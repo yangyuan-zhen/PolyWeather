@@ -1,0 +1,27 @@
+# Secrets
+.env
+
+# Data and Logs
+data/*.json
+data/logs/
+data/historical/
+data/cache/
+data/models/
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.history/
+
+# OS
+.DS_Store
+Thumbs.db
