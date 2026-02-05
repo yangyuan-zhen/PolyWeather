@@ -1,7 +1,7 @@
 import sys
 from loguru import logger
 
-def setup_logger():
+def setup_logger(level="DEBUG"):
     """
     Configure loguru logger
     """
@@ -11,7 +11,7 @@ def setup_logger():
     logger.add(
         sys.stderr,
         format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <level>{message}</level>",
-        level="DEBUG"
+        level=level
     )
     
     # 文件输出
@@ -19,7 +19,7 @@ def setup_logger():
         "data/logs/trading_system.log",
         rotation="10 MB",
         retention="10 days",
-        level="DEBUG",
+        level=level,
         encoding="utf-8",
         compression="zip"
     )

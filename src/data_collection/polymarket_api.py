@@ -183,38 +183,6 @@ class PolymarketClient:
 
         return None
 
-    def get_buy_prices(self, yes_token_id: str, no_token_id: str) -> Optional[Dict]:
-        """
-        获取买入价格 (Buy Yes 和 Buy No)
-
-        Args:
-            yes_token_id: Yes token ID
-            no_token_id: No token ID
-
-        Returns:
-            dict: {"buy_yes": float, "buy_no": float} 或 None
-        """
-        try:
-            # Buy Yes = Yes token 的最佳卖单 (asks)
-            yes_book = self.get_orderbook(yes_token_id)
-            buy_yes = None
-            if yes_book and isinstance(yes_book, dict) and yes_book.get("asks"):
-                buy_yes = float(yes_book["asks"][0].get("price", 0))
-
-            # Buy No = No token 的最佳卖单 (asks)
-            no_book = self.get_orderbook(no_token_id)
-            buy_no = None
-            if no_book and isinstance(no_book, dict) and no_book.get("asks"):
-                buy_no = float(no_book["asks"][0].get("price", 0))
-
-            if buy_yes is not None and buy_no is not None:
-                return {"buy_yes": buy_yes, "buy_no": buy_no}
-
-        except Exception as e:
-            logger.debug(f"获取买入价格失败: {e}")
-
-        return None
-
     def get_multiple_prices(self, token_requests: List[Dict]) -> Dict[str, float]:
         """
         批量获取多个 token 的价格 (使用 Polymarket 批量接口)
@@ -248,68 +216,6 @@ class PolymarketClient:
         except Exception as e:
             logger.debug(f"批量获取盘口价格失败: {e}")
         return {}
-
-        try:
-            url = f"{self.base_url}/prices"
-            # 这里的价格接口通常返回最佳买入/卖出价
-            # 构造请求体：Polymarket 期望的格式
-            payload = []
-            for req in token_requests:
-                payload.append(
-                    {
-                        "token_id": req["token_id"],
-                        "side": "buy"
-                        if req["side"] == "ask"
-                        else "sell",  # 映射：我们要买，所以查盘口的 sell side (ask)
-                    }
-                )
-
-            # 分批处理，每批 50 个，避免请求过大
-            all_prices = {}
-            for i in range(0, len(payload), 50):
-                batch = payload[i : i + 50]
-                response = self.session.post(url, json=batch, timeout=20)
-                if response.status_code == 200:
-                    results = response.json()
-                    # 结果通常是一个字典 {token_id: price}
-                    if isinstance(results, dict):
-                        all_prices.update(results)
-            return all_prices
-        except Exception as e:
-            logger.debug(f"批量获取价格失败: {e}")
-        return {}
-
-    def get_trades(self, market_id: str = None, limit: int = 100) -> Optional[Dict]:
-        """
-        获取成交历史 (使用 CLOB 专业接口 + Builder Key)
-        """
-        try:
-            url = f"{self.base_url}/trades"
-            params = {"limit": limit}
-            if market_id:
-                params["market"] = market_id
-
-            # 关键：带上你的 Builder Key
-            headers = {}
-            if self.api_key:
-                headers["x-api-key"] = self.api_key
-
-            response = self.session.get(
-                url, params=params, headers=headers, timeout=self.timeout
-            )
-
-            if response.status_code == 200:
-                return response.json()
-            elif response.status_code == 401:
-                logger.debug(
-                    f"CLOB Trades 依然返回 401 (权限受限): {market_id[:20]}..."
-                )
-            else:
-                logger.debug(f"CLOB Trades 接口返回状态码: {response.status_code}")
-
-        except Exception as e:
-            logger.debug(f"获取成交历史失败: {e}")
-        return None
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
         """
