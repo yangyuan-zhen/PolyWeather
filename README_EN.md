@@ -59,7 +59,7 @@ TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 
 # Polymarket API (Used for real-time prices & trade history)
-POLYMARKET_API_KEY=019c2d40-5d23-75a6-ab33-02ae5d2a033e
+POLYMARKET_API_KEY=your_api_key_here
 
 # Proxy (Optional)
 HTTPS_PROXY=http://127.0.0.1:7890
