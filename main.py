@@ -327,7 +327,7 @@ def main():
                                 city_alerts.append(
                                     {
                                         "type": "price",
-                                        "market": question,
+                                        "market": f"{question} ({target_date or '今日'})",
                                         "msg": f"{trigger_side}进入锁定区间 {trigger_price}¢",
                                     }
                                 )
@@ -352,7 +352,7 @@ def main():
                                 city_alerts.append(
                                     {
                                         "type": "anomaly",
-                                        "market": question,
+                                        "market": f"{question} ({target_date or '今日'})",
                                         "msg": f"{msg} (当前 {int(buy_yes_price * 100)}¢)",
                                     }
                                 )
