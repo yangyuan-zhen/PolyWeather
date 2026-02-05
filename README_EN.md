@@ -17,11 +17,12 @@ This command launches:
 
 ## 🤖 Telegram Bot Commands
 
-| Command   | Description             | Usage                                        |
-| :-------- | :---------------------- | :------------------------------------------- |
-| `/signal` | **Get Trading Signals** | Returns top 3 markets with highest deviation |
-| `/status` | **Check Status**        | Confirm if the monitoring engine is online   |
-| `/help`   | **Help**                | Display all available commands               |
+| Command      | Description             | Usage                                        |
+| :----------- | :---------------------- | :------------------------------------------- |
+| `/signal`    | **Get Trading Signals** | Returns top 3 markets with highest deviation |
+| `/portfolio` | **View Portfolio**      | Get real-time paper trading profit report    |
+| `/status`    | **Check Status**        | Confirm if the monitoring engine is online   |
+| `/help`      | **Help**                | Display all available commands               |
 
 ---
 
@@ -32,15 +33,21 @@ This command launches:
 - **Optimization**: All anomalies for the same city are merged into a **single report** per scan cycle to prevent spamming.
 - **Content**: Includes Price Alerts and Market Anomalies (Whales/Volume).
 
-### 2. ⚡ Price Alerts
+### 2. ⚡ Price Alerts (Auto Paper Trade)
 
 - **Trigger**: Buy Yes or Buy No price enters the **85¢-95¢** range.
-- **Purpose**: High-probability / Near-settlement reminders, ideal for closing or reaping positions.
+- **Auto Action**: System automatically executes a **$5.00 Paper Trade** to track success rate.
+- **Purpose**: High-probability / Near-settlement reminders.
 
 ### 3. 👀 Market Anomalies
 
-- **Whale Inflow**: Detection of large single trades (>$5,000) with imbalanced buy/sell ratios.
-- **Volume Spikes**: Sudden increase in trading volume (>2x historical standard deviation).
+- **Whale Inflow**: Large single trades (>$5,000) with imbalanced ratios.
+- **Volume Spikes**: Sudden increase in volume (>2x historical std dev).
+
+### 4. 📅 Daily PnL Summary
+
+- **Trigger**: Triggered automatically around 23:55 (Beijing Time).
+- **Content**: Summarizes daily floating PnL, balance changes, and win rate.
 
 ### 4. 🎯 Trading Signals (Query)
 

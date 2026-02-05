@@ -2,7 +2,7 @@ import sys
 import time
 import os
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from loguru import logger
 
 from src.utils.config_loader import load_config
@@ -17,39 +17,28 @@ from src.analysis.technical_indicators import TechnicalIndicators
 from src.analysis.whale_tracker import WhaleTracker
 from src.strategy.decision_engine import DecisionEngine
 from src.strategy.risk_manager import RiskManager
+from src.trading.paper_trader import PaperTrader
 from src.utils.notifier import TelegramNotifier
 
 
 def main():
-    """
-    Polymarket 交易系统主循环 - 监控与推送模式
-    """
-    # 1. 设置日志
-    setup_logger()
-    logger.info("正在启动 Polymarket 天气交易信号监控系统...")
+    # 1. 初始化配置与日志
+    config_data = load_config()
+    setup_logger(config_data.get("app", {}).get("log_level", "INFO"))
 
-    # 2. 加载配置
-    try:
-        config_data = load_config()
-        logger.info("配置加载成功。")
-    except Exception as e:
-        logger.error(f"配置加载失败: {e}")
-        sys.exit(1)
+    logger.info("🌟 PolyWeather 监控引擎启动中...")
 
-    # 3. 初始化组件
+    # 2. 初始化核心组件
     polymarket = PolymarketClient(config_data["polymarket"])
     weather = WeatherDataCollector(config_data["weather"])
     onchain = OnchainTracker(config_data["polymarket"], polymarket)
     notifier = TelegramNotifier(config_data["telegram"])
 
+    # 3. 初始化分析与交易组件
     predictor = TemperaturePredictor()
-    volume_analyzer = VolumeAnalyzer()
-    orderbook_analyzer = OrderbookAnalyzer()
-    tech_indicators = TechnicalIndicators()
-    whale_tracker = WhaleTracker(config_data, onchain)
-
-    decision_engine = DecisionEngine(config_data)
-    risk_manager = RiskManager(config_data)
+    decision_engine = DecisionEngine(config_data.get("config", {}))
+    whale_tracker = WhaleTracker(config_data.get("config", {}), onchain)
+    paper_trader = PaperTrader()
 
     # 发送启动通知
     notifier._send_message(
@@ -226,7 +215,7 @@ def main():
                         question = market.get("question", "未知市场")
                         event_title = market.get("event_title", "")
 
-                        # (日期处理逻辑保持不变...)
+                        # 识别该合约的目标日期
                         target_date = weather.extract_date_from_title(
                             event_title
                         ) or weather.extract_date_from_title(question)
@@ -301,16 +290,13 @@ def main():
                                 "transactions": [],
                             },
                             weather_consensus={"average_temp": ref_temp},
-                            whale_activity=whale_tracker.analyze_market_whales(
-                                market_id
-                            ),
+                            whale_activity=None,
                         )
                         cache_entry["score"] = signal["final_score"]
                         cache_entry["rationale"] = signal.get("recommendation", "N/A")
                         all_markets_cache[market_id] = cache_entry
 
-                        # --- 预警收集 ---
-                        # 1. 价格预警
+                        # --- 预警收集 (仅监控价格) ---
                         if (0.85 <= buy_yes_price <= 0.95) or (
                             0.85 <= buy_no_price <= 0.95
                         ):
@@ -324,39 +310,27 @@ def main():
                                     if trigger_side == "Buy Yes"
                                     else int(buy_no_price * 100)
                                 )
+
+                                # --- 模拟交易触发逻辑 ---
+                                side = "YES" if trigger_side == "Buy Yes" else "NO"
+                                success = paper_trader.open_position(
+                                    market_id=market_id,
+                                    city=city,
+                                    option=question,
+                                    price=trigger_price,
+                                    side=side,
+                                    amount_usd=5.0,
+                                )
+
                                 city_alerts.append(
                                     {
                                         "type": "price",
                                         "market": f"{question} ({target_date or '今日'})",
                                         "msg": f"{trigger_side}进入锁定区间 {trigger_price}¢",
+                                        "bought": success,
                                     }
                                 )
                                 pushed_signals[alert_key] = time.time()
-
-                        # 2. 市场异常
-                        whale_sig = signal["factor_details"].get("whale", {})
-                        volume_sig = signal["factor_details"].get("volume", {})
-                        if (
-                            whale_sig.get("signal")
-                            in ["STRONG_ACCUMULATION", "STRONG_DISTRIBUTION"]
-                            or volume_sig.get("volume_signal", {}).get("signal")
-                            == "VOLUME_SPIKE"
-                        ):
-                            anomaly_key = f"anomaly_{market_id}"
-                            if anomaly_key not in pushed_signals:
-                                msg = (
-                                    "检测到异常交易流"
-                                    if volume_sig.get("score", 0) > 0.7
-                                    else "大户入场"
-                                )
-                                city_alerts.append(
-                                    {
-                                        "type": "anomaly",
-                                        "market": f"{question} ({target_date or '今日'})",
-                                        "msg": f"{msg} (当前 {int(buy_yes_price * 100)}¢)",
-                                    }
-                                )
-                                pushed_signals[anomaly_key] = time.time()
 
                         # 3. 信号暂存
                         cached_signals[market_id] = cache_entry
@@ -367,9 +341,6 @@ def main():
                             city, city_alerts, local_time=city_local_time
                         )
 
-                except Exception as e:
-                    logger.error(f"分析城市 {city} 时出错: {e}")
-                    continue
                 except Exception as e:
                     logger.error(f"分析城市 {city} 时出错: {e}")
                     continue
@@ -416,10 +387,47 @@ def main():
                     with open("data/pushed_signals.json", "w", encoding="utf-8") as f:
                         json.dump(pushed_signals, f, ensure_ascii=False)
 
+                    # --- 4. 更新模拟仓位盈亏 ---
+                    price_snapshot = {}
+                    for mid, entry in all_markets_cache.items():
+                        price_snapshot[mid] = {"price": entry["price"]}
+                    paper_trader.update_pnl(price_snapshot)
+
+                    # --- 5. 每日收益总结推送 (北京时间 23:55 - 00:05 之间发送) ---
+                    now_bj = datetime.utcnow() + timedelta(hours=8)
+                    if now_bj.hour == 23 and now_bj.minute >= 50:
+                        summary_key = f"daily_pnl_{now_bj.strftime('%Y%m%d')}"
+                        if summary_key not in pushed_signals:
+                            # 构造总结消息
+                            total_cost = 0
+                            total_pnl = 0
+                            data = paper_trader._load_data()
+                            pos_list = data.get("positions", {})
+
+                            if pos_list:
+                                report = [
+                                    f"📊 <b>每日模拟仓结算总结 ({now_bj.strftime('%Y-%m-%d')})</b>\n"
+                                    + "═" * 15
+                                ]
+                                for p in pos_list.values():
+                                    if p["status"] == "OPEN":
+                                        total_cost += p["cost_usd"]
+                                        total_pnl += p.get("pnl_usd", 0)
+
+                                report.append(
+                                    f"💳 可用余额: <b>${data.get('balance', 0):.2f}</b>"
+                                )
+                                report.append(
+                                    f"💰 今日累计投入: <b>${total_cost:.2f}</b>"
+                                )
+                                report.append(
+                                    f"📈 累计浮动盈亏: <b>{total_pnl:+.2f}$</b>"
+                                )
+                                notifier._send_message("\n".join(report))
+                                pushed_signals[summary_key] = time.time()
+
                 except Exception as e:
                     logger.error(f"即时保存数据失败: {e}")
-
-            # 4. 每日概览已移除
 
             logger.info("本轮扫描结束。等待 5 分钟...")
             time.sleep(300)

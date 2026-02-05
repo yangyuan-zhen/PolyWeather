@@ -132,7 +132,8 @@ class TelegramNotifier:
         items_text = ""
         for a in alerts:
             type_icon = "⚡" if a["type"] == "price" else "🐋"
-            items_text += f"{type_icon} <b>{a['market']}</b>: {a['msg']}\n"
+            buy_tag = " [🛒 模拟仓已买入]" if a.get("bought") else ""
+            items_text += f"{type_icon} <b>{a['market']}</b>: {a['msg']}{buy_tag}\n"
 
         text = (
             f"🔔 <b>城市监控报告 #{self._escape_html(city)}</b>\n\n"
