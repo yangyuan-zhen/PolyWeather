@@ -5,9 +5,11 @@ import re
 from typing import Dict, List, Optional
 from loguru import logger
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
 from py_clob_client.client import ClobClient
 from py_clob_client.constants import POLYGON
+from py_clob_client.clob_types import ApiCreds, BookParams, OpenOrderParams
 
 
 class PolymarketClient:
@@ -19,6 +21,11 @@ class PolymarketClient:
         self.base_url = config.get("base_url", "https://clob.polymarket.com")
         self.timeout = config.get("timeout", 20)
         self.session = requests.Session()
+        
+        # 缓存机制
+        self._weather_markets_cache = []
+        self._last_discovery_time = 0
+        self._cache_ttl = 300  # 5 分钟缓存
 
         # 统一代理设置
         proxy = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
@@ -40,7 +47,6 @@ class PolymarketClient:
         self.api_passphrase = config.get("api_passphrase")
         
         try:
-            from py_clob_client.clob_types import ApiCreds
             
             # 组装凭据对象 (如果提供)
             creds = None
@@ -102,9 +108,9 @@ class PolymarketClient:
         获取 Token 的实时盘口价格 (纯官方库实现)
         """
         try:
-            # 官方语义：BUY 对应的是我们的买入成本 (Ask)
-            side_val = "BUY" if side == "ask" else "SELL"
-            price_str = self.clob_client.get_price(token_id=token_id, side=side_val)
+            # 用户侧语义：BUY 代表我要买 (Ask)，SELL 代表我要卖 (Bid)
+            sdk_side = "BUY" if side == "ask" else "SELL"
+            price_str = self.clob_client.get_price(token_id=token_id, side=sdk_side)
             if price_str:
                 return float(price_str)
         except Exception as e:
@@ -165,45 +171,59 @@ class PolymarketClient:
 
     def get_multiple_prices(self, token_requests: List[Dict]) -> Dict[str, float]:
         """
-        批量获取多个 token 的价格 (官方接口实现)
+        批量获取多个 token 的价格 (官方接口 + 线程池并行实现)
         """
         if not token_requests:
             return {}
 
         all_prices = {}
-        try:
-            # 准备官方批量请求格式
-            # 我们映射 ask->BUY, bid->SELL
-            batch_req = []
-            for r in token_requests:
-                side_val = "BUY" if r.get("side") == "ask" else "SELL"
-                batch_req.append({"token_id": r["token_id"], "side": side_val})
+        batch_size = 20
+        
+        def robust_float(val):
+            if isinstance(val, (int, float)): return float(val)
+            if isinstance(val, str):
+                try: return float(val)
+                except: return 0.0
+            return 0.0
 
-            # 使用官方批量获取接口
-            results = self.clob_client.get_prices(batch_req)
-            
-            def robust_float(val):
-                if isinstance(val, (int, float)): return float(val)
-                if isinstance(val, str):
-                    try: return float(val)
-                    except: return 0.0
-                return 0.0
+        chunks = [token_requests[i : i + batch_size] for i in range(0, len(token_requests), batch_size)]
+        
+        def fetch_chunk(chunk):
+            for attempt in range(3):
+                try:
+                    batch_req = []
+                    for r in chunk:
+                        sdk_side = "BUY" if r.get("side") == "ask" else "SELL"
+                        batch_req.append(BookParams(token_id=r["token_id"], side=sdk_side))
+                    
+                    results = self.clob_client.get_prices(batch_req)
+                    
+                    chunk_prices = {}
+                    if isinstance(results, list):
+                        for item in results:
+                            tid = item.get("token_id")
+                            price_raw = item.get("price")
+                            res_side = item.get("side")
+                            if tid and price_raw:
+                                val = robust_float(price_raw)
+                                key_side = "ask" if res_side == "BUY" else "bid"
+                                chunk_prices[f"{tid}:{key_side}"] = val
+                    return chunk_prices
+                except Exception as e:
+                    if attempt < 2:
+                        time.sleep(0.5 * (attempt + 1))
+                        continue
+                    logger.warning(f"Batch fetch failed after 3 attempts: {e}")
+            return {}
 
-            if isinstance(results, list):
-                for item in results:
-                    tid = item.get("token_id")
-                    price_raw = item.get("price")
-                    side = item.get("side")
-                    if tid and price_raw:
-                        val = robust_float(price_raw)
-                        key_side = "ask" if side == "BUY" else "bid"
-                        all_prices[f"{tid}:{key_side}"] = val
-                        all_prices[tid] = val
+        # 使用更保守的线程池并发抓取
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_results = list(executor.map(fetch_chunk, chunks))
             
-            return all_prices
-        except Exception as e:
-            logger.warning(f"官方库批量获取报价失败: {e}")
-        return {}
+        for chunk_result in future_results:
+            all_prices.update(chunk_result)
+        
+        return all_prices
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
         """
@@ -267,10 +287,28 @@ class PolymarketClient:
             logger.error(f"取消订单失败: {e}")
             return None
 
+    def get_orders(self, market_id: str = None) -> Optional[Dict]:
+        """
+        获取当前活跃挂单
+        """
+        try:
+            params = OpenOrderParams(market=market_id) if market_id else None
+            return self.clob_client.get_orders(params=params)
+        except Exception as e:
+            logger.error(f"获取挂单失败: {e}")
+            return None
+
     def discover_weather_markets(self) -> list:
         """
-        通过全量扫描活跃事件发现最高温天气市场。
+        通过全量扫描活跃事件发现最高温天气市场 (支持缓存机制)
         """
+        # 缓存检查
+        current_time = time.time()
+        if self._weather_markets_cache and (current_time - self._last_discovery_time < self._cache_ttl):
+            logger.debug(f"使用缓存的市场列表 (剩余寿命: {int(self._cache_ttl - (current_time - self._last_discovery_time))}s)")
+            return self._weather_markets_cache
+
+        logger.info("📡 正在全量扫描 Polymarket 发现天气市场...")
         gamma_url = "https://gamma-api.polymarket.com/events"
         all_weather_markets = []
         seen_condition_ids = set()
@@ -290,13 +328,23 @@ class PolymarketClient:
                 for m in event.get("markets", []):
                     question = m.get("groupItemTitle") or m.get("question") or ""
 
-                    # 关键词匹配
-                    if not (
-                        is_weather_event
-                        or "Highest temperature" in question
-                        or "temperature in" in question.lower()
-                    ):
+                    # 强化过滤：必须在标题中包含明确的气温气象词，且排除非气温市场
+                    t_lower = title.lower()
+                    q_lower = question.lower()
+                    
+                    # 1. 标题必须像个气温市场
+                    if not any(k in t_lower for k in ["highest temperature", "high temperature", "will temperature", "daily temperature"]):
                         continue
+                    
+                    # 2. 排除干扰项
+                    if "climate" in t_lower or "rain" in t_lower or "snow" in t_lower:
+                        continue
+                        
+                    # 3. 确保这个具体的 market (bracket) 是我们想要的
+                    if not any(k in q_lower for k in ["temperature", "be", "highest", "range"]):
+                        # 补充：如果是多选一市场的子项，question 可能只是一个数字或范围，此时看 title
+                        if not any(k in t_lower for k in ["temperature", "highest"]):
+                             continue
 
                     c_id = m.get("conditionId")
                     # 识别 outcome_index
@@ -429,6 +477,11 @@ class PolymarketClient:
             logger.info(
                 f"全量发现结束，共获取 {len(all_weather_markets)} 个天气档位合约"
             )
+            
+            # 更新缓存
+            self._weather_markets_cache = all_weather_markets
+            self._last_discovery_time = current_time
+            
             return all_weather_markets
 
         except Exception as e:
