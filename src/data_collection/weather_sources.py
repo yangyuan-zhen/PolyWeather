@@ -209,7 +209,7 @@ class WeatherDataCollector:
             current = data.get("current_weather", {})
             utc_offset = data.get("utc_offset_seconds", 0)
             timezone_name = data.get("timezone", "UTC")
-            
+
             # 计算精确的当地时间而不是气象站 bucket 时间
             now_utc = datetime.utcnow()
             local_now = now_utc + timedelta(seconds=utc_offset)
@@ -287,7 +287,7 @@ class WeatherDataCollector:
         normalized_city = city.lower().strip()
         if normalized_city in static_coords:
             return static_coords[normalized_city]
-        
+
         # 模糊匹配映射 (针对包含城市名的情况)
         for key in static_coords:
             if key in normalized_city:
@@ -368,7 +368,7 @@ class WeatherDataCollector:
         results = {}
 
         # 判断是否为美国市场（使用华氏度）
-        us_cities = [
+        us_cities = {
             "dallas",
             "nyc",
             "new york",
@@ -383,9 +383,26 @@ class WeatherDataCollector:
             "houston",
             "phoenix",
             "philadelphia",
-        ]
-        city_lower = city.lower()
-        use_fahrenheit = any(uc in city_lower for uc in us_cities)
+            "new york's central park",
+            "portland",
+            "denver",
+            "austin",
+            "san diego",
+            "detroit",
+            "cleveland",
+            "minneapolis",
+            "st. louis",
+        }
+        city_lower = city.lower().strip()
+        # 检查城市名是否在美国城市列表中（支持完全匹配或包含关系）
+        use_fahrenheit = city_lower in us_cities or any(
+            us_city in city_lower for us_city in us_cities
+        )
+
+        if use_fahrenheit:
+            logger.info(f"🌡️ {city} 使用华氏度 (°F)")
+        else:
+            logger.info(f"🌡️ {city} 使用摄氏度 (°C)")
 
         # Open-Meteo (Primary Free Source - No Key)
         if lat and lon:

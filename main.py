@@ -240,7 +240,7 @@ def main():
                     )
                     temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
                     logger.info(
-                        f"☁️ {city} 当前气温: {consensus['average_temp']}{temp_symbol} | 监控合约: {len(city_markets)}"
+                        f"☁️ {city} 当前气温: {consensus['average_temp']}{temp_symbol} (unit={temp_unit}) | 监控合约: {len(city_markets)}"
                     )
 
                     # --- 本城市汇总预警缓存 ---
@@ -364,6 +364,10 @@ def main():
                                     }
                                 )
 
+                                # 获取温度符号（在此处定义以便后续使用）
+                                temp_unit = weather_data.get("open-meteo", {}).get("unit", "celsius")
+                                temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
+                                
                                 # 预测偏差分析
                                 if ref_temp:
                                     city_pred_high = ref_temp  # 记录到城市概览
@@ -378,13 +382,14 @@ def main():
                                             else low_b
                                         )
                                         diff = ref_temp - ((low_b + high_b) / 2)
-                                        msg += f"\n📐 预测偏差: {diff:+.1f}{temp_symbol} (预测 {ref_temp}{temp_symbol})"
+                                        # 偏差信息将在后面构建 msg 时统一添加
 
                                         # 生成策略建议：仅保留模型一致提示
                                         if abs(diff) < 2 and current_prob > 0.7:
                                             city_strategy_tips.append(
                                                 f"预测温度{ref_temp}{temp_symbol}落在{question}区间，市场与模型一致"
                                             )
+
 
                                 # 模拟下单 - 使用 Ask 价格（实际可成交价格）
                                 if buy_yes_price and buy_yes_price > 0.5:
@@ -398,6 +403,13 @@ def main():
                                         else int((1 - current_prob) * 100)
                                     )
 
+                                # 构建预测文本
+                                forecast_text = f"{ref_temp}{temp_symbol}" if ref_temp else "N/A"
+                                
+                                # 构建简约版消息
+                                side_display = "Buy No" if trigger_side == "Buy No" else "Buy Yes"
+                                msg = f"⚡ {question} ({target_date}): {side_display} {trigger_price}¢ | 预测:{forecast_text}"
+
                                 success = paper_trader.open_position(
                                     market_id=market_id,
                                     city=city,
@@ -408,6 +420,10 @@ def main():
                                     target_date=target_date,
                                     predicted_temp=ref_temp,
                                 )
+                                
+                                # 添加模拟交易标签
+                                if success:
+                                    msg += " [🛒 $5.0 💡试探]"
 
                                 city_alerts.append(
                                     {
@@ -415,7 +431,7 @@ def main():
                                         "msg": msg,
                                         "bought": success,
                                         "amount": 5.0,
-                                        "confidence": "动态",
+                                        "confidence": "💡试探",
                                     }
                                 )
                                 pushed_signals[alert_key] = time.time()
@@ -476,8 +492,8 @@ def main():
                             all_markets_cache[market_id] = cache_entry
                             continue
 
-                        # 2. 过滤已过期日期 (对比当前日期: 2026-02-06)
-                        current_today = "2026-02-06"
+                        # 2. 过滤已过期日期 (动态获取当前日期)
+                        current_today = datetime.now().strftime("%Y-%m-%d")
                         if target_date and target_date < current_today:
                             cache_entry["rationale"] = "EXPIRED"
                             all_markets_cache[market_id] = cache_entry
