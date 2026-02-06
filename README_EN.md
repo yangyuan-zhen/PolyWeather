@@ -53,9 +53,13 @@ The system automatically decides the position size based on **Open-Meteo Weather
 ### 1. 📂 City Alert Summaries (Push)
 
 - **Optimization**: All anomalies for the same city are merged into a **single report** per scan cycle to prevent spamming.
+- **Price Source**: Uses real **Ask price** (actual executable price), not mid price
 - **Push Format**:
   ```
   ⚡ 40-41°F (2026-02-06): Buy No 87¢ | Prediction:38°F [🛒 $10.0 🔥High Conf]
+
+  💡 Strategy Tips:
+  • Predicted temp 38.0°C falls within 40-41°F range, market aligns with model
   ```
 
 ### 2. ⚡ Price Alerts (Auto Paper Trade)
@@ -141,6 +145,22 @@ POLYMARKET_API_KEY=your_api_key_here
 HTTPS_PROXY=http://127.0.0.1:7890
 HTTP_PROXY=http://127.0.0.1:7890
 ```
+
+## 🏗️ Project Architecture
+
+This project is built entirely on the official **py-clob-client**:
+- All interactions with Polymarket (market data, orderbook, trading) use `py-clob-client`
+- Core API wrapper: `src/data_collection/polymarket_api.py`
+
+## 📂 Data Files
+
+| File | Description |
+|------|-------------|
+| `data/paper_positions.json` | Paper trading positions, balance, trade history |
+| `data/pushed_signals.json` | Pushed signals record (anti-spam) |
+| `data/active_signals.json` | Currently active trading signals |
+| `data/all_markets.json` | Full market cache |
+| `data/price_history.json` | Price history for trend calculation |
 
 ---
 
