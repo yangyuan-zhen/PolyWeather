@@ -124,22 +124,30 @@ def main():
                 time.sleep(300)
                 continue
 
-            # 2. 批量同步盘口价格 (优化：一次请求获取所有市场的 Buy Yes/No)
+            # 2. 批量同步盘口价格 (优化：为每个档位获取其对应的真实 Token 价格)
             token_price_map = {}
             price_requests = []
             for m in all_weather_markets:
                 ts = m.get("tokens", [])
                 if isinstance(ts, str):
-                    try:
-                        ts = json.loads(ts)
-                    except:
-                        ts = []
-                if ts and len(ts) >= 2:
+                    try: ts = json.loads(ts)
+                    except: ts = []
+                
+                active_tid = m.get("active_token_id")
+                
+                # 如果是多选一市场（比如 Dallas 76-77°F）
+                if len(ts) > 2 and active_tid:
+                    # 获取该档位的买入价 (Ask) 
+                    price_requests.append({"token_id": active_tid, "side": "ask"})
+                    # 获取该档位的买入“否”价所需的 Bid 价
+                    price_requests.append({"token_id": active_tid, "side": "bid"})
+                # 如果是传统的 Yes/No 二选一市场
+                elif len(ts) == 2:
                     price_requests.append({"token_id": ts[0], "side": "ask"})  # Buy Yes
                     price_requests.append({"token_id": ts[1], "side": "ask"})  # Buy No
 
             if price_requests:
-                logger.info(f"正在同步 {len(price_requests)} 个档位的盘口价格...")
+                logger.info(f"正在同步 {len(price_requests)} 个档位的真实盘口价格...")
                 token_price_map = polymarket.get_multiple_prices(price_requests)
                 logger.info(f"价格同步完成，成功获取 {len(token_price_map)} 个实时报价")
 
@@ -156,11 +164,19 @@ def main():
                 # 注入实时批量价格
                 ts = m.get("tokens", [])
                 if isinstance(ts, str):
-                    try:
-                        ts = json.loads(ts)
-                    except:
-                        ts = []
-                if ts and len(ts) >= 2:
+                    try: ts = json.loads(ts)
+                    except: ts = []
+                
+                active_tid = m.get("active_token_id")
+                
+                # 多选一市场逻辑
+                if len(ts) > 2 and active_tid:
+                    m["buy_yes_live"] = token_price_map.get(active_tid) # 该档位的 Ask
+                    # 买入“否”的价格 = 1 - 该档位的 Bid (别人愿意买 Yes 的最高价)
+                    bid_price = token_price_map.get(active_tid) # 这里逻辑稍后在下文 fallback 处理中增强
+                    # 我们这里只是注入，真正复杂的 fallback 逻辑在循环内部
+                # 二选一市场逻辑
+                elif len(ts) == 2:
                     m["buy_yes_live"] = token_price_map.get(ts[0])
                     m["buy_no_live"] = token_price_map.get(ts[1])
 
@@ -243,37 +259,40 @@ def main():
                                         ref_temp = max_temps[idx]
                                         break
 
-                        # --- 价格获取逻辑 ---
+                        # --- 价格获取逻辑 (增强版) ---
                         buy_yes_price = market.get("buy_yes_live")
                         buy_no_price = market.get("buy_no_live")
-                        
-                        # 如果批量接口没拿到，尝试单独查询 orderbook
+                        ts = market.get("tokens", [])
+                        if isinstance(ts, str): ts = json.loads(ts)
+                        active_tid = market.get("active_token_id")
+
+                        # 特殊逻辑：针对多选一型市场（Dallas/Chicago 等温度段）
+                        if len(ts) > 2 and active_tid:
+                            # 1. 尝试从批量映射中重新获取该档位的精确买入价(Ask)
+                            buy_yes_price = polymarket.get_price(active_tid, side="ask") if buy_yes_price is None else buy_yes_price
+                            # 2. 计算“否”的价格（在多选一里是 1 - 最高买入意愿价Bid）
+                            bid_price = polymarket.get_price(active_tid, side="bid")
+                            if bid_price:
+                                buy_no_price = 1.0 - bid_price
+                            
+                            if i < 3: # 仅对前几个档位打印调试
+                                logger.debug(f"Categorical价格匹配 [{market.get('city')}-{market.get('question')}]: Yes={buy_yes_price}, No={buy_no_price} (from Bid={bid_price})")
+
+                        # 通用回退逻辑 (二选一)
                         if buy_yes_price is None or buy_no_price is None:
-                            ts = market.get("tokens", [])
-                            if isinstance(ts, str):
-                                try:
-                                    ts = json.loads(ts)
-                                except:
-                                    ts = []
                             if ts and len(ts) >= 2:
                                 prices = polymarket.get_buy_prices(ts[0], ts[1])
                                 if prices:
                                     buy_yes_price = prices.get("buy_yes")
                                     buy_no_price = prices.get("buy_no")
                         
-                        # 最后回退：使用 gamma 概率
+                        # 最后的回退：使用原始 Gamma 概率
                         if buy_yes_price is None or buy_no_price is None:
                             gamma_prices = market.get("prices", [])
-                            if isinstance(gamma_prices, str):
-                                try:
-                                    gamma_prices = json.loads(gamma_prices)
-                                except:
-                                    gamma_prices = []
-                            current_price = float(gamma_prices[0]) if gamma_prices else 0.5
-                            if buy_yes_price is None:
-                                buy_yes_price = current_price
-                            if buy_no_price is None:
-                                buy_no_price = 1.0 - current_price
+                            if isinstance(gamma_prices, str): gamma_prices = json.loads(gamma_prices)
+                            prob = float(gamma_prices[0]) if gamma_prices else 0.5
+                            if buy_yes_price is None: buy_yes_price = prob
+                            if buy_no_price is None: buy_no_price = 1.0 - prob
 
                         # C. 准备缓存
                         temp_unit = weather_data.get("open-meteo", {}).get(
@@ -285,6 +304,8 @@ def main():
                             .get("current", {})
                             .get("local_time")
                         )
+
+                        current_price = buy_yes_price if buy_yes_price else 0.5
 
                         # 计算价格趋势
                         prev_data = price_history.get(market_id, {})

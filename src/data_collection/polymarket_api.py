@@ -375,7 +375,9 @@ class PolymarketClient:
                         continue
 
                     c_id = m.get("conditionId")
-                    if c_id and c_id not in seen_condition_ids:
+                    # 对于多选一市场，不同档位共享 conditionId，但 tokenId 不同
+                    unique_key = f"{c_id}_{m.get('activeTokenId')}"
+                    if c_id and unique_key not in seen_condition_ids:
                         all_weather_markets.append(
                             {
                                 "condition_id": c_id,
@@ -387,7 +389,7 @@ class PolymarketClient:
                                 "slug": event_slug,
                             }
                         )
-                        seen_condition_ids.add(c_id)
+                        seen_condition_ids.add(unique_key)
                         new_markets_count += 1
             if new_markets_count > 0:
                 logger.debug(f"[{source_label}] 发现 {new_markets_count} 个新市场合约")
