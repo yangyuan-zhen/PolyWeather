@@ -1,0 +1,8 @@
+requests
+loguru
+pyTelegramBotAPI
+python-dotenv
+pytz
+numpy
+py-clob-client
+web3

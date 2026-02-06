@@ -6,6 +6,15 @@ from typing import Dict, List, Optional
 from loguru import logger
 from datetime import datetime
 
+# 官方组件
+try:
+    from py_clob_client.client import ClobClient
+    from py_clob_client.constants import POLYGON
+except ImportError:
+    logger.warning("官方库 py-clob-client 未安装，将回退到 requests 模式")
+    ClobClient = None
+    POLYGON = 137
+
 
 class PolymarketClient:
     """
@@ -35,6 +44,24 @@ class PolymarketClient:
         self.api_key = config.get("api_key")
         self.api_secret = config.get("api_secret")
         self.api_passphrase = config.get("api_passphrase")
+        
+        # 初始化官方 CLOB 客户端
+        if ClobClient:
+            try:
+                self.clob_client = ClobClient(
+                    host=self.base_url,
+                    key=self.api_key,
+                    secret=self.api_secret,
+                    passphrase=self.api_passphrase,
+                    chain_id=POLYGON
+                )
+                logger.info("官方 py-clob-client 初始化成功")
+            except Exception as e:
+                logger.error(f"官方客户端初始化失败: {e}")
+                self.clob_client = None
+        else:
+            self.clob_client = None
+
         self._setup_headers()
         logger.info(f"Polymarket 客户端初始化完成。Base URL: {self.base_url}")
 
@@ -96,8 +123,20 @@ class PolymarketClient:
 
     def get_price(self, token_id: str, side: str = "ask") -> Optional[float]:
         """
-        获取 Token 的实时盘口价格 (CLOB API)
+        获取 Token 的实时盘口价格 (优先使用官方库)
         """
+        # 官方库模式
+        if self.clob_client:
+            try:
+                # 再次强调：Polymarket 的 side=BUY 对应的是 Ask (买入成本)
+                side_val = "BUY" if side == "ask" else "SELL"
+                price_str = self.clob_client.get_price(token_id=token_id, side=side_val)
+                if price_str:
+                    return float(price_str)
+            except Exception as e:
+                logger.debug(f"官方库 get_price 失败: {e}")
+
+        # 回退模式
         try:
             book = self.get_orderbook(token_id)
             if book and isinstance(book, dict):
@@ -107,37 +146,32 @@ class PolymarketClient:
                     return float(book["bids"][0].get("price"))
 
             # 如果 orderbook 拿不到，尝试直接查 price 接口
-            side_val = "SELL" if side == "ask" else "BUY"
+            # 根据 Polymarket 文档：BUY 侧价格 = 市场上的最佳 ask (即你的买入成本)
+            side_val = "BUY" if side == "ask" else "SELL"
             res = self._request("GET", "/price", params={"token_id": token_id, "side": side_val})
             if res and isinstance(res, dict) and "price" in res:
                 return float(res["price"])
         except Exception as e:
-            # 这里的 400 通常是由于该 token 暂时没有挂单深度
             logger.debug(f"抓取 CLOB 价格失败 ({token_id}): {e}")
 
         return None
 
     def get_orderbook(self, token_id: str) -> Optional[Dict]:
         """
-        获取订单簿深度 (CLOB API)
+        获取订单簿深度 (优先使用官方库)
         """
-        # 尝试新端点 /orderbook
-        try:
-            url = f"{self.base_url}/orderbook"
-            response = self.session.get(url, params={"token_id": token_id}, timeout=15)
+        if self.clob_client:
+            try:
+                return self.clob_client.get_order_book(token_id=token_id)
+            except Exception as e:
+                logger.debug(f"官方库 get_order_book 失败: {e}")
 
+        # 回退到 requests 模式
+        try:
+            url = f"{self.base_url}/book"
+            response = self.session.get(url, params={"token_id": token_id}, timeout=15)
             if response.status_code == 200:
                 return response.json()
-            elif response.status_code == 404:
-                # 回退到旧端点 /book
-                url = f"{self.base_url}/book"
-                response = self.session.get(
-                    url, params={"token_id": token_id}, timeout=15
-                )
-                if response.status_code == 200:
-                    return response.json()
-        except requests.exceptions.Timeout:
-            logger.debug(f"订单簿请求超时: {token_id[:20]}...")
         except Exception as e:
             logger.debug(f"获取订单簿失败: {e}")
         return None
@@ -202,15 +236,15 @@ class PolymarketClient:
             # 分批处理以提高稳定性
             for i in range(0, len(token_requests), 50):
                 batch = token_requests[i : i + 50]
-                # 构建用于请求的 json 对象
-                # side 映射: ask -> SELL (我们要买入就要看卖单), bid -> BUY (我们要卖出就要看买单)
+                # 根据 Polymarket CLOB 文档，获取买入成本应使用 side=BUY (即 Ask 价格)
                 payload = []
                 for r in batch:
-                    side_val = "SELL" if r.get("side") == "ask" else "BUY"
+                    # 映射逻辑：我们想买(ask) -> API side=BUY; 我们想卖(bid) -> API side=SELL
+                    side_val = "BUY" if r.get("side") == "ask" else "SELL"
                     payload.append({"token_id": r["token_id"], "side": side_val})
 
                 response = self.session.post(url, json=payload, timeout=20)
-                logger.debug(f"批量价格请求: 状态码={response.status_code}, 返回数据={response.text[:200]}")
+                logger.debug(f"批量价格请求: 状态码={response.status_code}")
                 if response.status_code == 200:
                     results = response.json()
                     # 结果通常是 { "token_id": "price", ... } 或 [{ "token_id": "...", "price": "..." }, ...]
