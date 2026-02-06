@@ -63,6 +63,16 @@ def main():
 
     location_cache = {}
 
+    # 价格历史追踪（用于计算趋势）
+    PRICE_HISTORY_FILE = "data/price_history.json"
+    price_history = {}
+    if os.path.exists(PRICE_HISTORY_FILE):
+        try:
+            with open(PRICE_HISTORY_FILE, "r", encoding="utf-8") as f:
+                price_history = json.load(f)
+        except:
+            price_history = {}
+
     try:
         while True:
             logger.info("--- 开启新一轮全量动态监控 (自动搜寻所有天气市场) ---")
@@ -262,6 +272,20 @@ def main():
                             .get("local_time")
                         )
 
+                        # 计算价格趋势
+                        prev_data = price_history.get(market_id, {})
+                        prev_price = prev_data.get("price", current_price)
+                        if prev_price > 0:
+                            price_change_pct = ((current_price - prev_price) / prev_price) * 100
+                        else:
+                            price_change_pct = 0
+                        
+                        # 更新价格历史
+                        price_history[market_id] = {
+                            "price": current_price,
+                            "timestamp": datetime.now().isoformat()
+                        }
+
                         cache_entry = {
                             "city": city,
                             "full_title": event_title,
@@ -275,6 +299,7 @@ def main():
                             "target_date": target_date,
                             "score": 0,
                             "rationale": "ACTIVE",
+                            "trend": round(price_change_pct, 1),
                         }
 
                         if buy_yes_price <= 0.01 or buy_yes_price >= 0.99:
@@ -457,6 +482,10 @@ def main():
                     # 3. 保存推送记录
                     with open("data/pushed_signals.json", "w", encoding="utf-8") as f:
                         json.dump(pushed_signals, f, ensure_ascii=False)
+
+                    # 3.5 保存价格历史（用于趋势计算）
+                    with open(PRICE_HISTORY_FILE, "w", encoding="utf-8") as f:
+                        json.dump(price_history, f, ensure_ascii=False)
 
                     # --- 4. 更新模拟仓位盈亏 ---
                     price_snapshot = {}
