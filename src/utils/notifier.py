@@ -32,40 +32,46 @@ class TelegramNotifier:
         return html.escape(text, quote=False)
 
     def _send_message(self, text: str):
-        """发送 Telegram 消息的主函数"""
+        """发送 Telegram 消息的主函数 (支持多个 ID)"""
         if not self.token or not self.chat_id:
             logger.warning("未配置 Telegram Token 或 Chat ID，无法发送消息。")
-            return
-
-        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
-        # 调试输出：确保 ID 正确读取
-        logger.debug(f"DEBUG: Tnotifier using ChatID={self.chat_id}")
-
-        payload = {
-            "chat_id": self.chat_id,
-            "text": text,
-            "parse_mode": "HTML",
-            "disable_web_page_preview": True,
-        }
-
-        try:
-            response = self.session.post(url, json=payload, timeout=10)
-            if response.status_code != 200:
-                error_msg = response.text
-                if "chat not found" in error_msg.lower():
-                    logger.error(
-                        f"Telegram 消息发送失败 (400): Chat ID {self.chat_id} 无效或机器人尚未被加入该聊天。请在 Telegram 中发送 /id 给机器人确认正确的 Chat ID。"
-                    )
-                else:
-                    logger.error(
-                        f"Telegram 消息发送失败 ({response.status_code}): {error_msg}"
-                    )
-                return False
-            logger.info("Telegram 消息发送成功。")
-            return True
-        except Exception as e:
-            logger.error(f"Telegram 请求异常: {e}")
             return False
+
+        # 支持逗号分隔的多个 ID
+        chat_ids = str(self.chat_id).replace(" ", "").split(",")
+        url = f"https://api.telegram.org/bot{self.token}/sendMessage"
+
+        all_successful = True
+        for cid in chat_ids:
+            if not cid:
+                continue
+            
+            payload = {
+                "chat_id": cid,
+                "text": text,
+                "parse_mode": "HTML",
+                "disable_web_page_preview": True,
+            }
+
+            try:
+                response = self.session.post(url, json=payload, timeout=10)
+                if response.status_code != 200:
+                    error_msg = response.text
+                    if "chat not found" in error_msg.lower():
+                        logger.error(
+                            f"Telegram 消息发送给 {cid} 失败 (400): Chat ID {cid} 无效或机器人尚未被加入该聊天。请在 Telegram 中发送 /id 给机器人确认正确的 Chat ID。"
+                        )
+                    else:
+                        logger.error(
+                            f"Telegram 消息发送给 {cid} 失败 ({response.status_code}): {error_msg}"
+                        )
+                    all_successful = False
+                else:
+                    logger.info(f"Telegram 消息发送给 {cid} 成功。")
+            except Exception as e:
+                logger.error(f"Telegram 消息发送给 {cid} 异常: {e}")
+                all_successful = False
+        return all_successful
 
     def send_signal(
         self,
