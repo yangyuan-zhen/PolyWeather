@@ -128,23 +128,23 @@ def start_bot():
                     if range_match:
                         low, high = int(range_match.group(1)), int(range_match.group(2))
                         if pred_val < low:
-                            analysis = f"预测{pred_val}° < {low}° → 买NO ✓"
+                            analysis = f"预测{pred_val}°低于{low}° → 买NO ✓"
                         elif pred_val > high:
-                            analysis = f"预测{pred_val}° > {high}° → 买NO ✓"
+                            analysis = f"预测{pred_val}°高于{high}° → 买NO ✓"
                         else:
-                            analysis = f"预测{pred_val}° 在区间内 → 买YES ✓"
+                            analysis = f"预测{pred_val}°在区间内 → 买YES ✓"
                     elif below_match:
                         threshold = int(below_match.group(1))
                         if pred_val <= threshold:
-                            analysis = f"预测{pred_val}° ≤ {threshold}° → 买YES ✓"
+                            analysis = f"预测{pred_val}°≤{threshold}° → 买YES ✓"
                         else:
-                            analysis = f"预测{pred_val}° > {threshold}° → 买NO ✓"
+                            analysis = f"预测{pred_val}°高于{threshold}° → 买NO ✓"
                     elif higher_match:
                         threshold = int(higher_match.group(1))
                         if pred_val >= threshold:
-                            analysis = f"预测{pred_val}° ≥ {threshold}° → 买YES ✓"
+                            analysis = f"预测{pred_val}°≥{threshold}° → 买YES ✓"
                         else:
-                            analysis = f"预测{pred_val}° < {threshold}° → 买NO ✓"
+                            analysis = f"预测{pred_val}°低于{threshold}° → 买NO ✓"
                 except:
                     analysis = f"预测: {prediction}"
                 
