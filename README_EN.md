@@ -17,12 +17,12 @@ This command launches:
 
 ## 🤖 Telegram Bot Commands
 
-| Command      | Description             | Usage                                        |
-| :----------- | :---------------------- | :------------------------------------------- |
-| `/signal`    | **Get Trading Signals** | Returns top 3 markets with highest deviation |
-| `/portfolio` | **View Portfolio**      | Get real-time paper trading profit report    |
-| `/status`    | **Check Status**        | Confirm if the monitoring engine is online   |
-| `/help`      | **Help**                | Display all available commands               |
+| Command      | Description             | Usage                                          |
+| :----------- | :---------------------- | :--------------------------------------------- |
+| `/signal`    | **Get Trading Signals** | Returns Top 5 markets with earliest settlement |
+| `/portfolio` | **View Portfolio**      | Get real-time paper trading profit report      |
+| `/status`    | **Check Status**        | Confirm if the monitoring engine is online     |
+| `/help`      | **Help**                | Display all available commands                 |
 
 ---
 
@@ -74,10 +74,29 @@ The system automatically decides the position size based on **Open-Meteo Weather
 - **Trigger**: Triggered automatically around 23:55 (Beijing Time).
 - **Content**: Summarizes daily floating PnL, balance changes, and win rate.
 
-### 5. 🎯 Trading Signals (Query)
+### 5. 🎯 Trading Signals (`/signal`)
 
-- Comparison between weather forecasts and market pricing.
-- Includes: City, bucket, local time, expected temperature (unit-aware), and deviation score.
+Prioritizes markets with the **earliest settlement date**, sorted by opportunity value, returns **Top 5**:
+
+```
+🎯 Upcoming Settlement (2026-02-06)
+43 active options
+
+🔥 1. Dallas 76-77°F
+   💡 Prediction 80.7° above 77° → Buy NO ✓
+   📊 Buy No 94¢ | ⏳Near Lock
+
+🔥 2. Atlanta 56-57°F
+   💡 Prediction 60.4° above 57° → Buy NO ✓
+   📊 Buy No 94¢ | ⏳Near Lock
+```
+
+**Lock Status**:
+
+- 🔒Locked: Price ≥95¢
+- ⏳Near Lock: Price 85-94¢
+- 👀Watch: Price 70-84¢
+- ⚖️Balanced: Price <70¢
 
 ---
 
