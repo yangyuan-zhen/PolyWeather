@@ -1,219 +1,228 @@
-# 🌡️ PolyWeather: Polymarket 天气交易监控系统
+# 🌡️ PolyWeather: Polymarket Weather Trading Monitor
 
-基于多源实时气象数据与 Polymarket 市场定价偏差分析的智能监控与指令系统。
+An intelligent monitoring and alerting system based on multi-source real-time meteorological data and Polymarket market pricing deviation analysis.
 
-## 🚀 运行指令
+## 🚀 Quick Start
 
-### 环境要求
+### Requirements
 
-- **Python 3.11** (必须，`py-clob-client` 依赖要求)
-- 已安装所有依赖：`pip install -r requirements.txt`
+- **Python 3.11** (Required for `py-clob-client` dependency)
+- All dependencies installed: `pip install -r requirements.txt`
 
-### Windows 启动方式
+### Windows
 
 ```powershell
-# 方式一：使用 Python 3.11 启动器
+# Option 1: Use Python 3.11 launcher
 py -3.11 run.py
 
-# 方式二：激活虚拟环境后运行
-.venv\Scripts\activate  # 激活虚拟环境
+# Option 2: Activate virtual environment first
+.venv\Scripts\activate
 python run.py
 ```
 
-### Linux/VPS 启动方式
+### Linux/VPS
 
 ```bash
-# 使用 screen 保持后台运行
+# Use screen to keep it running in background
 screen -S polyweather
 python3.11 run.py
 
-# 按 Ctrl+A 然后 D 退出但保持运行
-# 恢复：screen -r polyweather
+# Detach: Press Ctrl+A then D
+# Reattach: screen -r polyweather
 ```
 
-该命令会同时启动：
+This command launches:
 
-1. **监控引擎**: 负责 7x24h 扫描并推送 **85¢-95¢ 价格预警** 与 **市场异常**。
-2. **指令监听器**: 监听电报指令并返回实时信号。
-
----
-
-## 🤖 电报机器人指令集
-
-| 指令         | 描述             | 用法                          |
-| :----------- | :--------------- | :---------------------------- |
-| `/signal`    | **获取交易信号** | 返回最早结算市场的 Top 5 档位 |
-| `/portfolio` | **查看模拟仓位** | 获取实时模拟交易盈亏汇总报告  |
-| `/status`    | **检查系统状态** | 确认监控引擎是否在线          |
-| `/help`      | **指令帮助**     | 显示所有可用指令              |
+1.  **Monitoring Engine**: Scans markets 24/7, providing **85¢-95¢ Price Alerts** and **Market Anomalies**.
+2.  **Command Listener**: Handles Telegram commands and returns real-time signals.
 
 ---
 
-## 🎯 智能动态仓位策略
+## 🤖 Telegram Bot Commands
 
-系统结合 **Open-Meteo 天气预测**、**成交量** 和 **价格锁定程度** 自动决定仓位大小：
-
-| 条件组合                        | 仓位    | 标签       | 说明           |
-| ------------------------------- | ------- | ---------- | -------------- |
-| 价格 ≥90¢ + 天气支持 + 高成交量 | **$10** | 🔥高置信   | 三重确认，重注 |
-| 价格 ≥90¢ + 天气支持            | **$7**  | ⭐中置信   | 双重确认       |
-| 价格 ≥92¢                       | **$5**  | 📌价格锁定 | 纯价格锁定     |
-| 其他 85-91¢                     | **$3**  | 💡试探     | 最小仓位试探   |
-
-### 天气支持判断逻辑
-
-- **买 NO**：Open-Meteo 预测温度在选项区间 **之外** (±2° 容差)
-- **买 YES**：Open-Meteo 预测温度 **落入** 选项区间
-
-### 成交量判断
-
-- **高成交量**：单个选项成交量 ≥ $5,000
+| Command      | Description             | Usage                                          |
+| :----------- | :---------------------- | :--------------------------------------------- |
+| `/signal`    | **Get Trading Signals** | Returns Top 5 markets with earliest settlement |
+| `/portfolio` | **View Portfolio**      | Get real-time paper trading profit report      |
+| `/status`    | **Check Status**        | Confirm if the monitoring engine is online     |
+| `/help`      | **Help**                | Display all available commands                 |
 
 ---
 
-## 📢 推送维度说明
+## 🎯 Smart Dynamic Position Strategy
 
-### 1. 📂 城市预警汇总 (主动推送)
+The system automatically decides the position size based on **Open-Meteo Weather Forecasts**, **Volume**, and **Price Locking Degree**:
 
-- **优化机制**: 同一轮扫描中，同一城市的所有异动将**合并为一条消息**发送，拒绝刷屏。
-- **触发内容**: 包含该城市下所有符合条件的"价格预警"与"市场异常"。
-- **价格来源**: 推送使用真实 **Ask 价格**（实际可成交价格），而非中间价
-- **推送格式**:
+| Condition Combination                      | Size    | Tag               | Description                      |
+| ------------------------------------------ | ------- | ----------------- | -------------------------------- |
+| Price ≥90¢ + Weather Support + High Volume | **$10** | 🔥High Confidence | Triple confirmation, Heavy stake |
+| Price ≥90¢ + Weather Support               | **$7**  | ⭐Mid Confidence  | Double confirmation              |
+| Price ≥92¢                                 | **$5**  | 📌Price Locked    | Pure price locking               |
+| Other 85-91¢                               | **$3**  | 💡Probe           | Minimum stake for probing        |
+
+### Weather Support Logic
+
+- **Buy NO**: Open-Meteo predicted temperature is **outside** the option range (with ±2° tolerance).
+- **Buy YES**: Open-Meteo predicted temperature **falls within** the option range.
+
+### Volume Detection
+
+- **High Volume**: Individual option volume ≥ $5,000.
+
+---
+
+## 📢 Alerting Dimensions
+
+### 1. 📂 City Alert Summaries (Push)
+
+- **Optimization**: All anomalies for the same city are merged into a **single report** per scan cycle to prevent spamming.
+- **Price Source**: Uses real **Ask price** (actual executable price), not mid price
+- **Push Format**:
 
   ```
-  ⚡ 40-41°F (2026-02-06): Buy No 87¢ | 预测:38°F [🛒 $10.0 🔥高置信]
+  ⚡ 40-41°F (2026-02-06): Buy No 87¢ | Prediction:38°F [🛒 $10.0 🔥High Conf]
 
-  💡 策略建议:
-  • 预测温度38.0°C落在40-41°F区间，市场与模型一致
+  💡 Strategy Tips:
+  • Predicted temp 38.0°C falls within 40-41°F range, market aligns with model
   ```
 
-### 2. ⚡ 价格预警 (触发模拟买入)
+### 2. ⚡ Price Alerts (Auto Paper Trade)
 
-- **触发条件**: Buy Yes 或 Buy No 价格在 **85¢-95¢** 区间。
-- **关联动作**: 系统根据智能仓位策略自动执行 **$3-$10** 的模拟开仓。
-- **用途**: 高胜率/即将锁定区间提醒，适合平仓或收割。
+- **Trigger**: Buy Yes or Buy No price enters the **85¢-95¢** range.
+- **Auto Action**: System executes a **$3-$10 Paper Trade** based on the dynamic position strategy.
+- **Purpose**: High-probability / Near-settlement reminders.
 
-### 3. 👀 市场异常
+### 3. 👀 Market Anomalies
 
-- **大户入场**: 检测到单笔 >$5000 的大额交易且买卖比失衡。
-- **异常交易流**: 成交量突然放大 (>2倍历史标准差)。
+- **Whale Inflow**: Large single trades (>$5,000) with imbalanced ratios.
+- **Volume Spikes**: Sudden increase in volume (>2x historical std dev).
 
-### 4. 📅 每日盈亏总结
+### 4. 📅 Daily PnL Summary
 
-- **触发时间**: 北京时间 23:55 左右自动推送。
-- **内容**: 汇总当日所有模拟仓位的浮动盈亏、余额变动及胜率统计。
+- **Trigger**: Triggered automatically around 23:55 (Beijing Time).
+- **Content**: Summarizes daily floating PnL, balance changes, and win rate.
 
-### 5. 🎯 交易信号 (`/signal` 指令)
+### 5. 🎯 Trading Signals (`/signal`)
 
-优先显示**最早结算日期**的市场，按机会价值排序，返回 **Top 5** 档位：
+Prioritizes markets with the **earliest settlement date**, sorted by opportunity value, returns **Top 5**:
 
 ```
-🎯 即将结算市场 (2026-02-06)
-共 43 个活跃选项
+🎯 Upcoming Settlement (2026-02-06)
+43 active options
 
 🔥 1. Dallas 76-77°F
-   💡 预测80.7°高于77° → 买NO ✓
-   📊 Buy No 94¢ | ⏳接近锁定
+   💡 Prediction 80.7° above 77° → Buy NO ✓
+   📊 Buy No 94¢ | ⏳Near Lock
 
 🔥 2. Atlanta 56-57°F
-   💡 预测60.4°高于57° → 买NO ✓
-   📊 Buy No 94¢ | ⏳接近锁定
-
-⭐ 3. Miami 62-63°F
-   💡 预测65.3°高于63° → 买NO ✓
-   📊 Buy No 88¢ | ⏳接近锁定
+   💡 Prediction 60.4° above 57° → Buy NO ✓
+   📊 Buy No 94¢ | ⏳Near Lock
 ```
 
-**锁定状态说明**:
+**Lock Status**:
 
-- 🔒锁定: 价格 ≥95¢
-- ⏳接近锁定: 价格 85-94¢
-- 👀观望: 价格 70-84¢
-- ⚖️均衡: 价格 <70¢
+- 🔒Locked: Price ≥95¢
+- ⏳Near Lock: Price 85-94¢
+- 👀Watch: Price 70-84¢
+- ⚖️Balanced: Price <70¢
 
 ---
 
-## 📊 模拟交易报告格式
+## 📊 Paper Trading Report Format
 
-通过 `/portfolio` 指令查看，报告按**目标日期分组**显示：
+Accessible via `/portfolio`. Reports are grouped by **Target Settlement Date**:
 
 ```
-📊 模拟交易报告
+📊 Paper Trading Report
 ════════════════════
 
-📈 【2026-02-06】 小计: +2.45$
+📈 【2026-02-06】 Subtotal: +2.45$
 ──────────────────
 🟢 Chicago 40-41°F
-   NO 87¢→92¢ 预测:38 | +0.47$
+   NO 87¢→92¢ Pred:38 | +0.47$
 🟢 Chicago 32-33°F
-   NO 94¢→98¢ 预测:38 | +0.12$
+   NO 94¢→98¢ Pred:38 | +0.12$
 
-💰 持仓总计: +6.89$
+💰 Total Exposure PnL: +6.89$
 
-📈 历史战绩:
-累计成交: 18笔 | 胜率: 100.0%
-已投入: $90.00 | 盈亏: +12.50$ (+13.9%)
+📈 Historical Stats:
+Trades: 18 | Win Rate: 100.0%
+Total Cost: $90.00 | Total PnL: +12.50$ (+13.9%)
 
 ════════════════════
-💳 账户余额: $639.11
+💳 Account Balance: $639.11
 ```
 
 ---
 
-## 🛠️ 环境配置 (.env)
+## 🛠️ Configuration (.env)
 
 ```bash
-# Telegram 机器人
+# Telegram Bot
 TELEGRAM_BOT_TOKEN=your_bot_token
 TELEGRAM_CHAT_ID=your_chat_id
 
-# Polymarket API (用于批量获取实时盘口价格与交易历史)
+# Polymarket API (Used for real-time prices & trade history)
 POLYMARKET_API_KEY=your_api_key_here
 
-# 代理设置 (如需要，VPS 部署时可删除)
+# Proxy (Optional, remove for VPS deployment)
 HTTPS_PROXY=http://127.0.0.1:7890
 HTTP_PROXY=http://127.0.0.1:7890
 ```
 
-## 🏗️ 项目架构
+## 🏗️ Project Architecture
 
-本项目完全基于 **py-clob-client** 官方客户端构建：
+This project is built on **py-clob-client** with REST API fallback:
 
-- 所有与 Polymarket 的交互（市场数据、订单簿、下单等）均通过 `py-clob-client` 实现
-- 核心 API 封装在 `src/data_collection/polymarket_api.py`
+- Primary: Uses `py-clob-client` SDK for market data, orderbook, and trading
+- Fallback: Direct REST API calls (`/price`, `/book`) when SDK fails
+- Core API wrapper: `src/data_collection/polymarket_api.py`
 
-## 📂 数据文件说明
+### Price Fetching
 
-| 文件                        | 说明                       |
-| --------------------------- | -------------------------- |
-| `data/paper_positions.json` | 模拟仓持仓、余额、交易历史 |
-| `data/pushed_signals.json`  | 已推送信号记录（防刷屏）   |
-| `data/active_signals.json`  | 当前活跃交易信号           |
-| `data/all_markets.json`     | 全量市场缓存               |
-| `data/price_history.json`   | 价格历史（用于趋势计算）   |
+```python
+# SDK method (primary)
+price = clob_client.get_price(token_id, side="BUY")
+
+# REST API fallback (when SDK fails)
+resp = requests.get("https://clob.polymarket.com/price", params={
+    "token_id": token_id,
+    "side": "BUY"
+})
+```
+
+## 📂 Data Files
+
+| File                        | Description                                     |
+| --------------------------- | ----------------------------------------------- |
+| `data/paper_positions.json` | Paper trading positions, balance, trade history |
+| `data/pushed_signals.json`  | Pushed signals record (anti-spam)               |
+| `data/active_signals.json`  | Currently active trading signals                |
+| `data/all_markets.json`     | Full market cache                               |
+| `data/price_history.json`   | Price history for trend calculation             |
 
 ---
 
-## 📋 核心功能特性
+## 📋 Core Features
 
-- ✅ **智能动态仓位**: 结合天气预测、成交量、价格锁定程度自动调整仓位 ($3-$10)。
-- ✅ **预测温度追踪**: 每笔交易记录买入时的 Open-Meteo 预测温度，方便复盘验证。
-- ✅ **智能合并推送**: 按城市汇总预警，界面整洁不刷屏。
-- ✅ **全自动模拟交易**: 内置模拟仓位系统，支持 85-95¢ 区间自动跟单，记录实战胜率。
-- ✅ **极速价格同步**: 采用 Polymarket 批量 API 接口，一次同步全量城市，无延迟、无 404。
-- ✅ **北京时间适配**: 所有推送时间戳与每日总结均自动转换为北京时间 (UTC+8)。
-- ✅ **智能日期选择**: 自动定位最早的活跃市场日期，结算后自动顺延。
-- ✅ **温度单位自适应**: 美国市场切换华氏度 (°F)，其他地区显示摄氏度 (°C)。
-- ✅ **全量数据持久化**: 信号记录、推送历史、交易仓位均保存至本地 JSON。
+- ✅ **Smart Dynamic Positions**: Automatic adjustment ($3-$10) based on weather forecasts, volume, and locking degree.
+- ✅ **Predicted Temp Tracking**: Records the Open-Meteo forecast at the time of purchase for retrospective analysis.
+- ✅ **Smart Merged Push**: City-based alert aggregation for a clean interface.
+- ✅ **Auto Paper Trading**: Built-in system for tracking performance within the 85-95¢ range.
+- ✅ **High-Speed Price Sync**: Utilizes CLOB batch API for instant price updates without 404s.
+- ✅ **Timezone Adaptation**: All timestamps are automatically adjusted to Beijing Time (UTC+8).
+- ✅ **Smart Date Selection**: Automatically targets the earliest active market date.
+- ✅ **Unit Sensitivity**: US markets use Fahrenheit (°F), others use Celsius (°C).
+- ✅ **Data Persistence**: Local JSON storage ensures consistency after restarts.
 
 ---
 
-## 🔄 VPS 更新步骤
+## 🔄 VPS Update Instructions
 
 ```bash
-# 1. 本地推送代码
+# 1. Local update
 git add . && git commit -m "update" && git push
 
-# 2. VPS 拉取并重启
+# 2. VPS pull & restart
 ssh root@VPS_IP "cd ~/PolyWeather && git pull && screen -S polyweather -X quit; screen -dmS polyweather python run.py"
 ```
