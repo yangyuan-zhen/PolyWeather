@@ -26,17 +26,42 @@ This command launches:
 
 ---
 
+## 🎯 Smart Dynamic Position Strategy
+
+The system automatically decides the position size based on **Open-Meteo Weather Forecasts**, **Volume**, and **Price Locking Degree**:
+
+| Condition Combination                      | Size    | Tag               | Description                      |
+| ------------------------------------------ | ------- | ----------------- | -------------------------------- |
+| Price ≥90¢ + Weather Support + High Volume | **$10** | 🔥High Confidence | Triple confirmation, Heavy stake |
+| Price ≥90¢ + Weather Support               | **$7**  | ⭐Mid Confidence  | Double confirmation              |
+| Price ≥92¢                                 | **$5**  | 📌Price Locked    | Pure price locking               |
+| Other 85-91¢                               | **$3**  | 💡Probe           | Minimum stake for probing        |
+
+### Weather Support Logic
+
+- **Buy NO**: Open-Meteo predicted temperature is **outside** the option range (with ±2° tolerance).
+- **Buy YES**: Open-Meteo predicted temperature **falls within** the option range.
+
+### Volume Detection
+
+- **High Volume**: Individual option volume ≥ $5,000.
+
+---
+
 ## 📢 Alerting Dimensions
 
 ### 1. 📂 City Alert Summaries (Push)
 
 - **Optimization**: All anomalies for the same city are merged into a **single report** per scan cycle to prevent spamming.
-- **Content**: Includes Price Alerts and Market Anomalies (Whales/Volume).
+- **Push Format**:
+  ```
+  ⚡ 40-41°F (2026-02-06): Buy No 87¢ | Prediction:38°F [🛒 $10.0 🔥High Conf]
+  ```
 
 ### 2. ⚡ Price Alerts (Auto Paper Trade)
 
 - **Trigger**: Buy Yes or Buy No price enters the **85¢-95¢** range.
-- **Auto Action**: System automatically executes a **$5.00 Paper Trade** to track success rate.
+- **Auto Action**: System executes a **$3-$10 Paper Trade** based on the dynamic position strategy.
 - **Purpose**: High-probability / Near-settlement reminders.
 
 ### 3. 👀 Market Anomalies
@@ -49,16 +74,41 @@ This command launches:
 - **Trigger**: Triggered automatically around 23:55 (Beijing Time).
 - **Content**: Summarizes daily floating PnL, balance changes, and win rate.
 
-### 4. 🎯 Trading Signals (Query)
+### 5. 🎯 Trading Signals (Query)
 
 - Comparison between weather forecasts and market pricing.
 - Includes: City, bucket, local time, expected temperature (unit-aware), and deviation score.
 
 ---
 
-## 🛠️ Configuration (.env)
+## 📊 Paper Trading Report Format
 
-Duplicate `.env.example` to `.env` and fill in your credentials:
+Accessible via `/portfolio`. Reports are grouped by **Target Settlement Date**:
+
+```
+📊 Paper Trading Report
+════════════════════
+
+📈 【2026-02-06】 Subtotal: +2.45$
+──────────────────
+🟢 Chicago 40-41°F
+   NO 87¢→92¢ Pred:38 | +0.47$
+🟢 Chicago 32-33°F
+   NO 94¢→98¢ Pred:38 | +0.12$
+
+💰 Total Exposure PnL: +6.89$
+
+📈 Historical Stats:
+Trades: 18 | Win Rate: 100.0%
+Total Cost: $90.00 | Total PnL: +12.50$ (+13.9%)
+
+════════════════════
+💳 Account Balance: $639.11
+```
+
+---
+
+## 🛠️ Configuration (.env)
 
 ```bash
 # Telegram Bot
@@ -68,19 +118,33 @@ TELEGRAM_CHAT_ID=your_chat_id
 # Polymarket API (Used for real-time prices & trade history)
 POLYMARKET_API_KEY=your_api_key_here
 
-# Proxy (Optional)
+# Proxy (Optional, remove for VPS deployment)
 HTTPS_PROXY=http://127.0.0.1:7890
+HTTP_PROXY=http://127.0.0.1:7890
 ```
 
 ---
 
 ## 📋 Core Features
 
+- ✅ **Smart Dynamic Positions**: Automatic adjustment ($3-$10) based on weather forecasts, volume, and locking degree.
+- ✅ **Predicted Temp Tracking**: Records the Open-Meteo forecast at the time of purchase for retrospective analysis.
 - ✅ **Smart Merged Push**: City-based alert aggregation for a clean interface.
+- ✅ **Auto Paper Trading**: Built-in system for tracking performance within the 85-95¢ range.
 - ✅ **High-Speed Price Sync**: Utilizes CLOB batch API for instant price updates without 404s.
 - ✅ **Timezone Adaptation**: All timestamps are automatically adjusted to Beijing Time (UTC+8).
-- ✅ **Smart Date Selection**: Automatically targets the earliest active market date and rolls over after settlement.
-- ✅ **Unit Sensitivity**: US markets display Fahrenheit (°F), while others use Celsius (°C).
-- ✅ **Data Persistence**: Local JSON storage for signals and push history to ensure no duplicates after restart.
+- ✅ **Smart Date Selection**: Automatically targets the earliest active market date.
+- ✅ **Unit Sensitivity**: US markets use Fahrenheit (°F), others use Celsius (°C).
+- ✅ **Data Persistence**: Local JSON storage ensures consistency after restarts.
 
 ---
+
+## 🔄 VPS Update Instructions
+
+```bash
+# 1. Local update
+git add . && git commit -m "update" && git push
+
+# 2. VPS pull & restart
+ssh root@VPS_IP "cd ~/PolyWeather && git pull && screen -S polyweather -X quit; screen -dmS polyweather python main.py"
+```
