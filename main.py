@@ -477,10 +477,9 @@ def main():
                         cached_signals[market_id] = cache_entry
 
                     # --- 循环结束后统一推送本城市汇总 ---
-                    if city_alerts:
-                        notifier.send_combined_alert(
-                            city, city_alerts, local_time=city_local_time
-                        )
+                    notifier.send_combined_alert(
+                        city, city_alerts, local_time=city_local_time
+                    )
 
                 except Exception as e:
                     logger.error(f"分析城市 {city} 时出错: {e}")
@@ -488,22 +487,25 @@ def main():
 
                 # --- 每处理完一个城市，立即更新 JSON 文件 ---
                 try:
-                    # 1. 更新活跃信号缓存 (合并旧数据避免扫描中途变空)
-                    final_signals = {}
-                    if os.path.exists("data/active_signals.json"):
-                        try:
-                            with open(
-                                "data/active_signals.json", "r", encoding="utf-8"
-                            ) as f:
-                                final_signals = json.load(f)
-                        except:
-                            pass
-
-                    final_signals.update(all_markets_cache)
-
+                    # --- 周期性结算：保存高价值信号 ---
+                    active_signals = []
+                    for mid, entry in all_markets_cache.items():
+                        # 核心过滤：只有 ACTIVE 且 价格未锁定、日期未过期的才进入 signals 列表
+                        if entry.get("rationale") not in ["ENDED", "EXPIRED", "ERROR"]:
+                            # 再次双重检查日期 (硬核拦截 2026-02-06)
+                            target_dt = entry.get("target_date")
+                            if target_dt and target_dt < "2026-02-06":
+                                continue
+                            active_signals.append(entry)
+                    
+                    # 按分数排序
+                    active_signals.sort(key=lambda x: x.get("score", 0), reverse=True)
+                    
                     with open("data/active_signals.json", "w", encoding="utf-8") as f:
-                        json.dump(final_signals, f, ensure_ascii=False, indent=2)
-
+                        json.dump(active_signals, f, ensure_ascii=False, indent=4)
+                    
+                    logger.info(f"已更新活跃信号库，包含 {len(active_signals)} 个有效信号。")
+                    
                     # 2. 更新全量市场缓存
                     try:
                         with open("data/all_markets.json", "r", encoding="utf-8") as f:
