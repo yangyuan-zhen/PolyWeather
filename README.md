@@ -54,9 +54,13 @@ python run.py
 
 - **优化机制**: 同一轮扫描中，同一城市的所有异动将**合并为一条消息**发送，拒绝刷屏。
 - **触发内容**: 包含该城市下所有符合条件的"价格预警"与"市场异常"。
+- **价格来源**: 推送使用真实 **Ask 价格**（实际可成交价格），而非中间价
 - **推送格式**:
   ```
   ⚡ 40-41°F (2026-02-06): Buy No 87¢ | 预测:38°F [🛒 $10.0 🔥高置信]
+  
+  💡 策略建议:
+  • 预测温度38.0°C落在40-41°F区间，市场与模型一致
   ```
 
 ### 2. ⚡ 价格预警 (触发模拟买入)
@@ -146,6 +150,22 @@ POLYMARKET_API_KEY=your_api_key_here
 HTTPS_PROXY=http://127.0.0.1:7890
 HTTP_PROXY=http://127.0.0.1:7890
 ```
+
+## 🏗️ 项目架构
+
+本项目完全基于 **py-clob-client** 官方客户端构建：
+- 所有与 Polymarket 的交互（市场数据、订单簿、下单等）均通过 `py-clob-client` 实现
+- 核心 API 封装在 `src/data_collection/polymarket_api.py`
+
+## 📂 数据文件说明
+
+| 文件 | 说明 |
+|------|------|
+| `data/paper_positions.json` | 模拟仓持仓、余额、交易历史 |
+| `data/pushed_signals.json` | 已推送信号记录（防刷屏） |
+| `data/active_signals.json` | 当前活跃交易信号 |
+| `data/all_markets.json` | 全量市场缓存 |
+| `data/price_history.json` | 价格历史（用于趋势计算） |
 
 ---
 
