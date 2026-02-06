@@ -258,10 +258,10 @@ class TemperaturePredictor:
                     weights.append(rf_weight)
         
         if not predictions:
-            logger.warning("No predictions available")
+            logger.debug("No predictions available (Model not trained)")
             return {
                 "predicted_temp": None,
-                "confidence": 0.0,
+                "confidence": 0.5,
                 "error": "No models available for prediction"
             }
         

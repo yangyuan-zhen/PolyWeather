@@ -45,7 +45,7 @@ class TelegramNotifier:
         for cid in chat_ids:
             if not cid:
                 continue
-            
+
             payload = {
                 "chat_id": cid,
                 "text": text,
@@ -125,33 +125,49 @@ class TelegramNotifier:
         )
         return self._send_message(text)
 
-    def send_combined_alert(self, city: str, alerts: list, local_time: str = None):
-        """发送合并后的城市预警"""
+    def send_combined_alert(
+        self,
+        city: str,
+        alerts: list,
+        local_time: str = None,
+        forecast_temp: str = None,
+        total_volume: float = 0,
+        brackets_count: int = 0,
+        strategy_tips: list = None,
+    ):
+        """发送简约版合并预警"""
         if not alerts:
             return
 
         from datetime import datetime, timedelta
 
         # UTC+8 北京时间
-        timestamp_bj = (datetime.utcnow() + timedelta(hours=8)).strftime("%H:%M")
+        now_bj = datetime.utcnow() + timedelta(hours=8)
+        timestamp_bj = now_bj.strftime(
+            "%H:%M"
+        )  # 简化为仅显示时间，日期通常与当地一致或不重要
 
+        # 1. 信号详情构建
         items_text = ""
         for a in alerts:
-            type_icon = "⚡" if a["type"] == "price" else "🐋"
-            # 买入标签：显示金额
-            if a.get("bought"):
-                amount = a.get("amount", 5.0)
-                confidence = a.get("confidence", "")
-                buy_tag = f" [🛒 ${amount} {confidence}]"
-            else:
-                buy_tag = ""
-            items_text += f"{type_icon} <b>{a['market']}</b>: {a['msg']}{buy_tag}\n"
+            items_text += f"{a['msg']}\n\n"
 
+        # 2. 策略建议（如果有）
+        tips_text = ""
+        if strategy_tips:
+            tips_text = (
+                "💡 <b>策略建议:</b>\n"
+                + "\n".join([f"• {self._escape_html(tip)}" for tip in strategy_tips])
+                + "\n\n"
+            )
+
+        # 3. 总体布局 (回归清爽风格)
         text = (
             f"🔔 <b>城市监控报告 #{self._escape_html(city)}</b>\n\n"
             f"📍 城市: {self._escape_html(city)}\n"
             f"📊 <b>实时异动:</b>\n"
-            f"{items_text}\n"
+            f"{items_text}"
+            f"{tips_text}"
             f"═══════════════════\n"
             f"🕒 当地时间: {self._escape_html(local_time or 'N/A')}\n"
             f"⏰ 预警时间: {timestamp_bj} (北京时间)"

@@ -270,6 +270,7 @@ class WeatherDataCollector:
         static_coords = {
             "london": {"lat": 51.5074, "lon": -0.1278},
             "new york": {"lat": 40.7128, "lon": -74.0060},
+            "new york's central park": {"lat": 40.7812, "lon": -73.9665},
             "nyc": {"lat": 40.7128, "lon": -74.0060},
             "seattle": {"lat": 47.6062, "lon": -122.3321},
             "chicago": {"lat": 41.8781, "lon": -87.6298},
@@ -286,6 +287,12 @@ class WeatherDataCollector:
         normalized_city = city.lower().strip()
         if normalized_city in static_coords:
             return static_coords[normalized_city]
+        
+        # 模糊匹配映射 (针对包含城市名的情况)
+        for key in static_coords:
+            if key in normalized_city:
+                logger.debug(f"地理编码命中模糊映射: {city} -> {key}")
+                return static_coords[key]
 
         try:
             url = "https://geocoding-api.open-meteo.com/v1/search"
@@ -377,7 +384,8 @@ class WeatherDataCollector:
             "phoenix",
             "philadelphia",
         ]
-        use_fahrenheit = city.lower() in us_cities
+        city_lower = city.lower()
+        use_fahrenheit = any(uc in city_lower for uc in us_cities)
 
         # Open-Meteo (Primary Free Source - No Key)
         if lat and lon:
