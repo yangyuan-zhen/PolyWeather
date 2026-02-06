@@ -170,10 +170,15 @@ def start_bot():
                     lock_status = "⚖️均衡"
                     confidence = "📊"
                 
+                # 提取修复后的精确当地时间
+                local_time = s.get("local_time", "")
+                time_only = local_time.split(" ")[1] if " " in local_time else ""
+                time_suffix = f" | 🕒{time_only}" if time_only else ""
+                
                 msg_lines.append(
                     f"{confidence} <b>{i}. {city} {option}</b>\n"
                     f"   💡 {analysis}\n"
-                    f"   📊 {direction} | {lock_status}\n"
+                    f"   📊 {direction} | {lock_status}{time_suffix}\n"
                 )
             
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")

@@ -246,20 +246,34 @@ def main():
                         # --- 价格获取逻辑 ---
                         buy_yes_price = market.get("buy_yes_live")
                         buy_no_price = market.get("buy_no_live")
-                        current_price = 0.5
-                        gamma_prices = market.get("prices", [])
-                        if isinstance(gamma_prices, str):
-                            try:
-                                gamma_prices = json.loads(gamma_prices)
-                            except:
-                                gamma_prices = []
-                        if gamma_prices and len(gamma_prices) > 0:
-                            current_price = float(gamma_prices[0])
-
-                        if buy_yes_price is None:
-                            buy_yes_price = current_price
-                        if buy_no_price is None:
-                            buy_no_price = 1.0 - current_price
+                        
+                        # 如果批量接口没拿到，尝试单独查询 orderbook
+                        if buy_yes_price is None or buy_no_price is None:
+                            ts = market.get("tokens", [])
+                            if isinstance(ts, str):
+                                try:
+                                    ts = json.loads(ts)
+                                except:
+                                    ts = []
+                            if ts and len(ts) >= 2:
+                                prices = polymarket.get_buy_prices(ts[0], ts[1])
+                                if prices:
+                                    buy_yes_price = prices.get("buy_yes")
+                                    buy_no_price = prices.get("buy_no")
+                        
+                        # 最后回退：使用 gamma 概率
+                        if buy_yes_price is None or buy_no_price is None:
+                            gamma_prices = market.get("prices", [])
+                            if isinstance(gamma_prices, str):
+                                try:
+                                    gamma_prices = json.loads(gamma_prices)
+                                except:
+                                    gamma_prices = []
+                            current_price = float(gamma_prices[0]) if gamma_prices else 0.5
+                            if buy_yes_price is None:
+                                buy_yes_price = current_price
+                            if buy_no_price is None:
+                                buy_no_price = 1.0 - current_price
 
                         # C. 准备缓存
                         temp_unit = weather_data.get("open-meteo", {}).get(
@@ -454,7 +468,7 @@ def main():
                         except:
                             pass
 
-                    final_signals.update(cached_signals)
+                    final_signals.update(all_markets_cache)
 
                     with open("data/active_signals.json", "w", encoding="utf-8") as f:
                         json.dump(final_signals, f, ensure_ascii=False, indent=2)

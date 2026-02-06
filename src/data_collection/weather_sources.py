@@ -211,12 +211,22 @@ class WeatherDataCollector:
             data = response.json()
 
             current = data.get("current_weather", {})
+            utc_offset = data.get("utc_offset_seconds", 0)
+            timezone_name = data.get("timezone", "UTC")
+            
+            # 计算精确的当地时间而不是气象站 bucket 时间
+            now_utc = datetime.utcnow()
+            local_now = now_utc + timedelta(seconds=utc_offset)
+            local_time_str = local_now.strftime("%Y-%m-%d %H:%M")
+
             return {
                 "source": "open-meteo",
-                "timestamp": datetime.utcnow().isoformat(),
+                "timestamp": now_utc.isoformat(),
+                "timezone": timezone_name,
+                "utc_offset": utc_offset,
                 "current": {
                     "temp": current.get("temperature"),
-                    "local_time": current.get("time", "").replace("T", " "),
+                    "local_time": local_time_str,
                 },
                 "daily": data.get("daily", {}),
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
