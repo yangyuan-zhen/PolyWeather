@@ -21,7 +21,7 @@ class TechnicalIndicators:
             float: RSI值 (0-100)
         """
         if len(prices) < period + 1:
-            logger.warning("Insufficient data for RSI calculation")
+            logger.debug("Insufficient data for RSI calculation")
             return 50.0  # 返回中性值
         
         prices = np.array(prices)
@@ -55,7 +55,7 @@ class TechnicalIndicators:
             dict: 包含上轨、中轨、下轨
         """
         if len(prices) < period:
-            logger.warning("Insufficient data for Bollinger Bands")
+            logger.debug("Insufficient data for Bollinger Bands")
             return {"upper": None, "middle": None, "lower": None}
         
         prices = np.array(prices[-period:])

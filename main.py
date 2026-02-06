@@ -171,14 +171,15 @@ def main():
                 
                 # 多选一市场逻辑
                 if len(ts) > 2 and active_tid:
-                    m["buy_yes_live"] = token_price_map.get(active_tid) # 该档位的 Ask
-                    # 买入“否”的价格 = 1 - 该档位的 Bid (别人愿意买 Yes 的最高价)
-                    bid_price = token_price_map.get(active_tid) # 这里逻辑稍后在下文 fallback 处理中增强
-                    # 我们这里只是注入，真正复杂的 fallback 逻辑在循环内部
+                    m["buy_yes_live"] = token_price_map.get(f"{active_tid}:ask")
+                    # 买入“否”的价格 = 1 - 该档位的 Bid
+                    bid_val = token_price_map.get(f"{active_tid}:bid")
+                    if bid_val:
+                        m["buy_no_live"] = 1.0 - bid_val
                 # 二选一市场逻辑
                 elif len(ts) == 2:
-                    m["buy_yes_live"] = token_price_map.get(ts[0])
-                    m["buy_no_live"] = token_price_map.get(ts[1])
+                    m["buy_yes_live"] = token_price_map.get(f"{ts[0]}:ask")
+                    m["buy_no_live"] = token_price_map.get(f"{ts[1]}:ask")
 
                 # 优先使用发现阶段已经识别出的城市名
                 city = m.get("city")
@@ -286,36 +287,31 @@ def main():
                                     buy_yes_price = prices.get("buy_yes")
                                     buy_no_price = prices.get("buy_no")
                         
-                        # 最后的回退：使用原始 Gamma 概率
+                        # 最后的回退：使用原始 Gamma 概率 (利用 outcome_index 获取正确的那一个)
                         if buy_yes_price is None or buy_no_price is None:
                             gamma_prices = market.get("prices", [])
                             if isinstance(gamma_prices, str): gamma_prices = json.loads(gamma_prices)
-                            prob = float(gamma_prices[0]) if gamma_prices else 0.5
+                            
+                            # 尝试获取该档位相对应的概率索引
+                            idx = market.get("outcome_index", 0)
+                            prob = float(gamma_prices[idx]) if (gamma_prices and idx < len(gamma_prices)) else 0.5
+                            
                             if buy_yes_price is None: buy_yes_price = prob
                             if buy_no_price is None: buy_no_price = 1.0 - prob
 
-                        # C. 准备缓存
-                        temp_unit = weather_data.get("open-meteo", {}).get(
-                            "unit", "celsius"
-                        )
+                        # C. 准备缓存数据
+                        temp_unit = weather_data.get("open-meteo", {}).get("unit", "celsius")
                         temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
-                        city_local_time = (
-                            weather_data.get("open-meteo", {})
-                            .get("current", {})
-                            .get("local_time")
-                        )
-
+                        city_local_time = weather_data.get("open-meteo", {}).get("current", {}).get("local_time")
+                        
                         current_price = buy_yes_price if buy_yes_price else 0.5
-
+                        
                         # 计算价格趋势
                         prev_data = price_history.get(market_id, {})
                         prev_price = prev_data.get("price", current_price)
-                        if prev_price > 0:
-                            price_change_pct = ((current_price - prev_price) / prev_price) * 100
-                        else:
-                            price_change_pct = 0
+                        price_change_pct = ((current_price - prev_price) / prev_price * 100) if prev_price > 0 else 0
                         
-                        # 更新价格历史
+                        # 更新价格历史缓存
                         price_history[market_id] = {
                             "price": current_price,
                             "timestamp": datetime.now().isoformat()
@@ -327,8 +323,8 @@ def main():
                             "option": question,
                             "prediction": f"{ref_temp}{temp_symbol}",
                             "price": int(current_price * 100),
-                            "buy_yes": int(buy_yes_price * 100),
-                            "buy_no": int(buy_no_price * 100),
+                            "buy_yes": int(buy_yes_price * 100) if buy_yes_price else 0,
+                            "buy_no": int(buy_no_price * 100) if buy_no_price else 0,
                             "url": f"https://polymarket.com/event/{market.get('slug')}",
                             "local_time": city_local_time,
                             "target_date": target_date,
@@ -337,30 +333,44 @@ def main():
                             "trend": round(price_change_pct, 1),
                         }
 
-                        if buy_yes_price <= 0.01 or buy_yes_price >= 0.99:
+                        # --- 最终过滤器 (拦截垃圾信号) ---
+                        
+                        # 1. 过滤已锁定价格 (>= 98.5c)
+                        if (buy_yes_price and buy_yes_price >= 0.985) or (buy_no_price and buy_no_price >= 0.985):
                             cache_entry["rationale"] = "ENDED"
                             all_markets_cache[market_id] = cache_entry
                             continue
 
-                        # D. 评分
-                        signal = decision_engine.calculate_signal(
-                            model_prediction=predictor.predict_ensemble([ref_temp]),
-                            market_data={
-                                "orderbook": {},
-                                "price_history": [current_price],
-                                "transactions": [],
-                            },
-                            weather_consensus={"average_temp": ref_temp},
-                            whale_activity=None,
-                        )
-                        cache_entry["score"] = signal["final_score"]
-                        cache_entry["rationale"] = signal.get("recommendation", "N/A")
+                        # 2. 过滤已过期日期 (对比当前日期: 2026-02-06)
+                        current_today = "2026-02-06"
+                        if target_date and target_date < current_today:
+                            cache_entry["rationale"] = "EXPIRED"
+                            all_markets_cache[market_id] = cache_entry
+                            continue
+
+                        # 3. 评分计算
+                        try:
+                            signal = decision_engine.calculate_signal(
+                                model_prediction=predictor.predict_ensemble([ref_temp]),
+                                market_data={
+                                    "orderbook": {},
+                                    "price_history": [current_price],
+                                    "transactions": [],
+                                },
+                                weather_consensus={"average_temp": ref_temp},
+                                whale_activity=None,
+                            )
+                            cache_entry["score"] = signal.get("final_score", 0)
+                            cache_entry["rationale"] = signal.get("recommendation", "ACTIVE")
+                        except Exception as e:
+                            logger.error(f"计算信号失败 [{market_id}]: {e}")
+                            cache_entry["score"] = 0
+                            cache_entry["rationale"] = "ERROR"
+
                         all_markets_cache[market_id] = cache_entry
 
-                        # --- 预警收集 (仅监控价格) ---
-                        if (0.85 <= buy_yes_price <= 0.95) or (
-                            0.85 <= buy_no_price <= 0.95
-                        ):
+                        # --- 预警收集 (自动推送逻辑) ---
+                        if (buy_yes_price and 0.85 <= buy_yes_price <= 0.95) or (buy_no_price and 0.85 <= buy_no_price <= 0.95):
                             alert_key = f"alert_{market_id}_range_85_95"
                             if alert_key not in pushed_signals:
                                 trigger_side = (

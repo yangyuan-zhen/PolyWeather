@@ -239,28 +239,49 @@ class PolymarketClient:
                 # 根据 Polymarket CLOB 文档，获取买入成本应使用 side=BUY (即 Ask 价格)
                 payload = []
                 for r in batch:
-                    # 映射逻辑：我们想买(ask) -> API side=BUY; 我们想卖(bid) -> API side=SELL
+                    # 遵循 CLOB API 规范：side=BUY 为买入成交价(Ask)，side=SELL 为卖出成交价(Bid)
                     side_val = "BUY" if r.get("side") == "ask" else "SELL"
                     payload.append({"token_id": r["token_id"], "side": side_val})
 
                 response = self.session.post(url, json=payload, timeout=20)
-                logger.debug(f"批量价格请求: 状态码={response.status_code}")
                 if response.status_code == 200:
                     results = response.json()
-                    # 结果通常是 { "token_id": "price", ... } 或 [{ "token_id": "...", "price": "..." }, ...]
+                    
+                    def robust_float(val):
+                        if isinstance(val, (int, float)): return float(val)
+                        if isinstance(val, str):
+                            try: return float(val)
+                            except: return 0.0
+                        if isinstance(val, dict):
+                            for k in ["price", "p", "avg", "amount"]:
+                                if k in val: return robust_float(val[k])
+                        return 0.0
+
                     if isinstance(results, dict):
                         for tid, p in results.items():
-                            all_prices[tid] = float(p)
+                            val = robust_float(p)
+                            # 如果是字典格式，默认我们请求的是 BUY(ask)
+                            all_prices[tid] = val
+                            all_prices[f"{tid}:ask"] = val 
                     elif isinstance(results, list):
                         for item in results:
-                            if "token_id" in item and "price" in item:
-                                all_prices[item["token_id"]] = float(item["price"])
+                            tid = item.get("token_id")
+                            price_raw = item.get("price")
+                            side = item.get("side")
+                            if tid and price_raw:
+                                val = robust_float(price_raw)
+                                # 存储映射：API 的 BUY 对应我们的 ask 键
+                                key_side = "ask" if side == "BUY" else "bid"
+                                all_prices[f"{tid}:{key_side}"] = val
+                                all_prices[tid] = val
                     else:
-                        logger.warning(f"批量价格返回非dict格式: {type(results)}")
+                        logger.warning(f"批量价格返回非预期格式: {type(results)}")
 
             return all_prices
         except Exception as e:
-            logger.warning(f"批量获取盘口价格失败: {e}")
+            logger.warning(f"批量获取盘口价格严重失败: {e}")
+            import traceback
+            logger.debug(traceback.format_exc())
         return {}
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
@@ -375,15 +396,23 @@ class PolymarketClient:
                         continue
 
                     c_id = m.get("conditionId")
+                    # 识别 outcome_index
+                    t_ids = m.get("clobTokenIds", [])
+                    active_id = m.get("activeTokenId")
+                    idx = 0
+                    if isinstance(t_ids, list) and active_id in t_ids:
+                        idx = t_ids.index(active_id)
+
                     # 对于多选一市场，不同档位共享 conditionId，但 tokenId 不同
-                    unique_key = f"{c_id}_{m.get('activeTokenId')}"
+                    unique_key = f"{c_id}_{active_id}"
                     if c_id and unique_key not in seen_condition_ids:
                         all_weather_markets.append(
                             {
                                 "condition_id": c_id,
                                 "question": question,
-                                "active_token_id": m.get("activeTokenId"),
-                                "tokens": m.get("clobTokenIds"),
+                                "active_token_id": active_id,
+                                "outcome_index": idx,
+                                "tokens": t_ids,
                                 "prices": m.get("outcomePrices"),
                                 "event_title": title,
                                 "slug": event_slug,
