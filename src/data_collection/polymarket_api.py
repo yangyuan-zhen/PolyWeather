@@ -105,27 +105,51 @@ class PolymarketClient:
 
     def get_price(self, token_id: str, side: str = "ask") -> Optional[float]:
         """
-        获取 Token 的实时盘口价格 (纯官方库实现)
+        获取 Token 的实时盘口价格
+        优先使用官方库，失败时使用直接 REST API
         """
+        # 方法1: 尝试官方库
         try:
-            # 用户侧语义：BUY 代表我要买 (Ask)，SELL 代表我要卖 (Bid)
             sdk_side = "BUY" if side == "ask" else "SELL"
             price_str = self.clob_client.get_price(token_id=token_id, side=sdk_side)
             if price_str:
                 return float(price_str)
         except Exception as e:
             logger.debug(f"官方库 get_price 失败 ({token_id}): {e}")
+        
+        # 方法2: 直接调用 REST API (与 test_price.py 一致)
+        try:
+            resp = self.session.get(f"{self.base_url}/price", params={
+                "token_id": token_id,
+                "side": side.upper()
+            }, timeout=10)
+            data = resp.json()
+            return float(data.get("price", 0))
+        except Exception as e:
+            logger.debug(f"REST API get_price 失败 ({token_id}): {e}")
         return None
 
     def get_orderbook(self, token_id: str) -> Optional[Dict]:
         """
-        获取订单簿深度 (纯官方库实现)
+        获取订单簿深度
+        优先使用官方库，失败时使用直接 REST API
         """
+        # 方法1: 尝试官方库
         try:
             return self.clob_client.get_orderbook(token_id=token_id)
         except Exception as e:
             logger.debug(f"官方库 get_orderbook 失败 ({token_id}): {e}")
+        
+        # 方法2: 直接调用 REST API (与 test_price.py 一致)
+        try:
+            resp = self.session.get(f"{self.base_url}/book", params={
+                "token_id": token_id
+            }, timeout=10)
+            return resp.json()
+        except Exception as e:
+            logger.debug(f"REST API get_orderbook 失败 ({token_id}): {e}")
         return None
+
 
     def get_buy_prices(self, yes_token_id: str, no_token_id: str) -> Optional[Dict]:
         """
@@ -171,7 +195,8 @@ class PolymarketClient:
 
     def get_multiple_prices(self, token_requests: List[Dict]) -> Dict[str, float]:
         """
-        批量获取多个 token 的价格 (官方接口 + 线程池并行实现)
+        批量获取多个 token 的价格
+        优先使用官方库，失败时使用直接 REST API
         """
         if not token_requests:
             return {}
@@ -188,42 +213,69 @@ class PolymarketClient:
 
         chunks = [token_requests[i : i + batch_size] for i in range(0, len(token_requests), batch_size)]
         
-        def fetch_chunk(chunk):
-            for attempt in range(3):
+        def fetch_chunk_sdk(chunk):
+            """使用官方 SDK 批量获取"""
+            try:
+                batch_req = []
+                for r in chunk:
+                    sdk_side = "BUY" if r.get("side") == "ask" else "SELL"
+                    batch_req.append(BookParams(token_id=r["token_id"], side=sdk_side))
+                
+                results = self.clob_client.get_prices(batch_req)
+                
+                chunk_prices = {}
+                if isinstance(results, list):
+                    for item in results:
+                        tid = item.get("token_id")
+                        price_raw = item.get("price")
+                        res_side = item.get("side")
+                        if tid and price_raw:
+                            val = robust_float(price_raw)
+                            key_side = "ask" if res_side == "BUY" else "bid"
+                            chunk_prices[f"{tid}:{key_side}"] = val
+                return chunk_prices
+            except Exception as e:
+                logger.debug(f"SDK batch fetch failed: {e}")
+                return None
+        
+        def fetch_chunk_rest(chunk):
+            """使用 REST API 逐个获取 (备用方案)"""
+            chunk_prices = {}
+            for r in chunk:
                 try:
-                    batch_req = []
-                    for r in chunk:
-                        sdk_side = "BUY" if r.get("side") == "ask" else "SELL"
-                        batch_req.append(BookParams(token_id=r["token_id"], side=sdk_side))
-                    
-                    results = self.clob_client.get_prices(batch_req)
-                    
-                    chunk_prices = {}
-                    if isinstance(results, list):
-                        for item in results:
-                            tid = item.get("token_id")
-                            price_raw = item.get("price")
-                            res_side = item.get("side")
-                            if tid and price_raw:
-                                val = robust_float(price_raw)
-                                key_side = "ask" if res_side == "BUY" else "bid"
-                                chunk_prices[f"{tid}:{key_side}"] = val
-                    return chunk_prices
+                    resp = self.session.get(f"{self.base_url}/price", params={
+                        "token_id": r["token_id"],
+                        "side": r.get("side", "ask").upper()
+                    }, timeout=10)
+                    data = resp.json()
+                    price = robust_float(data.get("price", 0))
+                    if price > 0:
+                        chunk_prices[f"{r['token_id']}:{r.get('side', 'ask')}"] = price
                 except Exception as e:
-                    if attempt < 2:
-                        time.sleep(0.5 * (attempt + 1))
-                        continue
-                    logger.warning(f"Batch fetch failed after 3 attempts: {e}")
-            return {}
+                    logger.debug(f"REST API price fetch failed for {r['token_id'][:16]}...: {e}")
+            return chunk_prices
 
-        # 使用更保守的线程池并发抓取
+        # 使用线程池并发抓取
         with ThreadPoolExecutor(max_workers=3) as executor:
-            future_results = list(executor.map(fetch_chunk, chunks))
-            
+            future_results = list(executor.map(fetch_chunk_sdk, chunks))
+        
+        # 检查结果，如果 SDK 全部失败，使用 REST API 备用
+        sdk_success = False
         for chunk_result in future_results:
-            all_prices.update(chunk_result)
+            if chunk_result:
+                all_prices.update(chunk_result)
+                sdk_success = True
+        
+        # 如果 SDK 完全失败，使用 REST API
+        if not sdk_success and token_requests:
+            logger.info("SDK 批量获取失败，使用 REST API 逐个获取...")
+            with ThreadPoolExecutor(max_workers=5) as executor:
+                future_results = list(executor.map(fetch_chunk_rest, chunks))
+            for chunk_result in future_results:
+                all_prices.update(chunk_result)
         
         return all_prices
+
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
         """
