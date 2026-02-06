@@ -103,7 +103,7 @@ def start_bot():
             # 构建消息
             msg_lines = [
                 f"🎯 <b>即将结算市场 ({earliest_date})</b>\n",
-                f"共发现 {len(earliest_markets)} 个活跃选项，以下为最值得关注的：\n"
+                f"共 {len(earliest_markets)} 个活跃选项\n"
             ]
             
             for i, s in enumerate(top_markets, 1):
@@ -112,32 +112,76 @@ def start_bot():
                 prediction = s.get("prediction", "N/A")
                 buy_yes = s.get("buy_yes", s.get("price", 50))
                 buy_no = s.get("buy_no", 100 - s.get("price", 50))
+                volume = s.get("volume", 0)
+                url = s.get("url", "")
+                
+                # 解析选项区间
+                import re
+                range_match = re.search(r'(\d+)-(\d+)', option)
+                below_match = re.search(r'(\d+).*or below', option, re.I)
+                higher_match = re.search(r'(\d+).*or higher', option, re.I)
+                
+                # 判断预测与区间关系
+                analysis = ""
+                try:
+                    pred_val = float(re.search(r'[\d.]+', str(prediction)).group())
+                    if range_match:
+                        low, high = int(range_match.group(1)), int(range_match.group(2))
+                        if pred_val < low:
+                            analysis = f"预测{pred_val}° < {low}° → 买NO ✓"
+                        elif pred_val > high:
+                            analysis = f"预测{pred_val}° > {high}° → 买NO ✓"
+                        else:
+                            analysis = f"预测{pred_val}° 在区间内 → 买YES ✓"
+                    elif below_match:
+                        threshold = int(below_match.group(1))
+                        if pred_val <= threshold:
+                            analysis = f"预测{pred_val}° ≤ {threshold}° → 买YES ✓"
+                        else:
+                            analysis = f"预测{pred_val}° > {threshold}° → 买NO ✓"
+                    elif higher_match:
+                        threshold = int(higher_match.group(1))
+                        if pred_val >= threshold:
+                            analysis = f"预测{pred_val}° ≥ {threshold}° → 买YES ✓"
+                        else:
+                            analysis = f"预测{pred_val}° < {threshold}° → 买NO ✓"
+                except:
+                    analysis = f"预测: {prediction}"
                 
                 # 判断最佳方向
                 if buy_no >= 85:
-                    direction = f"📈 Buy No {buy_no}¢ (接近锁定)"
+                    direction = f"Buy No {buy_no}¢"
+                    lock_status = "🔒锁定" if buy_no >= 95 else "⏳接近锁定"
                     confidence = "🔥" if buy_no >= 90 else "⭐"
                 elif buy_yes >= 85:
-                    direction = f"📈 Buy Yes {buy_yes}¢ (接近锁定)"
+                    direction = f"Buy Yes {buy_yes}¢"
+                    lock_status = "🔒锁定" if buy_yes >= 95 else "⏳接近锁定"
                     confidence = "🔥" if buy_yes >= 90 else "⭐"
                 elif buy_no >= 70:
-                    direction = f"👀 Buy No {buy_no}¢ (观望)"
+                    direction = f"Buy No {buy_no}¢"
+                    lock_status = "👀观望"
                     confidence = "💡"
                 elif buy_yes >= 70:
-                    direction = f"👀 Buy Yes {buy_yes}¢ (观望)"
+                    direction = f"Buy Yes {buy_yes}¢"
+                    lock_status = "👀观望"
                     confidence = "💡"
                 else:
-                    direction = f"⚖️ 均衡盘 Yes:{buy_yes}¢ No:{buy_no}¢"
+                    direction = f"Yes:{buy_yes}¢ No:{buy_no}¢"
+                    lock_status = "⚖️均衡"
                     confidence = "📊"
+                
+                # 成交量显示
+                vol_text = f"${volume/1000:.1f}K" if volume >= 1000 else f"${volume:.0f}"
+                
+                # 当地时间
+                local_time = s.get("local_time", "")
+                time_only = local_time.split(" ")[1] if " " in local_time else local_time
                 
                 msg_lines.append(
                     f"{confidence} <b>{i}. {city} {option}</b>\n"
-                    f"   预测: {prediction}\n"
-                    f"   {direction}\n"
+                    f"   💡 {analysis}\n"
+                    f"   📊 {direction} | {lock_status} | 量:{vol_text} | 🕒{time_only}\n"
                 )
-            
-            local_time = top_markets[0].get("local_time", "N/A") if top_markets else "N/A"
-            msg_lines.append(f"\n🕒 当地时间: {local_time}")
             
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
