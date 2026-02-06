@@ -98,7 +98,7 @@ def start_bot():
                     return max_price / 2  # 远离锁定
             
             earliest_markets.sort(key=opportunity_score, reverse=True)
-            top_markets = earliest_markets[:3]
+            top_markets = earliest_markets[:5]
 
             # 构建消息
             msg_lines = [
@@ -170,17 +170,10 @@ def start_bot():
                     lock_status = "⚖️均衡"
                     confidence = "📊"
                 
-                # 成交量显示
-                vol_text = f"${volume/1000:.1f}K" if volume >= 1000 else f"${volume:.0f}"
-                
-                # 当地时间
-                local_time = s.get("local_time", "")
-                time_only = local_time.split(" ")[1] if " " in local_time else local_time
-                
                 msg_lines.append(
                     f"{confidence} <b>{i}. {city} {option}</b>\n"
                     f"   💡 {analysis}\n"
-                    f"   📊 {direction} | {lock_status} | 量:{vol_text} | 🕒{time_only}\n"
+                    f"   📊 {direction} | {lock_status}\n"
                 )
             
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
