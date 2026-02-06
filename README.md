@@ -2,10 +2,33 @@
 
 基于多源实时气象数据与 Polymarket 市场定价偏差分析的智能监控与指令系统。
 
-## 🚀 运行指令 (一键启动)
+## 🚀 运行指令
+
+### 环境要求
+
+- **Python 3.11** (必须，`py-clob-client` 依赖要求)
+- 已安装所有依赖：`pip install -r requirements.txt`
+
+### Windows 启动方式
 
 ```powershell
+# 方式一：使用 Python 3.11 启动器
+py -3.11 run.py
+
+# 方式二：激活虚拟环境后运行
+.venv\Scripts\activate  # 激活虚拟环境
 python run.py
+```
+
+### Linux/VPS 启动方式
+
+```bash
+# 使用 screen 保持后台运行
+screen -S polyweather
+python3.11 run.py
+
+# 按 Ctrl+A 然后 D 退出但保持运行
+# 恢复：screen -r polyweather
 ```
 
 该命令会同时启动：
@@ -56,9 +79,10 @@ python run.py
 - **触发内容**: 包含该城市下所有符合条件的"价格预警"与"市场异常"。
 - **价格来源**: 推送使用真实 **Ask 价格**（实际可成交价格），而非中间价
 - **推送格式**:
+
   ```
   ⚡ 40-41°F (2026-02-06): Buy No 87¢ | 预测:38°F [🛒 $10.0 🔥高置信]
-  
+
   💡 策略建议:
   • 预测温度38.0°C落在40-41°F区间，市场与模型一致
   ```
@@ -154,18 +178,19 @@ HTTP_PROXY=http://127.0.0.1:7890
 ## 🏗️ 项目架构
 
 本项目完全基于 **py-clob-client** 官方客户端构建：
+
 - 所有与 Polymarket 的交互（市场数据、订单簿、下单等）均通过 `py-clob-client` 实现
 - 核心 API 封装在 `src/data_collection/polymarket_api.py`
 
 ## 📂 数据文件说明
 
-| 文件 | 说明 |
-|------|------|
+| 文件                        | 说明                       |
+| --------------------------- | -------------------------- |
 | `data/paper_positions.json` | 模拟仓持仓、余额、交易历史 |
-| `data/pushed_signals.json` | 已推送信号记录（防刷屏） |
-| `data/active_signals.json` | 当前活跃交易信号 |
-| `data/all_markets.json` | 全量市场缓存 |
-| `data/price_history.json` | 价格历史（用于趋势计算） |
+| `data/pushed_signals.json`  | 已推送信号记录（防刷屏）   |
+| `data/active_signals.json`  | 当前活跃交易信号           |
+| `data/all_markets.json`     | 全量市场缓存               |
+| `data/price_history.json`   | 价格历史（用于趋势计算）   |
 
 ---
 
