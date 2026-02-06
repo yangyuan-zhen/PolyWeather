@@ -17,9 +17,7 @@ class WeatherDataCollector:
 
     def __init__(self, config: dict):
         self.config = config
-        self.openweather_key = config.get("openweather_api_key")
         self.wunderground_key = config.get("wunderground_api_key")
-        self.visualcrossing_key = config.get("visualcrossing_api_key")
 
         self.timeout = 10
         self.session = requests.Session()
@@ -45,8 +43,7 @@ class WeatherDataCollector:
         Returns:
             dict: Weather data
         """
-        if not self.openweather_key:
-            logger.warning("OpenWeatherMap API key not configured")
+        if not getattr(self, "openweather_key", None):
             return None
 
         query = f"{city},{country}" if country else city
@@ -123,8 +120,7 @@ class WeatherDataCollector:
         Returns:
             dict: Historical weather data
         """
-        if not self.visualcrossing_key:
-            logger.warning("Visual Crossing API key not configured")
+        if not getattr(self, "visualcrossing_key", None):
             return None
 
         # Default to last 30 days if no dates provided
@@ -390,16 +386,6 @@ class WeatherDataCollector:
             )
             if open_meteo:
                 results["open-meteo"] = open_meteo
-
-        # OpenWeatherMap (Requires Key)
-        openweather = self.fetch_from_openweather(city, country)
-        if openweather:
-            results["openweathermap"] = openweather
-
-        # Visual Crossing (Requires Key)
-        visualcrossing = self.fetch_from_visualcrossing(city)
-        if visualcrossing:
-            results["visualcrossing"] = visualcrossing
 
         return results
 
