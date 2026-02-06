@@ -132,7 +132,13 @@ class TelegramNotifier:
         items_text = ""
         for a in alerts:
             type_icon = "⚡" if a["type"] == "price" else "🐋"
-            buy_tag = " [🛒 模拟仓已买入]" if a.get("bought") else ""
+            # 买入标签：显示金额
+            if a.get("bought"):
+                amount = a.get("amount", 5.0)
+                confidence = a.get("confidence", "")
+                buy_tag = f" [🛒 ${amount} {confidence}]"
+            else:
+                buy_tag = ""
             items_text += f"{type_icon} <b>{a['market']}</b>: {a['msg']}{buy_tag}\n"
 
         text = (
