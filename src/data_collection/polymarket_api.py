@@ -107,7 +107,8 @@ class PolymarketClient:
                     return float(book["bids"][0].get("price"))
 
             # 如果 orderbook 拿不到，尝试直接查 price 接口
-            res = self._request("GET", "/price", params={"token_id": token_id})
+            side_val = "SELL" if side == "ask" else "BUY"
+            res = self._request("GET", "/price", params={"token_id": token_id, "side": side_val})
             if res and isinstance(res, dict) and "price" in res:
                 return float(res["price"])
         except Exception as e:
@@ -202,19 +203,30 @@ class PolymarketClient:
             for i in range(0, len(token_requests), 50):
                 batch = token_requests[i : i + 50]
                 # 构建用于请求的 json 对象
-                payload = [{"token_id": r["token_id"], "side": "buy"} for r in batch]
+                # side 映射: ask -> SELL (我们要买入就要看卖单), bid -> BUY (我们要卖出就要看买单)
+                payload = []
+                for r in batch:
+                    side_val = "SELL" if r.get("side") == "ask" else "BUY"
+                    payload.append({"token_id": r["token_id"], "side": side_val})
 
                 response = self.session.post(url, json=payload, timeout=20)
+                logger.debug(f"批量价格请求: 状态码={response.status_code}, 返回数据={response.text[:200]}")
                 if response.status_code == 200:
                     results = response.json()
-                    # 结果通常是 { "token_id": "price", ... }
+                    # 结果通常是 { "token_id": "price", ... } 或 [{ "token_id": "...", "price": "..." }, ...]
                     if isinstance(results, dict):
                         for tid, p in results.items():
                             all_prices[tid] = float(p)
+                    elif isinstance(results, list):
+                        for item in results:
+                            if "token_id" in item and "price" in item:
+                                all_prices[item["token_id"]] = float(item["price"])
+                    else:
+                        logger.warning(f"批量价格返回非dict格式: {type(results)}")
 
             return all_prices
         except Exception as e:
-            logger.debug(f"批量获取盘口价格失败: {e}")
+            logger.warning(f"批量获取盘口价格失败: {e}")
         return {}
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
