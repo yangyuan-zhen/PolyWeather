@@ -11,7 +11,7 @@ try:
     from py_clob_client.client import ClobClient
     from py_clob_client.constants import POLYGON
 except ImportError:
-    logger.warning("官方库 py-clob-client 未安装，将回退到 requests 模式")
+    logger.debug("官方库 py-clob-client 未安装，将回退到 requests 模式")
     ClobClient = None
     POLYGON = 137
 
