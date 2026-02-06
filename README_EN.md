@@ -146,5 +146,5 @@ HTTP_PROXY=http://127.0.0.1:7890
 git add . && git commit -m "update" && git push
 
 # 2. VPS pull & restart
-ssh root@VPS_IP "cd ~/PolyWeather && git pull && screen -S polyweather -X quit; screen -dmS polyweather python main.py"
+ssh root@VPS_IP "cd ~/PolyWeather && git pull && screen -S polyweather -X quit; screen -dmS polyweather python run.py"
 ```
