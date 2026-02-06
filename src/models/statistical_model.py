@@ -9,7 +9,7 @@ try:
     HAS_STATSMODELS = True
 except ImportError:
     HAS_STATSMODELS = False
-    logger.warning("statsmodels not installed, ARIMA model unavailable")
+    logger.debug("statsmodels not installed, ARIMA model unavailable")
 
 try:
     from sklearn.ensemble import RandomForestRegressor
@@ -17,7 +17,7 @@ try:
     HAS_SKLEARN = True
 except ImportError:
     HAS_SKLEARN = False
-    logger.warning("scikit-learn not installed, ML models unavailable")
+    logger.debug("scikit-learn not installed, ML models unavailable")
 
 
 class TemperaturePredictor:

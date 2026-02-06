@@ -375,7 +375,18 @@ def start_bot():
             message, "✅ 监控引擎正在运行中...\n7x24h 实时扫码 Polymarket 气温市场。"
         )
 
-    bot.infinity_polling()
+    try:
+        while True:
+            try:
+                bot.infinity_polling(timeout=60, long_polling_timeout=60)
+            except (KeyboardInterrupt, SystemExit):
+                print("\n检测到退出信号，机器人正在关机...")
+                break
+            except Exception as e:
+                print(f"Bot 轮询连接异常 (通常是网络问题): {e}")
+                time.sleep(10)  # 等待10秒后自动重连
+    except KeyboardInterrupt:
+        print("\n机器人已停止。")
 
 
 if __name__ == "__main__":
