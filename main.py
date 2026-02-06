@@ -338,13 +338,14 @@ def main():
                         }
 
                         # --- 预警收集 (自动推送逻辑) ---
-                        # 触发阈值: 价格处于 85-95 锁死区间，或者概率异动 > 10%
-                        is_price_locked = (
-                            current_prob >= 0.85 or (1 - current_prob) >= 0.85
-                        )
-                        is_big_move = abs(prob_change) >= 10
-
-                        if is_price_locked or is_big_move:
+                        # 严格触发条件: 价格必须处于 85-95¢ 区间 (真正的高概率信号)
+                        yes_in_range = buy_yes_price and 0.85 <= buy_yes_price <= 0.95
+                        no_in_range = buy_no_price and 0.85 <= buy_no_price <= 0.95
+                        
+                        # 50¢ 保护：价格接近 50% 说明市场无明确方向，跳过
+                        is_undecided = 0.45 <= current_prob <= 0.55
+                        
+                        if (yes_in_range or no_in_range) and not is_undecided:
                             alert_key = f"alert_{market_id}_{int(current_prob * 100)}"
                             if alert_key not in pushed_signals:
                                 # 深度分析订单簿
