@@ -2,6 +2,7 @@ import sys
 import time
 import os
 import json
+import re
 from datetime import datetime, timedelta
 from loguru import logger
 
@@ -311,6 +312,67 @@ def main():
                                     else int(buy_no_price * 100)
                                 )
 
+                                # --- 智能动态仓位计算 ---
+                                # 1. 获取 Open-Meteo 对目标日期的最高温预测
+                                predicted_high = None
+                                weather_supports = False
+                                daily_data = weather_data.get("open-meteo", {}).get("daily", {})
+                                if daily_data and target_date:
+                                    dates = daily_data.get("time", [])
+                                    max_temps = daily_data.get("temperature_2m_max", [])
+                                    for idx, d_str in enumerate(dates):
+                                        if target_date == d_str and idx < len(max_temps):
+                                            predicted_high = max_temps[idx]
+                                            break
+                                
+                                # 2. 判断天气预测是否支持当前方向
+                                if predicted_high is not None:
+                                    # 解析选项的温度范围 (例如 "40-41°F" 或 "32°F or below")
+                                    temp_match = re.search(r'(\d+)(?:-(\d+))?°[FC]', question)
+                                    if temp_match:
+                                        low_bound = int(temp_match.group(1))
+                                        high_bound = int(temp_match.group(2)) if temp_match.group(2) else low_bound
+                                        
+                                        # 如果买 NO，天气预测应该在这个区间之外
+                                        if trigger_side == "Buy No":
+                                            weather_supports = (predicted_high < low_bound - 2) or (predicted_high > high_bound + 2)
+                                        else:  # 买 YES
+                                            weather_supports = (low_bound - 2 <= predicted_high <= high_bound + 2)
+                                
+                                # 3. 获取成交量信息
+                                market_volume = market.get("volume", 0)
+                                if isinstance(market_volume, str):
+                                    try:
+                                        market_volume = float(market_volume.replace("$", "").replace(",", ""))
+                                    except:
+                                        market_volume = 0
+                                high_volume = market_volume >= 5000  # $5000+ 算高成交量
+                                
+                                # 4. 动态仓位决策
+                                # 条件: 价格锁定程度 + 天气支持 + 成交量
+                                if trigger_price >= 90 and weather_supports and high_volume:
+                                    # 三重确认：重注
+                                    amount_usd = 10.0
+                                    confidence_tag = "🔥高置信"
+                                elif trigger_price >= 90 and weather_supports:
+                                    # 双重确认：中等仓位
+                                    amount_usd = 7.0
+                                    confidence_tag = "⭐中置信"
+                                elif trigger_price >= 92:
+                                    # 价格接近锁定，即使其他条件不满足也小额参与
+                                    amount_usd = 5.0
+                                    confidence_tag = "📌价格锁定"
+                                else:
+                                    # 普通信号：最小仓位
+                                    amount_usd = 3.0
+                                    confidence_tag = "💡试探"
+                                
+                                logger.info(
+                                    f"【仓位决策】{city} {question} | "
+                                    f"价格:{trigger_price}¢ | 预测:{predicted_high} | 天气支持:{weather_supports} | "
+                                    f"高量:{high_volume} | 仓位:${amount_usd} ({confidence_tag})"
+                                )
+
                                 # --- 模拟交易触发逻辑 ---
                                 side = "YES" if trigger_side == "Buy Yes" else "NO"
                                 success = paper_trader.open_position(
@@ -319,15 +381,24 @@ def main():
                                     option=question,
                                     price=trigger_price,
                                     side=side,
-                                    amount_usd=5.0,
+                                    amount_usd=amount_usd,
+                                    target_date=target_date,
+                                    predicted_temp=predicted_high,
                                 )
+
+                                # 构建预测温度显示文本
+                                temp_unit = weather_data.get("open-meteo", {}).get("unit", "celsius")
+                                temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
+                                forecast_text = f"预测:{predicted_high}{temp_symbol}" if predicted_high else "预测:N/A"
 
                                 city_alerts.append(
                                     {
                                         "type": "price",
                                         "market": f"{question} ({target_date or '今日'})",
-                                        "msg": f"{trigger_side}进入锁定区间 {trigger_price}¢",
+                                        "msg": f"{trigger_side} {trigger_price}¢ | {forecast_text}",
                                         "bought": success,
+                                        "amount": amount_usd,
+                                        "confidence": confidence_tag,
                                     }
                                 )
                                 pushed_signals[alert_key] = time.time()

@@ -110,20 +110,43 @@ def start_bot():
                 )
                 return
 
-            msg_lines = ["📊 <b>模拟交易报告 (北京时间)</b>\n" + "═" * 15]
+            msg_lines = ["📊 <b>模拟交易报告</b>\n" + "═" * 20]
 
-            # 1. 活跃持仓
+            # 1. 活跃持仓 - 按目标日期分组
             if positions:
-                msg_lines.append("📌 <b>当前持仓:</b>")
-                total_pnl = 0
+                # 按目标日期分组
+                positions_by_date = {}
                 for pid, pos in positions.items():
-                    pnl_usd = pos.get("pnl_usd", 0)
-                    total_pnl += pnl_usd
-                    icon = "🟢" if pnl_usd >= 0 else "🔴"
-                    msg_lines.append(
-                        f"{icon} {pos['city']} {pos['option']} ({pos['side']}): {pnl_usd:+.2f}$"
-                    )
-                msg_lines.append(f"<b>持仓小计: {total_pnl:+.2f}$</b>\n")
+                    target_date = pos.get("target_date") or "未知日期"
+                    if target_date not in positions_by_date:
+                        positions_by_date[target_date] = []
+                    positions_by_date[target_date].append(pos)
+                
+                # 按日期排序显示
+                for target_date in sorted(positions_by_date.keys()):
+                    date_positions = positions_by_date[target_date]
+                    date_pnl = sum(p.get("pnl_usd", 0) for p in date_positions)
+                    date_icon = "📈" if date_pnl >= 0 else "📉"
+                    
+                    msg_lines.append(f"\n{date_icon} <b>【{target_date}】</b> 小计: {date_pnl:+.2f}$")
+                    msg_lines.append("─" * 18)
+                    
+                    for pos in date_positions:
+                        pnl_usd = pos.get("pnl_usd", 0)
+                        icon = "🟢" if pnl_usd >= 0 else "🔴"
+                        entry_price = pos.get("entry_price", 0)
+                        current_price = pos.get("current_price", entry_price)
+                        predicted_temp = pos.get("predicted_temp")
+                        
+                        # 格式：城市 选项 | 方向 入场→当前 | 预测温度 | 盈亏
+                        pred_text = f"预测:{predicted_temp}" if predicted_temp else ""
+                        msg_lines.append(
+                            f"{icon} {pos['city']} {pos['option']}\n"
+                            f"   {pos['side']} {entry_price}¢→{current_price}¢ {pred_text} | {pnl_usd:+.2f}$"
+                        )
+                
+                total_pnl = sum(p.get("pnl_usd", 0) for p in positions.values())
+                msg_lines.append(f"\n💰 <b>持仓总计: {total_pnl:+.2f}$</b>")
 
             # 2. 最近交易记录 (最新 5 笔)
             trades = data.get("trades", [])
@@ -132,8 +155,8 @@ def start_bot():
                 # 取末尾 5 笔交易并展示
                 recent_trades = trades[-5:]
                 for t in reversed(recent_trades):
-                    t_type = "🛒 买入" if t["type"] == "BUY" else "💰 卖出"
-                    t_time = t.get("time", "").split(" ")[1] # 仅显示时间
+                    t_type = "🛒" if t["type"] == "BUY" else "💰"
+                    t_time = t.get("time", "").split(" ")[1] if " " in t.get("time", "") else t.get("time", "")
                     msg_lines.append(
                         f"• {t_time} {t_type} {t['city']} {t['option']} ({t['price']}¢)"
                     )
@@ -142,12 +165,15 @@ def start_bot():
             if history:
                 total_trades = len(history)
                 wins = sum(1 for p in history if p.get("pnl_usd", 0) > 0)
+                total_cost = sum(p.get("cost_usd", 0) for p in history)
+                total_profit = sum(p.get("pnl_usd", 0) for p in history)
                 win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
+                roi = (total_profit / total_cost * 100) if total_cost > 0 else 0
                 msg_lines.append("\n📈 <b>历史战绩:</b>")
-                msg_lines.append(f"累计成交: {total_trades} 笔")
-                msg_lines.append(f"综合胜率: <b>{win_rate:.1f}%</b>")
+                msg_lines.append(f"累计成交: {total_trades}笔 | 胜率: <b>{win_rate:.1f}%</b>")
+                msg_lines.append(f"已投入: ${total_cost:.2f} | 盈亏: <b>{total_profit:+.2f}$</b> ({roi:+.1f}%)")
 
-            footer = "\n" + "═" * 15 + "\n" + f"💳 虚拟账户余额: <b>${balance:.2f}</b>"
+            footer = "\n" + "═" * 20 + "\n" + f"💳 账户余额: <b>${balance:.2f}</b>"
             msg_lines.append(footer)
 
             bot.reply_to(message, "\n".join(msg_lines), parse_mode="HTML")

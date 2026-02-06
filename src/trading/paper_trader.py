@@ -43,7 +43,7 @@ class PaperTrader:
                 indent=2,
             )
 
-    def open_position(self, market_id: str, city: str, option: str, price: int, side: str, amount_usd: float = 5.0):
+    def open_position(self, market_id: str, city: str, option: str, price: int, side: str, amount_usd: float = 5.0, target_date: str = None, predicted_temp: float = None):
         """
         开仓进入模拟仓位
         """
@@ -76,6 +76,8 @@ class PaperTrader:
             "pnl_usd": 0.0,
             "pnl_pct": 0.0,
             "status": "OPEN",
+            "target_date": target_date,
+            "predicted_temp": predicted_temp,
             "opened_at": (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M:%S")
         }
         
