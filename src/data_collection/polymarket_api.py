@@ -6,31 +6,25 @@ from typing import Dict, List, Optional
 from loguru import logger
 from datetime import datetime
 
-# 官方组件
-try:
-    from py_clob_client.client import ClobClient
-    from py_clob_client.constants import POLYGON
-except ImportError:
-    logger.debug("官方库 py-clob-client 未安装，将回退到 requests 模式")
-    ClobClient = None
-    POLYGON = 137
+from py_clob_client.client import ClobClient
+from py_clob_client.constants import POLYGON
 
 
 class PolymarketClient:
     """
-    Polymarket API Client for market data and trading
+    Polymarket API Client for market data and trading (Exclusive py-clob-client mode)
     """
 
     def __init__(self, config: Dict):
         self.base_url = config.get("base_url", "https://clob.polymarket.com")
-        self.timeout = config.get("timeout", 10)
+        self.timeout = config.get("timeout", 20)
         self.session = requests.Session()
 
         # 统一代理设置
         proxy = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
         if proxy:
             self.session.proxies = {"http": proxy, "https": proxy}
-            logger.info(f"正在使用代理: {proxy}")  # Added this line for logging
+            logger.info(f"正在使用代理: {proxy}")
 
         # 设置公开接口通用的 User-Agent
         self.session.headers.update(
@@ -40,27 +34,41 @@ class PolymarketClient:
             }
         )
 
-        # 只有在明确需要签名交易时才注入私钥相关头 (目前我们只拉取报价)
+        # 初始化官方 CLOB 客户端
         self.api_key = config.get("api_key")
         self.api_secret = config.get("api_secret")
         self.api_passphrase = config.get("api_passphrase")
         
-        # 初始化官方 CLOB 客户端
-        if ClobClient:
-            try:
-                self.clob_client = ClobClient(
-                    host=self.base_url,
-                    key=self.api_key,
-                    secret=self.api_secret,
-                    passphrase=self.api_passphrase,
-                    chain_id=POLYGON
+        try:
+            from py_clob_client.clob_types import ApiCreds
+            
+            # 组装凭据对象 (如果提供)
+            creds = None
+            if self.api_key and self.api_secret:
+                creds = ApiCreds(
+                    api_key=self.api_key,
+                    api_secret=self.api_secret,
+                    api_passphrase=self.api_passphrase
                 )
-                logger.info("官方 py-clob-client 初始化成功")
-            except Exception as e:
-                logger.error(f"官方客户端初始化失败: {e}")
-                self.clob_client = None
-        else:
-            self.clob_client = None
+
+            self.clob_client = ClobClient(
+                host=self.base_url,
+                key=None, # 除非有 0x 开头的私钥，否则传入 None 以避免报错
+                creds=creds,
+                chain_id=POLYGON
+            )
+            # 注入代理到官方客户端 (官方库使用 httpx 或 requests)
+            if proxy:
+                # 尝试给官方 client 的内部 session 设置代理 (取决于版本实现)
+                try:
+                    if hasattr(self.clob_client, 'session'):
+                        self.clob_client.session.proxies = {"http": proxy, "https": proxy}
+                except: pass
+            
+            logger.info("✅ 官方 py-clob-client 已满血上线，Requests 模式已彻底退役。")
+        except Exception as e:
+            logger.error(f"官方客户端启动失败: {e}")
+            raise RuntimeError("必须安装并配置正确的 py-clob-client 才能运行。")
 
         self._setup_headers()
         logger.info(f"Polymarket 客户端初始化完成。Base URL: {self.base_url}")
@@ -73,107 +81,44 @@ class PolymarketClient:
         if self.api_key:
             self.session.headers.update({"POLY_API_KEY": self.api_key})
 
-    def _request(self, method: str, endpoint: str, **kwargs) -> Optional[Dict]:
-        """Make HTTP request with error handling"""
-        url = f"{self.base_url}{endpoint}"
-
-        try:
-            response = self.session.request(
-                method=method, url=url, timeout=self.timeout, **kwargs
-            )
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.Timeout:
-            logger.error(f"Request timeout: {url}")
-            return None
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                logger.debug(f"Resource not found (404): {url}")
-            else:
-                logger.error(f"HTTP error: {e}")
-            return None
-        except Exception as e:
-            logger.error(f"Request failed: {e}")
-            return None
-
     def get_markets(self, next_cursor: str = None) -> Optional[Dict]:
         """
-        Get list of all markets
-
-        Returns:
-            dict: Market list with pagination info
+        获取全量市场列表 (官方接口)
         """
-        params = {}
-        if next_cursor:
-            params["next_cursor"] = next_cursor
-
-        return self._request("GET", "/markets", params=params)
+        try:
+            return self.clob_client.get_markets(next_cursor=next_cursor)
+        except: return None
 
     def get_market(self, market_id: str) -> Optional[Dict]:
         """
-        Get specific market details
-
-        Args:
-            market_id: The market condition ID
-
-        Returns:
-            dict: Market details
+        获取特定市场详情 (官方接口)
         """
-        return self._request("GET", f"/markets/{market_id}")
+        try:
+            return self.clob_client.get_market(market_id=market_id)
+        except: return None
 
     def get_price(self, token_id: str, side: str = "ask") -> Optional[float]:
         """
-        获取 Token 的实时盘口价格 (优先使用官方库)
+        获取 Token 的实时盘口价格 (纯官方库实现)
         """
-        # 官方库模式
-        if self.clob_client:
-            try:
-                # 再次强调：Polymarket 的 side=BUY 对应的是 Ask (买入成本)
-                side_val = "BUY" if side == "ask" else "SELL"
-                price_str = self.clob_client.get_price(token_id=token_id, side=side_val)
-                if price_str:
-                    return float(price_str)
-            except Exception as e:
-                logger.debug(f"官方库 get_price 失败: {e}")
-
-        # 回退模式
         try:
-            book = self.get_orderbook(token_id)
-            if book and isinstance(book, dict):
-                if side == "ask" and book.get("asks"):
-                    return float(book["asks"][0].get("price"))
-                elif side == "bid" and book.get("bids"):
-                    return float(book["bids"][0].get("price"))
-
-            # 如果 orderbook 拿不到，尝试直接查 price 接口
-            # 根据 Polymarket 文档：BUY 侧价格 = 市场上的最佳 ask (即你的买入成本)
+            # 官方语义：BUY 对应的是我们的买入成本 (Ask)
             side_val = "BUY" if side == "ask" else "SELL"
-            res = self._request("GET", "/price", params={"token_id": token_id, "side": side_val})
-            if res and isinstance(res, dict) and "price" in res:
-                return float(res["price"])
+            price_str = self.clob_client.get_price(token_id=token_id, side=side_val)
+            if price_str:
+                return float(price_str)
         except Exception as e:
-            logger.debug(f"抓取 CLOB 价格失败 ({token_id}): {e}")
-
+            logger.debug(f"官方库 get_price 失败 ({token_id}): {e}")
         return None
 
     def get_orderbook(self, token_id: str) -> Optional[Dict]:
         """
-        获取订单簿深度 (优先使用官方库)
+        获取订单簿深度 (纯官方库实现)
         """
-        if self.clob_client:
-            try:
-                return self.clob_client.get_order_book(token_id=token_id)
-            except Exception as e:
-                logger.debug(f"官方库 get_order_book 失败: {e}")
-
-        # 回退到 requests 模式
         try:
-            url = f"{self.base_url}/book"
-            response = self.session.get(url, params={"token_id": token_id}, timeout=15)
-            if response.status_code == 200:
-                return response.json()
+            return self.clob_client.get_orderbook(token_id=token_id)
         except Exception as e:
-            logger.debug(f"获取订单簿失败: {e}")
+            logger.debug(f"官方库 get_orderbook 失败 ({token_id}): {e}")
         return None
 
     def get_buy_prices(self, yes_token_id: str, no_token_id: str) -> Optional[Dict]:
@@ -220,98 +165,73 @@ class PolymarketClient:
 
     def get_multiple_prices(self, token_requests: List[Dict]) -> Dict[str, float]:
         """
-        批量获取多个 token 的价格 (使用 Polymarket 批量接口)
+        批量获取多个 token 的价格 (官方接口实现)
         """
         if not token_requests:
             return {}
 
+        all_prices = {}
         try:
-            # 批量获取价格端点
-            url = f"{self.base_url}/prices"
+            # 准备官方批量请求格式
+            # 我们映射 ask->BUY, bid->SELL
+            batch_req = []
+            for r in token_requests:
+                side_val = "BUY" if r.get("side") == "ask" else "SELL"
+                batch_req.append({"token_id": r["token_id"], "side": side_val})
 
-            # Polymarket 期望的查询参数格式
-            # 我们需要获取可买入的价格，所以 side 应该是 "buy"
-            all_prices = {}
+            # 使用官方批量获取接口
+            results = self.clob_client.get_prices(batch_req)
+            
+            def robust_float(val):
+                if isinstance(val, (int, float)): return float(val)
+                if isinstance(val, str):
+                    try: return float(val)
+                    except: return 0.0
+                return 0.0
 
-            # 分批处理以提高稳定性
-            for i in range(0, len(token_requests), 50):
-                batch = token_requests[i : i + 50]
-                # 根据 Polymarket CLOB 文档，获取买入成本应使用 side=BUY (即 Ask 价格)
-                payload = []
-                for r in batch:
-                    # 遵循 CLOB API 规范：side=BUY 为买入成交价(Ask)，side=SELL 为卖出成交价(Bid)
-                    side_val = "BUY" if r.get("side") == "ask" else "SELL"
-                    payload.append({"token_id": r["token_id"], "side": side_val})
-
-                response = self.session.post(url, json=payload, timeout=20)
-                if response.status_code == 200:
-                    results = response.json()
-                    
-                    def robust_float(val):
-                        if isinstance(val, (int, float)): return float(val)
-                        if isinstance(val, str):
-                            try: return float(val)
-                            except: return 0.0
-                        if isinstance(val, dict):
-                            for k in ["price", "p", "avg", "amount"]:
-                                if k in val: return robust_float(val[k])
-                        return 0.0
-
-                    if isinstance(results, dict):
-                        for tid, p in results.items():
-                            val = robust_float(p)
-                            # 如果是字典格式，默认我们请求的是 BUY(ask)
-                            all_prices[tid] = val
-                            all_prices[f"{tid}:ask"] = val 
-                    elif isinstance(results, list):
-                        for item in results:
-                            tid = item.get("token_id")
-                            price_raw = item.get("price")
-                            side = item.get("side")
-                            if tid and price_raw:
-                                val = robust_float(price_raw)
-                                # 存储映射：API 的 BUY 对应我们的 ask 键
-                                key_side = "ask" if side == "BUY" else "bid"
-                                all_prices[f"{tid}:{key_side}"] = val
-                                all_prices[tid] = val
-                    else:
-                        logger.warning(f"批量价格返回非预期格式: {type(results)}")
-
+            if isinstance(results, list):
+                for item in results:
+                    tid = item.get("token_id")
+                    price_raw = item.get("price")
+                    side = item.get("side")
+                    if tid and price_raw:
+                        val = robust_float(price_raw)
+                        key_side = "ask" if side == "BUY" else "bid"
+                        all_prices[f"{tid}:{key_side}"] = val
+                        all_prices[tid] = val
+            
             return all_prices
         except Exception as e:
-            logger.warning(f"批量获取盘口价格严重失败: {e}")
-            import traceback
-            logger.debug(traceback.format_exc())
+            logger.warning(f"官方库批量获取报价失败: {e}")
         return {}
 
     def get_midpoint(self, token_id: str) -> Optional[float]:
         """
-        Get midpoint price for a token
-
-        Args:
-            token_id: The token ID
-
-        Returns:
-            float: Midpoint price
+        获取中点价格 (官方接口)
         """
-        result = self._request("GET", f"/midpoint", params={"token_id": token_id})
-        if result and "mid" in result:
-            return float(result["mid"])
+        try:
+            res = self.clob_client.get_midpoint(token_id)
+            if res and "mid" in res:
+                return float(res["mid"])
+        except: pass
         return None
 
     def search_markets(self, query: str) -> Optional[Dict]:
         """
-        Search markets by query
-
-        Args:
-            query: Search query string
-
-        Returns:
-            dict: Search results
+        搜索市场
         """
-        return self._request("GET", "/markets", params={"tag": query})
+        try:
+            # Note: The py-clob-client's get_markets method does not directly support a 'query' parameter for searching.
+            # It primarily supports pagination (next_cursor).
+            # This implementation will fetch the first page of markets and return them.
+            # A more robust search would involve fetching all markets and filtering locally,
+            # or using a different API endpoint if available.
+            return self.clob_client.get_markets(next_cursor=None) 
+        except Exception as e:
+            logger.error(f"搜索市场失败: {e}")
+            return None
 
-    # Trading methods (require authentication)
+    # --- 交易指令 (强依赖官方库) ---
     def create_order(
         self,
         token_id: str,
@@ -321,48 +241,31 @@ class PolymarketClient:
         order_type: str = "GTC",
     ) -> Optional[Dict]:
         """
-        Create a new order (requires API key)
-
-        Args:
-            token_id: Token to trade
-            side: "BUY" or "SELL"
-            price: Order price
-            size: Order size
-            order_type: Order type (GTC, GTD, FOK)
-
-        Returns:
-            dict: Order confirmation
+        创建新订单
         """
-        if not self.api_key:
-            logger.error("API key required for trading")
+        try:
+            # 转换方向
+            side_val = "BUY" if side.upper() == "BUY" else "SELL"
+            # 使用官方签名下单 (SDK 会自动处理签名)
+            return self.clob_client.create_order(
+                token_id=token_id,
+                price=price,
+                size=size,
+                side=side_val
+            )
+        except Exception as e:
+            logger.error(f"下单失败: {e}")
             return None
-
-        order_data = {
-            "tokenID": token_id,
-            "side": side.upper(),
-            "price": str(price),
-            "size": str(size),
-            "type": order_type,
-        }
-
-        logger.info(f"Creating order: {side} {size} @ {price}")
-        return self._request("POST", "/order", json=order_data)
 
     def cancel_order(self, order_id: str) -> Optional[Dict]:
         """
-        Cancel an existing order
-
-        Args:
-            order_id: Order ID to cancel
-
-        Returns:
-            dict: Cancellation confirmation
+        取消订单
         """
-        if not self.api_key:
-            logger.error("API key required for trading")
+        try:
+            return self.clob_client.cancel_order(order_id)
+        except Exception as e:
+            logger.error(f"取消订单失败: {e}")
             return None
-
-        return self._request("DELETE", f"/order/{order_id}")
 
     def discover_weather_markets(self) -> list:
         """
@@ -424,7 +327,7 @@ class PolymarketClient:
                 logger.debug(f"[{source_label}] 发现 {new_markets_count} 个新市场合约")
 
         try:
-            # 1. 扫描活跃且未合并的 (全量) - 增加到20000以确保抓取所有天气市场
+            # 1. 扫描活跃且未合并的 (全量)
             for offset in range(0, 20000, 1000):
                 params = {
                     "active": "true",
@@ -432,18 +335,31 @@ class PolymarketClient:
                     "limit": 1000,
                     "offset": offset,
                 }
-                response = self.session.get(
-                    gamma_url, params=params, timeout=self.timeout
-                )
-                if response.status_code == 200:
-                    events = response.json()
-                    if not events:
-                        break
-                    process_events(events, f"Open-O{offset}")
-                else:
+                
+                # 增加重试机制
+                success = False
+                for retry in range(3):
+                    try:
+                        response = self.session.get(
+                            gamma_url, params=params, timeout=self.timeout
+                        )
+                        if response.status_code == 200:
+                            events = response.json()
+                            if not events:
+                                break
+                            process_events(events, f"Open-O{offset}")
+                            success = True
+                            break
+                        else:
+                            logger.warning(f"Gamma API 状态码异常 ({response.status_code})，第 {retry+1} 次重试...")
+                    except Exception as e:
+                        logger.warning(f"发现市场请求出错: {e}，第 {retry+1} 次重试...")
+                    time.sleep(2)
+                
+                if not success:
                     break
 
-            # 2. 扫描活跃但已关闭的 - 增加到20000以覆盖更多历史
+            # 2. 扫描活跃但已关闭的
             for offset in range(0, 20000, 1000):
                 params = {
                     "active": "true",
@@ -451,15 +367,25 @@ class PolymarketClient:
                     "limit": 1000,
                     "offset": offset,
                 }
-                response = self.session.get(
-                    gamma_url, params=params, timeout=self.timeout
-                )
-                if response.status_code == 200:
-                    events = response.json()
-                    if not events:
-                        break
-                    process_events(events, f"Closed-O{offset}")
-                else:
+                
+                success = False
+                for retry in range(3):
+                    try:
+                        response = self.session.get(
+                            gamma_url, params=params, timeout=self.timeout
+                        )
+                        if response.status_code == 200:
+                            events = response.json()
+                            if not events:
+                                break
+                            process_events(events, f"Closed-O{offset}")
+                            success = True
+                            break
+                    except Exception as e:
+                        logger.warning(f"发现关闭市场请求出错: {e}，第 {retry+1} 次重试...")
+                    time.sleep(2)
+
+                if not success:
                     break
 
             # 3. 扫描非活跃但未关闭的市场

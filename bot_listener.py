@@ -6,6 +6,7 @@ import re
 from datetime import datetime
 from src.utils.config_loader import load_config
 from src.utils.notifier import TelegramNotifier
+from src.data_collection.polymarket_api import PolymarketClient
 
 
 def start_bot():
@@ -369,24 +370,133 @@ def start_bot():
         
         return html_path
 
+    @bot.message_handler(func=lambda m: True)
+    def handle_city_query(message):
+        """输入城市名直查当日天气市场"""
+        import re
+        from datetime import datetime
+        
+        query = message.text.strip()
+        if len(query) < 2 or query.startswith("/"):
+            return
+
+        bot.send_chat_action(message.chat.id, "typing")
+        
+        try:
+            # 1. 优先从本地全量市场缓存读取 (速度快，不依赖实时全量扫描)
+            cache_path = "data/all_markets.json"
+            if not os.path.exists(cache_path):
+                # 扫码还没完成的情形
+                bot.reply_to(message, "⏳ 系统正在进行首次数据同步（约需1分钟），请稍后再试。")
+                return
+                
+            with open(cache_path, "r", encoding="utf-8") as f:
+                cached_data = json.load(f)
+            
+            pm = PolymarketClient(config["polymarket"])
+            
+            # 2. 筛选匹配城市及日期的市场
+            today_str = datetime.now().strftime("%Y-%m-%d")
+            city_markets = []
+            
+            for m_id, m in cached_data.items():
+                title = m.get("event_title", "") + m.get("question", "") + m.get("full_title", "")
+                if query.lower() in title.lower():
+                    # 提取并验证日期
+                    target_date = m.get("target_date")
+                    if not target_date:
+                        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', title)
+                        target_date = date_match.group(1) if date_match else "Unknown"
+                    
+                    if target_date != "Unknown" and target_date < today_str:
+                        continue
+                        
+                    m["target_date"] = target_date
+                    city_markets.append(m)
+            
+            if not city_markets:
+                if message.chat.type == "private":
+                    bot.reply_to(message, f"❌ 未找到相关的活跃天气市场。\n提示：请确保输入的是城市常用名（如 Seattle, London）。")
+                return
+
+            # 获取最早日期
+            valid_dates = [m["target_date"] for m in city_markets if m["target_date"] != "Unknown"]
+            if not valid_dates:
+                 bot.reply_to(message, "❌ 该城市目前没有已标明结算日期的活跃市场。")
+                 return
+                 
+            earliest_date = min(valid_dates)
+            target_markets = [m for m in city_markets if m["target_date"] == earliest_date]
+            
+            # 3. 构建报告
+            msg_lines = [
+                f"🌡️ <b>{query.upper()} 概率报告 ({earliest_date})</b>\n",
+                "隐含概率 (Midpoint) 及买入报价：\n"
+            ]
+            
+            # 批量获取实时价格 (确保报价最新)
+            price_reqs = []
+            for m in target_markets:
+                t_ids = m.get("tokens", [])
+                if len(t_ids) >= 1:
+                    price_reqs.append({"token_id": t_ids[0], "side": "ask"})
+                    price_reqs.append({"token_id": t_ids[0], "side": "bid"})
+            
+            price_map = pm.get_multiple_prices(price_reqs)
+            
+            for m in target_markets:
+                tid = m.get("active_token_id") or (m.get("tokens", [])[0] if m.get("tokens") else None)
+                if not tid: continue
+                
+                # 获取中点价 (概率)
+                mid = pm.get_midpoint(tid)
+                prob = f"{mid*100:.1f}%" if mid is not None else "N/A"
+                
+                # 获取报价
+                buy_yes = price_map.get(f"{tid}:ask")
+                bid_yes = price_map.get(f"{tid}:bid")
+                buy_no = (1.0 - bid_yes) if bid_yes is not None else None
+                
+                yes_str = f"{int(buy_yes*100)}¢" if buy_yes else "??¢"
+                no_str = f"{int(buy_no*100)}¢" if buy_no else "??¢"
+                
+                opt = m.get("option") or m.get("question") or ""
+                # 简化选项显示
+                opt = re.sub(r'.*temperature in.*be ', '', opt, flags=re.I)
+                
+                msg_lines.append(
+                    f"🔹 <b>{opt}</b>\n"
+                    f"   └ 隐含概率: <code>{prob}</code>\n"
+                    f"   └ 买入 是:{yes_str} | 买入 否:{no_str}\n"
+                )
+            
+            msg_lines.append(f"\n🔗 <a href='https://polymarket.com/event/{target_markets[0]['slug']}'>在 Polymarket 查看</a>")
+            bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML", disable_web_page_preview=True)
+
+        except Exception as e:
+            logger.error(f"城市直查失败: {e}")
+            if message.chat.type == "private":
+                bot.reply_to(message, "❌ 抱歉，数据处理出现异常。")
+
     @bot.message_handler(commands=["status"])
     def get_status(message):
         bot.reply_to(
             message, "✅ 监控引擎正在运行中...\n7x24h 实时扫码 Polymarket 气温市场。"
         )
 
-    try:
-        while True:
-            try:
-                bot.infinity_polling(timeout=60, long_polling_timeout=60)
-            except (KeyboardInterrupt, SystemExit):
-                print("\n检测到退出信号，机器人正在关机...")
-                break
-            except Exception as e:
-                print(f"Bot 轮询连接异常 (通常是网络问题): {e}")
-                time.sleep(10)  # 等待10秒后自动重连
-    except KeyboardInterrupt:
-        print("\n机器人已停止。")
+    import logging
+    # 强制关闭 telebot 内部的刷屏日志
+    telebot.logger.setLevel(logging.CRITICAL)
+    
+    while True:
+        try:
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except (KeyboardInterrupt, SystemExit):
+            print("\n检测到退出信号，机器人正在关机...")
+            break
+        except Exception as e:
+            print(f"Bot 轮询连接异常: {e}")
+            time.sleep(10)
 
 
 if __name__ == "__main__":
