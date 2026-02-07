@@ -201,7 +201,7 @@ def start_bot():
                         msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} ⚠️")
                         msg_lines.append(f"   (NWS官方预报: {nws_high}{temp_symbol}，差异 {diff:.1f}°)")
                     else:
-                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} (NWS: {nws_high})")
+                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} (NWS: {nws_high}{temp_symbol})")
                 else:
                     msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
 
