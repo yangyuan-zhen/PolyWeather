@@ -177,7 +177,15 @@ def start_bot():
             weather_data = weather.fetch_all_sources(city_name, lat=coords["lat"], lon=coords["lon"])
 
             msg_lines = [f"📍 <b>{city_name.title()} 天气详情</b>"]
-            msg_lines.append(f"⏱️ 生成时间: {datetime.now().strftime('%H:%M:%S')}")
+            
+            # 立即显示城市风险档案，防止被淹没
+            risk_profile = get_city_risk_profile(city_name)
+            if risk_profile:
+                risk_warning = format_risk_warning(risk_profile, "°F") # 默认尝试用F显示偏差
+                if risk_warning:
+                    msg_lines.append(risk_warning)
+
+            msg_lines.append(f"\n⏱️ 生成时间: {datetime.now().strftime('%H:%M:%S')}")
             msg_lines.append("═" * 20)
 
             open_meteo = weather_data.get("open-meteo", {})
@@ -190,12 +198,6 @@ def start_bot():
                 time_only = local_time.split(" ")[1] if " " in local_time else local_time
                 msg_lines.append(f"🕐 当地时间: {time_only}")
 
-            # 显示城市风险档案
-            risk_profile = get_city_risk_profile(city_name)
-            if risk_profile:
-                risk_warning = format_risk_warning(risk_profile, temp_symbol)
-                if risk_warning:
-                    msg_lines.append(f"\n{risk_warning}")
 
             daily = open_meteo.get("daily", {})
             dates = daily.get("time", [])
