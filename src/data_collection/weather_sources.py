@@ -425,10 +425,17 @@ class WeatherDataCollector:
                 # 智能合并：HRRR 仅覆盖 48 小时，远期用 ECMWF 补全
                 merged_max = []
                 for i in range(len(ecmwf_max)):
-                    if i < len(hrrr_max) and hrrr_max[i] is not None:
-                        merged_max.append(hrrr_max[i])  # 短期用 HRRR
+                    hrrr_val = hrrr_max[i] if i < len(hrrr_max) else None
+                    ecmwf_val = ecmwf_max[i] if i < len(ecmwf_max) else None
+                    
+                    # 优先 HRRR，其次 ECMWF，都没有就跳过
+                    if hrrr_val is not None:
+                        merged_max.append(hrrr_val)
+                    elif ecmwf_val is not None:
+                        merged_max.append(ecmwf_val)
                     else:
-                        merged_max.append(ecmwf_max[i])  # 远期用 ECMWF
+                        # 两个都没有，用占位符 (理论上不应该发生)
+                        merged_max.append(ecmwf_val)  # None
                 daily_data["temperature_2m_max"] = merged_max
 
             # 映射逐小时数据

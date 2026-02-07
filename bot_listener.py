@@ -191,6 +191,10 @@ def start_bot():
             nws_high = nws.get("today_high")
             
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
+                # 跳过无效数据
+                if t is None:
+                    continue
+                    
                 day_label = "今天" if d == city_today_str else d[5:]
                 indicator = "👉 " if d == city_today_str else "   "
                 
