@@ -170,6 +170,7 @@ def get_city_risk_profile(city_name: str) -> dict:
         "tor": "toronto",
         "ank": "ankara",
         "sel": "seoul",
+        "seo": "seoul",
         "wel": "wellington",
         "ba": "buenos aires",
         "首尔": "seoul",
@@ -212,7 +213,7 @@ def format_risk_warning(profile: dict, temp_symbol: str) -> str:
     
     # 典型偏差
     if profile["typical_bias_f"] >= 1.0:
-        lines.append(f"   📊 典型偏差: ±{profile['typical_bias_f']}{temp_symbol}")
+        lines.append(f"   📊 偏差: ±{profile['typical_bias_f']}{temp_symbol}")
     
     # 偏差方向说明
     if profile["bias_direction"]:
