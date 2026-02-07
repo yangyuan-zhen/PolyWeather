@@ -228,8 +228,8 @@ class WeatherDataCollector:
             params = {
                 "ids": icao,
                 "format": "json",
-                "hours": 3,  # 获取最近3小时的观测
-                "_t": int(time.time()),  # 禁用缓存
+                "hours": 24,  # 抓取 24 小时数据以计算今日最高
+                "_t": int(time.time()),
             }
 
             response = self.session.get(
@@ -242,28 +242,32 @@ class WeatherDataCollector:
 
             data = response.json()
             if not data:
-                logger.warning(f"METAR 数据为空: {icao}")
                 return None
 
-            # 取最新的观测记录
+            # 1. 取最新的观测作为当前状态
             latest = data[0]
-
-            # 提取温度 (METAR 原始单位是摄氏度)
             temp_c = latest.get("temp")
             dewp_c = latest.get("dewp")
+            obs_time = latest.get("reportTime", "")
 
-            # 转换为华氏度（如果需要）
-            if use_fahrenheit and temp_c is not None:
-                temp = temp_c * 9 / 5 + 32
+            # 2. 计算过去 24 小时内的最高实测温
+            max_so_far_c = -999
+            for obs in data:
+                t = obs.get("temp")
+                if t is not None and t > max_so_far_c:
+                    max_so_far_c = t
+
+            # 转换为单位
+            if use_fahrenheit:
+                temp = temp_c * 9 / 5 + 32 if temp_c is not None else None
+                max_so_far = max_so_far_c * 9 / 5 + 32 if max_so_far_c > -900 else None
                 dewp = dewp_c * 9 / 5 + 32 if dewp_c is not None else None
                 unit = "fahrenheit"
             else:
                 temp = temp_c
+                max_so_far = max_so_far_c if max_so_far_c > -900 else None
                 dewp = dewp_c
                 unit = "celsius"
-
-            # 解析观测时间
-            obs_time = latest.get("reportTime", "")
 
             result = {
                 "source": "metar",
@@ -271,17 +275,12 @@ class WeatherDataCollector:
                 "station_name": latest.get("name", icao),
                 "timestamp": datetime.utcnow().isoformat(),
                 "observation_time": obs_time,
-                "raw_metar": latest.get("rawOb", ""),
                 "current": {
                     "temp": round(temp, 1) if temp is not None else None,
+                    "max_temp_so_far": round(max_so_far, 1) if max_so_far is not None else None,
                     "dewpoint": round(dewp, 1) if dewp is not None else None,
-                    "humidity": latest.get("rh"),  # 相对湿度
-                    "wind_speed_kt": latest.get("wspd"),  # 风速 (knots)
-                    "wind_dir": latest.get("wdir"),  # 风向 (度)
-                    "visibility_miles": latest.get("visib"),  # 能见度 (英里)
-                    "altimeter": latest.get("altim"),  # 气压
-                    "flight_category": latest.get("fltcat"),  # VFR/IFR 等
-                    "clouds": latest.get("clouds", []),
+                    "humidity": latest.get("rh"),
+                    "wind_speed_kt": latest.get("wspd"),
                 },
                 "unit": unit,
             }
