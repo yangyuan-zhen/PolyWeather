@@ -11,6 +11,7 @@ if project_root not in sys.path:
 
 from src.utils.config_loader import load_config
 from src.data_collection.weather_sources import WeatherDataCollector
+from src.data_collection.city_risk_profiles import get_city_risk_profile, format_risk_warning
 
 def analyze_weather_trend(weather_data, temp_symbol):
     """根据实测与预测分析气温态势，增加峰值时刻预测"""
@@ -23,6 +24,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
         return ""
         
     curr_temp = metar.get("current", {}).get("temp")
+    max_so_far = metar.get("current", {}).get("max_temp_so_far")  # 今日实测最高
     daily = open_meteo.get("daily", {})
     forecast_high = daily.get("temperature_2m_max", [None])[0]
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
@@ -36,17 +38,27 @@ def analyze_weather_trend(weather_data, temp_symbol):
         local_date_str = datetime.now().strftime("%Y-%m-%d")
         local_hour = datetime.now().hour
 
-    # --- 增加：峰值时刻预测逻辑 ---
+    # === 核心判断：实测是否已超预报 ===
+    if max_so_far is not None and forecast_high is not None:
+        if max_so_far > forecast_high + 0.5:
+            # 实测已超预报！
+            exceed_by = max_so_far - forecast_high
+            insights.append(f"🚨 <b>预报已被击穿</b>：实测最高 {max_so_far}{temp_symbol} 已超预报 {forecast_high}{temp_symbol} 约 {exceed_by:.1f}°！")
+            insights.append(f"💡 <b>博弈建议</b>：市场需重新评估，关注更高温度区间。")
+            # 直接返回，不再显示过时的建议
+            if wind_speed >= 10:
+                insights.append(f"🍃 <b>清劲风</b>：空气流动快，可能伴随阵风引起微小波动。")
+            return "\n💡 <b>态势分析</b>\n" + "\n".join(insights)
+
+    # --- 峰值时刻预测逻辑 ---
     hourly = open_meteo.get("hourly", {})
     times = hourly.get("time", [])
-    # 优先寻找高精模型的逐小时数据
-    temps = hourly.get("temperature_2m_hrrr_conus") or hourly.get("temperature_2m_ecmwf_ifs") or hourly.get("temperature_2m", [])
+    temps = hourly.get("temperature_2m", [])
     
     peak_hours = []
     if times and temps and forecast_high is not None:
         for t_str, temp in zip(times, temps):
             if t_str.startswith(local_date_str):
-                # 记录所有接近最高温的小时 (容差 0.2)
                 if abs(temp - forecast_high) <= 0.2:
                     hour = t_str.split("T")[1][:5]
                     peak_hours.append(hour)
@@ -54,7 +66,8 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if peak_hours:
             window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
             insights.append(f"⏱️ <b>预计峰值时刻</b>：今天 <b>{window}</b> 之间。")
-            if local_hour < int(peak_hours[0].split(":")[0]):
+            # 只有在实测还没超预报时才给这个建议
+            if local_hour < int(peak_hours[0].split(":")[0]) and (max_so_far is None or max_so_far < forecast_high):
                 insights.append(f"🎯 <b>博弈建议</b>：关注该时段实测能否站稳 {forecast_high}{temp_symbol}。")
 
     if curr_temp is not None and forecast_high is not None:
@@ -176,6 +189,13 @@ def start_bot():
             if local_time:
                 time_only = local_time.split(" ")[1] if " " in local_time else local_time
                 msg_lines.append(f"🕐 当地时间: {time_only}")
+
+            # 显示城市风险档案
+            risk_profile = get_city_risk_profile(city_name)
+            if risk_profile:
+                risk_warning = format_risk_warning(risk_profile, temp_symbol)
+                if risk_warning:
+                    msg_lines.append(f"\n{risk_warning}")
 
             daily = open_meteo.get("daily", {})
             dates = daily.get("time", [])
