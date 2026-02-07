@@ -15,7 +15,8 @@ def run_bot():
     """启动电报交互模块 (bot_listener.py)"""
     logger.info("🤖 正在启动电报指令监听器 (被动查询模式)...")
     cmd = [sys.executable, "bot_listener.py"]
-    subprocess.run(cmd)
+    # 设置工作目录，确保导入正常
+    subprocess.run(cmd, cwd=os.getcwd())
 
 def main():
     logger.info("🌟 PolyWeather 全功能系统正在初始化...")
@@ -29,12 +30,12 @@ def main():
     bot_thread = threading.Thread(target=run_bot, daemon=True)
 
     # 启动线程
-    monitor_thread.start()
+    # monitor_thread.start()
     bot_thread.start()
 
-    logger.success("🚀 系统已全面上线！")
-    logger.info("您可以现在去电报发送 /signal 指令测试。")
-    logger.info("监控引擎将在后台持续运行，发现 85¢-95¢ 价格将自动推送。")
+    logger.success("🚀 系统已上线（天气查询模式）！")
+    logger.info("已暂停监控引擎和自动发现市场功能。")
+    logger.info("现在仅支持直接查询各城市实时天气与 Open-Meteo 预测。")
 
     try:
         # 保持主进程运行
