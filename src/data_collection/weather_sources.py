@@ -13,7 +13,26 @@ class WeatherDataCollector:
     - OpenWeatherMap (free, fast updates)
     - Weather Underground (Polymarket settlement source)
     - Visual Crossing (rich historical data)
+    - NOAA Aviation Weather (METAR - airport observations)
     """
+
+    # Polymarket 12 个天气市场对应的 ICAO 机场代码
+    # 这些是 Weather Underground 结算源使用的气象站
+    CITY_TO_ICAO = {
+        "seattle": "KSEA",  # Seattle-Tacoma Airport
+        "london": "EGLC",  # London City Airport
+        "dallas": "KDAL",  # Dallas Love Field
+        "miami": "KMIA",  # Miami International
+        "atlanta": "KATL",  # Hartsfield-Jackson
+        "chicago": "KORD",  # O'Hare International
+        "new york": "KLGA",  # LaGuardia Airport
+        "nyc": "KLGA",  # Alias
+        "seoul": "RKSI",  # Incheon International
+        "ankara": "LTAC",  # Esenboğa International
+        "toronto": "CYYZ",  # Toronto Pearson
+        "wellington": "NZWN",  # Wellington International
+        "buenos aires": "SAEZ",  # Ezeiza International
+    }
 
     def __init__(self, config: dict):
         self.config = config
@@ -167,6 +186,113 @@ class WeatherDataCollector:
             logger.error(f"Visual Crossing request failed: {e}")
             return None
 
+    def get_icao_code(self, city: str) -> Optional[str]:
+        """
+        根据城市名获取对应的 ICAO 机场代码
+        """
+        normalized = city.lower().strip()
+
+        # 直接匹配
+        if normalized in self.CITY_TO_ICAO:
+            return self.CITY_TO_ICAO[normalized]
+
+        # 模糊匹配
+        for key, icao in self.CITY_TO_ICAO.items():
+            if key in normalized or normalized in key:
+                return icao
+
+        return None
+
+    def fetch_metar(self, city: str, use_fahrenheit: bool = False) -> Optional[Dict]:
+        """
+        从 NOAA Aviation Weather Center 获取 METAR 航空气象数据
+
+        这是 Polymarket 天气市场的结算数据源 (Weather Underground) 使用的相同气象站
+
+        Args:
+            city: 城市名称
+            use_fahrenheit: 是否转换为华氏度
+
+        Returns:
+            dict: METAR 数据，包含温度、露点、风速等
+        """
+        icao = self.get_icao_code(city)
+        if not icao:
+            logger.warning(f"未找到城市 {city} 对应的 ICAO 代码")
+            return None
+
+        try:
+            # NOAA Aviation Weather API (免费，无需 Key)
+            url = "https://aviationweather.gov/api/data/metar"
+            params = {
+                "ids": icao,
+                "format": "json",
+                "hours": 3,  # 获取最近3小时的观测
+            }
+
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+
+            data = response.json()
+            if not data:
+                logger.warning(f"METAR 数据为空: {icao}")
+                return None
+
+            # 取最新的观测记录
+            latest = data[0]
+
+            # 提取温度 (METAR 原始单位是摄氏度)
+            temp_c = latest.get("temp")
+            dewp_c = latest.get("dewp")
+
+            # 转换为华氏度（如果需要）
+            if use_fahrenheit and temp_c is not None:
+                temp = temp_c * 9 / 5 + 32
+                dewp = dewp_c * 9 / 5 + 32 if dewp_c is not None else None
+                unit = "fahrenheit"
+            else:
+                temp = temp_c
+                dewp = dewp_c
+                unit = "celsius"
+
+            # 解析观测时间
+            obs_time = latest.get("reportTime", "")
+
+            result = {
+                "source": "metar",
+                "icao": icao,
+                "station_name": latest.get("name", icao),
+                "timestamp": datetime.utcnow().isoformat(),
+                "observation_time": obs_time,
+                "raw_metar": latest.get("rawOb", ""),
+                "current": {
+                    "temp": round(temp, 1) if temp is not None else None,
+                    "dewpoint": round(dewp, 1) if dewp is not None else None,
+                    "humidity": latest.get("rh"),  # 相对湿度
+                    "wind_speed_kt": latest.get("wspd"),  # 风速 (knots)
+                    "wind_dir": latest.get("wdir"),  # 风向 (度)
+                    "visibility_miles": latest.get("visib"),  # 能见度 (英里)
+                    "altimeter": latest.get("altim"),  # 气压
+                    "flight_category": latest.get("fltcat"),  # VFR/IFR 等
+                    "clouds": latest.get("clouds", []),
+                },
+                "unit": unit,
+            }
+
+            logger.info(
+                f"✈️ METAR {icao}: {temp:.1f}°{'F' if use_fahrenheit else 'C'} "
+                f"(obs: {obs_time})"
+            )
+
+            return result
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"METAR 请求失败 ({icao}): {e}")
+            return None
+        except (KeyError, IndexError, TypeError) as e:
+            logger.error(f"METAR 数据解析失败 ({icao}): {e}")
+            return None
+
     def fetch_from_open_meteo(
         self,
         lat: float,
@@ -234,32 +360,35 @@ class WeatherDataCollector:
     def extract_date_from_title(self, title: str) -> Optional[str]:
         """
         从标题中提取日期并标准化为 YYYY-MM-DD
-        例如: "Highest temperature in Seattle on February 6?" -> "2026-02-06"
+        支持: "February 6", "2月6日", "2-6" 等
         """
+        # 1. 尝试英文月份
         months = {
-            "January": "01",
-            "February": "02",
-            "March": "03",
-            "April": "04",
-            "May": "05",
-            "June": "06",
-            "July": "07",
-            "August": "08",
-            "September": "09",
-            "October": "10",
-            "November": "11",
-            "December": "12",
+            "January": "01", "February": "02", "March": "03", "April": "04",
+            "May": "05", "June": "06", "July": "07", "August": "08",
+            "September": "09", "October": "10", "November": "11", "December": "12",
         }
-
         for month_name, month_val in months.items():
             if month_name in title:
                 match = re.search(f"{month_name}\\s+(\\d+)", title)
                 if match:
                     day = int(match.group(1))
                     year = datetime.now().year
-                    # 简单处理跨年逻辑：如果提取到的月份小于当前月份太多，可能是指明年
-                    # 但对于天气预报通常只看近期几天
                     return f"{year}-{month_val}-{day:02d}"
+
+        # 2. 尝试中文格式 "2月7日" 或 "02月07日"
+        zh_match = re.search(r"(\d{1,2})月(\d{1,2})日", title)
+        if zh_match:
+            month = int(zh_match.group(1))
+            day = int(zh_match.group(2))
+            year = datetime.now().year
+            return f"{year}-{month:02d}-{day:02d}"
+        
+        # 3. 尝试 ISO 格式 YYYY-MM-DD
+        iso_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", title)
+        if iso_match:
+            return iso_match.group(0)
+
         return None
 
     def get_coordinates(self, city: str) -> Optional[Dict[str, float]]:
@@ -317,40 +446,36 @@ class WeatherDataCollector:
 
     def extract_city_from_question(self, question: str) -> Optional[str]:
         """
-        从 Polymarket 问题描述中提取城市名称
-        支持多种描述方式:
-        - "Highest temperature in Ankara on February 5?"
-        - "Will the temperature in London be..."
-        - "Temp in New York..."
+        从 Polymarket 问题描述或 Slug 中提取城市名称
         """
         q = question.lower()
 
-        # 移除常见的干扰词
-        for noise in ["highest ", "the ", "will ", "lowest "]:
-            if q.startswith(noise):
-                q = q[len(noise) :]
+        # 1. 优先尝试已知城市列表 (硬编码匹配)
+        known_cities = {
+            "london": "London", "伦敦": "London",
+            "new york": "New York", "new york's central park": "New York", "nyc": "New York", "纽约": "New York",
+            "seattle": "Seattle", "西雅图": "Seattle",
+            "chicago": "Chicago", "芝加哥": "Chicago",
+            "dallas": "Dallas", "达拉斯": "Dallas",
+            "miami": "Miami", "迈阿密": "Miami",
+            "atlanta": "Atlanta", "亚特兰大": "Atlanta",
+            "seoul": "Seoul", "首尔": "Seoul",
+            "toronto": "Toronto", "多伦多": "Toronto",
+            "ankara": "Ankara", "安卡拉": "Ankara",
+            "wellington": "Wellington", "惠灵顿": "Wellington",
+            "buenos aires": "Buenos Aires", "布宜诺斯艾利斯": "Buenos Aires"
+        }
+        
+        for key, val in known_cities.items():
+            if key in q:
+                return val
 
-        # 处理 "temperature in [City]" | "temp in [City]"
-        triggers = ["temperature in ", "temp in ", "weather in "]
+        # 2. 从英文模板中提取
+        triggers = ["temperature in ", "temp in ", "weather in ", "highest-temperature-in-", "temperature-in-"]
         for trigger in triggers:
             if trigger in q:
                 part = q.split(trigger)[1]
-                # 截断日期和其他后缀
-                # 按照 "on", "at", "above", "below", "?", " ", "be", "is" 分割
-                delimiters = [
-                    " on ",
-                    " at ",
-                    " above ",
-                    " below ",
-                    " be ",
-                    " is ",
-                    " will ",
-                    " has ",
-                    " reached ",
-                    "?",
-                    " (",
-                    ", ",
-                ]
+                delimiters = [" on ", " at ", " above ", " below ", " be ", " is ", " will ", " has ", " reached ", "?", " (", ", ", "-"]
                 city = part
                 for d in delimiters:
                     if d in city:
@@ -403,6 +528,11 @@ class WeatherDataCollector:
             logger.info(f"🌡️ {city} 使用华氏度 (°F)")
         else:
             logger.info(f"🌡️ {city} 使用摄氏度 (°C)")
+
+        # METAR (Airport Weather - Same source as Weather Underground settlement)
+        metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
+        if metar_data:
+            results["metar"] = metar_data
 
         # Open-Meteo (Primary Free Source - No Key)
         if lat and lon:

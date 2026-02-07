@@ -12,9 +12,6 @@ from src.data_collection.polymarket_api import PolymarketClient
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.onchain_tracker import OnchainTracker
 from src.models.statistical_model import TemperaturePredictor
-from src.analysis.volume_analyzer import VolumeAnalyzer
-from src.analysis.orderbook_analyzer import OrderbookAnalyzer
-from src.analysis.technical_indicators import TechnicalIndicators
 from src.analysis.whale_tracker import WhaleTracker
 from src.strategy.decision_engine import DecisionEngine
 from src.strategy.risk_manager import RiskManager
@@ -38,7 +35,6 @@ def main():
     # 3. 初始化分析与交易组件
     predictor = TemperaturePredictor()
     risk_manager = RiskManager(config_data.get("config", {}))
-    orderbook_analyzer = OrderbookAnalyzer(config_data.get("config", {}))
     decision_engine = DecisionEngine(config_data.get("config", {}))
     whale_tracker = WhaleTracker(config_data.get("config", {}), onchain)
     paper_trader = PaperTrader()
@@ -139,16 +135,18 @@ def main():
 
                 active_tid = m.get("active_token_id")
 
-                # 如果是多选一市场（比如 Dallas 76-77°F）
-                if len(ts) > 2 and active_tid:
+                # 智能识别买入/买否 Token
+                if active_tid and isinstance(ts, list):
                     # 获取该档位的买入价 (Ask)
                     price_requests.append({"token_id": active_tid, "side": "ask"})
-                    # 获取该档位的买入“否”价所需的 Bid 价
-                    price_requests.append({"token_id": active_tid, "side": "bid"})
-                # 如果是传统的 Yes/No 二选一市场
-                elif len(ts) == 2:
-                    price_requests.append({"token_id": ts[0], "side": "ask"})  # Buy Yes
-                    price_requests.append({"token_id": ts[1], "side": "ask"})  # Buy No
+                    
+                    if len(ts) == 2:
+                        # 传统的二选一，直接获取 No Token 的 Ask
+                        no_tid = ts[1] if ts[0] == active_tid else ts[0]
+                        price_requests.append({"token_id": no_tid, "side": "ask"})
+                    else:
+                        # 多选一，需要用 1 - Bid(Yes) 来模拟 Buy No
+                        price_requests.append({"token_id": active_tid, "side": "bid"})
 
             if price_requests:
                 logger.info(f"正在同步 {len(price_requests)} 个档位的真实盘口价格...")
@@ -157,13 +155,13 @@ def main():
 
             # 3. 按城市分组（按condition_id去重）
             markets_by_city = {}
-            seen_condition_ids = set()
-
+            seen_condition_ids = set() # Initialize seen_condition_ids here
             for i, m in enumerate(all_weather_markets):
-                c_id = m.get("condition_id")
-                if c_id in seen_condition_ids:
-                    continue  # 跳过重复
-                seen_condition_ids.add(c_id)
+                # Use condition_id + active_token_id as unique key to support multi-bracket markets
+                unique_market_key = f"{m.get('condition_id')}_{m.get('active_token_id')}"
+                if unique_market_key in seen_condition_ids:
+                    continue 
+                seen_condition_ids.add(unique_market_key)
 
                 # 注入实时批量价格
                 ts = m.get("tokens", [])
@@ -175,24 +173,24 @@ def main():
 
                 active_tid = m.get("active_token_id")
 
-                # 多选一市场逻辑
-                if len(ts) > 2 and active_tid:
+                if active_tid and isinstance(ts, list):
                     m["buy_yes_live"] = token_price_map.get(f"{active_tid}:ask")
-                    # 买入“否”的价格 = 1 - 该档位的 Bid
-                    bid_val = token_price_map.get(f"{active_tid}:bid")
-                    if bid_val:
-                        m["buy_no_live"] = 1.0 - bid_val
-                # 二选一市场逻辑
-                elif len(ts) == 2:
-                    m["buy_yes_live"] = token_price_map.get(f"{ts[0]}:ask")
-                    m["buy_no_live"] = token_price_map.get(f"{ts[1]}:ask")
+                    
+                    if len(ts) == 2:
+                        no_tid = ts[1] if ts[0] == active_tid else ts[0]
+                        m["buy_no_live"] = token_price_map.get(f"{no_tid}:ask")
+                    else:
+                        # 1 - Bid(Yes) = Ask(No)
+                        bid_val = token_price_map.get(f"{active_tid}:bid")
+                        if bid_val:
+                            m["buy_no_live"] = 1.0 - bid_val
 
                 # 优先使用发现阶段已经识别出的城市名
                 city = m.get("city")
 
-                # 如果发现阶段没识别出，再尝试从问题文本提取
+                # 如果发现阶段没识别出，再尝试从问题文本或 Slug 提取
                 if not city or city == "Unknown":
-                    full_context = f"{m.get('event_title', '')} {m.get('question', '')}"
+                    full_context = f"{m.get('event_title', '')} {m.get('question', '')} {m.get('slug', '')}"
                     city = weather.extract_city_from_question(full_context)
 
                 if i < 5:
@@ -341,34 +339,21 @@ def main():
                         # 严格触发条件: 价格必须处于 85-95¢ 区间 (真正的高概率信号)
                         yes_in_range = buy_yes_price and 0.85 <= buy_yes_price <= 0.95
                         no_in_range = buy_no_price and 0.85 <= buy_no_price <= 0.95
-                        
+
                         # 50¢ 保护：价格接近 50% 说明市场无明确方向，跳过
                         is_undecided = 0.45 <= current_prob <= 0.55
-                        
+
                         if (yes_in_range or no_in_range) and not is_undecided:
                             alert_key = f"alert_{market_id}_{int(current_prob * 100)}"
                             if alert_key not in pushed_signals:
-                                # 深度分析订单簿
-                                ob_data = (
-                                    polymarket.get_orderbook(active_tid)
-                                    if active_tid
-                                    else None
+                                # 获取温度符号（在此处定义以便后续使用）
+                                temp_unit = weather_data.get("open-meteo", {}).get(
+                                    "unit", "celsius"
                                 )
-                                ob_analysis = (
-                                    orderbook_analyzer.analyze(ob_data)
-                                    if ob_data
-                                    else {
-                                        "tradeable": False,
-                                        "liquidity": "枯竭",
-                                        "spread": 0,
-                                        "mid_price": current_prob,
-                                    }
+                                temp_symbol = (
+                                    "°F" if temp_unit == "fahrenheit" else "°C"
                                 )
 
-                                # 获取温度符号（在此处定义以便后续使用）
-                                temp_unit = weather_data.get("open-meteo", {}).get("unit", "celsius")
-                                temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
-                                
                                 # 预测偏差分析
                                 if ref_temp:
                                     city_pred_high = ref_temp  # 记录到城市概览
@@ -391,7 +376,6 @@ def main():
                                                 f"预测温度{ref_temp}{temp_symbol}落在{question}区间，市场与模型一致"
                                             )
 
-
                                 # 模拟下单 - 使用 Ask 价格（实际可成交价格）
                                 if buy_yes_price and buy_yes_price > 0.5:
                                     trigger_side = "Buy Yes"
@@ -405,10 +389,14 @@ def main():
                                     )
 
                                 # 构建预测文本
-                                forecast_text = f"{ref_temp}{temp_symbol}" if ref_temp else "N/A"
-                                
+                                forecast_text = (
+                                    f"{ref_temp}{temp_symbol}" if ref_temp else "N/A"
+                                )
+
                                 # 构建简约版消息
-                                side_display = "Buy No" if trigger_side == "Buy No" else "Buy Yes"
+                                side_display = (
+                                    "Buy No" if trigger_side == "Buy No" else "Buy Yes"
+                                )
                                 msg = f"⚡ {question} ({target_date}): {side_display} {trigger_price}¢ | 预测:{forecast_text}"
 
                                 success = paper_trader.open_position(
@@ -421,7 +409,7 @@ def main():
                                     target_date=target_date,
                                     predicted_temp=ref_temp,
                                 )
-                                
+
                                 # 添加模拟交易标签
                                 if success:
                                     msg += " [🛒 $5.0 💡试探]"
@@ -534,10 +522,8 @@ def main():
                                 if is_categorical:
                                     # 语义转换逻辑保持一致
                                     if buy_no_price and buy_no_price >= 0.85:
-                                        trigger_side = "Sell Yes"
-                                        trigger_price = int(
-                                            buy_no_price * 100
-                                        )  # 预估价
+                                        trigger_side = "Buy No" # 直接统一为 Buy No
+                                        trigger_price = int(buy_no_price * 100)
                                     else:
                                         trigger_side = "Buy Yes"
                                         trigger_price = int(buy_yes_price * 100)
@@ -549,84 +535,6 @@ def main():
                                         int(buy_yes_price * 100)
                                         if trigger_side == "Buy Yes"
                                         else int(buy_no_price * 100)
-                                    )
-
-                                # --- 深度流动性与 Spread 检查 ---
-                                target_tid = (
-                                    active_tid
-                                    if is_categorical
-                                    else (ts[0] if trigger_side == "Buy Yes" else ts[1])
-                                )
-                                ob_data = (
-                                    polymarket.get_orderbook(target_tid)
-                                    if target_tid
-                                    else None
-                                )
-
-                                ob_analysis = {
-                                    "tradeable": True,
-                                    "liquidity": "未知",
-                                    "spread": 0,
-                                    "mid_price": trigger_price / 100,
-                                }
-                                if ob_data:
-                                    ob_analysis = orderbook_analyzer.analyze(ob_data)
-
-                                if not ob_analysis.get("tradeable", True):
-                                    confidence_tag = (
-                                        f"🔴不可交易 ({ob_analysis.get('liquidity')})"
-                                    )
-                                    if not is_categorical:
-                                        logger.warning(
-                                            f"跳过不可交易信号 (Spread {ob_analysis.get('spread')}): {city} {question}"
-                                        )
-                                        continue
-
-                                # 更新实时数据显示
-                                mid_c = round(ob_analysis.get("mid_price", 0) * 100, 1)
-                                spr_c = round(ob_analysis.get("spread", 0) * 100, 1)
-                                depth = ob_analysis.get(
-                                    "ask_depth"
-                                    if trigger_side.startswith("Buy")
-                                    else "bid_depth",
-                                    0,
-                                )
-
-                                # 流动性图标
-                                liq_map = {
-                                    "充裕": "✅ 充裕",
-                                    "正常": "🟡 正常",
-                                    "稀薄": "🟠 稀薄",
-                                    "枯竭": "🔴 枯竭",
-                                }
-                                liq_status = liq_map.get(
-                                    ob_analysis.get("liquidity", "未知"), "❓ 未知"
-                                )
-
-                                if is_categorical:
-                                    ask_str = (
-                                        "--"
-                                        if trigger_side == "Sell Yes"
-                                        else f"{trigger_price}¢"
-                                    )
-                                    bid_str = (
-                                        f"{trigger_price}¢"
-                                        if trigger_side == "Sell Yes"
-                                        else "--"
-                                    )
-
-                                    display_side = (
-                                        f"📊 <b>{question}</b>\n"
-                                        f"Ask: {ask_str} | Bid: {bid_str} | Mid: {mid_c}¢\n"
-                                        f"Spread: {spr_c}¢ | 深度: ${depth}\n"
-                                        f"流动性: {liq_status}"
-                                    )
-                                else:
-                                    display_side = (
-                                        f"📊 <b>{question}</b>\n"
-                                        f"报价: {trigger_side} {trigger_price}¢ | Mid: {mid_c}¢\n"
-                                        f"Spread: {spr_c}¢ | 深度: ${depth}\n"
-                                        f"流动性: {liq_status}"
                                     )
 
                                 # --- 智能动态仓位计算 ---
@@ -745,11 +653,10 @@ def main():
                                 elif trigger_price >= 92:
                                     base_pos, confidence_tag = 5.0, "📌价格锁定"
 
-                                # 4. 四层过滤决策
+                                # 4. 仓位决策
                                 amount_usd, risk_reason = (
                                     risk_manager.calculate_position_size(
                                         base_confidence_usd=base_pos,
-                                        depth=depth,
                                         hours_to_settle=hours_to_settle,
                                         is_high_relative_volume=is_rel_high_vol,
                                     )
@@ -758,7 +665,7 @@ def main():
                                 logger.info(
                                     f"【Pro仓位】{city} {question} | "
                                     f"基础:{base_pos}$ -> 最终:{amount_usd}$ | 原因:{risk_reason} | "
-                                    f"深度:${depth} | 剩:{hours_to_settle:.1f}h"
+                                    f"剩:{hours_to_settle:.1f}h"
                                 )
 
                                 # --- 模拟交易触发逻辑 ---
@@ -798,9 +705,7 @@ def main():
                                 )
 
                                 # 构建简约版消息: ⚡ {question} ({date}): {side} {price}¢ | 预测:{forecast} [🛒 ${amount} {tag}]
-                                side_display = (
-                                    "Buy No" if trigger_side == "Buy No" else "Buy Yes"
-                                )
+                                side_display = trigger_side
                                 msg = (
                                     f"⚡ {question} ({target_date}): {side_display} {trigger_price}¢ | "
                                     f"预测:{forecast_text} [🛒 ${amount_usd} {confidence_tag}]"
@@ -825,17 +730,28 @@ def main():
                     if city_alerts:
                         # 去重策略建议
                         unique_tips = list(dict.fromkeys(city_strategy_tips))
-                        notifier.send_combined_alert(
-                            city=city,
-                            alerts=city_alerts,
-                            local_time=city_local_time,
-                            forecast_temp=f"{city_pred_high}{temp_symbol}"
-                            if city_pred_high
-                            else "N/A",
-                            total_volume=city_total_vol,
-                            brackets_count=len(city_markets),
-                            strategy_tips=unique_tips,
+                        # 获取 METAR 数据（仅当天结算的市场才显示）
+                        today_str = datetime.now().strftime("%Y-%m-%d")
+                        # 检查是否有当天结算的市场
+                        has_today_market = any(
+                            a.get("market") == today_str or a.get("market") == "今日"
+                            for a in city_alerts
                         )
+                        metar_data = (
+                            weather_data.get("metar") if has_today_market else None
+                        )
+                        # notifier.send_combined_alert(
+                        #     city=city,
+                        #     alerts=city_alerts,
+                        #     local_time=city_local_time,
+                        #     forecast_temp=f"{city_pred_high}{temp_symbol}"
+                        #     if city_pred_high
+                        #     else "N/A",
+                        #     total_volume=city_total_vol,
+                        #     brackets_count=len(city_markets),
+                        #     strategy_tips=unique_tips,
+                        #     metar_data=metar_data,
+                        # )
 
                 except Exception as e:
                     logger.error(f"分析城市 {city} 时出错: {e}")
@@ -844,13 +760,17 @@ def main():
                     # --- 周期性结算：保存高价值信号 ---
                     active_signals = []
                     for mid, entry in all_markets_cache.items():
-                        # 核心过滤：只有 ACTIVE 且 价格未锁定、日期未过期的才进入 signals 列表
-                        if entry.get("rationale") not in ["ENDED", "EXPIRED", "ERROR"]:
-                            # 再次双重检查日期 (硬核拦截 2026-02-06)
-                            target_dt = entry.get("target_date")
-                            if target_dt and target_dt < "2026-02-06":
-                                continue
-                            active_signals.append(entry)
+                        # Relaxed filtering: Let the bot decide, but mark ENDED
+                        rationale = entry.get("rationale")
+                        if rationale == "ERROR":
+                            continue
+                        
+                        target_dt = entry.get("target_date")
+                        # Only filter out truly ancient history
+                        if target_dt and target_dt < "2026-02-01":
+                            continue
+                            
+                        active_signals.append(entry)
 
                     # 按分数排序
                     active_signals.sort(key=lambda x: x.get("score", 0), reverse=True)
@@ -926,7 +846,7 @@ def main():
                                 report.append(
                                     f"📈 累计浮动盈亏: <b>{total_pnl:+.2f}$</b>"
                                 )
-                                notifier._send_message("\n".join(report))
+                                # notifier._send_message("\n".join(report))
                                 pushed_signals[summary_key] = time.time()
 
                 except Exception as e:
