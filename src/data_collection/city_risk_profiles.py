@@ -158,36 +158,7 @@ def get_city_risk_profile(city_name: str) -> dict:
     """获取城市的风险档案"""
     city_lower = city_name.lower().strip()
     
-    # 别名映射
-    aliases = {
-        "nyc": "new york",
-        "ny": "new york",
-        "chi": "chicago",
-        "atl": "atlanta",
-        "sea": "seattle",
-        "dal": "dallas",
-        "mia": "miami",
-        "tor": "toronto",
-        "ank": "ankara",
-        "sel": "seoul",
-        "seo": "seoul",
-        "wel": "wellington",
-        "ba": "buenos aires",
-        "首尔": "seoul",
-        "芝加哥": "chicago",
-        "纽约": "new york",
-        "伦敦": "london",
-        "达拉斯": "dallas",
-        "迈阿密": "miami",
-        "亚特兰大": "atlanta",
-        "西雅图": "seattle",
-        "多伦多": "toronto",
-        "惠灵顿": "wellington",
-        "安卡拉": "ankara",
-        "布宜诺斯艾利斯": "buenos aires",
-    }
-    
-    city_key = aliases.get(city_lower, city_lower)
+    city_key = city_lower
     return CITY_RISK_PROFILES.get(city_key)
 
 
