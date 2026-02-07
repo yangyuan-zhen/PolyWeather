@@ -1,5 +1,6 @@
 import requests
 import re
+import time
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 from loguru import logger
@@ -228,9 +229,15 @@ class WeatherDataCollector:
                 "ids": icao,
                 "format": "json",
                 "hours": 3,  # 获取最近3小时的观测
+                "_t": int(time.time()),  # 禁用缓存
             }
 
-            response = self.session.get(url, params=params, timeout=self.timeout)
+            response = self.session.get(
+                url, 
+                params=params, 
+                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
+                timeout=self.timeout
+            )
             response.raise_for_status()
 
             data = response.json()
@@ -319,6 +326,7 @@ class WeatherDataCollector:
                 "daily": "temperature_2m_max,apparent_temperature_max",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
+                "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
             # 对于美国市场，使用华氏度
@@ -328,6 +336,7 @@ class WeatherDataCollector:
             response = self.session.get(
                 url,
                 params=params,
+                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
