@@ -1,41 +1,84 @@
-import telebot
-import json
+import sys
 import os
-import time
-import re
 from datetime import datetime
+import telebot
+from loguru import logger
+
+# 确保项目根目录在 sys.path 中
+project_root = os.path.dirname(os.path.abspath(__file__))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from src.utils.config_loader import load_config
-from src.utils.notifier import TelegramNotifier
-from src.data_collection.polymarket_api import PolymarketClient
 from src.data_collection.weather_sources import WeatherDataCollector
 
+def analyze_weather_trend(weather_data, temp_symbol):
+    """根据实测与预测分析气温态势"""
+    insights = []
+    
+    metar = weather_data.get("metar", {})
+    open_meteo = weather_data.get("open-meteo", {})
+    
+    if not metar or not open_meteo:
+        return ""
+        
+    curr_temp = metar.get("current", {}).get("temp")
+    forecast_high = open_meteo.get("daily", {}).get("temperature_2m_max", [None])[0]
+    wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
+    
+    # 获取当地时间小时
+    local_time_str = open_meteo.get("current", {}).get("local_time", "")
+    try:
+        local_hour = int(local_time_str.split(" ")[1].split(":")[0])
+    except:
+        local_hour = datetime.now().hour # 降级方案
+        
+    if curr_temp is not None and forecast_high is not None:
+        diff = forecast_high - curr_temp
+        
+        # 1. 峰值判断
+        if local_hour >= 16:
+            if curr_temp >= forecast_high - 0.5:
+                insights.append(f"✅ <b>今日峰值已达</b> ({curr_temp}{temp_symbol})，预计开始缓慢回落。")
+            else:
+                insights.append(f"📉 <b>处于降温期</b>：当前 {curr_temp}{temp_symbol} 已低于预报最高值，大概率不会再突破。")
+        elif 11 <= local_hour < 16:
+            if diff > 1.5:
+                insights.append(f"📈 <b>升温进程中</b>：距离预报最高温还有 {diff:.1f}° 空间，仍有上升动力。")
+            else:
+                insights.append(f"⚖️ <b>处于高位盘整</b>：接近预报峰值，变动幅度预计收窄。")
+        else:
+            insights.append(f"🌅 <b>早间时段</b>：气温正在起步，重点观察午后 14:00-15:00 表现。")
+
+        # 2. 剧烈变动预警
+        if wind_speed >= 15:
+            insights.append(f"🌬️ <b>大风预警 ({wind_speed}kt)</b>：风力较强，可能伴随锋面过境，气温或有剧烈起伏。")
+        elif wind_speed >= 10:
+            insights.append(f"🍃 <b>清劲风 ({wind_speed}kt)</b>：空气流动快，体感温度可能略低于实测。")
+
+    if not insights:
+        return ""
+        
+    return "\n💡 <b>态势分析</b>\n" + "\n".join(insights)
 
 def start_bot():
     config = load_config()
-    bot_token = config["telegram"]["bot_token"]
-    chat_id = config["telegram"]["chat_id"]
-
-    if not bot_token:
-        print("Error: TELEGRAM_BOT_TOKEN not found.")
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    if not token:
+        logger.error("未找到 TELEGRAM_BOT_TOKEN 环境变量")
         return
 
-    bot = telebot.TeleBot(bot_token)
-    notifier = TelegramNotifier(config["telegram"])
-    weather = WeatherDataCollector(config.get("weather", {}))
-
-    print(f"Bot is starting and listening for commands...")
+    bot = telebot.TeleBot(token)
+    weather = WeatherDataCollector(config)
 
     @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
         welcome_text = (
-            "🌡️ <b>PolyWeather 监控机器人</b>\n\n"
+            "🌡️ <b>PolyWeather 天气查询机器人</b>\n\n"
             "可用指令:\n"
-            "/signal - 获取当前高置信度交易信号\n"
-            "/city [城市名] - 查询城市市场详情与天气\n"
-            "/portfolio - 查看当前模拟交易报告\n"
-            "/status - 检查监控系统状态\n"
+            "/city [城市名] - 查询城市天气预测与实测\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
-            "示例: <code>/city chicago</code>"
+            "示例: <code>/city 伦敦</code>"
         )
         bot.reply_to(message, welcome_text, parse_mode="HTML")
 
@@ -46,519 +89,105 @@ def start_bot():
             f"🎯 当前聊天的 Chat ID 是: <code>{message.chat.id}</code>",
             parse_mode="HTML",
         )
-        print(f"USER REQUEST IDENTIFIER: Chat ID found: {message.chat.id}")
 
-    @bot.message_handler(commands=["signal"])
-    def get_signals(message):
-        bot.send_message(message.chat.id, "🔍 正在检索最早结算的市场信号...")
-
-        try:
-            if not os.path.exists("data/active_signals.json"):
-                bot.send_message(
-                    message.chat.id, "📭 目前暂无活跃信号，请等待系统完成下一轮扫描。"
-                )
-                return
-
-            with open("data/active_signals.json", "r", encoding="utf-8") as f:
-                signals = json.load(f)
-
-            if not signals:
-                bot.send_message(
-                    message.chat.id, "📭 当前市场定价较为合理，暂无高偏差机会。"
-                )
-                return
-
-            # 过滤掉已结束的市场（价格接近0或100）和无日期的
-            active_signals = []
-            for s in signals:
-                price = s.get("price", 50)
-                if 5 <= price <= 95 and s.get("target_date"):
-                    active_signals.append(s)
-
-            if not active_signals:
-                bot.send_message(message.chat.id, "📭 当前没有值得关注的活跃市场。")
-                return
-
-            # 按日期排序，优先最早结算的
-            active_signals.sort(key=lambda x: x.get("target_date", "9999-99-99"))
-
-            # 获取最早的日期
-            earliest_date = active_signals[0].get("target_date")
-
-            # 只取最早日期的市场
-            earliest_markets = [
-                s for s in active_signals if s.get("target_date") == earliest_date
-            ]
-
-            # 按"机会价值"排序：接近锁定区间（85-95¢）的优先
-            def opportunity_score(s):
-                price = s.get("price", 50)
-                buy_yes = s.get("buy_yes", price)
-                buy_no = s.get("buy_no", 100 - price)
-                # 计算距离锁定区间的距离
-                max_price = max(buy_yes, buy_no)
-                if 85 <= max_price <= 95:
-                    return 100 + max_price  # 已在锁定区间，最高优先
-                elif max_price > 70:
-                    return max_price  # 接近锁定
-                else:
-                    return max_price / 2  # 远离锁定
-
-            earliest_markets.sort(key=opportunity_score, reverse=True)
-            top_markets = earliest_markets[:5]
-
-            # 构建消息
-            msg_lines = [
-                f"🎯 <b>即将结算市场 ({earliest_date})</b>\n",
-                f"共 {len(earliest_markets)} 个活跃选项\n",
-            ]
-
-            for i, s in enumerate(top_markets, 1):
-                city = s.get("city", "Unknown")
-                option = s.get("option", "Unknown")
-                prediction = s.get("prediction", "N/A")
-                buy_yes = s.get("buy_yes", s.get("price", 50))
-                buy_no = s.get("buy_no", 100 - s.get("price", 50))
-                volume = s.get("volume", 0)
-                url = s.get("url", "")
-
-                # 解析选项区间
-                import re
-
-                range_match = re.search(r"(\d+)-(\d+)", option)
-                below_match = re.search(r"(\d+).*or below", option, re.I)
-                higher_match = re.search(r"(\d+).*or higher", option, re.I)
-
-                # 判断预测与区间关系
-                analysis = ""
-                try:
-                    pred_val = float(re.search(r"[\d.]+", str(prediction)).group())
-                    if range_match:
-                        low, high = int(range_match.group(1)), int(range_match.group(2))
-                        if pred_val < low:
-                            analysis = f"预测{pred_val}°低于{low}° → 买NO ✓"
-                        elif pred_val > high:
-                            analysis = f"预测{pred_val}°高于{high}° → 买NO ✓"
-                        else:
-                            analysis = f"预测{pred_val}°在区间内 → 买YES ✓"
-                    elif below_match:
-                        threshold = int(below_match.group(1))
-                        if pred_val <= threshold:
-                            analysis = f"预测{pred_val}°≤{threshold}° → 买YES ✓"
-                        else:
-                            analysis = f"预测{pred_val}°高于{threshold}° → 买NO ✓"
-                    elif higher_match:
-                        threshold = int(higher_match.group(1))
-                        if pred_val >= threshold:
-                            analysis = f"预测{pred_val}°≥{threshold}° → 买YES ✓"
-                        else:
-                            analysis = f"预测{pred_val}°低于{threshold}° → 买NO ✓"
-                except:
-                    analysis = f"预测: {prediction}"
-
-                # 判断最佳方向
-                if buy_no >= 85:
-                    direction = f"Buy No {buy_no}¢"
-                    lock_status = "🔒锁定" if buy_no >= 95 else "⏳接近锁定"
-                    confidence = "🔥" if buy_no >= 90 else "⭐"
-                elif buy_yes >= 85:
-                    direction = f"Buy Yes {buy_yes}¢"
-                    lock_status = "🔒锁定" if buy_yes >= 95 else "⏳接近锁定"
-                    confidence = "🔥" if buy_yes >= 90 else "⭐"
-                elif buy_no >= 70:
-                    direction = f"Buy No {buy_no}¢"
-                    lock_status = "👀观望"
-                    confidence = "💡"
-                elif buy_yes >= 70:
-                    direction = f"Buy Yes {buy_yes}¢"
-                    lock_status = "👀观望"
-                    confidence = "💡"
-                else:
-                    direction = f"Yes:{buy_yes}¢ No:{buy_no}¢"
-                    lock_status = "⚖️均衡"
-                    confidence = "📊"
-
-                # 提取修复后的精确当地时间
-                local_time = s.get("local_time", "")
-                time_only = local_time.split(" ")[1] if " " in local_time else ""
-                time_suffix = f" | 🕒{time_only}" if time_only else ""
-
-                msg_lines.append(
-                    f"{confidence} <b>{i}. {city} {option}</b>\n"
-                    f"   💡 {analysis}\n"
-                    f"   📊 {direction} | {lock_status}{time_suffix}\n"
-                )
-
-            bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
-
-        except Exception as e:
-            bot.send_message(message.chat.id, f"❌ 获取信号时出错: {e}")
-
-    @bot.message_handler(commands=["portfolio"])
-    def get_portfolio(message):
-        """查看模拟仓位"""
-        try:
-            if not os.path.exists("data/paper_positions.json"):
-                bot.reply_to(message, "📭 目前没有任何模拟记录。")
-                return
-
-            with open("data/paper_positions.json", "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            positions = data.get("positions", {})
-            history = data.get("history", [])
-            balance = data.get("balance", 1000.0)
-
-            if not positions and not history:
-                bot.reply_to(
-                    message,
-                    f"📭 目前没有任何模拟记录。\n可用余额: <b>${balance:.2f}</b>",
-                    parse_mode="HTML",
-                )
-                return
-
-            # 如果持仓超过20个，生成 HTML 文件
-            if len(positions) > 20:
-                html_path = generate_portfolio_html(data)
-                with open(html_path, "rb") as f:
-                    bot.send_document(
-                        message.chat.id,
-                        f,
-                        caption=f"📊 完整持仓报告 ({len(positions)}个持仓)\n💳 余额: ${balance:.2f}",
-                    )
-                return
-
-            # 精简版消息
-            msg_lines = ["📊 <b>模拟交易报告</b>"]
-
-            if positions:
-                positions_by_date = {}
-                for pid, pos in positions.items():
-                    target_date = pos.get("target_date") or "未知"
-                    if target_date not in positions_by_date:
-                        positions_by_date[target_date] = {
-                            "count": 0,
-                            "pnl": 0,
-                            "cost": 0,
-                        }
-                    positions_by_date[target_date]["count"] += 1
-                    positions_by_date[target_date]["pnl"] += pos.get("pnl_usd", 0)
-                    positions_by_date[target_date]["cost"] += pos.get("cost_usd", 0)
-
-                msg_lines.append(f"\n📌 <b>持仓概览</b> (共{len(positions)}个)")
-                for target_date in sorted(positions_by_date.keys()):
-                    info = positions_by_date[target_date]
-                    icon = "📈" if info["pnl"] >= 0 else "📉"
-                    msg_lines.append(
-                        f"{icon} {target_date}: {info['count']}笔 ${info['cost']:.0f}投入 {info['pnl']:+.2f}$"
-                    )
-
-                total_pnl = sum(p.get("pnl_usd", 0) for p in positions.values())
-                total_cost = sum(p.get("cost_usd", 0) for p in positions.values())
-                msg_lines.append(
-                    f"<b>💰 合计: ${total_cost:.0f}投入 {total_pnl:+.2f}$</b>"
-                )
-
-                msg_lines.append("\n📋 <b>最新持仓:</b>")
-                recent_positions = list(positions.values())[-5:]
-                for pos in reversed(recent_positions):
-                    pnl = pos.get("pnl_usd", 0)
-                    icon = "🟢" if pnl >= 0 else "🔴"
-                    pred = pos.get("predicted_temp", "")
-                    pred_text = f"预测:{pred}" if pred else ""
-                    msg_lines.append(
-                        f"{icon} {pos['city']} {pos['option']} {pred_text} {pnl:+.2f}$"
-                    )
-
-            trades = data.get("trades", [])
-            if trades:
-                msg_lines.append("\n📝 <b>最近操作:</b>")
-                for t in reversed(trades[-3:]):
-                    t_type = "🛒" if t["type"] == "BUY" else "💰"
-                    t_time = (
-                        t.get("time", "").split(" ")[1]
-                        if " " in t.get("time", "")
-                        else ""
-                    )
-                    msg_lines.append(f"• {t_time} {t_type} {t['city']} {t['option']}")
-
-            if history:
-                total_trades = len(history)
-                wins = sum(1 for p in history if p.get("pnl_usd", 0) > 0)
-                total_cost = sum(p.get("cost_usd", 0) for p in history)
-                total_profit = sum(p.get("pnl_usd", 0) for p in history)
-                win_rate = (wins / total_trades) * 100 if total_trades > 0 else 0
-                msg_lines.append(
-                    f"\n📈 <b>历史:</b> {total_trades}笔 胜率{win_rate:.0f}% 盈亏{total_profit:+.2f}$"
-                )
-
-            msg_lines.append(f"\n💳 余额: <b>${balance:.2f}</b>")
-
-            bot.reply_to(message, "\n".join(msg_lines), parse_mode="HTML")
-
-        except Exception as e:
-            bot.reply_to(message, f"❌ 获取持仓失败: {e}")
-
-    def generate_portfolio_html(data):
-        """生成漂亮的 HTML 持仓报告"""
-        from datetime import datetime, timedelta
-
-        positions = data.get("positions", {})
-        history = data.get("history", [])
-        balance = data.get("balance", 1000.0)
-
-        # 按日期分组
-        positions_by_date = {}
-        for pid, pos in positions.items():
-            target_date = pos.get("target_date") or "未知"
-            if target_date not in positions_by_date:
-                positions_by_date[target_date] = []
-            positions_by_date[target_date].append(pos)
-
-        total_pnl = sum(p.get("pnl_usd", 0) for p in positions.values())
-        total_cost = sum(p.get("cost_usd", 0) for p in positions.values())
-
-        # 生成 HTML
-        now_bj = (datetime.utcnow() + timedelta(hours=8)).strftime("%Y-%m-%d %H:%M")
-
-        html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>PolyWeather 持仓报告</title>
-    <style>
-        body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }}
-        h1 {{ color: #00d4ff; text-align: center; }}
-        .summary {{ background: #16213e; padding: 15px; border-radius: 10px; margin-bottom: 20px; }}
-        .summary-item {{ display: inline-block; margin-right: 30px; }}
-        .positive {{ color: #00ff88; }}
-        .negative {{ color: #ff4757; }}
-        table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-        th {{ background: #0f3460; padding: 10px; text-align: left; }}
-        td {{ padding: 8px; border-bottom: 1px solid #333; }}
-        .date-header {{ background: #0f3460; padding: 10px; margin-top: 20px; border-radius: 5px; }}
-        .footer {{ text-align: center; margin-top: 30px; color: #666; }}
-    </style>
-</head>
-<body>
-    <h1>📊 PolyWeather 持仓报告</h1>
-    <div class="summary">
-        <div class="summary-item">💳 余额: <b>${balance:.2f}</b></div>
-        <div class="summary-item">📦 持仓: <b>{len(positions)}</b> 个</div>
-        <div class="summary-item">💰 投入: <b>${total_cost:.2f}</b></div>
-        <div class="summary-item">📈 浮盈: <b class="{"positive" if total_pnl >= 0 else "negative"}">{total_pnl:+.2f}$</b></div>
-    </div>
-"""
-
-        for target_date in sorted(positions_by_date.keys()):
-            date_positions = positions_by_date[target_date]
-            date_pnl = sum(p.get("pnl_usd", 0) for p in date_positions)
-            date_cost = sum(p.get("cost_usd", 0) for p in date_positions)
-
-            html += f"""
-    <div class="date-header">
-        📅 <b>{target_date}</b> | {len(date_positions)}笔 | 投入${date_cost:.0f} | 
-        <span class="{"positive" if date_pnl >= 0 else "negative"}">{date_pnl:+.2f}$</span>
-    </div>
-    <table>
-        <tr><th>城市</th><th>选项</th><th>方向</th><th>入场</th><th>当前</th><th>预测</th><th>盈亏</th></tr>
-"""
-            for pos in date_positions:
-                pnl = pos.get("pnl_usd", 0)
-                pnl_class = "positive" if pnl >= 0 else "negative"
-                pred = pos.get("predicted_temp", "-")
-                html += f"""        <tr>
-            <td>{pos.get("city", "-")}</td>
-            <td>{pos.get("option", "-")}</td>
-            <td>{pos.get("side", "-")}</td>
-            <td>{pos.get("entry_price", 0)}¢</td>
-            <td>{pos.get("current_price", 0)}¢</td>
-            <td>{pred}</td>
-            <td class="{pnl_class}">{pnl:+.2f}$</td>
-        </tr>
-"""
-            html += "    </table>\n"
-
-        html += f"""
-    <div class="footer">
-        生成时间: {now_bj} (北京时间) | PolyWeather Monitor
-    </div>
-</body>
-</html>"""
-
-        html_path = "data/portfolio_report.html"
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html)
-
-        return html_path
-
-    @bot.message_handler(commands=["status"])
-    def get_status(message):
-        bot.reply_to(
-            message, "✅ 监控引擎正在运行中...\n7x24h 实时扫码 Polymarket 气温市场。"
-        )
+    @bot.message_handler(commands=["signal", "portfolio", "status"])
+    def disabled_feature(message):
+        bot.reply_to(message, "ℹ️ 监控引擎与交易模拟功能已暂停，现仅提供天气查询服务。")
 
     @bot.message_handler(commands=["city"])
     def get_city_info(message):
-        """查询指定城市的市场详情、天气预测和实时温度"""
+        """查询指定城市的天气详情"""
         try:
-            # 解析城市名称
             parts = message.text.split(maxsplit=1)
             if len(parts) < 2:
                 bot.reply_to(
                     message,
-                    "❓ 请输入城市名称\n\n用法: <code>/city chicago</code>\n\n"
-                    "支持城市: Seattle, London, Dallas, Miami, Atlanta, Chicago, "
-                    "New York, Seoul, Ankara, Toronto, Wellington, Buenos Aires",
+                    "❓ 请输入城市名称\n\n用法: <code>/city chicago</code>",
                     parse_mode="HTML",
                 )
                 return
 
             city_input = parts[1].strip().lower()
-
-            # 城市别名映射
             city_aliases = {
-                "nyc": "new york",
-                "ny": "new york",
-                "la": "los angeles",
-                "chi": "chicago",
-                "atl": "atlanta",
-                "sea": "seattle",
-                "dal": "dallas",
-                "mia": "miami",
-                "tor": "toronto",
-                "ank": "ankara",
-                "sel": "seoul",
-                "wel": "wellington",
-                "ba": "buenos aires",
-                "buenosaires": "buenos aires",
-                "伦敦": "london",
-                "纽约": "new york",
-                "西雅图": "seattle",
-                "芝加哥": "chicago",
-                "多伦多": "toronto",
-                "首尔": "seoul",
-                "惠灵顿": "wellington",
-                "达拉斯": "dallas",
-                "亚特兰大": "atlanta",
+                "nyc": "new york", "ny": "new york", "la": "los angeles",
+                "chi": "chicago", "atl": "atlanta", "sea": "seattle",
+                "dal": "dallas", "mia": "miami", "tor": "toronto",
+                "ank": "ankara", "sel": "seoul", "wel": "wellington",
+                "ba": "buenos aires", "伦敦": "london", "纽约": "new york",
+                "西雅图": "seattle", "芝加哥": "chicago", "多伦多": "toronto",
+                "首尔": "seoul", "惠灵顿": "wellington", "达拉斯": "dallas",
+                "亚特兰大": "atlanta"
             }
             city_name = city_aliases.get(city_input, city_input)
 
-            bot.send_message(
-                message.chat.id, f"🔍 正在查询 {city_name.title()} 的市场信息..."
-            )
+            bot.send_message(message.chat.id, f"🔍 正在查询 {city_name.title()} 的天气数据...")
 
-            # 1. 获取城市坐标
             coords = weather.get_coordinates(city_name)
             if not coords:
                 bot.reply_to(message, f"❌ 未找到城市: {city_name}")
                 return
 
-            # 2. 获取天气数据 (Open-Meteo + METAR)
-            weather_data = weather.fetch_all_sources(
-                city_name, lat=coords["lat"], lon=coords["lon"]
-            )
+            weather_data = weather.fetch_all_sources(city_name, lat=coords["lat"], lon=coords["lon"])
 
-            # 3. 从缓存中获取该城市的市场数据
-            city_markets = []
-            if os.path.exists("data/active_signals.json"):
-                with open("data/active_signals.json", "r", encoding="utf-8") as f:
-                    all_signals = json.load(f)
-                city_markets = [
-                    s
-                    for s in all_signals
-                    if s.get("city", "").lower() == city_name.lower()
-                ]
-
-            # 4. 构建消息
-            msg_lines = [f"📍 <b>{city_name.title()} 市场详情</b>"]
+            msg_lines = [f"📍 <b>{city_name.title()} 天气详情</b>"]
             msg_lines.append("═" * 20)
 
-            # 天气信息
             open_meteo = weather_data.get("open-meteo", {})
             metar = weather_data.get("metar", {})
-
             temp_unit = open_meteo.get("unit", "celsius")
             temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
 
-            # 当前时间
             local_time = open_meteo.get("current", {}).get("local_time", "")
             if local_time:
-                time_only = (
-                    local_time.split(" ")[1] if " " in local_time else local_time
-                )
+                time_only = local_time.split(" ")[1] if " " in local_time else local_time
                 msg_lines.append(f"🕐 当地时间: {time_only}")
 
-            # Open-Meteo 预测
             daily = open_meteo.get("daily", {})
             dates = daily.get("time", [])
             max_temps = daily.get("temperature_2m_max", [])
-
             today_str = datetime.now().strftime("%Y-%m-%d")
 
-            msg_lines.append(f"\n📊 <b>Open-Meteo 预测</b>")
+            msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
-                day_label = "今天" if d == today_str else d[5:]  # MM-DD
-                is_today = "👉 " if d == today_str else "   "
-                msg_lines.append(f"{is_today}{day_label}: 最高 {t}{temp_symbol}")
+                day_label = "今天" if d == today_str else d[5:]
+                indicator = "👉 " if d == today_str else "   "
+                msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
 
-            # METAR 实测
             if metar:
                 icao = metar.get("icao", "")
                 metar_temp = metar.get("current", {}).get("temp")
-                wind_speed = metar.get("current", {}).get("wind_speed_kt")
-                obs_time = metar.get("observation_time", "")
-
-                # 解析观测时间
-                if obs_time:
+                wind = metar.get("current", {}).get("wind_speed_kt")
+                obs = metar.get("observation_time", "")
+                
+                if obs:
                     try:
-                        obs_dt = datetime.fromisoformat(obs_time.replace("Z", "+00:00"))
-                        obs_time_str = obs_dt.strftime("%H:%M UTC")
+                        obs_dt = datetime.fromisoformat(obs.replace("Z", "+00:00"))
+                        obs_str = obs_dt.strftime("%H:%M UTC")
                     except:
-                        obs_time_str = obs_time[:16] if len(obs_time) > 16 else obs_time
+                        obs_str = obs[:16]
                 else:
-                    obs_time_str = "N/A"
+                    obs_str = "N/A"
 
                 msg_lines.append(f"\n✈️ <b>机场实测 ({icao})</b>")
                 if metar_temp is not None:
                     msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol}")
-                if wind_speed is not None:
-                    msg_lines.append(f"   💨 风速: {wind_speed}kt")
-                msg_lines.append(f"   🕐 观测: {obs_time_str}")
+                if wind is not None:
+                    msg_lines.append(f"   💨 风速: {wind}kt")
+                msg_lines.append(f"   🕐 观测: {obs_str}")
+                
+            # 3. 添加态势分析
+            trend_insights = analyze_weather_trend(weather_data, temp_symbol)
+            if trend_insights:
+                msg_lines.append(trend_insights)
 
-            # 市场信息已根据需求暂时移除
-            # (已在此处删除了之前的市场数据处理逻辑)
-
-            # 发送消息
-            final_msg = "\n".join(msg_lines)
-            if len(final_msg) > 4000:
-                # 消息太长，分段发送
-                bot.send_message(message.chat.id, final_msg[:4000], parse_mode="HTML")
-                bot.send_message(message.chat.id, final_msg[4000:], parse_mode="HTML")
-            else:
-                bot.send_message(message.chat.id, final_msg, parse_mode="HTML")
+            bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
         except Exception as e:
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"查询失败: {e}")
             bot.reply_to(message, f"❌ 查询失败: {e}")
 
-    import logging
-
-    # 强制关闭 telebot 内部的刷屏日志
-    telebot.logger.setLevel(logging.CRITICAL)
-
-    while True:
-        try:
-            bot.infinity_polling(timeout=60, long_polling_timeout=60)
-        except (KeyboardInterrupt, SystemExit):
-            print("\n检测到退出信号，机器人正在关机...")
-            break
-        except Exception as e:
-            print(f"Bot 轮询连接异常: {e}")
-            time.sleep(10)
-
+    logger.info("🤖 Bot 启动中...")
+    bot.infinity_polling()
 
 if __name__ == "__main__":
     start_bot()

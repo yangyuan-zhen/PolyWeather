@@ -315,6 +315,7 @@ class WeatherDataCollector:
                 "latitude": lat,
                 "longitude": lon,
                 "current_weather": "true",
+                "hourly": "temperature_2m",
                 "daily": "temperature_2m_max,apparent_temperature_max",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
@@ -350,6 +351,7 @@ class WeatherDataCollector:
                     "temp": current.get("temperature"),
                     "local_time": local_time_str,
                 },
+                "hourly": data.get("hourly", {}),
                 "daily": data.get("daily", {}),
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
