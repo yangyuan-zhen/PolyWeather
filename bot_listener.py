@@ -36,25 +36,35 @@ def analyze_weather_trend(weather_data, temp_symbol):
     if curr_temp is not None and forecast_high is not None:
         diff = forecast_high - curr_temp
         
-        # 1. 峰值判断
+        # 1. 气温节奏判定
         if local_hour >= 16:
             if curr_temp >= forecast_high - 0.5:
-                insights.append(f"✅ <b>今日峰值已达</b> ({curr_temp}{temp_symbol})，预计开始缓慢回落。")
+                insights.append(f"✅ <b>今日峰值已达</b>：当前 {curr_temp}{temp_symbol} 已触及预报最高温，后续将进入回落通道。")
             else:
-                insights.append(f"📉 <b>处于降温期</b>：当前 {curr_temp}{temp_symbol} 已低于预报最高值，大概率不会再突破。")
+                insights.append(f"📉 <b>处于降温期</b>：气温已开始从峰值下滑，今日大概率不会再反弹。")
         elif 11 <= local_hour < 16:
             if diff > 1.5:
-                insights.append(f"📈 <b>升温进程中</b>：距离预报最高温还有 {diff:.1f}° 空间，仍有上升动力。")
+                insights.append(f"📈 <b>升温进程中</b>：距离预报最高温还有约 {diff:.1f}° 空间，午后余热尚存。")
             else:
-                insights.append(f"⚖️ <b>处于高位盘整</b>：接近预报峰值，变动幅度预计收窄。")
+                insights.append(f"⚖️ <b>高位横盘</b>：气温已基本涨满，将在当前水平小幅波动，直至日落。")
         else:
-            insights.append(f"🌅 <b>早间时段</b>：气温正在起步，重点观察午后 14:00-15:00 表现。")
+            insights.append(f"🌅 <b>早间爬升</b>：气温正在起步。")
 
-        # 2. 剧烈变动预警
+        # 2. 湿度与露点带来的“粘性”分析
+        humidity = metar.get("current", {}).get("humidity")
+        dewpoint = metar.get("current", {}).get("dewpoint")
+        
+        if humidity and humidity > 80:
+            insights.append(f"💦 <b>闷热高湿</b>：空气湿度极大 ({humidity}%)，这会像保温层一样锁住热量，导致夜间降温非常缓慢。")
+        
+        if dewpoint is not None and curr_temp - dewpoint < 2.0 and local_hour >= 18:
+            insights.append(f"🌡️ <b>触及露点底线</b>：气温已非常接近露点，进一步下降的空间将被强力压缩，气温将“跌不动了”。")
+
+        # 3. 风力带来的剧烈波动预警
         if wind_speed >= 15:
-            insights.append(f"🌬️ <b>大风预警 ({wind_speed}kt)</b>：风力较强，可能伴随锋面过境，气温或有剧烈起伏。")
+            insights.append(f"🌬️ <b>大风预警 ({wind_speed}kt)</b>：强风可能带来锋面过境，注意气温可能出现非正常的剧烈跳变。")
         elif wind_speed >= 10:
-            insights.append(f"🍃 <b>清劲风 ({wind_speed}kt)</b>：空气流动快，体感温度可能略低于实测。")
+            insights.append(f"🍃 <b>清劲风</b>：空气流动快，虽然有助于散热，但可能伴随阵风引起微小波动。")
 
     if not insights:
         return ""
@@ -146,12 +156,16 @@ def start_bot():
             daily = open_meteo.get("daily", {})
             dates = daily.get("time", [])
             max_temps = daily.get("temperature_2m_max", [])
-            today_str = datetime.now().strftime("%Y-%m-%d")
+            # 获取当地“今天”的日期
+            utc_offset = open_meteo.get("utc_offset", 0)
+            from datetime import timedelta, timezone
+            city_now = datetime.now(timezone.utc) + timedelta(seconds=utc_offset)
+            city_today_str = city_now.strftime("%Y-%m-%d")
 
             msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
-                day_label = "今天" if d == today_str else d[5:]
-                indicator = "👉 " if d == today_str else "   "
+                day_label = "今天" if d == city_today_str else d[5:]
+                indicator = "👉 " if d == city_today_str else "   "
                 msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
 
             if metar:
