@@ -643,8 +643,17 @@ class WeatherDataCollector:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:
                         results["nws"] = nws_data
+            else:
+                # Open-Meteo 失败时，仍然尝试获取 METAR 和 NWS
+                metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
+                if metar_data:
+                    results["metar"] = metar_data
+                if use_fahrenheit:
+                    nws_data = self.fetch_nws(lat, lon)
+                    if nws_data:
+                        results["nws"] = nws_data
         else:
-            # 降级方案
+            # 降级方案（无经纬度）
             metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
             if metar_data:
                 results["metar"] = metar_data
