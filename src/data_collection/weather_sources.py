@@ -343,9 +343,10 @@ class WeatherDataCollector:
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
-            # 对于美国市场，使用华氏度
+            # 对于美国市场，使用华氏度并请求更多的模型共识
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
+                params["models"] = "ecmwf_ifs,hrrr_conus"
 
             response = self.session.get(
                 url,
@@ -360,7 +361,23 @@ class WeatherDataCollector:
             utc_offset = data.get("utc_offset_seconds", 0)
             timezone_name = data.get("timezone", "UTC")
 
-            # 计算精确的当地时间而不是气象站 bucket 时间
+            # 处理多模型数据 (如果请求了 models 参数，返回结构会变化)
+            daily_data = data.get("daily", {})
+            if "temperature_2m_max_ecmwf_ifs" in daily_data:
+                # 获取首日的各模型峰值比较
+                ecmwf_max = daily_data.get("temperature_2m_max_ecmwf_ifs", [])
+                hrrr_max = daily_data.get("temperature_2m_max_hrrr_conus", [])
+                
+                # 记录多模型分歧
+                daily_data["model_split"] = {
+                    "ecmwf": ecmwf_max[0] if ecmwf_max else None,
+                    "hrrr": hrrr_max[0] if hrrr_max else None
+                }
+                # 设置主显示值为 HRRR (当地高精)
+                if hrrr_max:
+                    daily_data["temperature_2m_max"] = hrrr_max
+
+            # 计算精确的当地时间
             now_utc = datetime.utcnow()
             local_now = now_utc + timedelta(seconds=utc_offset)
             local_time_str = local_now.strftime("%Y-%m-%d %H:%M")
@@ -375,7 +392,7 @@ class WeatherDataCollector:
                     "local_time": local_time_str,
                 },
                 "hourly": data.get("hourly", {}),
-                "daily": data.get("daily", {}),
+                "daily": daily_data,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
         except Exception as e:

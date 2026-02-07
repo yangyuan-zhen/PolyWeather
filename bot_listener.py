@@ -13,7 +13,7 @@ from src.utils.config_loader import load_config
 from src.data_collection.weather_sources import WeatherDataCollector
 
 def analyze_weather_trend(weather_data, temp_symbol):
-    """根据实测与预测分析气温态势"""
+    """根据实测与预测分析气温态势，增加峰值时刻预测"""
     insights = []
     
     metar = weather_data.get("metar", {})
@@ -23,46 +23,70 @@ def analyze_weather_trend(weather_data, temp_symbol):
         return ""
         
     curr_temp = metar.get("current", {}).get("temp")
-    forecast_high = open_meteo.get("daily", {}).get("temperature_2m_max", [None])[0]
+    daily = open_meteo.get("daily", {})
+    forecast_high = daily.get("temperature_2m_max", [None])[0]
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
     
     # 获取当地时间小时
-    local_time_str = open_meteo.get("current", {}).get("local_time", "")
+    local_time_full = open_meteo.get("current", {}).get("local_time", "")
     try:
-        local_hour = int(local_time_str.split(" ")[1].split(":")[0])
+        local_date_str = local_time_full.split(" ")[0] # YYYY-MM-DD
+        local_hour = int(local_time_full.split(" ")[1].split(":")[0])
     except:
-        local_hour = datetime.now().hour # 降级方案
+        local_date_str = datetime.now().strftime("%Y-%m-%d")
+        local_hour = datetime.now().hour
+
+    # --- 增加：峰值时刻预测逻辑 ---
+    hourly = open_meteo.get("hourly", {})
+    times = hourly.get("time", [])
+    # 优先寻找高精模型的逐小时数据
+    temps = hourly.get("temperature_2m_hrrr_conus") or hourly.get("temperature_2m_ecmwf_ifs") or hourly.get("temperature_2m", [])
+    
+    peak_hours = []
+    if times and temps and forecast_high is not None:
+        for t_str, temp in zip(times, temps):
+            if t_str.startswith(local_date_str):
+                # 记录所有接近最高温的小时 (容差 0.2)
+                if abs(temp - forecast_high) <= 0.2:
+                    hour = t_str.split("T")[1][:5]
+                    peak_hours.append(hour)
         
+        if peak_hours:
+            window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
+            insights.append(f"⏱️ <b>预计峰值时刻</b>：今天 <b>{window}</b> 之间。")
+            if local_hour < int(peak_hours[0].split(":")[0]):
+                insights.append(f"🎯 <b>博弈建议</b>：关注该时段实测能否站稳 {forecast_high}{temp_symbol}。")
+
     if curr_temp is not None and forecast_high is not None:
         diff = forecast_high - curr_temp
         
         # 1. 气温节奏判定
-        if local_hour >= 16:
+        if local_hour >= 17:
             if curr_temp >= forecast_high - 0.5:
-                insights.append(f"✅ <b>今日峰值已达</b>：当前 {curr_temp}{temp_symbol} 已触及预报最高温，后续将进入回落通道。")
+                insights.append(f"✅ <b>今日峰值已达</b>：当前已触及预报最高，大概率已定格。")
             else:
-                insights.append(f"📉 <b>处于降温期</b>：气温已开始从峰值下滑，今日大概率不会再反弹。")
-        elif 11 <= local_hour < 16:
-            if diff > 1.5:
-                insights.append(f"📈 <b>升温进程中</b>：距离预报最高温还有约 {diff:.1f}° 空间，午后余热尚存。")
+                insights.append(f"📉 <b>处于降温期</b>：气温已跌落峰值，今日反弹乏力。")
+        elif 10 <= local_hour < 17:
+            if diff > 1.2:
+                insights.append(f"📈 <b>升温进程中</b>：距离峰值还有约 {diff:.1f}° 空间，正向高点冲击。")
             else:
-                insights.append(f"⚖️ <b>高位横盘</b>：气温已基本涨满，将在当前水平小幅波动，直至日落。")
+                insights.append(f"⚖️ <b>高位横盘</b>：气温已在高位，将在当前水平小幅波动。")
         else:
-            insights.append(f"🌅 <b>早间爬升</b>：气温正在起步。")
+            insights.append(f"🌅 <b>早间爬升</b>：气温正快速起步，等待午后冲击。")
 
         # 2. 湿度与露点带来的“粘性”分析
         humidity = metar.get("current", {}).get("humidity")
         dewpoint = metar.get("current", {}).get("dewpoint")
         
-        if humidity and humidity > 80:
-            insights.append(f"💦 <b>闷热高湿</b>：空气湿度极大 ({humidity}%)，这会像保温层一样锁住热量，导致夜间降温非常缓慢。")
+        if humidity and humidity > 80 and local_hour >= 18:
+            insights.append(f"💦 <b>闷热高湿</b>：湿度极高 ({humidity}%)，将显著锁住夜间热量。")
         
         if dewpoint is not None and curr_temp - dewpoint < 2.0 and local_hour >= 18:
-            insights.append(f"🌡️ <b>触及露点底线</b>：气温已非常接近露点，进一步下降的空间将被强力压缩，气温将“跌不动了”。")
+            insights.append(f"🌡️ <b>触及露点支撑</b>：气温已跌至露点支撑位，降温将变慢。")
 
-        # 3. 风力带来的剧烈波动预警
+        # 3. 风力
         if wind_speed >= 15:
-            insights.append(f"🌬️ <b>大风预警 ({wind_speed}kt)</b>：强风可能带来锋面过境，注意气温可能出现非正常的剧烈跳变。")
+            insights.append(f"🌬️ <b>大风预判</b>：当前风力较大 ({wind_speed}kt)，气温可能出现非线性波动。")
         elif wind_speed >= 10:
             insights.append(f"🍃 <b>清劲风</b>：空气流动快，虽然有助于散热，但可能伴随阵风引起微小波动。")
 
@@ -163,10 +187,22 @@ def start_bot():
             city_today_str = city_now.strftime("%Y-%m-%d")
 
             msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
+            model_split = daily.get("model_split")
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
                 day_label = "今天" if d == city_today_str else d[5:]
                 indicator = "👉 " if d == city_today_str else "   "
-                msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
+                
+                # 如果是今天且存在模型分歧，则特别标注
+                if d == city_today_str and model_split:
+                    ecmwf = model_split.get("ecmwf")
+                    hrrr = model_split.get("hrrr")
+                    if ecmwf and hrrr and abs(ecmwf - hrrr) > 0.5:
+                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} ⚠️")
+                        msg_lines.append(f"   (模型分歧: ECMWF {ecmwf} | HRRR {hrrr})")
+                    else:
+                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
+                else:
+                    msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
 
             if metar:
                 icao = metar.get("icao", "")
