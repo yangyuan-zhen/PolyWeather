@@ -39,7 +39,7 @@ class WeatherDataCollector:
         self.config = config
         self.wunderground_key = config.get("wunderground_api_key")
 
-        self.timeout = 20  # 增加超时以支持多模型请求
+        self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()
 
         # 设置代理
@@ -392,9 +392,10 @@ class WeatherDataCollector:
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
-            # 对于美国市场，使用华氏度
+            # 对于美国市场，使用华氏度并请求多模型共识
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
+                params["models"] = "ecmwf_ifs04,ncep_hrrr_conus"  # 正确的模型名
 
             response = self.session.get(
                 url,
@@ -411,9 +412,9 @@ class WeatherDataCollector:
 
             # 处理多模型数据 (如果请求了 models 参数，返回结构会变化)
             daily_data = data.get("daily", {})
-            if "temperature_2m_max_ecmwf_ifs" in daily_data:
-                ecmwf_max = daily_data.get("temperature_2m_max_ecmwf_ifs", [])
-                hrrr_max = daily_data.get("temperature_2m_max_hrrr_conus", [])
+            if "temperature_2m_max_ecmwf_ifs04" in daily_data:
+                ecmwf_max = daily_data.get("temperature_2m_max_ecmwf_ifs04", [])
+                hrrr_max = daily_data.get("temperature_2m_max_ncep_hrrr_conus", [])
                 
                 # 记录多模型分歧
                 daily_data["model_split"] = {
@@ -428,8 +429,8 @@ class WeatherDataCollector:
 
             # 映射逐小时数据
             hourly_data = data.get("hourly", {})
-            if "temperature_2m_hrrr_conus" in hourly_data:
-                hourly_data["temperature_2m"] = hourly_data["temperature_2m_hrrr_conus"]
+            if "temperature_2m_ncep_hrrr_conus" in hourly_data:
+                hourly_data["temperature_2m"] = hourly_data["temperature_2m_ncep_hrrr_conus"]
 
             # 计算精确的当地时间
             now_utc = datetime.utcnow()
