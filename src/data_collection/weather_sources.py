@@ -392,10 +392,11 @@ class WeatherDataCollector:
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
-            # 对于美国市场，使用华氏度并请求多模型共识
+            # 对于美国市场，使用华氏度
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
-                params["models"] = "ecmwf_ifs04,ncep_hrrr_conus"  # 正确的模型名
+                # 不使用 models 参数，让 Open-Meteo 用默认最优模型
+                # NWS 已提供官方预报对比，无需 HRRR
 
             response = self.session.get(
                 url,
