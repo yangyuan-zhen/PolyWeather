@@ -416,16 +416,20 @@ class WeatherDataCollector:
                 ecmwf_max = daily_data.get("temperature_2m_max_ecmwf_ifs04", [])
                 hrrr_max = daily_data.get("temperature_2m_max_ncep_hrrr_conus", [])
                 
-                # 记录多模型分歧
+                # 记录今日模型分歧
                 daily_data["model_split"] = {
                     "ecmwf": ecmwf_max[0] if ecmwf_max else None,
                     "hrrr": hrrr_max[0] if hrrr_max else None
                 }
-                # 核心修正：映射回标准键名
-                if hrrr_max:
-                    daily_data["temperature_2m_max"] = hrrr_max
-                elif ecmwf_max:
-                    daily_data["temperature_2m_max"] = ecmwf_max
+                
+                # 智能合并：HRRR 仅覆盖 48 小时，远期用 ECMWF 补全
+                merged_max = []
+                for i in range(len(ecmwf_max)):
+                    if i < len(hrrr_max) and hrrr_max[i] is not None:
+                        merged_max.append(hrrr_max[i])  # 短期用 HRRR
+                    else:
+                        merged_max.append(ecmwf_max[i])  # 远期用 ECMWF
+                daily_data["temperature_2m_max"] = merged_max
 
             # 映射逐小时数据
             hourly_data = data.get("hourly", {})
