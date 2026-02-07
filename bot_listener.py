@@ -156,36 +156,37 @@ def start_bot():
 
             city_input = parts[1].strip().lower()
             
-            # --- 12城核心别名映射表 (Polymarket 标准) ---
-            city_aliases = {
-                # 韩国
+            # --- 核心标准名称映射表 ---
+            # 这里的 Key 是缩写或别名，Value 是 Open-Meteo 识别的标准全称
+            STANDARD_MAPPING = {
                 "sel": "seoul", "seo": "seoul", "首尔": "seoul",
-                # 英国
                 "lon": "london", "伦敦": "london",
-                # 加拿大
                 "tor": "toronto", "多伦多": "toronto",
-                # 土耳其
                 "ank": "ankara", "安卡拉": "ankara",
-                # 新西兰
                 "wel": "wellington", "惠灵顿": "wellington",
-                # 阿根廷
                 "ba": "buenos aires", "布宜诺斯艾利斯": "buenos aires",
-                
-                # 美国 (华氏度区)
                 "nyc": "new york", "ny": "new york", "纽约": "new york",
                 "chi": "chicago", "芝加哥": "chicago",
                 "sea": "seattle", "西雅图": "seattle",
                 "mia": "miami", "迈阿密": "miami",
                 "atl": "atlanta", "亚特兰大": "atlanta",
                 "dal": "dallas", "达拉斯": "dallas",
-                "hou": "houston", "休斯顿": "houston",
-                "bos": "boston", "波士顿": "boston",
-                "phi": "philadelphia", "费城": "philadelphia",
-                "pho": "phoenix", "凤凰城": "phoenix",
-                "san": "san francisco", "旧金山": "san francisco",
                 "la": "los angeles", "洛杉矶": "los angeles",
             }
-            city_name = city_aliases.get(city_input, city_input)
+            
+            # 1. 尝试直接从映射表获取
+            city_name = STANDARD_MAPPING.get(city_input)
+            
+            # 2. 如果没匹配到，尝试前缀匹配 (如输入 "seou")
+            if not city_name:
+                for k, v in STANDARD_MAPPING.items():
+                    if len(city_input) >= 3 and k.startswith(city_input[:3]):
+                        city_name = v
+                        break
+            
+            # 3. 最终回退
+            if not city_name:
+                city_name = city_input
 
             bot.send_message(message.chat.id, f"🔍 正在查询 {city_name.title()} 的天气数据...")
 
