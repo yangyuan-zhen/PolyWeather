@@ -39,7 +39,7 @@ class WeatherDataCollector:
         self.config = config
         self.wunderground_key = config.get("wunderground_api_key")
 
-        self.timeout = 10
+        self.timeout = 20  # 增加超时以支持多模型请求
         self.session = requests.Session()
 
         # 设置代理
