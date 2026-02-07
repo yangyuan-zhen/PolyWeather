@@ -155,15 +155,35 @@ def start_bot():
                 return
 
             city_input = parts[1].strip().lower()
+            
+            # --- 12城核心别名映射表 (Polymarket 标准) ---
             city_aliases = {
-                "nyc": "new york", "ny": "new york", "la": "los angeles",
-                "chi": "chicago", "atl": "atlanta", "sea": "seattle",
-                "dal": "dallas", "mia": "miami", "tor": "toronto",
-                "ank": "ankara", "sel": "seoul", "wel": "wellington",
-                "ba": "buenos aires", "伦敦": "london", "纽约": "new york",
-                "西雅图": "seattle", "芝加哥": "chicago", "多伦多": "toronto",
-                "首尔": "seoul", "惠灵顿": "wellington", "达拉斯": "dallas",
-                "亚特兰大": "atlanta"
+                # 韩国
+                "sel": "seoul", "seo": "seoul", "首尔": "seoul",
+                # 英国
+                "lon": "london", "伦敦": "london",
+                # 加拿大
+                "tor": "toronto", "多伦多": "toronto",
+                # 土耳其
+                "ank": "ankara", "安卡拉": "ankara",
+                # 新西兰
+                "wel": "wellington", "惠灵顿": "wellington",
+                # 阿根廷
+                "ba": "buenos aires", "布宜诺斯艾利斯": "buenos aires",
+                
+                # 美国 (华氏度区)
+                "nyc": "new york", "ny": "new york", "纽约": "new york",
+                "chi": "chicago", "芝加哥": "chicago",
+                "sea": "seattle", "西雅图": "seattle",
+                "mia": "miami", "迈阿密": "miami",
+                "atl": "atlanta", "亚特兰大": "atlanta",
+                "dal": "dallas", "达拉斯": "dallas",
+                "hou": "houston", "休斯顿": "houston",
+                "bos": "boston", "波士顿": "boston",
+                "phi": "philadelphia", "费城": "philadelphia",
+                "pho": "phoenix", "凤凰城": "phoenix",
+                "san": "san francisco", "旧金山": "san francisco",
+                "la": "los angeles", "洛杉矶": "los angeles",
             }
             city_name = city_aliases.get(city_input, city_input)
 
