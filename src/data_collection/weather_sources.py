@@ -392,11 +392,11 @@ class WeatherDataCollector:
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
-            # 对于美国市场，使用华氏度
+            # 显式指定单位，防止 API 默认行为漂移
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
-                # 不使用 models 参数，让 Open-Meteo 用默认最优模型
-                # NWS 已提供官方预报对比，无需 HRRR
+            else:
+                params["temperature_unit"] = "celsius"
 
             response = self.session.get(
                 url,
@@ -628,10 +628,8 @@ class WeatherDataCollector:
             "st. louis",
         }
         city_lower = city.lower().strip()
-        # 检查城市名是否在美国城市列表中（支持完全匹配或包含关系）
-        use_fahrenheit = city_lower in us_cities or any(
-            us_city in city_lower for us_city in us_cities
-        )
+        # 严格判断是否为美国市场（必须完全匹配列表或缩写）
+        use_fahrenheit = city_lower in us_cities
 
         if use_fahrenheit:
             logger.info(f"🌡️ {city} 使用华氏度 (°F)")
