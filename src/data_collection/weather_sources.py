@@ -204,7 +204,7 @@ class WeatherDataCollector:
 
         return None
 
-    def fetch_metar(self, city: str, use_fahrenheit: bool = False) -> Optional[Dict]:
+    def fetch_metar(self, city: str, use_fahrenheit: bool = False, utc_offset: int = 0) -> Optional[Dict]:
         """
         从 NOAA Aviation Weather Center 获取 METAR 航空气象数据
 
@@ -250,12 +250,27 @@ class WeatherDataCollector:
             dewp_c = latest.get("dewp")
             obs_time = latest.get("reportTime", "")
 
-            # 2. 计算过去 24 小时内的最高实测温
+            # 2. 精确计算“当地今天”的最高温
+            from datetime import timezone, timedelta
+            now_utc = datetime.now(timezone.utc)
+            local_now = now_utc + timedelta(seconds=utc_offset)
+            local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            utc_midnight = local_midnight - timedelta(seconds=utc_offset)
+
             max_so_far_c = -999
             for obs in data:
-                t = obs.get("temp")
-                if t is not None and t > max_so_far_c:
-                    max_so_far_c = t
+                obs_report_time = obs.get("reportTime", "")
+                try:
+                    clean_time = obs_report_time.replace(" ", "T")
+                    if not clean_time.endswith("Z"): clean_time += "Z"
+                    report_dt = datetime.fromisoformat(clean_time.replace("Z", "+00:00"))
+                    
+                    if report_dt >= utc_midnight:
+                        t = obs.get("temp")
+                        if t is not None and t > max_so_far_c:
+                            max_so_far_c = t
+                except:
+                    continue
 
             # 转换为单位
             if use_fahrenheit:
@@ -539,18 +554,22 @@ class WeatherDataCollector:
         else:
             logger.info(f"🌡️ {city} 使用摄氏度 (°C)")
 
-        # METAR (Airport Weather - Same source as Weather Underground settlement)
-        metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
-        if metar_data:
-            results["metar"] = metar_data
-
-        # Open-Meteo (Primary Free Source - No Key)
         if lat and lon:
             open_meteo = self.fetch_from_open_meteo(
                 lat, lon, use_fahrenheit=use_fahrenheit
             )
             if open_meteo:
                 results["open-meteo"] = open_meteo
+                # 获取时区偏移以过滤 METAR
+                utc_offset = open_meteo.get("utc_offset", 0)
+                metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset)
+                if metar_data:
+                    results["metar"] = metar_data
+        else:
+            # 降级方案
+            metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
+            if metar_data:
+                results["metar"] = metar_data
 
         return results
 
