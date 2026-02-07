@@ -40,12 +40,45 @@ This command launches:
 
 ## 🤖 Telegram Bot Commands
 
-| Command      | Description             | Usage                                          |
-| :----------- | :---------------------- | :--------------------------------------------- |
-| `/signal`    | **Get Trading Signals** | Returns Top 5 markets with earliest settlement |
-| `/portfolio` | **View Portfolio**      | Get real-time paper trading profit report      |
-| `/status`    | **Check Status**        | Confirm if the monitoring engine is online     |
-| `/help`      | **Help**                | Display all available commands                 |
+| Command           | Description             | Usage                                          |
+| :---------------- | :---------------------- | :--------------------------------------------- |
+| `/signal`         | **Get Trading Signals** | Returns Top 5 markets with earliest settlement |
+| `/city [name]`    | **Query City Details**  | Get market info, forecast & live temperature   |
+| `/portfolio`      | **View Portfolio**      | Get real-time paper trading profit report      |
+| `/status`         | **Check Status**        | Confirm if the monitoring engine is online     |
+| `/help`           | **Help**                | Display all available commands                 |
+
+### /city Command Example
+
+```
+/city chicago
+```
+
+Output:
+```
+📍 Chicago Market Details
+════════════════════
+
+🕐 Local Time: 08:30
+
+📊 Open-Meteo Forecast
+👉 Today: High 38°F
+   02-08: High 42°F
+   02-09: High 45°F
+
+✈️ Airport Obs (KORD)
+   🌡️ 32.0°F
+   💨 Wind: 12kt
+   🕐 Observed: 14:00 UTC
+
+📅 2026-02-07 Forecast:38°F
+──────────────────
+🔥 40-41°F: No 94¢ →Buy NO
+🔥 38-39°F: Yes 91¢ →Buy YES
+⭐ 36-37°F: No 87¢ →Buy NO
+```
+
+Supported abbreviations: `chi` (Chicago), `nyc` (New York), `atl` (Atlanta), `sea` (Seattle), `dal` (Dallas), `mia` (Miami)
 
 ---
 
@@ -80,29 +113,66 @@ The system automatically decides the position size based on **Open-Meteo Weather
 - **Push Format**:
 
   ```
-  ⚡ 40-41°F (2026-02-06): Buy No 87¢ | Prediction:38°F [🛒 $10.0 🔥High Conf]
+  📍 Chicago Market Update
+  🕐 Local 08:30 | Forecast High:38°F
+  ═══════════════════════
+
+  ✈️ Airport Obs (KORD):
+     🌡️ 32.0°F | Wind:12kt
+     🕐 Observed: 14:00 UTC
+
+  ⚡ 40-41°F (2026-02-07): Buy No 87¢ | Prediction:38°F [🛒 $10.0 🔥High Conf]
 
   💡 Strategy Tips:
-  • Predicted temp 38.0°C falls within 40-41°F range, market aligns with model
+  • Predicted temp 38.0°F falls within 40-41°F range, market aligns with model
   ```
 
-### 2. ⚡ Price Alerts (Auto Paper Trade)
+### 2. ✈️ METAR Aviation Weather Data
+
+For same-day settlement markets, the system fetches **METAR airport observation data** and displays real measurements:
+
+```
+✈️ Airport Obs (KORD):
+   🌡️ 12.0°F | Wind:15kt
+   🕐 Observed: 11:00 UTC
+```
+
+**ICAO Airport Code Mapping**:
+
+| City          | ICAO | Airport                      |
+| ------------- | ---- | ---------------------------- |
+| Seattle       | KSEA | Seattle-Tacoma International |
+| London        | EGLC | London City Airport          |
+| Dallas        | KDAL | Dallas Love Field            |
+| Miami         | KMIA | Miami International          |
+| Atlanta       | KATL | Hartsfield-Jackson Atlanta   |
+| Chicago       | KORD | O'Hare International         |
+| New York      | KLGA | LaGuardia Airport            |
+| Seoul         | RKSI | Incheon International        |
+| Ankara        | LTAC | Esenboga Airport             |
+| Toronto       | CYYZ | Pearson International        |
+| Wellington    | NZWN | Wellington International     |
+| Buenos Aires  | SAEZ | Ministro Pistarini           |
+
+**Data Source**: NOAA Aviation Weather Center (Free API, no key required)
+
+### 3. ⚡ Price Alerts (Auto Paper Trade)
 
 - **Trigger**: Buy Yes or Buy No price enters the **85¢-95¢** range.
 - **Auto Action**: System executes a **$3-$10 Paper Trade** based on the dynamic position strategy.
 - **Purpose**: High-probability / Near-settlement reminders.
 
-### 3. 👀 Market Anomalies
+### 4. 👀 Market Anomalies
 
 - **Whale Inflow**: Large single trades (>$5,000) with imbalanced ratios.
 - **Volume Spikes**: Sudden increase in volume (>2x historical std dev).
 
-### 4. 📅 Daily PnL Summary
+### 5. 📅 Daily PnL Summary
 
 - **Trigger**: Triggered automatically around 23:55 (Beijing Time).
 - **Content**: Summarizes daily floating PnL, balance changes, and win rate.
 
-### 5. 🎯 Trading Signals (`/signal`)
+### 6. 🎯 Trading Signals (`/signal`)
 
 Prioritizes markets with the **earliest settlement date**, sorted by opportunity value, returns **Top 5**:
 

@@ -134,8 +134,9 @@ class TelegramNotifier:
         total_volume: float = 0,
         brackets_count: int = 0,
         strategy_tips: list = None,
+        metar_data: dict = None,
     ):
-        """发送简约版合并预警"""
+        """发送简约版合并预警 (含 METAR 航空气象数据)"""
         if not alerts:
             return
 
@@ -143,16 +144,38 @@ class TelegramNotifier:
 
         # UTC+8 北京时间
         now_bj = datetime.utcnow() + timedelta(hours=8)
-        timestamp_bj = now_bj.strftime(
-            "%H:%M"
-        )  # 简化为仅显示时间，日期通常与当地一致或不重要
+        timestamp_bj = now_bj.strftime("%H:%M")
 
-        # 1. 信号详情构建
+        # 1. METAR 航空气象数据区块
+        metar_text = ""
+        if metar_data and metar_data.get("current", {}).get("temp") is not None:
+            icao = metar_data.get("icao", "N/A")
+            temp = metar_data["current"]["temp"]
+            unit = "°F" if metar_data.get("unit") == "fahrenheit" else "°C"
+
+            # 解析观测时间 (格式: 2026-02-07T11:00:00.000Z)
+            obs_time_raw = metar_data.get("observation_time", "")
+            if "T" in obs_time_raw:
+                obs_time = obs_time_raw.split("T")[1][:5] + " UTC"
+            else:
+                obs_time = obs_time_raw or "N/A"
+
+            # 可选：风速信息
+            wind_kt = metar_data["current"].get("wind_speed_kt")
+            wind_text = f" | 风速:{wind_kt}kt" if wind_kt else ""
+
+            metar_text = (
+                f"✈️ <b>机场实测 ({icao}):</b>\n"
+                f"   🌡️ {temp:.1f}{unit}{wind_text}\n"
+                f"   🕐 观测: {obs_time}\n\n"
+            )
+
+        # 2. 信号详情构建
         items_text = ""
         for a in alerts:
             items_text += f"{a['msg']}\n\n"
 
-        # 2. 策略建议（如果有）
+        # 3. 策略建议（如果有）
         tips_text = ""
         if strategy_tips:
             tips_text = (
@@ -161,10 +184,11 @@ class TelegramNotifier:
                 + "\n\n"
             )
 
-        # 3. 总体布局 (回归清爽风格)
+        # 4. 总体布局
         text = (
             f"🔔 <b>城市监控报告 #{self._escape_html(city)}</b>\n\n"
             f"📍 城市: {self._escape_html(city)}\n"
+            f"{metar_text}"
             f"📊 <b>实时异动:</b>\n"
             f"{items_text}"
             f"{tips_text}"
