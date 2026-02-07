@@ -314,6 +314,55 @@ class WeatherDataCollector:
             logger.error(f"METAR 数据解析失败 ({icao}): {e}")
             return None
 
+    def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
+        """
+        从 NWS (美国国家气象局) 获取高精度预报
+        仅适用于美国城市，全球 VPS 均可访问
+        """
+        try:
+            # 1. 获取网格点
+            points_url = f"https://api.weather.gov/points/{lat},{lon}"
+            headers = {"User-Agent": "PolyWeather/1.0 (weather-bot)"}
+            
+            points_resp = self.session.get(points_url, headers=headers, timeout=self.timeout)
+            points_resp.raise_for_status()
+            points_data = points_resp.json()
+            
+            forecast_url = points_data.get("properties", {}).get("forecast")
+            if not forecast_url:
+                return None
+            
+            # 2. 获取预报
+            forecast_resp = self.session.get(forecast_url, headers=headers, timeout=self.timeout)
+            forecast_resp.raise_for_status()
+            forecast_data = forecast_resp.json()
+            
+            periods = forecast_data.get("properties", {}).get("periods", [])
+            if not periods:
+                return None
+            
+            # 3. 提取今日最高温（找 isDaytime=True 的第一个）
+            today_high = None
+            for p in periods:
+                if p.get("isDaytime") and "High" in p.get("name", ""):
+                    today_high = p.get("temperature")
+                    break
+            # 如果没有明确的 High，取第一个 daytime 的温度
+            if today_high is None:
+                for p in periods:
+                    if p.get("isDaytime"):
+                        today_high = p.get("temperature")
+                        break
+            
+            return {
+                "source": "nws",
+                "today_high": today_high,
+                "unit": "fahrenheit",
+            }
+        except Exception as e:
+            logger.warning(f"NWS 请求失败: {e}")
+            return None
+
     def fetch_from_open_meteo(
         self,
         lat: float,
@@ -343,10 +392,9 @@ class WeatherDataCollector:
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
-            # 对于美国市场，使用华氏度并请求更多的模型共识
+            # 对于美国市场，使用华氏度
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
-                params["models"] = "ecmwf_ifs,hrrr_conus"
 
             response = self.session.get(
                 url,
@@ -588,6 +636,12 @@ class WeatherDataCollector:
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset)
                 if metar_data:
                     results["metar"] = metar_data
+                
+                # 对美国城市，额外获取 NWS 高精预报
+                if use_fahrenheit:
+                    nws_data = self.fetch_nws(lat, lon)
+                    if nws_data:
+                        results["nws"] = nws_data
         else:
             # 降级方案
             metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)

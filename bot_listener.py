@@ -187,20 +187,21 @@ def start_bot():
             city_today_str = city_now.strftime("%Y-%m-%d")
 
             msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
-            model_split = daily.get("model_split")
+            nws = weather_data.get("nws", {})
+            nws_high = nws.get("today_high")
+            
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
                 day_label = "今天" if d == city_today_str else d[5:]
                 indicator = "👉 " if d == city_today_str else "   "
                 
-                # 如果是今天且存在模型分歧，则特别标注
-                if d == city_today_str and model_split:
-                    ecmwf = model_split.get("ecmwf")
-                    hrrr = model_split.get("hrrr")
-                    if ecmwf and hrrr and abs(ecmwf - hrrr) > 0.5:
+                # 如果是今天且有 NWS 数据，显示模型对比
+                if d == city_today_str and nws_high is not None:
+                    diff = abs(t - nws_high)
+                    if diff > 1:
                         msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} ⚠️")
-                        msg_lines.append(f"   (模型分歧: ECMWF {ecmwf} | HRRR {hrrr})")
+                        msg_lines.append(f"   (NWS官方预报: {nws_high}{temp_symbol}，差异 {diff:.1f}°)")
                     else:
-                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
+                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} (NWS: {nws_high})")
                 else:
                     msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
 
