@@ -130,6 +130,7 @@ def start_bot():
             weather_data = weather.fetch_all_sources(city_name, lat=coords["lat"], lon=coords["lon"])
 
             msg_lines = [f"📍 <b>{city_name.title()} 天气详情</b>"]
+            msg_lines.append(f"⏱️ 生成时间: {datetime.now().strftime('%H:%M:%S')}")
             msg_lines.append("═" * 20)
 
             open_meteo = weather_data.get("open-meteo", {})
@@ -162,7 +163,11 @@ def start_bot():
                 if obs:
                     try:
                         obs_dt = datetime.fromisoformat(obs.replace("Z", "+00:00"))
-                        obs_str = obs_dt.strftime("%H:%M UTC")
+                        # 如果有 Open-Meteo 的时区偏移，则转换
+                        utc_offset = open_meteo.get("utc_offset", 0)
+                        from datetime import timezone, timedelta
+                        local_obs_dt = obs_dt.astimezone(timezone(timedelta(seconds=utc_offset)))
+                        obs_str = local_obs_dt.strftime("%H:%M") + " (当地)"
                     except:
                         obs_str = obs[:16]
                 else:
