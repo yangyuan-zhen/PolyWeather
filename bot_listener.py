@@ -190,7 +190,7 @@ def start_bot():
                 msg_lines.append(f"\n✈️ <b>机场实测 ({icao})</b>")
                 if metar_temp is not None:
                     max_sofar = metar.get("current", {}).get("max_temp_so_far")
-                    if max_sofar is not None and max_sofar != metar_temp:
+                    if max_sofar is not None:
                         msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol} (今日最高: {max_sofar}{temp_symbol})")
                     else:
                         msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol}")
