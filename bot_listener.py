@@ -103,6 +103,43 @@ def analyze_weather_trend(weather_data, temp_symbol):
         elif wind_speed >= 10:
             insights.append(f"🍃 <b>清劲风</b>：空气流动快，虽然有助于散热，但可能伴随阵风引起微小波动。")
 
+        # 4. 云层遮挡分析 (对午后增温影响巨大)
+        clouds = metar.get("current", {}).get("clouds", [])
+        if clouds and 10 <= local_hour <= 16:
+            # 取覆盖范围最大的云层
+            main_cloud = clouds[-1] # METAR 通常按高度由低到高排列，最后一层往往代表主要云量
+            cover = main_cloud.get("cover", "")
+            
+            if cover == "OVC":
+                insights.append(f"☁️ <b>全阴锁温</b>：机场上空完全遮挡，阳光增温几乎停滞，很难冲破预报高点。")
+            elif cover == "BKN":
+                insights.append(f"🌥️ <b>云层显著</b>：天空大部被遮挡，日照受限，升温速率将明显放缓。")
+            elif cover in ["SKC", "CLR", "FEW"]:
+                insights.append(f"☀️ <b>晴空万里</b>：日照强烈，无云层遮挡，气温有冲向预报上限甚至超出的动能。")
+
+        # 5. 特殊天气现象分析
+        wx_desc = metar.get("current", {}).get("wx_desc")
+        if wx_desc:
+            if any(x in wx_desc.upper() for x in ["RA", "DZ", "RAIN", "DRIZZLE"]):
+                insights.append(f"🌧️ <b>降雨压制</b>：当前有降雨，蒸发吸热将显著拉低实时气温。")
+            elif any(x in wx_desc.upper() for x in ["SN", "SNOW", "GR", "GS"]):
+                insights.append(f"❄️ <b>固态降水</b>：正在降雪或冰雹，气温将由于相变吸热而持续低迷。")
+            elif any(x in wx_desc.upper() for x in ["FG", "BR", "HZ", "FOG", "MIST"]):
+                insights.append(f"🌫️ <b>能见度受限</b>：当前有雾/霭，阻挡阳光并带来高湿，会大幅延缓升温周期。")
+
+        # 6. 风向与能见度
+        wind_dir = metar.get("current", {}).get("wind_dir")
+        if wind_dir is not None:
+            # 北半球简化逻辑：北风冷，南风暖
+            if 315 <= wind_dir or wind_dir <= 45:
+                insights.append(f"🌬️ <b>偏北风</b>：冷空气处于主导地位，午后增温阻力较大。")
+            elif 135 <= wind_dir <= 225:
+                insights.append(f"🔥 <b>偏南风</b>：正从低纬度输送暖湿气流，气温有超预期上涨的潜力。")
+
+        visibility = metar.get("current", {}).get("visibility_mi")
+        if visibility is not None and visibility < 3 and local_hour <= 11:
+            insights.append(f"🌫️ <b>早晨低见度</b>：能见度极差 ({visibility}mi)，阳光无法打透，早间升温将非常缓慢。")
+
     if not insights:
         return ""
         
@@ -279,7 +316,51 @@ def start_bot():
                     else:
                         msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol}")
                 if wind is not None:
-                    msg_lines.append(f"   💨 风速: {wind}kt")
+                    wind_dir = metar.get("current", {}).get("wind_dir")
+                    if wind_dir is not None:
+                        # 翻译风向
+                        dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
+                        dir_str = dirs[int((wind_dir + 22.5) % 360 / 45)]
+                        msg_lines.append(f"   💨 风力: {wind}kt ({dir_str}风 {wind_dir}°)")
+                    else:
+                        msg_lines.append(f"   💨 风速: {wind}kt")
+                
+                vis = metar.get("current", {}).get("visibility_mi")
+                if vis is not None:
+                    msg_lines.append(f"   👁️ 能见度: {vis}mi")
+                
+                wx = metar.get("current", {}).get("wx_desc")
+                if wx:
+                    # 常见天象翻译
+                    wx_map = {
+                        "RA": "雨", "SN": "雪", "DZ": "毛毛雨", "FG": "雾", 
+                        "BR": "薄雾", "HZ": "霾", "TS": "雷暴", "GR": "冰雹",
+                        "VC": "附近", "MI": "浅", "BC": "散", "PR": "部分",
+                        "BL": "吹", "SH": "阵", "FZ": "冻", "-": "轻微", "+": "强烈"
+                    }
+                    translated_wx = wx
+                    for code, cn in wx_map.items():
+                        translated_wx = translated_wx.replace(code, cn)
+                    msg_lines.append(f"   🌧️ 天象: {translated_wx}")
+                
+                # 云层显示
+                clouds = metar.get("current", {}).get("clouds", [])
+                if clouds:
+                    cloud_map = {
+                        "SKC": "晴空 (无云)", "CLR": "晴空 (无云)",
+                        "FEW": "少云", "SCT": "散云",
+                        "BKN": "多云 (有遮挡)", "OVC": "阴天 (全覆盖)",
+                        "VV": "垂直能见度受限"
+                    }
+                    main_cloud = clouds[-1]
+                    cover_code = main_cloud.get("cover", "Unknown")
+                    base_height = main_cloud.get("base", "")
+                    cover_desc = cloud_map.get(cover_code, cover_code)
+                    if base_height:
+                        msg_lines.append(f"   ☁️ 云层: {cover_desc} ({base_height}ft)")
+                    else:
+                        msg_lines.append(f"   ☁️ 云层: {cover_desc}")
+                
                 msg_lines.append(f"   🕐 观测: {obs_str}")
                 
             # 3. 添加态势分析
