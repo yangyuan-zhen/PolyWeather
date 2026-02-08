@@ -529,16 +529,13 @@ class WeatherDataCollector:
         lat: float,
         lon: float,
         timezone_name: str = "UTC",
+        use_fahrenheit: bool = False,
     ) -> Optional[Dict]:
         """
         从 Meteoblue 网页抓取多模型预测数据的“共识”最高温
-        这是交易者最认可的高精度预测源之一
         """
         try:
-            # 构造 Meteoblue 规范化的 URL
-            # 格式: https://www.meteoblue.com/en/weather/week/{lat}N{lon}E8_{tz_slug}
             tz_slug = timezone_name.replace("/", "%2F")
-            # 这里的 E8 后缀是 Meteoblue 的规范
             url = f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E8_{tz_slug}"
             
             headers = {
@@ -546,7 +543,6 @@ class WeatherDataCollector:
                 "Accept-Language": "en-US,en;q=0.9"
             }
             
-            # 使用现有 session (已配置代理)
             response = self.session.get(
                 url,
                 headers=headers,
@@ -555,26 +551,33 @@ class WeatherDataCollector:
             response.raise_for_status()
             
             content = response.text
-            # 提取今天（Today）区块的最高温
-            # 逻辑：找到 "Today" 后，查找第一个 "tab-temp-max" 中的温度
             match = re.search(r'Today.*?tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL | re.IGNORECASE)
             
             result = {
                 "source": "meteoblue",
                 "url": url,
                 "today_high": None,
-                "daily_highs": []
+                "daily_highs": [],
+                "unit": "celsius"
             }
             
+            def c_to_f(c):
+                return round((c * 9/5) + 32, 1)
+
             if match:
-                result["today_high"] = float(match.group(1))
+                val = float(match.group(1))
+                result["today_high"] = c_to_f(val) if use_fahrenheit else val
             
-            # 同时提取接下来几天的最高温，增强对比性
+            # 同时提取接下来几天的最高温
             all_highs = re.findall(r'tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL)
             if all_highs:
-                result["daily_highs"] = [float(h) for h in all_highs]
+                if use_fahrenheit:
+                    result["daily_highs"] = [c_to_f(float(h)) for h in all_highs]
+                else:
+                    result["daily_highs"] = [float(h) for h in all_highs]
             
-            logger.info(f"✅ Meteoblue 抓取成功: 今天 {result['today_high']}°C")
+            result["unit"] = "fahrenheit" if use_fahrenheit else "celsius"
+            logger.info(f"✅ Meteoblue 抓取成功: 今天 {result['today_high']}{result['unit']}")
             return result
         except Exception as e:
             logger.error(f"Meteoblue fetch failed: {e}")
@@ -769,7 +772,11 @@ class WeatherDataCollector:
                         results["mgm"] = mgm_data
                 
                 # 获取 Meteoblue 预测 (公认最准)
-                mb_data = self.fetch_from_meteoblue(lat, lon, timezone_name=open_meteo.get("timezone", "UTC"))
+                mb_data = self.fetch_from_meteoblue(
+                    lat, lon, 
+                    timezone_name=open_meteo.get("timezone", "UTC"),
+                    use_fahrenheit=use_fahrenheit
+                )
                 if mb_data:
                     results["meteoblue"] = mb_data
 
