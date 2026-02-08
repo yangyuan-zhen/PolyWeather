@@ -297,7 +297,21 @@ def start_bot():
             
             if metar:
                 obs_t = metar.get("observation_time", "")
-                obs_t_str = obs_t.split(" ")[1][:5] if " " in obs_t else obs_t[:5]
+                try:
+                    if "T" in obs_t:
+                        # 处理 ISO 格式 2026-02-08T09:46:00.000Z
+                        from datetime import datetime, timezone, timedelta
+                        dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
+                        # 转换为当地时间
+                        utc_offset = open_meteo.get("utc_offset", 0)
+                        local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
+                        obs_t_str = local_dt.strftime("%H:%M")
+                    elif " " in obs_t:
+                        obs_t_str = obs_t.split(" ")[1][:5]
+                    else:
+                        obs_t_str = obs_t
+                except:
+                    obs_t_str = obs_t[:16] # 备选逻辑
             elif mgm:
                 m_time = mgm.get("current", {}).get("time", "")
                 if "T" in m_time:
