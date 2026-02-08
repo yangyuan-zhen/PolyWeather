@@ -128,17 +128,24 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 insights.append(f"🌫️ <b>能见度受限</b>：当前有雾/霭，阻挡阳光并带来高湿，会大幅延缓升温周期。")
 
         # 6. 风向与能见度
-        wind_dir = metar.get("current", {}).get("wind_dir")
-        if wind_dir is not None:
+        try:
+            wind_dir = float(metar.get("current", {}).get("wind_dir", 0))
             # 北半球简化逻辑：北风冷，南风暖
             if 315 <= wind_dir or wind_dir <= 45:
                 insights.append(f"🌬️ <b>偏北风</b>：冷空气处于主导地位，午后增温阻力较大。")
             elif 135 <= wind_dir <= 225:
                 insights.append(f"🔥 <b>偏南风</b>：正从低纬度输送暖湿气流，气温有超预期上涨的潜力。")
+        except (TypeError, ValueError):
+            pass
 
-        visibility = metar.get("current", {}).get("visibility_mi")
-        if visibility is not None and visibility < 3 and local_hour <= 11:
-            insights.append(f"🌫️ <b>早晨低见度</b>：能见度极差 ({visibility}mi)，阳光无法打透，早间升温将非常缓慢。")
+        try:
+            visibility = metar.get("current", {}).get("visibility_mi")
+            if visibility is not None:
+                vis_val = float(str(visibility).replace("+", "").replace("-", ""))
+                if vis_val < 3 and local_hour <= 11:
+                    insights.append(f"🌫️ <b>早晨低见度</b>：能见度极差 ({vis_val}mi)，阳光无法打透，早间升温将非常缓慢。")
+        except (TypeError, ValueError):
+            pass
 
     if not insights:
         return ""
@@ -316,13 +323,17 @@ def start_bot():
                     else:
                         msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol}")
                 if wind is not None:
-                    wind_dir = metar.get("current", {}).get("wind_dir")
-                    if wind_dir is not None:
-                        # 翻译风向
-                        dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                        dir_str = dirs[int((wind_dir + 22.5) % 360 / 45)]
-                        msg_lines.append(f"   💨 风力: {wind}kt ({dir_str}风 {wind_dir}°)")
-                    else:
+                    try:
+                        wind_dir_raw = metar.get("current", {}).get("wind_dir")
+                        if wind_dir_raw is not None:
+                            wind_dir = float(wind_dir_raw)
+                            # 翻译风向
+                            dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
+                            dir_str = dirs[int((wind_dir + 22.5) % 360 / 45)]
+                            msg_lines.append(f"   💨 风力: {wind}kt ({dir_str}风 {int(wind_dir)}°)")
+                        else:
+                            msg_lines.append(f"   💨 风速: {wind}kt")
+                    except (TypeError, ValueError):
                         msg_lines.append(f"   💨 风速: {wind}kt")
                 
                 vis = metar.get("current", {}).get("visibility_mi")
