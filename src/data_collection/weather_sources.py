@@ -296,6 +296,11 @@ class WeatherDataCollector:
                     "dewpoint": round(dewp, 1) if dewp is not None else None,
                     "humidity": latest.get("rh"),
                     "wind_speed_kt": latest.get("wspd"),
+                    "wind_dir": latest.get("wdir"),
+                    "visibility_mi": latest.get("visib"),
+                    "wx_desc": latest.get("wxString"),
+                    "altimeter": latest.get("altim"),
+                    "clouds": latest.get("clouds", []),
                 },
                 "unit": unit,
             }
