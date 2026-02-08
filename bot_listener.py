@@ -278,9 +278,10 @@ def start_bot():
             elif mgm_high is not None:
                 comp_str = f" (MGM: {mgm_high})"
             
-            msg_lines.append(f"\n👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>")
+            msg_lines.append(f"\n📊 <b>预报 (Open-Meteo)</b>")
+            msg_lines.append(f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>")
             
-            # 明后天 (水平排列或极简列表)
+            # 明后天
             if len(dates) > 1:
                 future_forecasts = []
                 for d, t in zip(dates[1:], max_temps[1:]):
@@ -292,6 +293,8 @@ def start_bot():
             cur_temp = metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp")
             max_p = metar.get("current", {}).get("max_temp_so_far") if metar else None
             obs_t_str = "N/A"
+            main_source = "METAR" if metar else "MGM"
+            
             if metar:
                 obs_t = metar.get("observation_time", "")
                 obs_t_str = obs_t.split(" ")[1][:5] if " " in obs_t else obs_t[:5]
@@ -305,7 +308,7 @@ def start_bot():
                     m_time = m_time.split(" ")[1][:5]
                 obs_t_str = m_time
 
-            msg_lines.append(f"\n✈️ <b>实测: {cur_temp}{temp_symbol}</b>" + (f" (最高: {max_p}{temp_symbol})" if max_p else "") + f" | {obs_t_str}")
+            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>" + (f" (最高: {max_p}{temp_symbol})" if max_p else "") + f" | {obs_t_str}")
 
             if mgm:
                 m_c = mgm.get("current", {})
@@ -316,8 +319,8 @@ def start_bot():
                     dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
                     dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
                 
-                msg_lines.append(f"   🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}% | 🌧️ {m_c.get('rain_24h') or 0}mm")
-                msg_lines.append(f"   🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s)")
+                msg_lines.append(f"   [MGM] 🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}%")
+                msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s) | 🌧️ {m_c.get('rain_24h') or 0}mm")
             
             if metar:
                 m_c = metar.get("current", {})
@@ -332,11 +335,12 @@ def start_bot():
                     main = clouds[-1]
                     cloud_desc = f"☁️ {c_map.get(main.get('cover'), main.get('cover'))}"
 
+                prefix = "[METAR]" if mgm else "   "
                 if not mgm:
-                    msg_lines.append(f"   💨 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi")
+                    msg_lines.append(f"   {prefix} 💨 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi")
                 
                 if cloud_desc:
-                    msg_lines.append(f"   {cloud_desc} | 👁️ {vis or 10}mi")
+                    msg_lines.append(f"   {prefix} {cloud_desc} | 👁️ {vis or 10}mi | 💨 {wind or 0}kt")
 
             # --- 5. 态势分析 ---
             trend_insights = analyze_weather_trend(weather_data, temp_symbol)
