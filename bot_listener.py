@@ -73,19 +73,31 @@ def analyze_weather_trend(weather_data, temp_symbol):
     if curr_temp is not None and forecast_high is not None:
         diff = forecast_high - curr_temp
         
-        # 1. 气温节奏判定
-        if local_hour >= 17:
-            if curr_temp >= forecast_high - 0.5:
-                insights.append(f"✅ <b>今日峰值已达</b>：当前已触及预报最高，大概率已定格。")
+        # 1. 气温节奏判定 (动态参考峰值时刻)
+        last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
+        first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
+        
+        if local_hour > last_peak_h:
+            # 已经过了预报的峰值时段
+            if curr_temp >= forecast_high - 0.5 or (max_so_far and max_so_far >= forecast_high - 0.5):
+                insights.append(f"✅ <b>今日峰值已过</b>：气温已触及或接近预报最高，目前处于高位波动或缓慢回落。")
             else:
-                insights.append(f"📉 <b>处于降温期</b>：气温已跌落峰值，今日反弹乏力。")
-        elif 10 <= local_hour < 17:
+                insights.append(f"📉 <b>处于降温期</b>：已过预报峰值时段，且当前气温乏力，冲击高点概率降低。")
+        elif first_peak_h <= local_hour <= last_peak_h:
+            # 正在峰值窗口内
+            if diff <= 0.8:
+                insights.append(f"⚖️ <b>高位横盘</b>：正处于预测峰值时段，气温将在当前水平小幅波动。")
+            else:
+                insights.append(f"⏳ <b>峰值窗口中</b>：虽在预报高点时段，但目前仍有差距，紧盯最后冲刺。")
+        elif local_hour < first_peak_h:
+            # 还没到峰值窗口
             if diff > 1.2:
-                insights.append(f"📈 <b>升温进程中</b>：距离峰值还有约 {diff:.1f}° 空间，正向高点冲击。")
+                insights.append(f"📈 <b>升温进程中</b>：距离峰值时段还有 {first_peak_h - local_hour}h，正向高点冲击。")
             else:
-                insights.append(f"⚖️ <b>高位横盘</b>：气温已在高位，将在当前水平小幅波动。")
+                insights.append(f"🌅 <b>临近峰值</b>：即将进入高点时段，气温已处于预报高位。")
         else:
-            insights.append(f"🌅 <b>早间爬升</b>：气温正快速起步，等待午后冲击。")
+            # 回退逻辑
+            insights.append(f"🌌 <b>夜间/早间</b>：等待日出后的新一轮波动。")
 
         # 2. 湿度与露点带来的“粘性”分析
         humidity = metar.get("current", {}).get("humidity")
@@ -103,9 +115,9 @@ def analyze_weather_trend(weather_data, temp_symbol):
         elif wind_speed >= 10:
             insights.append(f"🍃 <b>清劲风</b>：空气流动快，虽然有助于散热，但可能伴随阵风引起微小波动。")
 
-        # 4. 云层遮挡分析 (对午后增温影响巨大)
+        # 4. 云层遮挡分析 (仅在升温期/峰值期有意义)
         clouds = metar.get("current", {}).get("clouds", [])
-        if clouds and 10 <= local_hour <= 16:
+        if clouds and local_hour <= last_peak_h + 1:
             # 取覆盖范围最大的云层
             main_cloud = clouds[-1] # METAR 通常按高度由低到高排列，最后一层往往代表主要云量
             cover = main_cloud.get("cover", "")
