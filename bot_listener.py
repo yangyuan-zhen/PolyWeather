@@ -218,13 +218,13 @@ def start_bot():
                 "la": "los angeles", "洛杉矶": "los angeles",
             }
             
-            # 1. 尝试直接从映射表获取
+            # 1. 第一优先级：严格全字匹配
             city_name = STANDARD_MAPPING.get(city_input)
             
-            # 2. 如果没匹配到，尝试前缀匹配 (如输入 "seou")
-            if not city_name:
+            # 2. 第二优先级：如果长度 >= 3，尝试前缀匹配
+            if not city_name and len(city_input) >= 3:
                 for k, v in STANDARD_MAPPING.items():
-                    if len(city_input) >= 3 and k.startswith(city_input[:3]):
+                    if k.startswith(city_input):
                         city_name = v
                         break
             
@@ -278,19 +278,27 @@ def start_bot():
             
             if mb_high is not None:
                 sources.append("MB")
-                comp_parts.append(f"MB: {mb_high}")
+                comp_parts.append(f"MB: {mb_high:.1f}{temp_symbol}" if isinstance(mb_high, (int, float)) else f"MB: {mb_high}")
             if nws_high is not None:
                 sources.append("NWS")
-                comp_parts.append(f"NWS: {nws_high}")
+                comp_parts.append(f"NWS: {nws_high:.1f}{temp_symbol}" if isinstance(nws_high, (int, float)) else f"NWS: {nws_high}")
             if mgm_high is not None:
                 sources.append("MGM")
-                comp_parts.append(f"MGM: {mgm_high}")
+                comp_parts.append(f"MGM: {mgm_high:.1f}{temp_symbol}" if isinstance(mgm_high, (int, float)) else f"MGM: {mgm_high}")
+            
+            # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
+            divergence_warning = ""
+            if mb_high is not None and max_temps:
+                diff = abs(mb_high - max_temps[0])
+                threshold = 5.0 if temp_unit == "fahrenheit" else 2.5
+                if diff > threshold:
+                    divergence_warning = f" ⚠️ <b>模型显著分歧 ({diff:.1f}{temp_symbol})</b>"
             
             comp_str = f" ({' | '.join(comp_parts)})" if comp_parts else ""
             sources_str = " | ".join(sources)
             
             msg_lines.append(f"\n📊 <b>预报 ({sources_str})</b>")
-            msg_lines.append(f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>")
+            msg_lines.append(f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>{divergence_warning}")
             
             # 明后天
             if len(dates) > 1:
