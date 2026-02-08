@@ -791,14 +791,15 @@ class WeatherDataCollector:
                     if mgm_data:
                         results["mgm"] = mgm_data
                 
-                # 获取 Meteoblue 预测 (公认最准)
-                mb_data = self.fetch_from_meteoblue(
-                    lat, lon, 
-                    timezone_name=open_meteo.get("timezone", "UTC"),
-                    use_fahrenheit=use_fahrenheit
-                )
-                if mb_data:
-                    results["meteoblue"] = mb_data
+                # 对伦敦，获取 Meteoblue 预测 (公认最准)
+                if city_lower == "london":
+                    mb_data = self.fetch_from_meteoblue(
+                        lat, lon, 
+                        timezone_name=open_meteo.get("timezone", "UTC"),
+                        use_fahrenheit=use_fahrenheit
+                    )
+                    if mb_data:
+                        results["meteoblue"] = mb_data
 
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:
