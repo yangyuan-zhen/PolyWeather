@@ -325,6 +325,13 @@ def start_bot():
                     msg_lines.append(f"   🌬️ {dir_str}{wind_dir}° / {mgm_curr.get('wind_speed_ms')} m/s")
                     if mgm_curr.get("rain_24h") is not None:
                         msg_lines.append(f"   🌧️ 24h 降水: {mgm_curr.get('rain_24h')}mm")
+                    
+                    if mgm_curr.get("time"):
+                        # 处理 MGM 原始时间格式 (例如 2026-02-08 13:00)
+                        obs_time = mgm_curr.get("time")
+                        if " " in obs_time:
+                            obs_time = obs_time.split(" ")[1]
+                        msg_lines.append(f"   🕐 观测: {obs_time} (官方)")
 
             if metar:
                 icao = metar.get("icao", "")
