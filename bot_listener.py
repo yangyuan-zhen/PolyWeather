@@ -240,181 +240,113 @@ def start_bot():
                 return
 
             weather_data = weather.fetch_all_sources(city_name, lat=coords["lat"], lon=coords["lon"])
-
-            msg_lines = [f"📍 <b>{city_name.title()} 天气详情</b>"]
-            
-            # 立即显示城市风险档案，防止被淹没
-            risk_profile = get_city_risk_profile(city_name)
-            if risk_profile:
-                risk_warning = format_risk_warning(risk_profile, "°F") # 默认尝试用F显示偏差
-                if risk_warning:
-                    msg_lines.append(risk_warning)
-
-            msg_lines.append(f"\n⏱️ 生成时间: {datetime.now().strftime('%H:%M:%S')}")
-            msg_lines.append("═" * 20)
-
             open_meteo = weather_data.get("open-meteo", {})
             metar = weather_data.get("metar", {})
+            mgm = weather_data.get("mgm", {})
+            
             temp_unit = open_meteo.get("unit", "celsius")
             temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
-
+            
+            # --- 1. 紧凑 Header (城市 + 时间 + 风险状态) ---
             local_time = open_meteo.get("current", {}).get("local_time", "")
-            if local_time:
-                time_only = local_time.split(" ")[1] if " " in local_time else local_time
-                msg_lines.append(f"🕐 当地时间: {time_only}")
+            time_str = local_time.split(" ")[1][:5] if " " in local_time else "N/A"
+            
+            risk_profile = get_city_risk_profile(city_name)
+            risk_emoji = risk_profile.get("risk_level", "⚪") if risk_profile else "⚪"
+            
+            msg_header = f"📍 <b>{city_name.title()}</b> ({time_str}) {risk_emoji}"
+            msg_lines = [msg_header]
+            
+            # --- 2. 紧凑 风险提示 ---
+            if risk_profile:
+                bias = risk_profile.get("bias", "±0.0")
+                msg_lines.append(f"⚠️ {risk_profile.get('airport_name', '')}: {bias}{temp_symbol} | {risk_profile.get('warning', '')}")
 
-
+            # --- 3. 紧凑 预测区 ---
             daily = open_meteo.get("daily", {})
-            dates = daily.get("time", [])
-            max_temps = daily.get("temperature_2m_max", [])
-            # 获取当地“今天”的日期
-            utc_offset = open_meteo.get("utc_offset", 0)
-            from datetime import timedelta, timezone
-            city_now = datetime.now(timezone.utc) + timedelta(seconds=utc_offset)
-            city_today_str = city_now.strftime("%Y-%m-%d")
-
-            msg_lines.append(f"\n📊 <b>Open-Meteo 3天预测</b>")
-            nws = weather_data.get("nws", {})
-            nws_high = nws.get("today_high")
-            mgm = weather_data.get("mgm", {})
+            dates = daily.get("time", [])[:3]
+            max_temps = daily.get("temperature_2m_max", [])[:3]
+            
+            nws_high = weather_data.get("nws", {}).get("today_high")
             mgm_high = mgm.get("today_high")
             
-            for i, (d, t) in enumerate(zip(dates[:3], max_temps[:3])):
-                # 跳过无效数据
-                if t is None:
-                    continue
-                    
-                day_label = "今天" if d == city_today_str else d[5:]
-                indicator = "👉 " if d == city_today_str else "   "
-                
-                # 如果是今天且有 NWS 或 MGM 数据，显示模型对比
-                comp_lines = []
-                if d == city_today_str:
-                    if nws_high is not None:
-                        diff_nws = abs(t - nws_high)
-                        warning = " ⚠️" if diff_nws > 1 else ""
-                        comp_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}{warning}")
-                        comp_lines.append(f"   (NWS官方预报: {nws_high}{temp_symbol}，差异 {diff_nws:.1f}°)")
-                    elif mgm_high is not None:
-                        # 安卡拉 MGM 对比
-                        diff_mgm = abs(t - mgm_high)
-                        warning = " ⚠️" if diff_mgm > 1 else ""
-                        comp_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}{warning}")
-                        comp_lines.append(f"   (MGM官方预报: {mgm_high}{temp_symbol}，差异 {diff_mgm:.1f}°)")
-                
-                if comp_lines:
-                    msg_lines.extend(comp_lines)
-                else:
-                    msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
+            # 今天对比
+            today_t = max_temps[0] if max_temps else "N/A"
+            comp_str = ""
+            if nws_high is not None:
+                comp_str = f" (NWS: {nws_high})"
+            elif mgm_high is not None:
+                comp_str = f" (MGM: {mgm_high})"
+            
+            msg_lines.append(f"\n👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>")
+            
+            # 明后天 (水平排列或极简列表)
+            if len(dates) > 1:
+                future_forecasts = []
+                for d, t in zip(dates[1:], max_temps[1:]):
+                    future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
+                msg_lines.append("📅 " + " | ".join(future_forecasts))
 
-            # MGM 官方实测显示
-            if mgm:
-                mgm_curr = mgm.get("current", {})
-                mgm_temp = mgm_curr.get("temp")
-                if mgm_temp is not None:
-                    # 翻译风向
-                    wind_dir = mgm_curr.get("wind_dir")
-                    dir_str = ""
-                    if wind_dir is not None:
-                        dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                        dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
-
-                    msg_lines.append(f"\n🏛️ <b>MGM 官方实测 ({mgm_curr.get('station_name', 'Ankara Esenboğa')})</b>")
-                    msg_lines.append(f"   🌡️ {mgm_temp}°C (体感 {mgm_curr.get('feels_like', mgm_temp)}°C)")
-                    msg_lines.append(f"   💧 湿度: {mgm_curr.get('humidity')}%")
-                    msg_lines.append(f"   🌬️ {dir_str}{wind_dir}° / {mgm_curr.get('wind_speed_ms')} m/s")
-                    if mgm_curr.get("rain_24h") is not None:
-                        msg_lines.append(f"   🌧️ 24h 降水: {mgm_curr.get('rain_24h')}mm")
-                    
-                    if mgm_curr.get("time"):
-                        # 处理 MGM 原始时间格式 (例如 2026-02-08 13:00)
-                        obs_time = mgm_curr.get("time")
-                        if " " in obs_time:
-                            obs_time = obs_time.split(" ")[1]
-                        msg_lines.append(f"   🕐 观测: {obs_time} (官方)")
-
+            # --- 4. 核心 实测区 (合并 METAR 和 MGM) ---
+            # 基础数据优先用 METAR
+            cur_temp = metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp")
+            max_p = metar.get("current", {}).get("max_temp_so_far") if metar else None
+            obs_t_str = "N/A"
             if metar:
-                icao = metar.get("icao", "")
-                metar_temp = metar.get("current", {}).get("temp")
-                wind = metar.get("current", {}).get("wind_speed_kt")
-                obs = metar.get("observation_time", "")
-                
-                if obs:
-                    try:
-                        obs_dt = datetime.fromisoformat(obs.replace("Z", "+00:00"))
-                        # 如果有 Open-Meteo 的时区偏移，则转换
-                        utc_offset = open_meteo.get("utc_offset", 0)
-                        from datetime import timezone, timedelta
-                        local_obs_dt = obs_dt.astimezone(timezone(timedelta(seconds=utc_offset)))
-                        obs_str = local_obs_dt.strftime("%H:%M") + " (当地)"
-                    except:
-                        obs_str = obs[:16]
-                else:
-                    obs_str = "N/A"
+                obs_t = metar.get("observation_time", "")
+                obs_t_str = obs_t.split(" ")[1][:5] if " " in obs_t else obs_t[:5]
+            elif mgm:
+                m_time = mgm.get("current", {}).get("time", "")
+                if "T" in m_time:
+                    from datetime import datetime, timezone, timedelta
+                    dt = datetime.fromisoformat(m_time.replace("Z", "+00:00"))
+                    m_time = dt.astimezone(timezone(timedelta(hours=3))).strftime("%H:%M")
+                elif " " in m_time:
+                    m_time = m_time.split(" ")[1][:5]
+                obs_t_str = m_time
 
-                msg_lines.append(f"\n✈️ <b>机场实测 ({icao})</b>")
-                if metar_temp is not None:
-                    max_sofar = metar.get("current", {}).get("max_temp_so_far")
-                    if max_sofar is not None:
-                        msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol} (今日最高: {max_sofar}{temp_symbol})")
-                    else:
-                        msg_lines.append(f"   🌡️ {metar_temp}{temp_symbol}")
-                if wind is not None:
-                    try:
-                        wind_dir_raw = metar.get("current", {}).get("wind_dir")
-                        if wind_dir_raw is not None:
-                            wind_dir = float(wind_dir_raw)
-                            # 翻译风向
-                            dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                            dir_str = dirs[int((wind_dir + 22.5) % 360 / 45)]
-                            msg_lines.append(f"   💨 风力: {wind}kt ({dir_str}风 {int(wind_dir)}°)")
-                        else:
-                            msg_lines.append(f"   💨 风速: {wind}kt")
-                    except (TypeError, ValueError):
-                        msg_lines.append(f"   💨 风速: {wind}kt")
+            msg_lines.append(f"\n✈️ <b>实测: {cur_temp}{temp_symbol}</b>" + (f" (最高: {max_p}{temp_symbol})" if max_p else "") + f" | {obs_t_str}")
+
+            if mgm:
+                m_c = mgm.get("current", {})
+                # 翻译风向
+                wind_dir = m_c.get("wind_dir")
+                dir_str = ""
+                if wind_dir is not None:
+                    dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
+                    dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
                 
-                vis = metar.get("current", {}).get("visibility_mi")
-                if vis is not None:
-                    msg_lines.append(f"   👁️ 能见度: {vis}mi")
+                msg_lines.append(f"   🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}% | 🌧️ {m_c.get('rain_24h') or 0}mm")
+                msg_lines.append(f"   🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s)")
+            
+            if metar:
+                m_c = metar.get("current", {})
+                wind = m_c.get("wind_speed_kt")
+                wind_dir = m_c.get("wind_dir")
+                vis = m_c.get("visibility_mi")
+                clouds = m_c.get("clouds", [])
                 
-                wx = metar.get("current", {}).get("wx_desc")
-                if wx:
-                    # 常见天象翻译
-                    wx_map = {
-                        "RA": "雨", "SN": "雪", "DZ": "毛毛雨", "FG": "雾", 
-                        "BR": "薄雾", "HZ": "霾", "TS": "雷暴", "GR": "冰雹",
-                        "VC": "附近", "MI": "浅", "BC": "散", "PR": "部分",
-                        "BL": "吹", "SH": "阵", "FZ": "冻", "-": "轻微", "+": "强烈"
-                    }
-                    translated_wx = wx
-                    for code, cn in wx_map.items():
-                        translated_wx = translated_wx.replace(code, cn)
-                    msg_lines.append(f"   🌧️ 天象: {translated_wx}")
-                
-                # 云层显示
-                clouds = metar.get("current", {}).get("clouds", [])
+                cloud_desc = ""
                 if clouds:
-                    cloud_map = {
-                        "SKC": "晴空 (无云)", "CLR": "晴空 (无云)",
-                        "FEW": "少云", "SCT": "散云",
-                        "BKN": "多云 (有遮挡)", "OVC": "阴天 (全覆盖)",
-                        "VV": "垂直能见度受限"
-                    }
-                    main_cloud = clouds[-1]
-                    cover_code = main_cloud.get("cover", "Unknown")
-                    base_height = main_cloud.get("base", "")
-                    cover_desc = cloud_map.get(cover_code, cover_code)
-                    if base_height:
-                        msg_lines.append(f"   ☁️ 云层: {cover_desc} ({base_height}ft)")
-                    else:
-                        msg_lines.append(f"   ☁️ 云层: {cover_desc}")
+                    c_map = {"BKN": "多云", "OVC": "阴天", "FEW": "少云", "SCT": "散云", "SKC": "晴", "CLR": "晴"}
+                    main = clouds[-1]
+                    cloud_desc = f"☁️ {c_map.get(main.get('cover'), main.get('cover'))}"
+
+                if not mgm:
+                    msg_lines.append(f"   💨 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi")
                 
-                msg_lines.append(f"   🕐 观测: {obs_str}")
-                
-            # 3. 添加态势分析
+                if cloud_desc:
+                    msg_lines.append(f"   {cloud_desc} | 👁️ {vis or 10}mi")
+
+            # --- 5. 态势分析 ---
             trend_insights = analyze_weather_trend(weather_data, temp_symbol)
             if trend_insights:
-                msg_lines.append(trend_insights)
+                clean_insights = trend_insights.replace("💡 <b>态势分析</b>", "").strip()
+                if clean_insights:
+                    msg_lines.append(f"\n💡 <b>分析</b>:")
+                    for line in clean_insights.split("\n"):
+                        if line.strip():
+                            msg_lines.append(f"- {line.strip()}")
 
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
