@@ -19,7 +19,7 @@ py -3.11 run.py
 python3 run.py
 ```
 
-_Note: The system is currently in **Weather Query Mode**. Active market monitoring and automated trading modules are suspended._
+_Note: The system is currently in **Weather Query Mode**. Legacy active market monitoring and automated trading modules are suspended._
 
 ---
 
@@ -31,92 +31,76 @@ _Note: The system is currently in **Weather Query Mode**. Active market monitori
 | `/id`          | **Get Chat ID**        | Retrieve your current Telegram Chat ID         |
 | `/help`        | **Help**               | Display all available commands                 |
 
-### /city Command Example
-
-```
-/city Chicago
-```
-
-**Real-time Output:**
-
-> 📍 **Chicago 天气详情**  
-> ⏱️ 生成时间: 12:45:30  
-> ════════════════════  
-> 🕐 当地时间: 12:45
->
-> 📊 **Open-Meteo 7天预测**  
-> 👉 今天: 最高 22.4°F (NWS: 23°F)  
->  02-08: 最高 26.2°F  
->  02-09: 最高 37.2°F
->
-> ✈️ **机场实测 (KORD)**  
->  🌡️ 21.0°F (今日最高: 23.0°F)  
->  💨 风速: 4kt  
->  🕐 观测: 12:00 (当地)
->
-> 💡 **态势分析**  
-> ⏱️ **预计峰值时刻**：今天 14:00 - 16:00 之间。  
-> 🎯 **博弈建议**：关注该时段实测能否站稳 22.4°F。  
-> 📈 **升温进程中**：距离峰值还有约 1.4° 空间，正向高点冲击。
-
 ---
 
 ## ✨ Key Features
 
-### 1. 🏛️ Multi-Source Data Fusion
+### 1. 🏛️ Multi-Source Data Fusion (High-Fidelity)
 
-The bot aggregates data from multiple authoritative sources:
+The bot aggregates data from multiple authoritative sources, layered by reliability:
 
-| Source         | Data Type                      | Coverage          |
-| -------------- | ------------------------------ | ----------------- |
-| **Open-Meteo** | 7-day forecast                 | Global            |
-| **NWS**        | Official US forecast           | US cities only ⚠️ |
-| **METAR**      | Real-time airport observations | Global airports   |
+| Source             | Role                    | Coverage        | Strength                                                                           |
+| :----------------- | :---------------------- | :-------------- | :--------------------------------------------------------------------------------- |
+| **Open-Meteo**     | Base Forecast           | Global          | Provides detailed 72-hour temperature curves for all cities.                       |
+| **Meteoblue (MB)** | **Precision Consensus** | Global          | **Traders' choice**. Aggregates multiple models; excellent for microclimates.      |
+| **METAR**          | **Settlement Standard** | Global Airports | The absolute truth for Polymarket settlement; real-time station data.              |
+| **NWS**            | Official (US)           | US Only         | High-fidelity forecasts for US cities, critical for extreme weather events.        |
+| **MGM**            | Official (Turkey)       | Ankara          | Direct access to Turkish State Meteorological Service for local official accuracy. |
 
-- **⚠️ Divergence Alerts**: When Open-Meteo and NWS disagree by >1°F, the bot flags it for your attention.
+### 2. ⚡ Ultra-Fresh Data (Cache-Busting)
 
-### 2. ⏱️ Peak Timing Prediction
+To counter second-by-second variations in weather betting, we implemented **Zero-Cache Technology**:
 
-For each city, the bot analyzes the hourly forecast curve to identify:
+- **Micro-timestamp Tokens**: Every request includes a dynamic token to force servers to bypass CDN caches.
+- **MGM Real-time Sync**: Specialized header camouflaging to bypass local Turkish API anti-crawling for Ankara.
 
-- **Exact peak window**: e.g., "14:00 - 16:00"
-- **Betting recommendation**: Monitor real-time data during this window
+### 3. ⏱️ Automated Trend Analysis
 
-### 3. 📊 Today's High Tracking
+The bot doesn't just fetch data; it interprets it:
 
-METAR data is filtered by **local calendar day** using UTC offset:
+- **Peak Window Prediction**: Automatically identifies the timeframe when today's record is most likely to be hit.
+- **Risk Profiling**: Assigns risk levels based on geographic traits (e.g., Ankara high-altitude swings, London coastal microclimates).
+- **Source Attribution**: Every data point is clearly labeled ([MGM], [METAR], [MB]) to help you weigh the data.
 
-- Only observations from **local midnight onwards** are counted
-- Ensures "Today's High" is accurate, not polluted by yesterday's warm afternoon
+### 4. 📊 Smart Max-Temp Tracking
 
-### 4. ✈️ High-Fidelity Airport Data (METAR)
+Optimized for Polymarket settlement logic:
 
-Directly connected to **NOAA Aviation Weather**, the bot fetches raw METAR data from major international airports.
+- **Local Day Filtering**: Uses city UTC offsets to strictly count observations after 00:00 local time.
+- **Multi-dimension Monitoring**: Includes "Feels Like" temperatures and 24h precipitation to assist in nuanced trade decisions.
 
-- Automatic conversion from UTC to **City Local Time**.
-- Real-time station observations (Temperature, Wind, Dew Point).
+---
 
-### 5. ⚡ Ultra-Fresh Data (Cache Busting)
+## 🏗️ System Architecture
 
-Engineered to bypass ISP and proxy caches:
+PolyWeather uses a **Lightweight, Plugin-based** architecture for millisecond responses.
 
-- Every request includes a **micro-timestamp token**.
-- Forces weather servers (Open-Meteo/NOAA/NWS) to deliver fresh results instead of stale cached snapshots.
+```mermaid
+graph TD
+    User[/Telegram User/] --> Bot[bot_listener.py]
+    Bot --> Collector[WeatherDataCollector]
+
+    subgraph "Data Engine"
+        Collector --> OM[Open-Meteo API]
+        Collector --> MB[Meteoblue Scraper]
+        Collector --> NOAA[METAR Data Center]
+        Collector --> MGM[Turkish MGM API]
+        Collector --> NWS[US NWS API]
+    end
+
+    Collector --> Processing[Smart Analysis & Formatting]
+    Processing --> Bot
+    Bot --> Reponse[/Compact Betting Snapshot/]
+```
+
+- **Logic Decoupling**: `weather_sources.py` handles parsing; `bot_listener.py` handles rendering.
+- **Legacy Modules**: `main.py` contains the old automated trading engine. Focus has shifted to "assisted manual decision-making."
 
 ---
 
 ## 🎯 Betting Strategy Tips
 
-1. **Check model consensus**: If Open-Meteo and NWS agree, confidence is high.
-2. **Watch the peak window**: Monitor METAR during predicted peak hours.
-3. **Use "Today's High"**: Track the actual recorded maximum vs forecast.
-4. **Interpret ⚠️ warnings**: Divergence means uncertainty—proceed with caution.
-
----
-
-## 🏗️ Architecture Note
-
-The project contains a legacy **Monitoring Engine** and **Paper Trading System** (located in `main.py`). These features are currently **deactivated** to prioritize high-speed on-demand weather reporting.
-
-- To re-enable monitoring: Uncomment `monitor_thread.start()` in `run.py`.
-- Documentation for inactive features: See [MARKET_DISCOVERY.md](./MARKET_DISCOVERY.md) and [PAPER_TRADING_GUIDE.md](./PAPER_TRADING_GUIDE.md).
+1. **Check Consensus**: Compare Open-Meteo and Meteoblue (MB). Consensus usually implies higher probability.
+2. **Watch the Peak**: Use `/city` frequently during predicted peak windows to catch momentum.
+3. **Weighting Hierarchy**: Settlement is **METAR**; high-accuracy trend is **MB**; Official (NWS/MGM) is the "anchor."
+4. **Geographic Risk**: Pay close attention to cities where "Bias will significantly amplify."
