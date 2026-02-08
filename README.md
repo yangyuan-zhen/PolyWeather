@@ -42,7 +42,7 @@ The bot aggregates data from multiple authoritative sources, layered by reliabil
 | Source             | Role                    | Coverage        | Strength                                                                           |
 | :----------------- | :---------------------- | :-------------- | :--------------------------------------------------------------------------------- |
 | **Open-Meteo**     | Base Forecast           | Global          | Provides detailed 72-hour temperature curves for all cities.                       |
-| **Meteoblue (MB)** | **Precision Consensus** | Global          | **Traders' choice**. Aggregates multiple models; excellent for microclimates.      |
+| **Meteoblue (MB)** | **Precision Consensus** | London Only     | **Traders' choice**. Aggregates multiple models; excellent for microclimates.      |
 | **METAR**          | **Settlement Standard** | Global Airports | The absolute truth for Polymarket settlement; real-time station data.              |
 | **NWS**            | Official (US)           | US Only         | High-fidelity forecasts for US cities, critical for extreme weather events.        |
 | **MGM**            | Official (Turkey)       | Ankara          | Direct access to Turkish State Meteorological Service for local official accuracy. |
@@ -102,5 +102,5 @@ graph TD
 
 1. **Check Consensus**: Compare Open-Meteo and Meteoblue (MB). Consensus usually implies higher probability.
 2. **Watch the Peak**: Use `/city` frequently during predicted peak windows to catch momentum.
-3. **Weighting Hierarchy**: Settlement is **METAR**; high-accuracy trend is **MB**; Official (NWS/MGM) is the "anchor."
+3. **Weighting Hierarchy**: Settlement is **METAR**; high-accuracy trend is **MB** (London); Official (NWS/MGM) is the "anchor."
 4. **Geographic Risk**: Pay close attention to cities where "Bias will significantly amplify."
