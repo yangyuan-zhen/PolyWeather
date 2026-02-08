@@ -535,27 +535,47 @@ class WeatherDataCollector:
         从 Meteoblue 网页抓取多模型预测数据的“共识”最高温
         """
         try:
+            # 1. 构造精确的方向后缀 URL
+            lat_dir = "N" if lat >= 0 else "S"
+            lon_dir = "E" if lon >= 0 else "W"
+            # Meteoblue 坐标 URL 习惯：保留 3 位小数，使用大写方向后缀
+            coord_str = f"{abs(lat):.3f}{lat_dir}{abs(lon):.3f}{lon_dir}"
             tz_slug = timezone_name.replace("/", "%2F")
-            url = f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E8_{tz_slug}"
+            
+            # 使用 forecast/week 路径通常比直接 week 更稳定
+            url = f"https://www.meteoblue.com/en/weather/week/{coord_str}"
+            if tz_slug:
+                url += f"_{tz_slug}"
             
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9"
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.meteoblue.com/"
             }
             
             response = self.session.get(
                 url,
                 headers=headers,
-                timeout=self.timeout
+                timeout=self.timeout,
+                allow_redirects=True  # 允许重定向，但我们要检查终点
             )
             response.raise_for_status()
             
             content = response.text
+            
+            # 2. 检查是否重定向到了错误的地方 (例如大阪 Osaka)
+            # 如果 URL 里有 W 但页面内容里全是 E 或者城市名完全对不上
+            if lon < 0 and "W" in coord_str:
+                if "osaka" in response.url.lower():
+                    logger.warning(f"⚠️ Meteoblue 重定向异常: 目标 {coord_str} 却返回了 {response.url}")
+                    return None
+
+            # 3. 提取最高温
             match = re.search(r'Today.*?tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL | re.IGNORECASE)
             
             result = {
                 "source": "meteoblue",
-                "url": url,
+                "url": response.url,
                 "today_high": None,
                 "daily_highs": [],
                 "unit": "celsius"
@@ -568,7 +588,7 @@ class WeatherDataCollector:
                 val = float(match.group(1))
                 result["today_high"] = c_to_f(val) if use_fahrenheit else val
             
-            # 同时提取接下来几天的最高温
+            # 同时提取接下来几天
             all_highs = re.findall(r'tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL)
             if all_highs:
                 if use_fahrenheit:
@@ -577,7 +597,7 @@ class WeatherDataCollector:
                     result["daily_highs"] = [float(h) for h in all_highs]
             
             result["unit"] = "fahrenheit" if use_fahrenheit else "celsius"
-            logger.info(f"✅ Meteoblue 抓取成功: 今天 {result['today_high']}{result['unit']}")
+            logger.info(f"✅ Meteoblue 抓取成功 ({coord_str}): 今天 {result['today_high']}{result['unit']}")
             return result
         except Exception as e:
             logger.error(f"Meteoblue fetch failed: {e}")
