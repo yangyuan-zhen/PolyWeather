@@ -8,6 +8,7 @@
 
 - **Python 3.11+**
 - 依赖安装: `pip install -r requirements.txt`
+- **环境变量**: 需在 `.env` 中配置 `METEOBLUE_API_KEY` 以激活伦敦高精度预报。
 
 ### 本地运行 (Windows/Linux)
 
@@ -88,7 +89,7 @@ graph TD
 
     subgraph "Data Engine"
         Collector --> OM[Open-Meteo API]
-        Collector --> MB[Meteoblue Scraper]
+        Collector --> MB[Meteoblue Weather API]
         Collector --> NOAA[METAR Data Center]
         Collector --> MGM[Turkish MGM API]
         Collector --> NWS[US NWS API]
