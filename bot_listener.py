@@ -269,14 +269,19 @@ def start_bot():
             
             nws_high = weather_data.get("nws", {}).get("today_high")
             mgm_high = mgm.get("today_high")
+            mb_high = weather_data.get("meteoblue", {}).get("today_high")
             
             # 今天对比
             today_t = max_temps[0] if max_temps else "N/A"
-            comp_str = ""
+            comp_parts = []
             if nws_high is not None:
-                comp_str = f" (NWS: {nws_high})"
-            elif mgm_high is not None:
-                comp_str = f" (MGM: {mgm_high})"
+                comp_parts.append(f"NWS: {nws_high}")
+            if mgm_high is not None:
+                comp_parts.append(f"MGM: {mgm_high}")
+            if mb_high is not None:
+                comp_parts.append(f"MB: {mb_high}")
+            
+            comp_str = f" ({' | '.join(comp_parts)})" if comp_parts else ""
             
             msg_lines.append(f"\n📊 <b>预报 (Open-Meteo)</b>")
             msg_lines.append(f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>")
