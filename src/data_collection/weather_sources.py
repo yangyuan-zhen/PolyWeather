@@ -319,6 +319,50 @@ class WeatherDataCollector:
             logger.error(f"METAR 数据解析失败 ({icao}): {e}")
             return None
 
+    def fetch_from_mgm(self, istno: str) -> Optional[Dict]:
+        """
+        从土耳其气象局 (MGM) 获取实时数据和预测 (由用户提供其内部 API)
+        """
+        base_url = "https://servis.mgm.gov.tr/web"
+        # 必须带 Origin，否则会被反爬拦截
+        headers = {
+            "Origin": "https://www.mgm.gov.tr",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        results = {}
+        
+        try:
+            # 1. 实时数据
+            obs_resp = self.session.get(f"{base_url}/sondurumlar?istno={istno}", headers=headers, timeout=self.timeout)
+            if obs_resp.status_code == 200:
+                data = obs_resp.json()
+                if data:
+                    latest = data[0] if isinstance(data, list) else data
+                    # MGM 数据字段映射
+                    results["current"] = {
+                        "temp": latest.get("sicaklik"),
+                        "humidity": latest.get("nem"),
+                        "wind_speed_kt": round(latest.get("ruzgarHiz", 0) * 1.94, 1) if latest.get("ruzgarHiz") is not None else None,
+                        "wind_dir": latest.get("ruzgarYon"),
+                        "rain_24h": latest.get("toplamYagis"),
+                        "time": latest.get("veriZamani"),
+                        "station_name": latest.get("istasyonAd")
+                    }
+            
+            # 2. 每日预报
+            daily_resp = self.session.get(f"{base_url}/tahminler/gunluk?istno={istno}", headers=headers, timeout=self.timeout)
+            if daily_resp.status_code == 200:
+                forecasts = daily_resp.json()
+                if forecasts and isinstance(forecasts, list):
+                    today = forecasts[0]
+                    results["today_high"] = today.get("enYuksekGun1")
+                    results["today_low"] = today.get("enDusukGun1")
+            
+            return results if "current" in results else None
+        except Exception as e:
+            logger.error(f"MGM API 请求失败 ({istno}): {e}")
+            return None
+
     def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
         """
         从 NWS (美国国家气象局) 获取高精度预报
@@ -652,6 +696,12 @@ class WeatherDataCollector:
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset)
                 if metar_data:
                     results["metar"] = metar_data
+                
+                # 对安卡拉，额外获取 MGM 官方数据
+                if city_lower == "ankara":
+                    mgm_data = self.fetch_from_mgm("17128")
+                    if mgm_data:
+                        results["mgm"] = mgm_data
                 
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:

@@ -276,6 +276,8 @@ def start_bot():
             msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
             nws = weather_data.get("nws", {})
             nws_high = nws.get("today_high")
+            mgm = weather_data.get("mgm", {})
+            mgm_high = mgm.get("today_high")
             
             for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
                 # 跳过无效数据
@@ -285,16 +287,36 @@ def start_bot():
                 day_label = "今天" if d == city_today_str else d[5:]
                 indicator = "👉 " if d == city_today_str else "   "
                 
-                # 如果是今天且有 NWS 数据，显示模型对比
-                if d == city_today_str and nws_high is not None:
-                    diff = abs(t - nws_high)
-                    if diff > 1:
-                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} ⚠️")
-                        msg_lines.append(f"   (NWS官方预报: {nws_high}{temp_symbol}，差异 {diff:.1f}°)")
-                    else:
-                        msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol} (NWS: {nws_high}{temp_symbol})")
+                # 如果是今天且有 NWS 或 MGM 数据，显示模型对比
+                comp_lines = []
+                if d == city_today_str:
+                    if nws_high is not None:
+                        diff_nws = abs(t - nws_high)
+                        warning = " ⚠️" if diff_nws > 1 else ""
+                        comp_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}{warning}")
+                        comp_lines.append(f"   (NWS官方预报: {nws_high}{temp_symbol}，差异 {diff_nws:.1f}°)")
+                    elif mgm_high is not None:
+                        # 安卡拉 MGM 对比
+                        diff_mgm = abs(t - mgm_high)
+                        warning = " ⚠️" if diff_mgm > 1 else ""
+                        comp_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}{warning}")
+                        comp_lines.append(f"   (MGM官方预报: {mgm_high}{temp_symbol}，差异 {diff_mgm:.1f}°)")
+                
+                if comp_lines:
+                    msg_lines.extend(comp_lines)
                 else:
                     msg_lines.append(f"{indicator}{day_label}: 最高 {t}{temp_symbol}")
+
+            # MGM 官方实测显示
+            if mgm:
+                mgm_curr = mgm.get("current", {})
+                mgm_temp = mgm_curr.get("temp")
+                if mgm_temp is not None:
+                    msg_lines.append(f"\n🏛️ <b>MGM 官方实测 ({mgm_curr.get('station_name', 'Ankara')})</b>")
+                    msg_lines.append(f"   🌡️ {mgm_temp}°C (湿度: {mgm_curr.get('nem', mgm_curr.get('humidity'))}%)")
+                    msg_lines.append(f"   💨 风速: {mgm_curr.get('wind_speed_kt')}kt")
+                    if mgm_curr.get("rain_24h"):
+                        msg_lines.append(f"   🌧️ 24h降水: {mgm_curr.get('rain_24h')}mm")
 
             if metar:
                 icao = metar.get("icao", "")
