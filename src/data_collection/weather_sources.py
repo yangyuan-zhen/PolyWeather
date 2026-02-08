@@ -524,6 +524,62 @@ class WeatherDataCollector:
             logger.error(f"Open-Meteo forecast failed: {e}")
             return None
 
+    def fetch_from_meteoblue(
+        self,
+        lat: float,
+        lon: float,
+        timezone_name: str = "UTC",
+    ) -> Optional[Dict]:
+        """
+        从 Meteoblue 网页抓取多模型预测数据的“共识”最高温
+        这是交易者最认可的高精度预测源之一
+        """
+        try:
+            # 构造 Meteoblue 规范化的 URL
+            # 格式: https://www.meteoblue.com/en/weather/week/{lat}N{lon}E8_{tz_slug}
+            tz_slug = timezone_name.replace("/", "%2F")
+            # 这里的 E8 后缀是 Meteoblue 的规范
+            url = f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E8_{tz_slug}"
+            
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "en-US,en;q=0.9"
+            }
+            
+            # 使用现有 session (已配置代理)
+            response = self.session.get(
+                url,
+                headers=headers,
+                timeout=self.timeout
+            )
+            response.raise_for_status()
+            
+            content = response.text
+            # 提取今天（Today）区块的最高温
+            # 逻辑：找到 "Today" 后，查找第一个 "tab-temp-max" 中的温度
+            match = re.search(r'Today.*?tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL | re.IGNORECASE)
+            
+            result = {
+                "source": "meteoblue",
+                "url": url,
+                "today_high": None,
+                "daily_highs": []
+            }
+            
+            if match:
+                result["today_high"] = float(match.group(1))
+            
+            # 同时提取接下来几天的最高温，增强对比性
+            all_highs = re.findall(r'tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL)
+            if all_highs:
+                result["daily_highs"] = [float(h) for h in all_highs]
+            
+            logger.info(f"✅ Meteoblue 抓取成功: 今天 {result['today_high']}°C")
+            return result
+        except Exception as e:
+            logger.error(f"Meteoblue fetch failed: {e}")
+            return None
+
     def extract_date_from_title(self, title: str) -> Optional[str]:
         """
         从标题中提取日期并标准化为 YYYY-MM-DD
@@ -712,6 +768,11 @@ class WeatherDataCollector:
                     if mgm_data:
                         results["mgm"] = mgm_data
                 
+                # 获取 Meteoblue 预测 (公认最准)
+                mb_data = self.fetch_from_meteoblue(lat, lon, timezone_name=open_meteo.get("timezone", "UTC"))
+                if mb_data:
+                    results["meteoblue"] = mb_data
+
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:
                     nws_data = self.fetch_nws(lat, lon)
