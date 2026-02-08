@@ -332,24 +332,29 @@ class WeatherDataCollector:
         results = {}
         
         try:
-            # 1. 实时数据
-            obs_resp = self.session.get(f"{base_url}/sondurumlar?istno={istno}", headers=headers, timeout=self.timeout)
+            # 1. 实时数据 (添加时间戳防止 CDN 缓存)
+            import time
+            obs_resp = self.session.get(
+                f"{base_url}/sondurumlar?istno={istno}&_={int(time.time()*1000)}", 
+                headers=headers, 
+                timeout=self.timeout
+            )
             if obs_resp.status_code == 200:
                 data = obs_resp.json()
                 if data:
                     latest = data[0] if isinstance(data, list) else data
                     # MGM 数据字段映射
-                    # ruzgarHiz 通常为 m/s 或 km/h，根据用户反馈这里使用 m/s 逻辑
-                    ruz_hiz = latest.get("ruzgarHiz", 0)
+                    # ruzgarHiz 实测为 km/h，转为 m/s 需要除以 3.6
+                    ruz_hiz_kmh = latest.get("ruzgarHiz", 0)
                     results["current"] = {
                         "temp": latest.get("sicaklik"),
                         "feels_like": latest.get("hissedilenSicaklik") or latest.get("sicaklik"),
                         "humidity": latest.get("nem"),
-                        "wind_speed_ms": ruz_hiz,
-                        "wind_speed_kt": round(ruz_hiz * 1.94, 1) if ruz_hiz is not None else None, # 如果是 m/s 转 kt
+                        "wind_speed_ms": round(ruz_hiz_kmh / 3.6, 1) if ruz_hiz_kmh is not None else None,
+                        "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if ruz_hiz_kmh is not None else None,
                         "wind_dir": latest.get("ruzgarYon"),
                         "rain_24h": latest.get("toplamYagis"),
-                        "time": latest.get("veriZamani"),
+                        "time": latest.get("veriZamani"), # 观测时间
                         "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
                     }
             
