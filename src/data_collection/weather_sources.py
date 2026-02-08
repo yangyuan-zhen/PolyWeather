@@ -37,7 +37,9 @@ class WeatherDataCollector:
 
     def __init__(self, config: dict):
         self.config = config
-        self.wunderground_key = config.get("wunderground_api_key")
+        weather_cfg = config.get("weather", {})
+        self.wunderground_key = weather_cfg.get("wunderground_api_key")
+        self.meteoblue_key = weather_cfg.get("meteoblue_api_key")
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()
@@ -532,75 +534,65 @@ class WeatherDataCollector:
         use_fahrenheit: bool = False,
     ) -> Optional[Dict]:
         """
-        从 Meteoblue 网页抓取多模型预测数据的“共识”最高温
+        通过 Meteoblue 官方 API 获取高精度预测数据
         """
+        if not self.meteoblue_key:
+            logger.warning("Meteoblue API Key 未配置，跳过抓取。")
+            return None
+
         try:
-            # 1. 构造精确的方向后缀 URL
-            lat_dir = "N" if lat >= 0 else "S"
-            lon_dir = "E" if lon >= 0 else "W"
-            # Meteoblue 坐标 URL 习惯：保留 3 位小数，使用大写方向后缀
-            coord_str = f"{abs(lat):.3f}{lat_dir}{abs(lon):.3f}{lon_dir}"
-            tz_slug = timezone_name.replace("/", "%2F")
-            
-            # 使用 forecast/week 路径通常比直接 week 更稳定
-            url = f"https://www.meteoblue.com/en/weather/week/{coord_str}"
-            if tz_slug:
-                url += f"_{tz_slug}"
-            
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                "Accept-Language": "en-US,en;q=0.9",
-                "Referer": "https://www.meteoblue.com/"
+            # 1. 调用官方 API (使用 basic-day 包，它是多模型 ML 融合结果)
+            # 格式: https://my.meteoblue.com/packages/basic-day?apikey=KEY&lat=LAT&lon=LON&format=json
+            url = "https://my.meteoblue.com/packages/basic-day"
+            params = {
+                "apikey": self.meteoblue_key,
+                "lat": lat,
+                "lon": lon,
+                "format": "json",
+                "as_daylight": "true"
             }
             
             response = self.session.get(
                 url,
-                headers=headers,
-                timeout=self.timeout,
-                allow_redirects=True  # 允许重定向，但我们要检查终点
+                params=params,
+                timeout=self.timeout
             )
             response.raise_for_status()
+            data = response.json()
             
-            content = response.text
+            day_data = data.get("data_day", {})
+            max_temps = day_data.get("temperature_max", [])
             
-            # 2. 检查是否重定向到了错误的地方 (例如大阪 Osaka)
-            # 如果 URL 里有 W 但页面内容里全是 E 或者城市名完全对不上
-            if lon < 0 and "W" in coord_str:
-                if "osaka" in response.url.lower():
-                    logger.warning(f"⚠️ Meteoblue 重定向异常: 目标 {coord_str} 却返回了 {response.url}")
-                    return None
+            if not max_temps:
+                logger.warning(f"Meteoblue API 返回数据中找不到最高温 (坐标: {lat},{lon})")
+                return None
 
-            # 3. 提取最高温
-            match = re.search(r'Today.*?tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL | re.IGNORECASE)
-            
-            result = {
-                "source": "meteoblue",
-                "url": response.url,
-                "today_high": None,
-                "daily_highs": [],
-                "unit": "celsius"
-            }
-            
+            # 2. 转换单位
             def c_to_f(c):
                 return round((c * 9/5) + 32, 1)
 
-            if match:
-                val = float(match.group(1))
-                result["today_high"] = c_to_f(val) if use_fahrenheit else val
+            result = {
+                "source": "meteoblue",
+                "today_high": None,
+                "daily_highs": [],
+                "unit": "fahrenheit" if use_fahrenheit else "celsius",
+                "url": f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E" # 仅供参考
+            }
+
+            # 提取今日最高
+            mb_today_c = max_temps[0]
+            result["today_high"] = c_to_f(mb_today_c) if use_fahrenheit else mb_today_c
             
-            # 同时提取接下来几天
-            all_highs = re.findall(r'tab-temp-max.*?(\d+)&nbsp;°C', content, re.DOTALL)
-            if all_highs:
-                if use_fahrenheit:
-                    result["daily_highs"] = [c_to_f(float(h)) for h in all_highs]
-                else:
-                    result["daily_highs"] = [float(h) for h in all_highs]
-            
-            result["unit"] = "fahrenheit" if use_fahrenheit else "celsius"
-            logger.info(f"✅ Meteoblue 抓取成功 ({coord_str}): 今天 {result['today_high']}{result['unit']}")
+            # 提取接下来几天的最高温
+            if use_fahrenheit:
+                result["daily_highs"] = [c_to_f(t) for t in max_temps]
+            else:
+                result["daily_highs"] = max_temps
+
+            logger.info(f"✅ Meteoblue API 获取成功 ({lat},{lon}): 今天 {result['today_high']}{result['unit']}")
             return result
         except Exception as e:
-            logger.error(f"Meteoblue fetch failed: {e}")
+            logger.error(f"Meteoblue API fetch failed: {e}")
             return None
 
     def extract_date_from_title(self, title: str) -> Optional[str]:

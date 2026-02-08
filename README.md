@@ -8,6 +8,7 @@ An intelligent weather information bot designed to provide ultra-fast, live mete
 
 - **Python 3.11+**
 - Dependencies: `pip install -r requirements.txt`
+- **Environment**: Configure `METEOBLUE_API_KEY` in `.env` to enable high-precision London forecasts.
 
 ### Running Locally (Windows/Linux)
 
@@ -82,7 +83,7 @@ graph TD
 
     subgraph "Data Engine"
         Collector --> OM[Open-Meteo API]
-        Collector --> MB[Meteoblue Scraper]
+        Collector --> MB[Meteoblue Weather API]
         Collector --> NOAA[METAR Data Center]
         Collector --> MGM[Turkish MGM API]
         Collector --> NWS[US NWS API]

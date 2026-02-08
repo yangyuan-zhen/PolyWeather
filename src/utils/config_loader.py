@@ -25,6 +25,7 @@ def load_config():
             "openweather_api_key": get_env_or_none("OPENWEATHER_API_KEY"),
             "wunderground_api_key": get_env_or_none("WUNDERGROUND_API_KEY"),
             "visualcrossing_api_key": get_env_or_none("VISUALCROSSING_API_KEY"),
+            "meteoblue_api_key": get_env_or_none("METEOBLUE_API_KEY"),
             "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
         },
         "telegram": {
