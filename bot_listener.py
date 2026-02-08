@@ -273,13 +273,13 @@ def start_bot():
             city_now = datetime.now(timezone.utc) + timedelta(seconds=utc_offset)
             city_today_str = city_now.strftime("%Y-%m-%d")
 
-            msg_lines.append(f"\n📊 <b>Open-Meteo 7天预测</b>")
+            msg_lines.append(f"\n📊 <b>Open-Meteo 3天预测</b>")
             nws = weather_data.get("nws", {})
             nws_high = nws.get("today_high")
             mgm = weather_data.get("mgm", {})
             mgm_high = mgm.get("today_high")
             
-            for i, (d, t) in enumerate(zip(dates[:7], max_temps[:7])):
+            for i, (d, t) in enumerate(zip(dates[:3], max_temps[:3])):
                 # 跳过无效数据
                 if t is None:
                     continue
@@ -312,11 +312,19 @@ def start_bot():
                 mgm_curr = mgm.get("current", {})
                 mgm_temp = mgm_curr.get("temp")
                 if mgm_temp is not None:
-                    msg_lines.append(f"\n🏛️ <b>MGM 官方实测 ({mgm_curr.get('station_name', 'Ankara')})</b>")
-                    msg_lines.append(f"   🌡️ {mgm_temp}°C (湿度: {mgm_curr.get('nem', mgm_curr.get('humidity'))}%)")
-                    msg_lines.append(f"   💨 风速: {mgm_curr.get('wind_speed_kt')}kt")
-                    if mgm_curr.get("rain_24h"):
-                        msg_lines.append(f"   🌧️ 24h降水: {mgm_curr.get('rain_24h')}mm")
+                    # 翻译风向
+                    wind_dir = mgm_curr.get("wind_dir")
+                    dir_str = ""
+                    if wind_dir is not None:
+                        dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
+                        dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
+
+                    msg_lines.append(f"\n🏛️ <b>MGM 官方实测 ({mgm_curr.get('station_name', 'Ankara Esenboğa')})</b>")
+                    msg_lines.append(f"   🌡️ {mgm_temp}°C (体感 {mgm_curr.get('feels_like', mgm_temp)}°C)")
+                    msg_lines.append(f"   💧 湿度: {mgm_curr.get('humidity')}%")
+                    msg_lines.append(f"   🌬️ {dir_str}{wind_dir}° / {mgm_curr.get('wind_speed_ms')} m/s")
+                    if mgm_curr.get("rain_24h") is not None:
+                        msg_lines.append(f"   🌧️ 24h 降水: {mgm_curr.get('rain_24h')}mm")
 
             if metar:
                 icao = metar.get("icao", "")
