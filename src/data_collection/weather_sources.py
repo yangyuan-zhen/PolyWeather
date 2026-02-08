@@ -339,14 +339,18 @@ class WeatherDataCollector:
                 if data:
                     latest = data[0] if isinstance(data, list) else data
                     # MGM 数据字段映射
+                    # ruzgarHiz 通常为 m/s 或 km/h，根据用户反馈这里使用 m/s 逻辑
+                    ruz_hiz = latest.get("ruzgarHiz", 0)
                     results["current"] = {
                         "temp": latest.get("sicaklik"),
+                        "feels_like": latest.get("hissedilenSicaklik") or latest.get("sicaklik"),
                         "humidity": latest.get("nem"),
-                        "wind_speed_kt": round(latest.get("ruzgarHiz", 0) * 1.94, 1) if latest.get("ruzgarHiz") is not None else None,
+                        "wind_speed_ms": ruz_hiz,
+                        "wind_speed_kt": round(ruz_hiz * 1.94, 1) if ruz_hiz is not None else None, # 如果是 m/s 转 kt
                         "wind_dir": latest.get("ruzgarYon"),
                         "rain_24h": latest.get("toplamYagis"),
                         "time": latest.get("veriZamani"),
-                        "station_name": latest.get("istasyonAd")
+                        "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
                     }
             
             # 2. 每日预报
