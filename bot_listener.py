@@ -57,13 +57,13 @@ def analyze_weather_trend(weather_data, temp_symbol):
         local_hour = datetime.now().hour
 
     # === 核心判断：实测是否已超预报 ===
+    is_breakthrough = False
     if max_so_far is not None and forecast_high is not None:
         if max_so_far > forecast_high + 0.5:
-            # 实测已超所有预报！
+            is_breakthrough = True
             exceed_by = max_so_far - forecast_high
             insights.append(f"🚨 <b>预报已被击穿</b>：实测最高 {max_so_far}{temp_symbol} 已超所有预报上限 {forecast_high}{temp_symbol} 约 {exceed_by:.1f}°！")
-            insights.append(f"💡 <b>博弈建议</b>：市场需重新评估，当前可能存在极端异常增温。")
-            return "\n💡 <b>态势分析</b>\n" + "\n".join(insights)
+            insights.append(f"💡 <b>建议</b>：市场需重新评估，当前可能存在物理层面的超预期增温。")
 
     # --- 峰值时刻预测逻辑 (仍以 Open-Meteo 逐小时数据为准) ---
     hourly = open_meteo.get("hourly", {})
@@ -97,15 +97,19 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if local_hour > last_peak_h:
             # 已经过了预报的峰值时段
             is_peak_passed = True
+            if is_breakthrough:
+                insights.append(f"🌡️ <b>超常规表现</b>：虽然时间已过预报峰值，但气温击穿上限后仍维持在高位，需警惕降温推迟。")
             # 如果实测已经接近“任一”主流预报的最高温 (使用 min_forecast_high)
-            if max_so_far and max_so_far >= min_forecast_high - 0.5:
+            elif max_so_far and max_so_far >= min_forecast_high - 0.5:
                 insights.append(f"✅ <b>今日峰值已过</b>：气温已触及或接近预报最高，目前处于高位波动或缓慢回落。")
             else:
                 # 虽然时间过了，但离最高温还有差距
                 insights.append(f"📉 <b>处于降温期</b>：已过预报峰值时段，且当前气温乏力 ({curr_temp}{temp_symbol})，冲击最高预报 {forecast_high}{temp_symbol} 的概率降低。")
         elif first_peak_h <= local_hour <= last_peak_h:
             # 正在峰值窗口内
-            if diff_max <= 0.8:
+            if is_breakthrough:
+                insights.append(f"🔥 <b>狂暴拉升</b>：正处于预测峰值时段，实测正以前所未有的态势压制所有预报，上限已失守。")
+            elif diff_max <= 0.8:
                 insights.append(f"⚖️ <b>高位横盘</b>：正处于预测峰值时段，气温将在当前水平小幅波动。")
             else:
                 insights.append(f"⏳ <b>峰值窗口中</b>：虽在预报高点时段，但目前仍有差距，紧盯最后冲刺。")
@@ -166,12 +170,13 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 if 315 <= wind_dir or wind_dir <= 45:
                     insights.append(f"🌬️ <b>偏北风</b>：冷空气处于主导地位，午后增温阻力较大。")
                 elif 135 <= wind_dir <= 225:
-                    # 只有在当前温度离最高预测还有距离时，南风才有意义
-                    if diff_max > 0.5:
-                        if is_peak_passed:
+                    # 只有在当前温度离最高预测还有距离时，或者已经击穿但还在上升时，南风才有意义
+                    if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
+                        if is_peak_passed and not is_breakthrough:
                             insights.append(f"🔥 <b>偏南风</b>：存在暖平流支撑，但已过传统峰值时段，冲击上限 {forecast_high}{temp_symbol} 的动能正在衰减。")
                         else:
-                            insights.append(f"🔥 <b>偏南风</b>：正从低纬度输送暖平流，气温仍有向上突围的潜力。")
+                            status = "气温仍有向上突围的潜力" if not is_breakthrough else "可能推高击穿后的极端高位"
+                            insights.append(f"🔥 <b>偏南风</b>：正从低纬度输送暖平流，{status}。")
             except (TypeError, ValueError):
                 pass
 
