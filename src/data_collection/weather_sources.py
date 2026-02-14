@@ -356,6 +356,9 @@ class WeatherDataCollector:
                         "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if ruz_hiz_kmh is not None else None,
                         "wind_dir": latest.get("ruzgarYon"),
                         "rain_24h": latest.get("toplamYagis"),
+                        "pressure": latest.get("aktuelBasinc"),
+                        "cloud_cover": latest.get("kapalilik"),  # 0-8 八分位云量
+                        "mgm_max_temp": latest.get("maxSicaklik"),  # MGM 官方实测最高温
                         "time": latest.get("veriZamani"), # 观测时间
                         "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
                     }
@@ -446,7 +449,7 @@ class WeatherDataCollector:
                 "longitude": lon,
                 "current_weather": "true",
                 "hourly": "temperature_2m",
-                "daily": "temperature_2m_max,apparent_temperature_max",
+                "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
