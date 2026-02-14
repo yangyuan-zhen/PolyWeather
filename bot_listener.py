@@ -62,8 +62,8 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if max_so_far > forecast_high + 0.5:
             is_breakthrough = True
             exceed_by = max_so_far - forecast_high
-            insights.append(f"🚨 <b>预报已被击穿</b>：实测最高 {max_so_far}{temp_symbol} 已超所有预报上限 {forecast_high}{temp_symbol} 约 {exceed_by:.1f}°！")
-            insights.append(f"💡 <b>建议</b>：市场需重新评估，当前可能存在物理层面的超预期增温。")
+            insights.append(f"🚨 <b>实测已超预报</b>：实测最高 {max_so_far}{temp_symbol} 超过了所有预报的天花板 {forecast_high}{temp_symbol}，多了 {exceed_by:.1f}°！")
+            insights.append(f"💡 <b>建议</b>：预报已经不准了，实际温度比所有模型预测的都高，需要重新判断。")
 
     # --- 峰值时刻预测逻辑 (仍以 Open-Meteo 逐小时数据为准) ---
     hourly = open_meteo.get("hourly", {})
@@ -81,10 +81,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
         
         if peak_hours:
             window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
-            insights.append(f"⏱️ <b>预计峰值时刻</b>：今天 <b>{window}</b> 之间。")
+            insights.append(f"⏱️ <b>预计最热时段</b>：今天 <b>{window}</b>。")
             # 只有在还没进入峰值时段且还没达到预报高点时才给这个建议
             if local_hour < int(peak_hours[0].split(":")[0]) and (max_so_far is None or max_so_far < forecast_high):
-                insights.append(f"🎯 <b>博弈建议</b>：关注该时段实测能否站稳 {forecast_high}{temp_symbol}。")
+                insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {forecast_high}{temp_symbol}。")
 
     is_peak_passed = False
     if curr_temp is not None and forecast_high is not None:
@@ -98,30 +98,30 @@ def analyze_weather_trend(weather_data, temp_symbol):
             # 已经过了预报的峰值时段
             is_peak_passed = True
             if is_breakthrough:
-                insights.append(f"🌡️ <b>超常规表现</b>：虽然时间已过预报峰值，但气温击穿上限后仍维持在高位，需警惕降温推迟。")
-            # 如果实测已经接近“任一”主流预报的最高温 (使用 min_forecast_high)
+                insights.append(f"🌡️ <b>异常高温</b>：最热的时间已经过了，但温度还是比预报高，降温可能会来得比较晚。")
+            # 如果实测已经接近"任一"主流预报的最高温 (使用 min_forecast_high)
             elif max_so_far and max_so_far >= min_forecast_high - 0.5:
-                insights.append(f"✅ <b>今日峰值已过</b>：气温已触及或接近预报最高，目前处于高位波动或缓慢回落。")
+                insights.append(f"✅ <b>今天最热已过</b>：温度已经到了预报最高值附近，接下来会慢慢降温了。")
             else:
                 # 虽然时间过了，但离最高温还有差距
-                insights.append(f"📉 <b>处于降温期</b>：已过预报峰值时段，且当前气温乏力 ({curr_temp}{temp_symbol})，冲击最高预报 {forecast_high}{temp_symbol} 的概率降低。")
+                insights.append(f"📉 <b>开始降温</b>：最热时段已过，现在 {curr_temp}{temp_symbol}，看起来很难再涨到预报的 {forecast_high}{temp_symbol} 了。")
         elif first_peak_h <= local_hour <= last_peak_h:
             # 正在峰值窗口内
             if is_breakthrough:
-                insights.append(f"🔥 <b>狂暴拉升</b>：正处于预测峰值时段，实测正以前所未有的态势压制所有预报，上限已失守。")
+                insights.append(f"🔥 <b>极端升温</b>：正处于最热时段，温度已经超过所有预报，还在继续往上走！")
             elif diff_max <= 0.8:
-                insights.append(f"⚖️ <b>高位横盘</b>：正处于预测峰值时段，气温将在当前水平小幅波动。")
+                insights.append(f"⚖️ <b>到顶了</b>：正处于最热时段，温度基本到位，接下来会在这个水平上下浮动。")
             else:
-                insights.append(f"⏳ <b>峰值窗口中</b>：虽在预报高点时段，但目前仍有差距，紧盯最后冲刺。")
+                insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报最高温还差一些，继续观察。")
         elif local_hour < first_peak_h:
             # 还没到峰值窗口
             if diff_max > 1.2:
-                insights.append(f"📈 <b>升温进程中</b>：距离峰值时段还有 {first_peak_h - local_hour}h，正向高点冲击。")
+                insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
             else:
-                insights.append(f"🌅 <b>临近峰值</b>：即将进入高点时段，气温已处于预报高位。")
+                insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
         else:
             # 回退逻辑
-            insights.append(f"🌌 <b>夜间/早间</b>：等待日出后的新一轮波动。")
+            insights.append(f"🌌 <b>夜间</b>：等明天太阳出来后再看新一轮升温。")
 
         # 2. 湿度与露点分析 (仅在傍晚以后)
         humidity = metar.get("current", {}).get("humidity")
@@ -129,15 +129,15 @@ def analyze_weather_trend(weather_data, temp_symbol):
         
         if local_hour >= 18:
             if humidity and humidity > 80:
-                insights.append(f"💦 <b>闷热高湿</b>：湿度极高 ({humidity}%)，将显著锁住夜间热量。")
+                insights.append(f"💦 <b>湿度很高</b>：湿度 {humidity}%，空气很潮湿，夜里热量散不掉，降温会很慢。")
             if dewpoint is not None and curr_temp - dewpoint < 2.0:
-                insights.append(f"🌡️ <b>触及露点支撑</b>：气温已跌至露点支撑位，降温将变慢。")
+                insights.append(f"🌡️ <b>降温快到底了</b>：温度已经接近露点（空气中水汽开始凝结的温度），再往下降会很困难。")
 
         # 3. 风力
         if wind_speed >= 15:
-            insights.append(f"🌬️ <b>大风预判</b>：当前风力较大 ({wind_speed}kt)，气温可能出现非线性波动。")
+            insights.append(f"🌬️ <b>风很大</b>：风速 {wind_speed}kt，温度可能会忽高忽低。")
         elif wind_speed >= 10:
-            insights.append(f"🍃 <b>清劲风</b>：空气流动快，虽然有助于散热，但在升温期可能带来暖平流加速。")
+            insights.append(f"🍃 <b>有风</b>：风速适中，白天可能会把远处的暖空气吹过来，帮助升温。")
 
         # 4. 云层遮挡分析 (仅在升温期/峰值期有意义)
         clouds = metar.get("current", {}).get("clouds", [])
@@ -145,38 +145,38 @@ def analyze_weather_trend(weather_data, temp_symbol):
             main_cloud = clouds[-1]
             cover = main_cloud.get("cover", "")
             if cover == "OVC":
-                insights.append(f"☁️ <b>全阴锁温</b>：机场上空完全遮挡，阳光增温几乎停滞，很难再冲高点。")
+                insights.append(f"☁️ <b>阴天</b>：天完全被云盖住了，太阳照不进来，温度很难再往上涨了。")
             elif cover == "BKN":
-                insights.append(f"🌥️ <b>云层显著</b>：天空大部被遮挡，日照受限，升温斜率受阻。")
+                insights.append(f"🌥️ <b>云比较多</b>：天空大部分被云挡住了，日照不足，升温会比较慢。")
             elif cover in ["SKC", "CLR", "FEW"]:
                 if not is_peak_passed:
-                    insights.append(f"☀️ <b>晴空万里</b>：日照强烈，无云层遮挡，气温有冲向预报上限甚至超出的动能。")
+                    insights.append(f"☀️ <b>大晴天</b>：阳光直射，没什么云，有利于温度继续往上冲。")
 
         # 5. 特殊天气现象
         wx_desc = metar.get("current", {}).get("wx_desc")
         if wx_desc:
             if any(x in wx_desc.upper() for x in ["RA", "DZ", "RAIN", "DRIZZLE"]):
-                insights.append(f"🌧️ <b>降雨压制</b>：当前有降雨，蒸发吸热将显著抑制升温。")
+                insights.append(f"🌧️ <b>在下雨</b>：雨水蒸发会吸收热量，温度很难涨上去。")
             elif any(x in wx_desc.upper() for x in ["SN", "SNOW", "GR", "GS"]):
-                insights.append(f"❄️ <b>固态降水</b>：正在降雪或冰雹，气温将持续低迷。")
+                insights.append(f"❄️ <b>在下雪/冰雹</b>：温度会一直低迷。")
             elif any(x in wx_desc.upper() for x in ["FG", "BR", "HZ", "FOG", "MIST"]):
-                insights.append(f"🌫️ <b>能见度受限</b>：当前有雾/霭，阻挡阳光并带来高湿，会大幅延缓升温周期。")
+                insights.append(f"🌫️ <b>有雾/霾</b>：阳光被挡住了，湿度也高，升温会很慢。")
 
-        # 6. 风向平流分析 (仅在未进入降温期前显示)
+        # 6. 风向分析 (仅在未进入降温期前显示)
         if not is_peak_passed or local_hour <= last_peak_h + 2:
             try:
                 wind_dir = float(metar.get("current", {}).get("wind_dir", 0))
                 # 北半球简化逻辑：北风 cold，南风 warm
                 if 315 <= wind_dir or wind_dir <= 45:
-                    insights.append(f"🌬️ <b>偏北风</b>：冷空气处于主导地位，午后增温阻力较大。")
+                    insights.append(f"🌬️ <b>吹北风</b>：从北方来的冷空气，会压制升温。")
                 elif 135 <= wind_dir <= 225:
                     # 只有在当前温度离最高预测还有距离时，或者已经击穿但还在上升时，南风才有意义
                     if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
                         if is_peak_passed and not is_breakthrough:
-                            insights.append(f"🔥 <b>偏南风</b>：存在暖平流支撑，但已过传统峰值时段，冲击上限 {forecast_high}{temp_symbol} 的动能正在衰减。")
+                            insights.append(f"🔥 <b>吹南风</b>：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
                         else:
-                            status = "气温仍有向上突围的潜力" if not is_breakthrough else "可能推高击穿后的极端高位"
-                            insights.append(f"🔥 <b>偏南风</b>：正从低纬度输送暖平流，{status}。")
+                            status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
+                            insights.append(f"🔥 <b>吹南风</b>：南方的暖空气正在吹过来，{status}。")
             except (TypeError, ValueError):
                 pass
 
@@ -185,11 +185,11 @@ def analyze_weather_trend(weather_data, temp_symbol):
             if visibility is not None:
                 vis_val = float(str(visibility).replace("+", "").replace("-", ""))
                 if vis_val < 3 and local_hour <= 11:
-                    insights.append(f"🌫️ <b>早晨低见度</b>：能见度极差 ({vis_val}mi)，阳光无法打透，早间升温将非常缓慢。")
+                    insights.append(f"🌫️ <b>早上能见度差</b>：只能看到 {vis_val} 英里远，阳光穿不透，上午升温会很慢。")
         except (TypeError, ValueError):
             pass
 
-        # 7. 模型准确度预警 (针对用户反馈的 MB 偏高问题)
+        # 7. 模型准确度预警
         if is_peak_passed and max_so_far is not None:
             model_checks = []
             if om_high and om_high > max_so_far + 1.5:
@@ -202,7 +202,19 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 model_checks.append(f"NWS ({nws_h}{temp_symbol})")
             
             if model_checks:
-                insights.append(f"⚠️ <b>预报偏高</b>：目前实测远低于 " + "、".join(model_checks) + "，判定预报模型今日表现过度乐观。")
+                insights.append(f"⚠️ <b>预报偏高了</b>：实测远低于 " + "、".join(model_checks) + "，这些预报今天报高了。")
+
+        # 8. MGM 气压分析 (仅安卡拉)
+        mgm_pressure = mgm.get("current", {}).get("pressure")
+        if mgm_pressure is not None and not is_peak_passed:
+            if mgm_pressure < 900:
+                insights.append(f"📉 <b>气压偏低</b>：{mgm_pressure}hPa，可能有暖湿气流过境，有利于温度上升。")
+
+        # 9. MGM 官方最高温交叉验证
+        mgm_max = mgm.get("current", {}).get("mgm_max_temp")
+        if mgm_max is not None and max_so_far is not None:
+            if abs(mgm_max - max_so_far) > 1.5:
+                insights.append(f"📊 <b>数据差异</b>：MGM 官方记录最高 {mgm_max}{temp_symbol}，METAR 记录 {max_so_far}{temp_symbol}，相差 {abs(mgm_max - max_so_far):.1f}°。")
 
 
     if not insights:
@@ -365,6 +377,14 @@ def start_bot():
                     future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
                 msg_lines.append("📅 " + " | ".join(future_forecasts))
 
+            # --- 3.5 日出日落 ---
+            sunrises = daily.get("sunrise", [])
+            sunsets = daily.get("sunset", [])
+            if sunrises and sunsets:
+                sunrise_t = sunrises[0].split("T")[1][:5] if "T" in str(sunrises[0]) else sunrises[0]
+                sunset_t = sunsets[0].split("T")[1][:5] if "T" in str(sunsets[0]) else sunsets[0]
+                msg_lines.append(f"🌅 日出 {sunrise_t} | 🌇 日落 {sunset_t}")
+
             # --- 4. 核心 实测区 (合并 METAR 和 MGM) ---
             # 基础数据优先用 METAR
             cur_temp = metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp")
@@ -412,6 +432,22 @@ def start_bot():
                 
                 msg_lines.append(f"   [MGM] 🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}%")
                 msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s) | 🌧️ {m_c.get('rain_24h') or 0}mm")
+                
+                # 新增：气压和云量
+                extra_parts = []
+                pressure = m_c.get("pressure")
+                if pressure is not None:
+                    extra_parts.append(f"🌡 气压: {pressure}hPa")
+                cloud_cover = m_c.get("cloud_cover")
+                if cloud_cover is not None:
+                    cloud_desc_map = {0: "晴朗", 1: "少云", 2: "少云", 3: "散云", 4: "散云", 5: "多云", 6: "多云", 7: "很多云", 8: "阴天"}
+                    cloud_text = cloud_desc_map.get(cloud_cover, f"{cloud_cover}/8")
+                    extra_parts.append(f"☁️ 云量: {cloud_text}({cloud_cover}/8)")
+                mgm_max = m_c.get("mgm_max_temp")
+                if mgm_max is not None:
+                    extra_parts.append(f"🌡️ MGM最高: {mgm_max}°C")
+                if extra_parts:
+                    msg_lines.append(f"   [MGM] {' | '.join(extra_parts)}")
             
             if metar:
                 m_c = metar.get("current", {})
