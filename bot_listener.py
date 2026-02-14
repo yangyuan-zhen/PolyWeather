@@ -138,7 +138,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if wind_speed >= 15:
             insights.append(f"🌬️ <b>风很大</b>：风速 {wind_speed}kt，温度可能会忽高忽低。")
         elif wind_speed >= 10:
-            insights.append(f"🍃 <b>有风</b>：风速适中，白天可能会把远处的暖空气吹过来，帮助升温。")
+            insights.append(f"🍃 <b>有风</b>：风速适中 ({wind_speed}kt)，会加速空气流动，具体影响看风向。")
 
         # 4. 云层遮挡分析 (仅在升温期/峰值期有意义)
         clouds = metar.get("current", {}).get("clouds", [])
@@ -178,17 +178,28 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if not is_peak_passed or local_hour <= last_peak_h + 2:
             try:
                 wind_dir = float(metar.get("current", {}).get("wind_dir", 0))
-                # 北半球简化逻辑：北风 cold，南风 warm
                 if 315 <= wind_dir or wind_dir <= 45:
+                    # 北风：冷空气
                     insights.append(f"🌬️ <b>吹北风</b>：从北方来的冷空气，会压制升温。")
                 elif 135 <= wind_dir <= 225:
-                    # 只有在当前温度离最高预测还有距离时，或者已经击穿但还在上升时，南风才有意义
+                    # 南风：暖空气
                     if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
                         if is_peak_passed and not is_breakthrough:
                             insights.append(f"🔥 <b>吹南风</b>：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
                         else:
                             status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
                             insights.append(f"🔥 <b>吹南风</b>：南方的暖空气正在吹过来，{status}。")
+                elif 225 < wind_dir < 315:
+                    # 西风/西南风/西北风
+                    if wind_dir <= 260:
+                        insights.append(f"🌬️ <b>吹西南风</b>：带有一定暖湿气流，对升温有轻微帮助。")
+                    elif wind_dir >= 280:
+                        insights.append(f"🌬️ <b>吹西北风</b>：偏冷的气流，会拖慢升温。")
+                    else:
+                        insights.append(f"🌬️ <b>吹西风</b>：对温度影响不大，主要取决于日照和云量。")
+                elif 45 < wind_dir < 135:
+                    # 东风
+                    insights.append(f"🌬️ <b>吹东风</b>：对温度影响较小，主要看日照和云量。")
             except (TypeError, ValueError):
                 pass
 
