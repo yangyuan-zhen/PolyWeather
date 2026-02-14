@@ -1,21 +1,22 @@
 import sys
 import os
 from datetime import datetime
-import telebot
-from loguru import logger
+from typing import List, Dict, Any, Optional
+import telebot  # type: ignore
+from loguru import logger  # type: ignore
 
 # 确保项目根目录在 sys.path 中
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from src.utils.config_loader import load_config
-from src.data_collection.weather_sources import WeatherDataCollector
-from src.data_collection.city_risk_profiles import get_city_risk_profile, format_risk_warning
+from src.utils.config_loader import load_config  # type: ignore
+from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore
+from src.data_collection.city_risk_profiles import get_city_risk_profile, format_risk_warning  # type: ignore
 
 def analyze_weather_trend(weather_data, temp_symbol):
     """根据实测与预测分析气温态势，增加峰值时刻预测"""
-    insights = []
+    insights: List[str] = []
     
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
@@ -100,7 +101,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
             if is_breakthrough:
                 insights.append(f"🌡️ <b>异常高温</b>：最热的时间已经过了，但温度还是比预报高，降温可能会来得比较晚。")
             # 如果实测已经接近"任一"主流预报的最高温 (使用 min_forecast_high)
-            elif max_so_far and max_so_far >= min_forecast_high - 0.5:
+            elif max_so_far and min_forecast_high is not None and max_so_far >= min_forecast_high - 0.5:
                 insights.append(f"✅ <b>今天最热已过</b>：温度已经到了预报最高值附近，接下来会慢慢降温了。")
             else:
                 # 虽然时间过了，但离最高温还有差距
@@ -154,12 +155,23 @@ def analyze_weather_trend(weather_data, temp_symbol):
 
         # 5. 特殊天气现象
         wx_desc = metar.get("current", {}).get("wx_desc")
+        mgm_rain = mgm.get("current", {}).get("rain_24h") or 0
         if wx_desc:
-            if any(x in wx_desc.upper() for x in ["RA", "DZ", "RAIN", "DRIZZLE"]):
-                insights.append(f"🌧️ <b>在下雨</b>：雨水蒸发会吸收热量，温度很难涨上去。")
-            elif any(x in wx_desc.upper() for x in ["SN", "SNOW", "GR", "GS"]):
+            wx_upper = wx_desc.upper().strip()
+            wx_tokens = wx_upper.split()
+            # 用分词匹配，避免 "METAR" 中的 "RA" 误判
+            rain_codes = {"RA", "DZ", "-RA", "+RA", "-DZ", "+DZ", "TSRA", "SHRA", "FZRA", "RAIN", "DRIZZLE"}
+            snow_codes = {"SN", "GR", "GS", "-SN", "+SN", "BLSN", "SNOW"}
+            fog_codes = {"FG", "BR", "HZ", "MIST", "FOG", "FZFG"}
+            
+            if rain_codes & set(wx_tokens):
+                if mgm_rain > 0:
+                    insights.append(f"🌧️ <b>在下雨</b>：已累计 {mgm_rain}mm，雨水蒸发会吸收热量，温度很难涨上去。")
+                else:
+                    insights.append(f"🌦️ <b>有零星小雨</b>：METAR 探测到轻微降水，但雨量极小（MGM 记录 0mm），对升温影响有限。")
+            elif snow_codes & set(wx_tokens):
                 insights.append(f"❄️ <b>在下雪/冰雹</b>：温度会一直低迷。")
-            elif any(x in wx_desc.upper() for x in ["FG", "BR", "HZ", "FOG", "MIST"]):
+            elif fog_codes & set(wx_tokens):
                 insights.append(f"🌫️ <b>有雾/霾</b>：阳光被挡住了，湿度也高，升温会很慢。")
 
         # 6. 风向分析 (仅在未进入降温期前显示)
@@ -431,7 +443,7 @@ def start_bot():
                     dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
                 
                 msg_lines.append(f"   [MGM] 🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}%")
-                msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s) | 🌧️ {m_c.get('rain_24h') or 0}mm")
+                msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s) | 💧 降水: {m_c.get('rain_24h') or 0}mm")
                 
                 # 新增：气压和云量
                 extra_parts = []
