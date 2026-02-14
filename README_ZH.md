@@ -10,15 +10,49 @@
 - 依赖安装: `pip install -r requirements.txt`
 - **环境变量**: 需在 `.env` 中配置 `METEOBLUE_API_KEY` 以激活伦敦高精度预报。
 
-### 本地运行 (Windows/Linux)
+### VPS 部署 (推荐)
+
+**首次部署：**
 
 ```bash
-# Windows
-py -3.11 run.py
-
-# Linux/VPS
-python3 run.py
+git clone https://github.com/yangyuan-zhen/PolyWeather.git
+cd PolyWeather
+pip install -r requirements.txt
+cp .env.example .env  # 编辑 .env 填入你的 Token 和 API Key
 ```
+
+**创建一键更新脚本（只需执行一次）：**
+
+```bash
+cat > ~/update.sh << 'EOF'
+#!/bin/bash
+cd ~/PolyWeather
+git fetch origin
+git reset --hard origin/main
+pkill -f run.py
+pkill -f bot_listener.py
+sleep 1
+nohup python3 run.py > bot.log 2>&1 &
+echo "✅ 已更新并重启！"
+EOF
+chmod +x ~/update.sh
+```
+
+**日常更新（每次代码推送后）：**
+
+```bash
+~/update.sh
+```
+
+> 一条命令完成：拉取最新代码 → 杀旧进程 → 启动新进程。无需手动处理分支冲突。
+
+### 本地开发 (Windows)
+
+```bash
+py -3.11 run.py
+```
+
+> 本地笔记本**不需要安装 Python**，只用来编辑代码和 Git 推送。IDE 的 import 报错是因为本地没装依赖，不影响 VPS 运行。
 
 _注意：系统当前处于 **天气查询模式**。主动市场监控和自动交易模块已暂停。_
 
