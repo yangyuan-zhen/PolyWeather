@@ -155,7 +155,8 @@ def analyze_weather_trend(weather_data, temp_symbol):
 
         # 5. 特殊天气现象
         wx_desc = metar.get("current", {}).get("wx_desc")
-        mgm_rain = mgm.get("current", {}).get("rain_24h") or 0
+        has_mgm = bool(mgm.get("current"))
+        mgm_rain = mgm.get("current", {}).get("rain_24h")
         if wx_desc:
             wx_upper = wx_desc.upper().strip()
             wx_tokens = wx_upper.split()
@@ -165,10 +166,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
             fog_codes = {"FG", "BR", "HZ", "MIST", "FOG", "FZFG"}
             
             if rain_codes & set(wx_tokens):
-                if mgm_rain > 0:
+                if has_mgm and mgm_rain and mgm_rain > 0:
                     insights.append(f"🌧️ <b>在下雨</b>：已累计 {mgm_rain}mm，雨水蒸发会吸收热量，温度很难涨上去。")
                 else:
-                    insights.append(f"🌦️ <b>有零星小雨</b>：METAR 探测到轻微降水，但雨量极小（MGM 记录 0mm），对升温影响有限。")
+                    insights.append(f"🌧️ <b>在下雨</b>：METAR 探测到降水，雨水蒸发会吸收热量，升温会受阻。")
             elif snow_codes & set(wx_tokens):
                 insights.append(f"❄️ <b>在下雪/冰雹</b>：温度会一直低迷。")
             elif fog_codes & set(wx_tokens):
