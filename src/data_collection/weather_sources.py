@@ -260,6 +260,7 @@ class WeatherDataCollector:
             utc_midnight = local_midnight - timedelta(seconds=utc_offset)
 
             max_so_far_c = -999
+            max_temp_time = None
             for obs in data:
                 obs_report_time = obs.get("reportTime", "")
                 try:
@@ -271,6 +272,9 @@ class WeatherDataCollector:
                         t = obs.get("temp")
                         if t is not None and t > max_so_far_c:
                             max_so_far_c = t
+                            # 转为当地时间并记录
+                            local_report = report_dt + timedelta(seconds=utc_offset)
+                            max_temp_time = local_report.strftime("%H:%M")
                 except:
                     continue
 
@@ -295,6 +299,7 @@ class WeatherDataCollector:
                 "current": {
                     "temp": round(temp, 1) if temp is not None else None,
                     "max_temp_so_far": round(max_so_far, 1) if max_so_far is not None else None,
+                    "max_temp_time": max_temp_time,
                     "dewpoint": round(dewp, 1) if dewp is not None else None,
                     "humidity": latest.get("rh"),
                     "wind_speed_kt": latest.get("wspd"),
