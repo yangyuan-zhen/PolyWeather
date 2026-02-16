@@ -437,6 +437,7 @@ def start_bot():
             # 基础数据优先用 METAR
             cur_temp = metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp")
             max_p = metar.get("current", {}).get("max_temp_so_far") if metar else None
+            max_p_time = metar.get("current", {}).get("max_temp_time") if metar else None
             obs_t_str = "N/A"
             main_source = "METAR" if metar else "MGM"
             
@@ -467,7 +468,13 @@ def start_bot():
                     m_time = m_time.split(" ")[1][:5]
                 obs_t_str = m_time
 
-            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>" + (f" (最高: {max_p}{temp_symbol})" if max_p else "") + f" | {obs_t_str}")
+            max_str = ""
+            if max_p is not None:
+                max_str = f" (最高: {max_p}{temp_symbol}"
+                if max_p_time:
+                    max_str += f" @{max_p_time}"
+                max_str += ")"
+            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} | {obs_t_str}")
 
             if mgm:
                 m_c = mgm.get("current", {})
