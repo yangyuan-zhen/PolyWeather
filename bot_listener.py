@@ -102,27 +102,27 @@ def analyze_weather_trend(weather_data, temp_symbol):
                     hour = t_str.split("T")[1][:5]
                     peak_hours.append(hour)
         
-        if peak_hours:
-            window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
-            insights.append(f"⏱️ <b>预计最热时段</b>：今天 <b>{window}</b>。")
-            # 只有在还没进入峰值时段且还没达到预报高点时才给这个建议
-            if local_hour < int(peak_hours[0].split(":")[0]) and (max_so_far is None or max_so_far < forecast_high):
-                insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {forecast_high}{temp_symbol}。")
+    # 确定用于逻辑判断的峰值小时
+    if peak_hours:
+        first_peak_h = int(peak_hours[0].split(":")[0])
+        last_peak_h = int(peak_hours[-1].split(":")[0])
+        
+        window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
+        insights.append(f"⏱️ <b>预计最热时段</b>：今天 <b>{window}</b>。")
+        
+        if last_peak_h < 6:
+            insights.append(f"⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
+        elif local_hour < first_peak_h and (max_so_far is None or max_so_far < forecast_high):
+            insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {forecast_high}{temp_symbol}。")
+    else:
+        # 兜底默认值
+        first_peak_h, last_peak_h = 13, 15
 
     is_peak_passed = False
     if curr_temp is not None and forecast_high is not None:
         diff_max = forecast_high - curr_temp
         
         # 1. 气温节奏判定 (动态参考峰值时刻)
-        # 安全检查：峰值时段如果在凌晨6点前（不合理），使用默认值
-        last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
-        first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
-        if last_peak_h < 6:
-            last_peak_h = 15
-            first_peak_h = 13
-            # 清空不合理的峰值时段，避免误导
-            peak_hours = []
-        
         if local_hour > last_peak_h:
             # 已经过了预报的峰值时段
             is_peak_passed = True
@@ -148,6 +148,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
             else:
                 insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
+
         else:
             # 回退逻辑
             insights.append(f"🌌 <b>夜间</b>：等明天太阳出来后再看新一轮升温。")
