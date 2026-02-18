@@ -92,8 +92,14 @@ def analyze_weather_trend(weather_data, temp_symbol):
         diff_max = forecast_high - curr_temp
         
         # 1. 气温节奏判定 (动态参考峰值时刻)
+        # 安全检查：峰值时段如果在凌晨6点前（不合理），使用默认值
         last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
         first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
+        if last_peak_h < 6:
+            last_peak_h = 15
+            first_peak_h = 13
+            # 清空不合理的峰值时段，避免误导
+            peak_hours = []
         
         if local_hour > last_peak_h:
             # 已经过了预报的峰值时段
@@ -175,58 +181,57 @@ def analyze_weather_trend(weather_data, temp_symbol):
             elif fog_codes & set(wx_tokens):
                 insights.append(f"🌫️ <b>有雾/霾</b>：阳光被挡住了，湿度也高，升温会很慢。")
 
-        # 6. 风向分析 (仅在未进入降温期前显示)
-        if not is_peak_passed or local_hour <= last_peak_h + 2:
-            try:
-                # 优先 METAR，回退 MGM
-                metar_wind = metar.get("current", {}).get("wind_dir")
-                mgm_wind = mgm.get("current", {}).get("wind_dir")
-                
-                if metar_wind is not None:
-                    analysis_wind = float(metar_wind)
-                    wind_source = "METAR"
-                elif mgm_wind is not None:
-                    analysis_wind = float(mgm_wind)
-                    wind_source = "MGM"
-                else:
-                    analysis_wind = None
-                    wind_source = None
-                
-                # 两源矛盾检测
-                if metar_wind is not None and mgm_wind is not None:
-                    metar_f = float(metar_wind)
-                    mgm_f = float(mgm_wind)
-                    diff_angle = abs(metar_f - mgm_f)
-                    if diff_angle > 180:
-                        diff_angle = 360 - diff_angle
-                    if diff_angle > 90:
-                        dirs_name = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                        m_name = dirs_name[int((metar_f + 22.5) % 360 / 45)]
-                        g_name = dirs_name[int((mgm_f + 22.5) % 360 / 45)]
-                        insights.append(f"⚠️ <b>风向矛盾</b>：METAR 测到{m_name}风({metar_f:.0f}°)，MGM 测到{g_name}风({mgm_f:.0f}°)，相差较大，风向不稳定。")
-                
-                if analysis_wind is not None:
-                    wd = analysis_wind
-                    if 315 <= wd or wd <= 45:
-                        insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：从北方来的冷空气，会压制升温。")
-                    elif 135 <= wd <= 225:
-                        if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
-                            if is_peak_passed and not is_breakthrough:
-                                insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
-                            else:
-                                status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
-                                insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，{status}。")
-                    elif 225 < wd < 315:
-                        if wd <= 260:
-                            insights.append(f"🌬️ <b>吹西南风</b>（{wind_source} {wd:.0f}°）：带有一定暖湿气流，对升温有轻微帮助。")
-                        elif wd >= 280:
-                            insights.append(f"🌬️ <b>吹西北风</b>（{wind_source} {wd:.0f}°）：偏冷的气流，会拖慢升温。")
+        # 6. 风向分析（始终显示，风向是重要参考信息）
+        try:
+            # 优先 METAR，回退 MGM
+            metar_wind = metar.get("current", {}).get("wind_dir")
+            mgm_wind = mgm.get("current", {}).get("wind_dir")
+            
+            if metar_wind is not None:
+                analysis_wind = float(metar_wind)
+                wind_source = "METAR"
+            elif mgm_wind is not None:
+                analysis_wind = float(mgm_wind)
+                wind_source = "MGM"
+            else:
+                analysis_wind = None
+                wind_source = None
+            
+            # 两源矛盾检测
+            if metar_wind is not None and mgm_wind is not None:
+                metar_f = float(metar_wind)
+                mgm_f = float(mgm_wind)
+                diff_angle = abs(metar_f - mgm_f)
+                if diff_angle > 180:
+                    diff_angle = 360 - diff_angle
+                if diff_angle > 90:
+                    dirs_name = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
+                    m_name = dirs_name[int((metar_f + 22.5) % 360 / 45)]
+                    g_name = dirs_name[int((mgm_f + 22.5) % 360 / 45)]
+                    insights.append(f"⚠️ <b>风向矛盾</b>：METAR 测到{m_name}风({metar_f:.0f}°)，MGM 测到{g_name}风({mgm_f:.0f}°)，相差较大，风向不稳定。")
+            
+            if analysis_wind is not None:
+                wd = analysis_wind
+                if 315 <= wd or wd <= 45:
+                    insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：从北方来的冷空气，会压制升温。")
+                elif 135 <= wd <= 225:
+                    if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
+                        if is_peak_passed and not is_breakthrough:
+                            insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
                         else:
-                            insights.append(f"🌬️ <b>吹西风</b>（{wind_source} {wd:.0f}°）：对温度影响不大，主要取决于日照和云量。")
-                    elif 45 < wd < 135:
-                        insights.append(f"🌬️ <b>吹东风</b>（{wind_source} {wd:.0f}°）：对温度影响较小，主要看日照和云量。")
-            except (TypeError, ValueError):
-                pass
+                            status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
+                            insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，{status}。")
+                elif 225 < wd < 315:
+                    if wd <= 260:
+                        insights.append(f"🌬️ <b>吹西南风</b>（{wind_source} {wd:.0f}°）：带有一定暖湿气流，对升温有轻微帮助。")
+                    elif wd >= 280:
+                        insights.append(f"🌬️ <b>吹西北风</b>（{wind_source} {wd:.0f}°）：偏冷的气流，会拖慢升温。")
+                    else:
+                        insights.append(f"🌬️ <b>吹西风</b>（{wind_source} {wd:.0f}°）：对温度影响不大，主要取决于日照和云量。")
+                elif 45 < wd < 135:
+                    insights.append(f"🌬️ <b>吹东风</b>（{wind_source} {wd:.0f}°）：对温度影响较小，主要看日照和云量。")
+        except (TypeError, ValueError):
+            pass
 
         try:
             visibility = metar.get("current", {}).get("visibility_mi")
