@@ -33,6 +33,7 @@ class WeatherDataCollector:
         "toronto": "CYYZ",  # Toronto Pearson
         "wellington": "NZWN",  # Wellington International
         "buenos aires": "SAEZ",  # Ezeiza International
+        "paris": "LFPG",  # Charles de Gaulle
     }
 
     def __init__(self, config: dict):
