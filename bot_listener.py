@@ -299,10 +299,6 @@ def start_bot():
             parse_mode="HTML",
         )
 
-    @bot.message_handler(commands=["signal", "portfolio", "status"])
-    def disabled_feature(message):
-        bot.reply_to(message, "ℹ️ 监控引擎与交易模拟功能已暂停，现仅提供天气查询服务。")
-
     @bot.message_handler(commands=["city"])
     def get_city_info(message):
         """查询指定城市的天气详情"""

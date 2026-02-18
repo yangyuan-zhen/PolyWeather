@@ -54,8 +54,6 @@ py -3.11 run.py
 
 > Local machine is for editing code and Git push only. IDE import errors are expected (dependencies not installed locally) and do not affect VPS operation.
 
-_Note: The system is currently in **Weather Query Mode**. Legacy market monitoring and automated trading modules are suspended._
-
 ---
 
 ## 🤖 Telegram Bot Commands
