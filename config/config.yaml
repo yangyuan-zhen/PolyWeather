@@ -73,6 +73,11 @@ markets:
     country: "USA"
     latitude: 41.8781
     longitude: -87.6298
+  - id: "paris"
+    city: "Paris"
+    country: "France"
+    latitude: 48.8566
+    longitude: 2.3522
 
 # Logging
 logging:

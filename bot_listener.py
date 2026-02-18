@@ -334,6 +334,7 @@ def start_bot():
                 "atl": "atlanta", "亚特兰大": "atlanta",
                 "dal": "dallas", "达拉斯": "dallas",
                 "la": "los angeles", "洛杉矶": "los angeles",
+                "par": "paris", "巴黎": "paris",
             }
             
             # 1. 第一优先级：严格全字匹配
