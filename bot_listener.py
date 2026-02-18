@@ -66,6 +66,28 @@ def analyze_weather_trend(weather_data, temp_symbol):
             insights.append(f"🚨 <b>实测已超预报</b>：实测最高 {max_so_far}{temp_symbol} 超过了所有预报的天花板 {forecast_high}{temp_symbol}，多了 {exceed_by:.1f}°！")
             insights.append(f"💡 <b>建议</b>：预报已经不准了，实际温度比所有模型预测的都高，需要重新判断。")
 
+    # === 结算取整分析 (Wunderground 四舍五入到整数) ===
+    if max_so_far is not None:
+        settled = round(max_so_far)
+        fractional = max_so_far - int(max_so_far)
+        # 离取整边界的距离
+        dist_to_boundary = abs(fractional - 0.5)
+        
+        if dist_to_boundary <= 0.3:
+            # 在边界附近 (X.2 ~ X.8)，取整结果可能随时翻转
+            if fractional < 0.5:
+                insights.append(
+                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → "
+                    f"WU 结算 <b>{settled}{temp_symbol}</b>，"
+                    f"但只差 <b>{0.5 - fractional:.1f}°</b> 就会进位到 {settled + 1}{temp_symbol}！"
+                )
+            else:
+                insights.append(
+                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → "
+                    f"WU 结算 <b>{settled}{temp_symbol}</b>，"
+                    f"刚刚越过进位线，再降 <b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
+                )
+
     # --- 峰值时刻预测逻辑 (仍以 Open-Meteo 逐小时数据为准) ---
     hourly = open_meteo.get("hourly", {})
     times = hourly.get("time", [])
@@ -472,10 +494,11 @@ def start_bot():
 
             max_str = ""
             if max_p is not None:
+                settled_val = round(max_p)
                 max_str = f" (最高: {max_p}{temp_symbol}"
                 if max_p_time:
                     max_str += f" @{max_p_time}"
-                max_str += ")"
+                max_str += f" → WU {settled_val}{temp_symbol})"
             msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} | {obs_t_str}")
 
             if mgm:
