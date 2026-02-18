@@ -1,5 +1,8 @@
 # Polymarket Weather Market Discovery Technical Documentation
 
+> ⚠️ **Current Status: Suspended**  
+> The automated market discovery and monitoring engine described here has been commented out in `run.py`. The system currently operates in "passive query mode" — weather analysis is only triggered by the `/city` command.
+
 This document explains the technical implementation of how PolyWeather identifies and tracks weather markets on Polymarket.
 
 ## 1. Data Sources
