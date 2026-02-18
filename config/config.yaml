@@ -1,68 +1,25 @@
-# API Configuration
-api:
-  polymarket:
-    base_url: "https://clob.polymarket.com"
-    ws_url: "wss://ws-subscriptions-clob.polymarket.com/ws/market"
-    timeout: 30
-    retry_attempts: 3
-    api_key: "019c2d40-5d23-75a6-ab33-02ae5d2a033e"
+# Weather API Configuration
+weather:
+  meteoblue_api_key: null  # Set via METEOBLUE_API_KEY env var
+  timeout: 30
 
-  weather:
-    openweather:
-      base_url: "https://api.openweathermap.org/data/2.5"
-      timeout: 10
-    wunderground:
-      base_url: "https://api.weather.com/v3"
-      timeout: 10
-    visualcrossing:
-      base_url: "https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services"
-      timeout: 10
-
-# Trading Parameters
-trading:
-  min_confidence: 0.65 # Minimum model confidence to trade
-  max_single_trade: 500 # Maximum single trade amount ($)
-  max_position_ratio: 0.25 # Maximum position as ratio of capital
-  max_total_exposure: 0.80 # Maximum total exposure
-  min_trade_size: 10 # Minimum trade size ($)
-
-# Risk Management
-risk:
-  max_drawdown: 0.10 # Maximum allowed drawdown (10%)
-  stop_loss: 0.15 # Stop loss threshold (15%)
-  take_profit: 0.30 # Take profit threshold (30%)
-  min_liquidity: 1000 # Minimum market liquidity ($)
-  max_slippage: 0.02 # Maximum acceptable slippage (2%)
-
-# Analysis Parameters
-analysis:
-  volume_threshold: 2.0 # Volume spike threshold (std dev)
-  large_order_threshold: 1000 # Large order detection threshold ($)
-  rsi_period: 14 # RSI calculation period
-  bollinger_period: 20 # Bollinger Bands period
-  bollinger_std: 2.0 # Bollinger Bands standard deviation
-
-# Model Weights (for multi-factor decision)
-weights:
-  statistical_prediction: 0.50
-  data_source_consensus: 0.15
-  market_volume_signal: 0.15
-  orderbook_analysis: 0.10
-  technical_indicators: 0.05
-  onchain_whale_signal: 0.05
-
-# Target Markets
-markets:
-  - id: "ankara"
-    city: "Ankara"
-    country: "Turkey"
-    latitude: 39.9334
-    longitude: 32.8597
+# Target Cities
+cities:
   - id: "london"
     city: "London"
     country: "UK"
     latitude: 51.5074
     longitude: -0.1278
+  - id: "paris"
+    city: "Paris"
+    country: "France"
+    latitude: 48.8566
+    longitude: 2.3522
+  - id: "ankara"
+    city: "Ankara"
+    country: "Turkey"
+    latitude: 39.9334
+    longitude: 32.8597
   - id: "new_york"
     city: "New York"
     country: "USA"
@@ -73,20 +30,9 @@ markets:
     country: "USA"
     latitude: 41.8781
     longitude: -87.6298
-  - id: "paris"
-    city: "Paris"
-    country: "France"
-    latitude: 48.8566
-    longitude: 2.3522
 
 # Logging
 logging:
   level: "INFO"
   rotation: "10 MB"
   retention: "10 days"
-
-# Scheduler
-scheduler:
-  data_refresh_interval: 60 # seconds
-  model_update_interval: 300 # seconds
-  risk_check_interval: 30 # seconds
