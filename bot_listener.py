@@ -553,7 +553,56 @@ def start_bot():
                 if max_p_time:
                     max_str += f" @{max_p_time}"
                 max_str += f" → WU {settled_val}{temp_symbol})"
-            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} | {obs_t_str}")
+
+            # --- 天气状况总结 ---
+            wx_summary = ""
+            # 优先使用 METAR 天气现象
+            metar_wx = metar.get("current", {}).get("wx_desc", "") if metar else ""
+            metar_clouds = metar.get("current", {}).get("clouds", []) if metar else []
+            mgm_cloud = mgm.get("current", {}).get("cloud_cover") if mgm else None
+
+            if metar_wx:
+                wx_upper = metar_wx.upper().strip()
+                wx_tokens = set(wx_upper.split())
+                rain_codes = {"RA", "DZ", "-RA", "+RA", "-DZ", "+DZ", "TSRA", "SHRA", "FZRA"}
+                snow_codes = {"SN", "GR", "GS", "-SN", "+SN", "BLSN"}
+                fog_codes = {"FG", "BR", "HZ", "FZFG"}
+                ts_codes = {"TS", "TSRA"}
+                if ts_codes & wx_tokens:
+                    wx_summary = "⛈️ 雷暴"
+                elif {"+RA", "+SN"} & wx_tokens:
+                    wx_summary = "🌧️ 大雨" if "+RA" in wx_tokens else "❄️ 大雪"
+                elif rain_codes & wx_tokens:
+                    wx_summary = "🌧️ 小雨" if {"-RA", "-DZ", "DZ"} & wx_tokens else "🌧️ 下雨"
+                elif snow_codes & wx_tokens:
+                    wx_summary = "❄️ 下雪"
+                elif fog_codes & wx_tokens:
+                    wx_summary = "🌫️ 雾/霾"
+
+            # 如果 METAR 没有特殊现象，用云量推断
+            if not wx_summary:
+                # 优先 METAR 云层，回退 MGM
+                cover_code = ""
+                if metar_clouds:
+                    cover_code = metar_clouds[-1].get("cover", "")
+                
+                if cover_code in ("SKC", "CLR") or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 1):
+                    wx_summary = "☀️ 晴"
+                elif cover_code == "FEW" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 2):
+                    wx_summary = "🌤️ 晴间少云"
+                elif cover_code == "SCT" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 4):
+                    wx_summary = "⛅ 晴间多云"
+                elif cover_code == "BKN" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 6):
+                    wx_summary = "🌥️ 多云"
+                elif cover_code == "OVC" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 8):
+                    wx_summary = "☁️ 阴天"
+                elif mgm_cloud is not None:
+                    # 纯数字回退
+                    cloud_names = {0: "☀️ 晴", 1: "🌤️ 晴", 2: "🌤️ 少云", 3: "⛅ 散云", 4: "⛅ 散云", 5: "🌥️ 多云", 6: "🌥️ 多云", 7: "☁️ 阴", 8: "☁️ 阴天"}
+                    wx_summary = cloud_names.get(mgm_cloud, "")
+
+            wx_display = f" {wx_summary}" if wx_summary else ""
+            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}")
 
             if mgm:
                 m_c = mgm.get("current", {})
