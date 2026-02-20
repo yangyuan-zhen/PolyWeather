@@ -454,8 +454,8 @@ class WeatherDataCollector:
                 "latitude": lat,
                 "longitude": lon,
                 "current_weather": "true",
-                "hourly": "temperature_2m",
-                "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset",
+                "hourly": "temperature_2m,shortwave_radiation",
+                "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
