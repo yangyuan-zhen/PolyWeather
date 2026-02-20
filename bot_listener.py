@@ -292,6 +292,54 @@ def analyze_weather_trend(weather_data, temp_symbol):
             if abs(mgm_max - max_so_far) > 1.5:
                 insights.append(f"📊 <b>数据差异</b>：MGM 官方记录最高 {mgm_max}{temp_symbol}，METAR 记录 {max_so_far}{temp_symbol}，相差 {abs(mgm_max - max_so_far):.1f}°。")
 
+        # 10. 太阳辐射分析 (Open-Meteo shortwave_radiation)
+        hourly_rad = hourly.get("shortwave_radiation", [])
+        sunshine_durations = daily.get("sunshine_duration", [])
+        if hourly_rad and times:
+            # 计算今天已经过去的小时的累计辐射 vs 全天预测总辐射
+            today_total_rad = 0.0
+            today_so_far_rad = 0.0
+            today_peak_rad = 0.0
+            today_peak_hour = ""
+            for t_str, rad in zip(times, hourly_rad):
+                if t_str.startswith(local_date_str) and rad is not None:
+                    today_total_rad += rad
+                    hour_val = int(t_str.split("T")[1][:2])
+                    if hour_val <= local_hour:
+                        today_so_far_rad += rad
+                    if rad > today_peak_rad:
+                        today_peak_rad = rad
+                        today_peak_hour = t_str.split("T")[1][:5]
+
+            if today_total_rad > 0:
+                rad_pct = today_so_far_rad / today_total_rad * 100
+
+                if not is_peak_passed and local_hour >= 8:
+                    # 白天升温期：报告太阳能量进度
+                    if rad_pct < 30 and local_hour >= 12:
+                        insights.append(f"🌤️ <b>日照不足</b>：到目前为止只吸收了全天 {rad_pct:.0f}% 的太阳能量，云层可能在严重削弱日照。")
+
+                # 检测"暖平流型"高温：峰值温度出现在太阳辐射极低的时段
+                max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
+                if max_so_far is not None and max_temp_time_str:
+                    try:
+                        max_h = int(max_temp_time_str.split(":")[0])
+                        # 找到最高温时段对应的辐射值
+                        max_temp_rad = 0.0
+                        for t_str, rad in zip(times, hourly_rad):
+                            if t_str.startswith(local_date_str) and rad is not None:
+                                h = int(t_str.split("T")[1][:2])
+                                if h == max_h:
+                                    max_temp_rad = rad
+                                    break
+                        if max_temp_rad < 50 and today_peak_rad > 200:
+                            insights.append(
+                                f"🌙 <b>暖平流驱动</b>：最高温出现在 {max_temp_time_str}，"
+                                f"当时太阳辐射仅 {max_temp_rad:.0f} W/m²（峰值 {today_peak_rad:.0f} W/m²），"
+                                f"说明气温是被暖空气推高的，而不是被太阳晒热的。"
+                            )
+                    except (ValueError, IndexError):
+                        pass
 
     if not insights:
         return ""
@@ -450,13 +498,18 @@ def start_bot():
                     future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
                 msg_lines.append("📅 " + " | ".join(future_forecasts))
 
-            # --- 3.5 日出日落 ---
+            # --- 3.5 日出日落 + 日照时长 ---
             sunrises = daily.get("sunrise", [])
             sunsets = daily.get("sunset", [])
+            sunshine_durations = daily.get("sunshine_duration", [])
             if sunrises and sunsets:
                 sunrise_t = sunrises[0].split("T")[1][:5] if "T" in str(sunrises[0]) else sunrises[0]
                 sunset_t = sunsets[0].split("T")[1][:5] if "T" in str(sunsets[0]) else sunsets[0]
-                msg_lines.append(f"🌅 日出 {sunrise_t} | 🌇 日落 {sunset_t}")
+                sun_line = f"🌅 日出 {sunrise_t} | 🌇 日落 {sunset_t}"
+                if sunshine_durations:
+                    sunshine_hours = sunshine_durations[0] / 3600  # 秒 -> 小时
+                    sun_line += f" | ☀️ 日照 {sunshine_hours:.1f}h"
+                msg_lines.append(sun_line)
 
             # --- 4. 核心 实测区 (合并 METAR 和 MGM) ---
             # 基础数据优先用 METAR
