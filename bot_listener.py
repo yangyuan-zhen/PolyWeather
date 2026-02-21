@@ -68,11 +68,9 @@ def analyze_weather_trend(weather_data, temp_symbol):
         labeled_forecasts.append(("NWS", nws["today_high"]))
     if mgm.get("today_high") is not None:
         labeled_forecasts.append(("MGM", mgm["today_high"]))
-    # 集合预报中位数 (如果有)
+    # 集合预报数据 (仅用于不确定性区间展示，不参与共识评分，避免与 OM 双重计数)
     ensemble = weather_data.get("ensemble", {})
     ens_median = ensemble.get("median")
-    if ens_median is not None:
-        labeled_forecasts.append(("ENS", ens_median))
 
     consensus_level = "unknown"
     consensus_spread = None
