@@ -126,6 +126,22 @@ def analyze_weather_trend(weather_data, temp_symbol):
             f"90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]，"
             f"波动幅度 {ens_range:.1f}°。"
         )
+        # 确定性预报 vs 集合分布偏差检测
+        if om_today is not None:
+            if om_today > ens_p90:
+                delta = om_today - ens_median
+                insights.append(
+                    f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} "
+                    f"超过了集合 90% 上限 ({ens_p90}{temp_symbol})，"
+                    f"比中位数高 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
+                )
+            elif om_today < ens_p10:
+                delta = ens_median - om_today
+                insights.append(
+                    f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} "
+                    f"低于集合 90% 下限 ({ens_p10}{temp_symbol})，"
+                    f"比中位数低 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
+                )
 
     # === 核心判断：实测是否已超预报 ===
     is_breakthrough = False
