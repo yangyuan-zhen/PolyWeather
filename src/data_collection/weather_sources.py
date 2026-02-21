@@ -535,6 +535,89 @@ class WeatherDataCollector:
             logger.error(f"Open-Meteo forecast failed: {e}")
             return None
 
+    def fetch_ensemble(
+        self,
+        lat: float,
+        lon: float,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict]:
+        """
+        从 Open-Meteo Ensemble API 获取 51 成员集合预报
+        用于计算预报不确定性范围（散度）
+        """
+        try:
+            url = "https://ensemble-api.open-meteo.com/v1/ensemble"
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max",
+                "timezone": "auto",
+                "forecast_days": 3,
+                "_t": int(time.time()),
+            }
+            if use_fahrenheit:
+                params["temperature_unit"] = "fahrenheit"
+            else:
+                params["temperature_unit"] = "celsius"
+
+            response = self.session.get(
+                url,
+                params=params,
+                headers={"Cache-Control": "no-cache"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            daily = data.get("daily", {})
+            # 每个成员都会返回一组 temperature_2m_max
+            # 格式: {"time": [...], "temperature_2m_max_member01": [...], ...}
+            today_highs = []
+            for key, values in daily.items():
+                if key.startswith("temperature_2m_max") and key != "temperature_2m_max":
+                    if values and values[0] is not None:
+                        today_highs.append(values[0])
+            
+            # 也检查非成员键（有些返回格式不同）
+            if not today_highs:
+                raw_max = daily.get("temperature_2m_max", [])
+                if isinstance(raw_max, list) and raw_max:
+                    if isinstance(raw_max[0], list):
+                        # 嵌套列表格式: [[member1_day1, member1_day2], [member2_day1, ...]]
+                        today_highs = [m[0] for m in raw_max if m and m[0] is not None]
+                    elif raw_max[0] is not None:
+                        today_highs = [raw_max[0]]
+
+            if len(today_highs) < 3:
+                logger.warning(f"Ensemble 数据不足: 仅获取 {len(today_highs)} 个成员")
+                return None
+
+            today_highs.sort()
+            n = len(today_highs)
+            median = today_highs[n // 2]
+            p10 = today_highs[max(0, int(n * 0.1))]
+            p90 = today_highs[min(n - 1, int(n * 0.9))]
+
+            result = {
+                "source": "ensemble",
+                "members": n,
+                "median": round(median, 1),
+                "p10": round(p10, 1),
+                "p90": round(p90, 1),
+                "min": round(today_highs[0], 1),
+                "max": round(today_highs[-1], 1),
+                "unit": "fahrenheit" if use_fahrenheit else "celsius",
+            }
+
+            logger.info(
+                f"📊 Ensemble ({n} members): median={median:.1f}, "
+                f"p10={p10:.1f}, p90={p90:.1f}"
+            )
+            return result
+        except Exception as e:
+            logger.warning(f"Ensemble API 请求失败: {e}")
+            return None
+
     def fetch_from_meteoblue(
         self,
         lat: float,
@@ -807,6 +890,11 @@ class WeatherDataCollector:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:
                         results["nws"] = nws_data
+                
+                # 集合预报 (所有城市通用，用于不确定性分析)
+                ens_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
+                if ens_data:
+                    results["ensemble"] = ens_data
             else:
                 # Open-Meteo 失败时，仍然尝试获取 METAR 和 NWS
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
