@@ -110,17 +110,22 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 f"{parts}，极差 {consensus_spread:.1f}°！"
                 f"{highest[0]} 最高 ({highest[1]}{temp_symbol}) vs {lowest[0]} 最低 ({lowest[1]}{temp_symbol})，不确定性大。"
             )
+    elif len(labeled_forecasts) == 1:
+        name, val = labeled_forecasts[0]
+        insights.append(
+            f"📡 <b>仅1个预报源 ({name} {val}{temp_symbol})</b> — 无法交叉验证，共识评分不可用。"
+        )
 
-        # 集合预报区间 (如果有)
-        ens_p10 = ensemble.get("p10")
-        ens_p90 = ensemble.get("p90")
-        if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
-            ens_range = ens_p90 - ens_p10
-            insights.append(
-                f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，"
-                f"90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]，"
-                f"波动幅度 {ens_range:.1f}°。"
-            )
+    # 集合预报区间 (独立于共识评分显示)
+    ens_p10 = ensemble.get("p10")
+    ens_p90 = ensemble.get("p90")
+    if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
+        ens_range = ens_p90 - ens_p10
+        insights.append(
+            f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，"
+            f"90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]，"
+            f"波动幅度 {ens_range:.1f}°。"
+        )
 
     # === 核心判断：实测是否已超预报 ===
     is_breakthrough = False
@@ -431,8 +436,11 @@ def analyze_weather_trend(weather_data, temp_symbol):
         elif consensus_level == "medium":
             timing_score += 1
             timing_factors.append("模型小分歧")
-        else:
+        elif consensus_level == "low":
             timing_factors.append("模型分歧大")
+        else:
+            # unknown: 数据源不足，无法评估共识
+            timing_factors.append("仅单源")
         
         if max_so_far is not None and forecast_high is not None:
             gap = abs(max_so_far - forecast_high)
