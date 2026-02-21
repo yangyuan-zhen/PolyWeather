@@ -442,7 +442,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
             # unknown: 数据源不足，无法评估共识
             timing_factors.append("仅单源")
         
-        if max_so_far is not None and forecast_high is not None:
+        if max_so_far is not None and forecast_high is not None and (is_peak_passed or hours_to_peak <= 3):
             gap = abs(max_so_far - forecast_high)
             if gap <= 0.5:
                 timing_score += 2
