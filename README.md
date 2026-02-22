@@ -98,29 +98,63 @@ py -3.11 run.py
 
 | Source                  | Role                    | Coverage        | Strength                                                                    |
 | :---------------------- | :---------------------- | :-------------- | :-------------------------------------------------------------------------- |
+| **Multi-Model (5 NWP)** | **Consensus Scoring**   | Global          | ECMWF, GFS, ICON, GEM, JMA — 5 fully independent NWP models via Open-Meteo |
 | **Open-Meteo**          | Base Forecast           | Global          | 72h hourly curves, sunrise/sunset, **sunshine duration**, **shortwave radiation** |
 | **Open-Meteo Ensemble** | **Uncertainty Range**   | Global          | 51-member ensemble: median, P10, P90 spread for confidence assessment       |
-| **Meteoblue (MB)**      | **Precision Consensus** | London Only     | Multi-model aggregation; excellent for microclimates                        |
+| **Meteoblue (MB)**      | Precision Consensus     | London Only     | Multi-model aggregation; excellent for microclimates                        |
 | **METAR**               | **Settlement Standard** | Global Airports | Polymarket settlement source; real-time airport observations                |
 | **NWS**                 | Official (US)           | US Only         | US National Weather Service high-fidelity forecasts                         |
-| **MGM**                 | Official (Turkey)       | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall  |
+| **MGM**                 | Observations (Turkey)   | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall  |
+
+> ⚠️ **All NWP model queries use airport coordinates** (matching METAR station), not city center. This eliminates systematic bias between forecast and settlement locations.
+
+**Open-Meteo API Architecture**: Three API calls go through the same platform, each serving a different purpose:
+
+```
+                    Open-Meteo (API Platform)
+                          │
+            ┌─────────────┼─────────────┐
+            │             │             │
+     ┌──────┴──────┐      │      ┌──────┴──────┐
+     │ /forecast   │      │      │ /forecast   │
+     │ (default)   │      │      │ ?models=... │
+     │ = best_match│      │      │ = multi-model│
+     └──────┬──────┘      │      └──────┬──────┘
+            │             │             │
+            ▼             │             ▼
+     Auto-selects best    │      Returns each model
+     model (≈ ECMWF)      │      ECMWF / GFS / ICON
+     → Hourly curves      │      GEM / JMA
+     → Sunrise/sunset     │      → Consensus scoring
+     → Sunshine/radiation │
+                   ┌──────┴──────┐
+                   │  /ensemble  │
+                   │  51 members │
+                   └──────┬──────┘
+                          │
+                          ▼
+                   Median / P10 / P90
+                   → Uncertainty range
+```
+
+> 💡 The OM default forecast is essentially **one of the 5 models** (auto-selected), so it is **excluded from consensus scoring** to avoid double-counting.
 
 ### 2. ⚡ Ultra-Fresh Data (Zero-Cache)
 
 - **Dynamic Timestamps**: Every API request includes a unique token to force servers to bypass CDN caches.
 - **MGM Real-time Sync**: Specialized header camouflaging and timezone correction for Turkish API.
 
-### 3. 🎯 Model Consensus Scoring (NEW)
+### 3. 🎯 Multi-Model Consensus Scoring
 
-The bot automatically rates how well different forecast sources agree, using a three-tier system:
+The bot queries **5 independent NWP models** (ECMWF, GFS, ICON, GEM, JMA) to rate forecast agreement:
 
 | Level | Condition (°C / °F) | Meaning |
 |:---|:---|:---|
-| 🎯 **High** | Spread ≤ 0.8°C / 1.5°F | All models converge — high confidence, low risk |
+| 🎯 **High** | Spread ≤ 0.8°C / 1.5°F | All 5 models converge — high confidence, low risk |
 | ⚖️ **Medium** | Spread ≤ 1.5°C / 3.0°F | Minor disagreement — moderate confidence |
 | ⚠️ **Low** | Spread > 1.5°C / 3.0°F | Major divergence — high uncertainty, wait for more data |
 
-Sources compared: Open-Meteo (OM), Meteoblue (MB), NWS, MGM — only **independent** forecast sources. Ensemble median is deliberately excluded to avoid double-counting with Open-Meteo.
+Primary models: **ECMWF IFS** (Europe), **GFS** (US NOAA), **ICON** (Germany DWD), **GEM** (Canada), **JMA** (Japan). Plus Meteoblue (London) and NWS (US) when available. Ensemble median is excluded to avoid double-counting.
 
 ### 4. 📊 Ensemble Forecast Spread (NEW)
 
@@ -129,6 +163,8 @@ Fetches 51-member ensemble forecasts from Open-Meteo to quantify prediction unce
 > 📊 **Ensemble**: Median 10.8°C, 90% range [9.5°C - 12.1°C], spread 2.6°.
 
 A tight range = high confidence in the forecast. A wide range = the atmosphere is chaotic, higher risk.
+
+**Deterministic vs Ensemble Divergence Detection**: When the OM deterministic forecast exceeds the ensemble P90 or falls below P10, the bot flags it. If actual observations later verify the forecast, the warning upgrades to a ✅ **Forecast Verified** message.
 
 ### 5. ⏰ Entry Timing Signal (NEW)
 
@@ -190,11 +226,12 @@ graph TD
     Bot --> Collector[WeatherDataCollector]
 
     subgraph "Data Engine"
-        Collector --> OM[Open-Meteo API]
+        Collector --> MM[Multi-Model API<br/>ECMWF/GFS/ICON/GEM/JMA]
+        Collector --> OM[Open-Meteo Forecast]
         Collector --> ENS[Open-Meteo Ensemble]
         Collector --> MB[Meteoblue API]
         Collector --> NOAA[METAR / NOAA]
-        Collector --> MGM[Turkish MGM API]
+        Collector --> MGM[MGM Observations]
         Collector --> NWS[US NWS API]
     end
 
@@ -205,7 +242,9 @@ graph TD
 
 - **Logic Decoupling**: `weather_sources.py` handles data fetching & parsing; `bot_listener.py` handles analysis & rendering.
 - **City Config**: `city_risk_profiles.py` contains all METAR station mappings and risk assessments.
-- **Ensemble Integration**: 51-member ensemble contributes to consensus scoring and provides P10/P90 uncertainty bands.
+- **Multi-Model Consensus**: 5 independent NWP models (ECMWF, GFS, ICON, GEM, JMA) for robust consensus scoring.
+- **Ensemble Integration**: 51-member ensemble provides P10/P90 uncertainty bands and divergence detection.
+- **Airport-Aligned Coordinates**: All NWP queries target METAR station coordinates, not city centers.
 
 ---
 
@@ -222,4 +261,4 @@ graph TD
 
 ---
 
-_Last updated: 2026-02-21_
+_Last updated: 2026-02-22_
