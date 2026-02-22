@@ -577,25 +577,47 @@ def start_bot():
                 "par": "paris", "巴黎": "paris",
             }
             
-            # 1. 第一优先级：严格全字匹配
+            # 支持的城市全名列表（用于模糊匹配）
+            SUPPORTED_CITIES = list(set(STANDARD_MAPPING.values()))
+            
+            # 1. 第一优先级：严格全字匹配（别名/缩写）
             city_name = STANDARD_MAPPING.get(city_input)
             
-            # 2. 第二优先级：如果长度 >= 3，尝试前缀匹配
-            if not city_name and len(city_input) >= 3:
+            # 2. 第二优先级：输入本身就是城市全名
+            if not city_name and city_input in SUPPORTED_CITIES:
+                city_name = city_input
+            
+            # 3. 第三优先级：前缀匹配（在别名和城市全名中搜索）
+            if not city_name and len(city_input) >= 2:
+                # 先搜别名
                 for k, v in STANDARD_MAPPING.items():
                     if k.startswith(city_input):
                         city_name = v
                         break
+                # 再搜城市全名
+                if not city_name:
+                    for full_name in SUPPORTED_CITIES:
+                        if full_name.startswith(city_input):
+                            city_name = full_name
+                            break
             
-            # 3. 最终回退
+            # 4. 未找到 → 报错，列出支持的城市
             if not city_name:
-                city_name = city_input
+                city_list = ", ".join(sorted(set(STANDARD_MAPPING.values())))
+                bot.reply_to(
+                    message,
+                    f"❌ 未找到城市: <b>{city_input}</b>\n\n"
+                    f"支持的城市: {city_list}\n\n"
+                    f"也可以用缩写，如 <code>/city dal</code> 查达拉斯",
+                    parse_mode="HTML",
+                )
+                return
 
             bot.send_message(message.chat.id, f"🔍 正在查询 {city_name.title()} 的天气数据...")
 
             coords = weather.get_coordinates(city_name)
             if not coords:
-                bot.reply_to(message, f"❌ 未找到城市: {city_name}")
+                bot.reply_to(message, f"❌ 未找到城市坐标: {city_name}")
                 return
 
             weather_data = weather.fetch_all_sources(city_name, lat=coords["lat"], lon=coords["lon"])
