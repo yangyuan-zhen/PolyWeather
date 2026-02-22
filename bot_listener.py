@@ -37,8 +37,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
         forecast_highs.append(mb["today_high"])
     if nws.get("today_high") is not None:
         forecast_highs.append(nws["today_high"])
-    if mgm.get("today_high") is not None:
-        forecast_highs.append(mgm["today_high"])
+    # 加入多模型预报 (ECMWF, GFS, ICON, GEM, JMA)
+    for mv in weather_data.get("multi_model", {}).get("forecasts", {}).values():
+        if mv is not None:
+            forecast_highs.append(mv)
     
     forecast_highs = [h for h in forecast_highs if h is not None]
     # 取预报中的最高值作为风险防御基准
@@ -58,17 +60,25 @@ def analyze_weather_trend(weather_data, temp_symbol):
         local_hour = datetime.now().hour
 
     # === 模型共识评分 ===
+    # 主要来源: 多模型预报 (ECMWF, GFS, ICON, GEM, JMA)
+    multi_model = weather_data.get("multi_model", {})
+    mm_forecasts = multi_model.get("forecasts", {})
+    
     labeled_forecasts = []
-    om_today = daily.get("temperature_2m_max", [None])[0]
-    if om_today is not None:
-        labeled_forecasts.append(("OM", om_today))
+    for model_name, model_val in mm_forecasts.items():
+        if model_val is not None:
+            labeled_forecasts.append((model_name, model_val))
+    
+    # 额外独立源 (如有)
     if mb.get("today_high") is not None:
         labeled_forecasts.append(("MB", mb["today_high"]))
     if nws.get("today_high") is not None:
         labeled_forecasts.append(("NWS", nws["today_high"]))
-    if mgm.get("today_high") is not None:
-        labeled_forecasts.append(("MGM", mgm["today_high"]))
-    # 集合预报数据 (仅用于不确定性区间展示，不参与共识评分，避免与 OM 双重计数)
+    
+    # Open-Meteo 确定性预报（用于后续偏差检测，不重复加入共识）
+    om_today = daily.get("temperature_2m_max", [None])[0]
+    
+    # 集合预报数据 (仅用于不确定性区间展示)
     ensemble = weather_data.get("ensemble", {})
     ens_median = ensemble.get("median")
 
@@ -128,20 +138,36 @@ def analyze_weather_trend(weather_data, temp_symbol):
         )
         # 确定性预报 vs 集合分布偏差检测
         if om_today is not None:
+            actual_reached = max_so_far is not None and max_so_far >= om_today - 0.5
             if om_today > ens_p90:
-                delta = om_today - ens_median
-                insights.append(
-                    f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} "
-                    f"超过了集合 90% 上限 ({ens_p90}{temp_symbol})，"
-                    f"比中位数高 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
-                )
+                if actual_reached:
+                    # 实测已达到预报值 → 确定性预报是对的，集合偏保守
+                    insights.append(
+                        f"✅ <b>预报验证</b>：确定性预报 {om_today}{temp_symbol} 已被实测验证 "
+                        f"(实测最高 {max_so_far}{temp_symbol})，集合预报偏保守。"
+                    )
+                else:
+                    # 还没到最高温，存在偏高风险
+                    delta = om_today - ens_median
+                    insights.append(
+                        f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} "
+                        f"超过了集合 90% 上限 ({ens_p90}{temp_symbol})，"
+                        f"比中位数高 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
+                    )
             elif om_today < ens_p10:
-                delta = ens_median - om_today
-                insights.append(
-                    f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} "
-                    f"低于集合 90% 下限 ({ens_p10}{temp_symbol})，"
-                    f"比中位数低 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
-                )
+                if max_so_far is not None and max_so_far >= ens_median:
+                    # 实测已超过中位数 → 确定性预报偏低，集合更准
+                    insights.append(
+                        f"✅ <b>预报验证</b>：实测最高 {max_so_far}{temp_symbol} "
+                        f"已超过确定性预报 {om_today}{temp_symbol}，集合中位数 {ens_median}{temp_symbol} 更准确。"
+                    )
+                else:
+                    delta = ens_median - om_today
+                    insights.append(
+                        f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} "
+                        f"低于集合 90% 下限 ({ens_p10}{temp_symbol})，"
+                        f"比中位数低 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
+                    )
 
     # === 核心判断：实测是否已超预报 ===
     is_breakthrough = False
@@ -224,13 +250,14 @@ def analyze_weather_trend(weather_data, temp_symbol):
             # 正在峰值窗口内
             if is_breakthrough:
                 insights.append(f"🔥 <b>极端升温</b>：正处于最热时段，温度已经超过所有预报，还在继续往上走！")
-            elif diff_max <= 0.8:
+            elif max_so_far is not None and forecast_high - max_so_far <= 0.8:
                 insights.append(f"⚖️ <b>到顶了</b>：正处于最热时段，温度基本到位，接下来会在这个水平上下浮动。")
             else:
                 insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报最高温还差一些，继续观察。")
         elif local_hour < first_peak_h:
             # 还没到峰值窗口
-            if diff_max > 1.2:
+            gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
+            if gap_to_high > 1.2:
                 insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
             else:
                 insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
@@ -257,7 +284,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
 
         # 4. 云层遮挡分析 (仅在升温期/峰值期有意义)
         clouds = metar.get("current", {}).get("clouds", [])
-        if clouds and local_hour <= last_peak_h + 1:
+        if clouds and not is_peak_passed:
             main_cloud = clouds[-1]
             cover = main_cloud.get("cover", "")
             if cover == "OVC":
@@ -265,8 +292,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
             elif cover == "BKN":
                 insights.append(f"🌥️ <b>云比较多</b>：天空大部分被云挡住了，日照不足，升温会比较慢。")
             elif cover in ["SKC", "CLR", "FEW"]:
-                if not is_peak_passed:
-                    insights.append(f"☀️ <b>大晴天</b>：阳光直射，没什么云，有利于温度继续往上冲。")
+                insights.append(f"☀️ <b>大晴天</b>：阳光直射，没什么云，有利于温度继续往上冲。")
 
         # 5. 特殊天气现象
         wx_desc = metar.get("current", {}).get("wx_desc")
@@ -324,12 +350,14 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 if 315 <= wd or wd <= 45:
                     insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：从北方来的冷空气，会压制升温。")
                 elif 135 <= wd <= 225:
-                    if diff_max > 0.5 or (is_breakthrough and curr_temp >= max_so_far):
-                        if is_peak_passed and not is_breakthrough:
-                            insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
-                        else:
-                            status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
-                            insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，{status}。")
+                    gap_to_forecast = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
+                    if is_peak_passed and not is_breakthrough:
+                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
+                    elif gap_to_forecast > 0.5 or is_breakthrough:
+                        status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
+                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，{status}。")
+                    else:
+                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，但温度已接近预报峰值。")
                 elif 225 < wd < 315:
                     if wd <= 260:
                         insights.append(f"🌬️ <b>吹西南风</b>（{wind_source} {wd:.0f}°）：带有一定暖湿气流，对升温有轻微帮助。")
@@ -351,20 +379,22 @@ def analyze_weather_trend(weather_data, temp_symbol):
         except (TypeError, ValueError):
             pass
 
-        # 7. 模型准确度预警
+        # 7. 模型准确度预警（使用多模型数据）
         if is_peak_passed and max_so_far is not None:
             model_checks = []
-            if om_high and om_high > max_so_far + 1.5:
-                model_checks.append(f"Open-Meteo ({om_high}{temp_symbol})")
+            for m_name, m_val in mm_forecasts.items():
+                if m_val is not None and m_val > max_so_far + 1.5:
+                    model_checks.append(f"{m_name} ({m_val}{temp_symbol})")
+            # 附加源也查一下
             mb_h = mb.get("today_high")
             if mb_h and mb_h > max_so_far + 1.5:
-                model_checks.append(f"Meteoblue ({mb_h}{temp_symbol})")
+                model_checks.append(f"MB ({mb_h}{temp_symbol})")
             nws_h = nws.get("today_high")
             if nws_h and nws_h > max_so_far + 1.5:
                 model_checks.append(f"NWS ({nws_h}{temp_symbol})")
             
             if model_checks:
-                insights.append(f"⚠️ <b>预报偏高了</b>：实测远低于 " + "、".join(model_checks) + "，这些预报今天报高了。")
+                insights.append(f"⚠️ <b>预报偏高了</b>：实测远低于 " + "、".join(model_checks) + "，这些模型今天报高了。")
 
         # 8. MGM 气压分析 (仅安卡拉)
         mgm_pressure = mgm.get("current", {}).get("pressure")
