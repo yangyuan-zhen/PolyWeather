@@ -47,6 +47,11 @@ def analyze_weather_trend(weather_data, temp_symbol):
     forecast_high = max(forecast_highs) if forecast_highs else None
     # 取最低值用于判断是否“已触及预报高位”
     min_forecast_high = min(forecast_highs) if forecast_highs else forecast_high
+    # 取中位数作为用户可见的"预期值"（避免极端模型误导）
+    forecast_median = None
+    if forecast_highs:
+        sorted_fh = sorted(forecast_highs)
+        forecast_median = sorted_fh[len(sorted_fh) // 2]
     
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
     
@@ -225,7 +230,8 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if last_peak_h < 6:
             insights.append(f"⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
         elif local_hour < first_peak_h and (max_so_far is None or max_so_far < forecast_high):
-            insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {forecast_high}{temp_symbol}。")
+            target_temp = forecast_median if forecast_median is not None else forecast_high
+            insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {target_temp}{temp_symbol}。")
     else:
         # 兜底默认值
         first_peak_h, last_peak_h = 13, 15
