@@ -8,7 +8,10 @@ An intelligent weather bot for prediction markets and professional weather betti
 
 - **Python 3.11+**
 - Dependencies: `pip install -r requirements.txt`
+  <<<<<<< HEAD
+- # **Environment**: Configure `METEOBLUE_API_KEY` in `.env` to enable high-precision London forecasts.
 - **Environment Variables**: Set `TELEGRAM_BOT_TOKEN` in `.env` (required). Optionally set `METEOBLUE_API_KEY` for London high-precision forecasts.
+  > > > > > > > e575440acfd8b5f1e8c30e83dfcb972d26175729
 
 ### VPS Deployment (Recommended)
 
@@ -66,21 +69,21 @@ py -3.11 run.py
 
 ### Supported Cities
 
-| City | Aliases | METAR Station | Extra Sources |
-|:---|:---|:---|:---|
-| London | `lon`, `伦敦` | EGLC (City Airport) | Meteoblue |
-| Paris | `par`, `巴黎` | LFPG (Charles de Gaulle) | — |
-| Ankara | `ank`, `安卡拉` | LTAC (Esenboğa) | MGM |
-| New York | `nyc`, `ny`, `纽约` | KLGA (LaGuardia) | NWS |
-| Chicago | `chi`, `芝加哥` | KORD (O'Hare) | NWS |
-| Dallas | `dal`, `达拉斯` | KDAL (Love Field) | NWS |
-| Miami | `mia`, `迈阿密` | KMIA (International) | NWS |
-| Atlanta | `atl`, `亚特兰大` | KATL (Hartsfield-Jackson) | NWS |
-| Seattle | `sea`, `西雅图` | KSEA (Sea-Tac) | NWS |
-| Toronto | `tor`, `多伦多` | CYYZ (Pearson) | — |
-| Seoul | `sel`, `首尔` | RKSI (Incheon) | — |
-| Buenos Aires | `ba`, `布宜诺斯艾利斯` | SAEZ (Ezeiza) | — |
-| Wellington | `wel`, `惠灵顿` | NZWN (Wellington) | — |
+| City         | Aliases                | METAR Station             | Extra Sources |
+| :----------- | :--------------------- | :------------------------ | :------------ |
+| London       | `lon`, `伦敦`          | EGLC (City Airport)       | Meteoblue     |
+| Paris        | `par`, `巴黎`          | LFPG (Charles de Gaulle)  | —             |
+| Ankara       | `ank`, `安卡拉`        | LTAC (Esenboğa)           | MGM           |
+| New York     | `nyc`, `ny`, `纽约`    | KLGA (LaGuardia)          | NWS           |
+| Chicago      | `chi`, `芝加哥`        | KORD (O'Hare)             | NWS           |
+| Dallas       | `dal`, `达拉斯`        | KDAL (Love Field)         | NWS           |
+| Miami        | `mia`, `迈阿密`        | KMIA (International)      | NWS           |
+| Atlanta      | `atl`, `亚特兰大`      | KATL (Hartsfield-Jackson) | NWS           |
+| Seattle      | `sea`, `西雅图`        | KSEA (Sea-Tac)            | NWS           |
+| Toronto      | `tor`, `多伦多`        | CYYZ (Pearson)            | —             |
+| Seoul        | `sel`, `首尔`          | RKSI (Incheon)            | —             |
+| Buenos Aires | `ba`, `布宜诺斯艾利斯` | SAEZ (Ezeiza)             | —             |
+| Wellington   | `wel`, `惠灵顿`        | NZWN (Wellington)         | —             |
 
 ### Example
 
@@ -96,15 +99,15 @@ py -3.11 run.py
 
 ### 1. 🏛️ Multi-Source Data Fusion
 
-| Source                  | Role                    | Coverage        | Strength                                                                    |
-| :---------------------- | :---------------------- | :-------------- | :-------------------------------------------------------------------------- |
-| **Multi-Model (5 NWP)** | **Consensus Scoring**   | Global          | ECMWF, GFS, ICON, GEM, JMA — 5 fully independent NWP models via Open-Meteo |
+| Source                  | Role                    | Coverage        | Strength                                                                          |
+| :---------------------- | :---------------------- | :-------------- | :-------------------------------------------------------------------------------- |
+| **Multi-Model (5 NWP)** | **Consensus Scoring**   | Global          | ECMWF, GFS, ICON, GEM, JMA — 5 fully independent NWP models via Open-Meteo        |
 | **Open-Meteo**          | Base Forecast           | Global          | 72h hourly curves, sunrise/sunset, **sunshine duration**, **shortwave radiation** |
-| **Open-Meteo Ensemble** | **Uncertainty Range**   | Global          | 51-member ensemble: median, P10, P90 spread for confidence assessment       |
-| **Meteoblue (MB)**      | Precision Consensus     | London Only     | Multi-model aggregation; excellent for microclimates                        |
-| **METAR**               | **Settlement Standard** | Global Airports | Polymarket settlement source; real-time airport observations                |
-| **NWS**                 | Official (US)           | US Only         | US National Weather Service high-fidelity forecasts                         |
-| **MGM**                 | Observations (Turkey)   | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall  |
+| **Open-Meteo Ensemble** | **Uncertainty Range**   | Global          | 51-member ensemble: median, P10, P90 spread for confidence assessment             |
+| **Meteoblue (MB)**      | Precision Consensus     | London Only     | Multi-model aggregation; excellent for microclimates                              |
+| **METAR**               | **Settlement Standard** | Global Airports | Polymarket settlement source; real-time airport observations                      |
+| **NWS**                 | Official (US)           | US Only         | US National Weather Service high-fidelity forecasts                               |
+| **MGM**                 | Observations (Turkey)   | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall        |
 
 > ⚠️ **All NWP model queries use airport coordinates** (matching METAR station), not city center. This eliminates systematic bias between forecast and settlement locations.
 
@@ -148,11 +151,11 @@ py -3.11 run.py
 
 The bot queries **5 independent NWP models** (ECMWF, GFS, ICON, GEM, JMA) to rate forecast agreement:
 
-| Level | Condition (°C / °F) | Meaning |
-|:---|:---|:---|
-| 🎯 **High** | Spread ≤ 0.8°C / 1.5°F | All 5 models converge — high confidence, low risk |
-| ⚖️ **Medium** | Spread ≤ 1.5°C / 3.0°F | Minor disagreement — moderate confidence |
-| ⚠️ **Low** | Spread > 1.5°C / 3.0°F | Major divergence — high uncertainty, wait for more data |
+| Level         | Condition (°C / °F)    | Meaning                                                 |
+| :------------ | :--------------------- | :------------------------------------------------------ |
+| 🎯 **High**   | Spread ≤ 0.8°C / 1.5°F | All 5 models converge — high confidence, low risk       |
+| ⚖️ **Medium** | Spread ≤ 1.5°C / 3.0°F | Minor disagreement — moderate confidence                |
+| ⚠️ **Low**    | Spread > 1.5°C / 3.0°F | Major divergence — high uncertainty, wait for more data |
 
 Primary models: **ECMWF IFS** (Europe), **GFS** (US NOAA), **ICON** (Germany DWD), **GEM** (Canada), **JMA** (Japan). Plus Meteoblue (London) and NWS (US) when available. Ensemble median is excluded to avoid double-counting.
 
@@ -170,22 +173,22 @@ A tight range = high confidence in the forecast. A wide range = the atmosphere i
 
 A composite score combining three factors to advise on betting timing:
 
-| Factor | Score |
-|:---|:---|
-| Peak already passed | +3 |
-| ≤ 2h to peak | +2 |
-| ≤ 4h to peak | +1 |
-| Model consensus: High | +2 |
-| Model consensus: Medium | +1 |
-| Actual ≈ Forecast (gap ≤ 0.5°) | +2 |
-| Actual close to Forecast (gap ≤ 1.5°) | +1 |
+| Factor                                | Score |
+| :------------------------------------ | :---- |
+| Peak already passed                   | +3    |
+| ≤ 2h to peak                          | +2    |
+| ≤ 4h to peak                          | +1    |
+| Model consensus: High                 | +2    |
+| Model consensus: Medium               | +1    |
+| Actual ≈ Forecast (gap ≤ 0.5°)        | +2    |
+| Actual close to Forecast (gap ≤ 1.5°) | +1    |
 
-| Total ≥ | Signal | Advice |
-|:---|:---|:---|
-| 5 | ⏰ **Ideal** | Low uncertainty — good to bet |
-| 3 | ⏰ **Good** | Consider small positions |
-| 2 | ⏰ **Cautious** | Keep observing |
-| <2 | ⏰ **Not Recommended** | High uncertainty — wait |
+| Total ≥ | Signal                 | Advice                        |
+| :------ | :--------------------- | :---------------------------- |
+| 5       | ⏰ **Ideal**           | Low uncertainty — good to bet |
+| 3       | ⏰ **Good**            | Consider small positions      |
+| 2       | ⏰ **Cautious**        | Keep observing                |
+| <2      | ⏰ **Not Recommended** | High uncertainty — wait       |
 
 ### 6. 🧠 Smart Trend Analysis (Plain Language)
 
@@ -250,15 +253,23 @@ graph TD
 
 ## 🎯 Betting Strategy Tips
 
-1. **Check Model Consensus**: The 🎯/⚖️/⚠️ rating tells you immediately if the forecast is reliable.
-2. **Use the Entry Signal**: Wait for ⏰ **Ideal** or **Good** timing before placing bets. Don't bet early when uncertainty is high.
-3. **Watch Ensemble Spread**: A tight 90% band (< 2°) means model confidence is high — this is where edges live.
-4. **Watch the Peak Window**: Use `/city` frequently during predicted peak hours.
-5. **Settlement Priority**: Settlement is always based on **METAR** data, rounded to integer via Wunderground.
-6. **Geographic Risk**: Pay attention to bias warnings, especially for high-risk cities like Seoul and Chicago.
-7. **Solar Radiation Clues**: If the bot reports "warm advection driven" 🌙, the temperature was pushed by warm air, not sunlight — this pattern often breaks model predictions.
-8. **Wind Conflicts**: When METAR and MGM show opposite wind directions, expect temperature volatility.
+<<<<<<< HEAD
+
+1. **Check Consensus**: Compare Open-Meteo and Meteoblue (MB). Consensus usually implies higher probability.
+2. **Watch the Peak**: Use `/city` frequently during predicted peak windows to catch momentum.
+3. **Weighting Hierarchy**: Settlement is **METAR**; high-accuracy trend is **MB** (London); Official (NWS/MGM) is the "anchor."
+4. # **Geographic Risk**: Pay close attention to cities where "Bias will significantly amplify."
+5. **Check Model Consensus**: The 🎯/⚖️/⚠️ rating tells you immediately if the forecast is reliable.
+6. **Use the Entry Signal**: Wait for ⏰ **Ideal** or **Good** timing before placing bets. Don't bet early when uncertainty is high.
+7. **Watch Ensemble Spread**: A tight 90% band (< 2°) means model confidence is high — this is where edges live.
+8. **Watch the Peak Window**: Use `/city` frequently during predicted peak hours.
+9. **Settlement Priority**: Settlement is always based on **METAR** data, rounded to integer via Wunderground.
+10. **Geographic Risk**: Pay attention to bias warnings, especially for high-risk cities like Seoul and Chicago.
+11. **Solar Radiation Clues**: If the bot reports "warm advection driven" 🌙, the temperature was pushed by warm air, not sunlight — this pattern often breaks model predictions.
+12. **Wind Conflicts**: When METAR and MGM show opposite wind directions, expect temperature volatility.
 
 ---
 
 _Last updated: 2026-02-22_
+
+> > > > > > > e575440acfd8b5f1e8c30e83dfcb972d26175729
