@@ -33,6 +33,7 @@ class WeatherDataCollector:
         "toronto": "CYYZ",  # Toronto Pearson
         "wellington": "NZWN",  # Wellington International
         "buenos aires": "SAEZ",  # Ezeiza International
+        "paris": "LFPG",  # Charles de Gaulle
     }
 
     def __init__(self, config: dict):
@@ -260,6 +261,7 @@ class WeatherDataCollector:
             utc_midnight = local_midnight - timedelta(seconds=utc_offset)
 
             max_so_far_c = -999
+            max_temp_time = None
             for obs in data:
                 obs_report_time = obs.get("reportTime", "")
                 try:
@@ -271,6 +273,9 @@ class WeatherDataCollector:
                         t = obs.get("temp")
                         if t is not None and t > max_so_far_c:
                             max_so_far_c = t
+                            # 转为当地时间并记录
+                            local_report = report_dt + timedelta(seconds=utc_offset)
+                            max_temp_time = local_report.strftime("%H:%M")
                 except:
                     continue
 
@@ -295,6 +300,7 @@ class WeatherDataCollector:
                 "current": {
                     "temp": round(temp, 1) if temp is not None else None,
                     "max_temp_so_far": round(max_so_far, 1) if max_so_far is not None else None,
+                    "max_temp_time": max_temp_time,
                     "dewpoint": round(dewp, 1) if dewp is not None else None,
                     "humidity": latest.get("rh"),
                     "wind_speed_kt": latest.get("wspd"),
@@ -356,18 +362,40 @@ class WeatherDataCollector:
                         "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if ruz_hiz_kmh is not None else None,
                         "wind_dir": latest.get("ruzgarYon"),
                         "rain_24h": latest.get("toplamYagis"),
+                        "pressure": latest.get("aktuelBasinc"),
+                        "cloud_cover": latest.get("kapalilik"),  # 0-8 八分位云量
+                        "mgm_max_temp": latest.get("maxSicaklik"),  # MGM 官方实测最高温
                         "time": latest.get("veriZamani"), # 观测时间
                         "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
                     }
             
-            # 2. 每日预报
-            daily_resp = self.session.get(f"{base_url}/tahminler/gunluk?istno={istno}", headers=headers, timeout=self.timeout)
-            if daily_resp.status_code == 200:
-                forecasts = daily_resp.json()
-                if forecasts and isinstance(forecasts, list):
-                    today = forecasts[0]
-                    results["today_high"] = today.get("enYuksekGun1")
-                    results["today_low"] = today.get("enDusukGun1")
+            # 2. 每日预报（尝试两个可能的 API 路径）
+            forecast_urls = [
+                f"{base_url}/tahminler/gunluk?istno={istno}",
+                f"https://servis.mgm.gov.tr/api/tahminler/gunluk?istno={istno}",
+            ]
+            for forecast_url in forecast_urls:
+                try:
+                    daily_resp = self.session.get(forecast_url, headers=headers, timeout=self.timeout)
+                    if daily_resp.status_code == 200:
+                        forecasts = daily_resp.json()
+                        if forecasts and isinstance(forecasts, list):
+                            today = forecasts[0]
+                            high_val = today.get("enYuksekGun1")
+                            low_val = today.get("enDusukGun1")
+                            if high_val is not None:
+                                results["today_high"] = high_val
+                                results["today_low"] = low_val
+                                logger.info(f"📋 MGM 每日预报: 最高 {high_val}°C, 最低 {low_val}°C (from {forecast_url})")
+                                break
+                            else:
+                                # 记录所有可用字段，方便调试
+                                available_keys = [k for k in today.keys() if "yuksek" in k.lower() or "sicaklik" in k.lower() or "gun" in k.lower()]
+                                logger.warning(f"MGM 每日预报: enYuksekGun1 为空，可用字段: {available_keys}")
+                    else:
+                        logger.debug(f"MGM forecast URL {forecast_url} returned {daily_resp.status_code}")
+                except Exception as e:
+                    logger.debug(f"MGM forecast URL {forecast_url} failed: {e}")
             
             return results if "current" in results else None
         except Exception as e:
@@ -445,8 +473,8 @@ class WeatherDataCollector:
                 "latitude": lat,
                 "longitude": lon,
                 "current_weather": "true",
-                "hourly": "temperature_2m",
-                "daily": "temperature_2m_max,apparent_temperature_max",
+                "hourly": "temperature_2m,shortwave_radiation",
+                "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
                 "_t": int(time.time()),  # 禁用缓存，强制刷新
@@ -524,6 +552,169 @@ class WeatherDataCollector:
             }
         except Exception as e:
             logger.error(f"Open-Meteo forecast failed: {e}")
+            return None
+
+    def fetch_ensemble(
+        self,
+        lat: float,
+        lon: float,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict]:
+        """
+        从 Open-Meteo Ensemble API 获取 51 成员集合预报
+        用于计算预报不确定性范围（散度）
+        """
+        try:
+            url = "https://ensemble-api.open-meteo.com/v1/ensemble"
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max",
+                "timezone": "auto",
+                "forecast_days": 3,
+                "_t": int(time.time()),
+            }
+            if use_fahrenheit:
+                params["temperature_unit"] = "fahrenheit"
+            else:
+                params["temperature_unit"] = "celsius"
+
+            response = self.session.get(
+                url,
+                params=params,
+                headers={"Cache-Control": "no-cache"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            daily = data.get("daily", {})
+            # 每个成员都会返回一组 temperature_2m_max
+            # 格式: {"time": [...], "temperature_2m_max_member01": [...], ...}
+            today_highs = []
+            for key, values in daily.items():
+                if key.startswith("temperature_2m_max") and key != "temperature_2m_max":
+                    if values and values[0] is not None:
+                        today_highs.append(values[0])
+            
+            # 也检查非成员键（有些返回格式不同）
+            if not today_highs:
+                raw_max = daily.get("temperature_2m_max", [])
+                if isinstance(raw_max, list) and raw_max:
+                    if isinstance(raw_max[0], list):
+                        # 嵌套列表格式: [[member1_day1, member1_day2], [member2_day1, ...]]
+                        today_highs = [m[0] for m in raw_max if m and m[0] is not None]
+                    elif raw_max[0] is not None:
+                        today_highs = [raw_max[0]]
+
+            if len(today_highs) < 3:
+                logger.warning(f"Ensemble 数据不足: 仅获取 {len(today_highs)} 个成员")
+                return None
+
+            today_highs.sort()
+            n = len(today_highs)
+            median = today_highs[n // 2]
+            p10 = today_highs[max(0, int(n * 0.1))]
+            p90 = today_highs[min(n - 1, int(n * 0.9))]
+
+            result = {
+                "source": "ensemble",
+                "members": n,
+                "median": round(median, 1),
+                "p10": round(p10, 1),
+                "p90": round(p90, 1),
+                "min": round(today_highs[0], 1),
+                "max": round(today_highs[-1], 1),
+                "unit": "fahrenheit" if use_fahrenheit else "celsius",
+            }
+
+            logger.info(
+                f"📊 Ensemble ({n} members): median={median:.1f}, "
+                f"p10={p10:.1f}, p90={p90:.1f}"
+            )
+            return result
+        except Exception as e:
+            logger.warning(f"Ensemble API 请求失败: {e}")
+            return None
+
+    def fetch_multi_model(
+        self,
+        lat: float,
+        lon: float,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict]:
+        """
+        从 Open-Meteo 获取多个独立 NWP 模型的预报
+        用于真正的多模型共识评分
+        
+        模型列表:
+        - ECMWF IFS (欧洲中期天气预报中心)
+        - GFS (美国 NOAA)
+        - ICON (德国气象局 DWD)
+        - GEM (加拿大气象局)
+        - JMA (日本气象厅)
+        """
+        try:
+            url = "https://api.open-meteo.com/v1/forecast"
+            models = "ecmwf_ifs025,gfs_seamless,icon_seamless,gem_seamless,jma_seamless"
+            params = {
+                "latitude": lat,
+                "longitude": lon,
+                "daily": "temperature_2m_max",
+                "models": models,
+                "timezone": "auto",
+                "forecast_days": 1,
+                "_t": int(time.time()),
+            }
+            if use_fahrenheit:
+                params["temperature_unit"] = "fahrenheit"
+
+            response = self.session.get(
+                url,
+                params=params,
+                headers={"Cache-Control": "no-cache"},
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            # Open-Meteo 多模型返回格式:
+            # "daily": {
+            #   "temperature_2m_max_ecmwf_ifs025": [12.3],
+            #   "temperature_2m_max_gfs_seamless": [11.8],
+            #   ...
+            # }
+            daily = data.get("daily", {})
+            
+            model_labels = {
+                "ecmwf_ifs025": "ECMWF",
+                "gfs_seamless": "GFS",
+                "icon_seamless": "ICON",
+                "gem_seamless": "GEM",
+                "jma_seamless": "JMA",
+            }
+            
+            forecasts = {}
+            for model_key, label in model_labels.items():
+                key = f"temperature_2m_max_{model_key}"
+                values = daily.get(key, [])
+                if values and values[0] is not None:
+                    forecasts[label] = round(values[0], 1)
+
+            if not forecasts:
+                logger.warning("Multi-model: 无有效模型数据")
+                return None
+
+            labels_str = ", ".join([f"{k}={v}" for k, v in forecasts.items()])
+            logger.info(f"🔬 Multi-model ({len(forecasts)}个): {labels_str}")
+            
+            return {
+                "source": "multi_model",
+                "forecasts": forecasts,  # {"ECMWF": 12.3, "GFS": 11.8, ...}
+                "unit": "fahrenheit" if use_fahrenheit else "celsius",
+            }
+        except Exception as e:
+            logger.warning(f"Multi-model API 请求失败: {e}")
             return None
 
     def fetch_from_meteoblue(
@@ -633,22 +824,23 @@ class WeatherDataCollector:
         """
         使用 Open-Meteo Geocoding API 获取城市坐标 (免费, 无需 Key)
         """
-        # 预设常用城市坐标，避免网络波动导致启动失败
+        # 坐标使用 METAR 机场位置（Polymarket 以机场数据结算）
         static_coords = {
-            "london": {"lat": 51.5074, "lon": -0.1278},
-            "new york": {"lat": 40.7128, "lon": -74.0060},
+            "london": {"lat": 51.5053, "lon": 0.0553},        # EGLC London City
+            "paris": {"lat": 49.0097, "lon": 2.5478},         # LFPG Charles de Gaulle
+            "new york": {"lat": 40.7750, "lon": -73.8750},    # KLGA LaGuardia
             "new york's central park": {"lat": 40.7812, "lon": -73.9665},
-            "nyc": {"lat": 40.7128, "lon": -74.0060},
-            "seattle": {"lat": 47.6062, "lon": -122.3321},
-            "chicago": {"lat": 41.8781, "lon": -87.6298},
-            "dallas": {"lat": 32.7767, "lon": -96.7970},
-            "miami": {"lat": 25.7617, "lon": -80.1918},
-            "atlanta": {"lat": 33.7490, "lon": -84.3880},
-            "seoul": {"lat": 37.5665, "lon": 126.9780},
-            "toronto": {"lat": 43.6532, "lon": -79.3832},
-            "ankara": {"lat": 39.9334, "lon": 32.8597},
-            "wellington": {"lat": -41.2865, "lon": 174.7762},
-            "buenos aires": {"lat": -34.6037, "lon": -58.3816},
+            "nyc": {"lat": 40.7750, "lon": -73.8750},         # KLGA LaGuardia
+            "seattle": {"lat": 47.4499, "lon": -122.3118},    # KSEA Sea-Tac
+            "chicago": {"lat": 41.9769, "lon": -87.9081},     # KORD O'Hare
+            "dallas": {"lat": 32.8459, "lon": -96.8509},      # KDAL Love Field
+            "miami": {"lat": 25.7933, "lon": -80.2906},       # KMIA International
+            "atlanta": {"lat": 33.6367, "lon": -84.4281},     # KATL Hartsfield-Jackson
+            "seoul": {"lat": 37.4691, "lon": 126.4510},       # RKSI Incheon
+            "toronto": {"lat": 43.6759, "lon": -79.6294},     # CYYZ Pearson
+            "ankara": {"lat": 40.1281, "lon": 32.9950},       # LTAC Esenboğa
+            "wellington": {"lat": -41.3272, "lon": 174.8053}, # NZWN Wellington
+            "buenos aires": {"lat": -34.8222, "lon": -58.5358}, # SAEZ Ezeiza
         }
 
         normalized_city = city.lower().strip()
@@ -798,6 +990,16 @@ class WeatherDataCollector:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:
                         results["nws"] = nws_data
+                
+                # 集合预报 (所有城市通用，用于不确定性分析)
+                ens_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
+                if ens_data:
+                    results["ensemble"] = ens_data
+                
+                # 多模型预报 (所有城市通用，用于共识评分)
+                mm_data = self.fetch_multi_model(lat, lon, use_fahrenheit=use_fahrenheit)
+                if mm_data:
+                    results["multi_model"] = mm_data
             else:
                 # Open-Meteo 失败时，仍然尝试获取 METAR 和 NWS
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
