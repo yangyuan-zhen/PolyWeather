@@ -8,11 +8,7 @@
 
 - **Python 3.11+**
 - 依赖安装: `pip install -r requirements.txt`
-<<<<<<< HEAD
-- **环境变量**: 需在 `.env` 中配置 `METEOBLUE_API_KEY` 以激活伦敦高精度预报。
-=======
 - **环境变量**: 在 `.env` 中设置 `TELEGRAM_BOT_TOKEN`（必需）。可选设置 `METEOBLUE_API_KEY` 以激活伦敦高精度预报。
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
 
 ### VPS 部署 (推荐)
 
@@ -110,17 +106,7 @@ py -3.11 run.py
 | **NWS**                 | 官方预测(美)   | 仅限美国   | 美国国家气象局高精度预报                                     |
 | **MGM**                 | 实测数据(土)   | 仅限安卡拉 | 土耳其气象局：气压、云量、体感温度、24h 降水                 |
 
-<<<<<<< HEAD
-| 数据源             | 数据角色       | 覆盖范围   | 优势                                             |
-| :----------------- | :------------- | :--------- | :----------------------------------------------- |
-| **Open-Meteo**     | 基础预测       | 全球       | 提供所有城市的 72 小时精细化温度曲线             |
-| **Meteoblue (MB)** | **高精度共识** | 仅限伦敦   | **交易员首选**。聚合多家模型，对微气候处理极佳   |
-| **METAR**          | **结算标准**   | 全球机场   | Polymarket 结算参考的绝对真理，实时机场观测      |
-| **NWS**            | 官方预测(美)   | 仅限美国   | 美国国家气象局，对美国城市的极端天气预判准确     |
-| **MGM**            | 官方预测(土)   | 仅限安卡拉 | 土耳其气象局，提供安卡拉 Esenboğa 机场的官方数据 |
-=======
 > ⚠️ **所有 NWP 模型查询使用机场坐标**（与 METAR 站点一致），而非市中心。这消除了预报位置与结算位置之间的系统性偏差。
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
 
 **Open-Meteo API 架构关系**：三个 API 调用都经过 Open-Meteo 平台，但获取的是不同维度的数据：
 
@@ -244,13 +230,6 @@ graph TD
     User[/Telegram User/] --> Bot[bot_listener.py]
     Bot --> Collector[WeatherDataCollector]
 
-<<<<<<< HEAD
-    subgraph "Data Engine"
-        Collector --> OM[Open-Meteo API]
-        Collector --> MB[Meteoblue Weather API]
-        Collector --> NOAA[METAR Data Center]
-        Collector --> MGM[Turkish MGM API]
-=======
     subgraph "数据引擎"
         Collector --> MM[多模型 API<br/>ECMWF/GFS/ICON/GEM/JMA]
         Collector --> OM[Open-Meteo 预报]
@@ -258,7 +237,6 @@ graph TD
         Collector --> MB[Meteoblue API]
         Collector --> NOAA[METAR / NOAA]
         Collector --> MGM[MGM 实测数据]
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
         Collector --> NWS[US NWS API]
     end
 
@@ -277,12 +255,6 @@ graph TD
 
 ## 🎯 博弈策略提示
 
-<<<<<<< HEAD
-1. **检查模型共识**：查看 Open-Meteo 和 Meteoblue (MB) 是否达成共识。
-2. **关注峰值窗口**：在预测的峰值时段多次使用 `/city` 刷新。
-3. **数据权重优先级**：结算以 **METAR** 为准，趋势预测以 **MB** 为准（仅限伦敦）。
-4. **地理风险评估**：重点关注提示中的“偏差会显著放大”警告（如安卡拉、伦敦）。
-=======
 1. **看模型共识**：🎯/⚖️/⚠️ 评级让你一眼判断预报是否可靠。高共识 + 市场低定价 = 套利机会。
 2. **用入场信号**：等 ⏰ **理想** 或 **较好** 时机再下注。不确定性高时绝不提前入场。
 3. **关注集合散度**：90% 区间越窄（< 2°），模型置信越高 — 这才是 edge 所在。
@@ -295,4 +267,3 @@ graph TD
 ---
 
 _最后更新: 2026-02-22_
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729

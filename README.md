@@ -8,11 +8,7 @@ An intelligent weather bot for prediction markets and professional weather betti
 
 - **Python 3.11+**
 - Dependencies: `pip install -r requirements.txt`
-<<<<<<< HEAD
-- **Environment**: Configure `METEOBLUE_API_KEY` in `.env` to enable high-precision London forecasts.
-=======
 - **Environment Variables**: Set `TELEGRAM_BOT_TOKEN` in `.env` (required). Optionally set `METEOBLUE_API_KEY` for London high-precision forecasts.
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
 
 ### VPS Deployment (Recommended)
 
@@ -110,17 +106,7 @@ py -3.11 run.py
 | **NWS**                 | Official (US)           | US Only         | US National Weather Service high-fidelity forecasts                         |
 | **MGM**                 | Observations (Turkey)   | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall  |
 
-<<<<<<< HEAD
-| Source             | Role                    | Coverage        | Strength                                                                           |
-| :----------------- | :---------------------- | :-------------- | :--------------------------------------------------------------------------------- |
-| **Open-Meteo**     | Base Forecast           | Global          | Provides detailed 72-hour temperature curves for all cities.                       |
-| **Meteoblue (MB)** | **Precision Consensus** | London Only     | **Traders' choice**. Aggregates multiple models; excellent for microclimates.      |
-| **METAR**          | **Settlement Standard** | Global Airports | The absolute truth for Polymarket settlement; real-time station data.              |
-| **NWS**            | Official (US)           | US Only         | High-fidelity forecasts for US cities, critical for extreme weather events.        |
-| **MGM**            | Official (Turkey)       | Ankara          | Direct access to Turkish State Meteorological Service for local official accuracy. |
-=======
 > ⚠️ **All NWP model queries use airport coordinates** (matching METAR station), not city center. This eliminates systematic bias between forecast and settlement locations.
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
 
 **Open-Meteo API Architecture**: Three API calls go through the same platform, each serving a different purpose:
 
@@ -240,19 +226,12 @@ graph TD
     Bot --> Collector[WeatherDataCollector]
 
     subgraph "Data Engine"
-<<<<<<< HEAD
-        Collector --> OM[Open-Meteo API]
-        Collector --> MB[Meteoblue Weather API]
-        Collector --> NOAA[METAR Data Center]
-        Collector --> MGM[Turkish MGM API]
-=======
         Collector --> MM[Multi-Model API<br/>ECMWF/GFS/ICON/GEM/JMA]
         Collector --> OM[Open-Meteo Forecast]
         Collector --> ENS[Open-Meteo Ensemble]
         Collector --> MB[Meteoblue API]
         Collector --> NOAA[METAR / NOAA]
         Collector --> MGM[MGM Observations]
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
         Collector --> NWS[US NWS API]
     end
 
@@ -271,12 +250,6 @@ graph TD
 
 ## 🎯 Betting Strategy Tips
 
-<<<<<<< HEAD
-1. **Check Consensus**: Compare Open-Meteo and Meteoblue (MB). Consensus usually implies higher probability.
-2. **Watch the Peak**: Use `/city` frequently during predicted peak windows to catch momentum.
-3. **Weighting Hierarchy**: Settlement is **METAR**; high-accuracy trend is **MB** (London); Official (NWS/MGM) is the "anchor."
-4. **Geographic Risk**: Pay close attention to cities where "Bias will significantly amplify."
-=======
 1. **Check Model Consensus**: The 🎯/⚖️/⚠️ rating tells you immediately if the forecast is reliable.
 2. **Use the Entry Signal**: Wait for ⏰ **Ideal** or **Good** timing before placing bets. Don't bet early when uncertainty is high.
 3. **Watch Ensemble Spread**: A tight 90% band (< 2°) means model confidence is high — this is where edges live.
@@ -289,4 +262,3 @@ graph TD
 ---
 
 _Last updated: 2026-02-22_
->>>>>>> e575440acfd8b5f1e8c30e83dfcb972d26175729
