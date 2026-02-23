@@ -77,6 +77,18 @@ CITY_RISK_PROFILES = {
         "warning": "距离远但地形平坦，偏差稳定可预测",
         "season_notes": "夏季",
     },
+    "paris": {
+        "risk_level": "medium",
+        "risk_emoji": "🟡",
+        "icao": "LFPG",
+        "airport_name": "Charles de Gaulle 机场",
+        "distance_km": 25.2,
+        "elevation_diff_m": 26,
+        "typical_bias_f": 1.5,
+        "bias_direction": "城市热岛效应：市区比机场偏暖1-2°C",
+        "warning": "机场在北郊，冬季北风时比市区更冷",
+        "season_notes": "夏季热浪期间偏差最大",
+    },
     
     # 🟢 低危城市 - 数据相对靠谱
     "toronto": {
