@@ -256,10 +256,12 @@ def analyze_weather_trend(weather_data, temp_symbol):
             # 正在峰值窗口内
             if is_breakthrough:
                 insights.append(f"🔥 <b>极端升温</b>：正处于最热时段，温度已经超过所有预报，还在继续往上走！")
-            elif max_so_far is not None and forecast_high - max_so_far <= 0.8:
-                insights.append(f"⚖️ <b>到顶了</b>：正处于最热时段，温度基本到位，接下来会在这个水平上下浮动。")
+            elif max_so_far is not None and (om_today or forecast_high) - max_so_far <= 0.8:
+                insights.append(f"⚖️ <b>到顶了</b>：正处于最热时段，温度基本到位（实测 {max_so_far}{temp_symbol} ≈ 预报 {om_today}{temp_symbol}），接下来会在这个水平上下浮动。")
             else:
-                insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报最高温还差一些，继续观察。")
+                ref = om_today or forecast_high
+                gap = ref - (max_so_far if max_so_far is not None else curr_temp)
+                insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报 {ref}{temp_symbol} 还差 {gap:.1f}°，继续观察。")
         elif local_hour < first_peak_h:
             # 还没到峰值窗口
             gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
