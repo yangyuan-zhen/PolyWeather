@@ -653,6 +653,8 @@ class WeatherDataCollector:
         - ICON (德国气象局 DWD)
         - GEM (加拿大气象局)
         - JMA (日本气象厅)
+        
+        返回 3 天的预报数据，支持今日+明日共识分析
         """
         try:
             url = "https://api.open-meteo.com/v1/forecast"
@@ -663,7 +665,7 @@ class WeatherDataCollector:
                 "daily": "temperature_2m_max",
                 "models": models,
                 "timezone": "auto",
-                "forecast_days": 1,
+                "forecast_days": 3,
                 "_t": int(time.time()),
             }
             if use_fahrenheit:
@@ -678,13 +680,8 @@ class WeatherDataCollector:
             response.raise_for_status()
             data = response.json()
 
-            # Open-Meteo 多模型返回格式:
-            # "daily": {
-            #   "temperature_2m_max_ecmwf_ifs025": [12.3],
-            #   "temperature_2m_max_gfs_seamless": [11.8],
-            #   ...
-            # }
             daily = data.get("daily", {})
+            dates = daily.get("time", [])
             
             model_labels = {
                 "ecmwf_ifs025": "ECMWF",
@@ -694,23 +691,34 @@ class WeatherDataCollector:
                 "jma_seamless": "JMA",
             }
             
-            forecasts = {}
-            for model_key, label in model_labels.items():
-                key = f"temperature_2m_max_{model_key}"
-                values = daily.get(key, [])
-                if values and values[0] is not None:
-                    forecasts[label] = round(values[0], 1)
+            # 按天提取每个模型的预报
+            daily_forecasts = {}  # {"2026-02-23": {"ECMWF": 7.9, "GFS": 6.5, ...}, ...}
+            for day_idx, date_str in enumerate(dates):
+                day_data = {}
+                for model_key, label in model_labels.items():
+                    key = f"temperature_2m_max_{model_key}"
+                    values = daily.get(key, [])
+                    if day_idx < len(values) and values[day_idx] is not None:
+                        day_data[label] = round(values[day_idx], 1)
+                if day_data:
+                    daily_forecasts[date_str] = day_data
 
-            if not forecasts:
+            if not daily_forecasts:
                 logger.warning("Multi-model: 无有效模型数据")
                 return None
 
+            # 今天的预报 (向后兼容)
+            today_date = dates[0] if dates else None
+            forecasts = daily_forecasts.get(today_date, {})
+
             labels_str = ", ".join([f"{k}={v}" for k, v in forecasts.items()])
-            logger.info(f"🔬 Multi-model ({len(forecasts)}个): {labels_str}")
+            logger.info(f"🔬 Multi-model ({len(forecasts)}个, {len(daily_forecasts)}天): {labels_str}")
             
             return {
                 "source": "multi_model",
-                "forecasts": forecasts,  # {"ECMWF": 12.3, "GFS": 11.8, ...}
+                "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
+                "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
+                "dates": dates,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
         except Exception as e:

@@ -517,6 +517,63 @@ def analyze_weather_trend(weather_data, temp_symbol):
         else:
             insights.append(f"⏰ <b>入场时机：不建议</b> — {factors_str}。不确定性大，等更多数据。")
 
+    # === 明日预览：当今日峰值已过，自动显示明天的模型共识 ===
+    if is_peak_passed:
+        tomorrow_forecasts = {}
+        tomorrow_date = None
+        
+        # 从 multi_model 的 daily_forecasts 中取明天数据
+        mm_daily = multi_model.get("daily_forecasts", {})
+        mm_dates = multi_model.get("dates", [])
+        
+        if len(mm_dates) >= 2:
+            tomorrow_date = mm_dates[1]
+            tomorrow_forecasts = mm_daily.get(tomorrow_date, {})
+        
+        # 明天的 Open-Meteo 预报
+        tomorrow_om = None
+        om_max_list = daily.get("temperature_2m_max", [])
+        om_dates = daily.get("time", [])
+        if len(om_max_list) >= 2:
+            tomorrow_om = om_max_list[1]
+            if tomorrow_date is None and len(om_dates) >= 2:
+                tomorrow_date = om_dates[1]
+        
+        if tomorrow_date and (tomorrow_forecasts or tomorrow_om is not None):
+            # 格式化日期 (02-24)
+            date_short = tomorrow_date[5:] if tomorrow_date else "明天"
+            
+            preview_parts = [f"\n📋 <b>明日预览 ({date_short})</b>"]
+            
+            if tomorrow_om is not None:
+                preview_parts.append(f"📊 Open-Meteo 预报: {tomorrow_om}{temp_symbol}")
+            
+            if tomorrow_forecasts:
+                t_values = list(tomorrow_forecasts.values())
+                t_max = max(t_values)
+                t_min = min(t_values)
+                t_spread = t_max - t_min
+                
+                is_f = (temp_symbol == "°F")
+                tight = 1.5 if is_f else 0.8
+                mid = 3.0 if is_f else 1.5
+                
+                parts = " | ".join([f"{name} {val}{temp_symbol}" for name, val in tomorrow_forecasts.items()])
+                
+                if t_spread <= tight:
+                    preview_parts.append(f"🎯 模型共识：高 — {parts}，极差 {t_spread:.1f}°")
+                elif t_spread <= mid:
+                    preview_parts.append(f"⚖️ 模型共识：中 — {parts}，极差 {t_spread:.1f}°")
+                else:
+                    highest = max(tomorrow_forecasts.items(), key=lambda x: x[1])
+                    lowest = min(tomorrow_forecasts.items(), key=lambda x: x[1])
+                    preview_parts.append(
+                        f"⚠️ 模型共识：低 — {parts}，极差 {t_spread:.1f}°！"
+                        f"{highest[0]} 最高 vs {lowest[0]} 最低"
+                    )
+            
+            insights.extend(preview_parts)
+
     if not insights:
         return ""
         
