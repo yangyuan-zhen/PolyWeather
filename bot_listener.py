@@ -242,7 +242,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if last_peak_h < 6:
             insights.append(f"⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
         elif local_hour < first_peak_h and (max_so_far is None or max_so_far < forecast_high):
-            target_temp = forecast_median if forecast_median is not None else forecast_high
+            target_temp = om_today if om_today is not None else forecast_high
             insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {target_temp}{temp_symbol}。")
     else:
         # 兜底默认值
