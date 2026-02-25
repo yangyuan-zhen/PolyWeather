@@ -131,6 +131,18 @@ def analyze_weather_trend(weather_data, temp_symbol):
             f"📡 <b>仅1个预报源 ({name} {val}{temp_symbol})</b> — 无法交叉验证，共识评分不可用。"
         )
 
+    # === 博弈区间提醒 (基于 WU 四舍五入结算) ===
+    if len(labeled_forecasts) >= 2:
+        settlement_vals = sorted(set(round(v) for _, v in labeled_forecasts))
+        unit_short = temp_symbol
+        if len(settlement_vals) == 1:
+            insights.append(f"🎲 <b>博弈区间</b>：{len(labeled_forecasts)}个模型全部指向 <b>{settlement_vals[0]}{unit_short}</b> 结算。")
+        elif len(settlement_vals) == 2:
+            insights.append(f"🎲 <b>博弈区间</b>：温度在 <b>{settlement_vals[0]}{unit_short}</b> 和 <b>{settlement_vals[1]}{unit_short}</b> 之间博弈。")
+        elif len(settlement_vals) == 3:
+            insights.append(f"🎲 <b>博弈区间</b>：温度在 <b>{settlement_vals[0]}{unit_short}</b>、<b>{settlement_vals[1]}{unit_short}</b>、<b>{settlement_vals[2]}{unit_short}</b> 之间博弈。")
+        else:
+            insights.append(f"🎲 <b>博弈区间</b>：模型分歧太大，结算还不确定。")
     # 集合预报区间 (独立于共识评分显示)
     ens_p10 = ensemble.get("p10")
     ens_p90 = ensemble.get("p90")
