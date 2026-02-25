@@ -787,25 +787,27 @@ def start_bot():
             max_p = metar.get("current", {}).get("max_temp_so_far") if metar else None
             max_p_time = metar.get("current", {}).get("max_temp_time") if metar else None
             obs_t_str = "N/A"
+            metar_age_min = None  # METAR 数据年龄（分钟）
             main_source = "METAR" if metar else "MGM"
             
             if metar:
                 obs_t = metar.get("observation_time", "")
                 try:
                     if "T" in obs_t:
-                        # 处理 ISO 格式 2026-02-08T09:46:00.000Z
                         from datetime import datetime, timezone, timedelta
                         dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
-                        # 转换为当地时间
                         utc_offset = open_meteo.get("utc_offset", 0)
                         local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
                         obs_t_str = local_dt.strftime("%H:%M")
+                        # 计算数据年龄
+                        now_utc = datetime.now(timezone.utc)
+                        metar_age_min = int((now_utc - dt).total_seconds() / 60)
                     elif " " in obs_t:
                         obs_t_str = obs_t.split(" ")[1][:5]
                     else:
                         obs_t_str = obs_t
                 except:
-                    obs_t_str = obs_t[:16] # 备选逻辑
+                    obs_t_str = obs_t[:16]
             elif mgm:
                 m_time = mgm.get("current", {}).get("time", "")
                 if "T" in m_time:
@@ -816,9 +818,18 @@ def start_bot():
                     m_time = m_time.split(" ")[1][:5]
                 obs_t_str = m_time
 
+            # 数据年龄标注
+            age_tag = ""
+            if metar_age_min is not None:
+                if metar_age_min >= 60:
+                    age_tag = f" ⚠️{metar_age_min}分钟前"
+                elif metar_age_min >= 30:
+                    age_tag = f" ⏳{metar_age_min}分钟前"
+
             max_str = ""
             if max_p is not None:
-                settled_val = round(max_p)
+                import math
+                settled_val = math.floor(max_p + 0.5)
                 max_str = f" (最高: {max_p}{temp_symbol}"
                 if max_p_time:
                     max_str += f" @{max_p_time}"
@@ -867,12 +878,16 @@ def start_bot():
                 elif cover_code == "OVC" or (cover_code == "" and mgm_cloud is not None and mgm_cloud <= 8):
                     wx_summary = "☁️ 阴天"
                 elif mgm_cloud is not None:
-                    # 纯数字回退
                     cloud_names = {0: "☀️ 晴", 1: "🌤️ 晴", 2: "🌤️ 少云", 3: "⛅ 散云", 4: "⛅ 散云", 5: "🌥️ 多云", 6: "🌥️ 多云", 7: "☁️ 阴", 8: "☁️ 阴天"}
                     wx_summary = cloud_names.get(mgm_cloud, "")
 
             wx_display = f" {wx_summary}" if wx_summary else ""
-            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}")
+            msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}")
+
+            # Open-Meteo 实时温度补充（当 METAR 数据超过 30 分钟时显示）
+            om_current_temp = open_meteo.get("current", {}).get("temp")
+            if om_current_temp is not None and metar_age_min is not None and metar_age_min >= 30:
+                msg_lines.append(f"   🌐 Open-Meteo 实时参考: {om_current_temp}{temp_symbol}（更新更快，仅供参考）")
 
             if mgm:
                 m_c = mgm.get("current", {})
