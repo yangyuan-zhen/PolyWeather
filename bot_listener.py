@@ -133,7 +133,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
 
     # === 博弈区间提醒 (基于 WU 四舍五入结算) ===
     if len(labeled_forecasts) >= 2:
-        settlement_vals = sorted(set(round(v) for _, v in labeled_forecasts))
+        import math
+        # 用标准四舍五入 (6.5→7)，不用 Python 的银行家舍入 (6.5→6)
+        wu_round = lambda v: math.floor(v + 0.5)
+        settlement_vals = sorted(set(wu_round(v) for _, v in labeled_forecasts))
         unit_short = temp_symbol
         if len(settlement_vals) == 1:
             insights.append(f"🎲 <b>博弈区间</b>：{len(labeled_forecasts)}个模型全部指向 <b>{settlement_vals[0]}{unit_short}</b> 结算。")
