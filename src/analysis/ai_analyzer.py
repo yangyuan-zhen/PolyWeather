@@ -39,7 +39,7 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
 
 🤖 <b>Groq AI 决策</b>
 - 💡 逻辑: [简述动力来源/阻碍因子。例如：暖平流强势推高，且辐射极低时段创新高，极大概率超预报。]
-- ⏰ 时机: [理想 / 较好 / 谨慎 / 不建议] (信心: [1-10]/10)
+- 🎯 信心: [1-10]/10
 """
 
         payload = {

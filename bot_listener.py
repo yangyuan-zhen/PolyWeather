@@ -300,39 +300,40 @@ def analyze_weather_trend(weather_data, temp_symbol):
         # 兜底默认值
         first_peak_h, last_peak_h = 13, 15
 
-    # --- 简化的 AI 特征提取 ---
+    # --- 简化的 AI 特征提取 (不对用户双重显示，仅供 AI 使用) ---
+    ai_features = list(insights)
     # 不再生成死板的分析文案，仅保留核心事实描述
     
     # 1. 气温节奏特征
     if local_hour > last_peak_h:
-        insights.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
+        ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
     elif first_peak_h <= local_hour <= last_peak_h:
-        insights.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
+        ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
     else:
-        insights.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
+        ai_features.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
 
     # 2. 气温偏差特征
     if max_so_far is not None and forecast_high is not None:
         gap = max_so_far - forecast_high
         if gap > 0.5:
-            insights.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
+            ai_features.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
         elif abs(gap) <= 1.0:
-            insights.append(f"⚖️ 状态: 实测已极度接近预报峰值。")
+            ai_features.append(f"⚖️ 状态: 实测已极度接近预报峰值。")
 
     # 3. 气象动力特征描述 (无主观推测)
     humidity = metar.get("current", {}).get("humidity")
     if humidity and humidity > 80:
-        insights.append(f"💦 湿度极高 ({humidity}%)。")
+        ai_features.append(f"💦 湿度极高 ({humidity}%)。")
     
     clouds = metar.get("current", {}).get("clouds", [])
     if clouds:
         cover = clouds[-1].get("cover", "")
         c_desc = {"OVC": "全阴", "BKN": "多云", "SCT": "散云", "FEW": "少云"}.get(cover, cover)
-        insights.append(f"☁️ 天空状况: {c_desc}。")
+        ai_features.append(f"☁️ 天空状况: {c_desc}。")
 
     wx_desc = metar.get("current", {}).get("wx_desc")
     if wx_desc:
-        insights.append(f"🌧️ 天气现象: {wx_desc}。")
+        ai_features.append(f"🌧️ 天气现象: {wx_desc}。")
 
     # 4. 暖平流事实提取
     max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
@@ -346,7 +347,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
                     max_temp_rad = rad if rad is not None else 0.0
                     break
             if max_temp_rad < 50:
-                insights.append(f"🌙 动力事实: 最高温出现在低辐射时段 ({max_temp_time_str}, 辐射{max_temp_rad:.0f}W/m²)。")
+                ai_features.append(f"🌙 动力事实: 最高温出现在低辐射时段 ({max_temp_time_str}, 辐射{max_temp_rad:.0f}W/m²)。")
         except: pass
 
     # 5. 结算判定
@@ -354,12 +355,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
         settled = round(max_so_far)
         fractional = max_so_far - int(max_so_far)
         if abs(fractional - 0.5) <= 0.2:
-            insights.append(f"⚖️ 结算事实: 当前最高 {max_so_far}{temp_symbol} 处于进位关键点 ({settled}{temp_symbol})。")
+            ai_features.append(f"⚖️ 结算事实: 当前最高 {max_so_far}{temp_symbol} 处于进位关键点 ({settled}{temp_symbol})。")
 
-    if not insights:
-        return ""
-        
-    return "\n".join(insights)
+    display_str = "\n".join(insights) if insights else ""
+    return display_str, "\n".join(ai_features)
 
 def start_bot():
     config = load_config()
@@ -705,7 +704,7 @@ def start_bot():
                     msg_lines.append(f"   {prefix} {cloud_desc} | 👁️ {vis or 10}mi | 💨 {wind or 0}kt")
 
             # --- 5. 态势特征提取 ---
-            feature_str = analyze_weather_trend(weather_data, temp_symbol)
+            feature_str, ai_context = analyze_weather_trend(weather_data, temp_symbol)
             if feature_str:
                 # 仅将最核心的信息展示给用户作为"态势分析"
                 # 但后面会把更全的数据传给 AI
@@ -718,8 +717,6 @@ def start_bot():
                 try:
                     from src.analysis.ai_analyzer import get_ai_analysis
                     # 构建更全的背景数据给 AI
-                    # 包含风力、能见度、多源分歧等原始结论
-                    ai_context = feature_str
                     
                     # 补充多模型分歧
                     mm = weather_data.get("multi_model", {})
