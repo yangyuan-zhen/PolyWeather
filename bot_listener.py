@@ -1017,16 +1017,15 @@ def start_bot():
                         if line.strip():
                             msg_lines.append(f"- {line.strip()}")
 
-                # --- 6. Gemini AI 数据分析 ---
+                # --- 6. Groq AI 数据分析 ---
                 try:
                     from src.analysis.ai_analyzer import get_ai_analysis
-                    # 发送请求时可以稍微提示一下正在请求AI
-                    bot.send_message(message.chat.id, f"🧠 Gemini 正在分析 {city_name} 的趋势数据...")
+                    # Groq 极快，通常不用发送“正在分析”的提示，直接拼接
                     ai_result = get_ai_analysis(clean_insights, city_name, temp_symbol)
                     if ai_result:
                         msg_lines.append(f"\n{ai_result}")
                 except Exception as e:
-                    logger.error(f"加载/调用 AI 分析失败: {e}")
+                    logger.error(f"调用 Groq AI 分析失败: {e}")
 
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
