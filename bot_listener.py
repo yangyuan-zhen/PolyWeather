@@ -134,11 +134,21 @@ def analyze_weather_trend(weather_data, temp_symbol):
     # === 博弈区间提醒 (基于 WU 四舍五入结算) ===
     if len(labeled_forecasts) >= 2:
         import math
-        # 用标准四舍五入 (6.5→7)，不用 Python 的银行家舍入 (6.5→6)
         wu_round = lambda v: math.floor(v + 0.5)
         settlement_vals = sorted(set(wu_round(v) for _, v in labeled_forecasts))
         unit_short = temp_symbol
-        if len(settlement_vals) == 1:
+        # 如果实测已超所有预报，用实测值重新评估博弈区间
+        if max_so_far is not None and forecast_high is not None and max_so_far > forecast_high + 0.5:
+            actual_settled = wu_round(max_so_far)
+            if actual_settled not in settlement_vals:
+                all_vals = sorted(set(settlement_vals + [actual_settled]))
+            else:
+                all_vals = settlement_vals
+            insights.append(
+                f"🎲 <b>博弈区间</b>：模型预报已失效！实测最高 {max_so_far}{unit_short} → WU <b>{actual_settled}{unit_short}</b>，"
+                f"但温度仍可能继续变化。"
+            )
+        elif len(settlement_vals) == 1:
             insights.append(f"🎲 <b>博弈区间</b>：{len(labeled_forecasts)}个模型全部指向 <b>{settlement_vals[0]}{unit_short}</b> 结算。")
         elif len(settlement_vals) == 2:
             insights.append(f"🎲 <b>博弈区间</b>：温度在 <b>{settlement_vals[0]}{unit_short}</b> 和 <b>{settlement_vals[1]}{unit_short}</b> 之间博弈。")
@@ -279,11 +289,14 @@ def analyze_weather_trend(weather_data, temp_symbol):
                 insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报 {ref}{temp_symbol} 还差 {gap:.1f}°，继续观察。")
         elif local_hour < first_peak_h:
             # 还没到峰值窗口
-            gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
-            if gap_to_high > 1.2:
-                insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
+            if is_breakthrough:
+                insights.append(f"🔥 <b>超预报升温</b>：还没到最热时段就已经超过所有预报了，峰值可能远超模型预期。")
             else:
-                insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
+                gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
+                if gap_to_high > 1.2:
+                    insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
+                else:
+                    insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
 
         else:
             # 回退逻辑
@@ -499,7 +512,10 @@ def analyze_weather_trend(weather_data, temp_symbol):
         else:
             timing_factors.append(f"距峰值{hours_to_peak}h")
         
-        if consensus_level == "high":
+        if is_breakthrough:
+            # 模型全部预测错了，共识一致但方向错误，不加分
+            timing_factors.append("⚠️模型已失效")
+        elif consensus_level == "high":
             timing_score += 2
             timing_factors.append("模型一致")
         elif consensus_level == "medium":
@@ -508,7 +524,6 @@ def analyze_weather_trend(weather_data, temp_symbol):
         elif consensus_level == "low":
             timing_factors.append("模型分歧大")
         else:
-            # unknown: 数据源不足，无法评估共识
             timing_factors.append("仅单源")
         
         if max_so_far is not None and forecast_high is not None and (is_peak_passed or hours_to_peak <= 3):
