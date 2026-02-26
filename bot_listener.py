@@ -13,8 +13,9 @@ if project_root not in sys.path:
 from src.utils.config_loader import load_config  # type: ignore
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore
 from src.data_collection.city_risk_profiles import get_city_risk_profile, format_risk_warning  # type: ignore
+from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record
 
-def analyze_weather_trend(weather_data, temp_symbol):
+def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     '''根据实测与预测分析气温态势，增加峰值时刻预测'''
     insights: List[str] = []
     ai_features: List[str] = []
@@ -27,6 +28,7 @@ def analyze_weather_trend(weather_data, temp_symbol):
     
     if not metar or not open_meteo:
         return "", ""
+
         
     curr_temp = metar.get("current", {}).get("temp")
     max_so_far = metar.get("current", {}).get("max_temp_so_far")  # 今日实测最高
@@ -35,17 +37,23 @@ def analyze_weather_trend(weather_data, temp_symbol):
     times = hourly.get("time", [])
     temps = hourly.get("temperature_2m", [])
     
-    # === 核心：整合多源预报最高温 ===
-    forecast_highs = [daily.get("temperature_2m_max", [None])[0]]
+    # === 新核心：动态集合权重预报 (DEB) ===
+    # 抽取各个确定性预报值构成的字典
+    current_forecasts = {}
+    if daily.get("temperature_2m_max"):
+        current_forecasts["Open-Meteo"] = daily.get("temperature_2m_max")[0]
     if mb.get("today_high") is not None:
-        forecast_highs.append(mb["today_high"])
+        current_forecasts["Meteoblue"] = mb.get("today_high")
     if nws.get("today_high") is not None:
-        forecast_highs.append(nws["today_high"])
-    for mv in weather_data.get("multi_model", {}).get("forecasts", {}).values():
-        if mv is not None:
-            forecast_highs.append(mv)
-    
-    forecast_highs = [h for h in forecast_highs if h is not None]
+        current_forecasts["NWS"] = nws.get("today_high")
+        
+    mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
+    for m_name, m_val in mm_forecasts.items():
+        if m_val is not None:
+            current_forecasts[m_name] = m_val
+            
+    # 从 URL/入参里我们暂时拿不到城名，为了 DEB 追溯我们在后方的总控那里提取。这里的 analyze_weather_trend 主要计算最高预留。
+    forecast_highs = [h for h in current_forecasts.values() if h is not None]
     forecast_high = max(forecast_highs) if forecast_highs else None
     min_forecast_high = min(forecast_highs) if forecast_highs else forecast_high
     forecast_median = sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
@@ -61,6 +69,19 @@ def analyze_weather_trend(weather_data, temp_symbol):
         from datetime import datetime
         local_date_str = datetime.now().strftime("%Y-%m-%d")
         local_hour = datetime.now().hour
+
+    # === DEB 融合渲染 ===
+    if city_name and current_forecasts:
+        blended_high, weight_info = calculate_dynamic_weights(city_name, current_forecasts)
+        if blended_high is not None:
+            insights.insert(0, f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info})")
+            ai_features.append(f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。")
+            
+        # 顺便把今天的预测记录下来供之后回测用
+        try:
+            update_daily_record(city_name, local_date_str, current_forecasts, max_so_far)
+        except:
+            pass
 
     # === METAR 趋势分析 (移到前部判断降温) ===
     recent_temps = metar.get("recent_temps", [])
@@ -160,16 +181,13 @@ def analyze_weather_trend(weather_data, temp_symbol):
         if max_so_far > forecast_high + 0.5:
             exceed_by = max_so_far - forecast_high
             bt_msg = f"🚨 <b>实测已超预报</b>：{max_so_far}{temp_symbol} 超过上限 {forecast_high}{temp_symbol}（+{exceed_by:.1f}°）。"
-            if trend_desc: bt_msg += f"\n{trend_desc}"
             insights.append(bt_msg)
             ai_features.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
-            ai_features.append(trend_desc)
+            if trend_desc: ai_features.append(trend_desc)
         else:
             if trend_desc:
-                insights.append(trend_desc)
                 ai_features.append(trend_desc)
     elif trend_desc:
-        insights.append(trend_desc)
         ai_features.append(trend_desc)
 
     # === 结算取整分析 ===
@@ -588,7 +606,7 @@ def start_bot():
                     msg_lines.append(f"   {prefix} {cloud_desc} | 👁️ {vis or 10}mi | 💨 {wind or 0}kt")
 
             # --- 5. 态势特征提取 ---
-            feature_str, ai_context = analyze_weather_trend(weather_data, temp_symbol)
+            feature_str, ai_context = analyze_weather_trend(weather_data, temp_symbol, city_name)
             if feature_str:
                 # 仅将最核心的信息展示给用户作为"态势分析"
                 # 但后面会把更全的数据传给 AI
