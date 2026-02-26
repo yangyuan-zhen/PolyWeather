@@ -300,369 +300,66 @@ def analyze_weather_trend(weather_data, temp_symbol):
         # 兜底默认值
         first_peak_h, last_peak_h = 13, 15
 
-    is_peak_passed = False
-    if curr_temp is not None and forecast_high is not None:
-        diff_max = forecast_high - curr_temp
-        
-        # 1. 气温节奏判定 (动态参考峰值时刻)
-        if local_hour > last_peak_h:
-            # 已经过了预报的峰值时段
-            is_peak_passed = True
-            if is_breakthrough:
-                insights.append(f"🌡️ <b>异常高温</b>：最热的时间已经过了，但温度还是比预报高，降温可能会来得比较晚。")
-            # 如果实测已经接近"任一"主流预报的最高温 (使用 min_forecast_high)
-            elif max_so_far and min_forecast_high is not None and max_so_far >= min_forecast_high - 0.5:
-                insights.append(f"✅ <b>今天最热已过</b>：温度已经到了预报最高值附近，接下来会慢慢降温了。")
-            else:
-                # 虽然时间过了，但离最高温还有差距
-                insights.append(f"📉 <b>开始降温</b>：最热时段已过，现在 {curr_temp}{temp_symbol}，看起来很难再涨到预报的 {forecast_high}{temp_symbol} 了。")
-        elif first_peak_h <= local_hour <= last_peak_h:
-            # 正在峰值窗口内
-            if is_breakthrough:
-                insights.append(f"🔥 <b>极端升温</b>：正处于最热时段，温度已经超过所有预报，还在继续往上走！")
-            elif max_so_far is not None and (om_today or forecast_high) - max_so_far <= 0.8:
-                insights.append(f"⚖️ <b>到顶了</b>：正处于最热时段，温度基本到位（实测 {max_so_far}{temp_symbol} ≈ 预报 {om_today}{temp_symbol}），接下来会在这个水平上下浮动。")
-            else:
-                ref = om_today or forecast_high
-                gap = ref - (max_so_far if max_so_far is not None else curr_temp)
-                insights.append(f"⏳ <b>最热时段进行中</b>：虽然在最热时段了，但离预报 {ref}{temp_symbol} 还差 {gap:.1f}°，继续观察。")
-        elif local_hour < first_peak_h:
-            # 还没到峰值窗口
-            if is_breakthrough:
-                exceed = max_so_far - forecast_high
-                insights.append(
-                    f"🔥 <b>超预报升温</b>：距最热时段还有 {first_peak_h - local_hour}h，"
-                    f"实测已超预报 {exceed:.1f}°（{max_so_far}{temp_symbol} vs 预报上限 {forecast_high}{temp_symbol}）。"
-                )
-            else:
-                gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
-                if gap_to_high > 1.2:
-                    insights.append(f"📈 <b>还在升温</b>：离最热时段还有 {first_peak_h - local_hour} 小时，温度还会继续往上走。")
-                else:
-                    insights.append(f"🌅 <b>快到最热了</b>：马上就要进入最热时段，温度已经接近预报高位了。")
+    # --- 简化的 AI 特征提取 ---
+    # 不再生成死板的分析文案，仅保留核心事实描述
+    
+    # 1. 气温节奏特征
+    if local_hour > last_peak_h:
+        insights.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
+    elif first_peak_h <= local_hour <= last_peak_h:
+        insights.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
+    else:
+        insights.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
 
-        else:
-            # 回退逻辑
-            insights.append(f"🌌 <b>夜间</b>：等明天太阳出来后再看新一轮升温。")
+    # 2. 气温偏差特征
+    if max_so_far is not None and forecast_high is not None:
+        gap = max_so_far - forecast_high
+        if gap > 0.5:
+            insights.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
+        elif abs(gap) <= 1.0:
+            insights.append(f"⚖️ 状态: 实测已极度接近预报峰值。")
 
-        # 2. 湿度与露点分析 (仅在傍晚以后)
-        humidity = metar.get("current", {}).get("humidity")
-        dewpoint = metar.get("current", {}).get("dewpoint")
-        
-        if local_hour >= 18:
-            if humidity and humidity > 80:
-                insights.append(f"💦 <b>湿度很高</b>：湿度 {humidity}%，空气很潮湿，夜里热量散不掉，降温会很慢。")
-            if dewpoint is not None and curr_temp - dewpoint < 2.0:
-                insights.append(f"🌡️ <b>降温快到底了</b>：温度已经接近露点（空气中水汽开始凝结的温度），再往下降会很困难。")
+    # 3. 气象动力特征描述 (无主观推测)
+    humidity = metar.get("current", {}).get("humidity")
+    if humidity and humidity > 80:
+        insights.append(f"💦 湿度极高 ({humidity}%)。")
+    
+    clouds = metar.get("current", {}).get("clouds", [])
+    if clouds:
+        cover = clouds[-1].get("cover", "")
+        c_desc = {"OVC": "全阴", "BKN": "多云", "SCT": "散云", "FEW": "少云"}.get(cover, cover)
+        insights.append(f"☁️ 天空状况: {c_desc}。")
 
-        # 3. 风力
-        if wind_speed >= 15:
-            insights.append(f"🌬️ <b>风很大</b>：风速 {wind_speed}kt，温度可能会忽高忽低。")
-        elif wind_speed >= 10:
-            insights.append(f"🍃 <b>有风</b>：风速适中 ({wind_speed}kt)，会加速空气流动，具体影响看风向。")
+    wx_desc = metar.get("current", {}).get("wx_desc")
+    if wx_desc:
+        insights.append(f"🌧️ 天气现象: {wx_desc}。")
 
-        # 4. 云层遮挡分析 (仅在升温期/峰值期有意义)
-        clouds = metar.get("current", {}).get("clouds", [])
-        if clouds and not is_peak_passed:
-            main_cloud = clouds[-1]
-            cover = main_cloud.get("cover", "")
-            if cover == "OVC":
-                insights.append(f"☁️ <b>阴天</b>：天完全被云盖住了，太阳照不进来，温度很难再往上涨了。")
-            elif cover == "BKN":
-                insights.append(f"🌥️ <b>云比较多</b>：天空大部分被云挡住了，日照不足，升温会比较慢。")
-            elif cover in ["SKC", "CLR", "FEW"]:
-                insights.append(f"☀️ <b>大晴天</b>：阳光直射，没什么云，有利于温度继续往上冲。")
-
-        # 5. 特殊天气现象
-        wx_desc = metar.get("current", {}).get("wx_desc")
-        has_mgm = bool(mgm.get("current"))
-        mgm_rain = mgm.get("current", {}).get("rain_24h")
-        if wx_desc:
-            wx_upper = wx_desc.upper().strip()
-            wx_tokens = wx_upper.split()
-            # 用分词匹配，避免 "METAR" 中的 "RA" 误判
-            rain_codes = {"RA", "DZ", "-RA", "+RA", "-DZ", "+DZ", "TSRA", "SHRA", "FZRA", "RAIN", "DRIZZLE"}
-            snow_codes = {"SN", "GR", "GS", "-SN", "+SN", "BLSN", "SNOW"}
-            fog_codes = {"FG", "BR", "HZ", "MIST", "FOG", "FZFG"}
-            
-            if rain_codes & set(wx_tokens):
-                if has_mgm and mgm_rain and mgm_rain > 0:
-                    insights.append(f"🌧️ <b>在下雨</b>：已累计 {mgm_rain}mm，雨水蒸发会吸收热量，温度很难涨上去。")
-                else:
-                    insights.append(f"🌧️ <b>在下雨</b>：METAR 探测到降水，雨水蒸发会吸收热量，升温会受阻。")
-            elif snow_codes & set(wx_tokens):
-                insights.append(f"❄️ <b>在下雪/冰雹</b>：温度会一直低迷。")
-            elif fog_codes & set(wx_tokens):
-                insights.append(f"🌫️ <b>有雾/霾</b>：阳光被挡住了，湿度也高，升温会很慢。")
-
-        # 6. 风向分析（始终显示，风向是重要参考信息）
+    # 4. 暖平流事实提取
+    max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
+    if max_so_far is not None and max_temp_time_str:
         try:
-            # 优先 METAR，回退 MGM
-            metar_wind = metar.get("current", {}).get("wind_dir")
-            mgm_wind = mgm.get("current", {}).get("wind_dir")
-            
-            if metar_wind is not None:
-                analysis_wind = float(metar_wind)
-                wind_source = "METAR"
-            elif mgm_wind is not None:
-                analysis_wind = float(mgm_wind)
-                wind_source = "MGM"
-            else:
-                analysis_wind = None
-                wind_source = None
-            
-            # 两源矛盾检测
-            if metar_wind is not None and mgm_wind is not None:
-                metar_f = float(metar_wind)
-                mgm_f = float(mgm_wind)
-                diff_angle = abs(metar_f - mgm_f)
-                if diff_angle > 180:
-                    diff_angle = 360 - diff_angle
-                if diff_angle > 90:
-                    dirs_name = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                    m_name = dirs_name[int((metar_f + 22.5) % 360 / 45)]
-                    g_name = dirs_name[int((mgm_f + 22.5) % 360 / 45)]
-                    insights.append(f"⚠️ <b>风向矛盾</b>：METAR 测到{m_name}风({metar_f:.0f}°)，MGM 测到{g_name}风({mgm_f:.0f}°)，相差较大，风向不稳定。")
-            
-            if analysis_wind is not None:
-                wd = analysis_wind
-                # 用趋势数据判断风的实际影响
-                if trend_desc:
-                    # 从趋势中提取关键词
-                    is_stagnant = "停滞" in trend_desc or "持平" in trend_desc
-                    is_rising = "升温" in trend_desc
-                    is_falling = "降温" in trend_desc
-                else:
-                    is_stagnant = False
-                    is_rising = False
-                    is_falling = False
-
-                if 315 <= wd or wd <= 45:
-                    effect = ""
-                    if is_stagnant or is_falling:
-                        effect = "，升温确实被压制"
-                    elif is_rising:
-                        effect = "，但温度仍在上升"
-                    insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：冷空气{effect}。")
-                elif 135 <= wd <= 225:
-                    effect = ""
-                    if is_rising:
-                        effect = "，温度仍在上升"
-                    elif is_stagnant:
-                        effect = "，但温度已停滞"
-                    elif is_falling:
-                        effect = "，但温度已开始下降"
-                    insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：暖空气{effect}。")
-                elif 225 < wd < 315:
-                    dir_name = "西南风" if wd <= 260 else ("西北风" if wd >= 280 else "西风")
-                    insights.append(f"🌬️ <b>吹{dir_name}</b>（{wind_source} {wd:.0f}°）。")
-                elif 45 < wd < 135:
-                    insights.append(f"🌬️ <b>吹东风</b>（{wind_source} {wd:.0f}°）。")
-        except (TypeError, ValueError):
-            pass
-
-        try:
-            visibility = metar.get("current", {}).get("visibility_mi")
-            if visibility is not None:
-                vis_val = float(str(visibility).replace("+", "").replace("-", ""))
-                if vis_val < 3 and local_hour <= 11:
-                    insights.append(f"🌫️ <b>早上能见度差</b>：只能看到 {vis_val} 英里远，阳光穿不透，上午升温会很慢。")
-        except (TypeError, ValueError):
-            pass
-
-        # 7. 模型准确度预警（使用多模型数据）
-        if is_peak_passed and max_so_far is not None:
-            model_checks = []
-            for m_name, m_val in mm_forecasts.items():
-                if m_val is not None and m_val > max_so_far + 1.5:
-                    model_checks.append(f"{m_name} ({m_val}{temp_symbol})")
-            # 附加源也查一下
-            mb_h = mb.get("today_high")
-            if mb_h and mb_h > max_so_far + 1.5:
-                model_checks.append(f"MB ({mb_h}{temp_symbol})")
-            nws_h = nws.get("today_high")
-            if nws_h and nws_h > max_so_far + 1.5:
-                model_checks.append(f"NWS ({nws_h}{temp_symbol})")
-            
-            if model_checks:
-                insights.append(f"⚠️ <b>预报偏高了</b>：实测远低于 " + "、".join(model_checks) + "，这些模型今天报高了。")
-
-        # 8. MGM 气压分析 (仅安卡拉)
-        mgm_pressure = mgm.get("current", {}).get("pressure")
-        if mgm_pressure is not None and not is_peak_passed:
-            if mgm_pressure < 900:
-                insights.append(f"📉 <b>气压偏低</b>：{mgm_pressure}hPa，可能有暖湿气流过境，有利于温度上升。")
-
-        # 9. MGM 官方最高温交叉验证
-        mgm_max = mgm.get("current", {}).get("mgm_max_temp")
-        if mgm_max is not None and max_so_far is not None:
-            if abs(mgm_max - max_so_far) > 1.5:
-                insights.append(f"📊 <b>数据差异</b>：MGM 官方记录最高 {mgm_max}{temp_symbol}，METAR 记录 {max_so_far}{temp_symbol}，相差 {abs(mgm_max - max_so_far):.1f}°。")
-
-        # 10. 太阳辐射分析 (Open-Meteo shortwave_radiation)
-        hourly_rad = hourly.get("shortwave_radiation", [])
-        sunshine_durations = daily.get("sunshine_duration", [])
-        if hourly_rad and times:
-            # 计算今天已经过去的小时的累计辐射 vs 全天预测总辐射
-            today_total_rad = 0.0
-            today_so_far_rad = 0.0
-            today_peak_rad = 0.0
-            today_peak_hour = ""
+            max_h = int(max_temp_time_str.split(":")[0])
+            max_temp_rad = 0.0
+            hourly_rad = hourly.get("shortwave_radiation", [])
             for t_str, rad in zip(times, hourly_rad):
-                if t_str.startswith(local_date_str) and rad is not None:
-                    today_total_rad += rad
-                    hour_val = int(t_str.split("T")[1][:2])
-                    if hour_val <= local_hour:
-                        today_so_far_rad += rad
-                    if rad > today_peak_rad:
-                        today_peak_rad = rad
-                        today_peak_hour = t_str.split("T")[1][:5]
+                if t_str.startswith(local_date_str) and int(t_str.split("T")[1][:2]) == max_h:
+                    max_temp_rad = rad if rad is not None else 0.0
+                    break
+            if max_temp_rad < 50:
+                insights.append(f"🌙 动力事实: 最高温出现在低辐射时段 ({max_temp_time_str}, 辐射{max_temp_rad:.0f}W/m²)。")
+        except: pass
 
-            if today_total_rad > 0:
-                rad_pct = today_so_far_rad / today_total_rad * 100
-
-                if not is_peak_passed and local_hour >= 8:
-                    # 白天升温期：报告太阳能量进度
-                    if rad_pct < 30 and local_hour >= 12:
-                        insights.append(f"🌤️ <b>日照不足</b>：到目前为止只吸收了全天 {rad_pct:.0f}% 的太阳能量，云层可能在严重削弱日照。")
-
-                # 检测"暖平流型"高温：峰值温度出现在太阳辐射极低的时段
-                max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
-                if max_so_far is not None and max_temp_time_str:
-                    try:
-                        max_h = int(max_temp_time_str.split(":")[0])
-                        # 找到最高温时段对应的辐射值
-                        max_temp_rad = 0.0
-                        for t_str, rad in zip(times, hourly_rad):
-                            if t_str.startswith(local_date_str) and rad is not None:
-                                h = int(t_str.split("T")[1][:2])
-                                if h == max_h:
-                                    max_temp_rad = rad
-                                    break
-                        if max_temp_rad < 50 and today_peak_rad > 200:
-                            insights.append(
-                                f"🌙 <b>暖平流驱动</b>：最高温出现在 {max_temp_time_str}，"
-                                f"当时太阳辐射仅 {max_temp_rad:.0f} W/m²（峰值 {today_peak_rad:.0f} W/m²），"
-                                f"说明气温是被暖空气推高的，而不是被太阳晒热的。"
-                            )
-                    except (ValueError, IndexError):
-                        pass
-
-        # 11. 入场时机信号
-        hours_to_peak = first_peak_h - local_hour if local_hour < first_peak_h else 0
-        
-        # 综合评分：距离峰值越近 + 共识越高 + 实测越接近预报 → 越适合入场
-        timing_score = 0
-        timing_factors = []
-        
-        if is_peak_passed:
-            timing_score += 3
-            timing_factors.append("最热已过")
-        elif hours_to_peak <= 2:
-            timing_score += 2
-            timing_factors.append(f"距峰值{hours_to_peak}h")
-        elif hours_to_peak <= 4:
-            timing_score += 1
-            timing_factors.append(f"距峰值{hours_to_peak}h")
-        else:
-            timing_factors.append(f"距峰值{hours_to_peak}h")
-        
-        if is_breakthrough:
-            # 模型全部预测错了，共识一致但方向错误，不加分
-            timing_factors.append("⚠️模型已失效")
-        elif consensus_level == "high":
-            timing_score += 2
-            timing_factors.append("模型一致")
-        elif consensus_level == "medium":
-            timing_score += 1
-            timing_factors.append("模型小分歧")
-        elif consensus_level == "low":
-            timing_factors.append("模型分歧大")
-        else:
-            timing_factors.append("仅单源")
-        
-        if max_so_far is not None and forecast_high is not None and (is_peak_passed or hours_to_peak <= 3):
-            gap = abs(max_so_far - forecast_high)
-            if gap <= 0.5:
-                timing_score += 2
-                timing_factors.append("实测≈预报")
-            elif gap <= 1.5:
-                timing_score += 1
-                timing_factors.append(f"差{gap:.1f}°")
-            else:
-                timing_factors.append(f"差{gap:.1f}°")
-        
-        factors_str = "，".join(timing_factors)
-        if timing_score >= 5:
-            insights.append(f"⏰ <b>入场时机：理想</b> — {factors_str}。不确定性低，适合下注。")
-        elif timing_score >= 3:
-            insights.append(f"⏰ <b>入场时机：较好</b> — {factors_str}。可以考虑小仓位入场。")
-        elif timing_score >= 2:
-            insights.append(f"⏰ <b>入场时机：谨慎</b> — {factors_str}。建议继续观察。")
-        else:
-            insights.append(f"⏰ <b>入场时机：不建议</b> — {factors_str}。不确定性大，等更多数据。")
-
-    # === 明日预览：当今日峰值已过，自动显示明天的模型共识 ===
-    if is_peak_passed:
-        tomorrow_forecasts = {}
-        tomorrow_date = None
-        
-        # 从 multi_model 的 daily_forecasts 中取明天数据
-        mm_daily = multi_model.get("daily_forecasts", {})
-        mm_dates = multi_model.get("dates", [])
-        
-        if len(mm_dates) >= 2:
-            tomorrow_date = mm_dates[1]
-            tomorrow_forecasts = mm_daily.get(tomorrow_date, {})
-        
-        # 明天的 Open-Meteo 预报
-        tomorrow_om = None
-        om_max_list = daily.get("temperature_2m_max", [])
-        om_dates = daily.get("time", [])
-        if len(om_max_list) >= 2:
-            tomorrow_om = om_max_list[1]
-            if tomorrow_date is None and len(om_dates) >= 2:
-                tomorrow_date = om_dates[1]
-        
-        if tomorrow_date and (tomorrow_forecasts or tomorrow_om is not None):
-            # 格式化日期 (02-24)
-            date_short = tomorrow_date[5:] if tomorrow_date else "明天"
-            
-            preview_parts = [f"\n📋 <b>明日预览 ({date_short})</b>"]
-            
-            if tomorrow_om is not None:
-                preview_parts.append(f"📊 Open-Meteo 预报: {tomorrow_om}{temp_symbol}")
-            
-            if tomorrow_forecasts:
-                t_values = list(tomorrow_forecasts.values())
-                t_max = max(t_values)
-                t_min = min(t_values)
-                t_spread = t_max - t_min
-                
-                is_f = (temp_symbol == "°F")
-                tight = 1.5 if is_f else 0.8
-                mid = 3.0 if is_f else 1.5
-                
-                parts = " | ".join([f"{name} {val}{temp_symbol}" for name, val in tomorrow_forecasts.items()])
-                
-                if t_spread <= tight:
-                    preview_parts.append(f"🎯 模型共识：高 — {parts}，极差 {t_spread:.1f}°")
-                elif t_spread <= mid:
-                    preview_parts.append(f"⚖️ 模型共识：中 — {parts}，极差 {t_spread:.1f}°")
-                else:
-                    highest = max(tomorrow_forecasts.items(), key=lambda x: x[1])
-                    lowest = min(tomorrow_forecasts.items(), key=lambda x: x[1])
-                    preview_parts.append(
-                        f"⚠️ 模型共识：低 — {parts}，极差 {t_spread:.1f}°！"
-                        f"{highest[0]} 最高 vs {lowest[0]} 最低"
-                    )
-            
-            insights.extend(preview_parts)
+    # 5. 结算判定
+    if max_so_far is not None:
+        settled = round(max_so_far)
+        fractional = max_so_far - int(max_so_far)
+        if abs(fractional - 0.5) <= 0.2:
+            insights.append(f"⚖️ 结算事实: 当前最高 {max_so_far}{temp_symbol} 处于进位关键点 ({settled}{temp_symbol})。")
 
     if not insights:
         return ""
         
-    return "\n💡 <b>态势分析</b>\n" + "\n".join(insights)
+    return "\n".join(insights)
 
 def start_bot():
     config = load_config()
@@ -1007,21 +704,30 @@ def start_bot():
                 if cloud_desc:
                     msg_lines.append(f"   {prefix} {cloud_desc} | 👁️ {vis or 10}mi | 💨 {wind or 0}kt")
 
-            # --- 5. 态势分析 ---
-            trend_insights = analyze_weather_trend(weather_data, temp_symbol)
-            if trend_insights:
-                clean_insights = trend_insights.replace("💡 <b>态势分析</b>", "").strip()
-                if clean_insights:
-                    msg_lines.append(f"\n💡 <b>分析</b>:")
-                    for line in clean_insights.split("\n"):
-                        if line.strip():
-                            msg_lines.append(f"- {line.strip()}")
+            # --- 5. 态势特征提取 ---
+            feature_str = analyze_weather_trend(weather_data, temp_symbol)
+            if feature_str:
+                # 仅将最核心的信息展示给用户作为"态势分析"
+                # 但后面会把更全的数据传给 AI
+                msg_lines.append(f"\n💡 <b>分析</b>:")
+                for line in feature_str.split("\n"):
+                    if line.strip():
+                        msg_lines.append(f"- {line.strip()}")
 
-                # --- 6. Groq AI 数据分析 ---
+                # --- 6. Groq AI 深度分析 ---
                 try:
                     from src.analysis.ai_analyzer import get_ai_analysis
-                    # Groq 极快，通常不用发送“正在分析”的提示，直接拼接
-                    ai_result = get_ai_analysis(clean_insights, city_name, temp_symbol)
+                    # 构建更全的背景数据给 AI
+                    # 包含风力、能见度、多源分歧等原始结论
+                    ai_context = feature_str
+                    
+                    # 补充多模型分歧
+                    mm = weather_data.get("multi_model", {})
+                    if mm.get("forecasts"):
+                        mm_str = " | ".join([f"{k}:{v}{temp_symbol}" for k,v in mm["forecasts"].items() if v])
+                        ai_context += f"\n模型分歧: {mm_str}"
+
+                    ai_result = get_ai_analysis(ai_context, city_name, temp_symbol)
                     if ai_result:
                         msg_lines.append(f"\n{ai_result}")
                 except Exception as e:
