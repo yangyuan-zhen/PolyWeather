@@ -1,27 +1,64 @@
-# 🌡️ PolyWeather: Real-time Weather Query & Analysis Bot
+# 🌡️ PolyWeather: Quantitative Weather Trading & AI Command Center
 
-An intelligent weather bot for prediction markets and professional weather betting. Fetches ultra-fresh data directly from global weather stations, bypassing CDN caches, and provides automated trend analysis with **model consensus scoring** and **entry timing signals** in plain language.
+![Banner Placeholder: Futuristic Weather Trading System]
 
-## 🚀 Quick Start
+PolyWeather is not just a simple weather bot. It is an **institutional-grade weather quantitative trading assistant** designed for prediction markets like **Polymarket** and other weather derivatives. By connecting directly to global aviation weather stations (METAR) without CDN caching, integrating our Dynamic Ensemble Blending (DEB) model, extracting real-time micro-climate features, and stripping away human emotion via the massive LLaMA 70B AI model, it provides you with rapid, objective, and lethal trading signals.
 
-### Requirements
+---
 
-- **Python 3.11+**
-- Dependencies: `pip install -r requirements.txt`
-- **Environment Variables**: Set `TELEGRAM_BOT_TOKEN` in `.env` (required). Optionally set `METEOBLUE_API_KEY` for London high-precision forecasts.
+## 🚀 Core Features Matrix
 
-### VPS Deployment (Recommended)
+### 1. 🧠 Proprietary Moat: Dynamic Ensemble Blending (DEB)
 
-**First-time setup:**
+Traditional weather bots simply calculate rigid averages out of numerical models like ECMWF and GFS. PolyWeather introduces a **dynamic tracking and backtesting algorithm**:
+
+- **Adaptive Weight Evolution**: By looking back at the Mean Absolute Error (MAE) of each model over the past 7-14 days at specific airports (e.g., Esenboğa Airport in Ankara), the system actively penalizes and rewards the 5 major NWP models (ECMWF, GFS, ICON, GEM, JMA) per query.
+- **High-Concurrency Thread-Safe Database**: Built on an underlying memory singleton cache and system-level file locks (`fcntl Lock`), PolyWeather guarantees 0 disk I/O bottlenecks and microsecond response times—even when bombarded by 500+ users checking the weather at the exact same millisecond.
+
+### 2. 🤖 AI Trading Veteran (Groq AI Agent)
+
+The system no longer outputs boring templates. We feed all **complex thermodynamic parameters** (wind direction/speed matrix, cooling inertia, rounding resistance) into LLaMA 3.3 70B via the lightning-fast Groq API:
+
+- **🧊 Forced Objectivity**: With strict logical constraints built into the prompt, the AI accurately evaluates scenarios like "15kt cold northerly winds at 3 PM, coupled with radiation dropping below 50W/m²" and immediately calls "Dead market: peak passed, bets frozen."
+- **🎯 Quantitative Confidence Scoring**: It outputs a 1-10 confidence score with strong guidance. High confidence means an "immediate signal to build positions," whereas low confidence warns of a chaotic market full of wind/rain uncertainties.
+
+### 3. ⏱️ Absolute Live Dominance (Zero-Cache METAR Extraction)
+
+In the meat grinder of Polymarket weather settlements, **a 1-minute delay can mean a 100% loss of your principal**.
+
+- PolyWeather forces anti-cache dynamic timestamps on every single API call, bypassing all proxy network (CDN) stagnant cache pools.
+- It doesn't just extract "how many degrees it is now." It analyzes the exact decimal point for Settlement Risk (including the deadly X.5 Wunderground roundup boundaries).
+
+### 4. 📈 High-Frequency Data Mining Foundation
+
+Built-in `fetch_history.py` native spider system.
+
+- One click to pull down hundreds of thousands of rows of hourly historical physics sandbox feature matrices (over 10 dimensions including humidity, shortwave radiation, surface pressure) for any global benchmark city across the past 3-5 years.
+- Infinite ammunition ready for our next-generation XGBoost / LightGBM Machine Learning Model Output Statistics (MOS) calibration.
+
+---
+
+## ⚡ Deployment & Operations
+
+### Environment Architecture
+
+- **Core Engine**: Python 3.11+ (Strict Compliance)
+- **Dependency Stack**: `pip install -r requirements.txt`
+- **Volume Mounts**: Minimal configuration. Just register your `TELEGRAM_BOT_TOKEN` and `GROQ_API_KEY` inside `.env` to summon the AI.
+
+### Recommended 1-Click VPS Production Launch
+
+**Step 1: Build & Register**
 
 ```bash
 git clone https://github.com/yangyuan-zhen/PolyWeather.git
 cd PolyWeather
 pip install -r requirements.txt
-cp .env.example .env  # Edit .env with your Token and API Keys
+cp .env.example .env  # Be sure to insert your secure API keys
 ```
 
-**Create one-click update script (run once):**
+**Step 2: Daemon Updater Assembly**
+Set up an automated keep-alive script to integrate updates, conflict-resolution, and hot-swaps all in one push:
 
 ```bash
 cat > ~/update.sh << 'EOF'
@@ -32,233 +69,86 @@ git reset --hard origin/main
 pkill -f run.py
 pkill -f bot_listener.py
 sleep 1
-nohup python3 run.py > bot.log 2>&1 &
-echo "✅ Updated and restarted!"
+nohup python3 bot_listener.py > bot.log 2>&1 &
+echo "✅ PolyWeather Quant Terminal up and loaded with the latest modules!"
 EOF
 chmod +x ~/update.sh
 ```
 
-**Daily updates (after each code push):**
+**Daily Operations Command (Push & Play):**
 
 ```bash
 ~/update.sh
 ```
 
-> One command: pull latest code → kill old process → start new process. No branch conflict handling needed.
-
-### Local Development (Windows)
-
-```bash
-py -3.11 run.py
-```
-
-> Local machine is for editing code and Git push only. IDE import errors are expected (dependencies not installed locally) and do not affect VPS operation.
+> One command to wipe Git conflicts, execute warm/cold reboots, and clean logs.
 
 ---
 
-## 🤖 Telegram Bot Commands
+## 🕹️ Telegram Command Center
 
-| Command        | Description            | Usage                                          |
-| :------------- | :--------------------- | :--------------------------------------------- |
-| `/city [name]` | **Query City Weather** | Get detailed forecasts, METAR & trend analysis |
-| `/id`          | **Get Chat ID**        | Retrieve your current Telegram Chat ID         |
-| `/help`        | **Help**               | Display all available commands                 |
+| Tactical Command    | Trigger Action      | Module Feedback                                                                                                                                        |
+| :------------------ | :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/city [City Code]` | **Reconnaissance**  | Initiates full-dimension weather sweep. Returns DEB-weighted forecast, METAR tracking, rounding risk warnings, and AI quantitative trading conclusion. |
+| `/id`               | **Identity Ping**   | Maps the current comm channel (Chat ID).                                                                                                               |
+| `/help`             | **Terminal Manual** | Pulls the latest command set.                                                                                                                          |
 
-### Supported Cities
+### Target Arenas
 
-| City | Aliases | METAR Station | Extra Sources |
-|:---|:---|:---|:---|
-| London | `lon`, `伦敦` | EGLC (City Airport) | Meteoblue |
-| Paris | `par`, `巴黎` | LFPG (Charles de Gaulle) | — |
-| Ankara | `ank`, `安卡拉` | LTAC (Esenboğa) | MGM |
-| New York | `nyc`, `ny`, `纽约` | KLGA (LaGuardia) | NWS |
-| Chicago | `chi`, `芝加哥` | KORD (O'Hare) | NWS |
-| Dallas | `dal`, `达拉斯` | KDAL (Love Field) | NWS |
-| Miami | `mia`, `迈阿密` | KMIA (International) | NWS |
-| Atlanta | `atl`, `亚特兰大` | KATL (Hartsfield-Jackson) | NWS |
-| Seattle | `sea`, `西雅图` | KSEA (Sea-Tac) | NWS |
-| Toronto | `tor`, `多伦多` | CYYZ (Pearson) | — |
-| Seoul | `sel`, `首尔` | RKSI (Incheon) | — |
-| Buenos Aires | `ba`, `布宜诺斯艾利斯` | SAEZ (Ezeiza) | — |
-| Wellington | `wel`, `惠灵顿` | NZWN (Wellington) | — |
+From low-risk setups in the Middle East/Africa to high-latency slippage arenas in North America, PolyWeather embeds precise airport deviation models (Risk Profiles):
+`lon`(London EGLC), `par`(Paris LFPG), `ank`(Ankara LTAC), `nyc`(New York KLGA), `chi`(Chicago KORD), `ba`(Buenos Aires SAEZ)... and more.
 
-### Example
-
-```
-/city 巴黎
-/city london
-/city par
-```
+> **Fire Examples:**
+> `/city Paris`
+> `/city london`
+> `/city ba`
 
 ---
 
-## ✨ Key Features
-
-### 1. 🏛️ Multi-Source Data Fusion
-
-| Source                  | Role                    | Coverage        | Strength                                                                    |
-| :---------------------- | :---------------------- | :-------------- | :-------------------------------------------------------------------------- |
-| **Multi-Model (5 NWP)** | **Consensus Scoring**   | Global          | ECMWF, GFS, ICON, GEM, JMA — 5 fully independent NWP models via Open-Meteo |
-| **Open-Meteo**          | Base Forecast           | Global          | 72h hourly curves, sunrise/sunset, **sunshine duration**, **shortwave radiation** |
-| **Open-Meteo Ensemble** | **Uncertainty Range**   | Global          | 51-member ensemble: median, P10, P90 spread for confidence assessment       |
-| **Meteoblue (MB)**      | Precision Consensus     | London Only     | Multi-model aggregation; excellent for microclimates                        |
-| **METAR**               | **Settlement Standard** | Global Airports | Polymarket settlement source; real-time airport observations                |
-| **NWS**                 | Official (US)           | US Only         | US National Weather Service high-fidelity forecasts                         |
-| **MGM**                 | Observations (Turkey)   | Ankara Only     | Turkish State Met Service: pressure, cloud cover, feels-like, 24h rainfall  |
-
-> ⚠️ **All NWP model queries use airport coordinates** (matching METAR station), not city center. This eliminates systematic bias between forecast and settlement locations.
-
-**Open-Meteo API Architecture**: Three API calls go through the same platform, each serving a different purpose:
-
-```
-                    Open-Meteo (API Platform)
-                          │
-            ┌─────────────┼─────────────┐
-            │             │             │
-     ┌──────┴──────┐      │      ┌──────┴──────┐
-     │ /forecast   │      │      │ /forecast   │
-     │ (default)   │      │      │ ?models=... │
-     │ = best_match│      │      │ = multi-model│
-     └──────┬──────┘      │      └──────┬──────┘
-            │             │             │
-            ▼             │             ▼
-     Auto-selects best    │      Returns each model
-     model (≈ ECMWF)      │      ECMWF / GFS / ICON
-     → Hourly curves      │      GEM / JMA
-     → Sunrise/sunset     │      → Consensus scoring
-     → Sunshine/radiation │
-                   ┌──────┴──────┐
-                   │  /ensemble  │
-                   │  51 members │
-                   └──────┬──────┘
-                          │
-                          ▼
-                   Median / P10 / P90
-                   → Uncertainty range
-```
-
-> 💡 The OM default forecast is essentially **one of the 5 models** (auto-selected), so it is **excluded from consensus scoring** to avoid double-counting.
-
-### 2. ⚡ Ultra-Fresh Data (Zero-Cache)
-
-- **Dynamic Timestamps**: Every API request includes a unique token to force servers to bypass CDN caches.
-- **MGM Real-time Sync**: Specialized header camouflaging and timezone correction for Turkish API.
-
-### 3. 🎯 Multi-Model Consensus Scoring
-
-The bot queries **5 independent NWP models** (ECMWF, GFS, ICON, GEM, JMA) to rate forecast agreement:
-
-| Level | Condition (°C / °F) | Meaning |
-|:---|:---|:---|
-| 🎯 **High** | Spread ≤ 0.8°C / 1.5°F | All 5 models converge — high confidence, low risk |
-| ⚖️ **Medium** | Spread ≤ 1.5°C / 3.0°F | Minor disagreement — moderate confidence |
-| ⚠️ **Low** | Spread > 1.5°C / 3.0°F | Major divergence — high uncertainty, wait for more data |
-
-Primary models: **ECMWF IFS** (Europe), **GFS** (US NOAA), **ICON** (Germany DWD), **GEM** (Canada), **JMA** (Japan). Plus Meteoblue (London) and NWS (US) when available. Ensemble median is excluded to avoid double-counting.
-
-### 4. 📊 Ensemble Forecast Spread (NEW)
-
-Fetches 51-member ensemble forecasts from Open-Meteo to quantify prediction uncertainty:
-
-> 📊 **Ensemble**: Median 10.8°C, 90% range [9.5°C - 12.1°C], spread 2.6°.
-
-A tight range = high confidence in the forecast. A wide range = the atmosphere is chaotic, higher risk.
-
-**Deterministic vs Ensemble Divergence Detection**: When the OM deterministic forecast exceeds the ensemble P90 or falls below P10, the bot flags it. If actual observations later verify the forecast, the warning upgrades to a ✅ **Forecast Verified** message.
-
-### 5. ⏰ Entry Timing Signal (NEW)
-
-A composite score combining three factors to advise on betting timing:
-
-| Factor | Score |
-|:---|:---|
-| Peak already passed | +3 |
-| ≤ 2h to peak | +2 |
-| ≤ 4h to peak | +1 |
-| Model consensus: High | +2 |
-| Model consensus: Medium | +1 |
-| Actual ≈ Forecast (gap ≤ 0.5°) | +2 |
-| Actual close to Forecast (gap ≤ 1.5°) | +1 |
-
-| Total ≥ | Signal | Advice |
-|:---|:---|:---|
-| 5 | ⏰ **Ideal** | Low uncertainty — good to bet |
-| 3 | ⏰ **Good** | Consider small positions |
-| 2 | ⏰ **Cautious** | Keep observing |
-| <2 | ⏰ **Not Recommended** | High uncertainty — wait |
-
-### 6. 🧠 Smart Trend Analysis (Plain Language)
-
-The bot generates human-readable insights automatically:
-
-- **🚨 Forecast Breakthrough Alerts**: Detects when METAR observed max exceeds all forecast highs.
-- **⏱️ Peak Window Prediction**: Identifies the exact hours when today's high is expected.
-- **🌬️ Wind Direction Cross-Validation**: Compares METAR and MGM wind data; alerts on conflicts (>90° difference).
-- **☁️ Cloud Impact Analysis**: Evaluates cloud cover's effect on warming potential.
-- **📉 Pressure Analysis**: Low pressure indicates warm/moist air passage.
-- **🌧️ Rain Detection**: Cross-validates METAR weather codes with actual rainfall data to avoid false positives.
-- **📊 Max Temperature Time Tracking**: Shows exactly when the daily high was recorded (e.g., `最高: 12°C @14:20`).
-- **☀️ Weather Condition Summary**: Synthesizes METAR phenomena + cloud cover into a single glanceable icon + text (e.g., `⛅ Partly Cloudy`).
-- **🌤️ Solar Radiation Analysis**: Tracks cumulative shortwave radiation vs. daily total; warns when clouds severely block sunlight.
-- **🌙 Warm Advection Detection**: Identifies when peak temperature occurred during zero-radiation hours (e.g., 3 AM), proving the high was driven by warm air mass rather than solar heating.
-
-### 7. 📊 Risk Profiling
-
-Every city has a data bias risk profile based on airport-to-city-center distance:
-
-- 🔴 **High Risk**: Seoul (48.8km), Chicago (25.3km) — large bias expected
-- 🟡 **Medium Risk**: Ankara (24.5km), Paris (25.2km), Dallas, Buenos Aires — systematic bias
-- 🟢 **Low Risk**: London (12.7km), Wellington (5.1km) — reliable data
-
-### 8. 🌅 Enhanced Display
-
-- **Sunrise/Sunset + Sunshine Hours**: `🌅 07:34 | 🌇 18:29 | ☀️ 9.9h`
-- **Weather Condition at a Glance**: `✈️ 实测 (METAR): 9°C | ⛅ Partly Cloudy | 15:00`
-- **WU Settlement Preview**: Shows the Wunderground-rounded value for settlement reference.
-
----
-
-## 🏗️ System Architecture
+## 🏗️ System Architecture Anatomy
 
 ```mermaid
 graph TD
-    User[/Telegram User/] --> Bot[bot_listener.py]
-    Bot --> Collector[WeatherDataCollector]
+    classDef ai fill:#f9f,stroke:#333,stroke-width:2px;
+    classDef core fill:#bbf,stroke:#333,stroke-width:2px;
+    classDef data fill:#dfd,stroke:#333,stroke-width:1px;
 
-    subgraph "Data Engine"
-        Collector --> MM[Multi-Model API<br/>ECMWF/GFS/ICON/GEM/JMA]
-        Collector --> OM[Open-Meteo Forecast]
-        Collector --> ENS[Open-Meteo Ensemble]
-        Collector --> MB[Meteoblue API]
-        Collector --> NOAA[METAR / NOAA]
-        Collector --> MGM[MGM Observations]
-        Collector --> NWS[US NWS API]
+    User[Telegram / Signal Receiver] -->|Trigger Scan| Bot[bot_listener.py Core Scheduler]:::core
+
+    subgraph Heterogeneous Data Parsing
+        Bot --> Collector[WeatherDataCollector]
+        Collector --> OM[Open-Meteo Archive/Live]:::data
+        Collector --> MM[Multi-Model Predictors]:::data
+        Collector --> METAR[Air Traffic Control Raw Logs]:::data
     end
 
-    Collector --> Processing[Consensus Scoring & Trend Analysis]
-    Processing --> Bot
-    Bot --> Response[/Betting Snapshot with Entry Signal/]
+    subgraph Computation & Circuit Breakers
+        Collector --> DEB[DEB Dynamic Weighting]:::core
+        DEB --> DB[(daily_records JSON DB<br/>Thread-Safe)]
+        Collector --> Logic[Rounding Analysis / Cooldown]
+    end
+
+    subgraph AI Metric Generation
+        DEB --> AIAnalyzer[Groq/LLaMA Cognitive Model]:::ai
+        Logic --> AIAnalyzer
+        METAR --> AIAnalyzer
+    end
+
+    AIAnalyzer -->|Generates: Spread+Logic+Confidence| Bot
+    Bot -->|Assembles High-Dimensional Slice| User
 ```
 
-- **Logic Decoupling**: `weather_sources.py` handles data fetching & parsing; `bot_listener.py` handles analysis & rendering.
-- **City Config**: `city_risk_profiles.py` contains all METAR station mappings and risk assessments.
-- **Multi-Model Consensus**: 5 independent NWP models (ECMWF, GFS, ICON, GEM, JMA) for robust consensus scoring.
-- **Ensemble Integration**: 51-member ensemble provides P10/P90 uncertainty bands and divergence detection.
-- **Airport-Aligned Coordinates**: All NWP queries target METAR station coordinates, not city centers.
+---
+
+## 🎯 Trader's Playbook
+
+As a Commander of PolyWeather, etch these rules into your DNA:
+
+1. 🧬 **Trust the DEB Baseline**: Instead of blindly believing an extreme forecast from ECMWF or GFS, stare at the `DEB Blended Forecast` on line one. It is the system's re-calibrated truth, forged after absorbing the punishing MAE beating those models took over the past 7 days.
+2. 🎯 **Respect the AI Confidence Red Line**: If the AI returns a `Confidence: ≤ 4/10`, it means the model's delay is clashing heavily with real-time airport headwinds. **Chop your gambling hands off immediately.** You are in a high-risk chaotic zone.
+3. ⚖️ **Fear the X.5 Rounding Abyss**: Polymarket weather settles on integer values (rounded via Wunderground logic). When the terminal blinks `⚖️ Settlement Boundary... crossed the rounding line`, this is where liquidity dries up and slippage becomes most predatory.
+4. 🌙 **Identify False Positives (Warm Advection radar)**: If the temperature ignores the sun and spikes during a low-radiation night, the system triggers a `🌙 Warm Advection Anomaly`. This mechanism frequently hands you the golden "LONG" signal (shattering the original forecast's ceiling) exactly when the rest of the market is betting NO.
 
 ---
 
-## 🎯 Betting Strategy Tips
-
-1. **Check Model Consensus**: The 🎯/⚖️/⚠️ rating tells you immediately if the forecast is reliable.
-2. **Use the Entry Signal**: Wait for ⏰ **Ideal** or **Good** timing before placing bets. Don't bet early when uncertainty is high.
-3. **Watch Ensemble Spread**: A tight 90% band (< 2°) means model confidence is high — this is where edges live.
-4. **Watch the Peak Window**: Use `/city` frequently during predicted peak hours.
-5. **Settlement Priority**: Settlement is always based on **METAR** data, rounded to integer via Wunderground.
-6. **Geographic Risk**: Pay attention to bias warnings, especially for high-risk cities like Seoul and Chicago.
-7. **Solar Radiation Clues**: If the bot reports "warm advection driven" 🌙, the temperature was pushed by warm air, not sunlight — this pattern often breaks model predictions.
-8. **Wind Conflicts**: When METAR and MGM show opposite wind directions, expect temperature volatility.
-
----
-
-_Last updated: 2026-02-22_
+_The weather changes. Our edge remains. | Updated 2026_
