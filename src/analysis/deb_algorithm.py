@@ -3,18 +3,47 @@ import json
 import logging
 from datetime import datetime, timedelta
 
+import fcntl
+
+# Simple memory cache to avoid blasting the disk if queried 10 times a minute
+_history_cache = {}
+_history_mtime = 0
+
 def load_history(filepath):
-    if os.path.exists(filepath):
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
+    global _history_cache, _history_mtime
+    if not os.path.exists(filepath):
+        return {}
+        
+    try:
+        current_mtime = os.path.getmtime(filepath)
+        if current_mtime == _history_mtime and _history_cache:
+            return _history_cache
+            
+        with open(filepath, 'r', encoding='utf-8') as f:
+            # We don't strictly need a lock for reading in Python if the write is atomic,
+            # but using one prevents reading half-written JSONs.
+            fcntl.flock(f, fcntl.LOCK_SH)
+            data = json.load(f)
+            fcntl.flock(f, fcntl.LOCK_UN)
+            
+            _history_cache = data
+            _history_mtime = current_mtime
+            return data
+    except Exception as e:
+        print(f"Error loading history: {e}")
+        return _history_cache if _history_cache else {}
 
 def save_history(filepath, data):
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    global _history_cache, _history_mtime
+    _history_cache = data
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            fcntl.flock(f, fcntl.LOCK_UN)
+        _history_mtime = os.path.getmtime(filepath)
+    except Exception as e:
+        print(f"Error saving history: {e}")
 
 def update_daily_record(city_name, date_str, forecasts, actual_high):
     """
@@ -31,6 +60,11 @@ def update_daily_record(city_name, date_str, forecasts, actual_high):
         
     if date_str not in data[city_name]:
         data[city_name][date_str] = {}
+    
+    # 避免无意义的频繁磁盘写入：如果数据没有变化，直接返回
+    old_actual = data[city_name][date_str].get('actual_high')
+    if old_actual == actual_high and data[city_name][date_str].get('forecasts') == forecasts:
+        return
     
     data[city_name][date_str]['forecasts'] = forecasts
     # 只要仍在更新或者已经结束，都记录最新高点
