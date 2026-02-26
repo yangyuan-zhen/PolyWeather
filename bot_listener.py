@@ -15,8 +15,9 @@ from src.data_collection.weather_sources import WeatherDataCollector  # type: ig
 from src.data_collection.city_risk_profiles import get_city_risk_profile, format_risk_warning  # type: ignore
 
 def analyze_weather_trend(weather_data, temp_symbol):
-    """根据实测与预测分析气温态势，增加峰值时刻预测"""
+    '''根据实测与预测分析气温态势，增加峰值时刻预测'''
     insights: List[str] = []
+    ai_features: List[str] = []
     
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
@@ -25,11 +26,14 @@ def analyze_weather_trend(weather_data, temp_symbol):
     mgm = weather_data.get("mgm", {})
     
     if not metar or not open_meteo:
-        return ""
+        return "", ""
         
     curr_temp = metar.get("current", {}).get("temp")
     max_so_far = metar.get("current", {}).get("max_temp_so_far")  # 今日实测最高
     daily = open_meteo.get("daily", {})
+    hourly = open_meteo.get("hourly", {})
+    times = hourly.get("time", [])
+    temps = hourly.get("temperature_2m", [])
     
     # === 核心：整合多源预报最高温 ===
     forecast_highs = [daily.get("temperature_2m_max", [None])[0]]
@@ -37,293 +41,182 @@ def analyze_weather_trend(weather_data, temp_symbol):
         forecast_highs.append(mb["today_high"])
     if nws.get("today_high") is not None:
         forecast_highs.append(nws["today_high"])
-    # 加入多模型预报 (ECMWF, GFS, ICON, GEM, JMA)
     for mv in weather_data.get("multi_model", {}).get("forecasts", {}).values():
         if mv is not None:
             forecast_highs.append(mv)
     
     forecast_highs = [h for h in forecast_highs if h is not None]
-    # 取预报中的最高值作为风险防御基准
     forecast_high = max(forecast_highs) if forecast_highs else None
-    # 取最低值用于判断是否“已触及预报高位”
     min_forecast_high = min(forecast_highs) if forecast_highs else forecast_high
-    # 取中位数作为用户可见的"预期值"（避免极端模型误导）
-    forecast_median = None
-    if forecast_highs:
-        sorted_fh = sorted(forecast_highs)
-        forecast_median = sorted_fh[len(sorted_fh) // 2]
+    forecast_median = sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
     
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
     
     # 获取当地时间小时
     local_time_full = open_meteo.get("current", {}).get("local_time", "")
     try:
-        local_date_str = local_time_full.split(" ")[0] # YYYY-MM-DD
+        local_date_str = local_time_full.split(" ")[0]
         local_hour = int(local_time_full.split(" ")[1].split(":")[0])
     except:
+        from datetime import datetime
         local_date_str = datetime.now().strftime("%Y-%m-%d")
         local_hour = datetime.now().hour
 
-    # === 模型共识评分 ===
-    # 主要来源: 多模型预报 (ECMWF, GFS, ICON, GEM, JMA)
-    multi_model = weather_data.get("multi_model", {})
-    mm_forecasts = multi_model.get("forecasts", {})
-    
-    labeled_forecasts = []
-    for model_name, model_val in mm_forecasts.items():
-        if model_val is not None:
-            labeled_forecasts.append((model_name, model_val))
-    
-    # 额外独立源 (如有)
-    if mb.get("today_high") is not None:
-        labeled_forecasts.append(("MB", mb["today_high"]))
-    if nws.get("today_high") is not None:
-        labeled_forecasts.append(("NWS", nws["today_high"]))
-    
-    # Open-Meteo 确定性预报（用于后续偏差检测，不重复加入共识）
-    om_today = daily.get("temperature_2m_max", [None])[0]
-    
-    # 集合预报数据 (仅用于不确定性区间展示)
-    ensemble = weather_data.get("ensemble", {})
-    ens_median = ensemble.get("median")
+    # === METAR 趋势分析 (移到前部判断降温) ===
+    recent_temps = metar.get("recent_temps", [])
+    trend_desc = ""
+    if len(recent_temps) >= 2:
+        temps_only = [t for _, t in recent_temps]
+        latest_val = temps_only[0]
+        prev_val = temps_only[1]
+        diff = latest_val - prev_val
+        if len(temps_only) >= 3:
+            all_same = all(t == latest_val for t in temps_only[:3])
+            all_rising = all(temps_only[i] >= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
+            all_falling = all(temps_only[i] <= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
+            trend_display = " → ".join([f"{t}{temp_symbol}@{tm}" for tm, t in recent_temps[:3]])
+            if all_same: trend_desc = f"📉 温度已停滞（{trend_display}），大概率到顶。"
+            elif all_rising and diff > 0: trend_desc = f"📈 仍在升温（{trend_display}）。"
+            elif all_falling and diff < 0: trend_desc = f"📉 已开始降温（{trend_display}）。"
+            else: trend_desc = f"📊 温度波动中（{trend_display}）。"
+        elif diff == 0: trend_desc = f"📉 温度持平（最近两条都是 {latest_val}{temp_symbol}）。"
+        elif diff > 0: trend_desc = f"📈 仍在升温（{prev_val} → {latest_val}{temp_symbol}）。"
+        else: trend_desc = f"📉 已开始降温（{prev_val} → {latest_val}{temp_symbol}）。"
 
-    consensus_level = "unknown"
-    consensus_spread = None
+    is_cooling = "降温" in trend_desc
+
+    # === 模型共识评分 ===
+    mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
+    labeled_forecasts = [(model_name, model_val) for model_name, model_val in mm_forecasts.items() if model_val is not None]
+    if mb.get("today_high") is not None: labeled_forecasts.append(("MB", mb["today_high"]))
+    if nws.get("today_high") is not None: labeled_forecasts.append(("NWS", nws["today_high"]))
+    
     if len(labeled_forecasts) >= 2:
         f_values = [v for _, v in labeled_forecasts]
-        f_max = max(f_values)
-        f_min = min(f_values)
-        consensus_spread = f_max - f_min
-        f_avg = sum(f_values) / len(f_values)
-
-        # 动态阈值：华氏度场景用更大的容差
-        is_f = (temp_symbol == "°F")
-        tight_threshold = 1.5 if is_f else 0.8   # 高共识
-        mid_threshold = 3.0 if is_f else 1.5      # 中共识
-
+        consensus_spread = max(f_values) - min(f_values)
+        tight_threshold = 1.5 if temp_symbol == "°F" else 0.8
+        mid_threshold = 3.0 if temp_symbol == "°F" else 1.5
         parts = " | ".join([f"{name} {val}{temp_symbol}" for name, val in labeled_forecasts])
         
         if consensus_spread <= tight_threshold:
-            consensus_level = "high"
-            insights.append(
-                f"🎯 <b>模型共识：高 ({len(labeled_forecasts)}/{len(labeled_forecasts)})</b> — "
-                f"{parts}，极差仅 {consensus_spread:.1f}°，预报高度一致。"
-            )
+            msg = f"🎯 <b>模型共识：高 ({len(labeled_forecasts)}源)</b> — {parts}，极差仅 {consensus_spread:.1f}°，高度一致。"
         elif consensus_spread <= mid_threshold:
-            consensus_level = "medium"
-            insights.append(
-                f"⚖️ <b>模型共识：中 ({len(labeled_forecasts)}源)</b> — "
-                f"{parts}，极差 {consensus_spread:.1f}°，有轻微分歧。"
-            )
+            msg = f"⚖️ <b>模型共识：中 ({len(labeled_forecasts)}源)</b> — {parts}，极差 {consensus_spread:.1f}°，有轻微分歧。"
         else:
-            consensus_level = "low"
-            # 找出最高和最低的源
             highest = max(labeled_forecasts, key=lambda x: x[1])
             lowest = min(labeled_forecasts, key=lambda x: x[1])
-            insights.append(
-                f"⚠️ <b>模型共识：低 ({len(labeled_forecasts)}源)</b> — "
-                f"{parts}，极差 {consensus_spread:.1f}°！"
-                f"{highest[0]} 最高 ({highest[1]}{temp_symbol}) vs {lowest[0]} 最低 ({lowest[1]}{temp_symbol})，不确定性大。"
-            )
+            msg = f"⚠️ <b>模型共识：低 ({len(labeled_forecasts)}源)</b> — {parts}，极差 {consensus_spread:.1f}°！{highest[0]} 最高 vs {lowest[0]} 最低。"
+        
+        # 移交 AI 处理，不再给用户直接显示博弈区间
+        ai_features.append(msg)
     elif len(labeled_forecasts) == 1:
-        name, val = labeled_forecasts[0]
-        insights.append(
-            f"📡 <b>仅1个预报源 ({name} {val}{temp_symbol})</b> — 无法交叉验证，共识评分不可用。"
-        )
+        msg = f"📡 <b>仅1个预报源 ({labeled_forecasts[0][0]} {labeled_forecasts[0][1]}{temp_symbol})</b>"
+        # 移交 AI 处理，不再给用户直接显示博弈区间
+        ai_features.append(msg)
 
-    # === 博弈区间提醒 (基于 WU 四舍五入结算) ===
+    # === 博弈区间提醒 ===
     if len(labeled_forecasts) >= 2:
         import math
         wu_round = lambda v: math.floor(v + 0.5)
         settlement_vals = sorted(set(wu_round(v) for _, v in labeled_forecasts))
-        unit_short = temp_symbol
-        # 如果实测已超所有预报，用实测值重新评估博弈区间
+        
         if max_so_far is not None and forecast_high is not None and max_so_far > forecast_high + 0.5:
             actual_settled = wu_round(max_so_far)
-            if actual_settled not in settlement_vals:
-                all_vals = sorted(set(settlement_vals + [actual_settled]))
-            else:
-                all_vals = settlement_vals
-            insights.append(
-                f"🎲 <b>博弈区间</b>：模型预报已失效！实测最高 {max_so_far}{unit_short} → WU <b>{actual_settled}{unit_short}</b>，"
-                f"但温度仍可能继续变化。"
-            )
+            msg = f"🎲 <b>博弈区间</b>：预报已失效！实测最高 {max_so_far}{temp_symbol} → WU <b>{actual_settled}{temp_symbol}</b>，温度仍可能波动。"
         elif len(settlement_vals) == 1:
-            insights.append(f"🎲 <b>博弈区间</b>：{len(labeled_forecasts)}个模型全部指向 <b>{settlement_vals[0]}{unit_short}</b> 结算。")
+            msg = f"🎲 <b>博弈区间</b>：模型全部指向 <b>{settlement_vals[0]}{temp_symbol}</b> 结算。"
         elif len(settlement_vals) == 2:
-            insights.append(f"🎲 <b>博弈区间</b>：温度在 <b>{settlement_vals[0]}{unit_short}</b> 和 <b>{settlement_vals[1]}{unit_short}</b> 之间博弈。")
+            msg = f"🎲 <b>博弈区间</b>：在 <b>{settlement_vals[0]}{temp_symbol}</b> 和 <b>{settlement_vals[1]}{temp_symbol}</b> 之间博弈。"
         elif len(settlement_vals) == 3:
-            insights.append(f"🎲 <b>博弈区间</b>：温度在 <b>{settlement_vals[0]}{unit_short}</b>、<b>{settlement_vals[1]}{unit_short}</b>、<b>{settlement_vals[2]}{unit_short}</b> 之间博弈。")
+            msg = f"🎲 <b>博弈区间</b>：在 <b>{settlement_vals[0]}{temp_symbol}</b>、<b>{settlement_vals[1]}{temp_symbol}</b>、<b>{settlement_vals[2]}{temp_symbol}</b> 之间博弈。"
         else:
-            insights.append(f"🎲 <b>博弈区间</b>：模型分歧太大，结算还不确定。")
-    # 集合预报区间 (独立于共识评分显示)
+            msg = f"🎲 <b>博弈区间</b>：模型分歧太大，结算还不确定。"
+        # 移交 AI 处理，不再给用户直接显示博弈区间
+        ai_features.append(msg)
+
+    # === 集合预报区间 (去除了啰嗦的预报验证) ===
+    ensemble = weather_data.get("ensemble", {})
     ens_p10 = ensemble.get("p10")
     ens_p90 = ensemble.get("p90")
+    ens_median = ensemble.get("median")
+    om_today = daily.get("temperature_2m_max", [None])[0]
     if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
-        ens_range = ens_p90 - ens_p10
-        insights.append(
-            f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，"
-            f"90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]，"
-            f"波动幅度 {ens_range:.1f}°。"
-        )
-        # 确定性预报 vs 集合分布偏差检测
+        msg1 = f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]。"
+        if not is_cooling: insights.append(msg1)
+        ai_features.append(msg1)
+
         if om_today is not None:
-            actual_reached = max_so_far is not None and max_so_far >= om_today - 0.5
-            if om_today > ens_p90:
-                if actual_reached:
-                    # 实测已达到预报值 → 确定性预报是对的，集合偏保守
-                    insights.append(
-                        f"✅ <b>预报验证</b>：确定性预报 {om_today}{temp_symbol} 已被实测验证 "
-                        f"(实测最高 {max_so_far}{temp_symbol})，集合预报偏保守。"
-                    )
-                else:
-                    # 还没到最高温，存在偏高风险
-                    delta = om_today - ens_median
-                    insights.append(
-                        f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} "
-                        f"超过了集合 90% 上限 ({ens_p90}{temp_symbol})，"
-                        f"比中位数高 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
-                    )
-            elif om_today < ens_p10:
-                if max_so_far is not None and max_so_far >= ens_median:
-                    # 实测已超过中位数 → 确定性预报偏低，集合更准
-                    insights.append(
-                        f"✅ <b>预报验证</b>：实测最高 {max_so_far}{temp_symbol} "
-                        f"已超过确定性预报 {om_today}{temp_symbol}，集合中位数 {ens_median}{temp_symbol} 更准确。"
-                    )
-                else:
-                    delta = ens_median - om_today
-                    insights.append(
-                        f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} "
-                        f"低于集合 90% 下限 ({ens_p10}{temp_symbol})，"
-                        f"比中位数低 {delta:.1f}°。实际高温更可能接近 {ens_median}{temp_symbol}。"
-                    )
+            if om_today > ens_p90 and (max_so_far is None or max_so_far < om_today - 0.5):
+                msg2 = f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} 超集合90%上限！更可能接近 {ens_median}{temp_symbol}。"
+                if not is_cooling: insights.append(msg2)
+                ai_features.append(msg2)
+            elif om_today < ens_p10 and (max_so_far is None or max_so_far < ens_median):
+                msg2 = f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} 低于集合90%下限！更可能接近 {ens_median}{temp_symbol}。"
+                if not is_cooling: insights.append(msg2)
+                ai_features.append(msg2)
 
-    # === 核心判断：实测是否已超预报 ===
-    is_breakthrough = False
-    
-    # METAR 趋势分析（最近 3-4 条报文）
-    recent_temps = metar.get("recent_temps", [])  # [("15:00", 5), ("14:20", 5), ("14:00", 3)]  倒序
-    trend_desc = ""
-    if len(recent_temps) >= 2:
-        temps_only = [t for _, t in recent_temps]  # 倒序：最新在前
-        latest_val = temps_only[0]
-        prev_val = temps_only[1]
-        diff = latest_val - prev_val
-        
-        if len(temps_only) >= 3:
-            # 3 条以上：判断整体趋势
-            all_same = all(t == latest_val for t in temps_only[:3])
-            all_rising = all(temps_only[i] >= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
-            all_falling = all(temps_only[i] <= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
-            
-            trend_display = " → ".join([f"{t}{temp_symbol}@{tm}" for tm, t in recent_temps[:3]])
-            
-            if all_same:
-                trend_desc = f"📉 温度已停滞（{trend_display}），大概率到顶。"
-            elif all_rising and diff > 0:
-                trend_desc = f"📈 仍在升温（{trend_display}）。"
-            elif all_falling and diff < 0:
-                trend_desc = f"📉 已开始降温（{trend_display}）。"
-            else:
-                trend_desc = f"📊 温度波动中（{trend_display}）。"
-        elif diff == 0:
-            trend_desc = f"📉 温度持平（最近两条都是 {latest_val}{temp_symbol}）。"
-        elif diff > 0:
-            trend_desc = f"📈 仍在升温（{prev_val} → {latest_val}{temp_symbol}）。"
-        else:
-            trend_desc = f"📉 已开始降温（{prev_val} → {latest_val}{temp_symbol}）。"
-
+    # === 实测已超预报 & 趋势输出 ===
     if max_so_far is not None and forecast_high is not None:
         if max_so_far > forecast_high + 0.5:
-            is_breakthrough = True
             exceed_by = max_so_far - forecast_high
-            # 合并为一条：事实 + 趋势（不给主观建议）
-            bt_msg = (
-                f"🚨 <b>实测已超预报</b>：{max_so_far}{temp_symbol} 超过预报上限 "
-                f"{forecast_high}{temp_symbol}（+{exceed_by:.1f}°）。"
-            )
-            if trend_desc:
-                bt_msg += f"\n{trend_desc}"
+            bt_msg = f"🚨 <b>实测已超预报</b>：{max_so_far}{temp_symbol} 超过上限 {forecast_high}{temp_symbol}（+{exceed_by:.1f}°）。"
+            if trend_desc: bt_msg += f"\n{trend_desc}"
             insights.append(bt_msg)
+            ai_features.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
+            ai_features.append(trend_desc)
+        else:
+            if trend_desc:
+                insights.append(trend_desc)
+                ai_features.append(trend_desc)
+    elif trend_desc:
+        insights.append(trend_desc)
+        ai_features.append(trend_desc)
 
-    # === 结算取整分析 (Wunderground 四舍五入到整数) ===
+    # === 结算取整分析 ===
     if max_so_far is not None:
         settled = round(max_so_far)
         fractional = max_so_far - int(max_so_far)
-        # 离取整边界的距离
         dist_to_boundary = abs(fractional - 0.5)
-        
         if dist_to_boundary <= 0.3:
-            # 在边界附近 (X.2 ~ X.8)，取整结果可能随时翻转
             if fractional < 0.5:
-                insights.append(
-                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → "
-                    f"WU 结算 <b>{settled}{temp_symbol}</b>，"
-                    f"但只差 <b>{0.5 - fractional:.1f}°</b> 就会进位到 {settled + 1}{temp_symbol}！"
-                )
+                msg = f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → WU 结算 <b>{settled}{temp_symbol}</b>，但只差 <b>{0.5 - fractional:.1f}°</b> 就会进位到 {settled + 1}{temp_symbol}！"
             else:
-                insights.append(
-                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → "
-                    f"WU 结算 <b>{settled}{temp_symbol}</b>，"
-                    f"刚刚越过进位线，再降 <b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
-                )
+                msg = f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → WU 结算 <b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 <b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
+            insights.append(msg)
+            ai_features.append(msg)
 
-    # --- 峰值时刻预测逻辑 (仍以 Open-Meteo 逐小时数据为准) ---
-    hourly = open_meteo.get("hourly", {})
-    times = hourly.get("time", [])
-    temps = hourly.get("temperature_2m", [])
-    
+    # === 峰值时刻预测 (只在还没过峰值时显示) ===
     peak_hours = []
-    om_high = daily.get("temperature_2m_max", [None])[0]
-    if times and temps and om_high is not None:
+    if times and temps and om_today is not None:
         for t_str, temp in zip(times, temps):
-            if t_str.startswith(local_date_str):
-                if abs(temp - om_high) <= 0.2:
-                    hour = t_str.split("T")[1][:5]
-                    peak_hours.append(hour)
-        
-    # 确定用于逻辑判断的峰值小时
+            if t_str.startswith(local_date_str) and abs(temp - om_today) <= 0.2:
+                peak_hours.append(t_str.split("T")[1][:5])
+                
     if peak_hours:
         first_peak_h = int(peak_hours[0].split(":")[0])
         last_peak_h = int(peak_hours[-1].split(":")[0])
-        
         window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
-        insights.append(f"⏱️ <b>预计最热时段</b>：今天 <b>{window}</b>。")
         
-        if last_peak_h < 6:
-            insights.append(f"⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
-        elif local_hour < first_peak_h and (max_so_far is None or max_so_far < forecast_high):
-            target_temp = om_today if om_today is not None else forecast_high
-            insights.append(f"🎯 <b>关注重点</b>：看看那个时段温度能不能真的到 {target_temp}{temp_symbol}。")
+        if local_hour <= last_peak_h:
+            if last_peak_h < 6:
+                ai_features.append(f"⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
+            elif local_hour < first_peak_h and (max_so_far is None or max_so_far < forecast_high):
+                target_temp = om_today if om_today is not None else forecast_high
+                ai_features.append(f"🎯 <b>关注重点</b>：看看那个时段能否涨到 {target_temp}{temp_symbol}。")
+                
+        # 写给AI
+        if local_hour > last_peak_h: ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
+        elif first_peak_h <= local_hour <= last_peak_h: ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
+        else: ai_features.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
     else:
-        # 兜底默认值
         first_peak_h, last_peak_h = 13, 15
 
-    # --- 简化的 AI 特征提取 (不对用户双重显示，仅供 AI 使用) ---
-    ai_features = list(insights)
-    # 不再生成死板的分析文案，仅保留核心事实描述
-    
-    # 1. 气温节奏特征
-    if local_hour > last_peak_h:
-        ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
-    elif first_peak_h <= local_hour <= last_peak_h:
-        ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
-    else:
-        ai_features.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
-
-    # 2. 气温偏差特征
-    if max_so_far is not None and forecast_high is not None:
-        gap = max_so_far - forecast_high
-        if gap > 0.5:
-            ai_features.append(f"🚨 异常: 实测已冲破所有预报上限 ({max_so_far}{temp_symbol} vs {forecast_high}{temp_symbol})。")
-        elif abs(gap) <= 1.0:
-            ai_features.append(f"⚖️ 状态: 实测已极度接近预报峰值。")
-
-    # 3. 气象动力特征描述 (无主观推测)
+    # === 其他 AI 专供的事实特征 ===
+    if wind_speed:
+        wind_dir = metar.get("current", {}).get("wind_dir", "未知")
+        ai_features.append(f"🌬️ 当下风况: 约 {wind_speed}kt (方向 {wind_dir}°)。")
     humidity = metar.get("current", {}).get("humidity")
-    if humidity and humidity > 80:
-        ai_features.append(f"💦 湿度极高 ({humidity}%)。")
+    if humidity and humidity > 80: ai_features.append(f"💦 湿度极高 ({humidity}%)。")
     
     clouds = metar.get("current", {}).get("clouds", [])
     if clouds:
@@ -332,10 +225,8 @@ def analyze_weather_trend(weather_data, temp_symbol):
         ai_features.append(f"☁️ 天空状况: {c_desc}。")
 
     wx_desc = metar.get("current", {}).get("wx_desc")
-    if wx_desc:
-        ai_features.append(f"🌧️ 天气现象: {wx_desc}。")
+    if wx_desc: ai_features.append(f"🌧️ 天气现象: {wx_desc}。")
 
-    # 4. 暖平流事实提取
     max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
     if max_so_far is not None and max_temp_time_str:
         try:
@@ -349,13 +240,6 @@ def analyze_weather_trend(weather_data, temp_symbol):
             if max_temp_rad < 50:
                 ai_features.append(f"🌙 动力事实: 最高温出现在低辐射时段 ({max_temp_time_str}, 辐射{max_temp_rad:.0f}W/m²)。")
         except: pass
-
-    # 5. 结算判定
-    if max_so_far is not None:
-        settled = round(max_so_far)
-        fractional = max_so_far - int(max_so_far)
-        if abs(fractional - 0.5) <= 0.2:
-            ai_features.append(f"⚖️ 结算事实: 当前最高 {max_so_far}{temp_symbol} 处于进位关键点 ({settled}{temp_symbol})。")
 
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features)
