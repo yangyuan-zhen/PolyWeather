@@ -13,8 +13,8 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
     
     try:
         genai.configure(api_key=api_key)
-        # 推荐使用最新的 Pro 模型进行深度推理
-        model = genai.GenerativeModel('gemini-3.1-pro')
+        # 使用最新的 Gemini 3 Flash 预览版模型
+        model = genai.GenerativeModel('gemini-3-flash-preview')
 
         prompt = f"""
 你是一个专业的天气衍生品（如 Polymarket）交易员。你的任务是根据当前天气数据推测今日最高温度趋势，进行交易决策。
