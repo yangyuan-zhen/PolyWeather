@@ -38,7 +38,7 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
 """
 
         payload = {
-            "model": "llama-3.3-70b-specdec", # 改用高性能版本
+            "model": "llama-3.3-70b-versatile", # 使用标准稳定的 70B 模型
             "messages": [
                 {"role": "system", "content": "你是不讲废话、只看数据的专业气象分析师。"},
                 {"role": "user", "content": prompt}
