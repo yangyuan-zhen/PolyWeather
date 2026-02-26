@@ -33,8 +33,8 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
 - 💡 逻辑: [一句话说明核心支撑逻辑，例如：最热时段已过且低于预报3度，涨水无望。]
 - 🎯 建议: <b>[下注YES / 下注NO / 观望]</b> (信心: [1-10]/10)
 """
-        # 如果配置了代理，可能需要设置环境变量，我们在代码层面不用干预，依赖系统环境变量即可
-        response = model.generate_content(prompt)
+        # 强制使用 REST 传输方式，这对代理更友好
+        response = model.generate_content(prompt, transport='rest')
         text = response.text.strip()
         
         # 简单清理可能的 markdown 标记
