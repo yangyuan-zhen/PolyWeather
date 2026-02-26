@@ -290,7 +290,11 @@ def analyze_weather_trend(weather_data, temp_symbol):
         elif local_hour < first_peak_h:
             # 还没到峰值窗口
             if is_breakthrough:
-                insights.append(f"🔥 <b>超预报升温</b>：还没到最热时段就已经超过所有预报了，峰值可能远超模型预期。")
+                exceed = max_so_far - forecast_high
+                insights.append(
+                    f"🔥 <b>超预报升温</b>：距最热时段还有 {first_peak_h - local_hour}h，"
+                    f"实测已超预报 {exceed:.1f}°（{max_so_far}{temp_symbol} vs 预报上限 {forecast_high}{temp_symbol}）。"
+                )
             else:
                 gap_to_high = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
                 if gap_to_high > 1.2:
