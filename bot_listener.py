@@ -201,12 +201,51 @@ def analyze_weather_trend(weather_data, temp_symbol):
 
     # === 核心判断：实测是否已超预报 ===
     is_breakthrough = False
+    
+    # METAR 趋势分析（最近 3-4 条报文）
+    recent_temps = metar.get("recent_temps", [])  # [("15:00", 5), ("14:20", 5), ("14:00", 3)]  倒序
+    trend_desc = ""
+    if len(recent_temps) >= 2:
+        temps_only = [t for _, t in recent_temps]  # 倒序：最新在前
+        latest_val = temps_only[0]
+        prev_val = temps_only[1]
+        diff = latest_val - prev_val
+        
+        if len(temps_only) >= 3:
+            # 3 条以上：判断整体趋势
+            all_same = all(t == latest_val for t in temps_only[:3])
+            all_rising = all(temps_only[i] >= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
+            all_falling = all(temps_only[i] <= temps_only[i+1] for i in range(min(3, len(temps_only)) - 1))
+            
+            trend_display = " → ".join([f"{t}{temp_symbol}@{tm}" for tm, t in recent_temps[:3]])
+            
+            if all_same:
+                trend_desc = f"📉 温度已停滞（{trend_display}），大概率到顶。"
+            elif all_rising and diff > 0:
+                trend_desc = f"📈 仍在升温（{trend_display}）。"
+            elif all_falling and diff < 0:
+                trend_desc = f"📉 已开始降温（{trend_display}）。"
+            else:
+                trend_desc = f"📊 温度波动中（{trend_display}）。"
+        elif diff == 0:
+            trend_desc = f"📉 温度持平（最近两条都是 {latest_val}{temp_symbol}）。"
+        elif diff > 0:
+            trend_desc = f"📈 仍在升温（{prev_val} → {latest_val}{temp_symbol}）。"
+        else:
+            trend_desc = f"📉 已开始降温（{prev_val} → {latest_val}{temp_symbol}）。"
+
     if max_so_far is not None and forecast_high is not None:
         if max_so_far > forecast_high + 0.5:
             is_breakthrough = True
             exceed_by = max_so_far - forecast_high
-            insights.append(f"🚨 <b>实测已超预报</b>：实测最高 {max_so_far}{temp_symbol} 超过了所有预报的天花板 {forecast_high}{temp_symbol}，多了 {exceed_by:.1f}°！")
-            insights.append(f"💡 <b>建议</b>：预报已经不准了，实际温度比所有模型预测的都高，需要重新判断。")
+            # 合并为一条：事实 + 趋势（不给主观建议）
+            bt_msg = (
+                f"🚨 <b>实测已超预报</b>：{max_so_far}{temp_symbol} 超过预报上限 "
+                f"{forecast_high}{temp_symbol}（+{exceed_by:.1f}°）。"
+            )
+            if trend_desc:
+                bt_msg += f"\n{trend_desc}"
+            insights.append(bt_msg)
 
     # === 结算取整分析 (Wunderground 四舍五入到整数) ===
     if max_so_far is not None:
@@ -387,26 +426,38 @@ def analyze_weather_trend(weather_data, temp_symbol):
             
             if analysis_wind is not None:
                 wd = analysis_wind
+                # 用趋势数据判断风的实际影响
+                if trend_desc:
+                    # 从趋势中提取关键词
+                    is_stagnant = "停滞" in trend_desc or "持平" in trend_desc
+                    is_rising = "升温" in trend_desc
+                    is_falling = "降温" in trend_desc
+                else:
+                    is_stagnant = False
+                    is_rising = False
+                    is_falling = False
+
                 if 315 <= wd or wd <= 45:
-                    insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：从北方来的冷空气，会压制升温。")
+                    effect = ""
+                    if is_stagnant or is_falling:
+                        effect = "，升温确实被压制"
+                    elif is_rising:
+                        effect = "，但温度仍在上升"
+                    insights.append(f"🌬️ <b>吹北风</b>（{wind_source} {wd:.0f}°）：冷空气{effect}。")
                 elif 135 <= wd <= 225:
-                    gap_to_forecast = forecast_high - (max_so_far if max_so_far is not None else curr_temp)
-                    if is_peak_passed and not is_breakthrough:
-                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气还在吹过来，但最热时段已过，后劲不足了。")
-                    elif gap_to_forecast > 0.5 or is_breakthrough:
-                        status = "温度还有继续上涨的空间" if not is_breakthrough else "可能把温度推得更高"
-                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，{status}。")
-                    else:
-                        insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：南方的暖空气正在吹过来，但温度已接近预报峰值。")
+                    effect = ""
+                    if is_rising:
+                        effect = "，温度仍在上升"
+                    elif is_stagnant:
+                        effect = "，但温度已停滞"
+                    elif is_falling:
+                        effect = "，但温度已开始下降"
+                    insights.append(f"🔥 <b>吹南风</b>（{wind_source} {wd:.0f}°）：暖空气{effect}。")
                 elif 225 < wd < 315:
-                    if wd <= 260:
-                        insights.append(f"🌬️ <b>吹西南风</b>（{wind_source} {wd:.0f}°）：带有一定暖湿气流，对升温有轻微帮助。")
-                    elif wd >= 280:
-                        insights.append(f"🌬️ <b>吹西北风</b>（{wind_source} {wd:.0f}°）：偏冷的气流，会拖慢升温。")
-                    else:
-                        insights.append(f"🌬️ <b>吹西风</b>（{wind_source} {wd:.0f}°）：对温度影响不大，主要取决于日照和云量。")
+                    dir_name = "西南风" if wd <= 260 else ("西北风" if wd >= 280 else "西风")
+                    insights.append(f"🌬️ <b>吹{dir_name}</b>（{wind_source} {wd:.0f}°）。")
                 elif 45 < wd < 135:
-                    insights.append(f"🌬️ <b>吹东风</b>（{wind_source} {wd:.0f}°）：对温度影响较小，主要看日照和云量。")
+                    insights.append(f"🌬️ <b>吹东风</b>（{wind_source} {wd:.0f}°）。")
         except (TypeError, ValueError):
             pass
 
