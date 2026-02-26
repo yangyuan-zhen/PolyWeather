@@ -279,17 +279,35 @@ class WeatherDataCollector:
                 except:
                     continue
 
+            # 3. 提取最近 4 条报文的温度（用于趋势分析）
+            recent_temps_raw = []  # [(local_time_str, temp_c), ...]
+            for obs in data[:4]:  # data 已按时间倒序
+                obs_rt = obs.get("reportTime", "")
+                obs_temp = obs.get("temp")
+                if obs_temp is not None:
+                    try:
+                        ct = obs_rt.replace(" ", "T")
+                        if not ct.endswith("Z"): ct += "Z"
+                        rdt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
+                        local_rt = rdt + timedelta(seconds=utc_offset)
+                        recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
+                    except:
+                        continue
+
             # 转换为单位
             if use_fahrenheit:
                 temp = temp_c * 9 / 5 + 32 if temp_c is not None else None
                 max_so_far = max_so_far_c * 9 / 5 + 32 if max_so_far_c > -900 else None
                 dewp = dewp_c * 9 / 5 + 32 if dewp_c is not None else None
                 unit = "fahrenheit"
+                # 转换最近温度
+                recent_temps = [(t, round(v * 9 / 5 + 32, 1)) for t, v in recent_temps_raw]
             else:
                 temp = temp_c
                 max_so_far = max_so_far_c if max_so_far_c > -900 else None
                 dewp = dewp_c
                 unit = "celsius"
+                recent_temps = [(t, v) for t, v in recent_temps_raw]
 
             result = {
                 "source": "metar",
@@ -310,6 +328,7 @@ class WeatherDataCollector:
                     "altimeter": latest.get("altim"),
                     "clouds": latest.get("clouds", []),
                 },
+                "recent_temps": recent_temps,  # 最近4条: [("15:00", 5), ("14:20", 5), ...]
                 "unit": unit,
             }
 
