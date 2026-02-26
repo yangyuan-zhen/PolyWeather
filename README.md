@@ -79,9 +79,32 @@ chmod +x ~/update.sh
 
 ## 🏗️ Architecture
 
-- **Data Layer**: Interfaces with Open-Meteo, NOAA, MGM, and other data sources.
-- **Algorithm Layer**: DEB dynamic weighting system + concurrency caching mechanism.
-- **Decision Layer**: Real-time trading logic analysis based on Groq API.
+```mermaid
+graph TD
+    User[User / Signal Receiver] -->|Query Command| Bot[bot_listener.py Core Scheduler]
+
+    subgraph Data Acquisition
+        Bot --> Collector[WeatherDataCollector]
+        Collector --> OM[Open-Meteo Live/Forecast]
+        Collector --> MM[Multi-Model Predictors ECMWF/GFS etc.]
+        Collector --> METAR[Live Airport Observations]
+    end
+
+    subgraph Logic Processing
+        Collector --> DEB[DEB Dynamic Weighting]
+        DEB --> DB[(daily_records JSON Database)]
+        Collector --> Logic[Settlement Analysis / Trend Detection]
+    end
+
+    subgraph AI Decision Layer
+        DEB --> AIAnalyzer[Groq/LLaMA 3.3 AI Model]
+        Logic --> AIAnalyzer
+        METAR --> AIAnalyzer
+    end
+
+    AIAnalyzer -->|Generates: Spread+Logic+Confidence| Bot
+    Bot -->|Returns Analysis Snapshot| User
+```
 
 ---
 
