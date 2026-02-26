@@ -79,9 +79,32 @@ chmod +x ~/update.sh
 
 ## 🏗️ 系统架构
 
-- **数据层**: 对接 Open-Meteo, NOAA, MGM 等多方数据源。
-- **算法层**: DEB 动态权重系统 + 并发缓存机制。
-- **决策层**: 基于 Groq API 的实时交易逻辑分析。
+```mermaid
+graph TD
+    User[用户 / 信号接收方] -->|查询指令| Bot[bot_listener.py 核心调度器]
+
+    subgraph 数据获取层
+        Bot --> Collector[WeatherDataCollector]
+        Collector --> OM[Open-Meteo 实时/预报]
+        Collector --> MM[多模型预测集 ECMWF/GFS等]
+        Collector --> METAR[机场实时实测]
+    end
+
+    subgraph 逻辑处理层
+        Collector --> DEB[DEB 动态权重算法]
+        DEB --> DB[(daily_records JSON 数据库)]
+        Collector --> Logic[结算分析 / 趋势判定]
+    end
+
+    subgraph AI 决策层
+        DEB --> AIAnalyzer[Groq/LLaMA 3.3 AI 模型]
+        Logic --> AIAnalyzer
+        METAR --> AIAnalyzer
+    end
+
+    AIAnalyzer -->|生成: 盘口+逻辑+置信度| Bot
+    Bot -->|返回分析快照| User
+```
 
 ---
 
