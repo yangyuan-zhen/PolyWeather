@@ -110,54 +110,7 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
 
     is_cooling = "降温" in trend_desc
 
-    # === 模型共识评分 ===
-    mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
-    labeled_forecasts = [(model_name, model_val) for model_name, model_val in mm_forecasts.items() if model_val is not None]
-    if mb.get("today_high") is not None: labeled_forecasts.append(("MB", mb["today_high"]))
-    if nws.get("today_high") is not None: labeled_forecasts.append(("NWS", nws["today_high"]))
-    
-    if len(labeled_forecasts) >= 2:
-        f_values = [v for _, v in labeled_forecasts]
-        consensus_spread = max(f_values) - min(f_values)
-        tight_threshold = 1.5 if temp_symbol == "°F" else 0.8
-        mid_threshold = 3.0 if temp_symbol == "°F" else 1.5
-        parts = " | ".join([f"{name} {val}{temp_symbol}" for name, val in labeled_forecasts])
-        
-        if consensus_spread <= tight_threshold:
-            msg = f"🎯 <b>模型共识：高 ({len(labeled_forecasts)}源)</b> — {parts}，极差仅 {consensus_spread:.1f}°，高度一致。"
-        elif consensus_spread <= mid_threshold:
-            msg = f"⚖️ <b>模型共识：中 ({len(labeled_forecasts)}源)</b> — {parts}，极差 {consensus_spread:.1f}°，有轻微分歧。"
-        else:
-            highest = max(labeled_forecasts, key=lambda x: x[1])
-            lowest = min(labeled_forecasts, key=lambda x: x[1])
-            msg = f"⚠️ <b>模型共识：低 ({len(labeled_forecasts)}源)</b> — {parts}，极差 {consensus_spread:.1f}°！{highest[0]} 最高 vs {lowest[0]} 最低。"
-        
-        # 移交 AI 处理，不再给用户直接显示博弈区间
-        ai_features.append(msg)
-    elif len(labeled_forecasts) == 1:
-        msg = f"📡 <b>仅1个预报源 ({labeled_forecasts[0][0]} {labeled_forecasts[0][1]}{temp_symbol})</b>"
-        # 移交 AI 处理，不再给用户直接显示博弈区间
-        ai_features.append(msg)
 
-    # === 博弈区间提醒 ===
-    if len(labeled_forecasts) >= 2:
-        import math
-        wu_round = lambda v: math.floor(v + 0.5)
-        settlement_vals = sorted(set(wu_round(v) for _, v in labeled_forecasts))
-        
-        if max_so_far is not None and forecast_high is not None and max_so_far > forecast_high + 0.5:
-            actual_settled = wu_round(max_so_far)
-            msg = f"🎲 <b>博弈区间</b>：预报已失效！实测最高 {max_so_far}{temp_symbol} → WU <b>{actual_settled}{temp_symbol}</b>，温度仍可能波动。"
-        elif len(settlement_vals) == 1:
-            msg = f"🎲 <b>博弈区间</b>：模型全部指向 <b>{settlement_vals[0]}{temp_symbol}</b> 结算。"
-        elif len(settlement_vals) == 2:
-            msg = f"🎲 <b>博弈区间</b>：在 <b>{settlement_vals[0]}{temp_symbol}</b> 和 <b>{settlement_vals[1]}{temp_symbol}</b> 之间博弈。"
-        elif len(settlement_vals) == 3:
-            msg = f"🎲 <b>博弈区间</b>：在 <b>{settlement_vals[0]}{temp_symbol}</b>、<b>{settlement_vals[1]}{temp_symbol}</b>、<b>{settlement_vals[2]}{temp_symbol}</b> 之间博弈。"
-        else:
-            msg = f"🎲 <b>博弈区间</b>：模型分歧太大，结算还不确定。"
-        # 移交 AI 处理，不再给用户直接显示博弈区间
-        ai_features.append(msg)
 
     # === 集合预报区间 (去除了啰嗦的预报验证) ===
     ensemble = weather_data.get("ensemble", {})
@@ -207,10 +160,15 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         # 计算每个 WU 整数区间 [N-0.5, N+0.5) 的概率
         center = round(mu)
         candidates = range(center - 2, center + 3)  # 5 个候选整数
+        # 如果已有实测最高温，低于该值的 WU 结算整数不可能出现
+        min_possible_wu = round(max_so_far) if max_so_far is not None else -999
+        
         probs = {}
         for n in candidates:
+            if n < min_possible_wu:
+                continue  # 已实测超过此温度，不可能结算在这里
             p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
-            if p > 0.01:  # 只保留概率 > 1% 的
+            if p > 0.01:
                 probs[n] = p
         
         # 归一化
