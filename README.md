@@ -19,7 +19,13 @@ The system automatically tracks the historical performance of weather models (EC
 
 Automatically computes the probability for each possible WU settlement integer using a Gaussian distribution fitted to the ensemble forecast:
 
-- **Method**: Derives standard deviation (σ) from the 51-member ensemble P10/P90, centers the distribution (μ) on a weighted average of DEB/multi-model median (70%) and ensemble median (30%).
+- **Distribution Center μ**: Weighted average of DEB/multi-model median (70%) and ensemble median (30%). Auto-corrects upward when actual METAR max exceeds μ and is still rising.
+- **Standard Deviation σ**: Derived from the 51-member ensemble P10/P90 (σ = (P90-P10) / 2.56).
+- **Time Decay**: σ dynamically narrows based on the current time relative to the predicted peak window:
+  - Before peak: σ × 1.0 (maximum uncertainty)
+  - During peak window: σ × 0.7 (settling)
+  - After peak: σ × 0.3 (outcome mostly determined)
+- **Observed Floor**: Temperatures below the current METAR max WU value are automatically excluded (can't go back down).
 - **Interval Integration**: Integrates over each WU rounding interval [N-0.5, N+0.5) to compute the probability of settling at integer N.
 - **Display**: `🎲 Settlement Probability (μ=3.7): 4°C [3.5~4.5) 68% | 3°C [2.5~3.5) 32%`
 
@@ -27,15 +33,18 @@ Automatically computes the probability for each possible WU settlement integer u
 
 Feeds wind speed, wind direction, cloud cover, solar radiation, and METAR trend data into LLaMA 70B:
 
-- **Logical Reasoning**: Uses 2-3 sentences to deeply analyze airport dynamics—whether conditions promote or inhibit warming, and whether the forecast can be reached.
-- **Market Call**: Explicitly states the expected peak time window and the specific temperature betting range. Calls "dead market" when cooling is confirmed.
+- **Logical Reasoning**: 2-3 sentences analyzing airport dynamics, explicitly referencing Open-Meteo forecast and DEB blended values as benchmarks.
+- **Time Awareness**: Analysis considers how much time remains until the predicted peak, judging remaining warming potential.
+- **Market Call**: Explicitly states the expected peak time window and specific temperature betting range. Calls "dead market" when cooling is confirmed.
 - **Confidence Score**: Quantitative 1-10 confidence rating.
 - **High Availability**: Built-in auto-retry + fallback model degradation (70B → 8B) to withstand Groq API 500/503 outages.
 
 ### 4. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
 
+- **Precise Timing**: Extracts actual observation time from raw METAR text (`rawOb`), not the API's rounded `reportTime`. Accurate to the minute.
 - **Live Passthrough**: Bypasses CDN caching via dynamic headers to obtain first-hand METAR reports.
 - **Settlement Warning**: Automatically calculates the Wunderground settlement boundary (X.5 rounding line).
+- **Anomaly Filtering**: Automatically filters out -9999 sentinel values from sources like MGM to prevent garbage data in output.
 
 ### 5. 📈 Historical Data Collection
 
@@ -97,13 +106,15 @@ graph TD
         Bot --> Collector[WeatherDataCollector]
         Collector --> OM[Open-Meteo Forecast/Ensemble]
         Collector --> MM[Multi-Model ECMWF/GFS/ICON/GEM/JMA]
-        Collector --> METAR[Live Airport METAR]
+        Collector --> METAR["Live Airport METAR (rawOb precise time)"]
     end
 
     subgraph Algorithm Layer
+        Collector --> Peak[Peak Hour Prediction]
         Collector --> DEB[DEB Dynamic Weighting]
         DEB --> DB[(daily_records Database)]
-        Collector --> Prob[Gaussian Probability Engine]
+        Peak --> Prob[Gaussian Probability Engine]
+        Collector --> Prob
         Collector --> Logic[Settlement Boundary / Trend Analysis]
     end
 
@@ -122,11 +133,12 @@ graph TD
 
 ## 💡 Trading Tips
 
-1. **Watch Settlement Probability**: The probability engine is math-based and more objective than AI subjective judgment. When one temperature has > 65% probability, the direction is relatively clear.
-2. **Reference DEB Blended Value**: When models diverge, the DEB corrected value is usually more reliable than any single forecast.
-3. **Observe AI Confidence**: A score below 5 indicates high uncertainty—consider staying on the sidelines.
-4. **Watch Settlement Boundaries**: When the observed high is near X.5, be wary of rounding jumps during WU settlements.
-5. **Distribution Center μ**: The μ value shown in the probability display represents the algorithm's expected most likely actual high temperature—compare it directly with the Polymarket odds.
+1. **Watch Settlement Probability**: The probability engine is math-based and more objective than AI judgment. When one temperature has > 65% probability, the direction is relatively clear.
+2. **Observe Time Decay**: Probabilities auto-lock as time progresses. After peak hours, the engine narrows σ dramatically, concentrating results around the observed max.
+3. **Reference DEB Blended Value**: When models diverge, the DEB corrected value is usually more reliable than any single forecast.
+4. **Observe AI Confidence**: A score below 5 indicates high uncertainty—consider staying on the sidelines.
+5. **Watch Settlement Boundaries**: When the observed high is near X.5, be wary of rounding jumps during WU settlements.
+6. **Distribution Center μ**: The μ value shown in the probability display represents the algorithm's expected most likely actual high temperature—compare it directly with the Polymarket odds.
 
 ---
 
