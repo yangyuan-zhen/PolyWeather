@@ -584,13 +584,24 @@ def start_bot():
                 m_c = mgm.get("current", {})
                 # 翻译风向
                 wind_dir = m_c.get("wind_dir")
+                wind_speed_ms = m_c.get("wind_speed_ms")
                 dir_str = ""
                 if wind_dir is not None:
                     dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
                     dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
                 
-                msg_lines.append(f"   [MGM] 🌡️ 体感: {m_c.get('feels_like')}°C | 💧 {m_c.get('humidity')}%")
-                msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({m_c.get('wind_speed_ms')} m/s) | 💧 降水: {m_c.get('rain_24h') or 0}mm")
+                # 体感和湿度（跳过缺失数据）
+                feels_like = m_c.get("feels_like")
+                humidity = m_c.get("humidity")
+                if feels_like is not None or humidity is not None:
+                    parts = []
+                    if feels_like is not None: parts.append(f"🌡️ 体感: {feels_like}°C")
+                    if humidity is not None: parts.append(f"💧 {humidity}%")
+                    msg_lines.append(f"   [MGM] {' | '.join(parts)}")
+                
+                # 风况（跳过缺失数据）
+                if wind_dir is not None and wind_speed_ms is not None:
+                    msg_lines.append(f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({wind_speed_ms} m/s) | 💧 降水: {m_c.get('rain_24h') or 0}mm")
                 
                 # 新增：气压和云量
                 extra_parts = []
