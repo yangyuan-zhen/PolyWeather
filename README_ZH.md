@@ -2,6 +2,12 @@
 
 PolyWeather 是一款专为 **Polymarket** 等预测市场打造的天气分析工具。它通过聚合多源气象预报、实时机场 METAR 观测，并引入数学概率模型与 AI 决策支持，帮助用户更科学地评估天气博弈风险。
 
+<p align="center">
+  <img src="docs/images/demo_ankara.png" alt="PolyWeather 效果展示 - 安卡拉实时分析" width="420">
+  <br>
+  <em>📊 实时查询效果：DEB 融合预测 + 结算概率 + Groq AI 决策</em>
+</p>
+
 ---
 
 ## ✨ 核心功能
