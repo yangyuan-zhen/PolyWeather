@@ -251,9 +251,42 @@ class WeatherDataCollector:
             latest = data[0]
             temp_c = latest.get("temp")
             dewp_c = latest.get("dewp")
-            obs_time = latest.get("reportTime", "")
+            
+            # 从 rawOb 中提取真实观测时间（比 reportTime 更准确，reportTime 会被取整）
+            # rawOb 格式: "METAR EGLC 271150Z AUTO ..." → "271150Z" → 27日11:50 UTC
+            def _parse_rawob_time(obs):
+                """从 rawOb 中提取精确的 UTC 观测时间"""
+                raw = obs.get("rawOb", "")
+                import re as _re
+                m = _re.search(r'\b(\d{2})(\d{2})(\d{2})Z\b', raw)
+                if m:
+                    day, hour, minute = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                    # 用 reportTime 的日期部分 + rawOb 的时分
+                    fallback = obs.get("reportTime", "")
+                    try:
+                        clean = fallback.replace(" ", "T")
+                        if not clean.endswith("Z"): clean += "Z"
+                        base_dt = datetime.fromisoformat(clean.replace("Z", "+00:00"))
+                        result = base_dt.replace(hour=hour, minute=minute, second=0)
+                        # 处理跨日（如 rawOb 是23:50但 reportTime 已经是次日00:00）
+                        if result > base_dt + timedelta(hours=2):
+                            result -= timedelta(days=1)
+                        return result
+                    except:
+                        pass
+                # fallback 到 reportTime
+                fallback = obs.get("reportTime", "")
+                try:
+                    clean = fallback.replace(" ", "T")
+                    if not clean.endswith("Z"): clean += "Z"
+                    return datetime.fromisoformat(clean.replace("Z", "+00:00"))
+                except:
+                    return None
+            
+            obs_dt = _parse_rawob_time(latest)
+            obs_time = obs_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z") if obs_dt else latest.get("reportTime", "")
 
-            # 2. 精确计算“当地今天”的最高温
+            # 2. 精确计算"当地今天"的最高温
             from datetime import timezone, timedelta
             now_utc = datetime.now(timezone.utc)
             local_now = now_utc + timedelta(seconds=utc_offset)
@@ -263,18 +296,15 @@ class WeatherDataCollector:
             max_so_far_c = -999
             max_temp_time = None
             for obs in data:
-                obs_report_time = obs.get("reportTime", "")
+                obs_dt_iter = _parse_rawob_time(obs)
+                if obs_dt_iter is None:
+                    continue
                 try:
-                    clean_time = obs_report_time.replace(" ", "T")
-                    if not clean_time.endswith("Z"): clean_time += "Z"
-                    report_dt = datetime.fromisoformat(clean_time.replace("Z", "+00:00"))
-                    
-                    if report_dt >= utc_midnight:
+                    if obs_dt_iter >= utc_midnight:
                         t = obs.get("temp")
                         if t is not None and t > max_so_far_c:
                             max_so_far_c = t
-                            # 转为当地时间并记录
-                            local_report = report_dt + timedelta(seconds=utc_offset)
+                            local_report = obs_dt_iter + timedelta(seconds=utc_offset)
                             max_temp_time = local_report.strftime("%H:%M")
                 except:
                     continue
@@ -282,17 +312,12 @@ class WeatherDataCollector:
             # 3. 提取最近 4 条报文的温度（用于趋势分析）
             recent_temps_raw = []  # [(local_time_str, temp_c), ...]
             for obs in data[:4]:  # data 已按时间倒序
-                obs_rt = obs.get("reportTime", "")
                 obs_temp = obs.get("temp")
                 if obs_temp is not None:
-                    try:
-                        ct = obs_rt.replace(" ", "T")
-                        if not ct.endswith("Z"): ct += "Z"
-                        rdt = datetime.fromisoformat(ct.replace("Z", "+00:00"))
-                        local_rt = rdt + timedelta(seconds=utc_offset)
+                    obs_dt_iter = _parse_rawob_time(obs)
+                    if obs_dt_iter:
+                        local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
                         recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
-                    except:
-                        continue
 
             # 转换为单位
             if use_fahrenheit:
