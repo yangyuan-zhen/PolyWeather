@@ -373,18 +373,23 @@ class WeatherDataCollector:
                     # MGM 数据字段映射
                     # ruzgarHiz 实测为 km/h，转为 m/s 需要除以 3.6
                     ruz_hiz_kmh = latest.get("ruzgarHiz", 0)
+                    
+                    # MGM 返回 -9999 表示数据缺失，需要过滤
+                    def _valid(v):
+                        return v is not None and v > -9000
+                    
                     results["current"] = {
-                        "temp": latest.get("sicaklik"),
-                        "feels_like": latest.get("hissedilenSicaklik") or latest.get("sicaklik"),
-                        "humidity": latest.get("nem"),
-                        "wind_speed_ms": round(ruz_hiz_kmh / 3.6, 1) if ruz_hiz_kmh is not None else None,
-                        "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if ruz_hiz_kmh is not None else None,
-                        "wind_dir": latest.get("ruzgarYon"),
-                        "rain_24h": latest.get("toplamYagis"),
-                        "pressure": latest.get("aktuelBasinc"),
+                        "temp": latest.get("sicaklik") if _valid(latest.get("sicaklik")) else None,
+                        "feels_like": latest.get("hissedilenSicaklik") if _valid(latest.get("hissedilenSicaklik")) else None,
+                        "humidity": latest.get("nem") if _valid(latest.get("nem")) else None,
+                        "wind_speed_ms": round(ruz_hiz_kmh / 3.6, 1) if _valid(ruz_hiz_kmh) else None,
+                        "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if _valid(ruz_hiz_kmh) else None,
+                        "wind_dir": latest.get("ruzgarYon") if _valid(latest.get("ruzgarYon")) else None,
+                        "rain_24h": latest.get("toplamYagis") if _valid(latest.get("toplamYagis")) else None,
+                        "pressure": latest.get("aktuelBasinc") if _valid(latest.get("aktuelBasinc")) else None,
                         "cloud_cover": latest.get("kapalilik"),  # 0-8 八分位云量
-                        "mgm_max_temp": latest.get("maxSicaklik"),  # MGM 官方实测最高温
-                        "time": latest.get("veriZamani"), # 观测时间
+                        "mgm_max_temp": latest.get("maxSicaklik") if _valid(latest.get("maxSicaklik")) else None,
+                        "time": latest.get("veriZamani"),
                         "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
                     }
             
