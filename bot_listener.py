@@ -111,8 +111,19 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     is_cooling = "降温" in trend_desc
 
 
+    # === 峰值时刻预测（提前计算，供概率引擎使用）===
+    peak_hours = []
+    if times and temps and om_today is not None:
+        for t_str, temp in zip(times, temps):
+            if t_str.startswith(local_date_str) and abs(temp - om_today) <= 0.2:
+                peak_hours.append(t_str.split("T")[1][:5])
+    if peak_hours:
+        first_peak_h = int(peak_hours[0].split(":")[0])
+        last_peak_h = int(peak_hours[-1].split(":")[0])
+    else:
+        first_peak_h, last_peak_h = 13, 15
 
-    # === 集合预报区间 (去除了啰嗦的预报验证) ===
+    # === 集合预报区间 ===
     ensemble = weather_data.get("ensemble", {})
     ens_p10 = ensemble.get("p10")
     ens_p90 = ensemble.get("p90")
@@ -136,6 +147,15 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         # 用 P10/P90 反推标准差: P10 = median - 1.28*sigma, P90 = median + 1.28*sigma
         sigma = (ens_p90 - ens_p10) / 2.56
         if sigma < 0.1: sigma = 0.1  # 防止除以零
+        
+        # 时间修正：根据当前时间距峰值的位置调整 σ
+        # 峰值前：σ 不变（不确定性最大）
+        # 峰值窗口内：σ 缩小 30%（正在定型）
+        # 峰值后：σ 缩小 70%（基本确定）
+        if local_hour_frac > last_peak_h:
+            sigma *= 0.3  # 峰值已过，结果基本锁定
+        elif first_peak_h <= local_hour_frac <= last_peak_h:
+            sigma *= 0.7  # 正在峰值窗口
         
         # 分布中心：以 DEB/多模型中位数为主锚（权重 70%），集合中位数为辅（30%）
         # 因为集合中位数经常偏保守，不如确定性模型和 DEB 融合值可靠
@@ -211,16 +231,8 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
             insights.append(msg)
             ai_features.append(msg)
 
-    # === 峰值时刻预测 (只在还没过峰值时显示) ===
-    peak_hours = []
-    if times and temps and om_today is not None:
-        for t_str, temp in zip(times, temps):
-            if t_str.startswith(local_date_str) and abs(temp - om_today) <= 0.2:
-                peak_hours.append(t_str.split("T")[1][:5])
-                
+    # === 峰值时刻 AI 提示 ===
     if peak_hours:
-        first_peak_h = int(peak_hours[0].split(":")[0])
-        last_peak_h = int(peak_hours[-1].split(":")[0])
         window = f"{peak_hours[0]} - {peak_hours[-1]}" if len(peak_hours) > 1 else peak_hours[0]
         
         if local_hour <= last_peak_h:
@@ -236,8 +248,6 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         elif first_peak_h <= local_hour_frac <= last_peak_h: ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
         elif remain_hrs < 1: ai_features.append(f"⏱️ 状态: 距最热时段仅剩约 {int(remain_hrs * 60)} 分钟 ({window})。")
         else: ai_features.append(f"⏱️ 状态: 距最热时段还有约 {remain_hrs:.1f}h ({window})。")
-    else:
-        first_peak_h, last_peak_h = 13, 15
 
     # === 其他 AI 专供的事实特征 ===
     # 明确告知 AI 当前实测温度和今日最高温，避免 AI 从趋势数据中误读
