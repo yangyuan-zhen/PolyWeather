@@ -168,12 +168,10 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
 
         if om_today is not None:
             if om_today > ens_p90 and (max_so_far is None or max_so_far < om_today - 0.5):
-                msg2 = f"⚡ <b>预报偏高警告</b>：确定性预报 {om_today}{temp_symbol} 超集合90%上限！更可能接近 {ens_median}{temp_symbol}。"
-                if not is_cooling: insights.append(msg2)
+                msg2 = f"⚡ 预报偏高：确定性预报 {om_today}{temp_symbol} 超集合90%上限，更可能接近 {ens_median}{temp_symbol}。"
                 ai_features.append(msg2)
             elif om_today < ens_p10 and (max_so_far is None or max_so_far < ens_median):
-                msg2 = f"⚡ <b>预报偏低警告</b>：确定性预报 {om_today}{temp_symbol} 低于集合90%下限！更可能接近 {ens_median}{temp_symbol}。"
-                if not is_cooling: insights.append(msg2)
+                msg2 = f"⚡ 预报偏低：确定性预报 {om_today}{temp_symbol} 低于集合90%下限，更可能接近 {ens_median}{temp_symbol}。"
                 ai_features.append(msg2)
 
     # === 实测已超预报 & 趋势输出 ===
