@@ -267,6 +267,12 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         first_peak_h, last_peak_h = 13, 15
 
     # === 其他 AI 专供的事实特征 ===
+    # 明确告知 AI 当前实测温度和今日最高温，避免 AI 从趋势数据中误读
+    current_temp = metar.get("current", {}).get("temp")
+    if current_temp is not None:
+        ai_features.append(f"🌡️ 当前实测温度: {current_temp}{temp_symbol}。")
+    if max_so_far is not None:
+        ai_features.append(f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} (WU结算={round(max_so_far)}{temp_symbol})。")
     if wind_speed:
         wind_dir = metar.get("current", {}).get("wind_dir", "未知")
         ai_features.append(f"🌬️ 当下风况: 约 {wind_speed}kt (方向 {wind_dir}°)。")
