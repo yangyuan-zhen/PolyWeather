@@ -179,11 +179,13 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         # 用 P10/P90 反推标准差: P10 = median - 1.28*sigma, P90 = median + 1.28*sigma
         sigma = (ens_p90 - ens_p10) / 2.56
         if sigma < 0.1: sigma = 0.1  # 防止除以零
-        mu = ens_median  # 以集合中位数为中心
         
-        # 如果 DEB 融合值或多模型均值存在，用它们微调中心
+        # 分布中心：以 DEB/多模型中位数为主锚（权重 70%），集合中位数为辅（30%）
+        # 因为集合中位数经常偏保守，不如确定性模型和 DEB 融合值可靠
         if forecast_median is not None:
-            mu = (ens_median + forecast_median) / 2  # 取集合中位数和模型中位数的均值
+            mu = forecast_median * 0.7 + ens_median * 0.3
+        else:
+            mu = ens_median
         
         # 简化的正态 CDF (不依赖 scipy)
         def _norm_cdf(x, m, s):
@@ -203,12 +205,12 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         if total_p > 0:
             probs = {k: v / total_p for k, v in probs.items()}
         
-        # 格式化输出（按概率从高到低排列）
+        # 格式化输出（按概率从高到低排列，显示区间）
         sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-        prob_parts = [f"{int(t)}{temp_symbol}({p*100:.0f}%)" for t, p in sorted_probs[:4]]
+        prob_parts = [f"{int(t)}{temp_symbol} [{t-0.5}~{t+0.5}) {p*100:.0f}%" for t, p in sorted_probs[:4]]
         if prob_parts:
             prob_str = " | ".join(prob_parts)
-            insights.append(f"🎲 <b>结算概率</b>：{prob_str}")
+            insights.append(f"🎲 <b>结算概率</b> (μ={mu:.1f})：{prob_str}")
             ai_features.append(f"🎲 数学概率分布：{prob_str}")
 
     # === 实测已超预报 & 趋势输出 ===
