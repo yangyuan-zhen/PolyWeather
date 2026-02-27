@@ -191,6 +191,15 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         else:
             mu = ens_median
         
+        # 实时修正：如果实测最高温已经超过了预报的 μ，则向上修正
+        if max_so_far is not None and max_so_far > mu:
+            if not is_cooling:
+                # 还在升温，预期最终比当前再高一点
+                mu = max_so_far + 0.3
+            else:
+                # 已降温，以实测峰值为锚
+                mu = max_so_far
+        
         # 简化的正态 CDF (不依赖 scipy)
         def _norm_cdf(x, m, s):
             return 0.5 * (1 + _math.erf((x - m) / (s * _math.sqrt(2))))
@@ -279,6 +288,13 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         ai_features.append(f"🌡️ 当前实测温度: {current_temp}{temp_symbol}。")
     if max_so_far is not None:
         ai_features.append(f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} (WU结算={round(max_so_far)}{temp_symbol})。")
+    
+    # 传递城市的 METAR 取整特性给 AI
+    from src.data_collection.city_risk_profiles import get_city_risk_profile
+    if city_name:
+        _profile = get_city_risk_profile(city_name)
+        if _profile and _profile.get("metar_rounding"):
+            ai_features.append(f"⚠️ METAR特性: {_profile['metar_rounding']}")
     if wind_speed:
         wind_dir = metar.get("current", {}).get("wind_dir", "未知")
         ai_features.append(f"🌬️ 当下风况: 约 {wind_speed}kt (方向 {wind_dir}°)。")
