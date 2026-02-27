@@ -60,15 +60,19 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
     
-    # 获取当地时间小时
+    # 获取当地时间小时和分钟
     local_time_full = open_meteo.get("current", {}).get("local_time", "")
     try:
         local_date_str = local_time_full.split(" ")[0]
-        local_hour = int(local_time_full.split(" ")[1].split(":")[0])
+        time_parts = local_time_full.split(" ")[1].split(":")
+        local_hour = int(time_parts[0])
+        local_minute = int(time_parts[1]) if len(time_parts) > 1 else 0
     except:
         from datetime import datetime
         local_date_str = datetime.now().strftime("%Y-%m-%d")
         local_hour = datetime.now().hour
+        local_minute = datetime.now().minute
+    local_hour_frac = local_hour + local_minute / 60  # 含分钟的精确小时
 
     # === DEB 融合渲染 ===
     if city_name and current_forecasts:
@@ -259,10 +263,12 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
                 target_temp = om_today if om_today is not None else forecast_high
                 ai_features.append(f"🎯 <b>关注重点</b>：看看那个时段能否涨到 {target_temp}{temp_symbol}。")
                 
-        # 写给AI
-        if local_hour > last_peak_h: ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
-        elif first_peak_h <= local_hour <= last_peak_h: ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
-        else: ai_features.append(f"⏱️ 状态: 距最热时段还有 {first_peak_h - local_hour}h ({window})。")
+        # 写给AI（使用精确到分钟的时间）
+        remain_hrs = first_peak_h - local_hour_frac
+        if local_hour_frac > last_peak_h: ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
+        elif first_peak_h <= local_hour_frac <= last_peak_h: ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
+        elif remain_hrs < 1: ai_features.append(f"⏱️ 状态: 距最热时段仅剩约 {int(remain_hrs * 60)} 分钟 ({window})。")
+        else: ai_features.append(f"⏱️ 状态: 距最热时段还有约 {remain_hrs:.1f}h ({window})。")
     else:
         first_peak_h, last_peak_h = 13, 15
 
