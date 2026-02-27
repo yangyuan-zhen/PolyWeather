@@ -110,6 +110,7 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
 
     is_cooling = "降温" in trend_desc
 
+    om_today = daily.get("temperature_2m_max", [None])[0]
 
     # === 峰值时刻预测（提前计算，供概率引擎使用）===
     peak_hours = []
@@ -128,7 +129,6 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     ens_p10 = ensemble.get("p10")
     ens_p90 = ensemble.get("p90")
     ens_median = ensemble.get("median")
-    om_today = daily.get("temperature_2m_max", [None])[0]
     if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
         msg1 = f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]。"
         if not is_cooling: insights.append(msg1)
