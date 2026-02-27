@@ -575,10 +575,8 @@ def start_bot():
             wx_display = f" {wx_summary}" if wx_summary else ""
             msg_lines.append(f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}")
 
-            # Open-Meteo 实时温度补充（当 METAR 数据超过 30 分钟时显示）
-            om_current_temp = open_meteo.get("current", {}).get("temp")
-            if om_current_temp is not None and metar_age_min is not None and metar_age_min >= 30:
-                msg_lines.append(f"   🌐 Open-Meteo 实时参考: {om_current_temp}{temp_symbol}（更新更快，仅供参考）")
+
+
 
             if mgm:
                 m_c = mgm.get("current", {})
