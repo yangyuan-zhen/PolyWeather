@@ -174,6 +174,43 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
                 msg2 = f"⚡ 预报偏低：确定性预报 {om_today}{temp_symbol} 低于集合90%下限，更可能接近 {ens_median}{temp_symbol}。"
                 ai_features.append(msg2)
 
+        # === 数学概率计算（基于集合预报正态分布拟合）===
+        import math as _math
+        # 用 P10/P90 反推标准差: P10 = median - 1.28*sigma, P90 = median + 1.28*sigma
+        sigma = (ens_p90 - ens_p10) / 2.56
+        if sigma < 0.1: sigma = 0.1  # 防止除以零
+        mu = ens_median  # 以集合中位数为中心
+        
+        # 如果 DEB 融合值或多模型均值存在，用它们微调中心
+        if forecast_median is not None:
+            mu = (ens_median + forecast_median) / 2  # 取集合中位数和模型中位数的均值
+        
+        # 简化的正态 CDF (不依赖 scipy)
+        def _norm_cdf(x, m, s):
+            return 0.5 * (1 + _math.erf((x - m) / (s * _math.sqrt(2))))
+        
+        # 计算每个 WU 整数区间 [N-0.5, N+0.5) 的概率
+        center = round(mu)
+        candidates = range(center - 2, center + 3)  # 5 个候选整数
+        probs = {}
+        for n in candidates:
+            p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
+            if p > 0.01:  # 只保留概率 > 1% 的
+                probs[n] = p
+        
+        # 归一化
+        total_p = sum(probs.values())
+        if total_p > 0:
+            probs = {k: v / total_p for k, v in probs.items()}
+        
+        # 格式化输出（按概率从高到低排列）
+        sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+        prob_parts = [f"{int(t)}{temp_symbol}({p*100:.0f}%)" for t, p in sorted_probs[:4]]
+        if prob_parts:
+            prob_str = " | ".join(prob_parts)
+            insights.append(f"🎲 <b>结算概率</b>：{prob_str}")
+            ai_features.append(f"🎲 数学概率分布：{prob_str}")
+
     # === 实测已超预报 & 趋势输出 ===
     if max_so_far is not None and forecast_high is not None:
         if max_so_far > forecast_high + 0.5:
