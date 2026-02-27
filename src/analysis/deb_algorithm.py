@@ -70,6 +70,13 @@ def update_daily_record(city_name, date_str, forecasts, actual_high):
     # 只要仍在更新或者已经结束，都记录最新高点
     data[city_name][date_str]['actual_high'] = actual_high
     
+    # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
+    cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    for city in list(data.keys()):
+        old_dates = [d for d in data[city] if d < cutoff]
+        for d in old_dates:
+            del data[city][d]
+    
     save_history(history_file, data)
 
 def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
