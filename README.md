@@ -2,6 +2,12 @@
 
 PolyWeather is a weather analysis tool built for prediction markets like **Polymarket**. It aggregates multi-source forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to help users evaluate weather trading risks more scientifically.
 
+<p align="center">
+  <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="420">
+  <br>
+  <em>📊 Live query: DEB Blended Forecast + Settlement Probability + Groq AI Decision</em>
+</p>
+
 ---
 
 ## ✨ Core Features
