@@ -1,6 +1,6 @@
 # 🌡️ PolyWeather: Intelligent Weather Quant Analysis Bot
 
-PolyWeather is a weather analysis tool specifically designed for prediction markets like **Polymarket**. It aggregates multi-source forecasts, real-time airport METAR observations, and incorporates AI-driven decision support to help users evaluate weather-related risks more scientifically.
+PolyWeather is a weather analysis tool built for prediction markets like **Polymarket**. It aggregates multi-source forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to help users evaluate weather trading risks more scientifically.
 
 ---
 
@@ -8,28 +8,38 @@ PolyWeather is a weather analysis tool specifically designed for prediction mark
 
 ### 1. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
 
-The system automatically tracks the historical performance of various weather models (ECMWF, GFS, ICON, GEM, JMA) in specific cities:
+The system automatically tracks the historical performance of weather models (ECMWF, GFS, ICON, GEM, JMA) per city:
 
-- **Error-Based Weighting**: Dynamically adjusts weights for each model based on their Mean Absolute Error (MAE) over the past 7 days.
-- **Blended Forecast**: Provides a "Blended High Temperature" recommendation corrected for historical biases.
-- **Concurrency Optimization**: Built-in singleton cache and file locking mechanism to support high-concurrency queries and ensure data safety.
+- **Error-Based Weighting**: Dynamically adjusts model weights based on their Mean Absolute Error (MAE) over the past 7 days. Lower error = higher weight.
+- **Blended Forecast**: Provides a bias-corrected "DEB Blended High Temperature" recommendation.
+- **Self-Learning**: Requires at least 2 days of observations before activating weight differentiation. Uses equal-weight averaging during cold start.
+- **Concurrency Safe**: Built-in memory cache and file locking (fcntl) for high-concurrency group chat queries.
 
-### 2. 🤖 AI Intelligent Analysis (Groq LLaMA 3.3)
+### 2. 🎲 Math Probability Engine (Settlement Probability)
 
-Integrates the LLaMA 70B model to interpret rapidly changing meteorological data:
+Automatically computes the probability for each possible WU settlement integer using a Gaussian distribution fitted to the ensemble forecast:
 
-- **Logical Deduction**: Considers dynamic factors such as wind speed, wind direction, cloud cover, and solar radiation to judge temperature trends.
-- **Confidence Scoring**: Provides a confidence score from 1-10 for the current market conditions.
-- **Automatic Cooldown Determination**: When temperature drop is observed or the forecast peak has passed, the AI provides a definitive market conclusion.
+- **Method**: Derives standard deviation (σ) from the 51-member ensemble P10/P90, centers the distribution (μ) on a weighted average of DEB/multi-model median (70%) and ensemble median (30%).
+- **Interval Integration**: Integrates over each WU rounding interval [N-0.5, N+0.5) to compute the probability of settling at integer N.
+- **Display**: `🎲 Settlement Probability (μ=3.7): 4°C [3.5~4.5) 68% | 3°C [2.5~3.5) 32%`
 
-### 3. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
+### 3. 🤖 AI Deep Analysis (Groq LLaMA 3.3 70B)
 
-- **Live Passthrough**: Bypasses CDN caching via dynamic headers to obtain first-hand METAR reports from airports.
-- **Settlement Warning**: Automatically calculates the Wunderground settlement boundary (X.5 rounding line) to warn of potential volatility.
+Feeds wind speed, wind direction, cloud cover, solar radiation, and METAR trend data into LLaMA 70B:
 
-### 4. 📈 Historical Data Collection
+- **Logical Reasoning**: Uses 2-3 sentences to deeply analyze airport dynamics—whether conditions promote or inhibit warming, and whether the forecast can be reached.
+- **Market Call**: Explicitly states the expected peak time window and the specific temperature betting range. Calls "dead market" when cooling is confirmed.
+- **Confidence Score**: Quantitative 1-10 confidence rating.
+- **High Availability**: Built-in auto-retry + fallback model degradation (70B → 8B) to withstand Groq API 500/503 outages.
 
-- Includes `fetch_history.py` to retrieve up to 3 years of hourly historical weather data for any city, supporting future algorithm development.
+### 4. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
+
+- **Live Passthrough**: Bypasses CDN caching via dynamic headers to obtain first-hand METAR reports.
+- **Settlement Warning**: Automatically calculates the Wunderground settlement boundary (X.5 rounding line).
+
+### 5. 📈 Historical Data Collection
+
+- Includes `fetch_history.py` to retrieve up to 3 years of hourly historical weather data (temperature, humidity, radiation, pressure, 10+ dimensions), providing data foundation for future ML models (XGBoost/MOS).
 
 ---
 
@@ -65,15 +75,15 @@ chmod +x ~/update.sh
 
 ## 🕹️ Bot Commands
 
-| Command             | Description                                                           |
-| :------------------ | :-------------------------------------------------------------------- |
-| `/city [city_name]` | Get in-depth weather analysis, live tracking, and AI-driven insights. |
-| `/id`               | View the Chat ID of the current conversation.                         |
-| `/help`             | Display help information.                                             |
+| Command             | Description                                                                      |
+| :------------------ | :------------------------------------------------------------------------------- |
+| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights. |
+| `/id`               | View the Chat ID of the current conversation.                                    |
+| `/help`             | Display help information.                                                        |
 
-### Supported City Examples
+### Supported Cities
 
-`lon` (London), `par` (Paris), `ank` (Ankara), `nyc` (New York), `chi` (Chicago), `ba` (Buenos Aires), etc.
+`lon` (London), `par` (Paris), `ank` (Ankara), `nyc` (New York), `chi` (Chicago), `dal` (Dallas), `mia` (Miami), `atl` (Atlanta), `sea` (Seattle), `tor` (Toronto), `sel` (Seoul), `ba` (Buenos Aires), `wel` (Wellington), etc.
 
 ---
 
@@ -81,39 +91,43 @@ chmod +x ~/update.sh
 
 ```mermaid
 graph TD
-    User[User / Signal Receiver] -->|Query Command| Bot[bot_listener.py Core Scheduler]
+    User[User] -->|Query Command| Bot[bot_listener.py Core Scheduler]
 
     subgraph Data Acquisition
         Bot --> Collector[WeatherDataCollector]
-        Collector --> OM[Open-Meteo Live/Forecast]
-        Collector --> MM[Multi-Model Predictors ECMWF/GFS etc.]
-        Collector --> METAR[Live Airport Observations]
+        Collector --> OM[Open-Meteo Forecast/Ensemble]
+        Collector --> MM[Multi-Model ECMWF/GFS/ICON/GEM/JMA]
+        Collector --> METAR[Live Airport METAR]
     end
 
-    subgraph Logic Processing
+    subgraph Algorithm Layer
         Collector --> DEB[DEB Dynamic Weighting]
-        DEB --> DB[(daily_records JSON Database)]
-        Collector --> Logic[Settlement Analysis / Trend Detection]
+        DEB --> DB[(daily_records Database)]
+        Collector --> Prob[Gaussian Probability Engine]
+        Collector --> Logic[Settlement Boundary / Trend Analysis]
     end
 
     subgraph AI Decision Layer
-        DEB --> AIAnalyzer[Groq/LLaMA 3.3 AI Model]
-        Logic --> AIAnalyzer
-        METAR --> AIAnalyzer
+        DEB --> AI[Groq LLaMA 70B]
+        Prob --> AI
+        Logic --> AI
+        METAR --> AI
     end
 
-    AIAnalyzer -->|Generates: Spread+Logic+Confidence| Bot
-    Bot -->|Returns Analysis Snapshot| User
+    AI -->|Market Call + Logic + Confidence| Bot
+    Bot -->|DEB Blend + Probability + AI Analysis| User
 ```
 
 ---
 
 ## 💡 Trading Tips
 
-1. **Reference DEB Blended Value**: When models diverge, the DEB corrected value is usually more reliable than a single forecast.
-2. **Observe AI Confidence**: A confidence score below 5 indicates high uncertainty in the current meteorological environment.
-3. **Watch Settlement Boundaries**: When the observed high is near X.5, be wary of rounding jumps during Wunderground settlements.
+1. **Watch Settlement Probability**: The probability engine is math-based and more objective than AI subjective judgment. When one temperature has > 65% probability, the direction is relatively clear.
+2. **Reference DEB Blended Value**: When models diverge, the DEB corrected value is usually more reliable than any single forecast.
+3. **Observe AI Confidence**: A score below 5 indicates high uncertainty—consider staying on the sidelines.
+4. **Watch Settlement Boundaries**: When the observed high is near X.5, be wary of rounding jumps during WU settlements.
+5. **Distribution Center μ**: The μ value shown in the probability display represents the algorithm's expected most likely actual high temperature—compare it directly with the Polymarket odds.
 
 ---
 
-_Updated 2026_
+_Updated 2026-02-27_
