@@ -40,6 +40,7 @@ CITY_RISK_PROFILES = {
         "bias_direction": "机场海拔更高",
         "warning": "内陆高原城市，昼夜温差大（可达15°C+）",
         "season_notes": "下午最高温时偏差会放大",
+        "metar_rounding": "激进取整：METAR 报告的温度偏高，例如实际 3.4°C 可能报告为 4°C，这意味着 METAR 显示的整数温度往往已接近下一个 WU 结算值。",
     },
     "london": {
         "risk_level": "low",
