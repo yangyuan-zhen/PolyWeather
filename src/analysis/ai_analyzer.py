@@ -1,25 +1,31 @@
 import os
+import time
 import requests
 from loguru import logger
+
+# 主力模型 + 备用模型（当主力 500 时自动降级）
+MODELS = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+]
 
 def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> str:
     """
     通过 Groq API (LLaMA 3.3 70B) 对天气态势进行极速交易分析
+    内置自动重试 + 模型降级机制
     """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         logger.warning("GROQ_API_KEY 未配置，跳过 AI 分析")
         return ""
     
-    try:
-        # Groq 完全兼容 OpenAI 的 API 格式，直接用 requests 简单直观
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        prompt = f"""
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    prompt = f"""
 你是一个专业的天气衍生品（如 Polymarket）交易员。你的任务是分析当前天气特征，判断今日实测最高温是否能达到或超过预报中的【最高值】。
 
 请综合以下提供的【{city_name}】气象特征进行深度推理。
@@ -43,24 +49,42 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
 - 🎯 置信度: [1-10]/10
 """
 
-        payload = {
-            "model": "llama-3.3-70b-versatile", # 使用标准稳定的 70B 模型
-            "messages": [
-                {"role": "system", "content": "你是不讲废话、只看数据的专业气象分析师。"},
-                {"role": "user", "content": prompt}
-            ],
-            "temperature": 0.5,
-            "max_tokens": 150
-        }
+    for model in MODELS:
+        for attempt in range(2):  # 每个模型最多重试 2 次
+            try:
+                payload = {
+                    "model": model,
+                    "messages": [
+                        {"role": "system", "content": "你是不讲废话、只看数据的专业气象分析师。"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.5,
+                    "max_tokens": 150
+                }
 
-        # 索非亚直连应该没问题
-        response = requests.post(url, json=payload, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        result = response.json()
-        content = result['choices'][0]['message']['content'].strip()
-        
-        return content
-    except Exception as e:
-        logger.error(f"Groq API 调用失败: {e}")
-        return f"\n⚠️ Groq 分析暂不可用 ({str(e)[:30]})"
+                response = requests.post(url, json=payload, headers=headers, timeout=15)
+                response.raise_for_status()
+                
+                result = response.json()
+                content = result['choices'][0]['message']['content'].strip()
+                
+                if model != MODELS[0]:
+                    logger.info(f"Groq 降级到备用模型 {model} 成功")
+                return content
+                
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response is not None else 0
+                if status in (500, 502, 503) and attempt == 0:
+                    logger.warning(f"Groq {model} 返回 {status}，{1.5}s 后重试...")
+                    time.sleep(1.5)
+                    continue
+                else:
+                    logger.warning(f"Groq {model} 失败 (HTTP {status})，尝试下一个模型...")
+                    break  # 换下一个模型
+            except Exception as e:
+                logger.warning(f"Groq {model} 异常: {e}，尝试下一个模型...")
+                break
+
+    logger.error("所有 Groq 模型均不可用")
+    return "\n⚠️ Groq AI 暂时不可用，请稍后再试"
+
