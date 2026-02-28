@@ -113,11 +113,14 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     om_today = daily.get("temperature_2m_max", [None])[0]
 
     # === 峰值时刻预测（提前计算，供概率引擎使用）===
+    # 只在白天时段 (8:00-19:00) 内搜索，避免夜间温差小时把凌晨误判为峰值
     peak_hours = []
     if times and temps and om_today is not None:
         for t_str, temp in zip(times, temps):
             if t_str.startswith(local_date_str) and abs(temp - om_today) <= 0.2:
-                peak_hours.append(t_str.split("T")[1][:5])
+                hour = int(t_str.split("T")[1][:2])
+                if 8 <= hour <= 19:  # 只考虑白天
+                    peak_hours.append(t_str.split("T")[1][:5])
     if peak_hours:
         first_peak_h = int(peak_hours[0].split(":")[0])
         last_peak_h = int(peak_hours[-1].split(":")[0])
