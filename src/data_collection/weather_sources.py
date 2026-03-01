@@ -309,15 +309,31 @@ class WeatherDataCollector:
                 except:
                     continue
 
-            # 3. 提取最近 4 条报文的温度（用于趋势分析）
+            # 3. 提取最近 4 条报文的多维数据（温度 + 风/云/压强，用于趋势和 shock_score）
             recent_temps_raw = []  # [(local_time_str, temp_c), ...]
+            recent_obs_raw = []    # [{time, temp, wdir, wspd, clouds, altim}, ...]
             for obs in data[:4]:  # data 已按时间倒序
                 obs_temp = obs.get("temp")
-                if obs_temp is not None:
-                    obs_dt_iter = _parse_rawob_time(obs)
-                    if obs_dt_iter:
-                        local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
-                        recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
+                obs_dt_iter = _parse_rawob_time(obs)
+                if obs_temp is not None and obs_dt_iter:
+                    local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
+                    recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
+                    # 云量码映射: CLR=0, FEW=1, SCT=2, BKN=3, OVC=4
+                    cloud_rank_map = {"CLR": 0, "SKC": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4}
+                    clouds = obs.get("clouds", [])
+                    max_cloud_rank = 0
+                    for c in clouds:
+                        rank = cloud_rank_map.get(c.get("cover", ""), 0)
+                        if rank > max_cloud_rank:
+                            max_cloud_rank = rank
+                    recent_obs_raw.append({
+                        "time": local_rt.strftime("%H:%M"),
+                        "temp": obs_temp,
+                        "wdir": obs.get("wdir"),
+                        "wspd": obs.get("wspd"),
+                        "cloud_rank": max_cloud_rank,  # 0~4
+                        "altim": obs.get("altim"),
+                    })
 
             # 转换为单位
             if use_fahrenheit:
@@ -354,6 +370,7 @@ class WeatherDataCollector:
                     "clouds": latest.get("clouds", []),
                 },
                 "recent_temps": recent_temps,  # 最近4条: [("15:00", 5), ("14:20", 5), ...]
+                "recent_obs": recent_obs_raw,  # 最近4条多维数据（风/云/压强）
                 "unit": unit,
             }
 
