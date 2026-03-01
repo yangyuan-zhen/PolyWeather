@@ -613,6 +613,12 @@ def start_bot():
             metar = weather_data.get("metar", {})
             mgm = weather_data.get("mgm", {})
             
+            # 数值归一化
+            def _sf(v):
+                if v is None: return None
+                try: return float(v)
+                except: return None
+            
             temp_unit = open_meteo.get("unit", "celsius")
             temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
             
@@ -636,9 +642,9 @@ def start_bot():
             dates = daily.get("time", [])[:3]
             max_temps = daily.get("temperature_2m_max", [])[:3]
             
-            nws_high = weather_data.get("nws", {}).get("today_high")
-            mgm_high = mgm.get("today_high")
-            mb_high = weather_data.get("meteoblue", {}).get("today_high")
+            nws_high = _sf(weather_data.get("nws", {}).get("today_high"))
+            mgm_high = _sf(mgm.get("today_high"))
+            mb_high = _sf(weather_data.get("meteoblue", {}).get("today_high"))
             
             # 今天对比
             today_t = max_temps[0] if max_temps else "N/A"
@@ -658,7 +664,7 @@ def start_bot():
             # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
             divergence_warning = ""
             if mb_high is not None and max_temps:
-                diff = abs(mb_high - max_temps[0])
+                diff = abs(mb_high - (_sf(max_temps[0]) or 0))
                 threshold = 5.0 if temp_unit == "fahrenheit" else 2.5
                 if diff > threshold:
                     divergence_warning = f" ⚠️ <b>模型显著分歧 ({diff:.1f}{temp_symbol})</b>"
@@ -691,8 +697,8 @@ def start_bot():
 
             # --- 4. 核心 实测区 (合并 METAR 和 MGM) ---
             # 基础数据优先用 METAR
-            cur_temp = metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp")
-            max_p = metar.get("current", {}).get("max_temp_so_far") if metar else None
+            cur_temp = _sf(metar.get("current", {}).get("temp") if metar else mgm.get("current", {}).get("temp"))
+            max_p = _sf(metar.get("current", {}).get("max_temp_so_far") if metar else None)
             max_p_time = metar.get("current", {}).get("max_temp_time") if metar else None
             obs_t_str = "N/A"
             metar_age_min = None  # METAR 数据年龄（分钟）
