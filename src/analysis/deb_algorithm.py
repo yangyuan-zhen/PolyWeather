@@ -198,6 +198,12 @@ def get_deb_accuracy(city_name):
         if deb_pred is None or actual is None:
             continue
         
+        try:
+            deb_pred = float(deb_pred)
+            actual = float(actual)
+        except:
+            continue
+        
         total += 1
         deb_wu = round(deb_pred)
         actual_wu = round(actual)
