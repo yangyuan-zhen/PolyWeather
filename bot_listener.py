@@ -423,6 +423,7 @@ def start_bot():
             total_days = 0
             hits = 0
             deb_errors = []
+            signed_errors = []  # 有正负的误差 (DEB - 实测)
             model_errors = {}
             
             for date_str in sorted(city_data.keys()):
@@ -448,10 +449,17 @@ def start_bot():
                     deb_wu = round(deb_pred)
                     hit = deb_wu == actual_wu
                     if hit: hits += 1
-                    deb_errors.append(abs(deb_pred - actual))
+                    err = deb_pred - actual
+                    deb_errors.append(abs(err))
+                    signed_errors.append(err)
                     icon = "✅" if hit else "❌"
                     retro = "≈" if 'deb_prediction' not in record else ""
-                    lines.append(f"  {date_str}: DEB {retro}{deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}")
+                    # 错误类型标签
+                    if not hit:
+                        err_label = f" 低估{abs(err):.1f}°" if err < 0 else f" 高估{abs(err):.1f}°"
+                    else:
+                        err_label = f" 偏差{abs(err):.1f}°"
+                    lines.append(f"  {date_str}: DEB {retro}{deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}{err_label}")
                 elif date_str == today_str:
                     lines.append(f"  {date_str}: 📍 今天进行中 (实测暂 {actual})")
                 
@@ -478,7 +486,34 @@ def start_bot():
                         tag = " ⭐" if mae <= deb_mae else ""
                         lines.append(f"  {m}: {mae:.1f}°{tag}")
                     lines.append(f"  <b>DEB融合: {deb_mae:.1f}°</b>")
-                    lines.append(f"\n💡 MAE = 平均绝对误差，数值越小预测越准。⭐ 表示优于 DEB 融合。")
+                
+                # 偏差模式分析
+                mean_bias = sum(signed_errors) / len(signed_errors)
+                underest = sum(1 for e in signed_errors if e < -0.3)
+                overest = sum(1 for e in signed_errors if e > 0.3)
+                
+                lines.append(f"\n🔍 <b>偏差分析</b>：")
+                if abs(mean_bias) > 0.3:
+                    bias_dir = "低估" if mean_bias < 0 else "高估"
+                    lines.append(f"  ⚠️ 系统性{bias_dir}：平均偏差 {mean_bias:+.1f}°")
+                else:
+                    lines.append(f"  ✅ 无明显系统偏差（平均 {mean_bias:+.1f}°）")
+                lines.append(f"  低估 {underest} 次 | 高估 {overest} 次 | 准确 {total_days - underest - overest} 次")
+                
+                # 可操作建议
+                lines.append(f"\n💡 <b>建议</b>：")
+                if underest > overest and abs(mean_bias) > 0.5:
+                    lines.append(f"  该城市模型集体低估趋势明显（{mean_bias:+.1f}°），实际最高温可能比 DEB 融合值高 {abs(mean_bias):.0f}-{abs(mean_bias)+0.5:.0f}°。交易时建议适当看高。")
+                elif overest > underest and abs(mean_bias) > 0.5:
+                    lines.append(f"  该城市模型集体高估趋势明显（{mean_bias:+.1f}°），实际最高温可能比 DEB 融合值低。交易时建议适当看低。")
+                elif deb_mae > 1.5:
+                    lines.append(f"  该城市预报波动大 (MAE {deb_mae:.1f}°)，建议观望或轻仓。")
+                elif hit_rate >= 60:
+                    lines.append(f"  DEB 表现良好，可作为主要参考。")
+                else:
+                    lines.append(f"  数据积累中，建议结合 AI 分析综合判断。")
+                
+                lines.append(f"\n📝 MAE = 平均绝对误差，越小越准。⭐ = 优于 DEB 融合。")
             else:
                 lines.append("\n⏳ 尚无完整的 DEB 预测记录，明天起开始统计。")
             
