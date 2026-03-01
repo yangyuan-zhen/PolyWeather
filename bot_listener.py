@@ -426,6 +426,7 @@ def start_bot():
                         tag = " ⭐" if mae <= deb_mae else ""
                         lines.append(f"  {m}: {mae:.1f}°{tag}")
                     lines.append(f"  <b>DEB融合: {deb_mae:.1f}°</b>")
+                    lines.append(f"\n💡 MAE = 平均绝对误差，数值越小预测越准。⭐ 表示优于 DEB 融合。")
             else:
                 lines.append("\n⏳ 尚无完整的 DEB 预测记录，明天起开始统计。")
             
