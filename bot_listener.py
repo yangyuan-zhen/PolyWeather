@@ -78,12 +78,20 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     if city_name and current_forecasts:
         blended_high, weight_info = calculate_dynamic_weights(city_name, current_forecasts)
         if blended_high is not None:
-            insights.insert(0, f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info})")
+            # 展示准确率（如果有历史数据）
+            from src.analysis.deb_algorithm import get_deb_accuracy
+            accuracy = get_deb_accuracy(city_name)
+            acc_tag = ""
+            if accuracy:
+                hit_rate, mae, total_days, details_str = accuracy
+                acc_tag = f"\n   📈 <b>DEB 历史战绩</b>：{details_str}"
+            
+            insights.insert(0, f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info}){acc_tag}")
             ai_features.append(f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。")
             
         # 顺便把今天的预测记录下来供之后回测用
         try:
-            update_daily_record(city_name, local_date_str, current_forecasts, max_so_far)
+            update_daily_record(city_name, local_date_str, current_forecasts, max_so_far, deb_prediction=blended_high)
         except:
             pass
 
