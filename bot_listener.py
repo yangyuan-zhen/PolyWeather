@@ -78,15 +78,7 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     if city_name and current_forecasts:
         blended_high, weight_info = calculate_dynamic_weights(city_name, current_forecasts)
         if blended_high is not None:
-            # 展示准确率（如果有历史数据）
-            from src.analysis.deb_algorithm import get_deb_accuracy
-            accuracy = get_deb_accuracy(city_name)
-            acc_tag = ""
-            if accuracy:
-                hit_rate, mae, total_days, details_str = accuracy
-                acc_tag = f"\n   📈 <b>DEB 历史战绩</b>：{details_str}"
-            
-            insights.insert(0, f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info}){acc_tag}")
+            insights.insert(0, f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info})")
             ai_features.append(f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。")
             
         # 顺便把今天的预测记录下来供之后回测用
@@ -322,6 +314,7 @@ def start_bot():
             "🌡️ <b>PolyWeather 天气查询机器人</b>\n\n"
             "可用指令:\n"
             "/city [城市名] - 查询城市天气预测与实测\n"
+            "/deb [城市名] - 查看 DEB 融合预测准确率\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "示例: <code>/city 伦敦</code>"
         )
@@ -334,6 +327,106 @@ def start_bot():
             f"🎯 当前聊天的 Chat ID 是: <code>{message.chat.id}</code>",
             parse_mode="HTML",
         )
+
+    @bot.message_handler(commands=["deb"])
+    def deb_accuracy(message):
+        """查询 DEB 融合预测的历史准确率"""
+        try:
+            parts = message.text.split(maxsplit=1)
+            if len(parts) < 2:
+                bot.reply_to(message, "❓ 用法: <code>/deb ankara</code>", parse_mode="HTML")
+                return
+            
+            city_input = parts[1].strip().lower()
+            # 复用城市名映射
+            city_aliases = {
+                "ank": "ankara", "lon": "london", "par": "paris",
+                "nyc": "new york", "chi": "chicago", "dal": "dallas",
+                "mia": "miami", "atl": "atlanta", "sea": "seattle",
+                "tor": "toronto", "sel": "seoul", "ba": "buenos aires",
+                "wel": "wellington",
+            }
+            city_name = city_aliases.get(city_input, city_input)
+            
+            from src.analysis.deb_algorithm import get_deb_accuracy, load_history
+            import os as _os
+            
+            # 获取详细历史数据
+            project_root = _os.path.dirname(_os.path.abspath(__file__))
+            history_file = _os.path.join(project_root, 'data', 'daily_records.json')
+            data = load_history(history_file)
+            
+            if city_name not in data or not data[city_name]:
+                bot.reply_to(message, f"❌ 暂无 {city_name} 的历史数据", parse_mode="HTML")
+                return
+            
+            city_data = data[city_name]
+            from datetime import datetime as _dt
+            today_str = _dt.now().strftime("%Y-%m-%d")
+            
+            lines = [f"📊 <b>DEB 准确率报告 - {city_name.title()}</b>\n"]
+            
+            # 逐日明细
+            lines.append("<b>📅 逐日记录：</b>")
+            total_days = 0
+            hits = 0
+            deb_errors = []
+            model_errors = {}
+            
+            for date_str in sorted(city_data.keys()):
+                record = city_data[date_str]
+                actual = record.get('actual_high')
+                deb_pred = record.get('deb_prediction')
+                forecasts = record.get('forecasts', {})
+                
+                if actual is None:
+                    continue
+                
+                actual_wu = round(actual)
+                
+                # DEB 命中判断
+                if deb_pred is not None and date_str != today_str:
+                    total_days += 1
+                    deb_wu = round(deb_pred)
+                    hit = deb_wu == actual_wu
+                    if hit: hits += 1
+                    deb_errors.append(abs(deb_pred - actual))
+                    icon = "✅" if hit else "❌"
+                    lines.append(f"  {date_str}: DEB {deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}")
+                elif date_str == today_str:
+                    lines.append(f"  {date_str}: 📍 今天进行中 (实测暂 {actual})")
+                else:
+                    lines.append(f"  {date_str}: 实测 {actual}→<b>{actual_wu}</b> (无DEB记录)")
+                
+                # 各模型误差统计
+                if date_str != today_str and actual is not None:
+                    for model, pred in forecasts.items():
+                        if pred is not None:
+                            if model not in model_errors:
+                                model_errors[model] = []
+                            model_errors[model].append(abs(pred - actual))
+            
+            # 汇总
+            if total_days > 0:
+                hit_rate = hits / total_days * 100
+                deb_mae = sum(deb_errors) / len(deb_errors)
+                lines.append(f"\n🎯 <b>DEB 总战绩</b>：WU命中 {hits}/{total_days} (<b>{hit_rate:.0f}%</b>) | MAE: {deb_mae:.1f}°")
+                
+                # 和各模型 MAE 对比
+                if model_errors:
+                    lines.append(f"\n📈 <b>模型 MAE 对比</b>：")
+                    model_maes = {m: sum(e)/len(e) for m, e in model_errors.items() if e}
+                    sorted_models = sorted(model_maes.items(), key=lambda x: x[1])
+                    for m, mae in sorted_models:
+                        tag = " ⭐" if mae <= deb_mae else ""
+                        lines.append(f"  {m}: {mae:.1f}°{tag}")
+                    lines.append(f"  <b>DEB融合: {deb_mae:.1f}°</b>")
+            else:
+                lines.append("\n⏳ 尚无完整的 DEB 预测记录，明天起开始统计。")
+            
+            bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
+        except Exception as e:
+            bot.reply_to(message, f"❌ 查询失败: {e}")
 
     @bot.message_handler(commands=["city"])
     def get_city_info(message):
