@@ -178,13 +178,13 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
             
             # ① 风向变化项 (0~0.4)
             # 角度差 × 风速放大系数（风速 > 10kt 时权重高，弱风忽略噪声）
-            wdir_old = oldest.get("wdir")
-            wdir_new = newest.get("wdir")
-            wspd_new = newest.get("wspd") or 0
+            wdir_old = _sf(oldest.get("wdir"))
+            wdir_new = _sf(newest.get("wdir"))
+            wspd_new = _sf(newest.get("wspd")) or 0
             if wdir_old is not None and wdir_new is not None:
                 angle_diff = abs(wdir_new - wdir_old)
                 if angle_diff > 180: angle_diff = 360 - angle_diff
-                wind_weight = min(wspd_new / 15.0, 1.0)  # 15kt 以上满权
+                wind_weight = min(wspd_new / 15.0, 1.0)
                 wind_shock = min(angle_diff / 90.0, 1.0) * wind_weight * 0.4
                 shock_score += wind_shock
             
@@ -198,8 +198,8 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
             
             # ③ 气压变化项 (0~0.25)
             # 2h 内气压变化超过 2hPa 视为异常
-            altim_old = oldest.get("altim")
-            altim_new = newest.get("altim")
+            altim_old = _sf(oldest.get("altim"))
+            altim_new = _sf(newest.get("altim"))
             if altim_old is not None and altim_new is not None:
                 press_diff = abs(altim_new - altim_old)
                 press_shock = min(press_diff / 4.0, 1.0) * 0.25
