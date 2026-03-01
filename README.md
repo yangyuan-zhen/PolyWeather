@@ -24,17 +24,25 @@ The system automatically tracks the historical performance of weather models (EC
 
 ### 2. 🎲 Math Probability Engine (Settlement Probability)
 
-Automatically computes the probability for each possible WU settlement integer using a Gaussian distribution fitted to the ensemble forecast:
+Automatically computes the probability for each possible WU settlement integer using a Gaussian distribution:
 
-- **Distribution Center μ**: Weighted average of DEB/multi-model median (70%) and ensemble median (30%). Auto-corrects upward when actual METAR max exceeds μ and is still rising.
-- **Standard Deviation σ**: Derived from the 51-member ensemble P10/P90 (σ = (P90-P10) / 2.56).
-- **Time Decay**: σ dynamically narrows based on the current time relative to the predicted peak window:
-  - Before peak: σ × 1.0 (maximum uncertainty)
-  - During peak window: σ × 0.7 (settling)
-  - After peak: σ × 0.3 (outcome mostly determined)
-- **Observed Floor**: Temperatures below the current METAR max WU value are automatically excluded (can't go back down).
-- **Interval Integration**: Integrates over each WU rounding interval [N-0.5, N+0.5) to compute the probability of settling at integer N.
-- **Display**: `🎲 Settlement Probability (μ=3.7): 4°C [3.5~4.5) 68% | 3°C [2.5~3.5) 32%`
+- **Distribution Center μ**: Weighted average of DEB/multi-model median (70%) and ensemble median (30%). Auto-corrects upward when METAR max exceeds μ.
+- **Standard Deviation σ — Three-Layer Pipeline**:
+  1. **Ensemble Base**: σ = (P90-P10) / 2.56
+  2. **MAE Floor**: Uses DEB’s historical MAE as σ minimum—prevents ensembles from underestimating true uncertainty
+  3. **Shock Score Amplifier**: σ × (1 + 0.5 × shock_score) when weather is changing rapidly
+- **Time Decay**: Before peak σ×1.0 → During peak σ×0.7 → After peak σ×0.3
+- **Observed Floor**: Temperatures below the current METAR max WU value are excluded
+
+#### 💥 Shock Score: Weather Disruption Soft Scorer (0~1)
+
+Evaluates environmental stability from the last 4 METAR observations. Higher = more unstable = wider σ:
+
+| Component             | Weight | Trigger                                                           |
+| :-------------------- | :----- | :---------------------------------------------------------------- |
+| Wind Direction Change | 0~0.4  | Angle difference × wind speed amplifier (weak winds downweighted) |
+| Cloud Cover Jump      | 0~0.35 | Cloud code escalation (FEW→BKN, etc.)                             |
+| Pressure Change       | 0~0.25 | >2hPa change within 2 hours                                       |
 
 ### 3. 🤖 AI Deep Analysis (Groq LLaMA 3.3 70B)
 
@@ -91,12 +99,12 @@ chmod +x ~/update.sh
 
 ## 🕹️ Bot Commands
 
-| Command             | Description                                                                      |
-| :------------------ | :------------------------------------------------------------------------------- |
-| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights. |
-| `/deb [city_name]`  | View DEB blended forecast accuracy (WU hit rate, MAE) and model comparison.      |
-| `/id`               | View the Chat ID of the current conversation.                                    |
-| `/help`             | Display help information.                                                        |
+| Command             | Description                                                                                                                         |
+| :------------------ | :---------------------------------------------------------------------------------------------------------------------------------- |
+| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights.                                                    |
+| `/deb [city_name]`  | View DEB accuracy: daily hit/miss breakdown, bias analysis (underestimate/overestimate), model MAE comparison, trading suggestions. |
+| `/id`               | View the Chat ID of the current conversation.                                                                                       |
+| `/help`             | Display help information.                                                                                                           |
 
 ### Supported Cities
 
@@ -123,6 +131,8 @@ graph TD
         DEB --> DB[(daily_records Database)]
         Peak --> Prob[Gaussian Probability Engine]
         Collector --> Prob
+        METAR --> Shock[Shock Score]
+        Shock --> Prob
         Collector --> Logic[Settlement Boundary / Trend Analysis]
     end
 
