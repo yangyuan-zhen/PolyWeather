@@ -151,6 +151,16 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         sigma = (ens_p90 - ens_p10) / 2.56
         if sigma < 0.1: sigma = 0.1  # 防止除以零
         
+        # 用 DEB 历史 MAE 作为 σ 的下限
+        # 如果模型过去的平均误差远大于集合预报的 σ，说明集合低估了真实不确定性
+        if city_name:
+            from src.analysis.deb_algorithm import get_deb_accuracy
+            acc = get_deb_accuracy(city_name)
+            if acc:
+                _, hist_mae, _, _ = acc
+                if hist_mae > sigma:
+                    sigma = hist_mae
+        
         # 时间修正：根据当前时间距峰值的位置调整 σ
         # 峰值前：σ 不变（不确定性最大）
         # 峰值窗口内：σ 缩小 30%（正在定型）
