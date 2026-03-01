@@ -29,9 +29,15 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     if not metar or not open_meteo:
         return "", ""
 
-        
-    curr_temp = metar.get("current", {}).get("temp")
-    max_so_far = metar.get("current", {}).get("max_temp_so_far")  # 今日实测最高
+    # 数值归一化：防止 JSON 反序列化后的 str 类型炸数学运算
+    def _sf(v):
+        """safe float"""
+        if v is None: return None
+        try: return float(v)
+        except: return None
+    
+    curr_temp = _sf(metar.get("current", {}).get("temp"))
+    max_so_far = _sf(metar.get("current", {}).get("max_temp_so_far"))
     daily = open_meteo.get("daily", {})
     hourly = open_meteo.get("hourly", {})
     times = hourly.get("time", [])
@@ -41,16 +47,16 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     # 抽取各个确定性预报值构成的字典
     current_forecasts = {}
     if daily.get("temperature_2m_max"):
-        current_forecasts["Open-Meteo"] = daily.get("temperature_2m_max")[0]
+        current_forecasts["Open-Meteo"] = _sf(daily.get("temperature_2m_max")[0])
     if mb.get("today_high") is not None:
-        current_forecasts["Meteoblue"] = mb.get("today_high")
+        current_forecasts["Meteoblue"] = _sf(mb.get("today_high"))
     if nws.get("today_high") is not None:
-        current_forecasts["NWS"] = nws.get("today_high")
+        current_forecasts["NWS"] = _sf(nws.get("today_high"))
         
     mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
     for m_name, m_val in mm_forecasts.items():
         if m_val is not None:
-            current_forecasts[m_name] = m_val
+            current_forecasts[m_name] = _sf(m_val)
             
     # 从 URL/入参里我们暂时拿不到城名，为了 DEB 追溯我们在后方的总控那里提取。这里的 analyze_weather_trend 主要计算最高预留。
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
@@ -129,9 +135,9 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
 
     # === 集合预报区间 ===
     ensemble = weather_data.get("ensemble", {})
-    ens_p10 = ensemble.get("p10")
-    ens_p90 = ensemble.get("p90")
-    ens_median = ensemble.get("median")
+    ens_p10 = _sf(ensemble.get("p10"))
+    ens_p90 = _sf(ensemble.get("p90"))
+    ens_median = _sf(ensemble.get("median"))
     if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
         msg1 = f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，90% 区间 [{ens_p10}{temp_symbol} - {ens_p90}{temp_symbol}]。"
         if not is_cooling: insights.append(msg1)
