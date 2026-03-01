@@ -434,10 +434,14 @@ def start_bot():
                 
                 if actual is None:
                     continue
+                try:
+                    actual = float(actual)
+                    if deb_pred is not None: deb_pred = float(deb_pred)
+                except: continue
                 
                 # 如果没有存 DEB 预测值，用当天各模型平均值回算
                 if deb_pred is None and forecasts:
-                    valid_preds = [v for v in forecasts.values() if v is not None]
+                    valid_preds = [float(v) for v in forecasts.values() if v is not None]
                     if valid_preds:
                         deb_pred = round(sum(valid_preds) / len(valid_preds), 1)
                 
@@ -469,7 +473,7 @@ def start_bot():
                         if pred is not None:
                             if model not in model_errors:
                                 model_errors[model] = []
-                            model_errors[model].append(abs(pred - actual))
+                            model_errors[model].append(abs(float(pred) - actual))
             
             # 汇总
             if total_days > 0:
