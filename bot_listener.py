@@ -890,7 +890,8 @@ def start_bot():
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
         except Exception as e:
-            logger.error(f"查询失败: {e}")
+            import traceback
+            logger.error(f"查询失败: {e}\n{traceback.format_exc()}")
             bot.reply_to(message, f"❌ 查询失败: {e}")
 
     logger.info("🤖 Bot 启动中...")
