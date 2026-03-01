@@ -19,7 +19,8 @@ The system automatically tracks the historical performance of weather models (EC
 - **Error-Based Weighting**: Dynamically adjusts model weights based on their Mean Absolute Error (MAE) over the past 7 days. Lower error = higher weight.
 - **Blended Forecast**: Provides a bias-corrected "DEB Blended High Temperature" recommendation.
 - **Self-Learning**: Requires at least 2 days of observations before activating weight differentiation. Uses equal-weight averaging during cold start.
-- **Concurrency Safe**: Built-in memory cache and file locking (fcntl) for high-concurrency group chat queries.
+- **Accuracy Tracking**: Use the `/deb` command to view DEB's historical WU settlement hit rate and MAE, compared against individual models.
+- **Auto-Cleanup**: Only retains the last 14 days of records to prevent unbounded data growth.
 
 ### 2. 🎲 Math Probability Engine (Settlement Probability)
 
@@ -93,6 +94,7 @@ chmod +x ~/update.sh
 | Command             | Description                                                                      |
 | :------------------ | :------------------------------------------------------------------------------- |
 | `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights. |
+| `/deb [city_name]`  | View DEB blended forecast accuracy (WU hit rate, MAE) and model comparison.      |
 | `/id`               | View the Chat ID of the current conversation.                                    |
 | `/help`             | Display help information.                                                        |
 
@@ -148,4 +150,4 @@ graph TD
 
 ---
 
-_Updated 2026-02-27_
+_Updated 2026-03-01_
