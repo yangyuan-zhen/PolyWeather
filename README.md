@@ -46,13 +46,14 @@ Evaluates environmental stability from the last 4 METAR observations. Higher = m
 
 ### 3. 🤖 AI Deep Analysis (Groq LLaMA 3.3 70B)
 
-Feeds wind speed, wind direction, cloud cover, solar radiation, and METAR trend data into LLaMA 70B:
+Feeds all weather data into LLaMA 70B, analyzed via a **P1→P4 Priority Chain**:
 
-- **Logical Reasoning**: 2-3 sentences analyzing airport dynamics, explicitly referencing Open-Meteo forecast and DEB blended values as benchmarks.
-- **Time Awareness**: Analysis considers how much time remains until the predicted peak, judging remaining warming potential.
-- **Market Call**: Explicitly states the expected peak time window and specific temperature betting range. Calls "dead market" when cooling is confirmed.
-- **Confidence Score**: Quantitative 1-10 confidence rating.
-- **High Availability**: Built-in auto-retry + fallback model degradation (70B → 8B) to withstand Groq API 500/503 outages.
+- **P1 Real-Time Rhythm** (highest priority): 2 consecutive METAR highs → still warming; 2 non-highs past peak → dead market. Warming under low radiation → advection-driven, forecasts often underestimate.
+- **P2 Inhibitors**: Humidity >80% **and** BKN/OVC sustained 2 reports → effective suppression. "Partly cloudy" alone is insufficient.
+- **P3 Math Probability**: References settlement probability but cannot override P1 observations.
+- **P4 Forecast Background**: DEB/forecasts used for ceiling estimation; downweighted when actuals exceed them.
+- **Dead Market Trigger**: Past peak window + 2 consecutive non-highs + cloud buildup or precipitation → dead market declared.
+- **High Availability**: Auto-retry + fallback model degradation (70B → 8B) to withstand Groq API outages.
 
 ### 4. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
 
@@ -151,12 +152,12 @@ graph TD
 
 ## 💡 Trading Tips
 
-1. **Watch Settlement Probability**: The probability engine is math-based and more objective than AI judgment. When one temperature has > 65% probability, the direction is relatively clear.
-2. **Observe Time Decay**: Probabilities auto-lock as time progresses. After peak hours, the engine narrows σ dramatically, concentrating results around the observed max.
-3. **Reference DEB Blended Value**: When models diverge, the DEB corrected value is usually more reliable than any single forecast.
-4. **Observe AI Confidence**: A score below 5 indicates high uncertainty—consider staying on the sidelines.
-5. **Watch Settlement Boundaries**: When the observed high is near X.5, be wary of rounding jumps during WU settlements.
-6. **Distribution Center μ**: The μ value shown in the probability display represents the algorithm's expected most likely actual high temperature—compare it directly with the Polymarket odds.
+1. **Real-time Rhythm First**: AI analysis follows P1→P4 priority. If live METAR trends (P1) conflict with math probabilities (P3)—e.g., probability favors 7°C but it’s still surging toward 8°C—always prioritize the live trend.
+2. **Watch Settlement Probabilities**: Based on Gaussian models, direction is most certain when a temperature has > 70% probability while P1 rhythm is flat.
+3. **Reference DEB Bias**: Use `/deb` to check for systematic bias. If a city is consistently "underestimated," habitually bid one WU notch higher.
+4. **Identify Dead Market Signals**: When AI declares a "Dead Market," it usually means warming power is exhausted (post-peak window + no new highs + cloud buildup). This is an opportunity to harvest remaining value.
+5. **Mind the Boundaries**: When the observed high is near X.5 (e.g., 7.50°C), be wary of Wunderground rounding up to 8 due to tiny fluctuations.
+6. **Center Point μ**: The μ value represents the expected actual high. When market prices deviate significantly from μ, an arbitrage opportunity may exist.
 
 ---
 
