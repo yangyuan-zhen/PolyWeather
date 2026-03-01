@@ -382,6 +382,12 @@ def start_bot():
                 if actual is None:
                     continue
                 
+                # 如果没有存 DEB 预测值，用当天各模型平均值回算
+                if deb_pred is None and forecasts:
+                    valid_preds = [v for v in forecasts.values() if v is not None]
+                    if valid_preds:
+                        deb_pred = round(sum(valid_preds) / len(valid_preds), 1)
+                
                 actual_wu = round(actual)
                 
                 # DEB 命中判断
@@ -392,11 +398,10 @@ def start_bot():
                     if hit: hits += 1
                     deb_errors.append(abs(deb_pred - actual))
                     icon = "✅" if hit else "❌"
-                    lines.append(f"  {date_str}: DEB {deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}")
+                    retro = "≈" if 'deb_prediction' not in record else ""
+                    lines.append(f"  {date_str}: DEB {retro}{deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}")
                 elif date_str == today_str:
                     lines.append(f"  {date_str}: 📍 今天进行中 (实测暂 {actual})")
-                else:
-                    lines.append(f"  {date_str}: 实测 {actual}→<b>{actual_wu}</b> (无DEB记录)")
                 
                 # 各模型误差统计
                 if date_str != today_str and actual is not None:
