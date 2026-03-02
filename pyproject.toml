@@ -1,14 +1,9 @@
 [tool.ruff]
+# Assume Python 3.11.
+target-version = "py311"
+
 # Set the maximum line length to 88.
 line-length = 88
-
-# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
-select = ["E", "F"]
-ignore = []
-
-# Allow autofix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
 
 # Exclude a variety of commonly ignored directories.
 exclude = [
@@ -34,13 +29,21 @@ exclude = [
     "node_modules",
     "venv",
 ]
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+select = ["E", "F"]
+ignore = ["E501"]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+unfixable = []
+
 per-file-ignores = {}
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-# Assume Python 3.11.
-target-version = "py311"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
