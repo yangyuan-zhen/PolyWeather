@@ -12,7 +12,7 @@ if project_root not in sys.path:
 from src.utils.config_loader import load_config  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
-from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record # noqa: E402
+from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
 
 
 def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
