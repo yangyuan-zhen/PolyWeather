@@ -207,7 +207,9 @@ class WeatherDataCollector:
 
         return None
 
-    def fetch_metar(self, city: str, use_fahrenheit: bool = False, utc_offset: int = 0) -> Optional[Dict]:
+    def fetch_metar(
+        self, city: str, use_fahrenheit: bool = False, utc_offset: int = 0
+    ) -> Optional[Dict]:
         """
         从 NOAA Aviation Weather Center 获取 METAR 航空气象数据
 
@@ -236,10 +238,10 @@ class WeatherDataCollector:
             }
 
             response = self.session.get(
-                url, 
-                params=params, 
+                url,
+                params=params,
                 headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             response.raise_for_status()
 
@@ -251,46 +253,60 @@ class WeatherDataCollector:
             latest = data[0]
             temp_c = latest.get("temp")
             dewp_c = latest.get("dewp")
-            
+
             # 从 rawOb 中提取真实观测时间（比 reportTime 更准确，reportTime 会被取整）
             # rawOb 格式: "METAR EGLC 271150Z AUTO ..." → "271150Z" → 27日11:50 UTC
             def _parse_rawob_time(obs):
                 """从 rawOb 中提取精确的 UTC 观测时间"""
                 raw = obs.get("rawOb", "")
                 import re as _re
-                m = _re.search(r'\b(\d{2})(\d{2})(\d{2})Z\b', raw)
+
+                m = _re.search(r"\b(\d{2})(\d{2})(\d{2})Z\b", raw)
                 if m:
-                    day, hour, minute = int(m.group(1)), int(m.group(2)), int(m.group(3))
+                    _day, hour, minute = (
+                        int(m.group(1)),
+                        int(m.group(2)),
+                        int(m.group(3)),
+                    )
                     # 用 reportTime 的日期部分 + rawOb 的时分
                     fallback = obs.get("reportTime", "")
                     try:
                         clean = fallback.replace(" ", "T")
-                        if not clean.endswith("Z"): clean += "Z"
+                        if not clean.endswith("Z"):
+                            clean += "Z"
                         base_dt = datetime.fromisoformat(clean.replace("Z", "+00:00"))
                         result = base_dt.replace(hour=hour, minute=minute, second=0)
                         # 处理跨日（如 rawOb 是23:50但 reportTime 已经是次日00:00）
                         if result > base_dt + timedelta(hours=2):
                             result -= timedelta(days=1)
                         return result
-                    except:
+                    except Exception:
                         pass
                 # fallback 到 reportTime
                 fallback = obs.get("reportTime", "")
                 try:
                     clean = fallback.replace(" ", "T")
-                    if not clean.endswith("Z"): clean += "Z"
+                    if not clean.endswith("Z"):
+                        clean += "Z"
                     return datetime.fromisoformat(clean.replace("Z", "+00:00"))
-                except:
+                except Exception:
                     return None
-            
+
             obs_dt = _parse_rawob_time(latest)
-            obs_time = obs_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z") if obs_dt else latest.get("reportTime", "")
+            obs_time = (
+                obs_dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                if obs_dt
+                else latest.get("reportTime", "")
+            )
 
             # 2. 精确计算"当地今天"的最高温
             from datetime import timezone, timedelta
+
             now_utc = datetime.now(timezone.utc)
             local_now = now_utc + timedelta(seconds=utc_offset)
-            local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+            local_midnight = local_now.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
             utc_midnight = local_midnight - timedelta(seconds=utc_offset)
 
             max_so_far_c = -999
@@ -306,12 +322,12 @@ class WeatherDataCollector:
                             max_so_far_c = t
                             local_report = obs_dt_iter + timedelta(seconds=utc_offset)
                             max_temp_time = local_report.strftime("%H:%M")
-                except:
+                except Exception:
                     continue
 
             # 3. 提取最近 4 条报文的多维数据（温度 + 风/云/压强，用于趋势和 shock_score）
             recent_temps_raw = []  # [(local_time_str, temp_c), ...]
-            recent_obs_raw = []    # [{time, temp, wdir, wspd, clouds, altim}, ...]
+            recent_obs_raw = []  # [{time, temp, wdir, wspd, clouds, altim}, ...]
             for obs in data[:4]:  # data 已按时间倒序
                 obs_temp = obs.get("temp")
                 obs_dt_iter = _parse_rawob_time(obs)
@@ -319,21 +335,30 @@ class WeatherDataCollector:
                     local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
                     recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
                     # 云量码映射: CLR=0, FEW=1, SCT=2, BKN=3, OVC=4
-                    cloud_rank_map = {"CLR": 0, "SKC": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4}
+                    cloud_rank_map = {
+                        "CLR": 0,
+                        "SKC": 0,
+                        "FEW": 1,
+                        "SCT": 2,
+                        "BKN": 3,
+                        "OVC": 4,
+                    }
                     clouds = obs.get("clouds", [])
                     max_cloud_rank = 0
                     for c in clouds:
                         rank = cloud_rank_map.get(c.get("cover", ""), 0)
                         if rank > max_cloud_rank:
                             max_cloud_rank = rank
-                    recent_obs_raw.append({
-                        "time": local_rt.strftime("%H:%M"),
-                        "temp": obs_temp,
-                        "wdir": obs.get("wdir"),
-                        "wspd": obs.get("wspd"),
-                        "cloud_rank": max_cloud_rank,  # 0~4
-                        "altim": obs.get("altim"),
-                    })
+                    recent_obs_raw.append(
+                        {
+                            "time": local_rt.strftime("%H:%M"),
+                            "temp": obs_temp,
+                            "wdir": obs.get("wdir"),
+                            "wspd": obs.get("wspd"),
+                            "cloud_rank": max_cloud_rank,  # 0~4
+                            "altim": obs.get("altim"),
+                        }
+                    )
 
             # 转换为单位
             if use_fahrenheit:
@@ -342,7 +367,9 @@ class WeatherDataCollector:
                 dewp = dewp_c * 9 / 5 + 32 if dewp_c is not None else None
                 unit = "fahrenheit"
                 # 转换最近温度
-                recent_temps = [(t, round(v * 9 / 5 + 32, 1)) for t, v in recent_temps_raw]
+                recent_temps = [
+                    (t, round(v * 9 / 5 + 32, 1)) for t, v in recent_temps_raw
+                ]
             else:
                 temp = temp_c
                 max_so_far = max_so_far_c if max_so_far_c > -900 else None
@@ -358,7 +385,9 @@ class WeatherDataCollector:
                 "observation_time": obs_time,
                 "current": {
                     "temp": round(temp, 1) if temp is not None else None,
-                    "max_temp_so_far": round(max_so_far, 1) if max_so_far is not None else None,
+                    "max_temp_so_far": round(max_so_far, 1)
+                    if max_so_far is not None
+                    else None,
                     "max_temp_time": max_temp_time,
                     "dewpoint": round(dewp, 1) if dewp is not None else None,
                     "humidity": latest.get("rh"),
@@ -396,17 +425,18 @@ class WeatherDataCollector:
         # 必须带 Origin，否则会被反爬拦截
         headers = {
             "Origin": "https://www.mgm.gov.tr",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
         results = {}
-        
+
         try:
             # 1. 实时数据 (添加时间戳防止 CDN 缓存)
             import time
+
             obs_resp = self.session.get(
-                f"{base_url}/sondurumlar?istno={istno}&_={int(time.time()*1000)}", 
-                headers=headers, 
-                timeout=self.timeout
+                f"{base_url}/sondurumlar?istno={istno}&_={int(time.time() * 1000)}",
+                headers=headers,
+                timeout=self.timeout,
             )
             if obs_resp.status_code == 200:
                 data = obs_resp.json()
@@ -415,26 +445,47 @@ class WeatherDataCollector:
                     # MGM 数据字段映射
                     # ruzgarHiz 实测为 km/h，转为 m/s 需要除以 3.6
                     ruz_hiz_kmh = latest.get("ruzgarHiz", 0)
-                    
+
                     # MGM 返回 -9999 表示数据缺失，需要过滤
                     def _valid(v):
                         return v is not None and v > -9000
-                    
+
                     results["current"] = {
-                        "temp": latest.get("sicaklik") if _valid(latest.get("sicaklik")) else None,
-                        "feels_like": latest.get("hissedilenSicaklik") if _valid(latest.get("hissedilenSicaklik")) else None,
-                        "humidity": latest.get("nem") if _valid(latest.get("nem")) else None,
-                        "wind_speed_ms": round(ruz_hiz_kmh / 3.6, 1) if _valid(ruz_hiz_kmh) else None,
-                        "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1) if _valid(ruz_hiz_kmh) else None,
-                        "wind_dir": latest.get("ruzgarYon") if _valid(latest.get("ruzgarYon")) else None,
-                        "rain_24h": latest.get("toplamYagis") if _valid(latest.get("toplamYagis")) else None,
-                        "pressure": latest.get("aktuelBasinc") if _valid(latest.get("aktuelBasinc")) else None,
+                        "temp": latest.get("sicaklik")
+                        if _valid(latest.get("sicaklik"))
+                        else None,
+                        "feels_like": latest.get("hissedilenSicaklik")
+                        if _valid(latest.get("hissedilenSicaklik"))
+                        else None,
+                        "humidity": latest.get("nem")
+                        if _valid(latest.get("nem"))
+                        else None,
+                        "wind_speed_ms": round(ruz_hiz_kmh / 3.6, 1)
+                        if _valid(ruz_hiz_kmh)
+                        else None,
+                        "wind_speed_kt": round(ruz_hiz_kmh / 1.852, 1)
+                        if _valid(ruz_hiz_kmh)
+                        else None,
+                        "wind_dir": latest.get("ruzgarYon")
+                        if _valid(latest.get("ruzgarYon"))
+                        else None,
+                        "rain_24h": latest.get("toplamYagis")
+                        if _valid(latest.get("toplamYagis"))
+                        else None,
+                        "pressure": latest.get("aktuelBasinc")
+                        if _valid(latest.get("aktuelBasinc"))
+                        else None,
                         "cloud_cover": latest.get("kapalilik"),  # 0-8 八分位云量
-                        "mgm_max_temp": latest.get("maxSicaklik") if _valid(latest.get("maxSicaklik")) else None,
+                        "mgm_max_temp": latest.get("maxSicaklik")
+                        if _valid(latest.get("maxSicaklik"))
+                        else None,
                         "time": latest.get("veriZamani"),
-                        "station_name": latest.get("istasyonAd") or latest.get("adi") or latest.get("merkezAd") or "Ankara Esenboğa"
+                        "station_name": latest.get("istasyonAd")
+                        or latest.get("adi")
+                        or latest.get("merkezAd")
+                        or "Ankara Esenboğa",
                     }
-            
+
             # 2. 每日预报（尝试两个可能的 API 路径）
             forecast_urls = [
                 f"{base_url}/tahminler/gunluk?istno={istno}",
@@ -442,7 +493,9 @@ class WeatherDataCollector:
             ]
             for forecast_url in forecast_urls:
                 try:
-                    daily_resp = self.session.get(forecast_url, headers=headers, timeout=self.timeout)
+                    daily_resp = self.session.get(
+                        forecast_url, headers=headers, timeout=self.timeout
+                    )
                     if daily_resp.status_code == 200:
                         forecasts = daily_resp.json()
                         if forecasts and isinstance(forecasts, list):
@@ -452,17 +505,29 @@ class WeatherDataCollector:
                             if high_val is not None:
                                 results["today_high"] = high_val
                                 results["today_low"] = low_val
-                                logger.info(f"📋 MGM 每日预报: 最高 {high_val}°C, 最低 {low_val}°C (from {forecast_url})")
+                                logger.info(
+                                    f"📋 MGM 每日预报: 最高 {high_val}°C, 最低 {low_val}°C (from {forecast_url})"
+                                )
                                 break
                             else:
                                 # 记录所有可用字段，方便调试
-                                available_keys = [k for k in today.keys() if "yuksek" in k.lower() or "sicaklik" in k.lower() or "gun" in k.lower()]
-                                logger.warning(f"MGM 每日预报: enYuksekGun1 为空，可用字段: {available_keys}")
+                                available_keys = [
+                                    k
+                                    for k in today.keys()
+                                    if "yuksek" in k.lower()
+                                    or "sicaklik" in k.lower()
+                                    or "gun" in k.lower()
+                                ]
+                                logger.warning(
+                                    f"MGM 每日预报: enYuksekGun1 为空，可用字段: {available_keys}"
+                                )
                     else:
-                        logger.debug(f"MGM forecast URL {forecast_url} returned {daily_resp.status_code}")
+                        logger.debug(
+                            f"MGM forecast URL {forecast_url} returned {daily_resp.status_code}"
+                        )
                 except Exception as e:
                     logger.debug(f"MGM forecast URL {forecast_url} failed: {e}")
-            
+
             return results if "current" in results else None
         except Exception as e:
             logger.error(f"MGM API 请求失败 ({istno}): {e}")
@@ -477,24 +542,28 @@ class WeatherDataCollector:
             # 1. 获取网格点
             points_url = f"https://api.weather.gov/points/{lat},{lon}"
             headers = {"User-Agent": "PolyWeather/1.0 (weather-bot)"}
-            
-            points_resp = self.session.get(points_url, headers=headers, timeout=self.timeout)
+
+            points_resp = self.session.get(
+                points_url, headers=headers, timeout=self.timeout
+            )
             points_resp.raise_for_status()
             points_data = points_resp.json()
-            
+
             forecast_url = points_data.get("properties", {}).get("forecast")
             if not forecast_url:
                 return None
-            
+
             # 2. 获取预报
-            forecast_resp = self.session.get(forecast_url, headers=headers, timeout=self.timeout)
+            forecast_resp = self.session.get(
+                forecast_url, headers=headers, timeout=self.timeout
+            )
             forecast_resp.raise_for_status()
             forecast_data = forecast_resp.json()
-            
+
             periods = forecast_data.get("properties", {}).get("periods", [])
             if not periods:
                 return None
-            
+
             # 3. 提取今日最高温（找 isDaytime=True 的第一个）
             today_high = None
             for p in periods:
@@ -507,7 +576,7 @@ class WeatherDataCollector:
                     if p.get("isDaytime"):
                         today_high = p.get("temperature")
                         break
-            
+
             return {
                 "source": "nws",
                 "today_high": today_high,
@@ -570,19 +639,19 @@ class WeatherDataCollector:
             if "temperature_2m_max_ecmwf_ifs04" in daily_data:
                 ecmwf_max = daily_data.get("temperature_2m_max_ecmwf_ifs04", [])
                 hrrr_max = daily_data.get("temperature_2m_max_ncep_hrrr_conus", [])
-                
+
                 # 记录今日模型分歧
                 daily_data["model_split"] = {
                     "ecmwf": ecmwf_max[0] if ecmwf_max else None,
-                    "hrrr": hrrr_max[0] if hrrr_max else None
+                    "hrrr": hrrr_max[0] if hrrr_max else None,
                 }
-                
+
                 # 智能合并：HRRR 仅覆盖 48 小时，远期用 ECMWF 补全
                 merged_max = []
                 for i in range(len(ecmwf_max)):
                     hrrr_val = hrrr_max[i] if i < len(hrrr_max) else None
                     ecmwf_val = ecmwf_max[i] if i < len(ecmwf_max) else None
-                    
+
                     # 优先 HRRR，其次 ECMWF，都没有就跳过
                     if hrrr_val is not None:
                         merged_max.append(hrrr_val)
@@ -596,7 +665,9 @@ class WeatherDataCollector:
             # 映射逐小时数据
             hourly_data = data.get("hourly", {})
             if "temperature_2m_ncep_hrrr_conus" in hourly_data:
-                hourly_data["temperature_2m"] = hourly_data["temperature_2m_ncep_hrrr_conus"]
+                hourly_data["temperature_2m"] = hourly_data[
+                    "temperature_2m_ncep_hrrr_conus"
+                ]
 
             # 计算精确的当地时间
             now_utc = datetime.utcnow()
@@ -662,7 +733,7 @@ class WeatherDataCollector:
                 if key.startswith("temperature_2m_max") and key != "temperature_2m_max":
                     if values and values[0] is not None:
                         today_highs.append(values[0])
-            
+
             # 也检查非成员键（有些返回格式不同）
             if not today_highs:
                 raw_max = daily.get("temperature_2m_max", [])
@@ -712,14 +783,14 @@ class WeatherDataCollector:
         """
         从 Open-Meteo 获取多个独立 NWP 模型的预报
         用于真正的多模型共识评分
-        
+
         模型列表:
         - ECMWF IFS (欧洲中期天气预报中心)
         - GFS (美国 NOAA)
         - ICON (德国气象局 DWD)
         - GEM (加拿大气象局)
         - JMA (日本气象厅)
-        
+
         返回 3 天的预报数据，支持今日+明日共识分析
         """
         try:
@@ -748,7 +819,7 @@ class WeatherDataCollector:
 
             daily = data.get("daily", {})
             dates = daily.get("time", [])
-            
+
             model_labels = {
                 "ecmwf_ifs025": "ECMWF",
                 "gfs_seamless": "GFS",
@@ -756,7 +827,7 @@ class WeatherDataCollector:
                 "gem_seamless": "GEM",
                 "jma_seamless": "JMA",
             }
-            
+
             # 按天提取每个模型的预报
             daily_forecasts = {}  # {"2026-02-23": {"ECMWF": 7.9, "GFS": 6.5, ...}, ...}
             for day_idx, date_str in enumerate(dates):
@@ -778,8 +849,10 @@ class WeatherDataCollector:
             forecasts = daily_forecasts.get(today_date, {})
 
             labels_str = ", ".join([f"{k}={v}" for k, v in forecasts.items()])
-            logger.info(f"🔬 Multi-model ({len(forecasts)}个, {len(daily_forecasts)}天): {labels_str}")
-            
+            logger.info(
+                f"🔬 Multi-model ({len(forecasts)}个, {len(daily_forecasts)}天): {labels_str}"
+            )
+
             return {
                 "source": "multi_model",
                 "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
@@ -814,47 +887,47 @@ class WeatherDataCollector:
                 "lat": lat,
                 "lon": lon,
                 "format": "json",
-                "as_daylight": "true"
+                "as_daylight": "true",
             }
-            
-            response = self.session.get(
-                url,
-                params=params,
-                timeout=self.timeout
-            )
+
+            response = self.session.get(url, params=params, timeout=self.timeout)
             response.raise_for_status()
             data = response.json()
-            
+
             day_data = data.get("data_day", {})
             max_temps = day_data.get("temperature_max", [])
-            
+
             if not max_temps:
-                logger.warning(f"Meteoblue API 返回数据中找不到最高温 (坐标: {lat},{lon})")
+                logger.warning(
+                    f"Meteoblue API 返回数据中找不到最高温 (坐标: {lat},{lon})"
+                )
                 return None
 
             # 2. 转换单位
             def c_to_f(c):
-                return round((c * 9/5) + 32, 1)
+                return round((c * 9 / 5) + 32, 1)
 
             result = {
                 "source": "meteoblue",
                 "today_high": None,
                 "daily_highs": [],
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
-                "url": f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E" # 仅供参考
+                "url": f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E",  # 仅供参考
             }
 
             # 提取今日最高
             mb_today_c = max_temps[0]
             result["today_high"] = c_to_f(mb_today_c) if use_fahrenheit else mb_today_c
-            
+
             # 提取接下来几天的最高温
             if use_fahrenheit:
                 result["daily_highs"] = [c_to_f(t) for t in max_temps]
             else:
                 result["daily_highs"] = max_temps
 
-            logger.info(f"✅ Meteoblue API 获取成功 ({lat},{lon}): 今天 {result['today_high']}{result['unit']}")
+            logger.info(
+                f"✅ Meteoblue API 获取成功 ({lat},{lon}): 今天 {result['today_high']}{result['unit']}"
+            )
             return result
         except Exception as e:
             logger.error(f"Meteoblue API fetch failed: {e}")
@@ -867,9 +940,18 @@ class WeatherDataCollector:
         """
         # 1. 尝试英文月份
         months = {
-            "January": "01", "February": "02", "March": "03", "April": "04",
-            "May": "05", "June": "06", "July": "07", "August": "08",
-            "September": "09", "October": "10", "November": "11", "December": "12",
+            "January": "01",
+            "February": "02",
+            "March": "03",
+            "April": "04",
+            "May": "05",
+            "June": "06",
+            "July": "07",
+            "August": "08",
+            "September": "09",
+            "October": "10",
+            "November": "11",
+            "December": "12",
         }
         for month_name, month_val in months.items():
             if month_name in title:
@@ -886,7 +968,7 @@ class WeatherDataCollector:
             day = int(zh_match.group(2))
             year = datetime.now().year
             return f"{year}-{month:02d}-{day:02d}"
-        
+
         # 3. 尝试 ISO 格式 YYYY-MM-DD
         iso_match = re.search(r"(\d{4})-(\d{2})-(\d{2})", title)
         if iso_match:
@@ -900,21 +982,21 @@ class WeatherDataCollector:
         """
         # 坐标使用 METAR 机场位置（Polymarket 以机场数据结算）
         static_coords = {
-            "london": {"lat": 51.5053, "lon": 0.0553},        # EGLC London City
-            "paris": {"lat": 49.0097, "lon": 2.5478},         # LFPG Charles de Gaulle
-            "new york": {"lat": 40.7750, "lon": -73.8750},    # KLGA LaGuardia
+            "london": {"lat": 51.5053, "lon": 0.0553},  # EGLC London City
+            "paris": {"lat": 49.0097, "lon": 2.5478},  # LFPG Charles de Gaulle
+            "new york": {"lat": 40.7750, "lon": -73.8750},  # KLGA LaGuardia
             "new york's central park": {"lat": 40.7812, "lon": -73.9665},
-            "nyc": {"lat": 40.7750, "lon": -73.8750},         # KLGA LaGuardia
-            "seattle": {"lat": 47.4499, "lon": -122.3118},    # KSEA Sea-Tac
-            "chicago": {"lat": 41.9769, "lon": -87.9081},     # KORD O'Hare
-            "dallas": {"lat": 32.8459, "lon": -96.8509},      # KDAL Love Field
-            "miami": {"lat": 25.7933, "lon": -80.2906},       # KMIA International
-            "atlanta": {"lat": 33.6367, "lon": -84.4281},     # KATL Hartsfield-Jackson
-            "seoul": {"lat": 37.4691, "lon": 126.4510},       # RKSI Incheon
-            "toronto": {"lat": 43.6759, "lon": -79.6294},     # CYYZ Pearson
-            "ankara": {"lat": 40.1281, "lon": 32.9950},       # LTAC Esenboğa
-            "wellington": {"lat": -41.3272, "lon": 174.8053}, # NZWN Wellington
-            "buenos aires": {"lat": -34.8222, "lon": -58.5358}, # SAEZ Ezeiza
+            "nyc": {"lat": 40.7750, "lon": -73.8750},  # KLGA LaGuardia
+            "seattle": {"lat": 47.4499, "lon": -122.3118},  # KSEA Sea-Tac
+            "chicago": {"lat": 41.9769, "lon": -87.9081},  # KORD O'Hare
+            "dallas": {"lat": 32.8459, "lon": -96.8509},  # KDAL Love Field
+            "miami": {"lat": 25.7933, "lon": -80.2906},  # KMIA International
+            "atlanta": {"lat": 33.6367, "lon": -84.4281},  # KATL Hartsfield-Jackson
+            "seoul": {"lat": 37.4691, "lon": 126.4510},  # RKSI Incheon
+            "toronto": {"lat": 43.6759, "lon": -79.6294},  # CYYZ Pearson
+            "ankara": {"lat": 40.1281, "lon": 32.9950},  # LTAC Esenboğa
+            "wellington": {"lat": -41.3272, "lon": 174.8053},  # NZWN Wellington
+            "buenos aires": {"lat": -34.8222, "lon": -58.5358},  # SAEZ Ezeiza
         }
 
         normalized_city = city.lower().strip()
@@ -956,30 +1038,64 @@ class WeatherDataCollector:
 
         # 1. 优先尝试已知城市列表 (硬编码匹配)
         known_cities = {
-            "london": "London", "伦敦": "London",
-            "new york": "New York", "new york's central park": "New York", "nyc": "New York", "纽约": "New York",
-            "seattle": "Seattle", "西雅图": "Seattle",
-            "chicago": "Chicago", "芝加哥": "Chicago",
-            "dallas": "Dallas", "达拉斯": "Dallas",
-            "miami": "Miami", "迈阿密": "Miami",
-            "atlanta": "Atlanta", "亚特兰大": "Atlanta",
-            "seoul": "Seoul", "首尔": "Seoul",
-            "toronto": "Toronto", "多伦多": "Toronto",
-            "ankara": "Ankara", "安卡拉": "Ankara",
-            "wellington": "Wellington", "惠灵顿": "Wellington",
-            "buenos aires": "Buenos Aires", "布宜诺斯艾利斯": "Buenos Aires"
+            "london": "London",
+            "伦敦": "London",
+            "new york": "New York",
+            "new york's central park": "New York",
+            "nyc": "New York",
+            "纽约": "New York",
+            "seattle": "Seattle",
+            "西雅图": "Seattle",
+            "chicago": "Chicago",
+            "芝加哥": "Chicago",
+            "dallas": "Dallas",
+            "达拉斯": "Dallas",
+            "miami": "Miami",
+            "迈阿密": "Miami",
+            "atlanta": "Atlanta",
+            "亚特兰大": "Atlanta",
+            "seoul": "Seoul",
+            "首尔": "Seoul",
+            "toronto": "Toronto",
+            "多伦多": "Toronto",
+            "ankara": "Ankara",
+            "安卡拉": "Ankara",
+            "wellington": "Wellington",
+            "惠灵顿": "Wellington",
+            "buenos aires": "Buenos Aires",
+            "布宜诺斯艾利斯": "Buenos Aires",
         }
-        
+
         for key, val in known_cities.items():
             if key in q:
                 return val
 
         # 2. 从英文模板中提取
-        triggers = ["temperature in ", "temp in ", "weather in ", "highest-temperature-in-", "temperature-in-"]
+        triggers = [
+            "temperature in ",
+            "temp in ",
+            "weather in ",
+            "highest-temperature-in-",
+            "temperature-in-",
+        ]
         for trigger in triggers:
             if trigger in q:
                 part = q.split(trigger)[1]
-                delimiters = [" on ", " at ", " above ", " below ", " be ", " is ", " will ", " has ", " reached ", "?", " (", ", ", "-"]
+                delimiters = [
+                    " on ",
+                    " at ",
+                    " above ",
+                    " below ",
+                    " be ",
+                    " is ",
+                    " will ",
+                    " has ",
+                    " reached ",
+                    "?",
+                    " (",
+                    ", ",
+                    "-",
+                ]
                 city = part
                 for d in delimiters:
                     if d in city:
@@ -1039,22 +1155,25 @@ class WeatherDataCollector:
                 results["open-meteo"] = open_meteo
                 # 获取时区偏移以过滤 METAR
                 utc_offset = open_meteo.get("utc_offset", 0)
-                metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset)
+                metar_data = self.fetch_metar(
+                    city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset
+                )
                 if metar_data:
                     results["metar"] = metar_data
-                
+
                 # 对安卡拉，额外获取 MGM 官方数据
                 if city_lower == "ankara":
                     mgm_data = self.fetch_from_mgm("17128")
                     if mgm_data:
                         results["mgm"] = mgm_data
-                
+
                 # 对伦敦，获取 Meteoblue 预测 (公认最准)
                 if city_lower == "london":
                     mb_data = self.fetch_from_meteoblue(
-                        lat, lon, 
+                        lat,
+                        lon,
                         timezone_name=open_meteo.get("timezone", "UTC"),
-                        use_fahrenheit=use_fahrenheit
+                        use_fahrenheit=use_fahrenheit,
                     )
                     if mb_data:
                         results["meteoblue"] = mb_data
@@ -1064,14 +1183,16 @@ class WeatherDataCollector:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:
                         results["nws"] = nws_data
-                
+
                 # 集合预报 (所有城市通用，用于不确定性分析)
                 ens_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
                 if ens_data:
                     results["ensemble"] = ens_data
-                
+
                 # 多模型预报 (所有城市通用，用于共识评分)
-                mm_data = self.fetch_multi_model(lat, lon, use_fahrenheit=use_fahrenheit)
+                mm_data = self.fetch_multi_model(
+                    lat, lon, use_fahrenheit=use_fahrenheit
+                )
                 if mm_data:
                     results["multi_model"] = mm_data
             else:

@@ -9,6 +9,7 @@ MODELS = [
     "llama-3.1-8b-instant",
 ]
 
+
 def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> str:
     """
     通过 Groq API (LLaMA 3.3 70B) 对天气态势进行极速交易分析
@@ -18,13 +19,10 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
     if not api_key:
         logger.warning("GROQ_API_KEY 未配置，跳过 AI 分析")
         return ""
-    
+
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+
     prompt = f"""
 你是一个专业的天气衍生品（如 Polymarket）交易员。你的任务是分析当前天气特征，判断今日实测最高温是否能达到或超过预报中的【最高值】。
 
@@ -69,23 +67,26 @@ P4 **预报背景**（最低优先级）：
                 payload = {
                     "model": model,
                     "messages": [
-                        {"role": "system", "content": "你是不讲废话、只看数据的专业气象分析师。"},
-                        {"role": "user", "content": prompt}
+                        {
+                            "role": "system",
+                            "content": "你是不讲废话、只看数据的专业气象分析师。",
+                        },
+                        {"role": "user", "content": prompt},
                     ],
                     "temperature": 0.5,
-                    "max_tokens": 250
+                    "max_tokens": 250,
                 }
 
                 response = requests.post(url, json=payload, headers=headers, timeout=15)
                 response.raise_for_status()
-                
+
                 result = response.json()
-                content = result['choices'][0]['message']['content'].strip()
-                
+                content = result["choices"][0]["message"]["content"].strip()
+
                 if model != MODELS[0]:
                     logger.info(f"Groq 降级到备用模型 {model} 成功")
                 return content
-                
+
             except requests.exceptions.HTTPError as e:
                 status = e.response.status_code if e.response is not None else 0
                 if status in (500, 502, 503) and attempt == 0:
@@ -93,7 +94,9 @@ P4 **预报背景**（最低优先级）：
                     time.sleep(1.5)
                     continue
                 else:
-                    logger.warning(f"Groq {model} 失败 (HTTP {status})，尝试下一个模型...")
+                    logger.warning(
+                        f"Groq {model} 失败 (HTTP {status})，尝试下一个模型..."
+                    )
                     break  # 换下一个模型
             except Exception as e:
                 logger.warning(f"Groq {model} 异常: {e}，尝试下一个模型...")
@@ -101,4 +104,3 @@ P4 **预报背景**（最低优先级）：
 
     logger.error("所有 Groq 模型均不可用")
     return "\n⚠️ Groq AI 暂时不可用，请稍后再试"
-

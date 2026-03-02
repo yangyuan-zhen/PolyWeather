@@ -1,12 +1,13 @@
 import os
 from dotenv import load_dotenv
 
+
 def load_config():
     """
     Load configuration from environment variables and config files
     """
     load_dotenv()
-    
+
     def get_env_or_none(key):
         val = os.getenv(key)
         if not val or "your_" in val.lower() or val.strip() == "":
@@ -40,14 +41,14 @@ def load_config():
                 "market_volume_signal": 0.15,
                 "orderbook_analysis": 0.10,
                 "technical_indicators": 0.05,
-                "onchain_whale_signal": 0.05
+                "onchain_whale_signal": 0.05,
             }
         },
         "app": {
             "log_level": os.getenv("LOG_LEVEL", "INFO"),
             "env": os.getenv("ENV", "development"),
             "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
-        }
+        },
     }
-    
+
     return config

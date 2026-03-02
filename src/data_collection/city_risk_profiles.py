@@ -27,7 +27,6 @@ CITY_RISK_PROFILES = {
         "warning": "冬天温差最不稳定",
         "season_notes": "冬季",
     },
-    
     # 🟡 中危城市 - 存在系统偏差，需注意
     "ankara": {
         "risk_level": "medium",
@@ -90,7 +89,6 @@ CITY_RISK_PROFILES = {
         "warning": "机场在北郊，冬季北风时比市区更冷",
         "season_notes": "夏季热浪期间偏差最大",
     },
-    
     # 🟢 低危城市 - 数据相对靠谱
     "toronto": {
         "risk_level": "low",
@@ -170,7 +168,7 @@ CITY_RISK_PROFILES = {
 def get_city_risk_profile(city_name: str) -> dict:
     """获取城市的风险档案"""
     city_lower = city_name.lower().strip()
-    
+
     city_key = city_lower
     return CITY_RISK_PROFILES.get(city_key)
 
@@ -179,32 +177,28 @@ def format_risk_warning(profile: dict, temp_symbol: str) -> str:
     """格式化风险警告信息"""
     if not profile:
         return ""
-    
+
     lines = []
-    
+
     # 风险等级标题
-    risk_labels = {
-        "high": "高危",
-        "medium": "中危", 
-        "low": "低危"
-    }
+    risk_labels = {"high": "高危", "medium": "中危", "low": "低危"}
     risk_label = risk_labels.get(profile["risk_level"], "未知")
     lines.append(f"⚠️ <b>数据偏差风险</b>: {profile['risk_emoji']} {risk_label}")
-    
+
     # 机场信息
     lines.append(f"   📍 机场: {profile['airport_name']} ({profile['icao']})")
     lines.append(f"   📏 距市区: {profile['distance_km']}km")
-    
+
     # 典型偏差
     if profile["typical_bias_f"] >= 1.0:
         lines.append(f"   📊 偏差: ±{profile['typical_bias_f']}{temp_symbol}")
-    
+
     # 偏差方向说明
     if profile["bias_direction"]:
         lines.append(f"   💡 {profile['bias_direction']}")
-    
+
     # 特别警告
     if profile["warning"]:
         lines.append(f"   🚨 {profile['warning']}")
-    
+
     return "\n".join(lines)
