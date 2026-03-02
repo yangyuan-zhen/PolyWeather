@@ -217,53 +217,48 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
             sigma *= 0.3  # 峰值已过，结果基本锁定
         elif first_peak_h <= local_hour_frac <= last_peak_h:
             sigma *= 0.7  # 正在峰值窗口
-        
-        # 分布中心：以 DEB/多模型中位数为主锚（权重 70%），集合中位数为辅（30%）
-        # 因为集合中位数经常偏保守，不如确定性模型和 DEB 融合值可靠
-        if forecast_median is not None:
-            mu = forecast_median * 0.7 + ens_median * 0.3
-        else:
-            mu = ens_median
-        
-        # 实时修正：如果实测最高温已经超过了预报的 μ，则向上修正
+    # === 判定是否为“死盘” (Dead Market) ===
+    # 逻辑：深夜且气温大幅回落，或者已过峰值时段且明显降温
+    is_dead_market = False
+    current_temp = _sf(metar.get("current", {}).get("temp"))
+    if max_so_far is not None and current_temp is not None:
+        # 深夜死盘：21:00 后，回落超过 3°C
+        if local_hour >= 21 and max_so_far - current_temp >= 3.0:
+            is_dead_market = True
+        # 峰值后死盘：已过最热窗口，回落超过 1.5°C
+        elif local_hour > last_peak_h and max_so_far - current_temp >= 1.5:
+            is_dead_market = True
+
+    if ens_p10 is not None and ens_p90 is not None and not is_dead_market:
+        # (现有概率计算逻辑保留，但增加 is_dead_market 排除)
+        mu = forecast_median * 0.7 + ens_median * 0.3 if forecast_median is not None else ens_median
         if max_so_far is not None and max_so_far > mu:
-            if not is_cooling:
-                # 还在升温，预期最终比当前再高一点
-                mu = max_so_far + 0.3
-            else:
-                # 已降温，以实测峰值为锚
-                mu = max_so_far
+            mu = max_so_far + (0.3 if not is_cooling else 0.0)
         
-        # 简化的正态 CDF (不依赖 scipy)
         def _norm_cdf(x, m, s):
             return 0.5 * (1 + _math.erf((x - m) / (s * _math.sqrt(2))))
         
-        # 计算每个 WU 整数区间 [N-0.5, N+0.5) 的概率
-        center = round(mu)
-        candidates = range(center - 2, center + 3)  # 5 个候选整数
-        # 如果已有实测最高温，低于该值的 WU 结算整数不可能出现
         min_possible_wu = round(max_so_far) if max_so_far is not None else -999
-        
         probs = {}
-        for n in candidates:
-            if n < min_possible_wu:
-                continue  # 已实测超过此温度，不可能结算在这里
+        for n in range(round(mu) - 2, round(mu) + 3):
+            if n < min_possible_wu: continue
             p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
-            if p > 0.01:
-                probs[n] = p
+            if p > 0.01: probs[n] = p
         
-        # 归一化
         total_p = sum(probs.values())
         if total_p > 0:
             probs = {k: v / total_p for k, v in probs.items()}
-        
-        # 格式化输出（按概率从高到低排列，显示区间）
-        sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
-        prob_parts = [f"{int(t)}{temp_symbol} [{t-0.5}~{t+0.5}) {p*100:.0f}%" for t, p in sorted_probs[:4]]
-        if prob_parts:
-            prob_str = " | ".join(prob_parts)
-            insights.append(f"🎲 <b>结算概率</b> (μ={mu:.1f})：{prob_str}")
-            ai_features.append(f"🎲 数学概率分布：{prob_str}")
+            sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+            prob_parts = [f"{int(t)}{temp_symbol} [{t-0.5}~{t+0.5}) {p*100:.0f}%" for t, p in sorted_probs[:4]]
+            if prob_parts:
+                prob_str = " | ".join(prob_parts)
+                insights.append(f"🎲 <b>结算概率</b> (μ={mu:.1f})：{prob_str}")
+                ai_features.append(f"🎲 数学概率分布：{prob_str}")
+    elif is_dead_market:
+        settled_wu = round(max_so_far) if max_so_far is not None else "N/A"
+        dead_msg = f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} (死盘确认)"
+        insights.append(dead_msg)
+        ai_features.append(f"🎲 状态: 确认死盘，结算已无悬念。")
 
     # === 实测已超预报 & 趋势输出 ===
     if max_so_far is not None and forecast_high is not None:
