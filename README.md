@@ -1,7 +1,9 @@
 # 🌡️ PolyWeather: Intelligent Weather Quant Analysis Bot
 
+[![Python application CI](https://github.com/yangyuan-zhen/PolyWeather/actions/workflows/python-app.yml/badge.svg)](https://github.com/yangyuan-zhen/PolyWeather/actions/workflows/python-app.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/yangyuan-zhen/PolyWeather)
-
 PolyWeather is a weather analysis tool built for prediction markets like **Polymarket**. It aggregates multi-source forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to help users evaluate weather trading risks more scientifically.
 
 <p align="center">
@@ -74,15 +76,35 @@ Feeds all weather data into LLaMA 70B, analyzed via a **P1→P4 Priority Chain**
 
 ### Requirements
 
-- **Python 3.11+**
-- Install dependencies: `pip install -r requirements.txt`
-- **Environment Variables**: Set `TELEGRAM_BOT_TOKEN` and `GROQ_API_KEY` in your `.env` file.
+- **Python 3.11+** or **Docker & Docker Compose**
+- **Environment Variables**: Set parameters in your `.env` file (copy from `.env.example`).
 
-### VPS Quick Deployment
+### 🐳 Docker Deployment (Recommended)
 
-1. Clone the repository and install dependencies.
+The easiest and most stable way to deploy without system dependency conflicts.
+
+1. **Clone and configure**
+   ```bash
+   git clone https://github.com/yangyuan-zhen/PolyWeather.git
+   cd PolyWeather
+   cp .env.example .env
+   # Edit .env to add TELEGRAM_BOT_TOKEN, GROQ_API_KEY, etc.
+   nano .env
+   ```
+2. **Start the service in the background**
+   ```bash
+   docker-compose up -d --build
+   ```
+3. **View live logs**
+   ```bash
+   docker-compose logs -f
+   ```
+
+### 💻 Traditional VPS Deployment
+
+1. Install dependencies: `pip install -r requirements.txt`
 2. Configure your `.env` file.
-3. Use the following script for one-click updates and restarts:
+3. Use the following script for one-click updates and restarts (for `nohup` background run):
 
 ```bash
 cat > ~/update.sh << 'EOF'

@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  polyweather:
+    build: .
+    container_name: polyweather_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data # 挂载数据目录，确保历史数据持久化
+      - ./bot.log:/app/bot.log # 挂载日志文件
+    user: "${UID:-1000}:${GID:-1000}"
