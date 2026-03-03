@@ -467,12 +467,31 @@ body {
   padding-top: 12px !important;
 }
 
+.hero-weather {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent-cyan);
+  margin-bottom: -4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
 .hero-temp {
   display: flex;
   align-items: flex-start;
   justify-content: center;
   gap: 2px;
+  margin-bottom: 2px;
+}
+
+.hero-max-time {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-muted);
   margin-bottom: 16px;
+  min-height: 12px;
 }
 .hero-value {
   font-size: 56px;

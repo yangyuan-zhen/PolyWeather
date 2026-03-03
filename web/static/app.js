@@ -255,13 +255,37 @@ function renderHero(data) {
   const sym = data.temp_symbol || "°C";
 
   const displayTemp =
-    cur.max_so_far != null && cur.max_so_far >= cur.temp
+    cur.max_so_far != null && cur.max_so_far >= (cur.temp || -999)
       ? cur.max_so_far
       : cur.temp;
+
+  // Use cloud_desc for the main weather indicator
+  const weatherText = cur.cloud_desc || cur.wx_desc || "未知";
+  const weatherIcon =
+    {
+      多云: "⛅",
+      阴天: "☁️",
+      少云: "🌤️",
+      散云: "⛅",
+      晴: "☀️",
+    }[cur.cloud_desc] || "🌡️";
+
+  document.getElementById("heroWeather").innerHTML = `
+        <span>${weatherIcon} ${weatherText}</span>
+    `;
 
   document.getElementById("heroTemp").textContent =
     displayTemp != null ? displayTemp.toFixed(1) : "—";
   document.getElementById("heroUnit").textContent = sym;
+
+  // Show if it's the peak recorded temperature
+  const isMax = cur.max_so_far != null && cur.max_so_far >= (cur.temp || -999);
+  const maxTimeEl = document.getElementById("heroMaxTime");
+  if (isMax && cur.max_temp_time) {
+    maxTimeEl.textContent = `该城市今日最高温出现于当地时间 ${cur.max_temp_time}`;
+  } else {
+    maxTimeEl.textContent = "";
+  }
 
   document.getElementById("heroCurrent").textContent =
     cur.temp != null ? `${cur.temp}${sym} @${cur.obs_time || "—"}` : "—";
@@ -279,7 +303,10 @@ function renderHero(data) {
     }
     parts.push(`<span>✈️ METAR ${cur.obs_time}${ageStr}</span>`);
   }
-  if (cur.cloud_desc) parts.push(`<span>☁️ ${cur.cloud_desc}</span>`);
+  // Remove redundant cloud_desc here as it's now in main hero
+  if (cur.wx_desc && cur.wx_desc !== cur.cloud_desc) {
+    parts.push(`<span>🌦️ ${cur.wx_desc}</span>`);
+  }
   if (cur.wind_speed_kt != null) {
     parts.push(`<span>💨 ${cur.wind_speed_kt}kt</span>`);
   }
