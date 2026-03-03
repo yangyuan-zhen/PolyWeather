@@ -359,6 +359,34 @@ def _analyze(city: str) -> Dict[str, Any]:
         }
 
 
+    # ── 15. Extended Multi-Model Daily ──
+    multi_model_daily = {}
+    mm_daily_raw = mm.get("daily_forecasts", {})
+    for i, d_str in enumerate(dates):
+        if i == 0:
+            day_m = current_forecasts.copy()
+            d_val, d_winfo = deb_val, deb_weights
+        else:
+            day_m = mm_daily_raw.get(d_str, {}).copy()
+            if i < len(maxtemps) and maxtemps[i] is not None:
+                day_m["Open-Meteo"] = _sf(maxtemps[i])
+            
+            d_val, d_winfo = None, ""
+            if day_m:
+                try:
+                    blended, winfo = calculate_dynamic_weights(city, day_m)
+                    if blended is not None:
+                        d_val = blended
+                        d_winfo = winfo
+                except Exception:
+                    pass
+        
+        if day_m:
+            multi_model_daily[d_str] = {
+                "models": day_m,
+                "deb": {"prediction": d_val, "weights_info": d_winfo}
+            }
+
     # ── Assemble result ──
     result = {
         "name": city,
@@ -402,6 +430,7 @@ def _analyze(city: str) -> Dict[str, Any]:
             "sunshine_hours": sunshine_h,
         },
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
+        "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
         "ensemble": ens_data,
         "probabilities": {

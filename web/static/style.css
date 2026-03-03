@@ -768,6 +768,15 @@ body {
   color: var(--accent-cyan);
 }
 
+.forecast-day.selected {
+  border-color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.1);
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.2);
+}
+.forecast-day.selected .f-date {
+  color: var(--accent-cyan);
+}
+
 .sun-info {
   margin-top: 10px;
   font-size: 12px;

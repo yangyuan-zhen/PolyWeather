@@ -38,6 +38,7 @@ function saveCache() {
 let selectedCity = null;
 let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
+let selectedForecastDate = null;
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -231,6 +232,7 @@ async function fetchCityDetail(cityName) {
 // ──────────────────────────────────────────────────────────
 async function loadCityDetail(cityName) {
   selectedCity = cityName;
+  selectedForecastDate = null; // Reset selection for new city
   setActiveCityItem(cityName);
   setSelectedMarker(cityName);
 
@@ -316,9 +318,11 @@ function renderPanel(data) {
   renderChart(data);
   // Probabilities
   renderProbabilities(data);
-  // Multi-model
+  // Multi-model & Forecast synchronization
+  if (!selectedForecastDate) {
+    selectedForecastDate = data.local_date;
+  }
   renderModels(data);
-  // Forecast
   renderForecast(data);
   // AI
   renderAI(data);
@@ -653,8 +657,18 @@ function renderProbabilities(data) {
 
 function renderModels(data) {
   const container = document.getElementById("modelBars");
-  const models = data.multi_model || {};
-  const deb = data.deb?.prediction;
+  const targetDate = selectedForecastDate || data.local_date;
+
+  let models = {};
+  let deb = null;
+
+  if (data.multi_model_daily && data.multi_model_daily[targetDate]) {
+    models = data.multi_model_daily[targetDate].models || {};
+    deb = data.multi_model_daily[targetDate].deb?.prediction;
+  } else {
+    models = data.multi_model || {};
+    deb = data.deb?.prediction;
+  }
 
   if (Object.keys(models).length === 0) {
     container.innerHTML =
@@ -717,9 +731,13 @@ function renderForecast(data) {
   let html = "";
   daily.forEach((d, i) => {
     const isToday = i === 0;
-    const dateLabel = isToday ? "今天" : d.date.substring(5);
+    const isSelected = d.date === selectedForecastDate;
+    const dateLabel = isToday ? "今天" : d.date.substring(5).replace("-", "/");
+
     html += `
-            <div class="forecast-day ${isToday ? "today" : ""}">
+            <div class="forecast-day ${isToday ? "today" : ""} ${isSelected ? "selected" : ""}" 
+                 onclick="switchForecastDate('${data.name}', '${d.date}')"
+                 style="cursor: pointer;">
                 <div class="f-date">${dateLabel}</div>
                 <div class="f-temp">${d.max_temp}${sym}</div>
             </div>
@@ -735,6 +753,17 @@ function renderForecast(data) {
   if (data.forecast?.sunshine_hours)
     parts.push(`☀️ ${data.forecast.sunshine_hours}h`);
   sunEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
+}
+
+function switchForecastDate(cityName, dateStr) {
+  if (selectedCity !== cityName) return;
+  selectedForecastDate = dateStr;
+
+  const data = cityDataCache[cityName];
+  if (data) {
+    renderModels(data);
+    renderForecast(data);
+  }
 }
 
 function renderAI(data) {
