@@ -27,7 +27,7 @@ PolyWeather is a weather analysis tool built for prediction markets like **Polym
 - **Global Overview**: Real-time Leaflet-based dark-themed map pinpointed to official Polymarket settlement airport coordinates.
 - **Progressive Background Loading**: Intelligently fetches multi-source data across all cities without hitting API rate limits.
 - **Rich Visualization**: Chart.js-powered temperature trends with METAR scatter overlay, multi-model comparison bars, Gaussian probability distribution, and dynamic risk badges.
-- **Cinematic Interaction**: City selection triggers a smooth fly-to zoom animation on the map.
+- **Cinematic Interaction & Sync**: City selection triggers a smooth fly-to zoom animation. The **Multi-Model Forecast** panel automatically synchronizes with the selected day in the 5-day forecast table.
 - **Dual-Engine Architecture**: Runs concurrently with the Telegram bot via a FastAPI backend, sharing the same data collection, analysis logic (`analyze_weather_trend`), and AI prompt pipeline.
 
 ### 2. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
