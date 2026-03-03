@@ -37,6 +37,11 @@ function initMap() {
     subdomains: "abcd",
     maxZoom: 19,
   }).addTo(map);
+
+  // Close panel and clear selection when clicking on empty map space
+  map.on("click", () => {
+    closePanel();
+  });
 }
 
 // ──────────────────────────────────────────────────────────
