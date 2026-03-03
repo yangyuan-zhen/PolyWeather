@@ -157,8 +157,10 @@ def start_bot():
                         )
                     else:
                         err_label = f" 偏差{abs(err):.1f}°"
+                    mu_val = record.get("mu")
+                    mu_str = f" | μ: {mu_val}" if mu_val is not None else ""
                     lines.append(
-                        f"  {date_str}: DEB {retro}{deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}{err_label}"
+                        f"  {date_str}: DEB {retro}{deb_pred}→<b>{deb_wu}</b> vs 实测 {actual}→<b>{actual_wu}</b> {icon}{err_label}{mu_str}"
                     )
                 elif date_str == today_str:
                     lines.append(f"  {date_str}: 📍 今天进行中 (实测暂 {actual})")
@@ -178,6 +180,20 @@ def start_bot():
                 lines.append(
                     f"\n🎯 <b>DEB 总战绩</b>：WU命中 {hits}/{total_days} (<b>{hit_rate:.0f}%</b>) | MAE: {deb_mae:.1f}°"
                 )
+
+                # --- 概率引擎 μ 的战绩 ---
+                from src.analysis.deb_algorithm import get_mu_accuracy
+                mu_acc = get_mu_accuracy(city_name)
+                if mu_acc:
+                    mu_mae, mu_hr, avg_brier, mu_total, _ = mu_acc
+                    lines.append(
+                        f"🎲 <b>概率引擎 (μ)</b>：WU命中 <b>{mu_hr:.0f}%</b> | MAE: {mu_mae:.1f}°"
+                    )
+                    if avg_brier is not None:
+                        # Brier Score 范围是 0 (完美) 到 2 (全错)
+                        bs_eval = "极佳" if avg_brier < 0.2 else ("良好" if avg_brier < 0.4 else "需校准")
+                        lines.append(f"  ▪ Brier评分: {avg_brier:.3f} ({bs_eval})")
+
 
                 # 和各模型 MAE 对比
                 if model_errors:
