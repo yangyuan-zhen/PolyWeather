@@ -442,99 +442,26 @@ def _analyze(city: str) -> Dict[str, Any]:
             "rain_24h": _sf(mgc.get("rain_24h")),
         }
 
-    # ── 15. AI Analysis ──
+    # ── 15. AI Analysis (reuse bot_listener's analyze_weather_trend) ──
     ai_text = ""
     try:
         from src.analysis.ai_analyzer import get_ai_analysis
+        from bot_listener import analyze_weather_trend
 
-        ai_parts = []
-        if deb_val is not None:
-            ai_parts.append(f"🧬 DEB融合预测: {deb_val}{sym}")
-        if ens_data["median"] is not None:
-            ai_parts.append(
-                f"📊 集合预报: 中位数 {ens_data['median']}{sym}, "
-                f"90%区间 [{ens_data['p10']}{sym} - {ens_data['p90']}{sym}]"
-            )
-        if cur_temp is not None:
-            ai_parts.append(f"🌡️ 当前实测温度: {cur_temp}{sym}")
-        if max_so_far is not None:
-            ai_parts.append(
-                f"🏔️ 今日实测最高温: {max_so_far}{sym} (WU结算={wu_settle}{sym})"
-            )
-        if trend_info["recent"]:
-            ts_str = " → ".join(
-                [f"{r['temp']}{sym}@{r['time']}" for r in trend_info["recent"][:3]]
-            )
-            ai_parts.append(f"📈 METAR趋势: {ts_str}")
-        if probabilities:
-            prob_str = " | ".join(
-                [
-                    f"{p['value']}{sym} {p['range']} {int(p['probability']*100)}%"
-                    for p in probabilities
-                ]
-            )
-            ai_parts.append(f"🎲 数学概率分布：{prob_str}")
+        # analyze_weather_trend returns (display_str, ai_context)
+        # It already handles: DEB, probability, dead market, forecast bust,
+        # METAR trend, peak window, wind, cloud, humidity, etc.
+        _, ai_context = analyze_weather_trend(raw, sym, city)
 
-        window = (
-            f"{peak_hours[0]} - {peak_hours[-1]}"
-            if len(peak_hours) > 1
-            else (peak_hours[0] if peak_hours else "13:00 - 15:00")
-        )
-        if peak_status == "past":
-            ai_parts.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
-        elif peak_status == "in_window":
-            remain_w = last_peak_h - local_hour_frac
-            ai_parts.append(
-                f"⏱️ 状态: 正处于预报最热窗口 ({window})内，距窗口结束约 {int(remain_w*60)} 分钟。"
-            )
-        else:
-            remain = first_peak_h - local_hour_frac
-            if remain < 1:
-                ai_parts.append(
-                    f"⏱️ 状态: 距最热时段开始还有约 {int(remain*60)} 分钟 ({window})，尚未进入峰值窗口。"
-                )
-            else:
-                ai_parts.append(
-                    f"⏱️ 状态: 距最热时段开始还有约 {remain:.1f}h ({window})。"
-                )
-
-        wind_speed = _sf(mc.get("wind_speed_kt"))
-        wind_dir = _sf(mc.get("wind_dir"))
-        if wind_speed:
-            ai_parts.append(f"🌬️ 风况: 约 {wind_speed}kt (方向 {wind_dir or '未知'}°)。")
-        if cloud_desc:
-            ai_parts.append(f"☁️ 天空: {cloud_desc}。")
-        if current_forecasts:
+        # Append multi-model divergence if not already included
+        if current_forecasts and ai_context:
             mm_str = " | ".join(
                 [f"{k}:{v}{sym}" for k, v in current_forecasts.items() if v]
             )
-            ai_parts.append(f"模型分歧: {mm_str}")
+            ai_context += f"\n模型分歧: {mm_str}"
 
-        # --- Forecast miss severity for AI ---
-        if forecast_miss_deg > 2.0 and peak_status in ("past", "in_window"):
-            if forecast_miss_deg > 5.0:
-                severity = "重"
-            elif forecast_miss_deg > 3.0:
-                severity = "中"
-            else:
-                severity = "轻"
-
-            min_forecast = min(
-                (v for v in current_forecasts.values() if v is not None), default=None
-            )
-            slope_info = trend_info["direction"]
-            ai_parts.append(
-                f"🚨 预报崩盘 [{severity}级失准]: 最低预报 {min_forecast}{sym} vs 实测最高 {max_so_far}{sym}，"
-                f"偏差 {forecast_miss_deg}°。当前趋势: {slope_info}。"
-            )
-        elif forecast_miss_deg > 4.0 and peak_status == "before":
-            ai_parts.append(
-                f"⚠️ 预报差距 [轻级]: 距峰值窗口尚有时间，但实测已落后预报 {forecast_miss_deg}°。"
-                f"当前趋势: {trend_info['direction']}。"
-            )
-
-        ai_context = "\n".join(ai_parts)
-        ai_text = get_ai_analysis(ai_context, city, sym)
+        if ai_context:
+            ai_text = get_ai_analysis(ai_context, city, sym)
     except Exception as e:
         logger.warning(f"AI analysis skipped for {city}: {e}")
 
