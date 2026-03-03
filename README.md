@@ -13,11 +13,24 @@ PolyWeather is a weather analysis tool built for prediction markets like **Polym
   <em>📊 Live query: DEB Blended Forecast + Settlement Probability + Groq AI Decision</em>
 </p>
 
+<p align="center">
+  <img src="docs/images/demo_map.png" alt="PolyWeather Web Map" width="600">
+  <br>
+  <em>🗺️ Interactive Web Map: Real-time global monitoring with rich data visualization</em>
+</p>
+
 ---
 
 ## ✨ Core Features
 
-### 1. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
+### 1. 🌐 Interactive Web Map Dashboard
+
+- **Global Overview**: Real-time Leaflet-based map pinpointed exactly to the official Polymarket settlement airport coordinates.
+- **Progressive Background Loading**: Intelligently fetches multi-source data across all cities seamlessly without hitting rate limits.
+- **Rich Visualization**: Includes Chart.js-powered temperature trends, multi-model comparison bars, Gaussian probability distribution, and dynamic risk badges.
+- **Dual-Engine Co-existence**: Runs concurrently with the Telegram bot using a FastAPI backend, sharing the exact same data and caching layers.
+
+### 2. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
 
 The system automatically tracks the historical performance of weather models (ECMWF, GFS, ICON, GEM, JMA) per city:
 
@@ -105,21 +118,14 @@ The easiest and most stable way to deploy without system dependency conflicts.
 
 1. Install dependencies: `pip install -r requirements.txt`
 2. Configure your `.env` file.
-3. Use the following script for one-click updates and restarts (for `nohup` background run):
+3. Use the included `update.sh` script for one-click updates and restarts for both the Telegram Bot and the Web Map:
 
 ```bash
-cat > ~/update.sh << 'EOF'
-#!/bin/bash
-cd ~/PolyWeather
-git fetch origin
-git reset --hard origin/main
-pkill -f bot_listener.py
-sleep 1
-nohup python3 bot_listener.py > bot.log 2>&1 &
-echo "✅ PolyWeather Restarted!"
-EOF
-chmod +x ~/update.sh
+# Run the script to update code and restart both services in the background
+./update.sh
 ```
+
+_(Note: The `update.sh` script automatically fetches the latest code, kills old processes, clears ports, and launches both `bot_listener.py` and `web/app.py` via `nohup`.)_
 
 ---
 
@@ -186,4 +192,4 @@ graph TD
 
 ---
 
-_Updated 2026-03-01_
+_Updated 2026-03-03_
