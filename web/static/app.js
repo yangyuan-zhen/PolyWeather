@@ -10,6 +10,31 @@
 let map = null;
 let markers = {}; // cityName → Leaflet marker
 let cityDataCache = {}; // cityName → API response
+const CACHE_KEY = "polyWeather_v1";
+
+try {
+  const cachedStr = sessionStorage.getItem(CACHE_KEY);
+  if (cachedStr) {
+    const parsed = JSON.parse(cachedStr);
+    if (Date.now() - parsed.timestamp < 5 * 60 * 1000) {
+      cityDataCache = parsed.data || {};
+    } else {
+      sessionStorage.removeItem(CACHE_KEY);
+    }
+  }
+} catch (e) {
+  console.warn("Restore cache failed", e);
+}
+
+function saveCache() {
+  try {
+    sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({ timestamp: Date.now(), data: cityDataCache }),
+    );
+  } catch (e) {}
+}
+
 let selectedCity = null;
 let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
@@ -208,11 +233,26 @@ async function loadCityDetail(cityName) {
   selectedCity = cityName;
   setActiveCityItem(cityName);
   setSelectedMarker(cityName);
+
+  if (cityDataCache[cityName]) {
+    renderPanel(cityDataCache[cityName]);
+    const cData = cityDataCache[cityName];
+    if (cData.lat != null && cData.lon != null) {
+      map.flyTo([cData.lat, cData.lon], 10, {
+        animate: true,
+        duration: 1.5,
+        easeLinearity: 0.25,
+      });
+    }
+    return;
+  }
+
   showLoading(true);
 
   try {
     const data = await fetchCityDetail(cityName);
     cityDataCache[cityName] = data;
+    saveCache();
     renderPanel(data);
 
     // Cinematic Zoom-in Camera
@@ -794,6 +834,7 @@ async function loadAllCitiesProgressively(cities) {
         if (res.ok) {
           const data = await res.json();
           cityDataCache[city.name] = data;
+          saveCache();
 
           // 如果用户目前没有点击它，仅更新标记和列表
           if (data.current?.temp != null) {
@@ -1010,6 +1051,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       const btn = document.getElementById("refreshAllBtn");
       btn.classList.add("spinning");
       cityDataCache = {};
+      saveCache();
       if (selectedCity) {
         await loadCityDetail(selectedCity);
       }
@@ -1019,8 +1061,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Load cities
   const cities = await fetchCities();
   if (cities.length > 0) {
+    cities.forEach((c) => {
+      const cached = cityDataCache[c.name];
+      if (cached && cached.current?.temp != null) {
+        c._temp =
+          cached.current.max_so_far != null &&
+          cached.current.max_so_far >= cached.current.temp
+            ? cached.current.max_so_far
+            : cached.current.temp;
+      }
+    });
+
     addCityMarkers(cities);
     buildCityList(cities);
+
+    cities.forEach((c) => {
+      if (cityDataCache[c.name]) {
+        updateCityListInfo(cityDataCache[c.name]);
+      }
+    });
 
     // Fit map to show all markers
     const bounds = cities.map((c) => [c.lat, c.lon]);
