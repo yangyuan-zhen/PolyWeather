@@ -43,19 +43,19 @@ _weather = WeatherDataCollector(_config)
 #  City Registry
 # ──────────────────────────────────────────────────────────
 CITIES: Dict[str, Dict[str, Any]] = {
-    "ankara":       {"lat": 39.9334,  "lon": 32.8597,   "f": False},
-    "london":       {"lat": 51.5074,  "lon": -0.1278,   "f": False},
-    "paris":        {"lat": 48.8566,  "lon": 2.3522,    "f": False},
-    "seoul":        {"lat": 37.5665,  "lon": 126.978,   "f": False},
-    "toronto":      {"lat": 43.6532,  "lon": -79.3832,  "f": False},
-    "buenos aires": {"lat": -34.6037, "lon": -58.3816,  "f": False},
-    "wellington":   {"lat": -41.2866, "lon": 174.7756,  "f": False},
-    "new york":     {"lat": 40.7128,  "lon": -74.006,   "f": True},
-    "chicago":      {"lat": 41.8781,  "lon": -87.6298,  "f": True},
-    "dallas":       {"lat": 32.7767,  "lon": -96.797,   "f": True},
-    "miami":        {"lat": 25.7617,  "lon": -80.1918,  "f": True},
-    "atlanta":      {"lat": 33.749,   "lon": -84.388,   "f": True},
-    "seattle":      {"lat": 47.6062,  "lon": -122.3321, "f": True},
+    "ankara":       {"lat": 40.1281,  "lon": 32.9951,   "f": False}, # LTAC (Esenboğa)
+    "london":       {"lat": 51.5048,  "lon": 0.0522,    "f": False}, # EGLC (London City)
+    "paris":        {"lat": 49.0097,  "lon": 2.5480,    "f": False}, # LFPG (Charles de Gaulle)
+    "seoul":        {"lat": 37.4602,  "lon": 126.4407,  "f": False}, # RKSI (Incheon)
+    "toronto":      {"lat": 43.6777,  "lon": -79.6248,  "f": False}, # CYYZ (Pearson)
+    "buenos aires": {"lat": -34.8222, "lon": -58.5358,  "f": False}, # SAEZ (Ezeiza)
+    "wellington":   {"lat": -41.3272, "lon": 174.8053,  "f": False}, # NZWN (Wellington)
+    "new york":     {"lat": 40.7769,  "lon": -73.8740,  "f": True},  # KLGA (LaGuardia)
+    "chicago":      {"lat": 41.9742,  "lon": -87.9073,  "f": True},  # KORD (O'Hare)
+    "dallas":       {"lat": 32.8471,  "lon": -96.8518,  "f": True},  # KDAL (Dallas Love Field)
+    "miami":        {"lat": 25.7959,  "lon": -80.2870,  "f": True},  # KMIA (Miami)
+    "atlanta":      {"lat": 33.6407,  "lon": -84.4277,  "f": True},  # KATL (Hartsfield-Jackson)
+    "seattle":      {"lat": 47.4502,  "lon": -122.3088, "f": True},  # KSEA (Sea-Tac)
 }
 
 ALIASES = {

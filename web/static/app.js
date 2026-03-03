@@ -43,8 +43,9 @@ function createMarkerIcon(city) {
   const riskClass = `risk-${city.risk_level}`;
   const label = city.display_name;
   // Short name for marker
+  const unitSym = city.temp_unit === "fahrenheit" ? "°F" : "°C";
   const shortName = label.length > 10 ? label.substring(0, 8) + "…" : label;
-  const tempText = city._temp !== undefined ? `${city._temp}` : "—";
+  const tempText = city._temp !== undefined ? `${city._temp}${unitSym}` : "—";
 
   const html = `
         <div class="city-marker" data-city="${city.name}">
