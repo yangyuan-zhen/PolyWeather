@@ -240,14 +240,17 @@ function renderHero(data) {
   const cur = data.current || {};
   const sym = data.temp_symbol || "°C";
 
+  const displayTemp =
+    cur.max_so_far != null && cur.max_so_far >= cur.temp
+      ? cur.max_so_far
+      : cur.temp;
+
   document.getElementById("heroTemp").textContent =
-    cur.temp != null ? cur.temp.toFixed(1) : "—";
+    displayTemp != null ? displayTemp.toFixed(1) : "—";
   document.getElementById("heroUnit").textContent = sym;
 
-  document.getElementById("heroMax").textContent =
-    cur.max_so_far != null
-      ? `${cur.max_so_far}${sym} @${cur.max_temp_time || "—"}`
-      : "—";
+  document.getElementById("heroCurrent").textContent =
+    cur.temp != null ? `${cur.temp}${sym} @${cur.obs_time || "—"}` : "—";
   document.getElementById("heroWU").textContent =
     cur.wu_settlement != null ? `${cur.wu_settlement}${sym}` : "—";
   document.getElementById("heroDEB").textContent =
@@ -313,6 +316,24 @@ function renderChart(data) {
     curIdx < 0 || i >= curIdx ? t : null,
   );
 
+  // METAR scatter points
+  const metarPoints = [];
+  if (data.trend?.recent?.length) {
+    data.trend.recent.forEach((r) => {
+      if (!r.time || r.temp == null) return;
+      const parts = r.time.split(":");
+      if (parts.length === 2) {
+        const h = parts[0];
+        const m = parseInt(parts[1], 10);
+        const hourStr = h + ":00";
+        const baseIdx = times.indexOf(hourStr);
+        if (baseIdx !== -1) {
+          metarPoints.push({ x: baseIdx + m / 60, y: r.temp });
+        }
+      }
+    });
+  }
+
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
@@ -347,6 +368,19 @@ function renderChart(data) {
           fill: false,
           tension: 0.3,
           spanGaps: false,
+        },
+        {
+          label: "METAR实况",
+          data: metarPoints,
+          borderColor: "#fbbf24", // Yellow accent for points
+          backgroundColor: "#fbbf24",
+          borderWidth: 2,
+          pointRadius: 4,
+          pointHoverRadius: 6,
+          pointBackgroundColor: "#0a0e1a",
+          type: "line",
+          showLine: false, // Only scatter points
+          order: 0, // Draw on top
         },
       ],
     },
@@ -413,8 +447,9 @@ function renderChart(data) {
   // METAR recent points overlay
   const legend = document.getElementById("chartLegend");
   if (data.trend?.recent?.length) {
-    const recentStr = data.trend.recent
+    const recentStr = [...data.trend.recent]
       .slice(0, 4)
+      .reverse() // Fix chronologically left to right
       .map((r) => `${r.temp}${data.temp_symbol}@${r.time}`)
       .join(" → ");
     legend.textContent = `METAR 趋势：${recentStr}`;
