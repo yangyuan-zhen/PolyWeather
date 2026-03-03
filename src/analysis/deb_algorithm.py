@@ -75,13 +75,17 @@ def save_history(filepath, data):
 
 
 def update_daily_record(
-    city_name, date_str, forecasts, actual_high, deb_prediction=None
+    city_name, date_str, forecasts, actual_high, deb_prediction=None,
+    mu=None, probabilities=None
 ):
     """
     保存/更新某城市某天的各个模型预报与最终实测值
     forecasts: dict, 例如 {"ECMWF": 28.5, "GFS": 30.0, ...}
     actual_high: float, 最终实测最高温
     deb_prediction: float, DEB 融合预测值（用于准确率追踪）
+    mu: float, 概率引擎中心值（用于 μ MAE 追踪）
+    probabilities: list[dict], 概率分布快照（用于 Brier Score 校准）
+        例如 [{"value": 25, "probability": 0.8}, {"value": 26, "probability": 0.2}]
     """
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -107,6 +111,14 @@ def update_daily_record(
     data[city_name][date_str]["actual_high"] = actual_high
     if deb_prediction is not None:
         data[city_name][date_str]["deb_prediction"] = deb_prediction
+    if mu is not None:
+        data[city_name][date_str]["mu"] = round(mu, 2)
+    if probabilities is not None:
+        # Store compact: [{"v": 25, "p": 0.8}, ...]
+        data[city_name][date_str]["prob_snapshot"] = [
+            {"v": p["value"], "p": p["probability"]}
+            for p in probabilities[:4]
+        ]
 
     # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
     cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
@@ -268,3 +280,81 @@ def get_deb_accuracy(city_name):
     )
 
     return hit_rate, mae, total, details_str
+
+
+def get_mu_accuracy(city_name):
+    """
+    评估概率引擎 μ 的历史准确性
+    返回: (mu_mae, mu_hit_rate, brier_score, total_days, details_str) 或 None
+
+    - mu_mae: μ 与实际最高温的平均绝对误差
+    - mu_hit_rate: round(μ) 命中 WU 结算值的比率
+    - brier_score: 概率分布的 Brier Score (越低越好)
+      对于每天，取概率最高的预测值，计算 (p - outcome)² 的平均值
+    - total_days: 有效统计天数
+    """
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    history_file = os.path.join(project_root, "data", "daily_records.json")
+    data = load_history(history_file)
+
+    if city_name not in data:
+        return None
+
+    city_data = data[city_name]
+    today_str = datetime.now().strftime("%Y-%m-%d")
+
+    mu_errors = []
+    mu_hits = 0
+    brier_scores = []
+    total = 0
+
+    for date_str in sorted(city_data.keys()):
+        if date_str == today_str:
+            continue
+        record = city_data[date_str]
+        actual = record.get("actual_high")
+        mu_val = record.get("mu")
+
+        if actual is None or mu_val is None:
+            continue
+
+        try:
+            actual = float(actual)
+            mu_val = float(mu_val)
+        except Exception:
+            continue
+
+        total += 1
+        mu_errors.append(abs(mu_val - actual))
+        if round(mu_val) == round(actual):
+            mu_hits += 1
+
+        # Brier Score from probability snapshot
+        prob_snap = record.get("prob_snapshot", [])
+        if prob_snap:
+            actual_wu = round(actual)
+            bs = 0.0
+            for entry in prob_snap:
+                predicted_p = entry.get("p", 0)
+                outcome = 1.0 if entry.get("v") == actual_wu else 0.0
+                bs += (predicted_p - outcome) ** 2
+            brier_scores.append(bs)
+
+    if total == 0:
+        return None
+
+    mu_mae = sum(mu_errors) / len(mu_errors)
+    mu_hr = mu_hits / total * 100
+    avg_brier = sum(brier_scores) / len(brier_scores) if brier_scores else None
+
+    details_parts = [
+        f"μ准确率: 过去{total}天",
+        f"WU命中 {mu_hits}/{total} ({mu_hr:.0f}%)",
+        f"MAE: {mu_mae:.1f}°",
+    ]
+    if avg_brier is not None:
+        details_parts.append(f"Brier: {avg_brier:.3f}")
+
+    return mu_mae, mu_hr, avg_brier, total, " | ".join(details_parts)

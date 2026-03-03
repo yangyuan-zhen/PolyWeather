@@ -19,6 +19,9 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     """根据实测与预测分析气温态势，增加峰值时刻预测"""
     insights: List[str] = []
     ai_features: List[str] = []
+    mu = None
+    sorted_probs = []
+    _deb_to_save = None
 
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
@@ -100,17 +103,8 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
                 f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。"
             )
 
-        # 顺便把今天的预测记录下来供之后回测用
-        try:
-            update_daily_record(
-                city_name,
-                local_date_str,
-                current_forecasts,
-                max_so_far,
-                deb_prediction=blended_high,
-            )
-        except Exception:
-            pass
+        # daily_record 将在函数末尾统一保存（含 μ 和概率快照）
+        _deb_to_save = blended_high
 
     # === METAR 趋势分析 (移到前部判断降温) ===
     recent_temps = metar.get("recent_temps", [])
@@ -482,6 +476,29 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
                 )
         except Exception:
             pass
+
+    # === 统一保存今日记录（含 μ 和概率快照）===
+    try:
+        _prob_list = None
+        if sorted_probs:
+            _prob_list = [
+                {"value": int(t), "probability": round(p, 3)}
+                for t, p in sorted_probs[:4]
+            ]
+        elif is_dead_market and max_so_far is not None:
+            _prob_list = [{"value": round(max_so_far), "probability": 1.0}]
+
+        update_daily_record(
+            city_name,
+            local_date_str,
+            current_forecasts,
+            max_so_far,
+            deb_prediction=_deb_to_save,
+            mu=mu,
+            probabilities=_prob_list,
+        )
+    except Exception:
+        pass
 
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features)
