@@ -12,7 +12,7 @@ let markers = {}; // cityName → Leaflet marker
 let cityDataCache = {}; // cityName → API response
 let selectedCity = null;
 let tempChart = null;
-const AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutes
+const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -182,8 +182,13 @@ async function loadCityDetail(cityName) {
     renderPanel(data);
     // Update marker temperature
     if (data.current?.temp != null) {
-      updateMarkerTemp(cityName, data.current.temp);
-      updateCityListTemp(cityName, data.current.temp, data.temp_symbol);
+      const displayTemp =
+        data.current.max_so_far != null &&
+        data.current.max_so_far >= data.current.temp
+          ? data.current.max_so_far
+          : data.current.temp;
+      updateMarkerTemp(cityName, displayTemp);
+      updateCityListTemp(cityName, displayTemp, data.temp_symbol);
     }
   } catch (e) {
     console.error(`Failed to load ${cityName}:`, e);
@@ -324,7 +329,7 @@ function renderChart(data) {
       if (!r.time || r.temp == null) return;
       const parts = r.time.split(":");
       if (parts.length === 2) {
-        const h = parts[0];
+        const h = parts[0].padStart(2, "0");
         const m = parseInt(parts[1], 10);
         const hourStr = h + ":00";
         const baseIdx = times.indexOf(hourStr);
@@ -380,7 +385,9 @@ function renderChart(data) {
           pointHoverRadius: 6,
           pointBackgroundColor: "#0a0e1a",
           type: "line",
-          showLine: false, // Only scatter points
+          showLine: true, // Show continuous line
+          tension: 0.3, // Add slight curve to METAR line
+          borderDash: [5, 5], // Dashed line to distinguish from main curve
           order: 0, // Draw on top
         },
       ],
@@ -641,8 +648,13 @@ function startAutoRefresh() {
         cityDataCache[selectedCity] = data;
         renderPanel(data);
         if (data.current?.temp != null) {
-          updateMarkerTemp(selectedCity, data.current.temp);
-          updateCityListTemp(selectedCity, data.current.temp, data.temp_symbol);
+          const displayTemp =
+            data.current.max_so_far != null &&
+            data.current.max_so_far >= data.current.temp
+              ? data.current.max_so_far
+              : data.current.temp;
+          updateMarkerTemp(selectedCity, displayTemp);
+          updateCityListTemp(selectedCity, displayTemp, data.temp_symbol);
         }
         flashLiveBadge();
       } catch (e) {
@@ -679,8 +691,13 @@ async function loadAllCitiesProgressively(cities) {
 
           // 如果用户目前没有点击它，仅更新标记和列表
           if (data.current?.temp != null) {
-            updateMarkerTemp(city.name, data.current.temp);
-            updateCityListTemp(city.name, data.current.temp, data.temp_symbol);
+            const displayTemp =
+              data.current.max_so_far != null &&
+              data.current.max_so_far >= data.current.temp
+                ? data.current.max_so_far
+                : data.current.temp;
+            updateMarkerTemp(city.name, displayTemp);
+            updateCityListTemp(city.name, displayTemp, data.temp_symbol);
           }
 
           // 如果恰好在这个时候用户选中了这个城市，顺便刷新面板
