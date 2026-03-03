@@ -678,8 +678,8 @@ async function loadAllCitiesProgressively(cities) {
       } catch (e) {
         console.warn(`Background load failed for ${city.name}`, e);
       }
-      // 间隔 800ms，避免瞬间并发轰炸后端 API
-      await new Promise((r) => setTimeout(r, 800));
+      // 间隔 2000ms，避免瞬间并发轰炸后端 API，且让出浏览器主线程
+      await new Promise((r) => setTimeout(r, 2000));
     }
   }
 }
