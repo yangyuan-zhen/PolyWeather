@@ -268,126 +268,42 @@ def _analyze(city: str) -> Dict[str, Any]:
     else:
         peak_status = "before"
 
-    # ── 10. Probability distribution ──
+    # ── 10. Shared analysis (probability, trend, AI) via trend_engine ──
+    # This single call replaces the duplicate probability engine, dead market
+    # detection, forecast bust grading, and AI context building.
+    from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze
+    from src.analysis.ai_analyzer import get_ai_analysis
+
     probabilities = []
     mu = None
-    forecast_miss_deg = 0  # How far actual is below forecasts
-    if (
-        ens_data["p10"] is not None
-        and ens_data["p90"] is not None
-        and ens_data["median"] is not None
-    ):
-        sigma = (ens_data["p90"] - ens_data["p10"]) / 2.56
-        if sigma < 0.1:
-            sigma = 0.1
+    ai_text = ""
+    try:
+        _, ai_context, sd = _trend_analyze(raw, sym, city)
 
-        # Historical MAE floor
-        acc = get_deb_accuracy(city)
-        if acc:
-            _, hist_mae, _, _ = acc
-            if hist_mae > sigma:
-                sigma = hist_mae
+        # Use structured data from shared engine
+        mu = sd.get("mu")
+        probabilities = sd.get("probabilities", [])
+        trend_info["is_dead_market"] = sd.get("trend_info", {}).get("is_dead_market", False)
+        trend_info["direction"] = sd.get("trend_info", {}).get("direction", trend_info.get("direction", "unknown"))
+        trend_info["is_cooling"] = sd.get("trend_info", {}).get("is_cooling", False)
+        peak_status = sd.get("peak_status", peak_status)
 
-        # Shock score
-        recent_obs = metar.get("recent_obs", []) if metar else []
-        shock = 0.0
-        if len(recent_obs) >= 2:
-            o_obs, n_obs = recent_obs[-1], recent_obs[0]
-            wd_o, wd_n = _sf(o_obs.get("wdir")), _sf(n_obs.get("wdir"))
-            ws_n = _sf(n_obs.get("wspd")) or 0
-            if wd_o is not None and wd_n is not None:
-                ad = abs(wd_n - wd_o)
-                if ad > 180:
-                    ad = 360 - ad
-                shock += min(ad / 90, 1) * min(ws_n / 15, 1) * 0.4
-            cr_o = o_obs.get("cloud_rank", 0)
-            cr_n = n_obs.get("cloud_rank", 0)
-            shock += min(abs(cr_n - cr_o) / 3, 1) * 0.35
-            ap_o, ap_n = _sf(o_obs.get("altim")), _sf(n_obs.get("altim"))
-            if ap_o is not None and ap_n is not None:
-                shock += min(abs(ap_n - ap_o) / 4, 1) * 0.25
-        if shock > 0.05:
-            sigma *= 1 + 0.5 * shock
+        # Use shared DEB if not already set
+        if deb_val is None and sd.get("deb_prediction") is not None:
+            deb_val = sd["deb_prediction"]
+            deb_weights = sd.get("deb_weights", "")
 
-        # Time-based sigma adjustment
-        if local_hour_frac > last_peak_h:
-            sigma *= 0.3
-        elif first_peak_h <= local_hour_frac <= last_peak_h:
-            sigma *= 0.7
-
-        # Mu calculation — reality-anchored
-        forecast_highs = [h for h in current_forecasts.values() if h is not None]
-        forecast_median = (
-            sorted(forecast_highs)[len(forecast_highs) // 2]
-            if forecast_highs
-            else ens_data["median"]
-        )
-
-        # Compute forecast miss magnitude
-        if max_so_far is not None and forecast_median is not None:
-            forecast_miss_deg = round(forecast_median - max_so_far, 1)
-
-        # --- Key fix: Reality-anchored μ ---
-        # If we are past or in the peak window AND actual max is significantly
-        # below forecasts, anchor μ on max_so_far, not on forecast_median.
-        if (
-            max_so_far is not None
-            and forecast_median is not None
-            and peak_status in ("past", "in_window")
-            and max_so_far < forecast_median - 2.0
-        ):
-            # Forecast bust: μ anchors on actual max, not failed predictions
-            # Allow small upward margin only if still warming
-            if trend_info["is_cooling"] or peak_status == "past":
-                mu = max_so_far
-            else:
-                # Still in window and warming — small margin
-                mu = max_so_far + 0.5
-        else:
-            # Normal case: blend forecast and ensemble
-            mu = (
-                forecast_median * 0.7 + ens_data["median"] * 0.3
-                if forecast_median is not None
-                else ens_data["median"]
+        # Append multi-model divergence for AI
+        if current_forecasts and ai_context:
+            mm_str = " | ".join(
+                [f"{k}:{v}{sym}" for k, v in current_forecasts.items() if v]
             )
-            if max_so_far is not None and max_so_far > mu:
-                mu = max_so_far + (0.3 if not trend_info["is_cooling"] else 0.0)
+            ai_context += f"\n模型分歧: {mm_str}"
 
-        def _norm_cdf(x, m, s):
-            return 0.5 * (1 + math.erf((x - m) / (s * math.sqrt(2))))
-
-        min_wu = round(max_so_far) if max_so_far is not None else -999
-        probs = {}
-        for n in range(round(mu) - 2, round(mu) + 3):
-            if n < min_wu:
-                continue
-            p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
-            if p > 0.01:
-                probs[n] = p
-        total = sum(probs.values())
-        if total > 0:
-            probs = {k: v / total for k, v in probs.items()}
-            for t, p in sorted(probs.items(), key=lambda x: x[1], reverse=True)[:4]:
-                probabilities.append(
-                    {"value": t, "range": f"[{t-0.5}~{t+0.5})", "probability": round(p, 3)}
-                )
-
-    # ── 11. Dead market detection ──
-    is_dead = False
-    if max_so_far is not None and cur_temp is not None:
-        if local_hour >= 21 and max_so_far - cur_temp >= 3.0:
-            is_dead = True
-        elif local_hour > last_peak_h and max_so_far - cur_temp >= 1.5:
-            is_dead = True
-    trend_info["is_dead_market"] = is_dead
-
-    # Override probabilities when dead market confirmed
-    if is_dead and max_so_far is not None:
-        settled = round(max_so_far)
-        mu = max_so_far
-        probabilities = [
-            {"value": settled, "range": f"[{settled-0.5}~{settled+0.5})", "probability": 1.0}
-        ]
+        if ai_context:
+            ai_text = get_ai_analysis(ai_context, city, sym)
+    except Exception as e:
+        logger.warning(f"Analysis/AI skipped for {city}: {e}")
 
     # ── 12. Hourly data (today only, for chart) ──
     today_hourly: Dict[str, list] = {"times": [], "temps": [], "radiation": []}
@@ -442,28 +358,6 @@ def _analyze(city: str) -> Dict[str, Any]:
             "rain_24h": _sf(mgc.get("rain_24h")),
         }
 
-    # ── 15. AI Analysis (reuse bot_listener's analyze_weather_trend) ──
-    ai_text = ""
-    try:
-        from src.analysis.ai_analyzer import get_ai_analysis
-        from bot_listener import analyze_weather_trend
-
-        # analyze_weather_trend returns (display_str, ai_context)
-        # It already handles: DEB, probability, dead market, forecast bust,
-        # METAR trend, peak window, wind, cloud, humidity, etc.
-        _, ai_context = analyze_weather_trend(raw, sym, city)
-
-        # Append multi-model divergence if not already included
-        if current_forecasts and ai_context:
-            mm_str = " | ".join(
-                [f"{k}:{v}{sym}" for k, v in current_forecasts.items() if v]
-            )
-            ai_context += f"\n模型分歧: {mm_str}"
-
-        if ai_context:
-            ai_text = get_ai_analysis(ai_context, city, sym)
-    except Exception as e:
-        logger.warning(f"AI analysis skipped for {city}: {e}")
 
     # ── Assemble result ──
     result = {
