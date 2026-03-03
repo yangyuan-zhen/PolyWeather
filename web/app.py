@@ -464,6 +464,38 @@ async def city_detail(name: str):
     return _analyze(name)
 
 
+@app.get("/api/history/{name}")
+async def city_history(name: str):
+    """Return historical accuracy data (DEB, mu, actuals) for a city."""
+    name = name.lower().strip().replace("-", " ")
+    name = ALIASES.get(name, name)
+    
+    from src.analysis.deb_algorithm import load_history
+    import os
+    
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    history_file = os.path.join(project_root, "data", "daily_records.json")
+    data = load_history(history_file)
+    
+    if name not in data:
+        return {"history": []}
+        
+    city_data = data[name]
+    out = []
+    for d, rec in sorted(city_data.items()):
+        act = rec.get("actual_high")
+        deb = rec.get("deb_prediction")
+        mu = rec.get("mu")
+        
+        # Only return items where we have at least an actual or a prediction
+        out.append({
+            "date": d,
+            "actual": float(act) if act is not None else None,
+            "deb": float(deb) if deb is not None else None,
+            "mu": float(mu) if mu is not None else None,
+        })
+    return {"history": out}
+
 # ──────────────────────────────────────────────────────────
 #  Entrypoint
 # ──────────────────────────────────────────────────────────

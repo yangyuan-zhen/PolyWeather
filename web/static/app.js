@@ -821,6 +821,164 @@ async function loadAllCitiesProgressively(cities) {
 }
 
 // ──────────────────────────────────────────────────────────
+//  History Chart Logic
+// ──────────────────────────────────────────────────────────
+let historyChartInst = null;
+
+async function openHistoryModal() {
+  if (!selectedCity) return;
+
+  const modal = document.getElementById("historyModal");
+  const title = document.getElementById("historyModalTitle");
+  const statsDiv = document.getElementById("historyStats");
+
+  modal.classList.remove("hidden");
+  title.textContent = `历史准确率对账 - ${selectedCity.toUpperCase()}`;
+  statsDiv.innerHTML =
+    '<span style="color:var(--text-muted)">正在获取底层数据库...</span>';
+
+  try {
+    const res = await fetch(`/api/history/${encodeURIComponent(selectedCity)}`);
+    const json = await res.json();
+    const data = json.history || [];
+
+    if (data.length === 0) {
+      statsDiv.innerHTML =
+        '<span style="color:var(--text-muted)">暂无该城市历史数据</span>';
+      if (historyChartInst) historyChartInst.destroy();
+      return;
+    }
+
+    // Compute stats
+    let hits = 0;
+    let debErrors = [];
+    let muErrors = [];
+
+    const dates = [];
+    const actuals = [];
+    const debs = [];
+    const mus = [];
+
+    data.forEach((row) => {
+      dates.push(row.date);
+      actuals.push(row.actual);
+      debs.push(row.deb);
+      mus.push(row.mu);
+
+      if (row.actual != null && row.deb != null) {
+        debErrors.push(Math.abs(row.actual - row.deb));
+        if (Math.round(row.actual) === Math.round(row.deb)) {
+          hits++;
+        }
+      }
+      if (row.actual != null && row.mu != null) {
+        muErrors.push(Math.abs(row.actual - row.mu));
+      }
+    });
+
+    const hitRate = debErrors.length
+      ? ((hits / debErrors.length) * 100).toFixed(0)
+      : 0;
+    const debMae = debErrors.length
+      ? (debErrors.reduce((a, b) => a + b, 0) / debErrors.length).toFixed(1)
+      : "-";
+    const muMae = muErrors.length
+      ? (muErrors.reduce((a, b) => a + b, 0) / muErrors.length).toFixed(1)
+      : "-";
+
+    statsDiv.innerHTML = `
+      <div class="h-stat-card"><span class="label">DEB 结算胜率 (WU)</span><span class="val">${hitRate}%</span></div>
+      <div class="h-stat-card"><span class="label">DEB MAE</span><span class="val">${debMae}°</span></div>
+      <div class="h-stat-card"><span class="label">μ (概率) MAE</span><span class="val">${muMae}°</span></div>
+      <div class="h-stat-card"><span class="label">有效样本数</span><span class="val">${data.length}天</span></div>
+    `;
+
+    if (historyChartInst) historyChartInst.destroy();
+    const ctx = document.getElementById("historyChart").getContext("2d");
+
+    historyChartInst = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels: dates,
+        datasets: [
+          {
+            label: "实测最高温",
+            data: actuals,
+            borderColor: "#f87171", // red
+            backgroundColor: "rgba(248, 113, 113, 0.1)",
+            borderWidth: 2,
+            tension: 0.2,
+            pointRadius: 4,
+            pointBackgroundColor: "#f87171",
+            pointBorderColor: "#fff",
+            zIndex: 10,
+          },
+          {
+            label: "DEB 融合",
+            data: debs,
+            borderColor: "#34d399", // emerald
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            borderDash: [5, 4],
+            tension: 0.2,
+            pointRadius: 3,
+          },
+          {
+            label: "μ (概率锚定)",
+            data: mus,
+            borderColor: "#a78bfa", // purple
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            borderDash: [2, 2],
+            tension: 0.2,
+            pointRadius: 3,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: {
+            labels: { color: "#94a3b8", font: { family: "Inter", size: 12 } },
+          },
+          tooltip: {
+            backgroundColor: "rgba(15, 23, 42, 0.9)",
+            borderColor: "rgba(255, 255, 255, 0.1)",
+            borderWidth: 1,
+            titleFont: { family: "Inter" },
+            bodyFont: { family: "Inter" },
+            callbacks: {
+              label: (ctx) =>
+                `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}°`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: { color: "#64748b", font: { family: "Inter", size: 10 } },
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: { color: "#64748b", font: { family: "Inter", size: 10 } },
+          },
+        },
+      },
+    });
+  } catch (e) {
+    console.error("Failed to load history", e);
+    statsDiv.innerHTML =
+      '<span style="color:var(--accent-red)">获取历史信息失败</span>';
+  }
+}
+
+function closeHistoryModal() {
+  document.getElementById("historyModal").classList.add("hidden");
+}
+
+// ──────────────────────────────────────────────────────────
 //  Init
 // ──────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
@@ -832,6 +990,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   // Escape key
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closePanel();
+  });
+
+  // History Modal Events
+  document
+    .getElementById("btnShowHistory")
+    .addEventListener("click", openHistoryModal);
+  document
+    .getElementById("historyModalClose")
+    .addEventListener("click", closeHistoryModal);
+  document.getElementById("historyModal").addEventListener("click", (e) => {
+    if (e.target.id === "historyModal") closeHistoryModal();
   });
 
   // Refresh all button
