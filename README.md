@@ -14,7 +14,7 @@ PolyWeather is a weather analysis tool built for prediction markets like **Polym
 </p>
 
 <p align="center">
-  <img src="docs/images/demo_map.png" alt="PolyWeather Web Map" width="600">
+  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="800">
   <br>
   <em>🗺️ Interactive Web Map: Real-time global monitoring with rich data visualization</em>
 </p>
