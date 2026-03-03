@@ -424,20 +424,35 @@ function renderChart(data) {
     : null;
   const curIdx = curHour ? times.indexOf(curHour) : -1;
 
-  // Forecast vs actual split
-  const actualTemps = temps.map((t, i) =>
+  // Open-Meteo model: past = solid, future = dashed
+  const pastTemps = temps.map((t, i) =>
     curIdx >= 0 && i <= curIdx ? t : null,
   );
-  const forecastTemps = temps.map((t, i) =>
+  const futureTemps = temps.map((t, i) =>
     curIdx < 0 || i >= curIdx ? t : null,
   );
+
+  // METAR observation scatter points
+  const metarPoints = new Array(times.length).fill(null);
+  const metarRecent = data.trend?.recent || [];
+  if (metarRecent.length > 0) {
+    metarRecent.forEach((r) => {
+      // Match METAR time (e.g. "15:00") to chart time labels
+      const idx = times.indexOf(r.time);
+      if (idx >= 0) {
+        metarPoints[idx] = r.temp;
+      }
+    });
+  }
 
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
   const validTemps = temps.filter((t) => t != null);
-  const minTemp = Math.floor(Math.min(...validTemps)) - 1;
-  const maxTemp = Math.ceil(Math.max(...validTemps)) + 1;
+  const validMetar = metarPoints.filter((t) => t != null);
+  const allVals = [...validTemps, ...validMetar];
+  const minTemp = Math.floor(Math.min(...allVals)) - 1;
+  const maxTemp = Math.ceil(Math.max(...allVals)) + 1;
 
   tempChart = new Chart(ctx, {
     type: "line",
@@ -445,27 +460,40 @@ function renderChart(data) {
       labels: times,
       datasets: [
         {
-          label: "实测",
-          data: actualTemps,
-          borderColor: "#22d3ee",
-          backgroundColor: "rgba(34, 211, 238, 0.1)",
-          borderWidth: 2.5,
+          label: "OM模型",
+          data: pastTemps,
+          borderColor: "rgba(99, 102, 241, 0.5)",
+          backgroundColor: "rgba(99, 102, 241, 0.05)",
+          borderWidth: 1.5,
           pointRadius: 0,
-          pointHoverRadius: 4,
+          pointHoverRadius: 3,
           fill: true,
           tension: 0.3,
           spanGaps: false,
         },
         {
-          label: "预报",
-          data: forecastTemps,
-          borderColor: "rgba(99, 102, 241, 0.6)",
+          label: "OM预报",
+          data: futureTemps,
+          borderColor: "rgba(99, 102, 241, 0.4)",
           borderWidth: 1.5,
           borderDash: [5, 3],
           pointRadius: 0,
           fill: false,
           tension: 0.3,
           spanGaps: false,
+        },
+        {
+          label: "METAR实测",
+          data: metarPoints,
+          borderColor: "#22d3ee",
+          backgroundColor: "#22d3ee",
+          borderWidth: 0,
+          pointRadius: 5,
+          pointHoverRadius: 7,
+          pointStyle: "circle",
+          fill: false,
+          showLine: false,
+          order: 0, // Draw on top
         },
       ],
     },
@@ -481,6 +509,7 @@ function renderChart(data) {
           borderWidth: 1,
           titleFont: { family: "Inter", size: 12 },
           bodyFont: { family: "Inter", size: 12 },
+          filter: (item) => item.parsed.y != null,
           callbacks: {
             label: (ctx) =>
               `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}${data.temp_symbol}`,
