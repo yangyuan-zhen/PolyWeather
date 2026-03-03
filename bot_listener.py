@@ -271,14 +271,57 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
             is_dead_market = True
 
     if ens_p10 is not None and ens_p90 is not None and not is_dead_market:
-        # (现有概率计算逻辑保留，但增加 is_dead_market 排除)
-        mu = (
-            forecast_median * 0.7 + ens_median * 0.3
-            if forecast_median is not None
-            else ens_median
-        )
-        if max_so_far is not None and max_so_far > mu:
-            mu = max_so_far + (0.3 if not is_cooling else 0.0)
+        # --- Reality-anchored μ ---
+        # Determine peak status
+        if local_hour_frac > last_peak_h:
+            _peak_status = "past"
+        elif first_peak_h <= local_hour_frac <= last_peak_h:
+            _peak_status = "in_window"
+        else:
+            _peak_status = "before"
+
+        # Compute forecast miss magnitude
+        forecast_miss_deg = 0
+        if max_so_far is not None and forecast_median is not None:
+            forecast_miss_deg = round(forecast_median - max_so_far, 1)
+
+        # If peak is past/in_window AND actual max is significantly below
+        # forecasts, anchor μ on actual max, not on failed predictions
+        if (
+            max_so_far is not None
+            and forecast_median is not None
+            and _peak_status in ("past", "in_window")
+            and max_so_far < forecast_median - 2.0
+        ):
+            if is_cooling or _peak_status == "past":
+                mu = max_so_far
+            else:
+                mu = max_so_far + 0.5
+        else:
+            mu = (
+                forecast_median * 0.7 + ens_median * 0.3
+                if forecast_median is not None
+                else ens_median
+            )
+            if max_so_far is not None and max_so_far > mu:
+                mu = max_so_far + (0.3 if not is_cooling else 0.0)
+
+        # Inject forecast miss severity for AI
+        if forecast_miss_deg > 2.0 and _peak_status in ("past", "in_window"):
+            if forecast_miss_deg > 5.0:
+                severity = "重"
+            elif forecast_miss_deg > 3.0:
+                severity = "中"
+            else:
+                severity = "轻"
+            min_fc = min(
+                (v for v in forecast_highs if v is not None), default=None
+            )
+            _trend_dir = "降温" if is_cooling else ("停滞" if "停滞" in trend_desc else "升温")
+            ai_features.append(
+                f"🚨 预报崩盘 [{severity}级失准]: 最低预报 {min_fc}{temp_symbol} vs 实测最高 {max_so_far}{temp_symbol}，"
+                f"偏差 {forecast_miss_deg}°。当前趋势: {_trend_dir}。"
+            )
 
         def _norm_cdf(x, m, s):
             return 0.5 * (1 + _math.erf((x - m) / (s * _math.sqrt(2))))
