@@ -271,6 +271,7 @@ def _analyze(city: str) -> Dict[str, Any]:
     # ── 10. Probability distribution ──
     probabilities = []
     mu = None
+    forecast_miss_deg = 0  # How far actual is below forecasts
     if (
         ens_data["p10"] is not None
         and ens_data["p90"] is not None
@@ -314,20 +315,43 @@ def _analyze(city: str) -> Dict[str, Any]:
         elif first_peak_h <= local_hour_frac <= last_peak_h:
             sigma *= 0.7
 
-        # Mu calculation
+        # Mu calculation — reality-anchored
         forecast_highs = [h for h in current_forecasts.values() if h is not None]
         forecast_median = (
             sorted(forecast_highs)[len(forecast_highs) // 2]
             if forecast_highs
             else ens_data["median"]
         )
-        mu = (
-            forecast_median * 0.7 + ens_data["median"] * 0.3
-            if forecast_median is not None
-            else ens_data["median"]
-        )
-        if max_so_far is not None and max_so_far > mu:
-            mu = max_so_far + (0.3 if not trend_info["is_cooling"] else 0.0)
+
+        # Compute forecast miss magnitude
+        if max_so_far is not None and forecast_median is not None:
+            forecast_miss_deg = round(forecast_median - max_so_far, 1)
+
+        # --- Key fix: Reality-anchored μ ---
+        # If we are past or in the peak window AND actual max is significantly
+        # below forecasts, anchor μ on max_so_far, not on forecast_median.
+        if (
+            max_so_far is not None
+            and forecast_median is not None
+            and peak_status in ("past", "in_window")
+            and max_so_far < forecast_median - 2.0
+        ):
+            # Forecast bust: μ anchors on actual max, not failed predictions
+            # Allow small upward margin only if still warming
+            if trend_info["is_cooling"] or peak_status == "past":
+                mu = max_so_far
+            else:
+                # Still in window and warming — small margin
+                mu = max_so_far + 0.5
+        else:
+            # Normal case: blend forecast and ensemble
+            mu = (
+                forecast_median * 0.7 + ens_data["median"] * 0.3
+                if forecast_median is not None
+                else ens_data["median"]
+            )
+            if max_so_far is not None and max_so_far > mu:
+                mu = max_so_far + (0.3 if not trend_info["is_cooling"] else 0.0)
 
         def _norm_cdf(x, m, s):
             return 0.5 * (1 + math.erf((x - m) / (s * math.sqrt(2))))
@@ -477,6 +501,20 @@ def _analyze(city: str) -> Dict[str, Any]:
                 [f"{k}:{v}{sym}" for k, v in current_forecasts.items() if v]
             )
             ai_parts.append(f"模型分歧: {mm_str}")
+
+        # --- Forecast bust detection for AI ---
+        if forecast_miss_deg > 2.0 and peak_status in ("past", "in_window"):
+            min_forecast = min(
+                (v for v in current_forecasts.values() if v is not None), default=None
+            )
+            ai_parts.append(
+                f"🚨 预报崩盘: 所有模型集体高估！最低预报 {min_forecast}{sym} vs 实测最高 {max_so_far}{sym}，"
+                f"偏差 {forecast_miss_deg}°。已进入/过了峰值窗口，温度严重不达预期。"
+            )
+        elif forecast_miss_deg > 4.0 and peak_status == "before":
+            ai_parts.append(
+                f"⚠️ 预报差距: 距峰值窗口尚有时间，但实测已落后预报 {forecast_miss_deg}°。"
+            )
 
         ai_context = "\n".join(ai_parts)
         ai_text = get_ai_analysis(ai_context, city, sym)
