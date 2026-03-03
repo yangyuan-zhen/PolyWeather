@@ -23,9 +23,12 @@ function initMap() {
     zoom: 3,
     minZoom: 2,
     maxZoom: 12,
-    zoomControl: true,
+    zoomControl: false,
     attributionControl: true,
   });
+
+  // Move zoom control to bottom right to avoid overlapping with city list
+  L.control.zoom({ position: "bottomright" }).addTo(map);
 
   // CartoDB Dark Matter tiles (free, dark theme)
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
