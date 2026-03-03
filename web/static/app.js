@@ -134,7 +134,6 @@ function buildCityList(cities) {
         `;
     div.addEventListener("click", () => {
       loadCityDetail(city.name);
-      map.flyTo([city.lat, city.lon], 6, { duration: 1 });
     });
     container.appendChild(div);
   });
@@ -215,6 +214,16 @@ async function loadCityDetail(cityName) {
     const data = await fetchCityDetail(cityName);
     cityDataCache[cityName] = data;
     renderPanel(data);
+
+    // Cinematic Zoom-in Camera
+    if (data.lat != null && data.lon != null) {
+      map.flyTo([data.lat, data.lon], 10, {
+        animate: true,
+        duration: 1.5,
+        easeLinearity: 0.25,
+      });
+    }
+
     // Update marker and list
     if (data.current?.temp != null) {
       const displayTemp =
