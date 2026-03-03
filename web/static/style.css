@@ -33,7 +33,7 @@
   /* Spacing */
   --panel-width: 560px;
   --header-height: 56px;
-  --sidebar-width: 200px;
+  --sidebar-width: 280px;
 
   /* Effects */
   --glass-blur: 20px;
@@ -247,20 +247,20 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border-bottom: 1px solid var(--border-subtle);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .city-count {
   background: var(--accent-blue);
   color: white;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 10px;
+  padding: 3px 10px;
+  border-radius: 12px;
 }
 
 .city-list-items {
@@ -301,20 +301,20 @@ body {
 .city-item-main {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   width: 100%;
 }
 
 .city-item .city-name-text {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
 }
 
 .city-item .city-temp {
   margin-left: auto;
-  font-size: 13px;
-  font-weight: 700;
+  font-size: 16px;
+  font-weight: 800;
   color: var(--accent-cyan);
   opacity: 0;
   transition: var(--transition);
@@ -327,8 +327,8 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-left: 16px; /* Align with name text, after the dot */
-  font-size: 10px;
+  padding-left: 20px; /* Align with name text, after the dot */
+  font-size: 11px;
   color: var(--text-muted);
 }
 
@@ -338,8 +338,8 @@ body {
 }
 
 .city-item .risk-dot {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
