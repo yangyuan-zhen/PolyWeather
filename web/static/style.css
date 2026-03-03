@@ -751,10 +751,12 @@ body {
 .risk-info .risk-row {
   display: flex;
   gap: 8px;
+  align-items: flex-start;
 }
 .risk-info .risk-label {
   color: var(--text-muted);
   min-width: 60px;
+  flex-shrink: 0;
 }
 
 /* ── Custom Map Markers ── */
