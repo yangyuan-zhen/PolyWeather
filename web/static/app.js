@@ -322,24 +322,6 @@ function renderChart(data) {
     curIdx < 0 || i >= curIdx ? t : null,
   );
 
-  // METAR scatter points
-  const metarPoints = [];
-  if (data.trend?.recent?.length) {
-    data.trend.recent.forEach((r) => {
-      if (!r.time || r.temp == null) return;
-      const parts = r.time.split(":");
-      if (parts.length === 2) {
-        const h = parts[0].padStart(2, "0");
-        const m = parseInt(parts[1], 10);
-        const hourStr = h + ":00";
-        const baseIdx = times.indexOf(hourStr);
-        if (baseIdx !== -1) {
-          metarPoints.push({ x: baseIdx + m / 60, y: r.temp });
-        }
-      }
-    });
-  }
-
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
@@ -374,21 +356,6 @@ function renderChart(data) {
           fill: false,
           tension: 0.3,
           spanGaps: false,
-        },
-        {
-          label: "METAR实况",
-          data: metarPoints,
-          borderColor: "#fbbf24", // Yellow accent for points
-          backgroundColor: "#fbbf24",
-          borderWidth: 2,
-          pointRadius: 4,
-          pointHoverRadius: 6,
-          pointBackgroundColor: "#0a0e1a",
-          type: "line",
-          showLine: true, // Show continuous line
-          tension: 0.3, // Add slight curve to METAR line
-          borderDash: [5, 5], // Dashed line to distinguish from main curve
-          order: 0, // Draw on top
         },
       ],
     },
