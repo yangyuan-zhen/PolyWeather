@@ -281,26 +281,60 @@ body {
 
 .city-item {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
   padding: 10px 12px;
   border-radius: 10px;
   cursor: pointer;
   transition: var(--transition);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
   border: 1px solid transparent;
 }
 .city-item:hover {
   background: rgba(99, 102, 241, 0.08);
-  color: var(--text-primary);
   border-color: var(--border-glass);
 }
 .city-item.active {
   background: rgba(99, 102, 241, 0.15);
-  color: var(--text-primary);
   border-color: var(--accent-blue);
+}
+
+.city-item-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.city-item .city-name-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.city-item .city-temp {
+  margin-left: auto;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  opacity: 0;
+  transition: var(--transition);
+}
+.city-item .city-temp.loaded {
+  opacity: 1;
+}
+
+.city-item-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-left: 16px; /* Align with name text, after the dot */
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.city-item .city-max-info {
+  color: var(--accent-blue);
+  font-weight: 500;
 }
 
 .city-item .risk-dot {

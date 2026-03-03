@@ -119,11 +119,18 @@ function buildCityList(cities) {
   sorted.forEach((city) => {
     const div = document.createElement("div");
     div.className = "city-item";
-    div.id = `city-item-${city.name.replace(/\s/g, "-")}`;
+    const cityId = city.name.replace(/\s/g, "-");
+    div.id = `city-item-${cityId}`;
     div.innerHTML = `
-            <span class="risk-dot ${city.risk_level}"></span>
-            <span class="city-name-text">${city.display_name}</span>
-            <span class="city-temp" id="temp-${city.name.replace(/\s/g, "-")}">—</span>
+            <div class="city-item-main">
+                <span class="risk-dot ${city.risk_level}"></span>
+                <span class="city-name-text">${city.display_name}</span>
+                <span class="city-temp" id="temp-${cityId}">—</span>
+            </div>
+            <div class="city-item-info">
+                <span class="city-local-time" id="time-${cityId}"></span>
+                <span class="city-max-info" id="max-${cityId}"></span>
+            </div>
         `;
     div.addEventListener("click", () => {
       loadCityDetail(city.name);
@@ -145,12 +152,32 @@ function setActiveCityItem(cityName) {
   }
 }
 
-function updateCityListTemp(cityName, temp, symbol) {
-  const id = `temp-${cityName.replace(/\s/g, "-")}`;
-  const el = document.getElementById(id);
-  if (el) {
-    el.textContent = `${temp}${symbol}`;
-    el.classList.add("loaded");
+function updateCityListInfo(cityData) {
+  const cityName = cityData.name;
+  const cityId = cityName.replace(/\s/g, "-");
+  const temp =
+    cityData.current?.max_so_far != null &&
+    cityData.current.max_so_far >= (cityData.current.temp || -999)
+      ? cityData.current.max_so_far
+      : cityData.current.temp;
+
+  // Update Temperature
+  const tempEl = document.getElementById(`temp-${cityId}`);
+  if (tempEl && temp != null) {
+    tempEl.textContent = `${temp}${cityData.temp_symbol}`;
+    tempEl.classList.add("loaded");
+  }
+
+  // Update Local Time
+  const timeEl = document.getElementById(`time-${cityId}`);
+  if (timeEl && cityData.local_time) {
+    timeEl.textContent = `🕐 ${cityData.local_time}`;
+  }
+
+  // Update Max Temp Time
+  const maxEl = document.getElementById(`max-${cityId}`);
+  if (maxEl && cityData.current?.max_temp_time) {
+    maxEl.textContent = `峰值 @${cityData.current.max_temp_time}`;
   }
 }
 
@@ -188,7 +215,7 @@ async function loadCityDetail(cityName) {
     const data = await fetchCityDetail(cityName);
     cityDataCache[cityName] = data;
     renderPanel(data);
-    // Update marker temperature
+    // Update marker and list
     if (data.current?.temp != null) {
       const displayTemp =
         data.current.max_so_far != null &&
@@ -196,7 +223,7 @@ async function loadCityDetail(cityName) {
           ? data.current.max_so_far
           : data.current.temp;
       updateMarkerTemp(cityName, displayTemp);
-      updateCityListTemp(cityName, displayTemp, data.temp_symbol);
+      updateCityListInfo(data);
     }
   } catch (e) {
     console.error(`Failed to load ${cityName}:`, e);
@@ -695,7 +722,7 @@ function startAutoRefresh() {
               ? data.current.max_so_far
               : data.current.temp;
           updateMarkerTemp(selectedCity, displayTemp);
-          updateCityListTemp(selectedCity, displayTemp, data.temp_symbol);
+          updateCityListInfo(data);
         }
         flashLiveBadge();
       } catch (e) {
@@ -738,7 +765,7 @@ async function loadAllCitiesProgressively(cities) {
                 ? data.current.max_so_far
                 : data.current.temp;
             updateMarkerTemp(city.name, displayTemp);
-            updateCityListTemp(city.name, displayTemp, data.temp_symbol);
+            updateCityListInfo(data);
           }
 
           // 如果恰好在这个时候用户选中了这个城市，顺便刷新面板
