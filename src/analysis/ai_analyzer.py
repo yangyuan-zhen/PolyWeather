@@ -61,6 +61,12 @@ P4 **预报背景**（最低优先级）：
 - 🎯 置信度: [1-10]/10
 """
 
+    # Use proxy if configured
+    proxies = {}
+    proxy_url = os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+    if proxy_url:
+        proxies = {"http": proxy_url, "https": proxy_url}
+
     for model in MODELS:
         for attempt in range(2):  # 每个模型最多重试 2 次
             try:
@@ -77,7 +83,9 @@ P4 **预报背景**（最低优先级）：
                     "max_tokens": 250,
                 }
 
-                response = requests.post(url, json=payload, headers=headers, timeout=15)
+                response = requests.post(
+                    url, json=payload, headers=headers, timeout=15, proxies=proxies
+                )
                 response.raise_for_status()
 
                 result = response.json()
@@ -89,17 +97,21 @@ P4 **预报背景**（最低优先级）：
 
             except requests.exceptions.HTTPError as e:
                 status = e.response.status_code if e.response is not None else 0
+                error_body = ""
+                try:
+                    error_body = e.response.text
+                except:
+                    pass
+                logger.warning(
+                    f"Groq {model} 失败 (HTTP {status}): {error_body}. 尝试下一个..."
+                )
                 if status in (500, 502, 503) and attempt == 0:
-                    logger.warning(f"Groq {model} 返回 {status}，{1.5}s 后重试...")
                     time.sleep(1.5)
                     continue
                 else:
-                    logger.warning(
-                        f"Groq {model} 失败 (HTTP {status})，尝试下一个模型..."
-                    )
                     break  # 换下一个模型
             except Exception as e:
-                logger.warning(f"Groq {model} 异常: {e}，尝试下一个模型...")
+                logger.warning(f"Groq {model} 异常: {str(e)}，尝试下一个模型...")
                 break
 
     logger.error("所有 Groq 模型均不可用")
