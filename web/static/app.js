@@ -250,6 +250,32 @@ function renderPanel(data) {
   renderRisk(data);
 }
 
+const METAR_WX_MAP = {
+  RA: { label: "降雨", icon: "🌧️" },
+  "-RA": { label: "轻雨", icon: "🌦️" },
+  "+RA": { label: "强降雨", icon: "⛈️" },
+  SN: { label: "降雪", icon: "❄️" },
+  "-SN": { label: "轻雪", icon: "🌨️" },
+  "+SN": { label: "大雪", icon: "🏔️" },
+  DZ: { label: "毛毛雨", icon: "🌦️" },
+  FG: { label: "雾", icon: "🌫️" },
+  BR: { label: "薄雾", icon: "🌫️" },
+  HZ: { label: "霾", icon: "🌫️" },
+  TS: { label: "雷暴", icon: "⛈️" },
+  VCTS: { label: "附近雷暴", icon: "⛈️" },
+  SQ: { label: "飑", icon: "💨" },
+  GS: { label: "冰雹", icon: "🌨️" },
+};
+
+function translateMETAR(code) {
+  if (!code) return null;
+  // Handle complex codes like "-RA FG" or "TSRA"
+  for (const [key, val] of Object.entries(METAR_WX_MAP)) {
+    if (code.includes(key)) return val;
+  }
+  return { label: code, icon: "🌡️" };
+}
+
 function renderHero(data) {
   const cur = data.current || {};
   const sym = data.temp_symbol || "°C";
@@ -259,9 +285,9 @@ function renderHero(data) {
       ? cur.max_so_far
       : cur.temp;
 
-  // Use cloud_desc for the main weather indicator
-  const weatherText = cur.cloud_desc || cur.wx_desc || "未知";
-  const weatherIcon =
+  // Use cloud_desc or wx_desc
+  let weatherText = cur.cloud_desc || "未知";
+  let weatherIcon =
     {
       多云: "⛅",
       阴天: "☁️",
@@ -269,6 +295,15 @@ function renderHero(data) {
       散云: "⛅",
       晴: "☀️",
     }[cur.cloud_desc] || "🌡️";
+
+  // If we have a specific weather phenomenon (METAR wx_desc like -RA), prioritize it
+  if (cur.wx_desc) {
+    const metarTranslation = translateMETAR(cur.wx_desc);
+    if (metarTranslation) {
+      weatherText = metarTranslation.label;
+      weatherIcon = metarTranslation.icon;
+    }
+  }
 
   document.getElementById("heroWeather").innerHTML = `
         <span>${weatherIcon} ${weatherText}</span>
@@ -303,9 +338,13 @@ function renderHero(data) {
     }
     parts.push(`<span>✈️ METAR ${cur.obs_time}${ageStr}</span>`);
   }
-  // Remove redundant cloud_desc here as it's now in main hero
-  if (cur.wx_desc && cur.wx_desc !== cur.cloud_desc) {
-    parts.push(`<span>🌦️ ${cur.wx_desc}</span>`);
+  // Use translated wx_desc if available
+  if (cur.wx_desc) {
+    const trans = translateMETAR(cur.wx_desc);
+    parts.push(`<span>${trans.icon} ${trans.label}</span>`);
+  } else if (cur.cloud_desc) {
+    // Already in hero, but keep it in sub if user wants detail
+    parts.push(`<span>☁️ ${cur.cloud_desc}</span>`);
   }
   if (cur.wind_speed_kt != null) {
     parts.push(`<span>💨 ${cur.wind_speed_kt}kt</span>`);
