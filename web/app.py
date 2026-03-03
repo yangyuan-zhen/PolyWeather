@@ -106,11 +106,24 @@ def _analyze(city: str) -> Dict[str, Any]:
     mm = raw.get("multi_model", {})
     risk = CITY_RISK_PROFILES.get(city, {})
 
-    # ── 2. Current conditions (METAR primary) ──
+    # ── 2. Current conditions (METAR primary, MGM fallback) ──
     mc = metar.get("current", {}) if metar else {}
+    mg_cur = mgm.get("current", {}) if mgm else {}
+
     cur_temp = _sf(mc.get("temp"))
+    if cur_temp is None:
+        cur_temp = _sf(mg_cur.get("temp"))
+
     max_so_far = _sf(mc.get("max_temp_so_far"))
+    if max_so_far is None:
+        max_so_far = _sf(mg_cur.get("mgm_max_temp"))
+
     max_temp_time = mc.get("max_temp_time")
+    if not max_temp_time:
+        max_temp_time = mg_cur.get("time", "")
+        if " " in max_temp_time:
+            max_temp_time = max_temp_time.split(" ")[1][:5]
+
     wu_settle = round(max_so_far) if max_so_far is not None else None
 
     # Observation time → local
@@ -352,7 +365,7 @@ def _analyze(city: str) -> Dict[str, Any]:
             today_hourly["temps"].append(h_temps[i] if i < len(h_temps) else None)
             today_hourly["radiation"].append(h_rad[i] if i < len(h_rad) else None)
 
-    # ── 13. Cloud description ──
+    # ── 13. Cloud description (METAR primary, MGM fallback) ──
     clouds = mc.get("clouds", [])
     cloud_desc = ""
     if clouds:
@@ -366,6 +379,22 @@ def _analyze(city: str) -> Dict[str, Any]:
         }
         main = clouds[-1]
         cloud_desc = c_map.get(main.get("cover"), main.get("cover", ""))
+
+    if not cloud_desc and mgm:
+        mgc_cover = mgm.get("current", {}).get("cloud_cover")
+        if mgc_cover is not None:
+            cloud_desc_map = {
+                0: "晴朗",
+                1: "少云",
+                2: "少云",
+                3: "散云",
+                4: "散云",
+                5: "多云",
+                6: "多云",
+                7: "阴天",
+                8: "阴天",
+            }
+            cloud_desc = cloud_desc_map.get(mgc_cover, "")
 
     # ── 14. MGM data (Ankara-specific) ──
     mgm_data = {}
