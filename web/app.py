@@ -381,6 +381,14 @@ def _analyze(city: str) -> Dict[str, Any]:
             is_dead = True
     trend_info["is_dead_market"] = is_dead
 
+    # Override probabilities when dead market confirmed
+    if is_dead and max_so_far is not None:
+        settled = round(max_so_far)
+        mu = max_so_far
+        probabilities = [
+            {"value": settled, "range": f"[{settled-0.5}~{settled+0.5})", "probability": 1.0}
+        ]
+
     # ── 12. Hourly data (today only, for chart) ──
     today_hourly: Dict[str, list] = {"times": [], "temps": [], "radiation": []}
     for i, ts in enumerate(h_times):
