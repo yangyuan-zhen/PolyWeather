@@ -366,14 +366,22 @@ def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
         if local_hour_frac > last_peak_h:
             ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
         elif first_peak_h <= local_hour_frac <= last_peak_h:
-            ai_features.append(f"⏱️ 状态: 正处于预报最热窗口 ({window})内。")
+            remain_in_window = last_peak_h - local_hour_frac
+            if remain_in_window < 1:
+                ai_features.append(
+                    f"⏱️ 状态: 正处于预报最热窗口 ({window})内，距窗口结束约 {int(remain_in_window * 60)} 分钟。"
+                )
+            else:
+                ai_features.append(
+                    f"⏱️ 状态: 正处于预报最热窗口 ({window})内，距窗口结束约 {remain_in_window:.1f}h。"
+                )
         elif remain_hrs < 1:
             ai_features.append(
-                f"⏱️ 状态: 距最热时段仅剩约 {int(remain_hrs * 60)} 分钟 ({window})。"
+                f"⏱️ 状态: 距最热时段开始还有约 {int(remain_hrs * 60)} 分钟 ({window})，尚未进入峰值窗口。"
             )
         else:
             ai_features.append(
-                f"⏱️ 状态: 距最热时段还有约 {remain_hrs:.1f}h ({window})。"
+                f"⏱️ 状态: 距最热时段开始还有约 {remain_hrs:.1f}h ({window})。"
             )
 
     # === 其他 AI 专供的事实特征 ===
