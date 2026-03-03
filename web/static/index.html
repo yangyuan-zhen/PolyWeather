@@ -63,6 +63,11 @@
         </div>
 
         <div id="panelContent" class="panel-body">
+            <!-- ── Weather Animation Overlay ── -->
+            <div class="weather-anim-container" id="weatherAnimContainer">
+                <canvas id="weatherCanvas"></canvas>
+            </div>
+
             <!-- ── Temperature Hero ── -->
             <section class="hero-section">
                 <div class="hero-weather" id="heroWeather"></div>
@@ -148,6 +153,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="/static/weather-anim.js"></script>
     <script src="/static/app.js"></script>
 </body>
 
