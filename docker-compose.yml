@@ -11,3 +11,16 @@ services:
       - ./data:/app/data # 挂载数据目录，确保历史数据持久化
       - ./bot.log:/app/bot.log # 挂载日志文件
     user: "${UID:-1000}:${GID:-1000}"
+
+  polyweather_web:
+    build: .
+    container_name: polyweather_web
+    restart: unless-stopped
+    command: python web/app.py
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "8000:8000"
+    user: "${UID:-1000}:${GID:-1000}"

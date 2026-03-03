@@ -2,7 +2,34 @@ import os
 import json
 from datetime import datetime, timedelta
 
-import fcntl
+# Cross-platform file locking
+import sys
+if sys.platform == "win32":
+    import msvcrt
+
+    def _lock_sh(f):
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+
+    def _lock_ex(f):
+        msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+
+    def _unlock(f):
+        try:
+            f.seek(0)
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        except Exception:
+            pass
+else:
+    import fcntl
+
+    def _lock_sh(f):
+        fcntl.flock(f, fcntl.LOCK_SH)
+
+    def _lock_ex(f):
+        fcntl.flock(f, fcntl.LOCK_EX)
+
+    def _unlock(f):
+        fcntl.flock(f, fcntl.LOCK_UN)
 
 # Simple memory cache to avoid blasting the disk if queried 10 times a minute
 _history_cache = {}
@@ -22,9 +49,9 @@ def load_history(filepath):
         with open(filepath, "r", encoding="utf-8") as f:
             # We don't strictly need a lock for reading in Python if the write is atomic,
             # but using one prevents reading half-written JSONs.
-            fcntl.flock(f, fcntl.LOCK_SH)
+            _lock_sh(f)
             data = json.load(f)
-            fcntl.flock(f, fcntl.LOCK_UN)
+            _unlock(f)
 
             _history_cache = data
             _history_mtime = current_mtime
@@ -39,9 +66,9 @@ def save_history(filepath, data):
     _history_cache = data
     try:
         with open(filepath, "w", encoding="utf-8") as f:
-            fcntl.flock(f, fcntl.LOCK_EX)
+            _lock_ex(f)
             json.dump(data, f, ensure_ascii=False, indent=2)
-            fcntl.flock(f, fcntl.LOCK_UN)
+            _unlock(f)
         _history_mtime = os.path.getmtime(filepath)
     except Exception as e:
         print(f"Error saving history: {e}")

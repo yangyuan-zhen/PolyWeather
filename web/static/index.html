@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PolyWeather — 天气衍生品智能地图</title>
+    <meta name="description" content="Polymarket 天气衍生品交易智能地图。实时 METAR、DEB 融合预报与 AI 分析。">
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+    <!-- ── Map ── -->
+    <div id="map"></div>
+
+    <!-- ── Header Overlay ── -->
+    <header id="header">
+        <div class="brand">
+            <h1>🌡️ PolyWeather</h1>
+            <span class="subtitle">天气衍生品智能分析</span>
+        </div>
+        <div class="header-right">
+            <div class="live-badge" id="liveBadge">
+                <span class="pulse-dot"></span>
+                <span>实时</span>
+            </div>
+            <button class="refresh-btn" id="refreshAllBtn" title="刷新所有数据">⟳</button>
+        </div>
+    </header>
+
+    <!-- ── City List Sidebar (left) ── -->
+    <nav id="cityList" class="city-list">
+        <div class="city-list-header">
+            <span>🏙️ 监控城市</span>
+            <span class="city-count" id="cityCount">0</span>
+        </div>
+        <div id="cityListItems" class="city-list-items">
+            <!-- Dynamically populated -->
+        </div>
+    </nav>
+
+    <!-- ── Detail Panel (right) ── -->
+    <aside id="panel" class="detail-panel hidden">
+        <div class="panel-header">
+            <button class="panel-close" id="panelClose">✕</button>
+            <div class="panel-title-area">
+                <h2 id="panelCityName">—</h2>
+                <div class="panel-meta">
+                    <span id="panelRiskBadge" class="risk-badge">—</span>
+                    <span id="panelLocalTime" class="local-time">—</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="panelContent" class="panel-body">
+            <!-- ── Temperature Hero ── -->
+            <section class="hero-section">
+                <div class="hero-temp">
+                    <span class="hero-value" id="heroTemp">—</span>
+                    <span class="hero-unit" id="heroUnit">°C</span>
+                </div>
+                <div class="hero-details">
+                    <div class="hero-item">
+                        <span class="label">📈 今日最高</span>
+                        <span class="value" id="heroMax">—</span>
+                    </div>
+                    <div class="hero-item">
+                        <span class="label">🎯 WU 结算</span>
+                        <span class="value highlight" id="heroWU">—</span>
+                    </div>
+                    <div class="hero-item">
+                        <span class="label">🧬 DEB 预测</span>
+                        <span class="value" id="heroDEB">—</span>
+                    </div>
+                </div>
+                <div class="hero-sub" id="heroSub">
+                    <!-- obs time, cloud, wind -->
+                </div>
+            </section>
+
+            <!-- ── Trend Sparkline ── -->
+            <section class="chart-section">
+                <h3>📊 今日温度走势</h3>
+                <div class="chart-wrapper">
+                    <canvas id="tempChart"></canvas>
+                </div>
+                <div class="chart-legend" id="chartLegend"></div>
+            </section>
+
+            <!-- ── Probability Bars ── -->
+            <section class="prob-section">
+                <h3>🎲 结算概率分布</h3>
+                <div id="probBars" class="prob-bars">
+                    <!-- Dynamically populated -->
+                </div>
+            </section>
+
+            <!-- ── Multi-Model Comparison ── -->
+            <section class="models-section">
+                <h3>🔬 多模型预报</h3>
+                <div id="modelBars" class="model-bars">
+                    <!-- Dynamically populated -->
+                </div>
+            </section>
+
+            <!-- ── Forecast Table ── -->
+            <section class="forecast-section">
+                <h3>📅 多日预报</h3>
+                <div id="forecastTable" class="forecast-table"></div>
+                <div class="sun-info" id="sunInfo"></div>
+            </section>
+
+            <!-- ── AI Analysis ── -->
+            <section class="ai-section">
+                <h3>🤖 AI 深度分析</h3>
+                <div id="aiAnalysis" class="ai-box">
+                    <span class="ai-placeholder">点击城市后加载...</span>
+                </div>
+            </section>
+
+            <!-- ── Risk Profile ── -->
+            <section class="risk-section">
+                <h3>⚠️ 数据偏差风险</h3>
+                <div id="riskInfo" class="risk-info"></div>
+            </section>
+        </div>
+    </aside>
+
+    <!-- ── Loading Overlay ── -->
+    <div id="loading" class="loading-overlay hidden">
+        <div class="loading-spinner"></div>
+        <span>正在获取气象数据，请稍候...</span>
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+
+</html>

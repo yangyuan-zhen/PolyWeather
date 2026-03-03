@@ -5,3 +5,5 @@ python-dotenv
 pytz
 numpy
 web3
+fastapi
+uvicorn
