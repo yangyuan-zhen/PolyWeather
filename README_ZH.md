@@ -197,4 +197,21 @@ graph TD
 
 ---
 
+## 🛠️ 开发与测试
+
+运行核心分析引擎和概率模型的单元测试：
+
+```bash
+python -m pytest tests/test_trend_engine.py -v
+```
+
+部署代码更新到服务器：
+
+```bash
+git pull
+./update.sh
+```
+
+---
+
 _更新于 2026-03-04_

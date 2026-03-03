@@ -197,4 +197,21 @@ graph TD
 
 ---
 
+## 🛠️ Development & Testing
+
+Run unit tests for the core trend engine and probability models:
+
+```bash
+python -m pytest tests/test_trend_engine.py -v
+```
+
+Deploying updates to the server:
+
+```bash
+git pull
+./update.sh
+```
+
+---
+
 _Updated 2026-03-04_
