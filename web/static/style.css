@@ -747,6 +747,8 @@ body {
   font-size: 12px;
   color: var(--text-secondary);
   line-height: 1.8;
+  word-break: break-word; /* 确保数字和英文长句也能折行 */
+  white-space: normal;
 }
 .risk-info .risk-row {
   display: flex;
