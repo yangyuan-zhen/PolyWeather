@@ -502,18 +502,27 @@ def _analyze(city: str) -> Dict[str, Any]:
             )
             ai_parts.append(f"模型分歧: {mm_str}")
 
-        # --- Forecast bust detection for AI ---
+        # --- Forecast miss severity for AI ---
         if forecast_miss_deg > 2.0 and peak_status in ("past", "in_window"):
+            if forecast_miss_deg > 5.0:
+                severity = "重"
+            elif forecast_miss_deg > 3.0:
+                severity = "中"
+            else:
+                severity = "轻"
+
             min_forecast = min(
                 (v for v in current_forecasts.values() if v is not None), default=None
             )
+            slope_info = trend_info["direction"]
             ai_parts.append(
-                f"🚨 预报崩盘: 所有模型集体高估！最低预报 {min_forecast}{sym} vs 实测最高 {max_so_far}{sym}，"
-                f"偏差 {forecast_miss_deg}°。已进入/过了峰值窗口，温度严重不达预期。"
+                f"🚨 预报崩盘 [{severity}级失准]: 最低预报 {min_forecast}{sym} vs 实测最高 {max_so_far}{sym}，"
+                f"偏差 {forecast_miss_deg}°。当前趋势: {slope_info}。"
             )
         elif forecast_miss_deg > 4.0 and peak_status == "before":
             ai_parts.append(
-                f"⚠️ 预报差距: 距峰值窗口尚有时间，但实测已落后预报 {forecast_miss_deg}°。"
+                f"⚠️ 预报差距 [轻级]: 距峰值窗口尚有时间，但实测已落后预报 {forecast_miss_deg}°。"
+                f"当前趋势: {trend_info['direction']}。"
             )
 
         ai_context = "\n".join(ai_parts)

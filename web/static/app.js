@@ -255,12 +255,6 @@ function renderPanel(data) {
   // Trigger reflow for animation
   requestAnimationFrame(() => panel.classList.add("visible"));
 
-  // Start weather animation
-  if (typeof WeatherAnim !== "undefined") {
-    // Small delay for canvas to be in DOM
-    setTimeout(() => WeatherAnim.start(data), 100);
-  }
-
   // Header
   document.getElementById("panelCityName").textContent =
     `${data.risk?.emoji || "🏙️"} ${data.display_name}`;
@@ -716,8 +710,6 @@ function closePanel() {
   document
     .querySelectorAll(".city-item")
     .forEach((el) => el.classList.remove("active"));
-  // Stop weather animation
-  if (typeof WeatherAnim !== "undefined") WeatherAnim.stop();
 }
 
 // ──────────────────────────────────────────────────────────
