@@ -116,7 +116,10 @@ def _analyze(city: str) -> Dict[str, Any]:
     mg_cur = mgm.get("current", {}) if mgm else {}
 
     cur_temp = _sf(mc.get("temp"))
-    if cur_temp is None:
+    # For Ankara, prioritize MGM over METAR as it's often more representative of city center
+    if city_lower == "ankara" and _sf(mg_cur.get("temp")) is not None:
+        cur_temp = _sf(mg_cur.get("temp"))
+    elif cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
 
     max_so_far = _sf(mc.get("max_temp_so_far"))
@@ -354,12 +357,22 @@ def _analyze(city: str) -> Dict[str, Any]:
     if mgm:
         mgc = mgm.get("current", {})
         mgm_time_str = mgc.get("time", "")
+        # MGM time is usually "2026-03-04T10:40:00.000Z" (UTC)
         if mgm_time_str and "T" in mgm_time_str:
             try:
-                dt = datetime.fromisoformat(mgm_time_str.replace("Z", "+00:00"))
+                # Handle ISO format with Z or +00:00
+                ts = mgm_time_str.replace("Z", "+00:00")
+                if "." in ts:
+                    # Strip fractional seconds if present to be safe for 3.8
+                    base, offset_part = ts.split("+")
+                    if "." in base:
+                        base = base.split(".")[0]
+                    ts = base + "+" + offset_part
+                dt = datetime.fromisoformat(ts)
                 local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
                 mgm_time_str = local_dt.strftime("%H:%M")
-            except Exception:
+            except Exception as e:
+                logger.debug(f"MGM time conversion failed: {e}")
                 pass
                 
         mgm_data = {

@@ -439,8 +439,10 @@ function renderHero(data) {
   if (data.mgm?.temp != null) {
     let mgmTimeStr = "";
     if (data.mgm.time) {
-      const match = data.mgm.time.match(/T?(\d{2}:\d{2})/);
-      if (match) mgmTimeStr = ` @${match[1]}`;
+      if (data.mgm.time.includes(":")) {
+        const match = data.mgm.time.match(/T?(\d{2}:\d{2})/);
+        if (match) mgmTimeStr = ` @${match[1]}`;
+      }
     }
     parts.push(
       `<span style="color:#eab308;font-weight:600;background:rgba(234, 179, 8, 0.1);padding:2px 8px;border-radius:12px;border:1px solid rgba(234, 179, 8, 0.3);">⭐ MGM 实测: ${data.mgm.temp}${sym}${mgmTimeStr}</span>`,
