@@ -114,6 +114,7 @@ def _analyze(city: str) -> Dict[str, Any]:
     # ── 2. Current conditions (METAR primary, MGM fallback) ──
     mc = metar.get("current", {}) if metar else {}
     mg_cur = mgm.get("current", {}) if mgm else {}
+    city_lower = city.lower()
 
     cur_temp = _sf(mc.get("temp"))
     # For Ankara, prioritize MGM over METAR as it's often more representative of city center
@@ -362,14 +363,13 @@ def _analyze(city: str) -> Dict[str, Any]:
             try:
                 # Handle ISO format with Z or +00:00
                 ts = mgm_time_str.replace("Z", "+00:00")
-                if "." in ts:
-                    # Strip fractional seconds if present to be safe for 3.8
-                    base, offset_part = ts.split("+")
+                if "+" in ts:
+                    base, offset_part = ts.split("+", 1)
                     if "." in base:
                         base = base.split(".")[0]
                     ts = base + "+" + offset_part
                 dt = datetime.fromisoformat(ts)
-                local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
+                local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset or 0)))
                 mgm_time_str = local_dt.strftime("%H:%M")
             except Exception as e:
                 logger.debug(f"MGM time conversion failed: {e}")
