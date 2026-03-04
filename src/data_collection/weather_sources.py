@@ -707,8 +707,12 @@ class WeatherDataCollector:
             ids_str = ",".join(icaos)
             # AviationWeather API 支持批量请求 IDs
             url = f"https://aviationweather.gov/api/data/metar?ids={ids_str}&format=json"
-            resp = self.session.get(url, timeout=self.timeout)
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            }
+            resp = self.session.get(url, headers=headers, timeout=self.timeout)
             if resp.status_code != 200:
+                logger.warning(f"METAR cluster fetch HTTP {resp.status_code} for {icaos}")
                 return []
             
             data = resp.json()
@@ -1377,7 +1381,7 @@ class WeatherDataCollector:
                 # 后面可以扩展更多土耳其城市，只需在这里添加映射
                 turkish_provinces = {
                     "ankara": ("17130", "Ankara"), # (主测站ID, 省份名用于周边)
-                    # "istanbul": ("17060", "Istanbul"),
+                    "istanbul": ("17060", "Istanbul"),
                 }
                 
                 if city_lower in turkish_provinces:
