@@ -538,10 +538,33 @@ function renderChart(data) {
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
+  // MGM Hourly Forecast (Ankara specific)
+  const mgmHourlyPoints = new Array(times.length).fill(null);
+  let hasMgmHourly = false;
+  if (data.mgm?.hourly?.length > 0) {
+    data.mgm.hourly.forEach((hData) => {
+      const match = hData.time.match(/T?(\d{2}):(\d{2})/);
+      if (match) {
+        const hourKey = match[1] + ":00";
+        const idx = times.indexOf(hourKey);
+        if (idx >= 0) {
+          mgmHourlyPoints[idx] = hData.temp;
+          hasMgmHourly = true;
+        }
+      }
+    });
+  }
+
   const validDebTemps = debTemps.filter((t) => t != null);
   const validMetar = metarPoints.filter((t) => t != null);
   const validMgm = mgmPoints.filter((t) => t != null);
-  const allVals = [...validDebTemps, ...validMetar, ...validMgm];
+  const validMgmHourly = mgmHourlyPoints.filter((t) => t != null);
+  const allVals = [
+    ...validDebTemps,
+    ...validMetar,
+    ...validMgm,
+    ...validMgmHourly,
+  ];
   if (allVals.length === 0) {
     document.getElementById("chartLegend").textContent = "暂无数据";
     return;
@@ -550,8 +573,25 @@ function renderChart(data) {
   const maxTemp = Math.ceil(Math.max(...allVals)) + 1;
 
   // Build datasets
-  const datasets = [
-    {
+  const datasets = [];
+
+  if (hasMgmHourly) {
+    // If MGM is available, replace DEB curve with MGM hourly curve
+    datasets.push({
+      label: "MGM预报",
+      data: mgmHourlyPoints,
+      borderColor: "rgba(234, 179, 8, 0.8)", // Yellow
+      backgroundColor: "rgba(234, 179, 8, 0.05)",
+      borderWidth: 2,
+      pointRadius: 3,
+      pointHoverRadius: 6,
+      fill: false,
+      tension: 0.3,
+      spanGaps: true, // Connect gaps because MGM is every 3 hours
+    });
+  } else {
+    // Standard DEB curves
+    datasets.push({
       label: "DEB预期",
       data: debPast,
       borderColor: "rgba(52, 211, 153, 0.6)",
@@ -562,8 +602,8 @@ function renderChart(data) {
       fill: true,
       tension: 0.3,
       spanGaps: false,
-    },
-    {
+    });
+    datasets.push({
       label: "DEB预报",
       data: debFuture,
       borderColor: "rgba(52, 211, 153, 0.35)",
@@ -573,20 +613,22 @@ function renderChart(data) {
       fill: false,
       tension: 0.3,
       spanGaps: false,
-    },
-    {
-      label: "METAR实测",
-      data: metarPoints,
-      borderColor: "#22d3ee",
-      backgroundColor: "#22d3ee",
-      borderWidth: 0,
-      pointRadius: 5,
-      pointHoverRadius: 7,
-      pointStyle: "circle",
-      fill: false,
-      order: 0,
-    },
-  ];
+    });
+  }
+
+  // Add METAR
+  datasets.push({
+    label: "METAR实测",
+    data: metarPoints,
+    borderColor: "#22d3ee",
+    backgroundColor: "#22d3ee",
+    borderWidth: 0,
+    pointRadius: 5,
+    pointHoverRadius: 7,
+    pointStyle: "circle",
+    fill: false,
+    order: 0,
+  });
 
   if (validMgm.length > 0) {
     datasets.push({
@@ -604,8 +646,8 @@ function renderChart(data) {
     });
   }
 
-  // Add subtle OM reference line if DEB offset is significant
-  if (Math.abs(offset) > 0.3) {
+  // Add subtle OM reference line if DEB offset is significant, ONLY if we aren't replacing with MGM
+  if (!hasMgmHourly && Math.abs(offset) > 0.3) {
     datasets.push({
       label: "OM原始",
       data: temps,
@@ -695,9 +737,17 @@ function renderChart(data) {
   if (data.mgm?.temp != null) {
     legendParts.push(`MGM: ${data.mgm.temp}${data.temp_symbol}`);
   }
-  if (debMax != null && omMax != null && Math.abs(offset) > 0.3) {
+  if (
+    !hasMgmHourly &&
+    debMax != null &&
+    omMax != null &&
+    Math.abs(offset) > 0.3
+  ) {
     const sign = offset > 0 ? "+" : "";
     legendParts.push(`DEB偏移 ${sign}${offset.toFixed(1)}° vs OM`);
+  }
+  if (hasMgmHourly) {
+    legendParts.push(`已使用MGM高精预报替换DEB分析曲线`);
   }
   if (data.trend?.recent?.length) {
     const recentStr = [...data.trend.recent]

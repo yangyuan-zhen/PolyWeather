@@ -490,7 +490,7 @@ class WeatherDataCollector:
                         "station_name": latest.get("istasyonAd")
                         or latest.get("adi")
                         or latest.get("merkezAd")
-                        or "Ankara Esenboğa",
+                        or "Ankara Bölge",
                     }
 
             # 2. 每日预报（尝试两个可能的 API 路径）
@@ -534,6 +534,27 @@ class WeatherDataCollector:
                         )
                 except Exception as e:
                     logger.debug(f"MGM forecast URL {forecast_url} failed: {e}")
+
+            # 3. 小时预报
+            try:
+                hourly_resp = self.session.get(
+                    f"{base_url}/tahminler/saatlik?istno={istno}",
+                    headers=headers,
+                    timeout=self.timeout
+                )
+                if hourly_resp.status_code == 200:
+                    h_data = hourly_resp.json()
+                    if h_data and isinstance(h_data, list):
+                        tahmin_list = h_data[0].get("tahmin", [])
+                        results["hourly"] = []
+                        for t_data in tahmin_list:
+                            if "tarih" in t_data and "sicaklik" in t_data:
+                                results["hourly"].append({
+                                    "time": t_data["tarih"],
+                                    "temp": t_data["sicaklik"]
+                                })
+            except Exception as e:
+                logger.debug(f"MGM hourly failed: {e}")
 
             return results if "current" in results else None
         except Exception as e:
@@ -1168,9 +1189,9 @@ class WeatherDataCollector:
                 if metar_data:
                     results["metar"] = metar_data
 
-                # 对安卡拉，额外获取 MGM 官方数据
+                # 对安卡拉，额外获取 MGM 官方数据 (17130 为 Ankara Bölge 市区测站)
                 if city_lower == "ankara":
-                    mgm_data = self.fetch_from_mgm("17128")
+                    mgm_data = self.fetch_from_mgm("17130")
                     if mgm_data:
                         results["mgm"] = mgm_data
 

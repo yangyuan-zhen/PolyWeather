@@ -353,9 +353,18 @@ def _analyze(city: str) -> Dict[str, Any]:
     mgm_data = {}
     if mgm:
         mgc = mgm.get("current", {})
+        mgm_time_str = mgc.get("time", "")
+        if mgm_time_str and "T" in mgm_time_str:
+            try:
+                dt = datetime.fromisoformat(mgm_time_str.replace("Z", "+00:00"))
+                local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
+                mgm_time_str = local_dt.strftime("%H:%M")
+            except Exception:
+                pass
+                
         mgm_data = {
             "temp": _sf(mgc.get("temp")),
-            "time": mgc.get("time"),
+            "time": mgm_time_str,
             "feels_like": _sf(mgc.get("feels_like")),
             "humidity": _sf(mgc.get("humidity")),
             "wind_dir": _sf(mgc.get("wind_dir")),
@@ -363,7 +372,23 @@ def _analyze(city: str) -> Dict[str, Any]:
             "pressure": _sf(mgc.get("pressure")),
             "cloud_cover": mgc.get("cloud_cover"),
             "rain_24h": _sf(mgc.get("rain_24h")),
+            "hourly": [],
         }
+
+        mgm_hourly = mgm.get("hourly", [])
+        for h in mgm_hourly:
+            dt_str = h.get("time")
+            val = _sf(h.get("temp"))
+            if dt_str and "T" in dt_str and val is not None:
+                try:
+                    dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+                    local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
+                    mgm_data["hourly"].append({
+                        "time": local_dt.strftime("%Y-%m-%dT%H:%M"),
+                        "temp": val
+                    })
+                except Exception:
+                    pass
 
 
     # ── 15. Extended Multi-Model Daily ──
