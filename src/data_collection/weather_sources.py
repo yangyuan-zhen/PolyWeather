@@ -328,37 +328,40 @@ class WeatherDataCollector:
             # 3. 提取最近 4 条报文的多维数据（温度 + 风/云/压强，用于趋势和 shock_score）
             recent_temps_raw = []  # [(local_time_str, temp_c), ...]
             recent_obs_raw = []  # [{time, temp, wdir, wspd, clouds, altim}, ...]
-            for obs in data[:4]:  # data 已按时间倒序
+            today_obs_raw = []  # [(local_time_str, temp_c), ...] 今天全部观测
+            cloud_rank_map = {
+                "CLR": 0, "SKC": 0, "FEW": 1, "SCT": 2, "BKN": 3, "OVC": 4,
+            }
+            for i_obs, obs in enumerate(data):  # data 已按时间倒序
                 obs_temp = obs.get("temp")
                 obs_dt_iter = _parse_rawob_time(obs)
                 if obs_temp is not None and obs_dt_iter:
                     local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
-                    recent_temps_raw.append((local_rt.strftime("%H:%M"), obs_temp))
-                    # 云量码映射: CLR=0, FEW=1, SCT=2, BKN=3, OVC=4
-                    cloud_rank_map = {
-                        "CLR": 0,
-                        "SKC": 0,
-                        "FEW": 1,
-                        "SCT": 2,
-                        "BKN": 3,
-                        "OVC": 4,
-                    }
-                    clouds = obs.get("clouds", [])
-                    max_cloud_rank = 0
-                    for c in clouds:
-                        rank = cloud_rank_map.get(c.get("cover", ""), 0)
-                        if rank > max_cloud_rank:
-                            max_cloud_rank = rank
-                    recent_obs_raw.append(
-                        {
-                            "time": local_rt.strftime("%H:%M"),
-                            "temp": obs_temp,
-                            "wdir": obs.get("wdir"),
-                            "wspd": obs.get("wspd"),
-                            "cloud_rank": max_cloud_rank,  # 0~4
-                            "altim": obs.get("altim"),
-                        }
-                    )
+                    time_str = local_rt.strftime("%H:%M")
+
+                    # 收集今天全部观测点（用于图表叠加）
+                    if obs_dt_iter >= utc_midnight:
+                        today_obs_raw.append((time_str, obs_temp))
+
+                    # 只取前4条用于趋势分析和 shock_score
+                    if i_obs < 4:
+                        recent_temps_raw.append((time_str, obs_temp))
+                        clouds = obs.get("clouds", [])
+                        max_cloud_rank = 0
+                        for c in clouds:
+                            rank = cloud_rank_map.get(c.get("cover", ""), 0)
+                            if rank > max_cloud_rank:
+                                max_cloud_rank = rank
+                        recent_obs_raw.append(
+                            {
+                                "time": time_str,
+                                "temp": obs_temp,
+                                "wdir": obs.get("wdir"),
+                                "wspd": obs.get("wspd"),
+                                "cloud_rank": max_cloud_rank,  # 0~4
+                                "altim": obs.get("altim"),
+                            }
+                        )
 
             # 转换为单位
             if use_fahrenheit:
@@ -366,9 +369,11 @@ class WeatherDataCollector:
                 max_so_far = max_so_far_c * 9 / 5 + 32 if max_so_far_c > -900 else None
                 dewp = dewp_c * 9 / 5 + 32 if dewp_c is not None else None
                 unit = "fahrenheit"
-                # 转换最近温度
                 recent_temps = [
                     (t, round(v * 9 / 5 + 32, 1)) for t, v in recent_temps_raw
+                ]
+                today_obs = [
+                    (t, round(v * 9 / 5 + 32, 1)) for t, v in today_obs_raw
                 ]
             else:
                 temp = temp_c
@@ -376,6 +381,7 @@ class WeatherDataCollector:
                 dewp = dewp_c
                 unit = "celsius"
                 recent_temps = [(t, v) for t, v in recent_temps_raw]
+                today_obs = [(t, v) for t, v in today_obs_raw]
 
             result = {
                 "source": "metar",
@@ -399,6 +405,7 @@ class WeatherDataCollector:
                     "clouds": latest.get("clouds", []),
                 },
                 "recent_temps": recent_temps,  # 最近4条: [("15:00", 5), ("14:20", 5), ...]
+                "today_obs": today_obs,  # 今天全部观测: [("00:00", 3), ("01:00", 2.5), ...]
                 "recent_obs": recent_obs_raw,  # 最近4条多维数据（风/云/压强）
                 "unit": unit,
             }

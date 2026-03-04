@@ -476,15 +476,25 @@ function renderChart(data) {
     curIdx < 0 || i >= curIdx ? t : null,
   );
 
-  // METAR observation scatter points
+  // METAR observation scatter points — use full today's obs if available
   const metarPoints = new Array(times.length).fill(null);
-  const metarRecent = data.trend?.recent || [];
-  if (metarRecent.length > 0) {
-    metarRecent.forEach((r) => {
-      // Match METAR time (e.g. "15:00") to chart time labels
-      const idx = times.indexOf(r.time);
+  const metarSrc = data.metar_today_obs?.length
+    ? data.metar_today_obs
+    : data.trend?.recent || [];
+  if (metarSrc.length > 0) {
+    metarSrc.forEach((r) => {
+      // METAR time may be "14:20" but chart labels are whole hours "14:00"
+      const parts = r.time.split(":");
+      let h = parseInt(parts[0], 10);
+      const m = parseInt(parts[1] || "0", 10);
+      if (m >= 30) h = (h + 1) % 24; // round to nearest hour
+      const hourKey = h.toString().padStart(2, "0") + ":00";
+      const idx = times.indexOf(hourKey);
       if (idx >= 0) {
-        metarPoints[idx] = r.temp;
+        // If multiple METARs map to the same hour, keep the latest (first in array)
+        if (metarPoints[idx] === null) {
+          metarPoints[idx] = r.temp;
+        }
       }
     });
   }

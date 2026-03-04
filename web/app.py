@@ -445,6 +445,10 @@ def _analyze(city: str) -> Dict[str, Any]:
             "status": peak_status,
         },
         "hourly": today_hourly,
+        "metar_today_obs": [
+            {"time": t, "temp": v}
+            for t, v in (metar.get("today_obs", []) if metar else [])
+        ],
         "ai_analysis": ai_text,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
