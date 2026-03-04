@@ -36,6 +36,21 @@ class WeatherDataCollector:
         "paris": "LFPG",  # Charles de Gaulle
     }
 
+    # 城市周边 METAR 集群（用于在全球城市模拟类似安卡拉的多测站地图分布）
+    CITY_METAR_CLUSTERS = {
+        "buenos aires": ["SAEZ", "SABE", "SADP", "SADF", "SADL", "SADJ"],
+        "london": ["EGLL", "EGLC", "EGKK", "EGSS", "EGGW"],
+        "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
+        "paris": ["LFPG", "LFPO", "LFPB"],
+        "seoul": ["RKSI", "RKSS"],
+        "toronto": ["CYYZ", "CYTZ", "CYKF"],
+        "chicago": ["KORD", "KMDW", "KPWK", "KDPA"],
+        "dallas": ["KDAL", "KDFW", "KADS", "KGKY"],
+        "atlanta": ["KATL", "KPDK", "KFTY"],
+        "miami": ["KMIA", "KOPF", "KTMB"],
+        "seattle": ["KSEA", "KBFI", "KPAE"],
+    }
+
     def __init__(self, config: dict):
         self.config = config
         weather_cfg = config.get("weather", {})
@@ -678,6 +693,56 @@ class WeatherDataCollector:
             return results
         except Exception as e:
             logger.error(f"Failed to fetch MGM nearby stations for {province}: {e}")
+            return []
+
+    def fetch_metar_nearby_cluster(self, icaos: List[str], use_fahrenheit: bool = False) -> list:
+        """
+        批量获取一组 ICAO 站点的 METAR 数据，用于地图周边显示
+        """
+        if not icaos:
+            return []
+        
+        results = []
+        try:
+            ids_str = ",".join(icaos)
+            # AviationWeather API 支持批量请求 IDs
+            url = f"https://aviationweather.gov/api/data/metar?ids={ids_str}&format=json"
+            resp = self.session.get(url, timeout=self.timeout)
+            if resp.status_code != 200:
+                return []
+            
+            data = resp.json()
+            if not isinstance(data, list):
+                return []
+
+            for obs in data:
+                icao = obs.get("icaoId")
+                lat = obs.get("lat")
+                lon = obs.get("lon")
+                temp_c = obs.get("temp")
+                if icao and lat and lon and temp_c is not None:
+                    # 温度单位转换
+                    display_temp = temp_c
+                    if use_fahrenheit:
+                        display_temp = (temp_c * 9 / 5) + 32
+                    
+                    # 站名处理：去除末尾的 " Airport" 或 " Intl" 使地图更简洁
+                    name = obs.get("name") or icao
+                    name = name.split(" Airport")[0].split(" Intl")[0].split(" International")[0].split(" Arpt")[0].split(",")[0].strip()
+
+                    results.append({
+                        "name": name,
+                        "lat": lat,
+                        "lon": lon,
+                        "temp": round(display_temp, 1),
+                        "istNo": icao # 用 ICAO ID 作为标识
+                    })
+            
+            if results:
+                logger.info(f"📍 METAR 集群: 成功抓取 {len(results)} 个参考站数据")
+            return results
+        except Exception as e:
+            logger.error(f"Failed to fetch METAR cluster {icaos}: {e}")
             return []
 
     def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
@@ -1325,6 +1390,16 @@ class WeatherDataCollector:
                     nearby = self.fetch_mgm_nearby_stations(province)
                     if nearby:
                         results["mgm_nearby"] = nearby
+                
+                # 全球通用：对有预定义集群的城市，抓取周边 METAR 参考站
+                # 这可以让 Buenos Aires, London, NYC 等城市也拥有类似安卡拉的多测站地图分布
+                if city_lower in self.CITY_METAR_CLUSTERS and "mgm_nearby" not in results:
+                    cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
+                    cluster_data = self.fetch_metar_nearby_cluster(
+                        cluster_icaos, use_fahrenheit=use_fahrenheit
+                    )
+                    if cluster_data:
+                        results["mgm_nearby"] = cluster_data
 
                 # 对伦敦，获取 Meteoblue 预测 (公认最准)
                 if city_lower == "london":
