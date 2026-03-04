@@ -462,17 +462,27 @@ function renderChart(data) {
     return;
   }
 
-  // Find current hour index
+  // Current hour index
   const curHour = data.local_time
     ? data.local_time.split(":")[0] + ":00"
     : null;
   const curIdx = curHour ? times.indexOf(curHour) : -1;
 
-  // Open-Meteo model: past = solid, future = dashed
-  const pastTemps = temps.map((t, i) =>
+  // === DEB-adjusted curve ===
+  // Shift the OM hourly shape so its peak matches DEB prediction
+  const omMax = data.forecast?.today_high;
+  const debMax = data.deb?.prediction;
+  const offset = debMax != null && omMax != null ? debMax - omMax : 0;
+
+  const debTemps = temps.map((t) =>
+    t != null ? +(t + offset).toFixed(1) : null,
+  );
+
+  // Split DEB curve: past = solid, future = dashed
+  const debPast = debTemps.map((t, i) =>
     curIdx >= 0 && i <= curIdx ? t : null,
   );
-  const futureTemps = temps.map((t, i) =>
+  const debFuture = debTemps.map((t, i) =>
     curIdx < 0 || i >= curIdx ? t : null,
   );
 
@@ -483,18 +493,14 @@ function renderChart(data) {
     : data.trend?.recent || [];
   if (metarSrc.length > 0) {
     metarSrc.forEach((r) => {
-      // METAR time may be "14:20" but chart labels are whole hours "14:00"
       const parts = r.time.split(":");
       let h = parseInt(parts[0], 10);
       const m = parseInt(parts[1] || "0", 10);
-      if (m >= 30) h = (h + 1) % 24; // round to nearest hour
+      if (m >= 30) h = (h + 1) % 24;
       const hourKey = h.toString().padStart(2, "0") + ":00";
       const idx = times.indexOf(hourKey);
-      if (idx >= 0) {
-        // If multiple METARs map to the same hour, keep the latest (first in array)
-        if (metarPoints[idx] === null) {
-          metarPoints[idx] = r.temp;
-        }
+      if (idx >= 0 && metarPoints[idx] === null) {
+        metarPoints[idx] = r.temp;
       }
     });
   }
@@ -502,55 +508,73 @@ function renderChart(data) {
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
-  const validTemps = temps.filter((t) => t != null);
+  const validDebTemps = debTemps.filter((t) => t != null);
   const validMetar = metarPoints.filter((t) => t != null);
-  const allVals = [...validTemps, ...validMetar];
+  const allVals = [...validDebTemps, ...validMetar];
+  if (allVals.length === 0) {
+    document.getElementById("chartLegend").textContent = "暂无数据";
+    return;
+  }
   const minTemp = Math.floor(Math.min(...allVals)) - 1;
   const maxTemp = Math.ceil(Math.max(...allVals)) + 1;
 
+  // Build datasets
+  const datasets = [
+    {
+      label: "DEB预期",
+      data: debPast,
+      borderColor: "rgba(52, 211, 153, 0.6)",
+      backgroundColor: "rgba(52, 211, 153, 0.05)",
+      borderWidth: 1.5,
+      pointRadius: 0,
+      pointHoverRadius: 3,
+      fill: true,
+      tension: 0.3,
+      spanGaps: false,
+    },
+    {
+      label: "DEB预报",
+      data: debFuture,
+      borderColor: "rgba(52, 211, 153, 0.35)",
+      borderWidth: 1.5,
+      borderDash: [5, 3],
+      pointRadius: 0,
+      fill: false,
+      tension: 0.3,
+      spanGaps: false,
+    },
+    {
+      label: "METAR实测",
+      data: metarPoints,
+      borderColor: "#22d3ee",
+      backgroundColor: "#22d3ee",
+      borderWidth: 0,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      pointStyle: "circle",
+      fill: false,
+      showLine: false,
+      order: 0,
+    },
+  ];
+
+  // Add subtle OM reference line if DEB offset is significant
+  if (Math.abs(offset) > 0.3) {
+    datasets.push({
+      label: "OM原始",
+      data: temps,
+      borderColor: "rgba(99, 102, 241, 0.2)",
+      borderWidth: 1,
+      borderDash: [2, 4],
+      pointRadius: 0,
+      fill: false,
+      tension: 0.3,
+    });
+  }
+
   tempChart = new Chart(ctx, {
     type: "line",
-    data: {
-      labels: times,
-      datasets: [
-        {
-          label: "OM模型",
-          data: pastTemps,
-          borderColor: "rgba(99, 102, 241, 0.5)",
-          backgroundColor: "rgba(99, 102, 241, 0.05)",
-          borderWidth: 1.5,
-          pointRadius: 0,
-          pointHoverRadius: 3,
-          fill: true,
-          tension: 0.3,
-          spanGaps: false,
-        },
-        {
-          label: "OM预报",
-          data: futureTemps,
-          borderColor: "rgba(99, 102, 241, 0.4)",
-          borderWidth: 1.5,
-          borderDash: [5, 3],
-          pointRadius: 0,
-          fill: false,
-          tension: 0.3,
-          spanGaps: false,
-        },
-        {
-          label: "METAR实测",
-          data: metarPoints,
-          borderColor: "#22d3ee",
-          backgroundColor: "#22d3ee",
-          borderWidth: 0,
-          pointRadius: 5,
-          pointHoverRadius: 7,
-          pointStyle: "circle",
-          fill: false,
-          showLine: false,
-          order: 0, // Draw on top
-        },
-      ],
-    },
+    data: { labels: times, datasets },
     options: {
       responsive: true,
       maintainAspectRatio: false,
@@ -559,7 +583,7 @@ function renderChart(data) {
         legend: { display: false },
         tooltip: {
           backgroundColor: "rgba(15, 23, 42, 0.9)",
-          borderColor: "rgba(99, 102, 241, 0.3)",
+          borderColor: "rgba(52, 211, 153, 0.3)",
           borderWidth: 1,
           titleFont: { family: "Inter", size: 12 },
           bodyFont: { family: "Inter", size: 12 },
@@ -594,36 +618,47 @@ function renderChart(data) {
     },
   });
 
-  // DEB prediction line annotation
-  if (data.deb?.prediction != null) {
-    const debY = data.deb.prediction;
+  // DEB max line annotation (horizontal)
+  if (debMax != null) {
     tempChart.options.plugins.annotation = {
       annotations: {
         debLine: {
           type: "line",
-          yMin: debY,
-          yMax: debY,
+          yMin: debMax,
+          yMax: debMax,
           borderColor: "#34d399",
-          borderWidth: 1,
-          borderDash: [4, 4],
+          borderWidth: 1.5,
+          borderDash: [6, 3],
+          label: {
+            display: true,
+            content: `DEB ${debMax}${data.temp_symbol}`,
+            position: "end",
+            backgroundColor: "rgba(52, 211, 153, 0.15)",
+            color: "#34d399",
+            font: { size: 10, family: "Inter" },
+          },
         },
       },
     };
     tempChart.update();
   }
 
-  // METAR recent points overlay
+  // Chart legend text
   const legend = document.getElementById("chartLegend");
+  const legendParts = [];
+  if (debMax != null && omMax != null && Math.abs(offset) > 0.3) {
+    const sign = offset > 0 ? "+" : "";
+    legendParts.push(`DEB偏移 ${sign}${offset.toFixed(1)}° vs OM`);
+  }
   if (data.trend?.recent?.length) {
     const recentStr = [...data.trend.recent]
       .slice(0, 4)
-      .reverse() // Fix chronologically left to right
+      .reverse()
       .map((r) => `${r.temp}${data.temp_symbol}@${r.time}`)
       .join(" → ");
-    legend.textContent = `METAR 趋势：${recentStr}`;
-  } else {
-    legend.textContent = "";
+    legendParts.push(`METAR: ${recentStr}`);
   }
+  legend.textContent = legendParts.join(" ┃ ") || "";
 }
 
 function renderProbabilities(data) {
