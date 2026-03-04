@@ -60,6 +60,7 @@ def analyze_weather_trend(
 
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
+    mgm = weather_data.get("mgm") or {}
     mb = weather_data.get("meteoblue", {})
     nws = weather_data.get("nws", {})
 
@@ -82,6 +83,10 @@ def analyze_weather_trend(
         current_forecasts["Meteoblue"] = _sf(mb.get("today_high"))
     if nws.get("today_high") is not None:
         current_forecasts["NWS"] = _sf(nws.get("today_high"))
+    
+    mgm = weather_data.get("mgm", {})
+    if mgm and mgm.get("today_high") is not None:
+        current_forecasts["MGM"] = _sf(mgm.get("today_high"))
 
     mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
     for m_name, m_val in mm_forecasts.items():

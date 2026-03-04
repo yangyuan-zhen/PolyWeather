@@ -105,7 +105,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     raw = _weather.fetch_all_sources(city, lat=lat, lon=lon)
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
-    mgm = raw.get("mgm", {})
+    mgm = raw.get("mgm") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
     risk = CITY_RISK_PROFILES.get(city, {})
@@ -411,6 +411,11 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             day_m = mm_daily_raw.get(d_str, {}).copy()
             if i < len(maxtemps) and maxtemps[i] is not None:
                 day_m["Open-Meteo"] = _sf(maxtemps[i])
+            
+            # Add MGM per-day forecast
+            mgm_daily = mgm.get("daily_forecasts", {})
+            if d_str in mgm_daily:
+                day_m["MGM"] = _sf(mgm_daily[d_str])
             
             d_val, d_winfo = None, ""
             if day_m:

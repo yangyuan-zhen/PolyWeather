@@ -349,7 +349,7 @@ def start_bot():
             )
             open_meteo = weather_data.get("open-meteo", {})
             metar = weather_data.get("metar", {})
-            mgm = weather_data.get("mgm", {})
+            mgm = weather_data.get("mgm") or {}
 
             # 数值归一化
             def _sf(v):

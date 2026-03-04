@@ -506,16 +506,24 @@ class WeatherDataCollector:
                     if daily_resp.status_code == 200:
                         forecasts = daily_resp.json()
                         if forecasts and isinstance(forecasts, list):
+                            # Store today extra clearly
                             today = forecasts[0]
                             high_val = today.get("enYuksekGun1")
                             low_val = today.get("enDusukGun1")
                             if high_val is not None:
                                 results["today_high"] = high_val
                                 results["today_low"] = low_val
-                                logger.info(
-                                    f"📋 MGM 每日预报: 最高 {high_val}°C, 最低 {low_val}°C (from {forecast_url})"
-                                )
-                                break
+                                logger.info(f"📋 MGM 每日预报: 今天的最高温 {high_val}°C")
+                            
+                            # Store all 5 days for multi_model_daily
+                            results["daily_forecasts"] = {}
+                            for i, day in enumerate(forecasts[:5]):
+                                d_high = day.get("enYuksekGun1")
+                                if d_high is not None:
+                                    # Calculate date (today + offset)
+                                    target_date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
+                                    results["daily_forecasts"][target_date] = d_high
+                            break
                             else:
                                 # 记录所有可用字段，方便调试
                                 available_keys = [
@@ -555,6 +563,20 @@ class WeatherDataCollector:
                                 })
             except Exception as e:
                 logger.debug(f"MGM hourly failed: {e}")
+
+            # 4. Fallback for today_high (if daily forecast is missing it)
+            if "today_high" not in results:
+                # Try from current max
+                cur_max = results.get("current", {}).get("mgm_max_temp")
+                if cur_max is not None:
+                    results["today_high"] = cur_max
+                    logger.info(f"📋 MGM 每日预报: 使用当前测站最高温作为今日预报回退: {cur_max}°C")
+                elif "hourly" in results and results["hourly"]:
+                    # Try from hourly
+                    h_max = max((h["temp"] for h in results["hourly"] if h["temp"] is not None), default=None)
+                    if h_max is not None:
+                        results["today_high"] = h_max
+                        logger.info(f"📋 MGM 每日预报: 使用小时预报最高温作为今日预报回退: {h_max}°C")
 
             return results if "current" in results else None
         except Exception as e:
