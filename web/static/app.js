@@ -376,6 +376,7 @@ function renderHero(data) {
       少云: "🌤️",
       散云: "⛅",
       晴: "☀️",
+      晴朗: "☀️",
     }[cur.cloud_desc] || "🌡️";
 
   // If we have a specific weather phenomenon (METAR wx_desc like -RA), prioritize it
