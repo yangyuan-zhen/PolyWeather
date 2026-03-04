@@ -329,23 +329,15 @@ def analyze_weather_trend(
                 f"实测最高 {max_so_far}{temp_symbol}，偏差 {forecast_miss_deg}°。当前趋势: {_trend_dir}。"
             )
 
-        # Gaussian CDF
-        def _norm_cdf(x, m, s):
-            return 0.5 * (1 + math.erf((x - m) / (s * math.sqrt(2))))
-
-        min_possible_wu = round(max_so_far) if max_so_far is not None else -999
-        probs = {}
-        for n in range(round(mu) - 2, round(mu) + 3):
-            if n < min_possible_wu:
-                continue
-            p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
-            if p > 0.01:
-                probs[n] = p
-
-        total_p = sum(probs.values())
-        if total_p > 0:
-            probs = {k: v / total_p for k, v in probs.items()}
-            sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)
+        # Probability Engine
+        probs_result = calculate_prob_distribution(
+            mu, sigma, max_so_far, temp_symbol
+        )
+        mu = probs_result.get("mu", mu)
+        probabilities = probs_result.get("probabilities", [])
+        sorted_probs = probs_result.get("sorted_probs", [])
+        
+        if sorted_probs:
             prob_parts = [
                 f"{int(t)}{temp_symbol} [{t - 0.5}~{t + 0.5}) {p * 100:.0f}%"
                 for t, p in sorted_probs[:4]
@@ -354,10 +346,6 @@ def analyze_weather_trend(
                 prob_str = " | ".join(prob_parts)
                 insights.append(f"🎲 <b>结算概率</b> (μ={mu:.1f})：{prob_str}")
                 ai_features.append(f"🎲 数学概率分布：{prob_str}")
-            for t, p in sorted_probs[:4]:
-                probabilities.append(
-                    {"value": int(t), "range": f"[{t-0.5}~{t+0.5})", "probability": round(p, 3)}
-                )
 
     elif is_dead_market:
         settled_wu = round(max_so_far) if max_so_far is not None else 0
@@ -538,6 +526,54 @@ def analyze_weather_trend(
         "cur_temp": cur_temp,
         "wu_settle": round(max_so_far) if max_so_far is not None else None,
     }
-
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features), structured
+
+
+def calculate_prob_distribution(
+    mu: float, sigma: float, max_so_far: Optional[float], temp_symbol: str
+) -> Dict[str, Any]:
+    """
+    Generalized Gaussian probability distribution calculation.
+    """
+    if mu is None or sigma is None:
+        return {}
+
+    def _norm_cdf(x, m, s):
+        # 0.5 * (1 + erf( (x-m)/(s*sqrt(2)) ))
+        return 0.5 * (1 + math.erf((x - m) / (sigma * math.sqrt(2))))
+
+    min_possible_wu = round(max_so_far) if max_so_far is not None else -999
+    probs = {}
+    
+    # Range: mu +/- 3 sigma or at least +/- 2 degrees
+    search_range = max(2, int(sigma * 2.5))
+    target_mu = round(mu)
+    
+    for n in range(target_mu - search_range, target_mu + search_range + 1):
+        if n < min_possible_wu:
+            continue
+        p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
+        if p > 0.01:
+            probs[n] = p
+
+    total_p = sum(probs.values())
+    sorted_probs = []
+    probabilities = []
+    
+    if total_p > 0:
+        norm_probs = {k: v / total_p for k, v in probs.items()}
+        sorted_probs = sorted(norm_probs.items(), key=lambda x: x[1], reverse=True)
+        for t, p in sorted_probs[:4]:
+            probabilities.append({
+                "value": int(t),
+                "range": f"[{t-0.5}~{t+0.5})",
+                "probability": round(p, 3)
+            })
+
+    return {
+        "mu": mu,
+        "sigma": sigma,
+        "probabilities": probabilities,
+        "sorted_probs": sorted_probs
+    }

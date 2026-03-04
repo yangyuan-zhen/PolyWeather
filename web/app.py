@@ -284,7 +284,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     # ── 10. Shared analysis (probability, trend, AI) via trend_engine ──
     # This single call replaces the duplicate probability engine, dead market
     # detection, forecast bust grading, and AI context building.
-    from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze
+    from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze, calculate_prob_distribution
     from src.analysis.ai_analyzer import get_ai_analysis
 
     probabilities = []
@@ -434,19 +434,33 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
                 day_m["MGM"] = _sf(mgm_daily[d_str])
             
             d_val, d_winfo = None, ""
+            d_probs = []
             if day_m:
                 try:
                     blended, winfo = calculate_dynamic_weights(city, day_m)
                     if blended is not None:
                         d_val = blended
                         d_winfo = winfo
+                        
+                        # Calculate future probability based on model divergence
+                        m_vals = [v for v in day_m.values() if v is not None]
+                        if len(m_vals) > 1:
+                            # Use spread as a proxy for sigma. 
+                            # sigma = (max-min)/2 with a floor of 0.6
+                            d_sigma = max(0.6, (max(m_vals) - min(m_vals)) / 2.0)
+                        else:
+                            d_sigma = 1.0
+                        
+                        prob_obj = calculate_prob_distribution(d_val, d_sigma, None, sym)
+                        d_probs = prob_obj.get("probabilities", [])
                 except Exception:
                     pass
         
         if day_m:
             multi_model_daily[d_str] = {
                 "models": day_m,
-                "deb": {"prediction": d_val, "weights_info": d_winfo}
+                "deb": {"prediction": d_val, "weights_info": d_winfo},
+                "probabilities": d_probs if i > 0 else probabilities # Use today's real prob for today
             }
 
     # ── Assemble result ──

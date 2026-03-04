@@ -818,8 +818,18 @@ function renderChart(data) {
 
 function renderProbabilities(data) {
   const container = document.getElementById("probBars");
-  const probs = data.probabilities?.distribution || [];
-  const mu = data.probabilities?.mu;
+  const targetDate = selectedForecastDate || data.local_date;
+
+  let probs = [];
+  let mu = null;
+
+  if (targetDate === data.local_date) {
+    probs = data.probabilities?.distribution || [];
+    mu = data.probabilities?.mu;
+  } else if (data.multi_model_daily && data.multi_model_daily[targetDate]) {
+    probs = data.multi_model_daily[targetDate].probabilities || [];
+    mu = data.multi_model_daily[targetDate].deb?.prediction;
+  }
 
   if (probs.length === 0) {
     container.innerHTML =
@@ -834,7 +844,6 @@ function renderProbabilities(data) {
 
   probs.forEach((p, i) => {
     const pct = Math.round(p.probability * 100);
-    const width = Math.max(pct, 8);
     html += `
             <div class="prob-row">
                 <div class="prob-label">${p.value}${data.temp_symbol}</div>
@@ -962,6 +971,7 @@ function switchForecastDate(cityName, dateStr) {
   const data = cityDataCache[cityName];
   if (data) {
     renderModels(data);
+    renderProbabilities(data);
     renderForecast(data);
   }
 }
