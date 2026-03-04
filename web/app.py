@@ -43,19 +43,19 @@ _weather = WeatherDataCollector(_config)
 #  City Registry
 # ──────────────────────────────────────────────────────────
 CITIES: Dict[str, Dict[str, Any]] = {
-    "ankara":       {"lat": 40.1281,  "lon": 32.9951,   "f": False}, # LTAC (Esenboğa)
-    "london":       {"lat": 51.5048,  "lon": 0.0522,    "f": False}, # EGLC (London City)
-    "paris":        {"lat": 49.0097,  "lon": 2.5480,    "f": False}, # LFPG (Charles de Gaulle)
-    "seoul":        {"lat": 37.4602,  "lon": 126.4407,  "f": False}, # RKSI (Incheon)
-    "toronto":      {"lat": 43.6777,  "lon": -79.6248,  "f": False}, # CYYZ (Pearson)
-    "buenos aires": {"lat": -34.8222, "lon": -58.5358,  "f": False}, # SAEZ (Ezeiza)
-    "wellington":   {"lat": -41.3272, "lon": 174.8053,  "f": False}, # NZWN (Wellington)
-    "new york":     {"lat": 40.7769,  "lon": -73.8740,  "f": True},  # KLGA (LaGuardia)
-    "chicago":      {"lat": 41.9742,  "lon": -87.9073,  "f": True},  # KORD (O'Hare)
-    "dallas":       {"lat": 32.8471,  "lon": -96.8518,  "f": True},  # KDAL (Dallas Love Field)
-    "miami":        {"lat": 25.7959,  "lon": -80.2870,  "f": True},  # KMIA (Miami)
-    "atlanta":      {"lat": 33.6407,  "lon": -84.4277,  "f": True},  # KATL (Hartsfield-Jackson)
-    "seattle":      {"lat": 47.4502,  "lon": -122.3088, "f": True},  # KSEA (Sea-Tac)
+    "ankara":       {"lat": 40.1281,  "lon": 32.9951,   "f": False, "tz": 10800},
+    "london":       {"lat": 51.5048,  "lon": 0.0522,    "f": False, "tz": 0},
+    "paris":        {"lat": 49.0097,  "lon": 2.5480,    "f": False, "tz": 3600},
+    "seoul":        {"lat": 37.4602,  "lon": 126.4407,  "f": False, "tz": 32400},
+    "toronto":      {"lat": 43.6777,  "lon": -79.6248,  "f": False, "tz": -18000},
+    "buenos aires": {"lat": -34.8222, "lon": -58.5358,  "f": False, "tz": -10800},
+    "wellington":   {"lat": -41.3272, "lon": 174.8053,  "f": False, "tz": 46800},
+    "new york":     {"lat": 40.7769,  "lon": -73.8740,  "f": True,  "tz": -18000},
+    "chicago":      {"lat": 41.9742,  "lon": -87.9073,  "f": True,  "tz": -21600},
+    "dallas":       {"lat": 32.8471,  "lon": -96.8518,  "f": True,  "tz": -21600},
+    "miami":        {"lat": 25.7959,  "lon": -80.2870,  "f": True,  "tz": -18000},
+    "atlanta":      {"lat": 33.6407,  "lon": -84.4277,  "f": True,  "tz": -18000},
+    "seattle":      {"lat": 47.4502,  "lon": -122.3088, "f": True,  "tz": -28800},
 }
 
 ALIASES = {
@@ -135,7 +135,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     obs_time_str = ""
     metar_age_min = None
     obs_t = metar.get("observation_time", "") if metar else ""
-    utc_offset = om.get("utc_offset", 0)
+    # 优先从 API 获取偏移，若失败则使用 CITIES 预设的静态偏移 (兜底当地时间)
+    utc_offset = om.get("utc_offset", info.get("tz", 0))
     if obs_t and "T" in obs_t:
         try:
             dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
@@ -150,15 +151,22 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     # ── 3. Local time parsing ──
     local_time_full = om.get("current", {}).get("local_time", "")
     local_hour, local_minute = 12, 0
-    local_date_str = datetime.now().strftime("%Y-%m-%d")
+    now_utc = datetime.now(timezone.utc)
+    local_now = now_utc + timedelta(seconds=utc_offset)
+    local_date_str = local_now.strftime("%Y-%m-%d")
+    
     try:
-        local_date_str = local_time_full.split(" ")[0]
-        tp = local_time_full.split(" ")[1].split(":")
-        local_hour = int(tp[0])
-        local_minute = int(tp[1]) if len(tp) > 1 else 0
+        if local_time_full:
+            local_date_str = local_time_full.split(" ")[0]
+            tp = local_time_full.split(" ")[1].split(":")
+            local_hour = int(tp[0])
+            local_minute = int(tp[1]) if len(tp) > 1 else 0
+        else:
+            local_hour = local_now.hour
+            local_minute = local_now.minute
     except Exception:
-        local_hour = datetime.now().hour
-        local_minute = datetime.now().minute
+        local_hour = local_now.hour
+        local_minute = local_now.minute
     local_time_str = f"{local_hour:02d}:{local_minute:02d}"
     local_hour_frac = local_hour + local_minute / 60
 

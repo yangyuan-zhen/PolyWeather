@@ -1378,25 +1378,20 @@ class WeatherDataCollector:
                     results["metar"] = metar_data
 
                 # 对土耳其城市，额外获取 MGM 官方数据与周边测站
-                # 后面可以扩展更多土耳其城市，只需在这里添加映射
                 turkish_provinces = {
-                    "ankara": ("17130", "Ankara"), # (主测站ID, 省份名用于周边)
+                    "ankara": ("17130", "Ankara"),
                     "istanbul": ("17060", "Istanbul"),
                 }
-                
                 if city_lower in turkish_provinces:
                     istno, province = turkish_provinces[city_lower]
                     mgm_data = self.fetch_from_mgm(istno)
                     if mgm_data:
                         results["mgm"] = mgm_data
-                    
-                    # 抓取并追加周边参考站数据 (并发模式)
                     nearby = self.fetch_mgm_nearby_stations(province)
                     if nearby:
                         results["mgm_nearby"] = nearby
                 
                 # 全球通用：对有预定义集群的城市，抓取周边 METAR 参考站
-                # 这可以让 Buenos Aires, London, NYC 等城市也拥有类似安卡拉的多测站地图分布
                 if city_lower in self.CITY_METAR_CLUSTERS and "mgm_nearby" not in results:
                     cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
                     cluster_data = self.fetch_metar_nearby_cluster(
@@ -1404,6 +1399,11 @@ class WeatherDataCollector:
                     )
                     if cluster_data:
                         results["mgm_nearby"] = cluster_data
+
+                if open_meteo:
+                    results["open-meteo"] = open_meteo
+                    # 获取时区偏移以过滤 METAR
+                    utc_offset = open_meteo.get("utc_offset", 0)
 
                 # 对伦敦，获取 Meteoblue 预测 (公认最准)
                 if city_lower == "london":
