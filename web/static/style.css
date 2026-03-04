@@ -804,11 +804,69 @@ body {
   font-style: italic;
 }
 
-/* ── Market Odds Section ── */
+/* ── Market Odds Section (Floating Widget) ── */
+.market-floating {
+  position: absolute;
+  bottom: 30px;
+  left: 20px;
+  width: 320px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(12px);
+  z-index: 1000;
+  overflow: hidden;
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.market-floating.hidden {
+  opacity: 0;
+  transform: translateY(20px);
+  pointer-events: none;
+}
+
+.market-widget-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.market-widget-header h3 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.market-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px;
+}
+.market-close:hover {
+  color: var(--text-primary);
+}
+
 .market-odds {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 12px;
+  overflow-y: auto;
 }
 
 .market-card {

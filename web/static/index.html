@@ -131,13 +131,6 @@
                 </div>
             </section>
 
-            <!-- ── Polymarket Odds ── -->
-            <section class="market-section">
-                <h3>📈 市场赔率 <span style="font-size:11px;color:var(--text-muted);font-weight:400;">Polymarket</span></h3>
-                <div id="marketOdds" class="market-odds">
-                    <div style="color:var(--text-muted);font-size:13px;">点击城市后加载...</div>
-                </div>
-            </section>
 
             <!-- ── Risk Profile ── -->
             <section class="risk-section">
@@ -146,6 +139,15 @@
             </section>
         </div>
     </aside>
+
+    <!-- ── Polymarket Floating Widget ── -->
+    <div id="marketFloatingWidget" class="market-floating hidden">
+        <div class="market-widget-header">
+            <h3>📈 Polymarket</h3>
+            <button class="market-close" id="marketClose">✕</button>
+        </div>
+        <div id="marketOdds" class="market-odds"></div>
+    </div>
 
     <!-- ── Loading Overlay ── -->
     <div id="loading" class="loading-overlay hidden">

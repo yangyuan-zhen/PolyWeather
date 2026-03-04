@@ -435,6 +435,18 @@ function renderHero(data) {
     parts.push(`<span>👁️ ${cur.visibility_mi}mi</span>`);
   }
 
+  // MGM info (Ankara specific)
+  if (data.mgm?.temp != null) {
+    let mgmTimeStr = "";
+    if (data.mgm.time) {
+      const match = data.mgm.time.match(/T?(\d{2}:\d{2})/);
+      if (match) mgmTimeStr = ` @${match[1]}`;
+    }
+    parts.push(
+      `<span style="color:#eab308;font-weight:600;background:rgba(234, 179, 8, 0.1);padding:2px 8px;border-radius:12px;border:1px solid rgba(234, 179, 8, 0.3);">⭐ MGM 实测: ${data.mgm.temp}${sym}${mgmTimeStr}</span>`,
+    );
+  }
+
   // Trend badge
   const trend = data.trend || {};
   if (trend.is_dead_market) {
@@ -507,12 +519,29 @@ function renderChart(data) {
     });
   }
 
+  // MGM observation point (Ankara specific)
+  const mgmPoints = new Array(times.length).fill(null);
+  if (data.mgm?.temp != null && data.mgm?.time) {
+    const timeMatch = data.mgm.time.match(/T?(\d{2}):(\d{2})/);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      const m = parseInt(timeMatch[2], 10);
+      if (m >= 30) h = (h + 1) % 24;
+      const hourKey = h.toString().padStart(2, "0") + ":00";
+      const idx = times.indexOf(hourKey);
+      if (idx >= 0) {
+        mgmPoints[idx] = data.mgm.temp;
+      }
+    }
+  }
+
   const ctx = document.getElementById("tempChart").getContext("2d");
   if (tempChart) tempChart.destroy();
 
   const validDebTemps = debTemps.filter((t) => t != null);
   const validMetar = metarPoints.filter((t) => t != null);
-  const allVals = [...validDebTemps, ...validMetar];
+  const validMgm = mgmPoints.filter((t) => t != null);
+  const allVals = [...validDebTemps, ...validMetar, ...validMgm];
   if (allVals.length === 0) {
     document.getElementById("chartLegend").textContent = "暂无数据";
     return;
@@ -555,10 +584,25 @@ function renderChart(data) {
       pointHoverRadius: 7,
       pointStyle: "circle",
       fill: false,
-      showLine: false,
       order: 0,
     },
   ];
+
+  if (validMgm.length > 0) {
+    datasets.push({
+      label: "MGM实测",
+      data: mgmPoints,
+      borderColor: "#facc15",
+      backgroundColor: "#facc15",
+      borderWidth: 0,
+      pointRadius: 7,
+      pointHoverRadius: 9,
+      pointStyle: "star",
+      fill: false,
+      showLine: false,
+      order: -1, // Draw on very top
+    });
+  }
 
   // Add subtle OM reference line if DEB offset is significant
   if (Math.abs(offset) > 0.3) {
@@ -648,6 +692,9 @@ function renderChart(data) {
   // Chart legend text
   const legend = document.getElementById("chartLegend");
   const legendParts = [];
+  if (data.mgm?.temp != null) {
+    legendParts.push(`MGM: ${data.mgm.temp}${data.temp_symbol}`);
+  }
   if (debMax != null && omMax != null && Math.abs(offset) > 0.3) {
     const sign = offset > 0 ? "+" : "";
     legendParts.push(`DEB偏移 ${sign}${offset.toFixed(1)}° vs OM`);
@@ -827,16 +874,18 @@ function renderAI(data) {
 }
 
 function renderMarket(data) {
+  const widget = document.getElementById("marketFloatingWidget");
   const container = document.getElementById("marketOdds");
   if (
     !data.polymarket ||
     !data.polymarket.markets ||
     data.polymarket.markets.length === 0
   ) {
-    container.innerHTML = '<div class="market-no-data">暂无相关天气合约</div>';
+    widget.classList.add("hidden");
     return;
   }
 
+  widget.classList.remove("hidden");
   const { markets, divergence } = data.polymarket;
   let html = "";
 
@@ -919,6 +968,13 @@ function closePanel() {
   const panel = document.getElementById("panel");
   panel.classList.remove("visible");
   setTimeout(() => panel.classList.add("hidden"), 400);
+
+  // Hide Polymarket widget
+  const marketWidget = document.getElementById("marketFloatingWidget");
+  if (marketWidget) {
+    marketWidget.classList.add("hidden");
+  }
+
   selectedCity = null;
   setSelectedMarker(null);
   document
@@ -1172,6 +1228,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   // Panel close
   document.getElementById("panelClose").addEventListener("click", closePanel);
+
+  // Market Widget close
+  document.getElementById("marketClose").addEventListener("click", () => {
+    document.getElementById("marketFloatingWidget").classList.add("hidden");
+  });
 
   // Escape key
   document.addEventListener("keydown", (e) => {

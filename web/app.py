@@ -354,6 +354,8 @@ def _analyze(city: str) -> Dict[str, Any]:
     if mgm:
         mgc = mgm.get("current", {})
         mgm_data = {
+            "temp": _sf(mgc.get("temp")),
+            "time": mgc.get("time"),
             "feels_like": _sf(mgc.get("feels_like")),
             "humidity": _sf(mgc.get("humidity")),
             "wind_dir": _sf(mgc.get("wind_dir")),
@@ -462,7 +464,8 @@ def _analyze(city: str) -> Dict[str, Any]:
     try:
         proxy = _config.get("proxy")
         fetch_weather_markets(proxy=proxy, timeout=10)
-        city_mkts = get_city_markets(city, target_date=local_date_str)
+        # We don't filter by target_date here, we want ALL active contracts for the city
+        city_mkts = get_city_markets(city)
         if city_mkts:
             result["polymarket"] = {
                 "markets": [
