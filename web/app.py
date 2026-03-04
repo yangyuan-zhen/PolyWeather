@@ -349,6 +349,14 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             }
             cloud_desc = cloud_desc_map.get(mgc_cover, "")
 
+    # Final fallback: If we have ANY actual observation but no cloud info, it's usually clear.
+    if not cloud_desc:
+        if mc.get("temp") is not None or (mgm and mgm.get("current", {}).get("temp") is not None):
+            # If weather phenomenon exists (e.g. rain), we'll let app.js handle wx_desc priority.
+            # Otherwise, clear skies.
+            if not mc.get("wx_desc"):
+                cloud_desc = "晴朗"
+
     # ── 14. MGM data (Ankara-specific) ──
     mgm_data = {}
     if mgm:
