@@ -39,6 +39,7 @@ let selectedCity = null;
 let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
 let selectedForecastDate = null;
+let nearbyLayerGroup = null;
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -63,6 +64,8 @@ function initMap() {
     subdomains: "abcd",
     maxZoom: 19,
   }).addTo(map);
+
+  nearbyLayerGroup = L.layerGroup().addTo(map);
 
   // Close panel and clear selection when clicking on empty map space
   map.on("click", () => {
@@ -230,6 +233,69 @@ async function fetchCityDetail(cityName, force = false) {
 }
 
 // ──────────────────────────────────────────────────────────
+//  Nearby Map Stations Rendering
+// ──────────────────────────────────────────────────────────
+function renderNearbyStations(data) {
+  if (!nearbyLayerGroup) return;
+  nearbyLayerGroup.clearLayers();
+
+  if (!data.mgm_nearby || data.mgm_nearby.length === 0) {
+    // Regular city zoom-in
+    if (data.lat != null && data.lon != null) {
+      map.flyTo([data.lat, data.lon], 10, {
+        animate: true,
+        duration: 1.5,
+        easeLinearity: 0.25,
+      });
+    }
+    return;
+  }
+
+  const latLngs = [];
+
+  // Add main city coordinate so it stays in bounds
+  if (data.lat != null && data.lon != null) {
+    latLngs.push([data.lat, data.lon]);
+  }
+
+  data.mgm_nearby.forEach((st) => {
+    // Filter out stations too far if needed, but il handles grouping nicely.
+    // Skip if it is the exact same marker as main (though coordinates might slightly differ)
+    const sym = data.temp_symbol || "°C";
+    const iconHtml = `
+      <div class="nearby-marker">
+        ${st.name}: <span class="nearby-temp">${st.temp}</span><span class="nearby-unit">${sym}</span>
+      </div>
+    `;
+    const icon = L.divIcon({
+      html: iconHtml,
+      className: "",
+      iconSize: null,
+      iconAnchor: [-5, 5],
+    });
+
+    const marker = L.marker([st.lat, st.lon], { icon }).addTo(nearbyLayerGroup);
+    latLngs.push([st.lat, st.lon]);
+  });
+
+  if (latLngs.length > 1) {
+    const bounds = L.latLngBounds(latLngs);
+    map.flyToBounds(bounds, {
+      padding: [40, 40],
+      duration: 1.5,
+      easeLinearity: 0.25,
+      maxZoom: 10, // Don't zoom in extremely close if bounds are tight
+    });
+  } else if (data.lat != null && data.lon != null) {
+    map.flyTo([data.lat, data.lon], 10, {
+      animate: true,
+      duration: 1.5,
+      easeLinearity: 0.25,
+    });
+  }
+}
+
+// ──────────────────────────────────────────────────────────
 //  Load & Render City Detail
 // ──────────────────────────────────────────────────────────
 async function loadCityDetail(cityName, force = false) {
@@ -240,14 +306,7 @@ async function loadCityDetail(cityName, force = false) {
 
   if (!force && cityDataCache[cityName]) {
     renderPanel(cityDataCache[cityName]);
-    const cData = cityDataCache[cityName];
-    if (cData.lat != null && cData.lon != null) {
-      map.flyTo([cData.lat, cData.lon], 10, {
-        animate: true,
-        duration: 1.5,
-        easeLinearity: 0.25,
-      });
-    }
+    renderNearbyStations(cityDataCache[cityName]);
     return;
   }
 
@@ -259,14 +318,8 @@ async function loadCityDetail(cityName, force = false) {
     saveCache();
     renderPanel(data);
 
-    // Cinematic Zoom-in Camera
-    if (data.lat != null && data.lon != null) {
-      map.flyTo([data.lat, data.lon], 10, {
-        animate: true,
-        duration: 1.5,
-        easeLinearity: 0.25,
-      });
-    }
+    // Render nearby stations and zoom camera (cinematic or bounds)
+    renderNearbyStations(data);
 
     // Update marker and list
     if (data.current?.temp != null) {

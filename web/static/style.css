@@ -823,6 +823,20 @@ body {
   flex-shrink: 0;
 }
 
+/* ── Nearby Markers ── */
+.nearby-marker {
+  background: rgba(30, 41, 59, 0.85); /* 暗夜蓝透明背景 */
+  color: #94a3b8; /* 灰白字体 */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 2px 6px;
+  font-size: 11px; /* 比主站小 */
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+  backdrop-filter: blur(4px); /* 玻璃质感 */
+  pointer-events: none; /* Make them click-through to avoid interfering with map clicking unless tooltipped */
+}
+
 /* ── Custom Map Markers ── */
 .city-marker {
   position: relative;

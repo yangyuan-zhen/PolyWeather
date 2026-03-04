@@ -476,6 +476,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "wx_desc": mc.get("wx_desc"),
         },
         "mgm": mgm_data,
+        "mgm_nearby": raw.get("mgm_nearby", []),
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,

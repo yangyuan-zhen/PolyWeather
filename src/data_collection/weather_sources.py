@@ -591,6 +591,95 @@ class WeatherDataCollector:
             logger.error(f"MGM API 请求失败 ({istno}): {e}")
             return None
 
+    def fetch_mgm_nearby_stations(self, province: str) -> list:
+        """
+        获取一个土耳其省份内所有气象站的当前温度及经纬度
+        使用多线程辅助抓取，因为直接通过 il={province} 往往只返回 1 个站。
+        """
+        base_url = "https://servis.mgm.gov.tr/web"
+        headers = {
+            "Origin": "https://www.mgm.gov.tr",
+            "User-Agent": "Mozilla/5.0",
+        }
+        import time
+        from concurrent.futures import ThreadPoolExecutor
+
+        results = []
+        try:
+            # 1. 加载测站元数据 (缓存到实例中)，用于过滤属于该省份的站点
+            if not getattr(self, "mgm_stations_meta", None):
+                meta_resp = self.session.get(f"{base_url}/istasyonlar", headers=headers, timeout=self.timeout)
+                if meta_resp.status_code == 200:
+                    meta_json = meta_resp.json()
+                    if isinstance(meta_json, list):
+                        self.mgm_stations_meta = {s["istNo"]: s for s in meta_json if "istNo" in s}
+                else:
+                    self.mgm_stations_meta = {}
+
+            metadata = getattr(self, "mgm_stations_meta", {})
+            
+            # 2. 找出属于该省份的所有站点 istNo
+            province_upper = province.upper()
+            province_ist_nos = [
+                ist_no for ist_no, s in metadata.items() 
+                if (s.get("il") or "").upper() == province_upper
+            ]
+
+            if not province_ist_nos:
+                logger.warning(f"MGM 找不到省份 {province} 的站点元数据")
+                return []
+
+            # 为了性能，如果站点太多（比如安卡拉有50多个），可以只取前 25 个
+            # 或者根据重要性排序（如果元数据里有的话），目前先取前 25 个
+            target_ist_nos = province_ist_nos[:25]
+
+            # 3. 多线程获取每个站点的最新观测 (sondurumlar)
+            def fetch_single_station(ist_no):
+                try:
+                    # sondurumlar?istno={ist_no} 是目前最稳的获取多站数据的办法
+                    url = f"{base_url}/sondurumlar?istno={ist_no}&_={int(time.time() * 1000)}"
+                    resp = self.session.get(url, headers=headers, timeout=5)
+                    if resp.status_code == 200:
+                        obs_list = resp.json()
+                        if obs_list:
+                            obs = obs_list[0] if isinstance(obs_list, list) else obs_list
+                            temp = obs.get("sicaklik")
+                            if temp is not None and temp > -9000:
+                                return ist_no, temp
+                except:
+                    pass
+                return None, None
+
+            # 并发抓取
+            station_temps = {}
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                fetch_results = list(executor.map(fetch_single_station, target_ist_nos))
+                for ist_no, temp in fetch_results:
+                    if ist_no is not None:
+                        station_temps[ist_no] = temp
+
+            # 4. 组装最终结果
+            for ist_no, temp in station_temps.items():
+                meta = metadata[ist_no]
+                lat = meta.get("enlem")
+                lon = meta.get("boylam")
+                # 优先显示区县名，地图更清晰
+                display_name = (meta.get("ilce") or meta.get("istAd") or f"Station {ist_no}").title()
+                
+                results.append({
+                    "name": display_name,
+                    "lat": lat,
+                    "lon": lon,
+                    "temp": temp,
+                    "istNo": ist_no
+                })
+
+            logger.info(f"📍 MGM 周边测站: 成功并发抓取 {len(results)} 个 {province} 站点的实时气温")
+            return results
+        except Exception as e:
+            logger.error(f"Failed to fetch MGM nearby stations for {province}: {e}")
+            return []
+
     def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
         """
         从 NWS (美国国家气象局) 获取高精度预报
@@ -1219,11 +1308,23 @@ class WeatherDataCollector:
                 if metar_data:
                     results["metar"] = metar_data
 
-                # 对安卡拉，额外获取 MGM 官方数据 (17130 为 Ankara Bölge 市区测站)
-                if city_lower == "ankara":
-                    mgm_data = self.fetch_from_mgm("17130")
+                # 对土耳其城市，额外获取 MGM 官方数据与周边测站
+                # 后面可以扩展更多土耳其城市，只需在这里添加映射
+                turkish_provinces = {
+                    "ankara": ("17130", "Ankara"), # (主测站ID, 省份名用于周边)
+                    # "istanbul": ("17060", "Istanbul"),
+                }
+                
+                if city_lower in turkish_provinces:
+                    istno, province = turkish_provinces[city_lower]
+                    mgm_data = self.fetch_from_mgm(istno)
                     if mgm_data:
                         results["mgm"] = mgm_data
+                    
+                    # 抓取并追加周边参考站数据 (并发模式)
+                    nearby = self.fetch_mgm_nearby_stations(province)
+                    if nearby:
+                        results["mgm_nearby"] = nearby
 
                 # 对伦敦，获取 Meteoblue 预测 (公认最准)
                 if city_lower == "london":
