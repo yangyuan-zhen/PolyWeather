@@ -566,6 +566,26 @@ class WeatherDataCollector:
                         results["today_high"] = h_max
                         logger.info(f"📋 MGM 每日预报: 使用小时预报最高温作为今日预报回退: {h_max}°C")
 
+            # 5. Fallback for daily_forecasts from hourly data
+            if not results.get("daily_forecasts") and results.get("hourly"):
+                from collections import defaultdict
+                daily_max = defaultdict(list)
+                for h in results["hourly"]:
+                    t = h.get("time", "")
+                    temp = h.get("temp")
+                    if t and temp is not None:
+                        # Extract date from ISO timestamp like "2026-03-05T12:00:00.000Z"
+                        date_str = t[:10]
+                        daily_max[date_str].append(temp)
+                if daily_max:
+                    results["daily_forecasts"] = {}
+                    for d, temps in sorted(daily_max.items()):
+                        results["daily_forecasts"][d] = max(temps)
+                    logger.info(
+                        f"📋 MGM daily_forecasts (from hourly fallback): "
+                        f"{dict(results['daily_forecasts'])}"
+                    )
+
             return results if "current" in results else None
         except Exception as e:
             logger.error(f"MGM API 请求失败 ({istno}): {e}")
