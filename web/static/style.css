@@ -804,6 +804,95 @@ body {
   font-style: italic;
 }
 
+/* ── Market Odds Section ── */
+.market-odds {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.market-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 12px 14px;
+  transition: var(--transition);
+}
+
+.market-card:hover {
+  border-color: var(--border-glass);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.market-question {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.market-prices {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.market-price {
+  font-size: 20px;
+  font-weight: 700;
+  font-family: "Inter", sans-serif;
+}
+
+.market-price.yes {
+  color: var(--accent-green);
+}
+.market-price.no {
+  color: #f87171;
+}
+.market-price-label {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-left: 2px;
+}
+
+.market-volume {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.market-divergence {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.market-divergence.underpriced {
+  background: rgba(52, 211, 153, 0.08);
+  border: 1px solid rgba(52, 211, 153, 0.2);
+  color: var(--accent-green);
+}
+
+.market-divergence.overpriced {
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.market-divergence.neutral {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.market-no-data {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
 /* ── Risk Section ── */
 .risk-info {
   font-size: 12px;

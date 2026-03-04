@@ -326,6 +326,8 @@ function renderPanel(data) {
   renderForecast(data);
   // AI
   renderAI(data);
+  // Market Odds
+  renderMarket(data);
   // Risk
   renderRisk(data);
 }
@@ -822,6 +824,75 @@ function renderAI(data) {
 
   // The AI output may contain HTML tags like <b>
   container.innerHTML = text;
+}
+
+function renderMarket(data) {
+  const container = document.getElementById("marketOdds");
+  if (
+    !data.polymarket ||
+    !data.polymarket.markets ||
+    data.polymarket.markets.length === 0
+  ) {
+    container.innerHTML = '<div class="market-no-data">暂无相关天气合约</div>';
+    return;
+  }
+
+  const { markets, divergence } = data.polymarket;
+  let html = "";
+
+  markets.forEach((mkt) => {
+    // Find matching divergence signal
+    const divSignal = divergence.find((d) => d.question === mkt.question);
+
+    let probText =
+      mkt.yes_price != null ? `${Math.round(mkt.yes_price * 100)}¢` : "N/A";
+    let noText =
+      mkt.yes_price != null
+        ? `${Math.round((1 - mkt.yes_price) * 100)}¢`
+        : "N/A";
+
+    html += `
+      <div class="market-card">
+        <div class="market-question">
+          <a href="${mkt.url}" target="_blank" style="color:var(--text-primary);text-decoration:none;">${mkt.question} 🔗</a>
+        </div>
+        <div class="market-prices">
+          <span class="market-price yes">${probText}</span><span class="market-price-label">Yes</span>
+          <span style="margin: 0 4px; color:var(--text-muted)">|</span>
+          <span class="market-price no">${noText}</span><span class="market-price-label">No</span>
+        </div>
+        <div class="market-volume">
+          交易量: $${mkt.volume ? Math.round(mkt.volume).toLocaleString() : 0}
+        </div>
+    `;
+
+    if (divSignal) {
+      let divClass = divSignal.signal;
+      let divIcon = "⚪";
+      let divText = "市场定价合理";
+      let diffPct = (Math.abs(divSignal.divergence) * 100).toFixed(1);
+
+      if (divClass === "underpriced" || divClass === "slight_under") {
+        divIcon = "🟢";
+        divText = `低估 (偏离 +${diffPct}%)`;
+      } else if (divClass === "overpriced" || divClass === "slight_over") {
+        divIcon = "🔴";
+        divText = `高估 (偏离 -${diffPct}%)`;
+      }
+
+      html += `
+        <div class="market-divergence ${divClass.replace("slight_", "")}">
+          <div><b>${divIcon} 你的模型:</b> ${Math.round(divSignal.our_prob * 100)}%</div>
+          <div style="margin-top:2px;"><b>🆚 市场定价:</b> ${Math.round(divSignal.market_prob * 100)}%</div>
+          <div style="margin-top:6px;font-weight:600;">💡 信号: ${divText}</div>
+        </div>
+      `;
+    }
+
+    html += `</div>`;
+  });
+
+  container.innerHTML = html;
 }
 
 function renderRisk(data) {

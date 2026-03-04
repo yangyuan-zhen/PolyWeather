@@ -26,6 +26,11 @@ from src.utils.config_loader import load_config
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES
 from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accuracy
+from src.data_collection.polymarket_client import (
+    fetch_weather_markets,
+    get_city_markets,
+    compute_divergence,
+)
 
 # ──────────────────────────────────────────────────────────
 #  Setup
@@ -452,6 +457,31 @@ def _analyze(city: str) -> Dict[str, Any]:
         "ai_analysis": ai_text,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+    # ── 16. Polymarket odds (web-only, non-blocking) ──
+    try:
+        proxy = _config.get("proxy")
+        fetch_weather_markets(proxy=proxy, timeout=10)
+        city_mkts = get_city_markets(city, target_date=local_date_str)
+        if city_mkts:
+            result["polymarket"] = {
+                "markets": [
+                    {
+                        "question": m["question"],
+                        "yes_price": m["yes_price"],
+                        "volume": m.get("volume"),
+                        "threshold": m.get("threshold"),
+                        "threshold_unit": m.get("threshold_unit"),
+                        "url": m.get("url", ""),
+                    }
+                    for m in city_mkts[:5]
+                ],
+                "divergence": compute_divergence(
+                    city_mkts, probabilities, sym, use_fahrenheit=info.get("f", False)
+                ),
+            }
+    except Exception as e:
+        logger.debug(f"Polymarket data skipped for {city}: {e}")
 
     _cache[city] = {"t": _time.time(), "d": result}
     return result
