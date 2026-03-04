@@ -117,10 +117,7 @@ def _analyze(city: str) -> Dict[str, Any]:
     city_lower = city.lower()
 
     cur_temp = _sf(mc.get("temp"))
-    # For Ankara, prioritize MGM over METAR as it's often more representative of city center
-    if city_lower == "ankara" and _sf(mg_cur.get("temp")) is not None:
-        cur_temp = _sf(mg_cur.get("temp"))
-    elif cur_temp is None:
+    if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
 
     max_so_far = _sf(mc.get("max_temp_so_far"))
