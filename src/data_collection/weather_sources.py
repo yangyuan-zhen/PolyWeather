@@ -524,18 +524,6 @@ class WeatherDataCollector:
                                     target_date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
                                     results["daily_forecasts"][target_date] = d_high
                             break
-                            else:
-                                # 记录所有可用字段，方便调试
-                                available_keys = [
-                                    k
-                                    for k in today.keys()
-                                    if "yuksek" in k.lower()
-                                    or "sicaklik" in k.lower()
-                                    or "gun" in k.lower()
-                                ]
-                                logger.warning(
-                                    f"MGM 每日预报: enYuksekGun1 为空，可用字段: {available_keys}"
-                                )
                     else:
                         logger.debug(
                             f"MGM forecast URL {forecast_url} returned {daily_resp.status_code}"
