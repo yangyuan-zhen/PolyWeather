@@ -411,9 +411,9 @@ def start_bot():
             if mgm_high is not None:
                 sources.append("MGM")
                 comp_parts.append(
-                    f"MGM: {mgm_high:.1f}{temp_symbol}"
+                    f"🇹🇷 MGM: {mgm_high:.1f}{temp_symbol}"
                     if isinstance(mgm_high, (int, float))
-                    else f"MGM: {mgm_high}"
+                    else f"🇹🇷 MGM: {mgm_high}"
                 )
 
             # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
@@ -437,8 +437,16 @@ def start_bot():
             # 明后天
             if len(dates) > 1:
                 future_forecasts = []
+                mgm_daily = mgm.get("daily_forecasts", {}) or {}
                 for d, t in zip(dates[1:], max_temps[1:]):
-                    future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
+                    # 检查 MGM 是否有该日期的预报
+                    mgm_f = mgm_daily.get(d)
+                    if mgm_f is not None:
+                        future_forecasts.append(
+                            f"{d[5:]}: {t}{temp_symbol} | 🇹🇷 <b>MGM: {mgm_f}{temp_symbol}</b>"
+                        )
+                    else:
+                        future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
                 msg_lines.append("📅 " + " | ".join(future_forecasts))
 
             # --- 3.5 日出日落 + 日照时长 ---
