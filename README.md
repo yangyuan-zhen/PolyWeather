@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/yangyuan-zhen/PolyWeather)
 
-PolyWeather is a weather analysis tool built for prediction markets like **Polymarket**. It aggregates multi-source forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to help users evaluate weather trading risks more scientifically.
+PolyWeather is a multi-source weather analysis and quantification tool. It aggregates high-precision forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to provide deep insights for weather-related risk assessment and data-driven decision making.
 
 <p align="center">
   <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="420">
@@ -27,7 +27,8 @@ PolyWeather is a weather analysis tool built for prediction markets like **Polym
 - **Global Overview**: Real-time Leaflet-based dark-themed map pinpointed to official Polymarket settlement airport coordinates.
 - **Progressive Background Loading**: Intelligently fetches multi-source data across all cities without hitting API rate limits.
 - **Rich Visualization**: Chart.js-powered temperature trends with METAR scatter overlay, multi-model comparison bars, Gaussian probability distribution, and dynamic risk badges.
-- **Cinematic Interaction & Sync**: City selection triggers a smooth fly-to zoom animation. The **Multi-Model Forecast** panel automatically synchronizes with the selected day in the 5-day forecast table.
+- **Cinematic Interaction & Sync**: City selection triggers a smooth fly-to zoom animation. The **Multi-Model Forecast** panel automatically synchronizes with the selected day in the 5-day forecast table, showing historical model performance and future projections.
+- **Forced Sync & Cache Control**: For specific regions like Ankara, the dashboard supports a 60-second real-time cache TTL with a manual "Force Refresh" button to bypass global caches and fetch the absolute latest MGM/METAR data.
 - **Dual-Engine Architecture**: Runs concurrently with the Telegram bot via a FastAPI backend, sharing the same data collection, analysis logic (`analyze_weather_trend`), and AI prompt pipeline.
 
 ### 2. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
@@ -36,8 +37,8 @@ The system automatically tracks the historical performance of weather models (EC
 
 - **Error-Based Weighting**: Dynamically adjusts model weights based on their Mean Absolute Error (MAE) over the past 7 days. Lower error = higher weight.
 - **Blended Forecast**: Provides a bias-corrected "DEB Blended High Temperature" recommendation.
-- **Self-Learning**: Requires at least 2 days of observations before activating weight differentiation. Uses equal-weight averaging during cold start.
-- **Accuracy Tracking**: Use the `/deb` command to view DEB's historical WU settlement hit rate and MAE, compared against individual models.
+- **Multi-Source Training**: Integrates official regional sources (like Turkey's MGM) into the training pipeline alongside international models (ECMWF, GFS, etc.).
+- **Accuracy Tracking**: Use the `/deb` command to view DEB's historical settlement hit rate and MAE, compared against individual models.
 - **Auto-Cleanup**: Only retains the last 14 days of records to prevent unbounded data growth.
 
 ### 3. 🎲 Math Probability Engine (Settlement Probability)
@@ -78,9 +79,9 @@ Feeds all weather data into LLaMA 70B, analyzed via a **P0→P4 Priority Chain**
 ### 5. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
 
 - **Precise Timing**: Extracts actual observation time from raw METAR text (`rawOb`), not the API's rounded `reportTime`. Accurate to the minute.
-- **Live Passthrough**: Bypasses CDN caching via dynamic headers to obtain first-hand METAR reports.
-- **Settlement Warning**: Automatically calculates the settlement boundary (X.5 rounding line).
-- **MGM Fallback**: For Turkish cities (Ankara), falls back to MGM data when METAR is unavailable.
+- **Live Passthrough**: Bypasses CDN caching via dynamic headers and randomized timestamps to obtain first-hand METAR/MGM reports.
+- **Settlement Warning**: Automatically calculates the rounding boundary for integer-based settlement (X.5 line).
+- **MGM Primary (Ankara)**: For Turkish cities like Ankara, PolyWeather uses official MGM data as a primary source for both real-time observations and 5-day hourly forecasts, ensuring maximum local accuracy.
 - **Anomaly Filtering**: Automatically filters out -9999 sentinel values to prevent garbage data in output.
 
 ### 6. 📈 Historical Data Collection
@@ -160,7 +161,7 @@ graph TD
         Collector --> OM[Open-Meteo Forecast/Ensemble]
         Collector --> MM[Multi-Model ECMWF/GFS/ICON/GEM/JMA]
         Collector --> METAR["Live Airport METAR (rawOb)"]
-        Collector --> MGM["MGM Fallback (Turkey)"]
+        Collector --> MGM["MGM Official (Ankara)"]
     end
 
     subgraph Algorithm Layer
