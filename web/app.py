@@ -26,11 +26,6 @@ from src.utils.config_loader import load_config
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES
 from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accuracy
-from src.data_collection.polymarket_client import (
-    fetch_weather_markets,
-    get_city_markets,
-    compute_divergence,
-)
 
 # ──────────────────────────────────────────────────────────
 #  Setup
@@ -76,6 +71,7 @@ ALIASES = {
 # ──────────────────────────────────────────────────────────
 _cache: Dict[str, Dict] = {}
 CACHE_TTL = 300
+CACHE_TTL_ANKARA = 60  # Ankara measurement updates frequent, narrower cache
 
 
 def _sf(v) -> Optional[float]:
@@ -91,12 +87,15 @@ def _sf(v) -> Optional[float]:
 # ──────────────────────────────────────────────────────────
 #  Core Analysis  (replicates bot_listener logic → JSON)
 # ──────────────────────────────────────────────────────────
-def _analyze(city: str) -> Dict[str, Any]:
+def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
-    cached = _cache.get(city)
-    if cached and _time.time() - cached["t"] < CACHE_TTL:
-        return cached["d"]
+    ttl = CACHE_TTL_ANKARA if city.lower() == "ankara" else CACHE_TTL
+    
+    if not force_refresh:
+        cached = _cache.get(city)
+        if cached and _time.time() - cached["t"] < ttl:
+            return cached["d"]
 
     info = CITIES[city]
     lat, lon, is_f = info["lat"], info["lon"], info["f"]
@@ -495,32 +494,6 @@ def _analyze(city: str) -> Dict[str, Any]:
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-    # ── 16. Polymarket odds (web-only, non-blocking) ──
-    try:
-        proxy = _config.get("proxy")
-        fetch_weather_markets(proxy=proxy, timeout=10)
-        # We don't filter by target_date here, we want ALL active contracts for the city
-        city_mkts = get_city_markets(city)
-        if city_mkts:
-            result["polymarket"] = {
-                "markets": [
-                    {
-                        "question": m["question"],
-                        "yes_price": m["yes_price"],
-                        "volume": m.get("volume"),
-                        "threshold": m.get("threshold"),
-                        "threshold_unit": m.get("threshold_unit"),
-                        "url": m.get("url", ""),
-                    }
-                    for m in city_mkts[:5]
-                ],
-                "divergence": compute_divergence(
-                    city_mkts, probabilities, sym, use_fahrenheit=info.get("f", False)
-                ),
-            }
-    except Exception as e:
-        logger.debug(f"Polymarket data skipped for {city}: {e}")
-
     _cache[city] = {"t": _time.time(), "d": result}
     return result
 
@@ -556,13 +529,13 @@ async def list_cities():
 
 
 @app.get("/api/city/{name}")
-async def city_detail(name: str):
+async def city_detail(name: str, force_refresh: bool = False):
     """Return full weather analysis for a single city."""
     name = name.lower().strip().replace("-", " ")
     name = ALIASES.get(name, name)
     if name not in CITIES:
         raise HTTPException(404, detail=f"Unknown city: {name}")
-    return _analyze(name)
+    return _analyze(name, force_refresh=force_refresh)
 
 
 @app.get("/api/history/{name}")

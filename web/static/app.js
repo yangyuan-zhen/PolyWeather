@@ -220,9 +220,11 @@ async function fetchCities() {
   }
 }
 
-async function fetchCityDetail(cityName) {
+async function fetchCityDetail(cityName, force = false) {
   const urlName = cityName.replace(/\s/g, "-");
-  const res = await fetch(`/api/city/${encodeURIComponent(urlName)}`);
+  const res = await fetch(
+    `/api/city/${encodeURIComponent(urlName)}?force_refresh=${force}`,
+  );
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return await res.json();
 }
@@ -230,13 +232,13 @@ async function fetchCityDetail(cityName) {
 // ──────────────────────────────────────────────────────────
 //  Load & Render City Detail
 // ──────────────────────────────────────────────────────────
-async function loadCityDetail(cityName) {
+async function loadCityDetail(cityName, force = false) {
   selectedCity = cityName;
   selectedForecastDate = null; // Reset selection for new city
   setActiveCityItem(cityName);
   setSelectedMarker(cityName);
 
-  if (cityDataCache[cityName]) {
+  if (!force && cityDataCache[cityName]) {
     renderPanel(cityDataCache[cityName]);
     const cData = cityDataCache[cityName];
     if (cData.lat != null && cData.lon != null) {
@@ -252,7 +254,7 @@ async function loadCityDetail(cityName) {
   showLoading(true);
 
   try {
-    const data = await fetchCityDetail(cityName);
+    const data = await fetchCityDetail(cityName, force);
     cityDataCache[cityName] = data;
     saveCache();
     renderPanel(data);
@@ -326,8 +328,6 @@ function renderPanel(data) {
   renderForecast(data);
   // AI
   renderAI(data);
-  // Market Odds
-  renderMarket(data);
   // Risk
   renderRisk(data);
 }
@@ -925,77 +925,6 @@ function renderAI(data) {
   container.innerHTML = text;
 }
 
-function renderMarket(data) {
-  const widget = document.getElementById("marketFloatingWidget");
-  const container = document.getElementById("marketOdds");
-  if (
-    !data.polymarket ||
-    !data.polymarket.markets ||
-    data.polymarket.markets.length === 0
-  ) {
-    widget.classList.add("hidden");
-    return;
-  }
-
-  widget.classList.remove("hidden");
-  const { markets, divergence } = data.polymarket;
-  let html = "";
-
-  markets.forEach((mkt) => {
-    // Find matching divergence signal
-    const divSignal = divergence.find((d) => d.question === mkt.question);
-
-    let probText =
-      mkt.yes_price != null ? `${Math.round(mkt.yes_price * 100)}¢` : "N/A";
-    let noText =
-      mkt.yes_price != null
-        ? `${Math.round((1 - mkt.yes_price) * 100)}¢`
-        : "N/A";
-
-    html += `
-      <div class="market-card">
-        <div class="market-question">
-          <a href="${mkt.url}" target="_blank" style="color:var(--text-primary);text-decoration:none;">${mkt.question} 🔗</a>
-        </div>
-        <div class="market-prices">
-          <span class="market-price yes">${probText}</span><span class="market-price-label">Yes</span>
-          <span style="margin: 0 4px; color:var(--text-muted)">|</span>
-          <span class="market-price no">${noText}</span><span class="market-price-label">No</span>
-        </div>
-        <div class="market-volume">
-          交易量: $${mkt.volume ? Math.round(mkt.volume).toLocaleString() : 0}
-        </div>
-    `;
-
-    if (divSignal) {
-      let divClass = divSignal.signal;
-      let divIcon = "⚪";
-      let divText = "市场定价合理";
-      let diffPct = (Math.abs(divSignal.divergence) * 100).toFixed(1);
-
-      if (divClass === "underpriced" || divClass === "slight_under") {
-        divIcon = "🟢";
-        divText = `低估 (偏离 +${diffPct}%)`;
-      } else if (divClass === "overpriced" || divClass === "slight_over") {
-        divIcon = "🔴";
-        divText = `高估 (偏离 -${diffPct}%)`;
-      }
-
-      html += `
-        <div class="market-divergence ${divClass.replace("slight_", "")}">
-          <div><b>${divIcon} 你的模型:</b> ${Math.round(divSignal.our_prob * 100)}%</div>
-          <div style="margin-top:2px;"><b>🆚 市场定价:</b> ${Math.round(divSignal.market_prob * 100)}%</div>
-          <div style="margin-top:6px;font-weight:600;">💡 信号: ${divText}</div>
-        </div>
-      `;
-    }
-
-    html += `</div>`;
-  });
-
-  container.innerHTML = html;
-}
-
 function renderRisk(data) {
   const container = document.getElementById("riskInfo");
   const risk = data.risk || {};
@@ -1020,12 +949,6 @@ function closePanel() {
   const panel = document.getElementById("panel");
   panel.classList.remove("visible");
   setTimeout(() => panel.classList.add("hidden"), 400);
-
-  // Hide Polymarket widget
-  const marketWidget = document.getElementById("marketFloatingWidget");
-  if (marketWidget) {
-    marketWidget.classList.add("hidden");
-  }
 
   selectedCity = null;
   setSelectedMarker(null);
@@ -1272,19 +1195,11 @@ function closeHistoryModal() {
   document.getElementById("historyModal").classList.add("hidden");
 }
 
-// ──────────────────────────────────────────────────────────
-//  Init
-// ──────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", async () => {
   initMap();
 
   // Panel close
   document.getElementById("panelClose").addEventListener("click", closePanel);
-
-  // Market Widget close
-  document.getElementById("marketClose").addEventListener("click", () => {
-    document.getElementById("marketFloatingWidget").classList.add("hidden");
-  });
 
   // Escape key
   document.addEventListener("keydown", (e) => {
@@ -1311,7 +1226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       cityDataCache = {};
       saveCache();
       if (selectedCity) {
-        await loadCityDetail(selectedCity);
+        await loadCityDetail(selectedCity, true);
       }
       btn.classList.remove("spinning");
     });
