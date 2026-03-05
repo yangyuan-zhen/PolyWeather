@@ -71,6 +71,33 @@ function initMap() {
   map.on("click", () => {
     closePanel();
   });
+
+  // Handle zoom-based visibility for local stations and minor cities
+  map.on("zoomend", updateMapVisibility);
+}
+
+function updateMapVisibility() {
+  if (!map) return;
+  const zoom = map.getZoom();
+
+  // 1. Handle Nearby Individual Stations (very high zoom only)
+  // These are the "Ankara-style" local station markers
+  if (zoom < 7) {
+    if (map.hasLayer(nearbyLayerGroup)) map.removeLayer(nearbyLayerGroup);
+  } else {
+    if (!map.hasLayer(nearbyLayerGroup)) map.addLayer(nearbyLayerGroup);
+  }
+
+  // 2. Handle Primary City Markers (Major vs Minor)
+  Object.values(markers).forEach(({ marker, city }) => {
+    const isMajor = city.is_major !== false;
+    // Hide minor cities (like Ankara/Atlanta) when zoomed way out
+    if (zoom < 4 && !isMajor) {
+      if (map.hasLayer(marker)) map.removeLayer(marker);
+    } else {
+      if (!map.hasLayer(marker)) map.addLayer(marker);
+    }
+  });
 }
 
 // ──────────────────────────────────────────────────────────
@@ -109,6 +136,7 @@ function addCityMarkers(cities) {
   });
 
   document.getElementById("cityCount").textContent = cities.length;
+  updateMapVisibility();
 }
 
 function updateMarkerTemp(cityName, temp) {

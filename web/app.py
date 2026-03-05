@@ -548,6 +548,7 @@ async def list_cities():
                 "airport": risk.get("airport_name", ""),
                 "icao": risk.get("icao", ""),
                 "temp_unit": "fahrenheit" if info["f"] else "celsius",
+                "is_major": CITY_REGISTRY.get(name, {}).get("is_major", True),
             }
         )
     return {"cities": out}
