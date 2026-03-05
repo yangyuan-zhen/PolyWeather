@@ -594,7 +594,7 @@ class WeatherDataCollector:
             logger.error(f"MGM API 请求失败 ({istno}): {e}")
             return None
 
-    def fetch_mgm_nearby_stations(self, province: str) -> list:
+    def fetch_mgm_nearby_stations(self, province: str, root_ist_no: str = None) -> list:
         """
         获取一个土耳其省份内所有气象站的当前温度及经纬度
         使用多线程辅助抓取，因为直接通过 il={province} 往往只返回 1 个站。
@@ -633,8 +633,13 @@ class WeatherDataCollector:
                 return []
 
             # 为了性能，如果站点太多（比如安卡拉有50多个），可以只取前 25 个
-            # 或者根据重要性排序（如果元数据里有的话），目前先取前 25 个
+            # 同时确保我们关心的 root_ist_no 一定在里面
             target_ist_nos = province_ist_nos[:25]
+            if root_ist_no and root_ist_no in province_ist_nos and root_ist_no not in target_ist_nos:
+                target_ist_nos.append(root_ist_no)
+            # 如果是安卡拉，额外确保 17128 (机场站) 也在里面
+            if province_upper == "ANKARA" and "17128" in province_ist_nos and "17128" not in target_ist_nos:
+                target_ist_nos.append("17128")
 
             # 3. 多线程获取每个站点的最新观测 (sondurumlar)
             def fetch_single_station(ist_no):
@@ -1370,7 +1375,7 @@ class WeatherDataCollector:
                     mgm_data = self.fetch_from_mgm(istno)
                     if mgm_data:
                         results["mgm"] = mgm_data
-                    nearby = self.fetch_mgm_nearby_stations(province)
+                    nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
                     if nearby:
                         results["mgm_nearby"] = nearby
                 
