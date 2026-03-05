@@ -1270,15 +1270,28 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (e.key === "Escape") closePanel();
   });
 
-  // History Modal Events
+  // Modal Event Listeners
+  const histModal = document.getElementById("historyModal");
+  const guideModal = document.getElementById("guideModal");
+
   document
     .getElementById("btnShowHistory")
     .addEventListener("click", openHistoryModal);
   document
     .getElementById("historyModalClose")
     .addEventListener("click", closeHistoryModal);
-  document.getElementById("historyModal").addEventListener("click", (e) => {
+  histModal.addEventListener("click", (e) => {
     if (e.target.id === "historyModal") closeHistoryModal();
+  });
+
+  document.getElementById("btnShowGuide").addEventListener("click", () => {
+    guideModal.classList.remove("hidden");
+  });
+  document.getElementById("guideModalClose").addEventListener("click", () => {
+    guideModal.classList.add("hidden");
+  });
+  guideModal.addEventListener("click", (e) => {
+    if (e.target.id === "guideModal") guideModal.classList.add("hidden");
   });
 
   // Refresh all button

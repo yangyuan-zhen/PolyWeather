@@ -29,12 +29,12 @@
             <h1>🌡️ PolyWeather</h1>
             <span class="subtitle">天气衍生品智能分析</span>
         </div>
-        <div class="header-right">
-            <div class="live-badge" id="liveBadge">
-                <span class="pulse-dot"></span>
-                <span>实时</span>
-            </div>
-            <button class="refresh-btn" id="refreshAllBtn" title="刷新所有数据">⟳</button>
+        <button class="info-btn" id="btnShowGuide" title="查看系统技术说明">ℹ️ 技术说明</button>
+        <div class="live-badge" id="liveBadge">
+            <span class="pulse-dot"></span>
+            <span>实时</span>
+        </div>
+        <button class="refresh-btn" id="refreshAllBtn" title="刷新所有数据">⟳</button>
         </div>
     </header>
 
@@ -148,17 +148,42 @@
         <span>正在获取气象数据，请稍候...</span>
     </div>
 
-    <!-- ── History Chart Modal ── -->
-    <div id="historyModal" class="modal-overlay hidden">
-        <div class="modal-content">
+    <!-- ── Technical Guide Modal ── -->
+    <div id="guideModal" class="modal-overlay hidden">
+        <div class="modal-content large">
             <div class="modal-header">
-                <h2>📊 <span id="historyModalTitle">历史准确率</span></h2>
-                <button class="modal-close" id="historyModalClose">✕</button>
+                <h2>📚 PolyWeather 系统技术说明</h2>
+                <button class="modal-close" id="guideModalClose">✕</button>
             </div>
             <div class="modal-body">
-                <div class="history-stats" id="historyStats"></div>
-                <div class="history-chart-wrapper">
-                    <canvas id="historyChart"></canvas>
+                <div class="guide-grid">
+                    <div class="guide-card">
+                        <h3>🧬 DEB 动态融合预测</h3>
+                        <p><b>Dynamic Ensemble Blending</b> 是系统的核心算法。它不只是简单的平均值，而是根据各个模型（ECMWF, GFS, MGM等）在**过去 30
+                            天**内的实际表现，动态分配权重。表现越稳的模型，在最终决策中占比越高。</p>
+                    </div>
+                    <div class="guide-card">
+                        <h3>🎲 结算概率引擎 (μ)</h3>
+                        <p>基于正态分布模型。我们提取所有预报模型的离散度作为**不确定性系数 ($\sigma$)**，结合 DEB 预测值作为**期望值 ($\mu$)**。这能告诉你某个温度区间（如 10°C
+                            盘口）发生的真实概率，辅助对冲决策。</p>
+                    </div>
+                    <div class="guide-card">
+                        <h3>📍 结算点 (Airport) 逻辑</h3>
+                        <p>Polymarket 结算是以**机场 METAR
+                            气象站**为准。在安卡拉等复杂城市，我们同时监控**市中心总站**（潜力热岛）和**机场站**（物理结算点）。当两者温差巨大时，往往预示着随后的补涨跳升机会。</p>
+                    </div>
+                    <div class="guide-card">
+                        <h3>⚠️ 风险偏置档案</h3>
+                        <p>系统记录了每个城市机场站与市区的距离、海拔差及季度性偏差。例如，首尔仁川机场因靠海，最高温通常比市区偏低；慕尼黑机场因海拔高，夜间降温极快。这些偏置已自动整合进 AI 分析逻辑中。
+                        </p>
+                    </div>
+                    <div class="guide-card">
+                        <h3>📈 未来日期概率分布</h3>
+                        <p>当你切换到未来 3-5 天时，系统会基于各模型对该日期的预报分歧度重新计算概率。分歧越大，分布越扁平（风险高）；共识越强，分布越尖锐（机会明朗）。</p>
+                    </div>
+                </div>
+                <div class="guide-footer">
+                    <p>※ 数据来源：NOAA METAR, Turkish MGM, Open-Meteo Ensemble, Meteoblue, NWS.</p>
                 </div>
             </div>
         </div>

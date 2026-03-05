@@ -1390,12 +1390,23 @@ class WeatherDataCollector:
                 }
                 if city_lower in turkish_provinces:
                     istno, province = turkish_provinces[city_lower]
+                    # 核心逻辑：实测用 istno (17128), 预报强制去 17130 拿
                     mgm_data = self.fetch_from_mgm(istno)
+                    
+                    # 如果当前是机场站 (17128)，我们额外去 17130 拿一次预报
+                    if istno == "17128":
+                        mgm_city_center = self.fetch_from_mgm("17130")
+                        if mgm_city_center and mgm_data:
+                            # 用市中心的预报覆盖机场可能缺失的预报
+                            mgm_data["today_high"] = mgm_city_center.get("today_high")
+                            mgm_data["daily_forecasts"] = mgm_city_center.get("daily_forecasts")
+                            logger.info("⚡ 已同步 MGM 安卡拉总部 (17130) 的官方最高温预报")
+                    
                     if mgm_data:
                         results["mgm"] = mgm_data
-                    nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
-                    if nearby:
-                        results["mgm_nearby"] = nearby
+                        nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
+                        if nearby:
+                            results["mgm_nearby"] = nearby
                 
                 # 全球通用：对有预定义集群的城市，抓取周边 METAR 参考站
                 if city_lower in self.CITY_METAR_CLUSTERS and "mgm_nearby" not in results:
