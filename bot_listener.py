@@ -587,6 +587,12 @@ def start_bot():
                     parts = []
                     if feels_like is not None:
                         parts.append(f"🌡️ 体感: {feels_like}°C")
+                    
+                    # 针对安卡拉，补充市区(Center)实测值
+                    ankara_center = next((s for s in weather_data.get("mgm_nearby", []) if "Bölge/Center" in s.get("name", "")), None)
+                    if ankara_center:
+                        parts.append(f"Ankara (Bölge/Center): <b>{ankara_center['temp']}°C</b>")
+                        
                     if humidity is not None:
                         parts.append(f"💧 {humidity}%")
                     msg_lines.append(f"   [MGM] {' | '.join(parts)}")
