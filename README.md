@@ -27,6 +27,8 @@ PolyWeather is a multi-source weather analysis and quantification tool. It aggre
 - **Global Overview**: Real-time Leaflet-based dark-themed map pinpointed to official Polymarket settlement airport coordinates.
 - **Progressive Background Loading**: Intelligently fetches multi-source data across all cities without hitting API rate limits.
 - **Rich Visualization**: Chart.js-powered temperature trends with METAR scatter overlay, multi-model comparison bars, Gaussian probability distribution, and dynamic risk badges.
+- **Zoom-based Intelligence**: Map automatically filters minor cities (e.g., Atlanta/Ankara) and local station labels at lower zoom levels to maintain clarity, showing only major global hubs when zoomed out.
+- **Technical Guide Interface**: Features an interactive on-map technical guide explaining DEB prediction curves, probability bands, and risk factors.
 - **Cinematic Interaction & Sync**: City selection triggers a smooth fly-to zoom animation. The **Multi-Model Forecast** panel automatically synchronizes with the selected day in the 5-day forecast table, showing historical model performance and future projections.
 - **Forced Sync & Cache Control**: For specific regions like Ankara, the dashboard supports a 60-second real-time cache TTL with a manual "Force Refresh" button to bypass global caches and fetch the absolute latest MGM/METAR data.
 - **Dual-Engine Architecture**: Runs concurrently with the Telegram bot via a FastAPI backend, sharing the same data collection, analysis logic (`analyze_weather_trend`), and AI prompt pipeline.
@@ -137,7 +139,7 @@ _(Note: The `update.sh` script automatically fetches the latest code, kills old 
 
 | Command             | Description                                                                                                                         |
 | :------------------ | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights.                                                    |
+| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights. (Includes "Bölge/Center" detail for Ankara).       |
 | `/deb [city_name]`  | View DEB accuracy: daily hit/miss breakdown, bias analysis (underestimate/overestimate), model MAE comparison, trading suggestions. |
 | `/id`               | View the Chat ID of the current conversation.                                                                                       |
 | `/help`             | Display help information.                                                                                                           |
@@ -215,4 +217,4 @@ git pull
 
 ---
 
-_Updated 2026-03-04_
+_Updated 2026-03-05_
