@@ -327,7 +327,11 @@ function renderNearbyStations(data) {
 
   // Update Heatmap
   if (heatLayer) {
-    const heatData = nearby.map((st) => [st.lat, st.lon, st.temp || 10]);
+    const heatData = data.mgm_nearby.map((st) => [
+      st.lat,
+      st.lon,
+      st.temp || 10,
+    ]);
     // Add current city center to heat data
     if (data.lat && data.lon && data.current?.temp != null) {
       heatData.push([data.lat, data.lon, data.current.temp]);
