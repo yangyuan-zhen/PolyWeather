@@ -24,7 +24,7 @@ CITY_RISK_PROFILES = {
 
 def get_city_risk_profile(city: str) -> dict:
     """获取城市的风险档案"""
-    city_lower = city_name.lower().strip()
+    city_lower = city.lower().strip()
 
     city_key = city_lower
     return CITY_RISK_PROFILES.get(city_key)
