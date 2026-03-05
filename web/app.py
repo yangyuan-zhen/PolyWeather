@@ -39,31 +39,20 @@ app.mount("/static", StaticFiles(directory=_static), name="static")
 _config = load_config()
 _weather = WeatherDataCollector(_config)
 
-# ──────────────────────────────────────────────────────────
-#  City Registry
-# ──────────────────────────────────────────────────────────
-CITIES: Dict[str, Dict[str, Any]] = {
-    "ankara":       {"lat": 40.1281,  "lon": 32.9951,   "f": False, "tz": 10800},
-    "london":       {"lat": 51.5048,  "lon": 0.0522,    "f": False, "tz": 0},
-    "paris":        {"lat": 49.0097,  "lon": 2.5480,    "f": False, "tz": 3600},
-    "seoul":        {"lat": 37.4602,  "lon": 126.4407,  "f": False, "tz": 32400},
-    "toronto":      {"lat": 43.6777,  "lon": -79.6248,  "f": False, "tz": -18000},
-    "buenos aires": {"lat": -34.8222, "lon": -58.5358,  "f": False, "tz": -10800},
-    "wellington":   {"lat": -41.3272, "lon": 174.8053,  "f": False, "tz": 46800},
-    "new york":     {"lat": 40.7769,  "lon": -73.8740,  "f": True,  "tz": -18000},
-    "chicago":      {"lat": 41.9742,  "lon": -87.9073,  "f": True,  "tz": -21600},
-    "dallas":       {"lat": 32.8471,  "lon": -96.8518,  "f": True,  "tz": -21600},
-    "miami":        {"lat": 25.7959,  "lon": -80.2870,  "f": True,  "tz": -18000},
-    "atlanta":      {"lat": 33.6407,  "lon": -84.4277,  "f": True,  "tz": -18000},
-    "seattle":      {"lat": 47.4502,  "lon": -122.3088, "f": True,  "tz": -28800},
-}
+from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
 
-ALIASES = {
-    "ank": "ankara", "lon": "london", "par": "paris",
-    "nyc": "new york", "chi": "chicago", "dal": "dallas",
-    "mia": "miami", "atl": "atlanta", "sea": "seattle",
-    "tor": "toronto", "sel": "seoul", "ba": "buenos aires",
-    "wel": "wellington",
+# ──────────────────────────────────────────────────────────
+#  City Registry Transformation
+# ──────────────────────────────────────────────────────────
+# Convert registry to the internal format expected by app logic
+CITIES: Dict[str, Dict[str, Any]] = {
+    cid: {
+        "lat": info["lat"],
+        "lon": info["lon"],
+        "f": info["use_fahrenheit"],
+        "tz": info["tz_offset"]
+    }
+    for cid, info in CITY_REGISTRY.items()
 }
 
 # ──────────────────────────────────────────────────────────

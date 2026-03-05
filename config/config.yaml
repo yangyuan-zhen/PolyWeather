@@ -1,6 +1,6 @@
 # Weather API Configuration
 weather:
-  meteoblue_api_key: null  # Set via METEOBLUE_API_KEY env var
+  meteoblue_api_key: null # Set via METEOBLUE_API_KEY env var
   timeout: 30
 
 # Target Cities
@@ -30,6 +30,21 @@ cities:
     country: "USA"
     latitude: 41.8781
     longitude: -87.6298
+  - id: "lucknow"
+    city: "Lucknow"
+    country: "India"
+    latitude: 26.7606
+    longitude: 80.8893
+  - id: "sao paulo"
+    city: "São Paulo"
+    country: "Brazil"
+    latitude: -23.4356
+    longitude: -46.4731
+  - id: "munich"
+    city: "Munich"
+    country: "Germany"
+    latitude: 48.3538
+    longitude: 11.7861
 
 # Logging
 logging:

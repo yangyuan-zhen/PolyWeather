@@ -63,24 +63,9 @@ def start_bot():
                 )
                 return
 
+            from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
             city_input = parts[1].strip().lower()
-            # 复用城市名映射
-            city_aliases = {
-                "ank": "ankara",
-                "lon": "london",
-                "par": "paris",
-                "nyc": "new york",
-                "chi": "chicago",
-                "dal": "dallas",
-                "mia": "miami",
-                "atl": "atlanta",
-                "sea": "seattle",
-                "tor": "toronto",
-                "sel": "seoul",
-                "ba": "buenos aires",
-                "wel": "wellington",
-            }
-            city_name = city_aliases.get(city_input, city_input)
+            city_name = ALIASES.get(city_input, city_input)
 
             from src.analysis.deb_algorithm import load_history
             import os as _os
@@ -262,75 +247,38 @@ def start_bot():
                 )
                 return
 
+            from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
             city_input = parts[1].strip().lower()
+            
+            # --- 使用统一注册表解析城市 ---
+            SUPPORTED_CITIES = list(CITY_REGISTRY.keys())
 
-            # --- 核心标准名称映射表 ---
-            # 这里的 Key 是缩写或别名，Value 是 Open-Meteo 识别的标准全称
-            STANDARD_MAPPING = {
-                "sel": "seoul",
-                "seo": "seoul",
-                "首尔": "seoul",
-                "lon": "london",
-                "伦敦": "london",
-                "tor": "toronto",
-                "多伦多": "toronto",
-                "ank": "ankara",
-                "安卡拉": "ankara",
-                "wel": "wellington",
-                "惠灵顿": "wellington",
-                "ba": "buenos aires",
-                "布宜诺斯艾利斯": "buenos aires",
-                "nyc": "new york",
-                "ny": "new york",
-                "纽约": "new york",
-                "chi": "chicago",
-                "芝加哥": "chicago",
-                "sea": "seattle",
-                "西雅图": "seattle",
-                "mia": "miami",
-                "迈阿密": "miami",
-                "atl": "atlanta",
-                "亚特兰大": "atlanta",
-                "dal": "dallas",
-                "达拉斯": "dallas",
-                "la": "los angeles",
-                "洛杉矶": "los angeles",
-                "par": "paris",
-                "巴黎": "paris",
-            }
-
-            # 支持的城市全名列表（用于模糊匹配）
-            SUPPORTED_CITIES = list(set(STANDARD_MAPPING.values()))
-
-            # 1. 第一优先级：严格全字匹配（别名/缩写）
-            city_name = STANDARD_MAPPING.get(city_input)
-
-            # 2. 第二优先级：输入本身就是城市全名
+            # 1. 第一优先级：全称或别名完全匹配
+            city_name = ALIASES.get(city_input)
             if not city_name and city_input in SUPPORTED_CITIES:
                 city_name = city_input
 
-            # 3. 第三优先级：前缀匹配（在别名和城市全名中搜索）
+            # 2. 第二优先级：前缀模糊匹配
             if not city_name and len(city_input) >= 2:
-                # 先搜别名
-                for k, v in STANDARD_MAPPING.items():
+                # 搜别名
+                for k, v in ALIASES.items():
                     if k.startswith(city_input):
                         city_name = v
                         break
-                # 再搜城市全名
+                # 搜城市全名
                 if not city_name:
                     for full_name in SUPPORTED_CITIES:
                         if full_name.startswith(city_input):
                             city_name = full_name
                             break
 
-            # 4. 未找到 → 报错，列出支持的城市
+            # 3. 未找到 → 报错
             if not city_name:
-                city_list = ", ".join(sorted(set(STANDARD_MAPPING.values())))
+                city_list = ", ".join(sorted(SUPPORTED_CITIES))
                 bot.reply_to(
                     message,
                     f"❌ 未找到城市: <b>{city_input}</b>\n\n"
-                    f"支持的城市: {city_list}\n\n"
-                    f"也可以用缩写，如 <code>/city dal</code> 查达拉斯",
+                    f"支持的城市: {city_list}",
                     parse_mode="HTML",
                 )
                 return

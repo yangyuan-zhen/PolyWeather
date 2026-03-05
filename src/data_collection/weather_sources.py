@@ -17,24 +17,10 @@ class WeatherDataCollector:
     - NOAA Aviation Weather (METAR - airport observations)
     """
 
-    # Polymarket 12 个天气市场对应的 ICAO 机场代码
-    # 这些是 Weather Underground 结算源使用的气象站
-    CITY_TO_ICAO = {
-        "seattle": "KSEA",  # Seattle-Tacoma Airport
-        "london": "EGLC",  # London City Airport
-        "dallas": "KDAL",  # Dallas Love Field
-        "miami": "KMIA",  # Miami International
-        "atlanta": "KATL",  # Hartsfield-Jackson
-        "chicago": "KORD",  # O'Hare International
-        "new york": "KLGA",  # LaGuardia Airport
-        "nyc": "KLGA",  # Alias
-        "seoul": "RKSI",  # Incheon International
-        "ankara": "LTAC",  # Esenboğa International
-        "toronto": "CYYZ",  # Toronto Pearson
-        "wellington": "NZWN",  # Wellington International
-        "buenos aires": "SAEZ",  # Ezeiza International
-        "paris": "LFPG",  # Charles de Gaulle
-    }
+    from src.data_collection.city_registry import CITY_REGISTRY
+    CITY_TO_ICAO = {cid: info["icao"] for cid, info in CITY_REGISTRY.items()}
+    # Alias
+    CITY_TO_ICAO["nyc"] = "KLGA"
 
     # 城市周边 METAR 集群（用于在全球城市模拟类似安卡拉的多测站地图分布）
     CITY_METAR_CLUSTERS = {
@@ -49,6 +35,8 @@ class WeatherDataCollector:
         "atlanta": ["KATL", "KPDK", "KFTY"],
         "miami": ["KMIA", "KOPF", "KTMB"],
         "seattle": ["KSEA", "KBFI", "KPAE"],
+        "sao paulo": ["SBGR", "SBSP", "SBKP"],
+        "munich": ["EDDM", "EDMO", "EDJA"],
     }
 
     def __init__(self, config: dict):
@@ -1196,34 +1184,29 @@ class WeatherDataCollector:
         """
         使用 Open-Meteo Geocoding API 获取城市坐标 (免费, 无需 Key)
         """
-        # 坐标使用 METAR 机场位置（Polymarket 以机场数据结算）
-        static_coords = {
-            "london": {"lat": 51.5053, "lon": 0.0553},  # EGLC London City
-            "paris": {"lat": 49.0097, "lon": 2.5478},  # LFPG Charles de Gaulle
-            "new york": {"lat": 40.7750, "lon": -73.8750},  # KLGA LaGuardia
-            "new york's central park": {"lat": 40.7812, "lon": -73.9665},
-            "nyc": {"lat": 40.7750, "lon": -73.8750},  # KLGA LaGuardia
-            "seattle": {"lat": 47.4499, "lon": -122.3118},  # KSEA Sea-Tac
-            "chicago": {"lat": 41.9769, "lon": -87.9081},  # KORD O'Hare
-            "dallas": {"lat": 32.8459, "lon": -96.8509},  # KDAL Love Field
-            "miami": {"lat": 25.7933, "lon": -80.2906},  # KMIA International
-            "atlanta": {"lat": 33.6367, "lon": -84.4281},  # KATL Hartsfield-Jackson
-            "seoul": {"lat": 37.4691, "lon": 126.4510},  # RKSI Incheon
-            "toronto": {"lat": 43.6759, "lon": -79.6294},  # CYYZ Pearson
-            "ankara": {"lat": 40.1281, "lon": 32.9950},  # LTAC Esenboğa
-            "wellington": {"lat": -41.3272, "lon": 174.8053},  # NZWN Wellington
-            "buenos aires": {"lat": -34.8222, "lon": -58.5358},  # SAEZ Ezeiza
-        }
-
+        from src.data_collection.city_registry import CITY_REGISTRY
         normalized_city = city.lower().strip()
-        if normalized_city in static_coords:
-            return static_coords[normalized_city]
 
-        # 模糊匹配映射 (针对包含城市名的情况)
-        for key in static_coords:
+        # 1. Check registry first (Source of Truth)
+        if normalized_city in CITY_REGISTRY:
+            info = CITY_REGISTRY[normalized_city]
+            return {"lat": info["lat"], "lon": info["lon"]}
+
+        # 2. Hardcoded specific cases or aliases
+        static_aliases = {
+            "new york's central park": "new york",
+            "nyc": "new york"
+        }
+        if normalized_city in static_aliases:
+            root_city = static_aliases[normalized_city]
+            info = CITY_REGISTRY[root_city]
+            return {"lat": info["lat"], "lon": info["lon"]}
+
+        for key in CITY_REGISTRY:
             if key in normalized_city:
                 logger.debug(f"地理编码命中模糊映射: {city} -> {key}")
-                return static_coords[key]
+                info = CITY_REGISTRY[key]
+                return {"lat": info["lat"], "lon": info["lon"]}
 
         try:
             url = "https://geocoding-api.open-meteo.com/v1/search"
