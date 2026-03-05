@@ -40,7 +40,6 @@ let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
 let selectedForecastDate = null;
 let nearbyLayerGroup = null;
-let heatLayer = null;
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -68,22 +67,6 @@ function initMap() {
 
   nearbyLayerGroup = L.layerGroup().addTo(map);
 
-  // Initialize Heatmap layer (requires Leaflet.heat)
-  heatLayer = L.heatLayer([], {
-    radius: 160, // Large radius for field blending
-    blur: 50, // Lower blur for more defined radar-like edges
-    max: 1.0, // We will pass normalized intensities [0, 1]
-    gradient: {
-      0.0: "#3b82f6", // Blue (Coldest in localized set)
-      0.2: "#06b6d4", // Cyan
-      0.4: "#10b981", // Green
-      0.6: "#facc15", // Yellow
-      0.8: "#f97316", // Orange
-      1.0: "#ef4444", // Red (Hottest in localized set)
-    },
-    opacity: 0.45,
-  }).addTo(map);
-
   // Close panel and clear selection when clicking on empty map space
   map.on("click", () => {
     closePanel();
@@ -101,10 +84,8 @@ function updateMapVisibility() {
   // These are the "Ankara-style" local station markers
   if (zoom < 7) {
     if (map.hasLayer(nearbyLayerGroup)) map.removeLayer(nearbyLayerGroup);
-    if (heatLayer && map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
   } else {
     if (!map.hasLayer(nearbyLayerGroup)) map.addLayer(nearbyLayerGroup);
-    if (heatLayer && !map.hasLayer(heatLayer)) map.addLayer(heatLayer);
   }
 
   // 2. Handle Primary City Markers (Major vs Minor)
@@ -313,7 +294,8 @@ function renderNearbyStations(data) {
     let windHtml = "";
     if (st.wind_dir != null) {
       const rot = (parseFloat(st.wind_dir) + 180) % 360;
-      const speed = st.wind_speed != null ? `${st.wind_speed}k` : "";
+      const speedRaw = parseFloat(st.wind_speed);
+      const speed = !isNaN(speedRaw) ? `${speedRaw.toFixed(1)}k` : "";
       windHtml = `
         <div class="wind-info">
           <span class="wind-arrow" style="transform: rotate(${rot}deg)">↑</span>
@@ -339,46 +321,6 @@ function renderNearbyStations(data) {
     const marker = L.marker([st.lat, st.lon], { icon }).addTo(nearbyLayerGroup);
     latLngs.push([st.lat, st.lon]);
   });
-
-  // Update Heatmap
-  if (heatLayer) {
-    const allStations = [...data.mgm_nearby];
-    if (data.lat && data.lon && data.current?.temp != null) {
-      allStations.push({
-        lat: data.lat,
-        lon: data.lon,
-        temp: data.current.temp,
-      });
-    }
-
-    // Dynamic Normalization: calculate min/max in current set to show contrast.
-    // This allows seeing the 'heat island' even with subtle 0.5C differences.
-    const temps = allStations
-      .map((s) => parseFloat(s.temp))
-      .filter((t) => !isNaN(t));
-
-    if (temps.length > 0) {
-      const minT = Math.min(...temps);
-      const maxT = Math.max(...temps);
-      const range = maxT - minT || 1.0;
-
-      const heatData = allStations.map((st) => {
-        const val = parseFloat(st.temp) || minT;
-        // Normalize val to 0.0 - 1.0 based on current city data range
-        const normalized = range > 0 ? (val - minT) / range : 0.5;
-        // We use Math.max(0.1, ...) to ensure even the coldest point has some visible 'field'
-        return [st.lat, st.lon, Math.max(0.1, normalized)];
-      });
-
-      // Ensure layer is on map before updating to avoid internal Leaflet.heat errors
-      if (!map.hasLayer(heatLayer) && map.getZoom() >= 7) {
-        heatLayer.addTo(map);
-      }
-      if (map.hasLayer(heatLayer)) {
-        heatLayer.setLatLngs(heatData);
-      }
-    }
-  }
 
   if (latLngs.length > 1) {
     const bounds = L.latLngBounds(latLngs);
