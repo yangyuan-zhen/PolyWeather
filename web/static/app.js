@@ -40,6 +40,7 @@ let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
 let selectedForecastDate = null;
 let nearbyLayerGroup = null;
+let heatLayer = null;
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -67,6 +68,22 @@ function initMap() {
 
   nearbyLayerGroup = L.layerGroup().addTo(map);
 
+  // Initialize Heatmap layer (requires Leaflet.heat)
+  heatLayer = L.heatLayer([], {
+    radius: 70,
+    blur: 50,
+    maxZoom: 10,
+    gradient: {
+      0.0: "blue",
+      0.2: "cyan",
+      0.4: "lime",
+      0.6: "yellow",
+      0.8: "orange",
+      1.0: "red",
+    },
+    opacity: 0.5,
+  }).addTo(map);
+
   // Close panel and clear selection when clicking on empty map space
   map.on("click", () => {
     closePanel();
@@ -84,8 +101,10 @@ function updateMapVisibility() {
   // These are the "Ankara-style" local station markers
   if (zoom < 7) {
     if (map.hasLayer(nearbyLayerGroup)) map.removeLayer(nearbyLayerGroup);
+    if (map.hasLayer(heatLayer)) map.removeLayer(heatLayer);
   } else {
     if (!map.hasLayer(nearbyLayerGroup)) map.addLayer(nearbyLayerGroup);
+    if (!map.hasLayer(heatLayer)) map.addLayer(heatLayer);
   }
 
   // 2. Handle Primary City Markers (Major vs Minor)
@@ -305,6 +324,16 @@ function renderNearbyStations(data) {
     const marker = L.marker([st.lat, st.lon], { icon }).addTo(nearbyLayerGroup);
     latLngs.push([st.lat, st.lon]);
   });
+
+  // Update Heatmap
+  if (heatLayer) {
+    const heatData = nearby.map((st) => [st.lat, st.lon, st.temp || 10]);
+    // Add current city center to heat data
+    if (data.lat && data.lon && data.current?.temp != null) {
+      heatData.push([data.lat, data.lon, data.current.temp]);
+    }
+    heatLayer.setLatLngs(heatData);
+  }
 
   if (latLngs.length > 1) {
     const bounds = L.latLngBounds(latLngs);
