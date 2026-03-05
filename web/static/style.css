@@ -825,26 +825,58 @@ body {
 
 /* ── Nearby Markers ── */
 .nearby-marker {
-  background: rgba(15, 23, 42, 0.85); /* 深蓝玻璃背景 */
-  color: var(--accent-cyan); /* 亮青色 */
-  border: 1px solid rgba(34, 211, 238, 0.3); /* 青色边框 */
-  border-radius: 6px;
-  padding: 3px 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.9);
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 4px 10px;
   font-size: 11px;
   font-weight: 500;
-  box-shadow:
-    0 0 15px rgba(34, 211, 238, 0.1),
-    0 4px 6px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
   backdrop-filter: blur(8px);
   pointer-events: none;
-  animation: markerFadeIn 0.5s ease-out;
+}
+
+.nearby-name {
+  color: var(--text-muted);
 }
 
 .nearby-temp {
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
-  margin: 0 2px;
+}
+
+.nearby-unit {
+  font-weight: 400;
+  font-size: 9px;
+  color: var(--text-muted);
+}
+
+.wind-info {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 4px;
+  padding-left: 6px;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.wind-arrow {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent-cyan);
+  transition: transform 0.3s;
+  text-shadow: 0 0 8px rgba(34, 211, 238, 0.5);
+}
+
+.wind-speed {
+  font-size: 9px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 @keyframes markerFadeIn {

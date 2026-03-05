@@ -658,8 +658,10 @@ class WeatherDataCollector:
                         if obs_list:
                             obs = obs_list[0] if isinstance(obs_list, list) else obs_list
                             temp = obs.get("sicaklik")
+                            wind_speed = obs.get("ruzgarHiz")
+                            wind_dir = obs.get("ruzgarYon")
                             if temp is not None and temp > -9000:
-                                return ist_no, temp
+                                return ist_no, {"temp": temp, "wind_speed": wind_speed, "wind_dir": wind_dir}
                 except:
                     pass
                 return None, None
@@ -668,9 +670,9 @@ class WeatherDataCollector:
             station_temps = {}
             with ThreadPoolExecutor(max_workers=10) as executor:
                 fetch_results = list(executor.map(fetch_single_station, target_ist_nos))
-                for ist_no, temp in fetch_results:
+                for ist_no, data in fetch_results:
                     if ist_no is not None:
-                        station_temps[ist_no] = temp
+                        station_temps[ist_no] = data
 
             # 4. 组装最终结果
             for ist_no, temp in station_temps.items():
@@ -696,7 +698,9 @@ class WeatherDataCollector:
                     "name": display_name,
                     "lat": lat,
                     "lon": lon,
-                    "temp": temp,
+                    "temp": temp.get("temp") if isinstance(temp, dict) else temp,
+                    "wind_speed": temp.get("wind_speed") if isinstance(temp, dict) else None,
+                    "wind_dir": temp.get("wind_dir") if isinstance(temp, dict) else None,
                     "istNo": ist_no
                 })
 
