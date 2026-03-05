@@ -586,6 +586,7 @@ async def city_history(name: str):
         act = rec.get("actual_high")
         deb = rec.get("deb_prediction")
         mu = rec.get("mu")
+        mgm = rec.get("forecasts", {}).get("MGM")
         
         # Only return items where we have at least an actual or a prediction
         out.append({
@@ -593,6 +594,7 @@ async def city_history(name: str):
             "actual": float(act) if act is not None else None,
             "deb": float(deb) if deb is not None else None,
             "mu": float(mu) if mu is not None else None,
+            "mgm": float(mgm) if mgm is not None else None,
         })
     return {"history": out}
 

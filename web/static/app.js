@@ -1167,12 +1167,14 @@ async function openHistoryModal() {
     const actuals = [];
     const debs = [];
     const mus = [];
+    const mgms = [];
 
     data.forEach((row) => {
       dates.push(row.date);
       actuals.push(row.actual);
       debs.push(row.deb);
       mus.push(row.mu);
+      mgms.push(row.mgm);
 
       if (row.actual != null && row.deb != null) {
         debErrors.push(Math.abs(row.actual - row.deb));
@@ -1241,6 +1243,16 @@ async function openHistoryModal() {
             borderDash: [2, 2],
             tension: 0.2,
             pointRadius: 3,
+          },
+          {
+            label: "MGM 官方预报",
+            data: mgms,
+            borderColor: "#fb923c", // orange
+            backgroundColor: "transparent",
+            borderWidth: 2,
+            tension: 0.2,
+            pointRadius: 3,
+            hidden: false, // Show by default for Ankara
           },
         ],
       },
