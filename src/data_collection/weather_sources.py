@@ -632,14 +632,20 @@ class WeatherDataCollector:
                 logger.warning(f"MGM 找不到省份 {province} 的站点元数据")
                 return []
 
-            # 为了性能，如果站点太多（比如安卡拉有50多个），可以只取前 25 个
-            # 同时确保我们关心的 root_ist_no 一定在里面
-            target_ist_nos = province_ist_nos[:25]
-            if root_ist_no and root_ist_no in province_ist_nos and root_ist_no not in target_ist_nos:
-                target_ist_nos.append(root_ist_no)
-            # 如果是安卡拉，额外确保 17128 (机场站) 也在里面
-            if province_upper == "ANKARA" and "17128" in province_ist_nos and "17128" not in target_ist_nos:
-                target_ist_nos.append("17128")
+            # 同时确保我们关心的几个核心站一定在里面
+            target_ist_nos = [str(i) for i in province_ist_nos[:25]]
+            # 17130: 安卡拉总站 (市区核心)
+            if 17130 in province_ist_nos or "17130" in province_ist_nos:
+                if "17130" not in target_ist_nos:
+                    target_ist_nos.append("17130")
+            # 17128: 机场官方站
+            if 17128 in province_ist_nos or "17128" in province_ist_nos:
+                if "17128" not in target_ist_nos:
+                    target_ist_nos.append("17128")
+            if root_ist_no:
+                rs = str(root_ist_no)
+                if rs not in target_ist_nos:
+                    target_ist_nos.append(rs)
 
             # 3. 多线程获取每个站点的最新观测 (sondurumlar)
             def fetch_single_station(ist_no):
@@ -668,11 +674,23 @@ class WeatherDataCollector:
 
             # 4. 组装最终结果
             for ist_no, temp in station_temps.items():
-                meta = metadata[ist_no]
+                sid = str(ist_no)
+                # metadata 可能使用 int 或 str 作为 key
+                meta = metadata.get(sid) or metadata.get(int(sid))
+                if not meta:
+                    continue
+                
                 lat = meta.get("enlem")
                 lon = meta.get("boylam")
                 # 优先显示区县名，地图更清晰
                 display_name = (meta.get("ilce") or meta.get("istAd") or f"Station {ist_no}").title()
+                
+                # 特殊处理核心站点的显示名称
+                sid = str(ist_no)
+                if sid == "17130":
+                    display_name = "Ankara (Bölge/Center)"
+                elif sid == "17128":
+                    display_name = "Airport (MGM/17128)"
                 
                 results.append({
                     "name": display_name,
@@ -1367,7 +1385,7 @@ class WeatherDataCollector:
 
                 # 对土耳其城市，额外获取 MGM 官方数据与周边测站
                 turkish_provinces = {
-                    "ankara": ("17130", "Ankara"),
+                    "ankara": ("17128", "Ankara"),  # 使用机场站 (Esenboğa Havalimanı) 作为结算参考主站
                     "istanbul": ("17060", "Istanbul"),
                 }
                 if city_lower in turkish_provinces:
