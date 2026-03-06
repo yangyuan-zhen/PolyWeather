@@ -256,14 +256,14 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     def _runner() -> None:
         logger.info(
             f"telegram alert push loop started cities={len(cities)} interval={interval_sec}s "
-            f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity}"
+            f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
+            f"state_path={state_path}"
         )
         while True:
             cycle_started = time.time()
             state = _load_state(state_path)
             _cleanup_state(state, int(cycle_started))
 
-            changed = False
             for city in cities:
                 try:
                     alert_payload = build_trade_alert_for_city(city, config)
@@ -277,16 +277,13 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                         min_severity=min_severity,
                         min_trigger_count=min_trigger_count,
                     ):
-                        changed = True
+                        try:
+                            _save_state(state_path, state)
+                        except Exception:
+                            logger.exception(f"failed to save telegram push state city={city}")
                 except Exception:
                     logger.exception(f"telegram alert push loop failed for city={city}")
                 time.sleep(1)
-
-            if changed:
-                try:
-                    _save_state(state_path, state)
-                except Exception:
-                    logger.exception("failed to save telegram push state")
 
             elapsed = time.time() - cycle_started
             sleep_sec = max(5, interval_sec - int(elapsed))

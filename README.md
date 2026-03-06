@@ -1,185 +1,141 @@
-﻿# PolyWeather
+﻿# 🌡️ PolyWeather Pro
 
-PolyWeather is a weather intelligence system built around live airport observations, multi-model forecasts, DEB blending, and Telegram alert delivery.
+> **Professional Weather Intelligence System** —— Specialized in edge data collection, DEB smart blending, and real-time decision alerts.
 
-Current production layout:
+---
 
-- Frontend: Next.js on Vercel
-- Backend API: FastAPI on VPS
-- Bot / alert loop: Telegram bot on VPS
+## 💎 Project Vision
 
-The old FastAPI static web page has been removed. Vercel is the only web entry point.
+PolyWeather is a specialized intelligence system built for **Polymarket** high-stakes participants. We don't just provide weather forecasts; we aggregate data from top-tier global meteorological sources, apply our proprietary **DEB (Dynamic Error Balancing)** algorithm, and deliver **market-shifting alerts** at critical decision nodes.
+
+---
+
+## 🏗️ Production Architecture
+
+This project utilizes a production-grade decoupled architecture for high availability:
+
+- **Frontend**: A **Next.js** interactive dashboard deployed on **Vercel**.
+- **Backend API**: A **FastAPI** service running on a VPS, providing low-latency data access.
+- **Bot & Alert Heartbeat**: A **Telegram Bot** running on a VPS, executing minute-level global scans and push notifications.
+
+🔗 **Official Visit**: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
+
+---
+
+## 🖼️ Preview & Interaction
 
 <p align="center">
-  <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="420">
+  <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="450">
   <br>
-  <em>📊 Live query: DEB Blended Forecast + Settlement Probability + Groq AI Decision</em>
+  <em>📊 <b>Deep Query View</b>: DEB Blended Forecast + Settlement Probability + Groq AI Expert Advice</em>
 </p>
 
 <p align="center">
-  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="800">
+  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="850">
   <br>
-  <em>🗺️ Interactive Web Map: Real-time global monitoring with rich data visualization</em>
+  <em>🗺️ <b>Omni-Dashboard</b>: Real-time global heatmaps + array-style data visualization</em>
 </p>
 
-## Features
+---
 
-- Multi-source weather aggregation
-  - Open-Meteo
-  - METAR live observations
-  - MGM official data for Ankara
-  - Multi-model highs such as ECMWF / GFS / ICON / GEM / JMA when available
-- DEB blended forecast
-  - Dynamic weighting based on recent model error
-- City dashboard
-  - Global city list
-  - City detail panel
-  - Nearby station map markers
-  - Trend chart
-  - Multi-model comparison
-  - Daily forecast table
-- Telegram proactive alerts
-  - Ankara Center reached DEB
-  - Momentum spike
-  - Forecast breakthrough
-  - Advection / nearby lead station signal
-- Late-day suppression
-  - If the local daily high has likely already passed and the market is cooling off, active alerts are downgraded to status only and are not pushed
+## 🚀 Core Features
 
-## Alert Rules
+- **📡 Full-Spectrum Collection**
+  - **Major Models**: Real-time sync for ECMWF, GFS, ICON, GEM, and JMA high temperatures.
+  - **Observed Data**: Global airport METAR reports + official Turkish MGM station-level data.
+  - **Centralized Correction**: Integrated `17130` (Center) official data specifically for Ankara.
+- **⚖️ DEB Smart Blending**
+  - Dynamic weighting of forecasts based on recent 7-day historical performance.
+- **🔔 Alert Engine**
+  - **Momentum Spike**: Captures rapid temperature changes within 30 minutes.
+  - **Forecast Breakthrough**: Fires when observations exceed all model predictions plus a safety margin.
+  - **Advection Monitoring**: Simulates warm/cold advection based on lead stations and wind currents.
+- **🛡️ Smart Suppression**
+  - **Peak Protection**: Automatically switches to snapshot mode when the daily high has likely passed.
+  - **Cooldown Management**: Global and city-level cooldowns to prevent notification fatigue.
 
-Implemented rules:
+---
 
-- `ankara_center_deb_hit`
-  - Only uses `Ankara (Bolge/Center)` station / `istNo=17130`
-  - This is the official Ankara center station used for the Center signal
-- `momentum_spike`
-  - 30-minute slope exceeds the configured threshold
-- `forecast_breakthrough`
-  - Current observed temperature is above the highest available major model high by margin
-- `advection`
-  - Nearby station leads the airport station and wind regime supports warm advection
+## 🔐 Alert Logic Details
 
-Suppression rule:
+| Trigger Name     | Core Logic                                    | Trading Value                                 |
+| :--------------- | :-------------------------------------------- | :-------------------------------------------- |
+| **Center Hit**   | Detects DEB trigger only at Ankara HQ `17130` | **Highest priority signal**, the "truth"      |
+| **Momentum**     | 30min temperature slope exceed threshold      | Captures sudden weather fronts                |
+| **Breakthrough** | Pierces all model highs + margin              | Captures high-volatility outlier events       |
+| **Advection**    | Lead station rise + Wind match                | Gain 20-40 minutes of lead time for execution |
 
-- `peak_passed_guard`
-  - No active push if the city's local peak has already passed, enough time has elapsed, and the current temperature has materially rolled over from the day's high
+---
 
-Push dedupe rule:
-
-- Same city + same trigger type only pushes once while still active
-- It can push again only after the signal clears and re-arms
-- Cooldown still applies at city level
-
-## Data Semantics
-
-Alert message fields:
-
-- `实测 / Now`
-  - Uses `METAR current.temp` first
-  - Falls back to `MGM current.temp` if METAR current temperature is unavailable
-- `时间 / Time`
-  - `local`: city local clock time
-  - `observed`: observation time attached to the current reading
-
-## Deployment
-
-### Backend / bot on VPS
-
-Requirements:
-
-- Docker
-- Docker Compose
-- `.env`
-
-Deploy:
-
-```bash
-git pull
-docker-compose up -d --build
-```
-
-Main services:
-
-- `polyweather_bot`
-- `polyweather_web`
-
-The FastAPI service is now API-only. It does not serve a static website.
-
-### Frontend on Vercel
-
-The Vercel project uses the `frontend` directory as root.
-
-After pushing to Git, Vercel deploys automatically.
-
-## Environment Variables
-
-Minimum practical set:
-
-```env
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
-GROQ_API_KEY=...
-POLYWEATHER_MAP_URL=https://polyweather-pro.vercel.app/
-WEB_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://polyweather-pro.vercel.app
-```
-
-Push tuning:
-
-```env
-TELEGRAM_ALERT_PUSH_ENABLED=true
-TELEGRAM_ALERT_PUSH_INTERVAL_SEC=300
-TELEGRAM_ALERT_PUSH_COOLDOWN_SEC=3600
-TELEGRAM_ALERT_MIN_TRIGGER_COUNT=2
-TELEGRAM_ALERT_MIN_SEVERITY=medium
-TELEGRAM_ALERT_CITIES=ankara,london,paris,seoul,toronto,buenos aires,wellington,new york,chicago,dallas,miami,atlanta,seattle,lucknow,sao paulo,munich
-```
-
-Recommended:
-
-- Use `3600` seconds cooldown for production paid groups unless you explicitly want more aggressive alerting
-
-## Bot Commands
-
-Supported user commands:
-
-- `/city [city]`
-- `/deb [city]`
-- `/id`
-- `/help`
-
-`/tradealert` has been removed. Alerts are proactive push only.
-
-## Architecture
+## 🏗️ System Architecture
 
 ```mermaid
 graph TD
-    User[Telegram User] --> Bot[bot_listener.py]
-    User2[Web User] --> Vercel[Next.js on Vercel]
-    Vercel --> API[FastAPI API on VPS]
-    Bot --> API
-    API --> Collector[WeatherDataCollector]
-    Collector --> OM[Open-Meteo]
-    Collector --> METAR[METAR]
-    Collector --> MGM[MGM]
-    Collector --> MM[Multi-model sources]
-    API --> DEB[DEB blending]
-    API --> Alerts[Alert engine]
-    Alerts --> Bot
+    subgraph "Client / Terminals"
+        Web[Next.js Web App]
+        TG[Telegram Client]
+    end
+
+    subgraph "Edge Deployment (Vercel)"
+        Web -.-> |Auth| Supa[(Supabase Auth/DB)]
+        Web --> |API| Fast[FastAPI API]
+    end
+
+    subgraph "Core Hub (VPS)"
+        Fast --- |Shared Logic| Worker[Alert Engine / Worker]
+        Bot[Telegram Bot] --- |Shared Logic| Worker
+        Worker --> |Cache/Sub| Supa
+    end
+
+    subgraph "External Sources"
+        Worker --> |Pull| MGM[MGM Weather]
+        Worker --> |Pull| METAR[Airport METAR]
+        Worker --> |Pull| OM[Open-Meteo]
+        Worker --> |Pull| MM[Multi-Model Integration]
+    end
+
+    Worker --> |Push Alert| TG
+    Bot --> |Query| Worker
 ```
 
-## Testing
+---
 
-Quick checks used in development:
+## 🛠️ Deployment
+
+### 1. Backend / Bot (VPS)
 
 ```bash
-python -m py_compile src/analysis/market_alert_engine.py src/utils/telegram_push.py web/app.py bot_listener.py
-node --check frontend/public/static/app.js
-npm run build --prefix frontend
+# Pull Source
+git pull
+
+# Environment
+# Edit .env with TELEGRAM_BOT_TOKEN and other keys
+
+# Launch
+docker-compose up -d --build
 ```
 
-If you want to run pytest, install it first.
+### 2. Frontend (Vercel)
 
-## Status
+Associate the `frontend` directory as the project root on Vercel for automatic CI/CD.
 
-Last updated: 2026-03-06
+---
+
+## 💬 Bot Commands
+
+| Command   | Description                             | Example        |
+| :-------- | :-------------------------------------- | :------------- |
+| `/city`   | Query real-time analysis for a city     | `/city ankara` |
+| `/deb`    | View historical accuracy of DEB model   | `/deb london`  |
+| `/points` | View your activity points & leaderboard | `/points`      |
+| `/help`   | Get detailed instructions               | `/help`        |
+
+---
+
+> [!NOTE]
+> **Commercialization**: This project currently offers **Web Dashboard ($5/mo)** and **Telegram Signal Channel ($1/mo)** subscriptions.
+> Point-earning via group participation is active and points can be redeemed for access.
+
+---
+
+**📅 Last Updated**: 2026-03-06

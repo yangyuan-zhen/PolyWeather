@@ -1,185 +1,141 @@
-﻿# PolyWeather
+﻿# 🌡️ PolyWeather Pro
 
-PolyWeather 是一套围绕实时机场观测、多模型预报、DEB 融合和 Telegram 主动推送构建的天气情报系统。
+> **专业级博弈情报系统** —— 专注边缘气象数据采集、DEB 智能融合与实时决策预警。
 
-当前生产架构：
+---
 
-- 前端：Vercel 上的 Next.js
-- 后端 API：VPS 上的 FastAPI
-- 机器人与预警循环：VPS 上的 Telegram Bot
+## 💎 项目愿景
 
-FastAPI 旧静态网页已经移除。Vercel 是唯一网页入口。
+PolyWeather 是一套专为 **Polymarket** 深度博弈者设计的实时情报系统。我们不只是提供天气预报，而是通过聚合全球顶级气象源、应用自研的 **DEB (Dynamic Error Balancing)** 算法，并在关键时间节点提供**具有博弈预测价值**的异动预警。
+
+---
+
+## 🏗️ 生产架构
+
+本项目采用生产级解耦架构，确保高可用与实时性：
+
+- **前端**：部署在 **Vercel** 上的 **Next.js** 交互式仪表盘。
+- **后端 API**：运行在 VPS 上的 **FastAPI**，提供低延迟数据服务。
+- **机器人与预警心跳**：运行在 VPS 上的 **Telegram Bot**，执行每分钟级的全球扫描与推送。
+
+🔗 **官方访问地址**：[polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
+
+---
+
+## 🖼️ 预览与交互
 
 <p align="center">
-  <img src="docs/images/demo_ankara.png" alt="PolyWeather 效果展示 - 安卡拉实时分析" width="420">
+  <img src="docs/images/demo_ankara.png" alt="PolyWeather 效果展示 - 安卡拉实时分析" width="450">
   <br>
-  <em>📊 实时查询效果：DEB 融合预测 + 结算概率 + Groq AI 决策</em>
+  <em>📊 <b>深度查询效果</b>：DEB 融合预测 + 结算概率 + Groq AI 专家建议</em>
 </p>
 
 <p align="center">
-  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="800">
+  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="850">
   <br>
-  <em>🗺️ 交互式网页地图：全球城市实时监控与丰富的数据可视化</em>
+  <em>🗺️ <b>全景仪表盘</b>：全球站点实时热力场 + 阵列式数据展示</em>
 </p>
 
-## 当前功能
+---
 
-- 多源天气采集
-  - Open-Meteo
-  - METAR 实时观测
-  - 安卡拉官方 MGM 数据
-  - ECMWF / GFS / ICON / GEM / JMA 等多模型最高温
-- DEB 融合预报
-  - 基于近期误差动态调权
-- 网页仪表盘
-  - 全球监控城市列表
-  - 城市详情面板
-  - 周边站点地图标记
-  - 今日趋势图
-  - 多模型对比
-  - 多日预报表
-- Telegram 主动预警
-  - Ankara Center 达到 DEB
-  - 动量突变
-  - 预测突破
-  - 暖平流 / 周边站联动
-- 晚盘压制逻辑
-  - 当地高温大概率已经兑现且开始回落时，预警降级为状态快照，不主动推送
+## 🚀 核心功能
 
-## 预警规则
+- **📡 多源全量采集**
+  - **主流模型**：ECMWF, GFS, ICON, GEM, JMA 实时最高温同步。
+  - **实测数据**：全球机场 METAR 定时报文 + 土耳其 MGM 局点官方实测。
+  - **中心化纠偏**：针对安卡拉特别接入 `17130` (Center) 官方指挥中心数据。
+- **⚖️ DEB 智能融合**
+  - 基于近期 7 天历史表现，动态调整各模型权重的博弈预测。
+- **🔔 异动预警系统 (Alert Engine)**
+  - **动量突变**：捕捉 30 分钟内的急剧温变。
+  - **预测突破**：当实测击穿所有预报上限时触发告警。
+  - **平流监测**：基于周边前导站的风向流场模拟，预测冷/暖平流的到达。
+- **🛡️ 智能压制逻辑**
+  - **峰值保护**：当日高温峰值大概率已过时，自动转为静默/快照模式，拒绝骚扰。
+  - **冷却管理**：同一信号路径支持全局与城市级双重 CD。
 
-当前启用的规则：
+---
 
-- `ankara_center_deb_hit`
-  - 只使用 `Ankara (Bolge/Center)` 站点，`istNo=17130`
-  - 这是安卡拉 Center 信号唯一认可的官方站点
-- `momentum_spike`
-  - 30 分钟温度斜率超过阈值
-- `forecast_breakthrough`
-  - 当前实测温度高于主流模型最高值，并超过安全边际
-- `advection`
-  - 周边站领先升温，且风向与暖平流传播方向匹配
+## 🔐 预警逻辑深度说明
 
-压制规则：
+| 触发器名称       | 核心逻辑                                     | 博弈价值                           |
+| :--------------- | :------------------------------------------- | :--------------------------------- |
+| **Center Hit**   | 仅识别安卡拉总部 `17130` 站点的 DEB 触发信号 | **最高级信号**，定盘星             |
+| **Momentum**     | 30min 温度斜率超过                           | 捕捉突发天气系统（如锋面）         |
+| **Breakthrough** | 击穿所有预报上限 + 安全边际                  | 捕捉市场极少数情况下的暴利点       |
+| **Advection**    | 前导站温升 + 风向匹配                        | 获得 20-40 分钟的提前离场/建仓时间 |
 
-- `peak_passed_guard`
-  - 当地高点已经过去、间隔足够长、且温度已从日内高点明显回落时，不再主动推送
+---
 
-去重规则：
-
-- 同一城市、同一 trigger type，只会在激活时推送一次
-- 只有信号先解除，再重新触发，才允许再次推送
-- 同时仍保留城市级 cooldown
-
-## 数据语义
-
-预警文案中的字段：
-
-- `实测`
-  - 优先使用 `METAR current.temp`
-  - 如果 METAR 当前温度不可用，再退回 `MGM current.temp`
-- `时间`
-  - `当地`：城市本地当前时间
-  - `观测`：这条实测温度对应的观测时间
-
-## 部署
-
-### VPS 后端 / 机器人
-
-要求：
-
-- Docker
-- Docker Compose
-- `.env`
-
-部署命令：
-
-```bash
-git pull
-docker-compose up -d --build
-```
-
-主要服务：
-
-- `polyweather_bot`
-- `polyweather_web`
-
-现在的 FastAPI 只提供 API，不再承载网页静态资源。
-
-### Vercel 前端
-
-Vercel 项目根目录使用 `frontend`。
-
-代码推送后，Vercel 会自动部署。
-
-## 环境变量
-
-最小可用集合：
-
-```env
-TELEGRAM_BOT_TOKEN=...
-TELEGRAM_CHAT_ID=...
-GROQ_API_KEY=...
-POLYWEATHER_MAP_URL=https://polyweather-pro.vercel.app/
-WEB_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://polyweather-pro.vercel.app
-```
-
-预警推送调优：
-
-```env
-TELEGRAM_ALERT_PUSH_ENABLED=true
-TELEGRAM_ALERT_PUSH_INTERVAL_SEC=300
-TELEGRAM_ALERT_PUSH_COOLDOWN_SEC=3600
-TELEGRAM_ALERT_MIN_TRIGGER_COUNT=2
-TELEGRAM_ALERT_MIN_SEVERITY=medium
-TELEGRAM_ALERT_CITIES=ankara,london,paris,seoul,toronto,buenos aires,wellington,new york,chicago,dallas,miami,atlanta,seattle,lucknow,sao paulo,munich
-```
-
-生产环境建议：
-
-- 付费群默认使用 `3600` 秒 cooldown，避免同一城市短时间内刷屏
-
-## 机器人命令
-
-当前保留的命令：
-
-- `/city [city]`
-- `/deb [city]`
-- `/id`
-- `/help`
-
-`/tradealert` 已移除。预警只支持主动推送。
-
-## 架构
+## 🏗️ 架构解析
 
 ```mermaid
 graph TD
-    User[Telegram 用户] --> Bot[bot_listener.py]
-    User2[网页用户] --> Vercel[Next.js on Vercel]
-    Vercel --> API[FastAPI API on VPS]
-    Bot --> API
-    API --> Collector[WeatherDataCollector]
-    Collector --> OM[Open-Meteo]
-    Collector --> METAR[METAR]
-    Collector --> MGM[MGM]
-    Collector --> MM[多模型数据源]
-    API --> DEB[DEB 融合]
-    API --> Alerts[预警引擎]
-    Alerts --> Bot
+    subgraph "客户端 / 终端"
+        Web[Next.js 网页端]
+        TG[Telegram 客户端]
+    end
+
+    subgraph "云端部署 (Vercel)"
+        Web -.-> |Auth| Supa[(Supabase Auth/DB)]
+        Web --> |API| Fast[FastAPI API]
+    end
+
+    subgraph "核心引擎 (VPS)"
+        Fast --- |Shared Logic| Worker[Alert Engine / Worker]
+        Bot[Telegram Bot] --- |Shared Logic| Worker
+        Worker --> |Cache/Sub| Supa
+    end
+
+    subgraph "外部数据源"
+        Worker --> |Pull| MGM[MGM 气象局]
+        Worker --> |Pull| METAR[机场实测]
+        Worker --> |Pull| OM[Open-Meteo]
+        Worker --> |Pull| MM[多模型集成]
+    end
+
+    Worker --> |Push Alert| TG
+    Bot --> |Query| Worker
 ```
 
-## 测试
+---
 
-开发时常用快速检查：
+## 🛠️ 部署指南
+
+### 1. 后端 / 机器人 (VPS)
 
 ```bash
-python -m py_compile src/analysis/market_alert_engine.py src/utils/telegram_push.py web/app.py bot_listener.py
-node --check frontend/public/static/app.js
-npm run build --prefix frontend
+# 获取源码
+git pull
+
+# 环境配置
+# 编辑 .env 文件，填入 TELEGRAM_BOT_TOKEN 等关键参数
+
+# 一键启动
+docker-compose up -d --build
 ```
 
-如果要跑 pytest，请先安装 pytest。
+### 2. 前端 (Vercel)
 
-## 状态
+直接关联本项目 `frontend` 目录作为根目录即可，享受自动 CI/CD。
 
-最后更新：2026-03-06
+---
+
+## 💬 机器人指令
+
+| 命令      | 说明                      | 示例           |
+| :-------- | :------------------------ | :------------- |
+| `/city`   | 查询指定城市实时分析      | `/city ankara` |
+| `/deb`    | 查看 DEB 模型的历史准确率 | `/deb london`  |
+| `/points` | 查看您的活跃积分与排行榜  | `/points`      |
+| `/help`   | 获取详细功能说明          | `/help`        |
+
+---
+
+> [!NOTE]
+> **商业化提示**：本项目目前提供 **Web 仪表盘 ($5/月)** 与 **Telegram 信号频道 ($1/月)** 订阅服务。
+> 发言获取积分逻辑已上线，活跃用户可兑换相应权限。
+
+---
+
+**📅 最后更新**：2026-03-06
