@@ -254,6 +254,10 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     state_path = _state_file()
 
     def _runner() -> None:
+        try:
+            _save_state(state_path, _load_state(state_path))
+        except Exception:
+            logger.exception(f"failed to initialize telegram push state path={state_path}")
         logger.info(
             f"telegram alert push loop started cities={len(cities)} interval={interval_sec}s "
             f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
