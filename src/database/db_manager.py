@@ -36,13 +36,25 @@ class DBManager:
                     is_group_premium BOOLEAN DEFAULT 0,
                     group_expiry TIMESTAMP,
                     points INTEGER DEFAULT 0,
+                    daily_points INTEGER DEFAULT 0,
+                    daily_points_date TEXT,
                     message_count INTEGER DEFAULT 0,
                     last_message_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "users", "daily_points_date", "TEXT")
             conn.commit()
             logger.info(f"Database initialized successfully path={self.db_path}")
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+        existing = {
+            row[1]
+            for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+        }
+        if column not in existing:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
     def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
@@ -73,26 +85,99 @@ class DBManager:
             """, (telegram_id, username))
             conn.commit()
 
-    def add_message_activity(self, telegram_id: int, points_to_add: int = 1):
-        """Update message count and add points with simple anti-spam logic."""
+    def add_message_activity(
+        self,
+        telegram_id: int,
+        text: str,
+        points_to_add: int = 1,
+        cooldown_sec: int = 30,
+        daily_cap: int = 20,
+        min_text_length: int = 4,
+    ) -> Dict[str, Any]:
+        """Award points for valid group activity with cooldown and daily cap."""
         now = datetime.now()
+        normalized = "".join((text or "").split())
+        if len(normalized) < min_text_length:
+            return {"awarded": False, "reason": "too_short"}
+
+        today_str = now.strftime("%Y-%m-%d")
         with self._get_connection() as conn:
-            cursor = conn.execute("SELECT last_message_at FROM users WHERE telegram_id = ?", (telegram_id,))
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT points, daily_points, daily_points_date, last_message_at
+                FROM users WHERE telegram_id = ?
+                """,
+                (telegram_id,),
+            )
             row = cursor.fetchone()
-            if row and row[0]:
-                last_at = datetime.fromisoformat(row[0])
-                if (now - last_at).total_seconds() < 5:  # 5 second cooldown
-                    return False
-            
+            if not row:
+                return {"awarded": False, "reason": "user_missing"}
+
+            last_message_at = row["last_message_at"]
+            if last_message_at:
+                last_at = datetime.fromisoformat(last_message_at)
+                if (now - last_at).total_seconds() < cooldown_sec:
+                    return {"awarded": False, "reason": "cooldown"}
+
+            daily_points = int(row["daily_points"] or 0)
+            daily_points_date = row["daily_points_date"] or ""
+            if daily_points_date != today_str:
+                daily_points = 0
+
+            if daily_points >= daily_cap:
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET last_message_at = ?, daily_points = ?, daily_points_date = ?
+                    WHERE telegram_id = ?
+                    """,
+                    (now.isoformat(), daily_points, today_str, telegram_id),
+                )
+                conn.commit()
+                return {"awarded": False, "reason": "daily_cap", "daily_points": daily_points}
+
             conn.execute("""
                 UPDATE users 
                 SET message_count = message_count + 1,
                     points = points + ?,
+                    daily_points = ?,
+                    daily_points_date = ?,
                     last_message_at = ?
                 WHERE telegram_id = ?
-            """, (points_to_add, now.isoformat(), telegram_id))
+            """, (points_to_add, daily_points + points_to_add, today_str, now.isoformat(), telegram_id))
             conn.commit()
-            return True
+            return {
+                "awarded": True,
+                "reason": "ok",
+                "daily_points": daily_points + points_to_add,
+            }
+
+    def spend_points(self, telegram_id: int, amount: int) -> Dict[str, Any]:
+        if amount <= 0:
+            user = self.get_user(telegram_id)
+            return {"ok": True, "balance": int((user or {}).get("points") or 0)}
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT points FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
+
+            balance = int(row["points"] or 0)
+            if balance < amount:
+                return {"ok": False, "reason": "insufficient_points", "balance": balance, "required": amount}
+
+            new_balance = balance - amount
+            conn.execute(
+                "UPDATE users SET points = ? WHERE telegram_id = ?",
+                (new_balance, telegram_id),
+            )
+            conn.commit()
+            return {"ok": True, "balance": new_balance, "spent": amount}
 
     def set_premium(self, telegram_id: int, plan: str, months: int = 1):
         expiry = datetime.now() + timedelta(days=30 * months)

@@ -16,6 +16,13 @@ from src.data_collection.city_risk_profiles import get_city_risk_profile  # type
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
 from src.database.db_manager import DBManager
 
+MESSAGE_POINTS = 1
+MESSAGE_DAILY_CAP = 20
+MESSAGE_MIN_LENGTH = 4
+MESSAGE_COOLDOWN_SEC = 30
+CITY_QUERY_COST = 2
+DEB_QUERY_COST = 3
+
 
 def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
     """Thin wrapper — delegates to shared trend_engine module."""
@@ -36,17 +43,45 @@ def start_bot():
     weather = WeatherDataCollector(config)
     start_trade_alert_push_loop(bot, config)
 
+    def _display_name(user) -> str:
+        return user.username or user.first_name or f"User_{user.id}"
+
+    def _ensure_query_points(message, cost: int, label: str) -> bool:
+        user = message.from_user
+        db.upsert_user(user.id, _display_name(user))
+        result = db.spend_points(user.id, cost)
+        if result.get("ok"):
+            return True
+
+        balance = int(result.get("balance") or 0)
+        required = int(result.get("required") or cost)
+        missing = max(0, required - balance)
+        bot.reply_to(
+            message,
+            (
+                f"❌ 积分不足，无法执行 <b>{label}</b>\n"
+                f"当前积分: <code>{balance}</code>\n"
+                f"需要积分: <code>{required}</code>\n"
+                f"还差积分: <code>{missing}</code>\n\n"
+                f"积分规则：群内有效发言满 {MESSAGE_MIN_LENGTH} 字，"
+                f"每次 +{MESSAGE_POINTS} 分，每日上限 {MESSAGE_DAILY_CAP} 分。"
+            ),
+            parse_mode="HTML",
+        )
+        return False
+
     @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
         welcome_text = (
             "🌡️ <b>PolyWeather 天气查询机器人</b>\n\n"
             "可用指令:\n"
-            "/city [城市名] - 查询城市天气预测与实测\n"
-            "/deb [城市名] - 查看 DEB 融合预测准确率\n"
+            f"/city [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
+            f"/deb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
             "/points - 查看你的积分与排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "示例: <code>/city 伦敦</code>\n"
-            "💡 <i>提示: 在群内发言可获得积分，积分可用于后续解锁高级版。</i>"
+            f"💡 <i>提示: 群内有效发言满 {MESSAGE_MIN_LENGTH} 字，每次 +{MESSAGE_POINTS} 分，"
+            f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
         )
         bot.reply_to(message, welcome_text, parse_mode="HTML")
 
@@ -62,6 +97,7 @@ def start_bot():
     def show_points(message):
         """显示当前用户的积分及排行榜"""
         user = message.from_user
+        db.upsert_user(user.id, _display_name(user))
         user_info = db.get_user(user.id)
         
         leaderboard = db.get_leaderboard(limit=5)
@@ -76,7 +112,9 @@ def start_bot():
             rank_text += (
                 f"👤 <b>我的状态：</b>\n"
                 f"└ 积分: <code>{user_info['points']}</code>\n"
-                f"└ 发言: <code>{user_info['message_count']}</code> 次"
+                f"└ 发言: <code>{user_info['message_count']}</code> 次\n"
+                f"└ 今日发言积分: <code>{user_info.get('daily_points') or 0}/{MESSAGE_DAILY_CAP}</code>\n"
+                f"└ /city 消耗: <code>{CITY_QUERY_COST}</code> | /deb 消耗: <code>{DEB_QUERY_COST}</code>"
             )
         
         bot.send_message(message.chat.id, rank_text, parse_mode="HTML")
@@ -108,6 +146,9 @@ def start_bot():
                 bot.reply_to(
                     message, f"❌ 暂无 {city_name} 的历史数据", parse_mode="HTML"
                 )
+                return
+
+            if not _ensure_query_points(message, DEB_QUERY_COST, "/deb"):
                 return
 
             city_data = data[city_name]
@@ -259,6 +300,7 @@ def start_bot():
             else:
                 lines.append("\n⏳ 尚无完整的 DEB 预测记录，明天起开始统计。")
 
+            lines.append(f"\n💳 本次消耗 <code>{DEB_QUERY_COST}</code> 积分。")
             bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
         except Exception as e:
             bot.reply_to(message, f"❌ 查询失败: {e}")
@@ -310,6 +352,9 @@ def start_bot():
                     f"支持的城市: {city_list}",
                     parse_mode="HTML",
                 )
+                return
+
+            if not _ensure_query_points(message, CITY_QUERY_COST, "/city"):
                 return
 
             bot.send_message(
@@ -724,6 +769,7 @@ def start_bot():
                 except Exception as e:
                     logger.error(f"调用 Groq AI 分析失败: {e}")
 
+            msg_lines.append(f"\n💳 本次消耗 <b>{CITY_QUERY_COST}</b> 积分。")
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
         except Exception as e:
@@ -737,13 +783,26 @@ def start_bot():
         """全量监听消息，用于记录群内发言积分(非指令消息)"""
         if message.text.startswith('/'):
             return
+        if message.chat.type not in ("group", "supergroup"):
+            return
 
         user = message.from_user
-        username = user.username or user.first_name or f"User_{user.id}"
+        username = _display_name(user)
         db.upsert_user(user.id, username)
-        
-        # 增加积分 (5秒冷却防刷屏，每个自然发言给 1 分)
-        db.add_message_activity(user.id, points_to_add=1)
+
+        result = db.add_message_activity(
+            user.id,
+            text=message.text,
+            points_to_add=MESSAGE_POINTS,
+            cooldown_sec=MESSAGE_COOLDOWN_SEC,
+            daily_cap=MESSAGE_DAILY_CAP,
+            min_text_length=MESSAGE_MIN_LENGTH,
+        )
+        if result.get("awarded"):
+            logger.info(
+                f"message points awarded user={user.id} points=+{MESSAGE_POINTS} "
+                f"daily_points={result.get('daily_points')}/{MESSAGE_DAILY_CAP}"
+            )
 
     logger.info("🤖 Bot 启动中...")
     bot.infinity_polling()
