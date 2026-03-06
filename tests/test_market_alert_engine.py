@@ -100,6 +100,37 @@ def test_ankara_center_hits_deb_triggers_force_push():
     assert "Center信号" in out["telegram"]["zh"]
 
 
+def test_ankara_center_signal_only_uses_official_center_station():
+    city_weather = _sample_weather_payload()
+    city_weather["deb"]["prediction"] = 11.2
+    city_weather["current"]["temp"] = 10.7
+    city_weather["mgm_nearby"] = [
+        {
+            "name": "Etimesgut",
+            "istNo": "17069",
+            "lat": 39.95,
+            "lon": 32.68,
+            "temp": 12.6,
+        },
+        {
+            "name": "Ankara (Bölge/Center)",
+            "istNo": "17130",
+            "lat": 39.95,
+            "lon": 32.97,
+            "temp": 11.3,
+        },
+    ]
+
+    out = build_trading_alerts(city_weather=city_weather)
+
+    center_rule = out["rules"]["ankara_center_deb_hit"]
+    assert center_rule["triggered"] is True
+    assert center_rule["center_station"]["istNo"] == "17130"
+    assert center_rule["center_station"]["name"] == "Ankara (Bölge/Center)"
+    assert "Ankara (Bölge/Center)" in out["telegram"]["zh"]
+    assert "Etimesgut" not in out["telegram"]["zh"]
+
+
 def test_peak_passed_guard_suppresses_late_day_cooldown_alerts():
     city_weather = {
         "name": "wellington",

@@ -111,6 +111,15 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
     return SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK.get(min_severity, 0)
 
 
+def _trigger_type_key(alert_payload: Dict[str, Any]) -> str:
+    trigger_types = sorted(
+        str(alert.get("type") or "").strip()
+        for alert in (alert_payload.get("triggered_alerts") or [])
+        if alert.get("type")
+    )
+    return "|".join(trigger_types)
+
+
 def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     rules = alert_payload.get("rules") or {}
     center_deb = rules.get("ankara_center_deb_hit") or {}
@@ -178,19 +187,33 @@ def _maybe_send_alert(
     min_severity: str,
     min_trigger_count: int,
 ) -> bool:
-    if not _severity_ok(alert_payload, min_severity, min_trigger_count):
-        return False
-
-    message = ((alert_payload.get("telegram") or {}).get("zh") or "").strip()
-    if not message:
-        return False
-
     now_ts = int(time.time())
+    last_by_city = state.setdefault("last_by_city", {})
+    last_city = last_by_city.get(city) or {}
+    is_active = _severity_ok(alert_payload, min_severity, min_trigger_count)
+    message = ((alert_payload.get("telegram") or {}).get("zh") or "").strip()
+
+    if not is_active or not message:
+        if last_city.get("active"):
+            last_by_city[city] = {
+                **last_city,
+                "active": False,
+                "cleared_ts": now_ts,
+            }
+            logger.info(f"trade alert disarmed city={city}")
+            return True
+        return False
+
     signature = _alert_signature(alert_payload)
-    last_city = (state.get("last_by_city") or {}).get(city) or {}
+    trigger_key = _trigger_type_key(alert_payload)
     last_city_sig = last_city.get("signature")
+    last_city_key = str(last_city.get("trigger_key") or "")
     last_city_ts = int(last_city.get("ts") or 0)
     last_sig_ts = int((state.get("by_signature") or {}).get(signature) or 0)
+    last_city_active = bool(last_city.get("active"))
+
+    if last_city_active and last_city_key == trigger_key:
+        return False
 
     if last_city_ts and now_ts - last_city_ts < cooldown_sec:
         return False
@@ -198,11 +221,17 @@ def _maybe_send_alert(
         return False
 
     bot.send_message(chat_id, message)
-    state.setdefault("last_by_city", {})[city] = {"signature": signature, "ts": now_ts}
+    last_by_city[city] = {
+        "signature": signature,
+        "trigger_key": trigger_key,
+        "severity": alert_payload.get("severity"),
+        "ts": now_ts,
+        "active": True,
+    }
     state.setdefault("by_signature", {})[signature] = now_ts
     logger.info(
         f"trade alert pushed city={city} severity={alert_payload.get('severity')} "
-        f"trigger_count={alert_payload.get('trigger_count')}"
+        f"trigger_count={alert_payload.get('trigger_count')} trigger_key={trigger_key}"
     )
     return True
 

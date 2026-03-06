@@ -212,17 +212,13 @@ def _pick_ankara_center_station(nearby: List[Dict[str, Any]]) -> Optional[Dict[s
     if not nearby:
         return None
 
-    def _temp(row: Dict[str, Any]) -> float:
-        return _sf(row.get("temp")) or -999.0
-
-    priority_rows = []
     for row in nearby:
-        name = str(row.get("name") or "").lower()
+        name = str(row.get("name") or "").strip().lower()
         sid = str(row.get("istNo") or "").strip()
-        if sid == "17130" or "center" in name or "b枚lge" in name or "etimesgut" in name:
-            priority_rows.append(row)
-    if priority_rows:
-        return max(priority_rows, key=_temp)
+        if sid == "17130":
+            return row
+        if name in {"ankara (bölge/center)", "ankara (bolge/center)"}:
+            return row
     return None
 
 
