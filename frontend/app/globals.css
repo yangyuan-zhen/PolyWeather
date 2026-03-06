@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+  --card: 222 47% 9%;
+  --card-foreground: 210 40% 98%;
+  --primary: 190 95% 52%;
+  --primary-foreground: 222 47% 8%;
+  --secondary: 223 36% 16%;
+  --secondary-foreground: 210 40% 98%;
+  --accent: 217 33% 18%;
+  --accent-foreground: 210 40% 98%;
+  --border: 220 33% 20%;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 5%, rgba(6, 78, 99, 0.2), transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(30, 41, 59, 0.4), transparent 42%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  font-family: inherit;
+}

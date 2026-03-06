@@ -18,6 +18,7 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from loguru import logger
@@ -31,6 +32,18 @@ from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accura
 #  Setup
 # ──────────────────────────────────────────────────────────
 app = FastAPI(title="PolyWeather Map", version="1.0")
+
+_cors_origins = os.getenv(
+    "WEB_CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000,https://polyweather.vercel.app",
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in _cors_origins.split(",") if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _static = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(_static, exist_ok=True)

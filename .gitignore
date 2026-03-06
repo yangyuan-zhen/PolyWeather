@@ -25,3 +25,8 @@ pip-delete-this-directory.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/.vercel/
