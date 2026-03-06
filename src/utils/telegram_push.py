@@ -156,7 +156,7 @@ def build_trade_alert_for_city(
         proxy=proxy,
         force_refresh=force_refresh,
     )
-    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
+    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather-pro.vercel.app/"
     alert_payload = build_trading_alerts(
         city_weather=city_weather,
         market_snapshot=market_snapshot,

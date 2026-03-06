@@ -256,6 +256,48 @@ def _find_market_by_id(markets: List[Dict[str, Any]], market_id: Any) -> Optiona
     return None
 
 
+def _extract_market_prices(target_market: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    prices: Dict[str, Any] = {
+        "question": None,
+        "yes_buy": None,
+        "yes_sell": None,
+        "yes_last": None,
+        "no_buy": None,
+        "no_sell": None,
+        "no_last": None,
+    }
+    if not target_market:
+        return prices
+
+    prices["question"] = target_market.get("question")
+    for oc in target_market.get("outcomes", []) or []:
+        name = str(oc.get("name") or "").strip().lower()
+        if name not in ("yes", "no"):
+            continue
+        prefix = "yes" if name == "yes" else "no"
+        prices[f"{prefix}_buy"] = _sf(oc.get("buy_price"))
+        prices[f"{prefix}_sell"] = _sf(oc.get("sell_price"))
+        prices[f"{prefix}_last"] = _sf(oc.get("last_trade_price"))
+        if prices[f"{prefix}_last"] is None:
+            prices[f"{prefix}_last"] = _sf(oc.get("last_price"))
+    return prices
+
+
+def _format_market_price(value: Optional[float]) -> str:
+    if value is None:
+        return "-"
+    return f"{value * 100:.0f}c"
+
+
+def _format_temp_display(value: Optional[float], temp_symbol: str) -> str:
+    if value is None:
+        return f"-{temp_symbol}"
+    rounded = round(float(value), 1)
+    if abs(rounded - round(rounded)) < 1e-9:
+        return f"{int(round(rounded))}{temp_symbol}"
+    return f"{rounded:.1f}{temp_symbol}"
+
+
 def _calc_kill_zone_alert(
     city_weather: Dict[str, Any],
     market_snapshot: Dict[str, Any],
@@ -290,21 +332,14 @@ def _calc_kill_zone_alert(
     distance = abs(current_temp - strike)
     triggered = distance < threshold
 
-    no_probability = None
     markets = market_snapshot.get("markets", []) or []
     target_market = _find_market_by_id(markets, nearest.get("market_id"))
+    market_prices = _extract_market_prices(target_market)
+
+    no_probability = None
     if target_market:
-        yes_price = None
-        no_price = None
-        for oc in target_market.get("outcomes", []) or []:
-            oc_name = str(oc.get("name") or "").strip().lower()
-            candidate_price = _sf(oc.get("buy_price"))
-            if candidate_price is None:
-                candidate_price = _sf(oc.get("last_price"))
-            if oc_name == "yes":
-                yes_price = candidate_price
-            elif oc_name == "no":
-                no_price = candidate_price
+        yes_price = market_prices.get("yes_buy")
+        no_price = market_prices.get("no_buy")
         if no_price is None and yes_price is not None:
             no_price = max(0.0, min(1.0, 1.0 - yes_price))
         no_probability = no_price
@@ -314,12 +349,14 @@ def _calc_kill_zone_alert(
         "triggered": triggered,
         "current_temp": round(current_temp, 2),
         "strike_price": round(strike, 2),
+        "market_label": f"{_format_temp_display(strike, temp_symbol)} 档位",
         "distance": round(distance, 2),
         "threshold": round(threshold, 2),
         "market_id": nearest.get("market_id"),
         "question": nearest.get("question"),
         "strike_source": nearest.get("source"),
         "no_probability": round(no_probability, 4) if no_probability is not None else None,
+        "market_prices": market_prices,
     }
 
 
@@ -495,6 +532,8 @@ def _build_telegram_messages(
     delta_min = momentum.get("delta_minutes")
     strike = _sf(kill_zone.get("strike_price"))
     distance = _sf(kill_zone.get("distance"))
+    market_label = str(kill_zone.get("market_label") or "").strip()
+    market_prices = kill_zone.get("market_prices") or {}
 
     dyn = f"实测 {current_temp:.1f}{temp_symbol}"
     if delta_temp is not None and delta_min is not None:
@@ -515,8 +554,20 @@ def _build_telegram_messages(
         if lead_delta is not None:
             lead_line = f"联动：{st_name} 已领先 {lead_delta:+.1f}{temp_symbol}"
 
+    price_line = ""
+    if any(
+        market_prices.get(key) is not None
+        for key in ("yes_buy", "yes_sell", "no_buy", "no_sell")
+    ):
+        price_prefix = f"盘口（{market_label}）：" if market_label else "盘口："
+        price_line = (
+            price_prefix
+            f"Yes 买 {_format_market_price(market_prices.get('yes_buy'))} / 卖 {_format_market_price(market_prices.get('yes_sell'))} | "
+            f"No 买 {_format_market_price(market_prices.get('no_buy'))} / 卖 {_format_market_price(market_prices.get('no_sell'))}"
+        )
+
     advice = _build_advice_cn(rules, temp_symbol)
-    final_map = map_url or "https://polyweather.vercel.app"
+    final_map = map_url or "https://polyweather-pro.vercel.app/"
 
     lines_zh = [
         f"🚨 PolyWeather 异动预警 [{city_name}]",
@@ -526,6 +577,8 @@ def _build_telegram_messages(
     ]
     if strike_line:
         lines_zh.append(strike_line)
+    if price_line:
+        lines_zh.append(price_line)
     if lead_line:
         lines_zh.append(lead_line)
     lines_zh.append(f"AI 建议：{advice}")
@@ -550,6 +603,13 @@ def _build_telegram_messages(
     ]
     if strike is not None and distance is not None:
         lines_en.append(f"Distance to {strike:.1f}{temp_symbol} strike: {distance:.1f}{temp_symbol}")
+    if price_line:
+        price_label_en = f"Quotes ({market_label}): " if market_label else "Quotes: "
+        lines_en.append(
+            price_label_en
+            f"Yes buy {_format_market_price(market_prices.get('yes_buy'))} / sell {_format_market_price(market_prices.get('yes_sell'))} | "
+            f"No buy {_format_market_price(market_prices.get('no_buy'))} / sell {_format_market_price(market_prices.get('no_sell'))}"
+        )
     lines_en.append(f"Action: {advice}")
     lines_en.append(f"Map: {final_map}")
 

@@ -84,6 +84,9 @@ def test_trading_alerts_all_core_rules_trigger():
     msg = out["telegram"]["zh"]
     assert "PolyWeather 异动预警" in msg
     assert "动量突变" in msg
+    assert "盘口：" in msg
+    assert "Yes 买 73c / 卖 -" in msg
+    assert "No 买 27c / 卖 -" in msg
     assert "No\" 单需谨慎" in msg
     assert "https://example.com/map" in msg
 
@@ -97,4 +100,3 @@ def test_forecast_breakthrough_not_triggered_when_current_not_above_margin():
         market_snapshot=_sample_market_snapshot(),
     )
     assert out["rules"]["forecast_breakthrough"]["triggered"] is False
-

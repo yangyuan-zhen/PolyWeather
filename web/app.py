@@ -35,7 +35,7 @@ app = FastAPI(title="PolyWeather Map", version="1.0")
 
 _cors_origins = os.getenv(
     "WEB_CORS_ORIGINS",
-    "http://localhost:3000,http://127.0.0.1:3000,https://polyweather.vercel.app",
+    "http://localhost:3000,http://127.0.0.1:3000,https://polyweather-pro.vercel.app",
 )
 app.add_middleware(
     CORSMiddleware,
@@ -658,7 +658,7 @@ async def city_polymarket_alerts(
         force_refresh=force_refresh,
     )
     city_weather = _analyze(city, force_refresh=force_refresh)
-    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
+    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather-pro.vercel.app/"
     trade_alerts = build_trading_alerts(
         city_weather=city_weather,
         market_snapshot=snapshot,
@@ -701,7 +701,7 @@ async def city_trade_alerts(
         force_refresh=force_refresh,
     )
     city_weather = _analyze(city, force_refresh=force_refresh)
-    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
+    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather-pro.vercel.app/"
     return build_trading_alerts(
         city_weather=city_weather,
         market_snapshot=snapshot,
