@@ -10,6 +10,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.utils.config_loader import load_config  # type: ignore # noqa: E402
+from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
@@ -31,6 +32,7 @@ def start_bot():
 
     bot = telebot.TeleBot(token)
     weather = WeatherDataCollector(config)
+    start_trade_alert_push_loop(bot, config)
 
     @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
