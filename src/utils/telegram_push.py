@@ -134,12 +134,16 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
-def _build_trade_alert_for_city(city: str, config: Dict[str, Any]) -> Dict[str, Any]:
+def build_trade_alert_for_city(
+    city: str,
+    config: Dict[str, Any],
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
     from web.app import _analyze
     from src.analysis.market_alert_engine import build_trading_alerts
     from src.data_collection.polymarket_client import build_city_market_snapshot
 
-    city_weather = _analyze(city, force_refresh=False)
+    city_weather = _analyze(city, force_refresh=force_refresh)
     target_date = city_weather.get("local_date")
 
     proxy = (
@@ -150,7 +154,7 @@ def _build_trade_alert_for_city(city: str, config: Dict[str, Any]) -> Dict[str, 
         city=city,
         target_date=target_date,
         proxy=proxy,
-        force_refresh=False,
+        force_refresh=force_refresh,
     )
     map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
     alert_payload = build_trading_alerts(
@@ -231,7 +235,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
             changed = False
             for city in cities:
                 try:
-                    alert_payload = _build_trade_alert_for_city(city, config)
+                    alert_payload = build_trade_alert_for_city(city, config)
                     if _maybe_send_alert(
                         bot=bot,
                         chat_id=chat_id,
@@ -264,4 +268,3 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     )
     thread.start()
     return thread
-
