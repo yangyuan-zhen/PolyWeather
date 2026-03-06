@@ -577,6 +577,91 @@ async def city_detail(name: str, force_refresh: bool = False):
     return _analyze(name, force_refresh=force_refresh)
 
 
+def _normalize_city_or_404(name: str) -> str:
+    city = name.lower().strip().replace("-", " ")
+    city = ALIASES.get(city, city)
+    if city not in CITIES:
+        raise HTTPException(404, detail=f"Unknown city: {city}")
+    return city
+
+
+def _resolve_target_date(city: str, target_date: Optional[str]) -> str:
+    """
+    Resolve requested market date. If absent, default to current local date of city.
+    """
+    if target_date:
+        try:
+            datetime.strptime(target_date, "%Y-%m-%d")
+        except Exception:
+            raise HTTPException(400, detail="target_date must be YYYY-MM-DD")
+        return target_date
+
+    tz_seconds = CITIES.get(city, {}).get("tz", 0)
+    return (datetime.now(timezone.utc) + timedelta(seconds=tz_seconds)).strftime(
+        "%Y-%m-%d"
+    )
+
+
+@app.get("/api/polymarket/{name}")
+async def city_polymarket_snapshot(
+    name: str,
+    target_date: Optional[str] = None,
+    force_refresh: bool = False,
+):
+    """
+    Return Polymarket city/date market snapshot with buy/sell prices and spreads.
+    """
+    city = _normalize_city_or_404(name)
+    resolved_date = _resolve_target_date(city, target_date)
+
+    from src.data_collection.polymarket_client import build_city_market_snapshot
+
+    proxy = (
+        (_config.get("polymarket", {}) or {}).get("proxy")
+        or (_config.get("app", {}) or {}).get("proxy")
+    )
+    snapshot = build_city_market_snapshot(
+        city=city,
+        target_date=resolved_date,
+        proxy=proxy,
+        force_refresh=force_refresh,
+    )
+    return snapshot
+
+
+@app.get("/api/polymarket/{name}/alerts")
+async def city_polymarket_alerts(
+    name: str,
+    target_date: Optional[str] = None,
+    force_refresh: bool = False,
+):
+    """
+    Return only anomaly alerts for Polymarket city/date orderbooks.
+    """
+    city = _normalize_city_or_404(name)
+    resolved_date = _resolve_target_date(city, target_date)
+
+    from src.data_collection.polymarket_client import build_city_market_snapshot
+
+    proxy = (
+        (_config.get("polymarket", {}) or {}).get("proxy")
+        or (_config.get("app", {}) or {}).get("proxy")
+    )
+    snapshot = build_city_market_snapshot(
+        city=city,
+        target_date=resolved_date,
+        proxy=proxy,
+        force_refresh=force_refresh,
+    )
+    return {
+        "city": snapshot.get("city"),
+        "target_date": snapshot.get("target_date"),
+        "updated_at": snapshot.get("updated_at"),
+        "summary": snapshot.get("summary"),
+        "alerts": snapshot.get("alerts", []),
+    }
+
+
 @app.get("/api/history/{name}")
 async def city_history(name: str):
     """Return historical accuracy data (DEB, mu, actuals) for a city."""

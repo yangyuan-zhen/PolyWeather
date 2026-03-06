@@ -88,15 +88,10 @@ function updateMapVisibility() {
     if (!map.hasLayer(nearbyLayerGroup)) map.addLayer(nearbyLayerGroup);
   }
 
-  // 2. Handle Primary City Markers (Major vs Minor)
-  Object.values(markers).forEach(({ marker, city }) => {
-    const isMajor = city.is_major !== false;
-    // Hide minor cities (like Ankara/Atlanta) when zoomed way out
-    if (zoom < 4 && !isMajor) {
-      if (map.hasLayer(marker)) map.removeLayer(marker);
-    } else {
-      if (!map.hasLayer(marker)) map.addLayer(marker);
-    }
+  // 2. Keep all primary city markers visible at all zoom levels.
+  // This avoids cities like Ankara disappearing when zoomed out.
+  Object.values(markers).forEach(({ marker }) => {
+    if (!map.hasLayer(marker)) map.addLayer(marker);
   });
 }
 
