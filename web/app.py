@@ -19,8 +19,6 @@ if _root not in sys.path:
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from loguru import logger
 
 from src.utils.config_loader import load_config
@@ -44,10 +42,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-_static = os.path.join(os.path.dirname(__file__), "static")
-os.makedirs(_static, exist_ok=True)
-app.mount("/static", StaticFiles(directory=_static), name="static")
 
 _config = load_config()
 _weather = WeatherDataCollector(_config)
@@ -542,11 +536,6 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 # ──────────────────────────────────────────────────────────
 #  Routes
 # ──────────────────────────────────────────────────────────
-@app.get("/")
-async def index():
-    return FileResponse(os.path.join(_static, "index.html"))
-
-
 @app.get("/api/cities")
 async def list_cities():
     """Return all supported cities with coordinates and risk level."""
