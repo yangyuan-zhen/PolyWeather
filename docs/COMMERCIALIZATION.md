@@ -1,35 +1,141 @@
-# PolyWeather 商业化技术升级草案
+﻿# Commercialization Plan
 
-## 1. 核心目标
+## Product Direction
 
-将 PolyWeather 从单人工具转型为支持多用户的 SaaS 产品。
+PolyWeather is being positioned as a paid weather intelligence product built around:
+- Web dashboard subscription
+- Telegram paid group subscription
+- Fast, rules-based weather alerting
+- High-confidence Ankara specialization
 
-## 2. 架构调整 (Architecture Upgrade)
+Current pricing target:
+- Web dashboard: $5 / month
+- Telegram paid group: $1 / month
 
-### 2.1 用户与订阅系统 (Auth & Sub)
+Current payment direction under discussion:
+- Polygon / USDC
 
-- **前端**: 增加 Login 模态框，支持 Telegram 一键登录。
-- **后端 (FastAPI)**: 增加用户数据库 (`users` 表)，存储 `telegram_id`, `subscription_status`, `expiry_date`。
-- **权限中间件**: 拦截未经授权的实时 API 请求。
+Important current state:
+- Polymarket market-price integration has been removed from the codebase
+- The current product focuses on weather intelligence, not exchange/orderbook execution data
 
-### 2.2 网页功能增强 (Web Premium)
+## Production Architecture
 
-- **实时性**: 付费用户 30s 刷新一次，免费用户 15min 刷新。
-- **专业视图**: 增加各模型历史 MAE (平均绝对误差) 实时排行榜，让用户知道安卡拉今天该信 MGM 还是 GFS。
-- **推送配置**: 允许用户在网页端订阅特定城市的“突破预警”。
+### Web
+- Next.js frontend on Vercel
+- Public URL: `https://polyweather-pro.vercel.app/`
+- FastAPI backend serves API only
 
-### 2.3 电报机器人深度集成 (Bot Monitization)
+### Backend
+- FastAPI on VPS
+- Shared analysis layer for web and bot
+- City data cache in-process
 
-- **邀请管理**: 自动生成独一无二的支付链接或入群链接。
-- **私人简报**: 每小时向 $1 订阅用户私聊发送其关注城市的“结算风险报告”。
+### Telegram
+- Bot runs on VPS
+- Paid group receives proactive alerts
+- Push engine includes dedupe, cooldown, and late-day suppression
 
-## 3. 支付方案 (Payment Integration)
+## Alert Product Strategy
 
-- **Polygon (USDC)**: 完美契合 Polymarket 生态。
-- **逻辑**: 用户转账 -> Webhook 回调 -> 自动激活账户权限。
+Current alert strategy is weather-first:
+- Ankara Center reached DEB
+- Momentum spike
+- Forecast breakthrough
+- Advection / nearby lead station
 
-## 4. 商业化阶段
+Operational controls already implemented:
+- Same city + same trigger type only pushes once while active
+- City-level cooldown
+- Peak-passed suppression for late-day rollover
 
-- **Phase 1 (Beta)**: 邀请制内测，验证安卡拉等重点城市的数据准确性。
-- **Phase 2 (MVP)**: 上线手动支付激活模式（人工进群）。
-- **Phase 3 (Full)**: 全自动 Web3 登录 + USDC 支付 + 自动入群。
+Ankara special handling:
+- Center signal only uses `Ankara (Bolge/Center)` / `17130`
+- This should remain a product differentiator and be documented clearly in sales copy
+
+## Recommended Subscription Structure
+
+### Tier A: Telegram Group
+- Price: $1 / month
+- Value proposition:
+  - Real-time proactive weather alerts
+  - Fast anomaly delivery
+  - Focused operational signal, minimal clutter
+- Suggested restrictions:
+  - No raw API access
+  - No historical analytics export
+  - No advanced chart controls
+
+### Tier B: Web Dashboard
+- Price: $5 / month
+- Value proposition:
+  - Full city dashboard
+  - Trend and nearby-station visualization
+  - Multi-model comparison
+  - Historical view
+- Suggested restrictions:
+  - View-only unless future premium tools are added
+
+### Bundle Option
+- Optional future bundle: Web + Group
+- Use only if conversion data shows users want both together
+
+## Payment Roadmap
+
+### Phase 1: Manual Ops
+- User pays manually
+- Operator manually activates web access / Telegram access
+- Lowest engineering cost, fastest launch
+
+### Phase 2: Polygon / USDC Automation
+- Generate unique deposit address or payment intent
+- Confirm on-chain payment
+- Activate subscription automatically
+- Telegram bot issues one-time group invite link
+
+### Phase 3: Full Subscription Management
+- Renewal reminders
+- Grace period handling
+- Automatic expiry / revocation
+- Self-serve billing status page
+
+## Recommended Near-Term Roadmap
+
+### Step 1: Stabilize Current Product
+- Finish cleaning docs and deployment flow
+- Keep Vercel as the only web entry point
+- Keep backend API-only
+- Tune Telegram cooldown and trigger quality
+
+### Step 2: Launch Manual Paid Beta
+- Start with a small paid Telegram group
+- Start web dashboard on invite basis
+- Track which alert types users actually value
+
+### Step 3: Add Access Control
+- Web login and session layer
+- Subscription table in backend
+- Telegram membership verification
+
+### Step 4: Add Polygon / USDC Collection
+- Payment detection
+- Subscription activation
+- One-time Telegram invite issuance
+
+## Metrics To Track
+
+Minimum metrics before scaling:
+- Alert-to-action usefulness feedback
+- Daily active dashboard users
+- Telegram retention after first payment cycle
+- Most valuable cities by engagement
+- False-positive complaint rate for alerts
+
+## Constraints To Keep In Mind
+
+- The current system is strongest in weather intelligence, not execution plumbing
+- Ankara is a differentiated niche and should be treated as premium signal inventory
+- Over-pushing alerts will destroy paid-group value faster than under-pushing
+- Payment automation should come after alert quality is operationally stable
+
+Last updated: 2026-03-06

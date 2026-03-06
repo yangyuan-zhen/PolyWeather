@@ -1,116 +1,115 @@
-# PolyWeather 技术债与演进路线
+﻿# Technical Debt
 
-> 最后更新：2026-03-05
+Last updated: 2026-03-06
 
----
+## Current State
 
-## 一、当前完成度：约 65%
+Overall system status: usable and deployable.
 
-### ✅ 已经可用
+Stable pieces:
+- Multi-source weather collection
+- DEB forecast blending
+- Web dashboard on Vercel
+- FastAPI API backend
+- Telegram proactive push loop
+- Alert dedupe and cooldown
+- Late-day peak suppression
 
-| 模块             | 状态         | 说明                                                           |
-| ---------------- | ------------ | -------------------------------------------------------------- |
-| 多源数据采集     | **可用**     | Open-Meteo / ECMWF / GFS / ICON / GEM / JMA / METAR / MGM      |
-| DEB 动态融合预报 | **可用**     | 误差加权 + 自学习 + 冷启动处理                                 |
-| 概率引擎         | **基本可用** | Gaussian 拟合 + Shock Score + 时间衰减 + 实况锚定 μ + 死盘覆盖 |
-| AI 决策          | **基本可用** | P0→P4 分级框架 + 预报失准分级 + 高可用降级                     |
-| Telegram Bot     | **稳定运行** | 当前最成熟的交互端                                             |
-| Web 仪表盘       | **基本可用** | 全功能地图 + 面板 + 图表，支持 5rd/多模型联动与强制刷新        |
-| 部署             | **可用**     | Docker + 传统 VPS 双通道，`update.sh` 一键部署                 |
+Recently removed:
+- Old FastAPI static web page
+- Polymarket market-price integration
+- `/tradealert` preview command
 
-### ⚠️ 真实能力边界
+## High-Priority Debt
 
-1. **概率引擎的 μ 是手工规则（非统计学习的）**。70/30 加权 + 实况锚定的逻辑在多数情况下"看起来合理"，但没有经过回测校准，在极端天气下的准确性无统计保障。
-2. **AI 决策是"结构化的猜测"**。Prompt 再精巧，底层仍是 LLM 概率续写。AI 有时自相矛盾，置信度是自评的，不代表真实概率。
-3. **Shock Score 是启发式指标**。风向/云量/气压权重（0.4/0.35/0.25）未经回归验证。
-4. **DEB 自学习窗口只有 7 天**，无法捕捉季节性趋势。
-5. **Web 端图表已对齐实测**。利用 MGM 逐小时预报和实测数据，安卡拉等重点城市的日内曲线已实现预报与实况的实时拟合叠加。
+### 1. Bot orchestration is still too centralized
+`bot_listener.py` is operational, but too much runtime behavior is still coordinated from a single entrypoint.
 
----
+Impact:
+- Harder to test
+- Harder to evolve subscription logic
+- Harder to isolate push bugs
 
-## 二、技术债
+Suggested direction:
+- Keep moving push and analysis concerns into `src/utils` and `src/analysis`
 
-### 🔴 高优先级 (✅ 本期已全部清理)
+### 2. Alert transparency needs better operator visibility
+The system now pushes the correct trigger types more conservatively, but group operators still need better evidence lines.
 
-| 问题                       | 影响                                                                     | 状态                                                                        |
-| -------------------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
-| `bot_listener.py` 过于臃肿 | 单文件 1200 行，混杂数据处理、概率计算、趋势分析、AI 调用。可维护性极差  | ✅ **已拆分**：提取近 500 行核心逻辑至 `src/analysis/trend_engine.py`       |
-| Web 与 Bot 概率引擎重复    | 两端各有独立的概率计算代码。AI 上下文已统一，但概率分布仍各算各的        | ✅ **已统一**：Web 端已完全删除自己的引擎，直接复用 `trend_engine` 输出结果 |
-| 无测试覆盖                 | 概率引擎、DEB 算法、趋势分析等核心逻辑没有单元测试，任何改动只能人肉验证 | ✅ **已覆盖**：建立 `pytest` 机制，编写 15 个用例完全覆盖核心引擎逻辑       |
+Impact:
+- Hard to audit why a message fired
+- Hard to distinguish strong vs weak advection calls
 
-### 🟡 中优先级
+Suggested direction:
+- Add a compact `依据 / Evidence` line to alert messages
+- Expose raw trigger metrics in a debug API or operator log
 
-| 问题               | 影响                                                                        | 建议                                                                             |
-| ------------------ | --------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| 无回测框架         | 无法用历史数据验证算法改动是否真的提升了准确率，改代码全凭直觉              | 用 `fetch_history.py` 的数据搭回测管线                                           |
-| 硬编码阈值散落各处 | 死盘 (3°C/1.5°C)、forecast bust (2°C)、Shock Score 权重等直接写在业务代码里 | 提取到配置文件或 `constants.py`                                                  |
-| MGM 数据源不稳定   | 经常 403，数据频率受限                                                      | ✅ **已解决**：采用自定义 Header + 随机时间戳 + 5级 API 遍历抓取，稳定性大幅提升 |
+### 3. No persistent application store for subscriptions
+Current architecture is ready for commercialization planning, but there is no real subscription state model yet.
 
-### 🟢 低优先级
+Impact:
+- No paid access enforcement
+- No renewal logic
+- No expiry / access revocation
 
-| 问题              | 影响                                                | 建议                       |
-| ----------------- | --------------------------------------------------- | -------------------------- |
-| 缓存策略粗糙      | Web 端用简单 dict + 过期时间，无 LRU 或容量限制     | 引入 `cachetools` 或 Redis |
-| 日志没有结构化    | loguru 直接 print，上线后难做分析和报警             | 改用 JSON 格式 + 集中收集  |
-| CI badge 链接失效 | 已移除 GitHub Actions 但 README 之前还留着 CI badge | 已在本次文档更新中修复     |
+Suggested direction:
+- Add a database-backed subscription table before automating billing
 
----
+## Medium-Priority Debt
 
-## 三、未完成功能
+### 4. Backtesting is still missing
+The system has live rules, but no proper replay framework for validating whether rule changes improve quality.
 
-| #   | 功能                | 说明                                                             |
-| --- | ------------------- | ---------------------------------------------------------------- |
-| 1   | 历史数据消费        | `fetch_history.py` 可采集 3 年数据，但没有任何模型在使用         |
-| 2   | 结算自动对账        | 系统已支持通过 `/deb` 查看命中率，但尚未实现自动生成昨日总结推送 |
-| 3   | 交易信号输出        | 系统只给分析建议，不输出可执行的交易信号                         |
-| 4   | Web 身份认证        | 任何人都可以访问 Web 面板                                        |
-| 5   | 主动推送            | 预报崩盘或结算边界预警时不会主动通知用户                         |
-| 6   | 完整日内 METAR 走势 | `trend.recent` 只保留最近 4 条，无法展示完整日内观测曲线         |
+Impact:
+- Rule changes are hard to evaluate objectively
+- Alert tuning is still partly manual
 
----
+Suggested direction:
+- Build a replay harness from stored observations and forecasts
 
-## 四、演进路线
+### 5. Thresholds remain code-defined
+Important thresholds are still embedded in Python.
 
-### 短期（1-2 周）— 偿还核心债务
+Examples:
+- Momentum slope threshold
+- Peak-passed rollback threshold
+- Advection lead delta threshold
+- Cooldown defaults
 
-1. **拆分 `bot_listener.py`**
-   - 将 `analyze_weather_trend` 移到 `src/analysis/trend_engine.py`
-   - 将概率引擎移到 `src/analysis/probability.py`
-   - `bot_listener.py` 只保留 Telegram 交互逻辑
+Suggested direction:
+- Extract to constants or structured config
 
-2. **概率引擎统一**
-   - Web 端概率计算应直接调用共享模块的结果
-   - 消除两份独立实现
+### 6. Frontend still uses a legacy shell inside Next
+The production frontend is on Vercel, but the page is still driven by `public/legacy/index.html` plus static scripts.
 
-3. **核心单元测试**
-   - 测试范围：μ/σ 计算、死盘判定、forecast bust 检测、DEB 权重计算
-   - 不追求覆盖率，追求"改代码时有安全网"
+Impact:
+- Slower UI evolution
+- Harder component-level reuse
+- Harder design-system integration
 
-### 中期（1-2 月）— 建立校验能力
+Suggested direction:
+- Migrate the legacy dashboard into native Next components incrementally
 
-4. **回测框架**
-   - 用历史数据跑"过去 90 天每天的 μ 偏差是多少"
-   - 这是证明概率引擎有效的唯一方式
+## Low-Priority Debt
 
-5. **结算自动对账**
-   - 每天自动拉取合约实际结算结果
-   - 与系统前一天的预测做比对，自动生成准确率报告
+### 7. Caching is simple in-process cache only
+Current cache is sufficient for the current deployment size, but not ideal long term.
 
-6. **推送机制**
-   - 检测到 forecast bust 或结算边界预警时主动推送 Telegram 通知
+Suggested direction:
+- Move to Redis or another shared cache if multi-instance deployment is needed
 
-### 长期（3+ 月）— 从规则到模型
+### 8. Test tooling is not fully provisioned everywhere
+The repository has tests, but some environments still do not have `pytest` installed.
 
-7. **MOS/XGBoost 替代手工 μ**
-   - 用历史 METAR + 模型预报训练后处理模型
-   - 概率引擎从"合理的猜测"升级到"可校验的预测"
+Impact:
+- Harder to run full verification on every host
 
-8. **多市场适配**
-   - 当前只针对温度合约
-   - 扩展到降水、风速等需要重构分析框架
+Suggested direction:
+- Standardize test dependencies in deployment and CI environments
 
----
+## Immediate Next Steps
 
-## 五、一句话总结
-
-> PolyWeather 目前最大的价值是**信息聚合和格式化**——把分散在多个 API 的气象数据整合成可快速消化的仪表盘。至于"预测准不准"，诚实的回答是：**不知道，因为还没有建立衡量准确率的机制**。
+1. Add evidence lines to Telegram alerts
+2. Finish cleaning backend naming after removal of old static web flow
+3. Design subscription storage for commercialization
+4. Start replay/backtest tooling for alert-quality tuning

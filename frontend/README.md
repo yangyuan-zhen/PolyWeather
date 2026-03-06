@@ -1,14 +1,27 @@
-# PolyWeather Frontend (Next.js)
+﻿# PolyWeather Frontend
 
-Standalone web frontend for `polyweather.vercel.app`.
+This directory is the only web frontend in production.
+
+Production URL:
+- https://polyweather-pro.vercel.app/
 
 ## Stack
 
-- Next.js 14+ (App Router)
+- Next.js App Router
 - Tailwind CSS
 - Lucide React
-- shadcn/ui base components
-- Leaflet (react-leaflet)
+- shadcn/ui base layer
+- Legacy dashboard shell loaded from `public/legacy/index.html`
+
+## Production Model
+
+- Vercel serves the web UI
+- FastAPI on VPS serves API only
+- The old FastAPI static website has been removed
+
+Current request flow:
+- Browser -> Vercel frontend
+- Vercel route handlers -> FastAPI API
 
 ## Local Development
 
@@ -19,32 +32,37 @@ npm install
 npm run dev
 ```
 
-Default frontend URL: `http://localhost:3000`
+Default local URL:
+- http://localhost:3000
 
-## Backend API
+## Required Environment Variable
 
-Set `POLYWEATHER_API_BASE_URL` to your FastAPI service URL.
-
-Example:
-
-```bash
-POLYWEATHER_API_BASE_URL=https://api.yourdomain.com
+```env
+POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
 ```
 
-The frontend uses Next Route Handlers as a thin BFF layer:
+Examples:
+- `http://38.54.27.70:8000`
+- `https://api.example.com`
 
+## Route Handlers
+
+Thin BFF routes currently exposed by Next:
 - `GET /api/cities`
-- `GET /api/city/:name`
+- `GET /api/city/[name]`
+- `GET /api/history/[name]`
 
 ## Vercel Deployment
 
-1. Import this repo in Vercel.
-2. Set **Root Directory** to `frontend`.
-3. Add environment variable:
-   - `POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>`
-4. Deploy.
+1. Import the repo into Vercel
+2. Set Root Directory to `frontend`
+3. Set `POLYWEATHER_API_BASE_URL`
+4. Deploy
 
 ## Notes
 
-- Backend CORS must allow `https://polyweather.vercel.app`.
-- This is phase-1 split: map + city list + detail panel are migrated first.
+- Backend CORS must allow `https://polyweather-pro.vercel.app`
+- The page shell currently embeds the legacy dashboard HTML from `public/legacy/index.html`
+- If you change files under `public/static`, deploy to Vercel to make them live
+
+Last updated: 2026-03-06

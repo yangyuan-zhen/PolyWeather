@@ -1,10 +1,14 @@
-# 🌡️ PolyWeather: Intelligent Weather Quant Analysis Bot
+﻿# PolyWeather
 
-[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/yangyuan-zhen/PolyWeather)
+PolyWeather is a weather intelligence system built around live airport observations, multi-model forecasts, DEB blending, and Telegram alert delivery.
 
-PolyWeather is a multi-source weather analysis and quantification tool. It aggregates high-precision forecasts, real-time airport METAR observations, a math-based probability engine, and AI-driven decision support to provide deep insights for weather-related risk assessment and data-driven decision making.
+Current production layout:
+
+- Frontend: Next.js on Vercel
+- Backend API: FastAPI on VPS
+- Bot / alert loop: Telegram bot on VPS
+
+The old FastAPI static web page has been removed. Vercel is the only web entry point.
 
 <p align="center">
   <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="420">
@@ -18,203 +22,164 @@ PolyWeather is a multi-source weather analysis and quantification tool. It aggre
   <em>🗺️ Interactive Web Map: Real-time global monitoring with rich data visualization</em>
 </p>
 
----
+## Features
 
-## ✨ Core Features
+- Multi-source weather aggregation
+  - Open-Meteo
+  - METAR live observations
+  - MGM official data for Ankara
+  - Multi-model highs such as ECMWF / GFS / ICON / GEM / JMA when available
+- DEB blended forecast
+  - Dynamic weighting based on recent model error
+- City dashboard
+  - Global city list
+  - City detail panel
+  - Nearby station map markers
+  - Trend chart
+  - Multi-model comparison
+  - Daily forecast table
+- Telegram proactive alerts
+  - Ankara Center reached DEB
+  - Momentum spike
+  - Forecast breakthrough
+  - Advection / nearby lead station signal
+- Late-day suppression
+  - If the local daily high has likely already passed and the market is cooling off, active alerts are downgraded to status only and are not pushed
 
-### 1. 🌐 Interactive Web Map Dashboard
+## Alert Rules
 
-- **Global Overview**: Real-time Leaflet-based dark-themed map pinpointed to official Polymarket settlement airport coordinates.
-- **Progressive Background Loading**: Intelligently fetches multi-source data across all cities without hitting API rate limits.
-- **Rich Visualization**: Chart.js-powered temperature trends with METAR scatter overlay, multi-model comparison bars, Gaussian probability distribution, and dynamic risk badges.
-- **Zoom-based Intelligence**: Map automatically filters minor cities (e.g., Atlanta/Ankara) and local station labels at lower zoom levels to maintain clarity, showing only major global hubs when zoomed out.
-- **Technical Guide Interface**: Features an interactive on-map technical guide explaining DEB prediction curves, probability bands, and risk factors.
-- **Cinematic Interaction & Sync**: City selection triggers a smooth fly-to zoom animation. The **Multi-Model Forecast** panel automatically synchronizes with the selected day in the 5-day forecast table, showing historical model performance and future projections.
-- **Forced Sync & Cache Control**: For specific regions like Ankara, the dashboard supports a 60-second real-time cache TTL with a manual "Force Refresh" button to bypass global caches and fetch the absolute latest MGM/METAR data.
-- **Dual-Engine Architecture**: Runs concurrently with the Telegram bot via a FastAPI backend, sharing the same data collection, analysis logic (`analyze_weather_trend`), and AI prompt pipeline.
+Implemented rules:
 
-### 2. 🧬 Dynamic Ensemble Blending (DEB Algorithm)
+- `ankara_center_deb_hit`
+  - Only uses `Ankara (Bolge/Center)` station / `istNo=17130`
+  - This is the official Ankara center station used for the Center signal
+- `momentum_spike`
+  - 30-minute slope exceeds the configured threshold
+- `forecast_breakthrough`
+  - Current observed temperature is above the highest available major model high by margin
+- `advection`
+  - Nearby station leads the airport station and wind regime supports warm advection
 
-The system automatically tracks the historical performance of weather models (ECMWF, GFS, ICON, GEM, JMA) per city:
+Suppression rule:
 
-- **Error-Based Weighting**: Dynamically adjusts model weights based on their Mean Absolute Error (MAE) over the past 7 days. Lower error = higher weight.
-- **Blended Forecast**: Provides a bias-corrected "DEB Blended High Temperature" recommendation.
-- **Multi-Source Training**: Integrates official regional sources (like Turkey's MGM) into the training pipeline alongside international models (ECMWF, GFS, etc.).
-- **Accuracy Tracking**: Use the `/deb` command to view DEB's historical settlement hit rate and MAE, compared against individual models.
-- **Auto-Cleanup**: Only retains the last 14 days of records to prevent unbounded data growth.
+- `peak_passed_guard`
+  - No active push if the city's local peak has already passed, enough time has elapsed, and the current temperature has materially rolled over from the day's high
 
-### 3. 🎲 Math Probability Engine (Settlement Probability)
+Push dedupe rule:
 
-Automatically computes the probability for each possible settlement integer using a Gaussian distribution:
+- Same city + same trigger type only pushes once while still active
+- It can push again only after the signal clears and re-arms
+- Cooldown still applies at city level
 
-- **Reality-Anchored μ**: When actual max temperature is significantly below forecasts during/after the peak window (forecast bust), μ anchors on the observed max instead of failed predictions. Otherwise, uses a weighted average of DEB/multi-model median (70%) and ensemble median (30%).
-- **Standard Deviation σ — Three-Layer Pipeline**:
-  1. **Ensemble Base**: σ = (P90-P10) / 2.56
-  2. **MAE Floor**: Uses DEB's historical MAE as σ minimum—prevents ensembles from underestimating true uncertainty
-  3. **Shock Score Amplifier**: σ × (1 + 0.5 × shock_score) when weather is changing rapidly
-- **Time Decay**: Before peak σ×1.0 → During peak σ×0.7 → After peak σ×0.3
-- **Observed Floor**: Temperatures below the current METAR max WU value are excluded
-- **Dead Market Override**: When a dead market is confirmed, probability collapses to 100% at the settled value
+## Data Semantics
 
-#### 💥 Shock Score: Weather Disruption Soft Scorer (0~1)
+Alert message fields:
 
-Evaluates environmental stability from the last 4 METAR observations. Higher = more unstable = wider σ:
+- `实测 / Now`
+  - Uses `METAR current.temp` first
+  - Falls back to `MGM current.temp` if METAR current temperature is unavailable
+- `时间 / Time`
+  - `local`: city local clock time
+  - `observed`: observation time attached to the current reading
 
-| Component             | Weight | Trigger                                                           |
-| :-------------------- | :----- | :---------------------------------------------------------------- |
-| Wind Direction Change | 0~0.4  | Angle difference × wind speed amplifier (weak winds downweighted) |
-| Cloud Cover Jump      | 0~0.35 | Cloud code escalation (FEW→BKN, etc.)                             |
-| Pressure Change       | 0~0.25 | >2hPa change within 2 hours                                       |
+## Deployment
 
-### 4. 🤖 AI Deep Analysis (Groq LLaMA 3.3 70B)
+### Backend / bot on VPS
 
-Feeds all weather data into LLaMA 70B, analyzed via a **P0→P4 Priority Chain**:
+Requirements:
 
-- **P0 Forecast Bust Detection** (highest priority): Graded severity (light/medium/heavy) when actual temps diverge from forecasts. Requires slope + wind/cloud verification before declaring settlement locked. "Bust ≠ locked" — still checks for second-wave warming.
-- **P1 Real-Time Rhythm**: 2 consecutive METAR highs → still warming; 2 non-highs with slope ≤ 0 → dead market. Low-radiation warming → multi-factor (advection/mixing layer/heat island), no single-factor attribution.
-- **P2 Inhibitors** (city-aware): Precipitation → strong suppression. High humidity + thick clouds sustained 2+ reports → possible suppression, but thresholds vary by city type (maritime vs. continental). Single factor insufficient.
-- **P3 Probability Cross-Check**: References settlement probability for consistency check with P1. Contradictions explained with deviation rationale.
-- **P4 Forecast Background**: DEB/forecasts for ceiling estimation; silenced when actuals significantly deviate.
-- **Single Source of Truth**: Both web and Telegram bot share the same `analyze_weather_trend` function and `get_ai_analysis` prompt — identical context, identical decisions.
-- **High Availability**: Auto-retry + fallback model degradation (70B → 8B). Proxy support for restricted networks.
+- Docker
+- Docker Compose
+- `.env`
 
-### 5. ⏱️ Real-time Airport Observations (Zero-Cache METAR)
-
-- **Precise Timing**: Extracts actual observation time from raw METAR text (`rawOb`), not the API's rounded `reportTime`. Accurate to the minute.
-- **Live Passthrough**: Bypasses CDN caching via dynamic headers and randomized timestamps to obtain first-hand METAR/MGM reports.
-- **Settlement Warning**: Automatically calculates the rounding boundary for integer-based settlement (X.5 line).
-- **MGM Primary (Ankara)**: For Turkish cities like Ankara, PolyWeather uses official MGM data as a primary source for both real-time observations and 5-day hourly forecasts, ensuring maximum local accuracy.
-- **Anomaly Filtering**: Automatically filters out -9999 sentinel values to prevent garbage data in output.
-
-### 6. 📈 Historical Data Collection
-
-- Includes `fetch_history.py` to retrieve up to 3 years of hourly historical weather data (temperature, humidity, radiation, pressure, 10+ dimensions), providing data foundation for future ML models (XGBoost/MOS).
-
----
-
-## ⚡ Deployment
-
-### Requirements
-
-- **Python 3.11+** or **Docker & Docker Compose**
-- **Environment Variables**: Set parameters in your `.env` file (copy from `.env.example`).
-
-### 🐳 Docker Deployment (Recommended)
-
-The easiest and most stable way to deploy without system dependency conflicts.
-
-1. **Clone and configure**
-   ```bash
-   git clone https://github.com/yangyuan-zhen/PolyWeather.git
-   cd PolyWeather
-   cp .env.example .env
-   # Edit .env to add TELEGRAM_BOT_TOKEN, GROQ_API_KEY, etc.
-   nano .env
-   ```
-2. **Start the service in the background**
-   ```bash
-   docker-compose up -d --build
-   ```
-3. **View live logs**
-   ```bash
-   docker-compose logs -f
-   ```
-
-### 💻 Traditional VPS Deployment
-
-1. Install dependencies: `pip install -r requirements.txt`
-2. Configure your `.env` file.
-3. Use the included `update.sh` script for one-click updates and restarts for both the Telegram Bot and the Web Map:
-
-```bash
-# Run the script to update code and restart both services in the background
-./update.sh
-```
-
-_(Note: The `update.sh` script automatically fetches the latest code, kills old processes, clears ports, and launches both `bot_listener.py` and `web/app.py` via `nohup`.)_
-
----
-
-## 🕹️ Bot Commands
-
-| Command             | Description                                                                                                                         |
-| :------------------ | :---------------------------------------------------------------------------------------------------------------------------------- |
-| `/city [city_name]` | Get weather analysis, settlement probabilities, METAR tracking, and AI insights. (Includes "Bölge/Center" detail for Ankara).       |
-| `/deb [city_name]`  | View DEB accuracy: daily hit/miss breakdown, bias analysis (underestimate/overestimate), model MAE comparison, trading suggestions. |
-| `/id`               | View the Chat ID of the current conversation.                                                                                       |
-| `/help`             | Display help information.                                                                                                           |
-
-### Supported Cities
-
-`lon` (London), `par` (Paris), `ank` (Ankara), `nyc` (New York), `chi` (Chicago), `dal` (Dallas), `mia` (Miami), `atl` (Atlanta), `sea` (Seattle), `tor` (Toronto), `sel` (Seoul), `ba` (Buenos Aires), `wel` (Wellington), etc.
-
----
-
-## 🏗️ Architecture
-
-```mermaid
-graph TD
-    User[User] -->|Query| Bot["bot_listener.py (Core Scheduler)"]
-    User -->|Browser| Web["web/app.py (FastAPI)"]
-
-    subgraph Data Acquisition
-        Bot --> Collector[WeatherDataCollector]
-        Web --> Collector
-        Collector --> OM[Open-Meteo Forecast/Ensemble]
-        Collector --> MM[Multi-Model ECMWF/GFS/ICON/GEM/JMA]
-        Collector --> METAR["Live Airport METAR (rawOb)"]
-        Collector --> MGM["MGM Official (Ankara)"]
-    end
-
-    subgraph Algorithm Layer
-        Collector --> Peak[Peak Hour Prediction]
-        Collector --> DEB[DEB Dynamic Weighting]
-        DEB --> DB[(daily_records Database)]
-        Peak --> Prob["Probability Engine (Reality-Anchored μ)"]
-        Collector --> Prob
-        METAR --> Shock[Shock Score]
-        Shock --> Prob
-        Collector --> Logic["Settlement Boundary / Dead Market"]
-    end
-
-    subgraph Shared Analysis
-        Bot --> ATF["analyze_weather_trend()"]
-        Web --> ATF
-        ATF --> AI["Groq LLaMA 70B (P0→P4)"]
-    end
-
-    AI -->|Market Call + Logic + Confidence| Bot
-    AI -->|Market Call + Logic + Confidence| Web
-```
-
----
-
-## 💡 Trading Tips
-
-1. **Real-time Rhythm First**: AI analysis follows P0→P4 priority. If live METAR trends (P1) conflict with math probabilities (P3), always prioritize the live trend.
-2. **Watch Settlement Probabilities**: Based on Gaussian models, direction is most certain when a temperature has > 70% probability while P1 rhythm is flat.
-3. **Reference DEB Bias**: Use `/deb` to check for systematic bias. If a city is consistently "underestimated," habitually bid one WU notch higher.
-4. **Identify Dead Market Signals**: When the system declares a "Dead Market," probability collapses to 100% at the settled value. Warming power is exhausted.
-5. **Mind the Boundaries**: When the observed high is near X.5 (e.g., 7.50°C), be wary of rounding up due to tiny fluctuations.
-6. **Forecast Bust Awareness**: When the AI reports a forecast bust (especially medium/heavy grade), all model predictions have lost reference value. Focus exclusively on METAR actuals.
-
----
-
-## 🛠️ Development & Testing
-
-Run unit tests for the core trend engine and probability models:
-
-```bash
-python -m pytest tests/test_trend_engine.py -v
-```
-
-Deploying updates to the server:
+Deploy:
 
 ```bash
 git pull
-./update.sh
+docker-compose up -d --build
 ```
 
----
+Main services:
 
-_Updated 2026-03-05_
+- `polyweather_bot`
+- `polyweather_web`
+
+The FastAPI service is now API-only. It does not serve a static website.
+
+### Frontend on Vercel
+
+The Vercel project uses the `frontend` directory as root.
+
+After pushing to Git, Vercel deploys automatically.
+
+## Environment Variables
+
+Minimum practical set:
+
+```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+GROQ_API_KEY=...
+POLYWEATHER_MAP_URL=https://polyweather-pro.vercel.app/
+WEB_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://polyweather-pro.vercel.app
+```
+
+Push tuning:
+
+```env
+TELEGRAM_ALERT_PUSH_ENABLED=true
+TELEGRAM_ALERT_PUSH_INTERVAL_SEC=300
+TELEGRAM_ALERT_PUSH_COOLDOWN_SEC=3600
+TELEGRAM_ALERT_MIN_TRIGGER_COUNT=2
+TELEGRAM_ALERT_MIN_SEVERITY=medium
+TELEGRAM_ALERT_CITIES=ankara,london,paris,seoul,toronto,buenos aires,wellington,new york,chicago,dallas,miami,atlanta,seattle,lucknow,sao paulo,munich
+```
+
+Recommended:
+
+- Use `3600` seconds cooldown for production paid groups unless you explicitly want more aggressive alerting
+
+## Bot Commands
+
+Supported user commands:
+
+- `/city [city]`
+- `/deb [city]`
+- `/id`
+- `/help`
+
+`/tradealert` has been removed. Alerts are proactive push only.
+
+## Architecture
+
+```mermaid
+graph TD
+    User[Telegram User] --> Bot[bot_listener.py]
+    User2[Web User] --> Vercel[Next.js on Vercel]
+    Vercel --> API[FastAPI API on VPS]
+    Bot --> API
+    API --> Collector[WeatherDataCollector]
+    Collector --> OM[Open-Meteo]
+    Collector --> METAR[METAR]
+    Collector --> MGM[MGM]
+    Collector --> MM[Multi-model sources]
+    API --> DEB[DEB blending]
+    API --> Alerts[Alert engine]
+    Alerts --> Bot
+```
+
+## Testing
+
+Quick checks used in development:
+
+```bash
+python -m py_compile src/analysis/market_alert_engine.py src/utils/telegram_push.py web/app.py bot_listener.py
+node --check frontend/public/static/app.js
+npm run build --prefix frontend
+```
+
+If you want to run pytest, install it first.
+
+## Status
+
+Last updated: 2026-03-06

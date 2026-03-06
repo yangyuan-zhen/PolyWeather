@@ -14,6 +14,7 @@ from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore 
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
+from src.database.db_manager import DBManager
 
 
 def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
@@ -31,6 +32,7 @@ def start_bot():
         return
 
     bot = telebot.TeleBot(token)
+    db = DBManager()
     weather = WeatherDataCollector(config)
     start_trade_alert_push_loop(bot, config)
 
@@ -41,8 +43,10 @@ def start_bot():
             "可用指令:\n"
             "/city [城市名] - 查询城市天气预测与实测\n"
             "/deb [城市名] - 查看 DEB 融合预测准确率\n"
+            "/points - 查看你的积分与排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
-            "示例: <code>/city 伦敦</code>"
+            "示例: <code>/city 伦敦</code>\n"
+            "💡 <i>提示: 在群内发言可获得积分，积分可用于后续解锁高级版。</i>"
         )
         bot.reply_to(message, welcome_text, parse_mode="HTML")
 
@@ -53,6 +57,29 @@ def start_bot():
             f"🎯 当前聊天的 Chat ID 是: <code>{message.chat.id}</code>",
             parse_mode="HTML",
         )
+
+    @bot.message_handler(commands=["points", "rank", "top"])
+    def show_points(message):
+        """显示当前用户的积分及排行榜"""
+        user = message.from_user
+        user_info = db.get_user(user.id)
+        
+        leaderboard = db.get_leaderboard(limit=5)
+        rank_text = "🏆 <b>PolyWeather 活跃度排行榜</b>\n"
+        rank_text += "────────────────────\n"
+        for i, entry in enumerate(leaderboard):
+            medal = ["🥇", "🥈", "🥉", "  ", "  "][i] if i < 5 else "  "
+            rank_text += f"{medal} {entry['username'][:12]}: <b>{entry['points']}</b> 点\n"
+        
+        if user_info:
+            rank_text += "────────────────────\n"
+            rank_text += (
+                f"👤 <b>我的状态：</b>\n"
+                f"└ 积分: <code>{user_info['points']}</code>\n"
+                f"└ 发言: <code>{user_info['message_count']}</code> 次"
+            )
+        
+        bot.send_message(message.chat.id, rank_text, parse_mode="HTML")
 
     @bot.message_handler(commands=["deb"])
     def deb_accuracy(message):
@@ -704,6 +731,19 @@ def start_bot():
 
             logger.error(f"查询失败: {e}\n{traceback.format_exc()}")
             bot.reply_to(message, f"❌ 查询失败: {e}")
+
+    @bot.message_handler(func=lambda message: True, content_types=['text'])
+    def track_activity(message):
+        """全量监听消息，用于记录群内发言积分(非指令消息)"""
+        if message.text.startswith('/'):
+            return
+
+        user = message.from_user
+        username = user.username or user.first_name or f"User_{user.id}"
+        db.upsert_user(user.id, username)
+        
+        # 增加积分 (5秒冷却防刷屏，每个自然发言给 1 分)
+        db.add_message_activity(user.id, points_to_add=1)
 
     logger.info("🤖 Bot 启动中...")
     bot.infinity_polling()
