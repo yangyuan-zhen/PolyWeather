@@ -527,6 +527,7 @@ def _build_telegram_messages(
     if current_temp is None:
         return {"zh": "", "en": ""}
 
+    has_active_trigger = any(rule.get("triggered") for rule in rules.values())
     types_cn = _join_trigger_types_cn(rules) or "盘口异动"
     delta_temp = _sf(momentum.get("delta_temp"))
     delta_min = momentum.get("delta_minutes")
@@ -569,9 +570,11 @@ def _build_telegram_messages(
 
     advice = _build_advice_cn(rules, temp_symbol)
     final_map = map_url or "https://polyweather-pro.vercel.app/"
+    title_zh = "🚨 PolyWeather 异动预警" if has_active_trigger else "📍 PolyWeather 状态快照"
+    title_en = "🚨 PolyWeather Alert" if has_active_trigger else "📍 PolyWeather Status"
 
     lines_zh = [
-        f"🚨 PolyWeather 异动预警 [{city_name}]",
+        f"{title_zh} [{city_name}]",
         "",
         f"类型：{types_cn}",
         f"动态：{dyn}",
@@ -597,7 +600,7 @@ def _build_telegram_messages(
     type_en_str = " + ".join(type_en) or "Market anomaly"
 
     lines_en = [
-        f"🚨 PolyWeather Alert [{city_name}]",
+        f"{title_en} [{city_name}]",
         "",
         f"Type: {type_en_str}",
         f"Now: {current_temp:.1f}{temp_symbol}",
