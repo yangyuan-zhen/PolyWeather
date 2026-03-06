@@ -1051,20 +1051,20 @@ function renderMarketPrices(data) {
 
   if (snapshot.loading && markets.length === 0) {
     summary.innerHTML =
-      '<span class="market-muted">姝ｅ湪鍔犺浇褰撳ぉ Polymarket 鐩樺彛...</span>';
+      '<span class="market-muted">Loading current Polymarket markets...</span>';
     container.innerHTML = "";
     return;
   }
 
   if (snapshot.fetch_error && markets.length === 0) {
-    summary.innerHTML = `<span class="market-error">鐩樺彛鍔犺浇澶辫触: ${escapeHtml(snapshot.fetch_error)}</span>`;
+    summary.innerHTML =       `<span class="market-error">Market load failed: ${escapeHtml(snapshot.fetch_error)}</span>`;
     container.innerHTML = "";
     return;
   }
 
   if (markets.length === 0) {
     summary.innerHTML =
-      '<span class="market-muted">褰撳ぉ鏆傛棤鍙敤鐨?Polymarket 甯傚満浠锋牸</span>';
+      '<span class="market-muted">No Polymarket markets for this date</span>';
     container.innerHTML = "";
     return;
   }
@@ -1088,12 +1088,12 @@ function renderMarketPrices(data) {
 
   summary.innerHTML = `
     <div class="market-summary-main">
-      <span>${escapeHtml(targetDate)} · ${markets.length} 涓悎绾?/span>
-      <span>涔板叆 = best ask</span>
-      <span>鍗栧嚭 = best bid</span>
-      ${updatedAt ? `<span>鏇存柊 ${escapeHtml(updatedAt)}</span>` : ""}
+      <span>${escapeHtml(targetDate)} - ${markets.length} markets</span>
+      <span>Buy = best ask</span>
+      <span>Sell = best bid</span>
+      ${updatedAt ? `<span>Updated ${escapeHtml(updatedAt)}</span>` : ""}
     </div>
-    ${primaryUrl ? `<a href="${escapeHtml(primaryUrl)}" target="_blank" rel="noreferrer">鎵撳紑 Polymarket</a>` : ""}
+    ${primaryUrl ? `<a href="${escapeHtml(primaryUrl)}" target="_blank" rel="noreferrer">Open Polymarket</a>` : ""}
   `;
 
   container.innerHTML = markets
@@ -1125,11 +1125,11 @@ function renderMarketPrices(data) {
             </div>
             <div class="market-side-prices">
               <div class="market-price-chip">
-                <div class="market-price-label">涔板叆</div>
+                <div class="market-price-label">Buy</div>
                 <div class="market-price-value">${formatCents(yes.buy_price)}</div>
               </div>
               <div class="market-price-chip">
-                <div class="market-price-label">鍗栧嚭</div>
+                <div class="market-price-label">Sell</div>
                 <div class="market-price-value">${formatCents(yes.sell_price)}</div>
               </div>
             </div>
@@ -1141,11 +1141,11 @@ function renderMarketPrices(data) {
             </div>
             <div class="market-side-prices">
               <div class="market-price-chip">
-                <div class="market-price-label">涔板叆</div>
+                <div class="market-price-label">Buy</div>
                 <div class="market-price-value">${formatCents(no.buy_price)}</div>
               </div>
               <div class="market-price-chip">
-                <div class="market-price-label">鍗栧嚭</div>
+                <div class="market-price-label">Sell</div>
                 <div class="market-price-value">${formatCents(no.sell_price)}</div>
               </div>
             </div>

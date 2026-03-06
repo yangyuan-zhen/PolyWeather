@@ -3,7 +3,7 @@ export default function HomePage() {
     <main className="h-screen w-screen overflow-hidden bg-black">
       <iframe
         title="PolyWeather Legacy Dashboard"
-        src="/legacy/index.html"
+        src="/legacy/index.html?v=market-v1"
         className="h-full w-full border-0"
       />
     </main>
