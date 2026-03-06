@@ -4,10 +4,18 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from loguru import logger
 
+
 class DBManager:
-    def __init__(self, db_path: str = "polyweather.db"):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = self._resolve_db_path(db_path)
         self._init_db()
+
+    def _resolve_db_path(self, db_path: Optional[str]) -> str:
+        raw = (db_path or os.getenv("POLYWEATHER_DB_PATH") or "").strip()
+        if not raw:
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            return os.path.join(project_root, "data", "polyweather.db")
+        return raw
 
     def _get_connection(self):
         return sqlite3.connect(self.db_path)
@@ -15,7 +23,9 @@ class DBManager:
     def _init_db(self):
         """Create tables if they don't exist."""
         # Ensure directory exists
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
         with self._get_connection() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -32,7 +42,7 @@ class DBManager:
                 )
             """)
             conn.commit()
-            logger.info("Database initialized successfully.")
+            logger.info(f"Database initialized successfully path={self.db_path}")
 
     def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
