@@ -17,11 +17,11 @@ from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_r
 from src.database.db_manager import DBManager
 
 MESSAGE_POINTS = 1
-MESSAGE_DAILY_CAP = 20
+MESSAGE_DAILY_CAP = 50
 MESSAGE_MIN_LENGTH = 4
 MESSAGE_COOLDOWN_SEC = 30
-CITY_QUERY_COST = 2
-DEB_QUERY_COST = 3
+CITY_QUERY_COST = 1
+DEB_QUERY_COST = 1
 
 
 def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
