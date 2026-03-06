@@ -481,6 +481,8 @@ def _build_telegram_messages(
     temp_symbol = city_weather.get("temp_symbol", "°C")
     city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
     current_temp = _sf((city_weather.get("current") or {}).get("temp"))
+    local_time = str(city_weather.get("local_time") or "").strip()
+    obs_time = str(((city_weather.get("current") or {}).get("obs_time")) or "").strip()
     center_deb = rules.get("ankara_center_deb_hit", {})
     momentum = rules.get("momentum_spike", {})
     advection = rules.get("advection", {})
@@ -548,6 +550,13 @@ def _build_telegram_messages(
         f"类型：{types_cn}",
         f"动态：{dyn}",
     ]
+    if local_time or obs_time:
+        if local_time and obs_time:
+            lines_zh.append(f"时间：当地 {local_time} | 观测 {obs_time}")
+        elif local_time:
+            lines_zh.append(f"时间：当地 {local_time}")
+        else:
+            lines_zh.append(f"时间：观测 {obs_time}")
     if center_deb_line:
         lines_zh.append(center_deb_line)
     if peak_line:
@@ -574,6 +583,13 @@ def _build_telegram_messages(
         f"Type: {type_en_str}",
         f"Now: {current_temp:.1f}{temp_symbol}",
     ]
+    if local_time or obs_time:
+        if local_time and obs_time:
+            lines_en.append(f"Time: local {local_time} | observed {obs_time}")
+        elif local_time:
+            lines_en.append(f"Time: local {local_time}")
+        else:
+            lines_en.append(f"Time: observed {obs_time}")
     if center_deb_line:
         center_temp = _sf(center_station.get("temp"))
         deb_prediction = _sf(center_deb.get("deb_prediction"))

@@ -192,7 +192,7 @@ def _maybe_send_alert(
     last_city_ts = int(last_city.get("ts") or 0)
     last_sig_ts = int((state.get("by_signature") or {}).get(signature) or 0)
 
-    if last_city_sig == signature and now_ts - last_city_ts < cooldown_sec:
+    if last_city_ts and now_ts - last_city_ts < cooldown_sec:
         return False
     if last_sig_ts and now_ts - last_sig_ts < cooldown_sec:
         return False
