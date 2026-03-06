@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -138,13 +139,16 @@ def build_trade_alert_for_city(
     city: str,
     config: Dict[str, Any],
     force_refresh: bool = False,
+    target_date: Optional[str] = None,
 ) -> Dict[str, Any]:
     from web.app import _analyze
     from src.analysis.market_alert_engine import build_trading_alerts
     from src.data_collection.polymarket_client import build_city_market_snapshot
 
     city_weather = _analyze(city, force_refresh=force_refresh)
-    target_date = city_weather.get("local_date")
+    resolved_target_date = target_date or city_weather.get("local_date")
+    if resolved_target_date:
+        datetime.strptime(resolved_target_date, "%Y-%m-%d")
 
     proxy = (
         (config.get("polymarket", {}) or {}).get("proxy")
@@ -152,7 +156,7 @@ def build_trade_alert_for_city(
     )
     market_snapshot = build_city_market_snapshot(
         city=city,
-        target_date=target_date,
+        target_date=resolved_target_date,
         proxy=proxy,
         force_refresh=force_refresh,
     )
@@ -162,7 +166,7 @@ def build_trade_alert_for_city(
         market_snapshot=market_snapshot,
         map_url=map_url,
     )
-    alert_payload["target_date"] = target_date
+    alert_payload["target_date"] = resolved_target_date
     return alert_payload
 
 

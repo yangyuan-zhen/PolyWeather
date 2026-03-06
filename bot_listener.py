@@ -242,16 +242,36 @@ def start_bot():
     def tradealert_preview(message):
         """Preview the current trade-alert push payload for one city."""
         try:
-            parts = message.text.split(maxsplit=1)
+            parts = message.text.split()
             if len(parts) < 2:
                 bot.reply_to(
                     message,
-                    "用法: <code>/tradealert ankara</code>",
+                    "用法: <code>/tradealert ankara</code> 或 <code>/tradealert ankara 2026-03-06</code>",
                     parse_mode="HTML",
                 )
                 return
 
-            city_input = parts[1].strip().lower()
+            target_date = None
+            city_tokens = parts[1:]
+            if city_tokens:
+                last_token = city_tokens[-1].strip()
+                try:
+                    from datetime import datetime as _dt
+                    _dt.strptime(last_token, "%Y-%m-%d")
+                    target_date = last_token
+                    city_tokens = city_tokens[:-1]
+                except Exception:
+                    pass
+
+            city_input = " ".join(city_tokens).strip().lower()
+            if not city_input:
+                bot.reply_to(
+                    message,
+                    "用法: <code>/tradealert ankara</code> 或 <code>/tradealert ankara 2026-03-06</code>",
+                    parse_mode="HTML",
+                )
+                return
+
             city_name = ALIASES.get(city_input)
 
             if not city_name and city_input in CITY_REGISTRY:
@@ -278,20 +298,24 @@ def start_bot():
 
             bot.send_message(
                 message.chat.id,
-                f"📡 正在生成 {city_name.title()} 的异动预警预览...",
+                f"📡 正在生成 {city_name.title()} 的异动预警预览"
+                f"{f' ({target_date})' if target_date else ''}...",
             )
 
             payload = build_trade_alert_for_city(
                 city_name,
                 config,
                 force_refresh=True,
+                target_date=target_date,
             )
 
             preview = ((payload.get("telegram") or {}).get("zh") or "").strip()
             trigger_count = int(payload.get("trigger_count") or 0)
             severity = str(payload.get("severity") or "none")
+            resolved_date = payload.get("target_date")
             header = (
                 f"[TEST PREVIEW] city={city_name} "
+                f"date={resolved_date} "
                 f"severity={severity} triggers={trigger_count}"
             )
 
