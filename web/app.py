@@ -399,6 +399,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "pressure": _sf(mgc.get("pressure")),
             "cloud_cover": mgc.get("cloud_cover"),
             "rain_24h": _sf(mgc.get("rain_24h")),
+            "today_high": _sf(mgm.get("today_high")),
+            "today_low": _sf(mgm.get("today_low")),
             "hourly": [],
         }
 
@@ -528,6 +530,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             {"time": t, "temp": v}
             for t, v in (metar.get("today_obs", []) if metar else [])
         ],
+        "metar_recent_obs": metar.get("recent_obs", []) if metar else [],
         "ai_analysis": ai_text,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -636,12 +639,13 @@ async def city_polymarket_alerts(
     force_refresh: bool = False,
 ):
     """
-    Return only anomaly alerts for Polymarket city/date orderbooks.
+    Return orderbook anomalies plus strategy-focused trading alerts.
     """
     city = _normalize_city_or_404(name)
     resolved_date = _resolve_target_date(city, target_date)
 
     from src.data_collection.polymarket_client import build_city_market_snapshot
+    from src.analysis.market_alert_engine import build_trading_alerts
 
     proxy = (
         (_config.get("polymarket", {}) or {}).get("proxy")
@@ -653,13 +657,56 @@ async def city_polymarket_alerts(
         proxy=proxy,
         force_refresh=force_refresh,
     )
+    city_weather = _analyze(city, force_refresh=force_refresh)
+    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
+    trade_alerts = build_trading_alerts(
+        city_weather=city_weather,
+        market_snapshot=snapshot,
+        map_url=map_url,
+    )
+
     return {
         "city": snapshot.get("city"),
         "target_date": snapshot.get("target_date"),
         "updated_at": snapshot.get("updated_at"),
         "summary": snapshot.get("summary"),
         "alerts": snapshot.get("alerts", []),
+        "trade_alerts": trade_alerts,
     }
+
+
+@app.get("/api/polymarket/{name}/trade-alerts")
+async def city_trade_alerts(
+    name: str,
+    target_date: Optional[str] = None,
+    force_refresh: bool = False,
+):
+    """
+    Return trading alerts and Telegram-ready notification payload.
+    """
+    city = _normalize_city_or_404(name)
+    resolved_date = _resolve_target_date(city, target_date)
+
+    from src.data_collection.polymarket_client import build_city_market_snapshot
+    from src.analysis.market_alert_engine import build_trading_alerts
+
+    proxy = (
+        (_config.get("polymarket", {}) or {}).get("proxy")
+        or (_config.get("app", {}) or {}).get("proxy")
+    )
+    snapshot = build_city_market_snapshot(
+        city=city,
+        target_date=resolved_date,
+        proxy=proxy,
+        force_refresh=force_refresh,
+    )
+    city_weather = _analyze(city, force_refresh=force_refresh)
+    map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather.vercel.app"
+    return build_trading_alerts(
+        city_weather=city_weather,
+        market_snapshot=snapshot,
+        map_url=map_url,
+    )
 
 
 @app.get("/api/history/{name}")
