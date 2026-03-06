@@ -11,20 +11,19 @@ type MapCanvasProps = {
   onSelectCity: (cityName: string) => void;
 };
 
-const tempIcon = (risk: CitySummary["risk_level"]) =>
+function shortName(name: string) {
+  return name.length > 8 ? `${name.slice(0, 7)}.` : name;
+}
+
+const tempIcon = (
+  city: CitySummary,
+  selected: boolean,
+) =>
   L.divIcon({
     className: "",
-    html: `<div style="
-      background:${risk === "high" ? "#ef4444" : risk === "medium" ? "#f59e0b" : "#10b981"};
-      color:#fff;
-      padding:6px 10px;
-      border-radius:999px;
-      font-size:12px;
-      font-weight:700;
-      box-shadow:0 2px 10px rgba(0,0,0,.4);
-    ">${risk.toUpperCase()}</div>`,
-    iconSize: [56, 28],
-    iconAnchor: [28, 14],
+    html: `<div class="map-pill ${city.risk_level} ${selected ? "active" : ""}">${shortName(city.display_name)}</div>`,
+    iconSize: [78, 30],
+    iconAnchor: [39, 15],
   });
 
 export function MapCanvas({ cities, selectedCity, onSelectCity }: MapCanvasProps) {
@@ -38,7 +37,7 @@ export function MapCanvas({ cities, selectedCity, onSelectCity }: MapCanvasProps
         <Marker
           key={city.name}
           position={[city.lat, city.lon]}
-          icon={tempIcon(city.risk_level)}
+          icon={tempIcon(city, selectedCity === city.name)}
           eventHandlers={{ click: () => onSelectCity(city.name) }}
         >
           <Popup>
