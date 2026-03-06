@@ -562,6 +562,7 @@ def _build_telegram_messages(
         price_prefix = f"盘口（{market_label}）：" if market_label else "盘口："
         price_line = (
             price_prefix
+            + 
             f"Yes 买 {_format_market_price(market_prices.get('yes_buy'))} / 卖 {_format_market_price(market_prices.get('yes_sell'))} | "
             f"No 买 {_format_market_price(market_prices.get('no_buy'))} / 卖 {_format_market_price(market_prices.get('no_sell'))}"
         )
@@ -607,6 +608,7 @@ def _build_telegram_messages(
         price_label_en = f"Quotes ({market_label}): " if market_label else "Quotes: "
         lines_en.append(
             price_label_en
+            +
             f"Yes buy {_format_market_price(market_prices.get('yes_buy'))} / sell {_format_market_price(market_prices.get('yes_sell'))} | "
             f"No buy {_format_market_price(market_prices.get('no_buy'))} / sell {_format_market_price(market_prices.get('no_sell'))}"
         )
