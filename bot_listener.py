@@ -10,9 +10,8 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.utils.config_loader import load_config  # type: ignore # noqa: E402
-from src.utils.telegram_push import start_trade_alert_push_loop, build_trade_alert_for_city  # type: ignore # noqa: E402
+from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
-from src.data_collection.city_registry import ALIASES, CITY_REGISTRY  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
 
@@ -42,7 +41,6 @@ def start_bot():
             "可用指令:\n"
             "/city [城市名] - 查询城市天气预测与实测\n"
             "/deb [城市名] - 查看 DEB 融合预测准确率\n"
-            "/tradealert [城市名] - 预览当前异动预警推送\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "示例: <code>/city 伦敦</code>"
         )
@@ -237,105 +235,6 @@ def start_bot():
             bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
         except Exception as e:
             bot.reply_to(message, f"❌ 查询失败: {e}")
-
-    @bot.message_handler(commands=["tradealert"])
-    def tradealert_preview(message):
-        """Preview the current trade-alert push payload for one city."""
-        try:
-            parts = message.text.split()
-            if len(parts) < 2:
-                bot.reply_to(
-                    message,
-                    "用法: <code>/tradealert ankara</code> 或 <code>/tradealert ankara 2026-03-06</code>",
-                    parse_mode="HTML",
-                )
-                return
-
-            target_date = None
-            city_tokens = parts[1:]
-            if city_tokens:
-                last_token = city_tokens[-1].strip()
-                try:
-                    from datetime import datetime as _dt
-                    _dt.strptime(last_token, "%Y-%m-%d")
-                    target_date = last_token
-                    city_tokens = city_tokens[:-1]
-                except Exception:
-                    pass
-
-            city_input = " ".join(city_tokens).strip().lower()
-            if not city_input:
-                bot.reply_to(
-                    message,
-                    "用法: <code>/tradealert ankara</code> 或 <code>/tradealert ankara 2026-03-06</code>",
-                    parse_mode="HTML",
-                )
-                return
-
-            city_name = ALIASES.get(city_input)
-
-            if not city_name and city_input in CITY_REGISTRY:
-                city_name = city_input
-
-            if not city_name and len(city_input) >= 2:
-                for alias, resolved in ALIASES.items():
-                    if alias.startswith(city_input):
-                        city_name = resolved
-                        break
-                if not city_name:
-                    for full_name in CITY_REGISTRY:
-                        if full_name.startswith(city_input):
-                            city_name = full_name
-                            break
-
-            if not city_name:
-                bot.reply_to(
-                    message,
-                    f"❌ 未找到城市: <b>{city_input}</b>",
-                    parse_mode="HTML",
-                )
-                return
-
-            bot.send_message(
-                message.chat.id,
-                f"📡 正在生成 {city_name.title()} 的异动预警预览"
-                f"{f' ({target_date})' if target_date else ''}...",
-            )
-
-            payload = build_trade_alert_for_city(
-                city_name,
-                config,
-                force_refresh=True,
-                target_date=target_date,
-            )
-
-            preview = ((payload.get("telegram") or {}).get("zh") or "").strip()
-            trigger_count = int(payload.get("trigger_count") or 0)
-            severity = str(payload.get("severity") or "none")
-            resolved_date = payload.get("target_date")
-            header = (
-                f"[TEST PREVIEW] city={city_name} "
-                f"date={resolved_date} "
-                f"severity={severity} triggers={trigger_count}"
-            )
-
-            if not preview:
-                bot.reply_to(message, f"{header}\n\nNo Telegram preview available.")
-                return
-
-            if trigger_count <= 0:
-                bot.send_message(
-                    message.chat.id,
-                    f"{header}\n\n当前没有 active trade alert。\n\n{preview}",
-                )
-                return
-
-            bot.send_message(message.chat.id, f"{header}\n\n{preview}")
-        except Exception as e:
-            import traceback
-
-            logger.error(f"trade alert preview failed: {e}\n{traceback.format_exc()}")
-            bot.reply_to(message, f"❌ tradealert failed: {e}")
 
     @bot.message_handler(commands=["city"])
     def get_city_info(message):
