@@ -15,13 +15,6 @@ def load_config():
         return val
 
     config = {
-        "polymarket": {
-            "api_key": get_env_or_none("POLYMARKET_API_KEY"),
-            "secret_key": get_env_or_none("POLYMARKET_SECRET_KEY"),
-            "passphrase": get_env_or_none("POLYMARKET_PASSPHRASE"),
-            "wallet_address": get_env_or_none("POLYMARKET_WALLET_ADDRESS"),
-            "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
-        },
         "weather": {
             "openweather_api_key": get_env_or_none("OPENWEATHER_API_KEY"),
             "wunderground_api_key": get_env_or_none("WUNDERGROUND_API_KEY"),

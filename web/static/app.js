@@ -255,85 +255,6 @@ async function fetchCityDetail(cityName, force = false) {
   return await res.json();
 }
 
-async function fetchCityMarket(cityName, targetDate, force = false) {
-  const urlName = cityName.replace(/\s/g, "-");
-  const params = new URLSearchParams({
-    force_refresh: String(force),
-  });
-  if (targetDate) {
-    params.set("target_date", targetDate);
-  }
-
-  const res = await fetch(`/api/polymarket/${encodeURIComponent(urlName)}?${params}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return await res.json();
-}
-
-function hasMarketSnapshot(data, targetDate) {
-  return Boolean(
-    data?.polymarket &&
-      data.polymarket.target_date === targetDate &&
-      !data.polymarket.loading &&
-      !data.polymarket.fetch_error &&
-      Array.isArray(data.polymarket.markets),
-  );
-}
-
-async function hydrateCityMarketData(data, force = false) {
-  if (!data?.name) return null;
-
-  const targetDate = data.local_date || null;
-  if (!force && data.polymarket?.loading && data.polymarket.target_date === targetDate) {
-    return data.polymarket;
-  }
-  if (!force && hasMarketSnapshot(data, targetDate)) {
-    return data.polymarket;
-  }
-
-  const existingMarkets = Array.isArray(data.polymarket?.markets)
-    ? data.polymarket.markets
-    : [];
-
-  data.polymarket = {
-    ...(data.polymarket || {}),
-    target_date: targetDate,
-    loading: true,
-    fetch_error: null,
-    markets: existingMarkets,
-  };
-
-  if (selectedCity === data.name) {
-    renderMarketPrices(data);
-  }
-
-  try {
-    const snapshot = await fetchCityMarket(data.name, targetDate, force);
-    data.polymarket = {
-      ...snapshot,
-      loading: false,
-      fetch_error: null,
-    };
-  } catch (e) {
-    console.error(`Failed to load market for ${data.name}:`, e);
-    data.polymarket = {
-      ...(data.polymarket || {}),
-      target_date: targetDate,
-      loading: false,
-      fetch_error: e.message || "Unknown error",
-      markets: existingMarkets,
-    };
-  }
-
-  cityDataCache[data.name] = data;
-  saveCache();
-
-  if (selectedCity === data.name) {
-    renderMarketPrices(data);
-  }
-
-  return data.polymarket;
-}
-
 // ──────────────────────────────────────────────────────────
 //  Nearby Map Stations Rendering
 // ──────────────────────────────────────────────────────────
@@ -426,7 +347,6 @@ async function loadCityDetail(cityName, force = false) {
     const cachedData = cityDataCache[cityName];
     renderPanel(cachedData);
     renderNearbyStations(cachedData);
-    hydrateCityMarketData(cachedData, false);
     return;
   }
 
@@ -437,7 +357,6 @@ async function loadCityDetail(cityName, force = false) {
     cityDataCache[cityName] = data;
     saveCache();
     renderPanel(data);
-    hydrateCityMarketData(data, force);
 
     // Render nearby stations and zoom camera (cinematic or bounds)
     renderNearbyStations(data);
@@ -494,8 +413,6 @@ function renderPanel(data) {
   renderChart(data);
   // Probabilities
   renderProbabilities(data);
-  // Market prices
-  renderMarketPrices(data);
   // Multi-model & Forecast synchronization
   if (!selectedForecastDate) {
     selectedForecastDate = data.local_date;
@@ -1006,154 +923,6 @@ function formatCents(price) {
   if (!Number.isFinite(n)) return "--";
   const cents = Math.round(n * 1000) / 10;
   return Number.isInteger(cents) ? `${cents.toFixed(0)}c` : `${cents.toFixed(1)}c`;
-}
-
-function formatCompactUsd(value) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "--";
-  if (n >= 1000) {
-    const compact = n >= 10000 ? (n / 1000).toFixed(0) : (n / 1000).toFixed(1);
-    return `$${compact}k`;
-  }
-  return `$${Math.round(n)}`;
-}
-
-function formatMarketThreshold(market, fallbackUnit) {
-  const threshold = Number(market?.threshold);
-  if (!Number.isFinite(threshold)) {
-    return market?.question || "Market";
-  }
-
-  const isInteger = Math.abs(threshold - Math.round(threshold)) < 0.001;
-  const value = isInteger ? threshold.toFixed(0) : threshold.toFixed(1);
-  const unitRaw = String(market?.threshold_unit || fallbackUnit || "C").toUpperCase();
-  const unit = unitRaw === "F" ? "°F" : "°C";
-
-  if (market?.contract_type === "exceed") {
-    return `${value}${unit}+`;
-  }
-  return `${value}${unit}`;
-}
-
-function findOutcome(market, outcomeName) {
-  const target = String(outcomeName || "").toLowerCase();
-  return (market?.outcomes || []).find(
-    (outcome) => String(outcome?.name || "").toLowerCase() === target,
-  );
-}
-
-function renderMarketPrices(data) {
-  const summary = document.getElementById("marketSummary");
-  const container = document.getElementById("marketBook");
-  const snapshot = data.polymarket || {};
-  const markets = Array.isArray(snapshot.markets) ? [...snapshot.markets] : [];
-  const targetDate = snapshot.target_date || data.local_date || "--";
-
-  if (snapshot.loading && markets.length === 0) {
-    summary.innerHTML =
-      '<span class="market-muted">Loading current Polymarket markets...</span>';
-    container.innerHTML = "";
-    return;
-  }
-
-  if (snapshot.fetch_error && markets.length === 0) {
-    summary.innerHTML =       `<span class="market-error">Market load failed: ${escapeHtml(snapshot.fetch_error)}</span>`;
-    container.innerHTML = "";
-    return;
-  }
-
-  if (markets.length === 0) {
-    summary.innerHTML =
-      '<span class="market-muted">No Polymarket markets for this date</span>';
-    container.innerHTML = "";
-    return;
-  }
-
-  markets.sort((a, b) => {
-    const left = Number(a?.threshold);
-    const right = Number(b?.threshold);
-    const safeLeft = Number.isFinite(left) ? left : Number.MAX_SAFE_INTEGER;
-    const safeRight = Number.isFinite(right) ? right : Number.MAX_SAFE_INTEGER;
-    return safeLeft - safeRight;
-  });
-
-  const primaryUrl = markets.find((market) => market?.url)?.url;
-  const updatedAtTs = snapshot.updated_at ? Date.parse(snapshot.updated_at) : NaN;
-  const updatedAt = Number.isFinite(updatedAtTs)
-    ? new Date(updatedAtTs).toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      })
-    : null;
-
-  summary.innerHTML = `
-    <div class="market-summary-main">
-      <span>${escapeHtml(targetDate)} - ${markets.length} markets</span>
-      <span>Buy = best ask</span>
-      <span>Sell = best bid</span>
-      ${updatedAt ? `<span>Updated ${escapeHtml(updatedAt)}</span>` : ""}
-    </div>
-    ${primaryUrl ? `<a href="${escapeHtml(primaryUrl)}" target="_blank" rel="noreferrer">Open Polymarket</a>` : ""}
-  `;
-
-  container.innerHTML = markets
-    .map((market) => {
-      const yes = findOutcome(market, "yes") || {};
-      const no = findOutcome(market, "no") || {};
-      const label = formatMarketThreshold(
-        market,
-        String(data.temp_symbol || "").includes("F") ? "F" : "C",
-      );
-      const spread = Number(yes.spread);
-      const meta = [
-        `Volume ${formatCompactUsd(market.volume)}`,
-        `Liquidity ${formatCompactUsd(market.liquidity)}`,
-        Number.isFinite(spread) ? `Yes spread ${formatCents(spread)}` : null,
-      ].filter(Boolean);
-
-      return `
-        <div class="market-row">
-          <div class="market-contract">
-            <div class="market-threshold">${escapeHtml(label)}</div>
-            <div class="market-contract-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>
-            <div class="market-question">${escapeHtml(market.question || "")}</div>
-          </div>
-          <div class="market-side yes">
-            <div class="market-side-header">
-              <span class="market-side-label yes">YES</span>
-              <span class="market-last">Last ${formatCents(yes.last_trade_price)}</span>
-            </div>
-            <div class="market-side-prices">
-              <div class="market-price-chip">
-                <div class="market-price-label">Buy</div>
-                <div class="market-price-value">${formatCents(yes.buy_price)}</div>
-              </div>
-              <div class="market-price-chip">
-                <div class="market-price-label">Sell</div>
-                <div class="market-price-value">${formatCents(yes.sell_price)}</div>
-              </div>
-            </div>
-          </div>
-          <div class="market-side no">
-            <div class="market-side-header">
-              <span class="market-side-label no">NO</span>
-              <span class="market-last">Last ${formatCents(no.last_trade_price)}</span>
-            </div>
-            <div class="market-side-prices">
-              <div class="market-price-chip">
-                <div class="market-price-label">Buy</div>
-                <div class="market-price-value">${formatCents(no.buy_price)}</div>
-              </div>
-              <div class="market-price-chip">
-                <div class="market-price-label">Sell</div>
-                <div class="market-price-value">${formatCents(no.sell_price)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    })
-    .join("");
 }
 
 function renderModels(data) {

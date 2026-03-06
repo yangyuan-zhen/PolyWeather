@@ -51,46 +51,20 @@ def _sample_weather_payload():
     }
 
 
-def _sample_market_snapshot():
-    return {
-        "city": "ankara",
-        "target_date": "2026-03-07",
-        "markets": [
-            {
-                "id": "m1",
-                "question": "Will temperature in Ankara exceed 11.5°C on March 7?",
-                "threshold": 11.5,
-                "threshold_unit": "C",
-                "contract_type": "exceed",
-                "outcomes": [
-                    {"name": "Yes", "buy_price": 0.73, "last_price": 0.72},
-                    {"name": "No", "buy_price": 0.27, "last_price": 0.28},
-                ],
-            }
-        ],
-    }
-
-
 def test_trading_alerts_all_core_rules_trigger():
     out = build_trading_alerts(
         city_weather=_sample_weather_payload(),
-        market_snapshot=_sample_market_snapshot(),
         map_url="https://example.com/map",
     )
 
     assert out["trigger_count"] >= 3
     assert out["rules"]["momentum_spike"]["triggered"] is True
     assert out["rules"]["forecast_breakthrough"]["triggered"] is True
-    assert out["rules"]["kill_zone"]["triggered"] is True
     assert out["rules"]["advection"]["triggered"] is True
 
     msg = out["telegram"]["zh"]
     assert "PolyWeather 异动预警" in msg
     assert "动量突变" in msg
-    assert "盘口：" in msg
-    assert "Yes 买 73c / 卖 -" in msg
-    assert "No 买 27c / 卖 -" in msg
-    assert "No\" 单需谨慎" in msg
     assert "https://example.com/map" in msg
 
 
@@ -100,7 +74,6 @@ def test_forecast_breakthrough_not_triggered_when_current_not_above_margin():
 
     out = build_trading_alerts(
         city_weather=city_weather,
-        market_snapshot=_sample_market_snapshot(),
     )
     assert out["rules"]["forecast_breakthrough"]["triggered"] is False
 
@@ -118,7 +91,6 @@ def test_ankara_center_hits_deb_triggers_force_push():
 
     out = build_trading_alerts(
         city_weather=city_weather,
-        market_snapshot={"city": "ankara", "target_date": "2026-03-07", "markets": []},
     )
 
     center_rule = out["rules"]["ankara_center_deb_hit"]
@@ -126,3 +98,47 @@ def test_ankara_center_hits_deb_triggers_force_push():
     assert center_rule["force_push"] is True
     assert out["severity"] in ("medium", "high")
     assert "Center信号" in out["telegram"]["zh"]
+
+
+def test_peak_passed_guard_suppresses_late_day_cooldown_alerts():
+    city_weather = {
+        "name": "wellington",
+        "display_name": "Wellington",
+        "temp_symbol": "°C",
+        "local_time": "16:40",
+        "current": {
+            "temp": 19.0,
+            "max_so_far": 20.2,
+            "max_temp_time": "15:20",
+            "wind_dir": 220.0,
+            "wind_speed_kt": 8.0,
+        },
+        "trend": {
+            "recent": [
+                {"time": "16:40", "temp": 19.0},
+                {"time": "16:10", "temp": 20.0},
+                {"time": "15:40", "temp": 20.5},
+            ]
+        },
+        "multi_model": {
+            "MGM": 18.2,
+            "GFS": 18.4,
+            "ECMWF": 18.5,
+        },
+        "deb": {"prediction": 18.7},
+        "metar_recent_obs": [
+            {"time": "16:40", "wdir": 220},
+            {"time": "16:10", "wdir": 210},
+        ],
+        "mgm_nearby": [],
+    }
+
+    out = build_trading_alerts(city_weather=city_weather)
+
+    assert out["suppression"]["suppressed"] is True
+    assert out["severity"] == "none"
+    assert out["trigger_count"] == 0
+    assert out["rules"]["momentum_spike"]["raw_triggered"] is True
+    assert out["rules"]["forecast_breakthrough"]["raw_triggered"] is True
+    assert "高温已过（暂停推送）" in out["telegram"]["zh"]
+    assert "暂停主动推送" in out["telegram"]["zh"]

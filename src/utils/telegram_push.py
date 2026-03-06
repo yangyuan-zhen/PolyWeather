@@ -116,8 +116,8 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     center_deb = rules.get("ankara_center_deb_hit") or {}
     momentum = rules.get("momentum_spike") or {}
     breakthrough = rules.get("forecast_breakthrough") or {}
-    kill_zone = rules.get("kill_zone") or {}
     advection = rules.get("advection") or {}
+    suppression = alert_payload.get("suppression") or {}
 
     signature_payload = {
         "city": alert_payload.get("city"),
@@ -134,10 +134,12 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
         "momentum_direction": momentum.get("direction"),
         "momentum_slope_30m": round(float(momentum.get("slope_30m") or 0.0), 1),
         "breakthrough_margin": round(float(breakthrough.get("margin") or 0.0), 1),
-        "kill_zone_strike": round(float(kill_zone.get("strike_price") or 0.0), 1),
-        "kill_zone_distance": round(float(kill_zone.get("distance") or 0.0), 1),
         "lead_station": (advection.get("lead_station") or {}).get("name"),
         "lead_delta": round(float(advection.get("lead_delta") or 0.0), 1),
+        "suppressed": bool(suppression.get("suppressed")),
+        "suppression_reason": suppression.get("reason"),
+        "suppression_peak_time": suppression.get("max_temp_time"),
+        "suppression_rollback": round(float(suppression.get("rollback") or 0.0), 1),
     }
     raw = json.dumps(signature_payload, sort_keys=True, ensure_ascii=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
@@ -151,27 +153,15 @@ def build_trade_alert_for_city(
 ) -> Dict[str, Any]:
     from web.app import _analyze
     from src.analysis.market_alert_engine import build_trading_alerts
-    from src.data_collection.polymarket_client import build_city_market_snapshot
 
     city_weather = _analyze(city, force_refresh=force_refresh)
     resolved_target_date = target_date or city_weather.get("local_date")
     if resolved_target_date:
         datetime.strptime(resolved_target_date, "%Y-%m-%d")
 
-    proxy = (
-        (config.get("polymarket", {}) or {}).get("proxy")
-        or (config.get("app", {}) or {}).get("proxy")
-    )
-    market_snapshot = build_city_market_snapshot(
-        city=city,
-        target_date=resolved_target_date,
-        proxy=proxy,
-        force_refresh=force_refresh,
-    )
     map_url = os.getenv("POLYWEATHER_MAP_URL") or "https://polyweather-pro.vercel.app/"
     alert_payload = build_trading_alerts(
         city_weather=city_weather,
-        market_snapshot=market_snapshot,
         map_url=map_url,
     )
     alert_payload["target_date"] = resolved_target_date

@@ -1,11 +1,10 @@
 """
-Rule-based weather/market alert engine for short-horizon Polymarket trading.
+Rule-based weather alert engine for short-horizon trading signals.
 """
 
 from __future__ import annotations
 
 import math
-import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -185,178 +184,6 @@ def _calc_forecast_breakthrough_alert(city_weather: Dict[str, Any], temp_symbol:
         "margin": round(margin, 2),
         "threshold": round(threshold, 2),
         "model_coverage": f"{len(available)}/3",
-    }
-
-
-def _convert_temp(value: float, from_unit: Optional[str], temp_symbol: str) -> float:
-    from_u = (from_unit or "").upper()
-    to_f = "F" in (temp_symbol or "").upper()
-    if from_u == "F" and not to_f:
-        return (value - 32.0) * 5.0 / 9.0
-    if from_u == "C" and to_f:
-        return (value * 9.0 / 5.0) + 32.0
-    return value
-
-
-def _extract_numbers(text: str) -> List[float]:
-    out: List[float] = []
-    for m in re.finditer(r"-?\d+(?:\.\d+)?", text or ""):
-        try:
-            out.append(float(m.group(0)))
-        except Exception:
-            continue
-    return out
-
-
-def _extract_market_strikes(
-    market_snapshot: Dict[str, Any],
-    temp_symbol: str,
-) -> List[Dict[str, Any]]:
-    candidates: List[Dict[str, Any]] = []
-    for market in market_snapshot.get("markets", []) or []:
-        m_question = market.get("question") or ""
-        m_id = market.get("id")
-
-        threshold = _sf(market.get("threshold"))
-        threshold_unit = market.get("threshold_unit")
-        if threshold is not None:
-            candidates.append(
-                {
-                    "strike": _convert_temp(threshold, threshold_unit, temp_symbol),
-                    "source": "market_threshold",
-                    "market_id": m_id,
-                    "question": m_question,
-                }
-            )
-
-        for outcome in market.get("outcomes", []) or []:
-            name = str(outcome.get("name") or "")
-            name_l = name.lower()
-            if name_l in ("yes", "no"):
-                continue
-            if not any(tok in name_l for tok in ("-", "to", "below", "under", "above", "over", "deg", "f", "c")):
-                continue
-            vals = [v for v in _extract_numbers(name) if -80 <= v <= 160]
-            for v in vals:
-                candidates.append(
-                    {
-                        "strike": _convert_temp(v, threshold_unit, temp_symbol),
-                        "source": "outcome_number",
-                        "market_id": m_id,
-                        "question": m_question,
-                    }
-                )
-    return candidates
-
-
-def _find_market_by_id(markets: List[Dict[str, Any]], market_id: Any) -> Optional[Dict[str, Any]]:
-    for m in markets:
-        if str(m.get("id")) == str(market_id):
-            return m
-    return None
-
-
-def _extract_market_prices(target_market: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    prices: Dict[str, Any] = {
-        "question": None,
-        "yes_buy": None,
-        "yes_sell": None,
-        "yes_last": None,
-        "no_buy": None,
-        "no_sell": None,
-        "no_last": None,
-    }
-    if not target_market:
-        return prices
-
-    prices["question"] = target_market.get("question")
-    for oc in target_market.get("outcomes", []) or []:
-        name = str(oc.get("name") or "").strip().lower()
-        if name not in ("yes", "no"):
-            continue
-        prefix = "yes" if name == "yes" else "no"
-        prices[f"{prefix}_buy"] = _sf(oc.get("buy_price"))
-        prices[f"{prefix}_sell"] = _sf(oc.get("sell_price"))
-        prices[f"{prefix}_last"] = _sf(oc.get("last_trade_price"))
-        if prices[f"{prefix}_last"] is None:
-            prices[f"{prefix}_last"] = _sf(oc.get("last_price"))
-    return prices
-
-
-def _format_market_price(value: Optional[float]) -> str:
-    if value is None:
-        return "-"
-    return f"{value * 100:.0f}c"
-
-
-def _format_temp_display(value: Optional[float], temp_symbol: str) -> str:
-    if value is None:
-        return f"-{temp_symbol}"
-    rounded = round(float(value), 1)
-    if abs(rounded - round(rounded)) < 1e-9:
-        return f"{int(round(rounded))}{temp_symbol}"
-    return f"{rounded:.1f}{temp_symbol}"
-
-
-def _calc_kill_zone_alert(
-    city_weather: Dict[str, Any],
-    market_snapshot: Dict[str, Any],
-    temp_symbol: str,
-) -> Dict[str, Any]:
-    current_temp = _sf((city_weather.get("current") or {}).get("temp"))
-    if current_temp is None:
-        return {
-            "type": "kill_zone",
-            "triggered": False,
-            "reason": "current temperature unavailable",
-        }
-
-    candidates = _extract_market_strikes(market_snapshot, temp_symbol)
-    if not candidates:
-        return {
-            "type": "kill_zone",
-            "triggered": False,
-            "reason": "no market strike candidates found",
-        }
-
-    nearest = min(candidates, key=lambda row: abs(current_temp - row["strike"]))
-    strike = _sf(nearest.get("strike"))
-    if strike is None:
-        return {
-            "type": "kill_zone",
-            "triggered": False,
-            "reason": "failed to parse strike temperature",
-        }
-
-    threshold = _to_unit_delta(0.3, temp_symbol)
-    distance = abs(current_temp - strike)
-    triggered = distance < threshold
-
-    markets = market_snapshot.get("markets", []) or []
-    target_market = _find_market_by_id(markets, nearest.get("market_id"))
-    market_prices = _extract_market_prices(target_market)
-
-    no_probability = None
-    if target_market:
-        yes_price = market_prices.get("yes_buy")
-        no_price = market_prices.get("no_buy")
-        if no_price is None and yes_price is not None:
-            no_price = max(0.0, min(1.0, 1.0 - yes_price))
-        no_probability = no_price
-
-    return {
-        "type": "kill_zone",
-        "triggered": triggered,
-        "current_temp": round(current_temp, 2),
-        "strike_price": round(strike, 2),
-        "market_label": f"{_format_temp_display(strike, temp_symbol)} 档位",
-        "distance": round(distance, 2),
-        "threshold": round(threshold, 2),
-        "market_id": nearest.get("market_id"),
-        "question": nearest.get("question"),
-        "strike_source": nearest.get("source"),
-        "no_probability": round(no_probability, 4) if no_probability is not None else None,
-        "market_prices": market_prices,
     }
 
 
@@ -546,12 +373,52 @@ def _calc_advection_alert(city_weather: Dict[str, Any], temp_symbol: str) -> Dic
     }
 
 
+def _calc_peak_passed_guard(city_weather: Dict[str, Any], temp_symbol: str) -> Dict[str, Any]:
+    current = city_weather.get("current") or {}
+    current_temp = _sf(current.get("temp"))
+    max_so_far = _sf(current.get("max_so_far"))
+    max_temp_time = current.get("max_temp_time")
+    local_time = city_weather.get("local_time")
+
+    if current_temp is None or max_so_far is None:
+        return {"suppressed": False, "reason": "missing current/max_so_far"}
+
+    local_min = _minute_of_day(local_time)
+    peak_min = _minute_of_day(max_temp_time)
+    if local_min is None or peak_min is None:
+        return {"suppressed": False, "reason": "missing local_time/max_temp_time"}
+
+    # Do not suppress in the morning; many cities still make their daily high later.
+    if local_min < (14 * 60 + 30):
+        return {"suppressed": False, "reason": "too early in local day"}
+
+    if peak_min >= local_min:
+        return {"suppressed": False, "reason": "peak has not passed yet"}
+
+    minutes_since_peak = local_min - peak_min
+    rollback = max_so_far - current_temp
+    rollback_threshold = _to_unit_delta(0.8, temp_symbol)
+    cooled_off = rollback >= rollback_threshold
+    suppressed = minutes_since_peak >= 45 and cooled_off
+
+    return {
+        "suppressed": suppressed,
+        "reason": "late-day peak already passed" if suppressed else "cool-off threshold not met",
+        "current_temp": round(current_temp, 2),
+        "max_so_far": round(max_so_far, 2),
+        "max_temp_time": max_temp_time,
+        "local_time": local_time,
+        "minutes_since_peak": minutes_since_peak,
+        "rollback": round(rollback, 2),
+        "rollback_threshold": round(rollback_threshold, 2),
+    }
+
+
 def _join_trigger_types_cn(rules: Dict[str, Dict[str, Any]]) -> str:
     mapping = [
         ("ankara_center_deb_hit", "Center达到DEB"),
         ("momentum_spike", "动量突变"),
         ("forecast_breakthrough", "预测突破"),
-        ("kill_zone", "临界触发"),
         ("advection", "暖平流"),
     ]
     parts = [name for key, name in mapping if rules.get(key, {}).get("triggered")]
@@ -561,13 +428,24 @@ def _join_trigger_types_cn(rules: Dict[str, Dict[str, Any]]) -> str:
 def _build_advice_cn(
     rules: Dict[str, Dict[str, Any]],
     temp_symbol: str,
+    suppression: Optional[Dict[str, Any]] = None,
 ) -> str:
+    if (suppression or {}).get("suppressed"):
+        max_so_far = _sf((suppression or {}).get("max_so_far"))
+        max_temp_time = (suppression or {}).get("max_temp_time")
+        rollback = _sf((suppression or {}).get("rollback"))
+        if max_so_far is not None and max_temp_time and rollback is not None:
+            return (
+                f"当地高温大概率已在 {max_temp_time} 前后兑现，"
+                f"较日内高点 {max_so_far:.1f}{temp_symbol} 已回落 {rollback:.1f}{temp_symbol}，暂停主动推送。"
+            )
+        return "当地高温大概率已经兑现，当前进入回落阶段，暂停主动推送。"
+
     parts: List[str] = []
     center_deb = rules.get("ankara_center_deb_hit", {})
     advection = rules.get("advection", {})
     momentum = rules.get("momentum_spike", {})
     breakthrough = rules.get("forecast_breakthrough", {})
-    kill_zone = rules.get("kill_zone", {})
 
     if center_deb.get("triggered"):
         deb_prediction = _sf(center_deb.get("deb_prediction"))
@@ -589,15 +467,8 @@ def _build_advice_cn(
     if breakthrough.get("triggered"):
         parts.append("实测已击穿主流模型上沿")
 
-    no_prob = _sf(kill_zone.get("no_probability"))
-    strike = _sf(kill_zone.get("strike_price"))
-    if kill_zone.get("triggered") and no_prob is not None and strike is not None:
-        parts.append(f'{no_prob * 100:.0f}% 概率的 {strike:.1f}{temp_symbol} "No" 单需谨慎')
-    elif kill_zone.get("triggered") and strike is not None:
-        parts.append(f"接近 {strike:.1f}{temp_symbol} 结算阻力位，波动率可能激增")
-
     if not parts:
-        return "当前未触发高优先级异动，继续观察盘口与实测联动。"
+        return "当前未触发高优先级天气异动，继续观察实测与模型联动。"
     return "，".join(parts) + "。"
 
 
@@ -605,39 +476,32 @@ def _build_telegram_messages(
     city_weather: Dict[str, Any],
     rules: Dict[str, Dict[str, Any]],
     map_url: Optional[str],
+    suppression: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     temp_symbol = city_weather.get("temp_symbol", "°C")
     city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
     current_temp = _sf((city_weather.get("current") or {}).get("temp"))
     center_deb = rules.get("ankara_center_deb_hit", {})
     momentum = rules.get("momentum_spike", {})
-    kill_zone = rules.get("kill_zone", {})
     advection = rules.get("advection", {})
 
     if current_temp is None:
         return {"zh": "", "en": ""}
 
+    suppressed = bool((suppression or {}).get("suppressed"))
     has_active_trigger = any(rule.get("triggered") for rule in rules.values())
-    types_cn = _join_trigger_types_cn(rules) or "盘口异动"
+    if suppressed:
+        types_cn = "高温已过（暂停推送）"
+    else:
+        types_cn = _join_trigger_types_cn(rules) or "天气状态快照"
     delta_temp = _sf(momentum.get("delta_temp"))
     delta_min = momentum.get("delta_minutes")
-    strike = _sf(kill_zone.get("strike_price"))
-    distance = _sf(kill_zone.get("distance"))
-    market_label = str(kill_zone.get("market_label") or "").strip()
-    market_prices = kill_zone.get("market_prices") or {}
     center_station = center_deb.get("center_station") or {}
 
     dyn = f"实测 {current_temp:.1f}{temp_symbol}"
     if delta_temp is not None and delta_min is not None:
         icon = "🚀" if delta_temp > 0 else ("🧊" if delta_temp < 0 else "➖")
         dyn += f" ({int(delta_min)}min 内 {delta_temp:+.1f}{temp_symbol}) {icon}"
-
-    strike_line = ""
-    if strike is not None and distance is not None:
-        if current_temp < strike:
-            strike_line = f"距离 {strike:.1f}{temp_symbol} 档位：还差 {distance:.1f}{temp_symbol}"
-        else:
-            strike_line = f"距离 {strike:.1f}{temp_symbol} 档位：高出 {distance:.1f}{temp_symbol}"
 
     lead_line = ""
     if advection.get("triggered"):
@@ -662,20 +526,18 @@ def _build_telegram_messages(
             if lead_gap is not None:
                 center_deb_line += f" | 领先 {lead_gap:+.1f}{temp_symbol}"
 
-    price_line = ""
-    if any(
-        market_prices.get(key) is not None
-        for key in ("yes_buy", "yes_sell", "no_buy", "no_sell")
-    ):
-        price_prefix = f"盘口（{market_label}）：" if market_label else "盘口："
-        price_line = (
-            price_prefix
-            + 
-            f"Yes 买 {_format_market_price(market_prices.get('yes_buy'))} / 卖 {_format_market_price(market_prices.get('yes_sell'))} | "
-            f"No 买 {_format_market_price(market_prices.get('no_buy'))} / 卖 {_format_market_price(market_prices.get('no_sell'))}"
-        )
+    peak_line = ""
+    if suppressed:
+        max_so_far = _sf((suppression or {}).get("max_so_far"))
+        max_temp_time = (suppression or {}).get("max_temp_time")
+        rollback = _sf((suppression or {}).get("rollback"))
+        if max_so_far is not None and max_temp_time and rollback is not None:
+            peak_line = (
+                f"高温状态：日内高点 {max_so_far:.1f}{temp_symbol} @ {max_temp_time}，"
+                f"当前已回落 {rollback:.1f}{temp_symbol}"
+            )
 
-    advice = _build_advice_cn(rules, temp_symbol)
+    advice = _build_advice_cn(rules, temp_symbol, suppression=suppression)
     final_map = map_url or "https://polyweather-pro.vercel.app/"
     title_zh = "🚨 PolyWeather 异动预警" if has_active_trigger else "📍 PolyWeather 状态快照"
     title_en = "🚨 PolyWeather Alert" if has_active_trigger else "📍 PolyWeather Status"
@@ -686,27 +548,25 @@ def _build_telegram_messages(
         f"类型：{types_cn}",
         f"动态：{dyn}",
     ]
-    if strike_line:
-        lines_zh.append(strike_line)
     if center_deb_line:
         lines_zh.append(center_deb_line)
-    if price_line:
-        lines_zh.append(price_line)
+    if peak_line:
+        lines_zh.append(peak_line)
     if lead_line:
         lines_zh.append(lead_line)
     lines_zh.append(f"AI 建议：{advice}")
     lines_zh.append(f"点击查看实时地图：{final_map}")
 
     type_en = []
+    if rules.get("ankara_center_deb_hit", {}).get("triggered"):
+        type_en.append("Center Reached DEB")
     if rules.get("momentum_spike", {}).get("triggered"):
         type_en.append("Momentum Spike")
     if rules.get("forecast_breakthrough", {}).get("triggered"):
         type_en.append("Forecast Breakthrough")
-    if rules.get("kill_zone", {}).get("triggered"):
-        type_en.append("Kill Zone")
     if rules.get("advection", {}).get("triggered"):
         type_en.append("Advection")
-    type_en_str = " + ".join(type_en) or "Market anomaly"
+    type_en_str = "Peak Passed (suppressed)" if suppressed else (" + ".join(type_en) or "Weather snapshot")
 
     lines_en = [
         f"{title_en} [{city_name}]",
@@ -714,8 +574,6 @@ def _build_telegram_messages(
         f"Type: {type_en_str}",
         f"Now: {current_temp:.1f}{temp_symbol}",
     ]
-    if strike is not None and distance is not None:
-        lines_en.append(f"Distance to {strike:.1f}{temp_symbol} strike: {distance:.1f}{temp_symbol}")
     if center_deb_line:
         center_temp = _sf(center_station.get("temp"))
         deb_prediction = _sf(center_deb.get("deb_prediction"))
@@ -723,14 +581,15 @@ def _build_telegram_messages(
             lines_en.append(
                 f"Center signal: {center_temp:.1f}{temp_symbol} has reached DEB {deb_prediction:.1f}{temp_symbol}"
             )
-    if price_line:
-        price_label_en = f"Quotes ({market_label}): " if market_label else "Quotes: "
-        lines_en.append(
-            price_label_en
-            +
-            f"Yes buy {_format_market_price(market_prices.get('yes_buy'))} / sell {_format_market_price(market_prices.get('yes_sell'))} | "
-            f"No buy {_format_market_price(market_prices.get('no_buy'))} / sell {_format_market_price(market_prices.get('no_sell'))}"
-        )
+    if peak_line:
+        max_so_far = _sf((suppression or {}).get("max_so_far"))
+        max_temp_time = (suppression or {}).get("max_temp_time")
+        rollback = _sf((suppression or {}).get("rollback"))
+        if max_so_far is not None and max_temp_time and rollback is not None:
+            lines_en.append(
+                f"Peak state: intraday high {max_so_far:.1f}{temp_symbol} at {max_temp_time}, "
+                f"now off by {rollback:.1f}{temp_symbol}"
+            )
     lines_en.append(f"Action: {advice}")
     lines_en.append(f"Map: {final_map}")
 
@@ -739,11 +598,10 @@ def _build_telegram_messages(
 
 def build_trading_alerts(
     city_weather: Dict[str, Any],
-    market_snapshot: Dict[str, Any],
     map_url: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Build weather+market trading alerts for paid Telegram delivery and web usage.
+    Build weather-driven trading alerts for paid Telegram delivery and web usage.
     """
     temp_symbol = city_weather.get("temp_symbol", "°C")
     city = city_weather.get("name", "")
@@ -753,7 +611,6 @@ def build_trading_alerts(
         "ankara_center_deb_hit": _calc_ankara_center_deb_alert(city_weather, temp_symbol),
         "momentum_spike": _calc_momentum_alert(city_weather, temp_symbol),
         "forecast_breakthrough": _calc_forecast_breakthrough_alert(city_weather, temp_symbol),
-        "kill_zone": _calc_kill_zone_alert(city_weather, market_snapshot, temp_symbol),
         "advection": _calc_advection_alert(city_weather, temp_symbol),
     }
 
@@ -765,15 +622,31 @@ def build_trading_alerts(
         for key, value in rules.items()
         if value.get("triggered")
     ]
-    force_push = any(alert.get("force_push") for alert in triggered)
-    severity = "high" if len(triggered) >= 2 else ("medium" if len(triggered) == 1 else "none")
-    if force_push and severity == "none":
-        severity = "medium"
+    suppression = _calc_peak_passed_guard(city_weather, temp_symbol)
+    if suppression.get("suppressed") and triggered:
+        suppression["raw_trigger_types"] = [alert.get("type") for alert in triggered if alert.get("type")]
+        for alert in triggered:
+            rule = rules.get(alert.get("type") or "")
+            if not rule:
+                continue
+            rule["raw_triggered"] = True
+            rule["triggered"] = False
+            rule["suppressed"] = True
+            rule["suppression_reason"] = suppression.get("reason")
+        triggered = []
+        force_push = False
+        severity = "none"
+    else:
+        force_push = any(alert.get("force_push") for alert in triggered)
+        severity = "high" if len(triggered) >= 2 else ("medium" if len(triggered) == 1 else "none")
+        if force_push and severity == "none":
+            severity = "medium"
 
     telegram = _build_telegram_messages(
         city_weather=city_weather,
         rules=rules,
         map_url=map_url,
+        suppression=suppression,
     )
 
     return {
@@ -783,6 +656,7 @@ def build_trading_alerts(
         "severity": severity,
         "trigger_count": len(triggered),
         "rules": rules,
+        "suppression": suppression,
         "triggered_alerts": triggered,
         "telegram": telegram,
     }
