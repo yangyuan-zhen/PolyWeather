@@ -381,6 +381,84 @@ def _pick_leading_station(city: str, nearby: List[Dict[str, Any]]) -> Optional[D
     return max(nearby, key=_temp)
 
 
+def _pick_ankara_center_station(nearby: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not nearby:
+        return None
+
+    def _temp(row: Dict[str, Any]) -> float:
+        return _sf(row.get("temp")) or -999.0
+
+    priority_rows = []
+    for row in nearby:
+        name = str(row.get("name") or "").lower()
+        sid = str(row.get("istNo") or "").strip()
+        if sid == "17130" or "center" in name or "b枚lge" in name or "etimesgut" in name:
+            priority_rows.append(row)
+    if priority_rows:
+        return max(priority_rows, key=_temp)
+    return None
+
+
+def _calc_ankara_center_deb_alert(
+    city_weather: Dict[str, Any],
+    temp_symbol: str,
+) -> Dict[str, Any]:
+    city = (city_weather.get("name") or "").lower()
+    if city != "ankara":
+        return {
+            "type": "ankara_center_deb_hit",
+            "triggered": False,
+            "reason": "city is not ankara",
+        }
+
+    deb_prediction = _sf((city_weather.get("deb") or {}).get("prediction"))
+    if deb_prediction is None:
+        return {
+            "type": "ankara_center_deb_hit",
+            "triggered": False,
+            "reason": "deb prediction unavailable",
+        }
+
+    center_station = _pick_ankara_center_station(city_weather.get("mgm_nearby") or [])
+    if not center_station:
+        return {
+            "type": "ankara_center_deb_hit",
+            "triggered": False,
+            "reason": "ankara center station unavailable",
+        }
+
+    center_temp = _sf(center_station.get("temp"))
+    if center_temp is None:
+        return {
+            "type": "ankara_center_deb_hit",
+            "triggered": False,
+            "reason": "ankara center temperature unavailable",
+        }
+
+    airport_temp = _sf((city_weather.get("current") or {}).get("temp"))
+    epsilon = _to_unit_delta(0.05, temp_symbol)
+    triggered = center_temp + epsilon >= deb_prediction
+
+    return {
+        "type": "ankara_center_deb_hit",
+        "triggered": triggered,
+        "force_push": triggered,
+        "center_station": {
+            "name": center_station.get("name"),
+            "istNo": center_station.get("istNo"),
+            "temp": round(center_temp, 2),
+        },
+        "deb_prediction": round(deb_prediction, 2),
+        "airport_temp": round(airport_temp, 2) if airport_temp is not None else None,
+        "margin_vs_deb": round(center_temp - deb_prediction, 2),
+        "center_lead_vs_airport": (
+            round(center_temp - airport_temp, 2)
+            if airport_temp is not None
+            else None
+        ),
+    }
+
+
 def _calc_advection_alert(city_weather: Dict[str, Any], temp_symbol: str) -> Dict[str, Any]:
     city = (city_weather.get("name") or "").lower()
     current = city_weather.get("current") or {}
@@ -470,6 +548,7 @@ def _calc_advection_alert(city_weather: Dict[str, Any], temp_symbol: str) -> Dic
 
 def _join_trigger_types_cn(rules: Dict[str, Dict[str, Any]]) -> str:
     mapping = [
+        ("ankara_center_deb_hit", "Center达到DEB"),
         ("momentum_spike", "动量突变"),
         ("forecast_breakthrough", "预测突破"),
         ("kill_zone", "临界触发"),
@@ -484,11 +563,21 @@ def _build_advice_cn(
     temp_symbol: str,
 ) -> str:
     parts: List[str] = []
+    center_deb = rules.get("ankara_center_deb_hit", {})
     advection = rules.get("advection", {})
     momentum = rules.get("momentum_spike", {})
     breakthrough = rules.get("forecast_breakthrough", {})
     kill_zone = rules.get("kill_zone", {})
 
+    if center_deb.get("triggered"):
+        deb_prediction = _sf(center_deb.get("deb_prediction"))
+        center_temp = _sf(((center_deb.get("center_station") or {}).get("temp")))
+        if deb_prediction is not None and center_temp is not None:
+            parts.append(
+                f"Ankara Center {center_temp:.1f}{temp_symbol} 已触及 DEB {deb_prediction:.1f}{temp_symbol}"
+            )
+        else:
+            parts.append("Ankara Center 已触及 DEB 预测值")
     if advection.get("triggered"):
         parts.append("风向转南，暖平流增强")
     if momentum.get("triggered"):
@@ -520,6 +609,7 @@ def _build_telegram_messages(
     temp_symbol = city_weather.get("temp_symbol", "°C")
     city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
     current_temp = _sf((city_weather.get("current") or {}).get("temp"))
+    center_deb = rules.get("ankara_center_deb_hit", {})
     momentum = rules.get("momentum_spike", {})
     kill_zone = rules.get("kill_zone", {})
     advection = rules.get("advection", {})
@@ -535,6 +625,7 @@ def _build_telegram_messages(
     distance = _sf(kill_zone.get("distance"))
     market_label = str(kill_zone.get("market_label") or "").strip()
     market_prices = kill_zone.get("market_prices") or {}
+    center_station = center_deb.get("center_station") or {}
 
     dyn = f"实测 {current_temp:.1f}{temp_symbol}"
     if delta_temp is not None and delta_min is not None:
@@ -554,6 +645,22 @@ def _build_telegram_messages(
         lead_delta = _sf(advection.get("lead_delta"))
         if lead_delta is not None:
             lead_line = f"联动：{st_name} 已领先 {lead_delta:+.1f}{temp_symbol}"
+
+    center_deb_line = ""
+    if center_deb.get("triggered"):
+        center_name = center_station.get("name") or "Ankara Center"
+        center_temp = _sf(center_station.get("temp"))
+        deb_prediction = _sf(center_deb.get("deb_prediction"))
+        airport_temp = _sf(center_deb.get("airport_temp"))
+        lead_gap = _sf(center_deb.get("center_lead_vs_airport"))
+        if center_temp is not None and deb_prediction is not None:
+            center_deb_line = (
+                f"Center信号：{center_name} {center_temp:.1f}{temp_symbol} 已达到 DEB {deb_prediction:.1f}{temp_symbol}"
+            )
+            if airport_temp is not None:
+                center_deb_line += f" | 机场 {airport_temp:.1f}{temp_symbol}"
+            if lead_gap is not None:
+                center_deb_line += f" | 领先 {lead_gap:+.1f}{temp_symbol}"
 
     price_line = ""
     if any(
@@ -581,6 +688,8 @@ def _build_telegram_messages(
     ]
     if strike_line:
         lines_zh.append(strike_line)
+    if center_deb_line:
+        lines_zh.append(center_deb_line)
     if price_line:
         lines_zh.append(price_line)
     if lead_line:
@@ -607,6 +716,13 @@ def _build_telegram_messages(
     ]
     if strike is not None and distance is not None:
         lines_en.append(f"Distance to {strike:.1f}{temp_symbol} strike: {distance:.1f}{temp_symbol}")
+    if center_deb_line:
+        center_temp = _sf(center_station.get("temp"))
+        deb_prediction = _sf(center_deb.get("deb_prediction"))
+        if center_temp is not None and deb_prediction is not None:
+            lines_en.append(
+                f"Center signal: {center_temp:.1f}{temp_symbol} has reached DEB {deb_prediction:.1f}{temp_symbol}"
+            )
     if price_line:
         price_label_en = f"Quotes ({market_label}): " if market_label else "Quotes: "
         lines_en.append(
@@ -634,6 +750,7 @@ def build_trading_alerts(
     now = datetime.now(timezone.utc).isoformat()
 
     rules: Dict[str, Dict[str, Any]] = {
+        "ankara_center_deb_hit": _calc_ankara_center_deb_alert(city_weather, temp_symbol),
         "momentum_spike": _calc_momentum_alert(city_weather, temp_symbol),
         "forecast_breakthrough": _calc_forecast_breakthrough_alert(city_weather, temp_symbol),
         "kill_zone": _calc_kill_zone_alert(city_weather, market_snapshot, temp_symbol),
@@ -648,7 +765,10 @@ def build_trading_alerts(
         for key, value in rules.items()
         if value.get("triggered")
     ]
+    force_push = any(alert.get("force_push") for alert in triggered)
     severity = "high" if len(triggered) >= 2 else ("medium" if len(triggered) == 1 else "none")
+    if force_push and severity == "none":
+        severity = "medium"
 
     telegram = _build_telegram_messages(
         city_weather=city_weather,

@@ -100,6 +100,10 @@ def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400
 
 
 def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_count: int) -> bool:
+    triggered_alerts = alert_payload.get("triggered_alerts") or []
+    if any(alert.get("force_push") for alert in triggered_alerts):
+        return True
+
     trigger_count = int(alert_payload.get("trigger_count") or 0)
     if trigger_count < min_trigger_count:
         return False
@@ -109,6 +113,7 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
 
 def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     rules = alert_payload.get("rules") or {}
+    center_deb = rules.get("ankara_center_deb_hit") or {}
     momentum = rules.get("momentum_spike") or {}
     breakthrough = rules.get("forecast_breakthrough") or {}
     kill_zone = rules.get("kill_zone") or {}
@@ -123,6 +128,9 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
             for alert in (alert_payload.get("triggered_alerts") or [])
             if alert.get("type")
         ),
+        "center_temp": round(float(((center_deb.get("center_station") or {}).get("temp")) or 0.0), 1),
+        "center_deb_prediction": round(float(center_deb.get("deb_prediction") or 0.0), 1),
+        "center_airport_gap": round(float(center_deb.get("center_lead_vs_airport") or 0.0), 1),
         "momentum_direction": momentum.get("direction"),
         "momentum_slope_30m": round(float(momentum.get("slope_30m") or 0.0), 1),
         "breakthrough_margin": round(float(breakthrough.get("margin") or 0.0), 1),

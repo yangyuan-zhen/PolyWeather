@@ -25,6 +25,9 @@ def _sample_weather_payload():
             "GFS": 10.4,
             "ECMWF": 10.6,
         },
+        "deb": {
+            "prediction": 11.8,
+        },
         "metar_recent_obs": [
             {"time": "10:30", "wdir": 180},
             {"time": "10:00", "wdir": 60},
@@ -100,3 +103,26 @@ def test_forecast_breakthrough_not_triggered_when_current_not_above_margin():
         market_snapshot=_sample_market_snapshot(),
     )
     assert out["rules"]["forecast_breakthrough"]["triggered"] is False
+
+
+def test_ankara_center_hits_deb_triggers_force_push():
+    city_weather = _sample_weather_payload()
+    city_weather["current"]["temp"] = 10.7
+    city_weather["deb"]["prediction"] = 11.2
+    city_weather["trend"]["recent"] = [
+        {"time": "10:30", "temp": 10.7},
+        {"time": "10:00", "temp": 10.7},
+        {"time": "09:30", "temp": 10.6},
+    ]
+    city_weather["multi_model"] = {"MGM": 11.2, "GFS": 11.2, "ECMWF": 11.2}
+
+    out = build_trading_alerts(
+        city_weather=city_weather,
+        market_snapshot={"city": "ankara", "target_date": "2026-03-07", "markets": []},
+    )
+
+    center_rule = out["rules"]["ankara_center_deb_hit"]
+    assert center_rule["triggered"] is True
+    assert center_rule["force_push"] is True
+    assert out["severity"] in ("medium", "high")
+    assert "Center信号" in out["telegram"]["zh"]
