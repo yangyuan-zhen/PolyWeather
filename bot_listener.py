@@ -77,7 +77,7 @@ def start_bot():
             "可用指令:\n"
             f"/city [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
             f"/deb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
-            "/points - 查看你的积分与排行榜\n"
+            "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "示例: <code>/city 伦敦</code>\n"
             f"💡 <i>提示: 群内有效发言满 {MESSAGE_MIN_LENGTH} 字，每次 +{MESSAGE_POINTS} 分，"
@@ -93,7 +93,7 @@ def start_bot():
             parse_mode="HTML",
         )
 
-    @bot.message_handler(commands=["points", "rank", "top"])
+    @bot.message_handler(commands=["top"])
     def show_points(message):
         """显示当前用户的积分及排行榜"""
         user = message.from_user
