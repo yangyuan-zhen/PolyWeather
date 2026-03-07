@@ -1,4 +1,4 @@
-"""
+﻿"""
 PolyWeather Web Map API
 ~~~~~~~~~~~~~~~~~~~~~~~
 FastAPI backend that reuses existing weather data collection and analysis modules.
@@ -13,9 +13,13 @@ from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
 # Project root setup
-_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_file_dir = os.path.dirname(os.path.abspath(__file__))
+_root = os.path.dirname(_file_dir)
 if _root not in sys.path:
     sys.path.insert(0, _root)
+# Ensure current dir is also in path for local imports if any
+if _file_dir not in sys.path:
+    sys.path.insert(0, _file_dir)
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -539,24 +543,30 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 @app.get("/api/cities")
 async def list_cities():
     """Return all supported cities with coordinates and risk level."""
-    out = []
-    for name, info in CITIES.items():
-        risk = CITY_RISK_PROFILES.get(name, {})
-        out.append(
-            {
-                "name": name,
-                "display_name": name.title(),
-                "lat": info["lat"],
-                "lon": info["lon"],
-                "risk_level": risk.get("risk_level", "low"),
-                "risk_emoji": risk.get("risk_emoji", "🟢"),
-                "airport": risk.get("airport_name", ""),
-                "icao": risk.get("icao", ""),
-                "temp_unit": "fahrenheit" if info["f"] else "celsius",
-                "is_major": CITY_REGISTRY.get(name, {}).get("is_major", True),
-            }
-        )
-    return {"cities": out}
+    try:
+        out = []
+        for name, info in CITIES.items():
+            risk = CITY_RISK_PROFILES.get(name, {})
+            out.append(
+                {
+                    "name": name,
+                    "display_name": name.title(),
+                    "lat": info["lat"],
+                    "lon": info["lon"],
+                    "risk_level": risk.get("risk_level", "low"),
+                    "risk_emoji": risk.get("risk_emoji", "🟢"),
+                    "airport": risk.get("airport_name", ""),
+                    "icao": risk.get("icao", ""),
+                    "temp_unit": "fahrenheit" if info["f"] else "celsius",
+                    "is_major": CITY_REGISTRY.get(name, {}).get("is_major", True),
+                }
+            )
+        return {"cities": out}
+    except Exception as e:
+        logger.error(f"❌ Error in list_cities: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/city/{name}")

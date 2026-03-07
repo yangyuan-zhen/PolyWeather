@@ -138,4 +138,10 @@ Associate the `frontend` directory as the project root on Vercel for automatic C
 
 ---
 
-**📅 Last Updated**: 2026-03-06
+---
+
+**📅 Last Updated**: 2026-03-08
+**🚀 Status**: v1.0 Stable - Professional Quant UI Locked
+
+> [!TIP]
+> **Production Note**: The current dashboard utilizes the high-density "Professional Quant" UI (v1.0-legacy) which integrates real-time METAR/MGM data, DEB ensemble blending, and multi-model probability distribution in a single high-performance view.
