@@ -16,7 +16,7 @@ from src.data_collection.city_risk_profiles import get_city_risk_profile  # type
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
 from src.database.db_manager import DBManager
 
-MESSAGE_POINTS = 1
+MESSAGE_POINTS = 4
 MESSAGE_DAILY_CAP = 50
 MESSAGE_MIN_LENGTH = 2
 MESSAGE_COOLDOWN_SEC = 30
@@ -63,8 +63,8 @@ def start_bot():
                 f"当前积分: <code>{balance}</code>\n"
                 f"需要积分: <code>{required}</code>\n"
                 f"还差积分: <code>{missing}</code>\n\n"
-                f"积分规则：群内有效发言满 {MESSAGE_MIN_LENGTH} 字，"
-                f"每次 +{MESSAGE_POINTS} 分，每日上限 {MESSAGE_DAILY_CAP} 分。"
+                f"积分规则：每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
+                f"每日上限 {MESSAGE_DAILY_CAP} 分。"
             ),
             parse_mode="HTML",
         )
@@ -80,7 +80,7 @@ def start_bot():
             "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "示例: <code>/city 伦敦</code>\n"
-            f"💡 <i>提示: 群内有效发言满 {MESSAGE_MIN_LENGTH} 字，每次 +{MESSAGE_POINTS} 分，"
+            f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
             f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
         )
         bot.reply_to(message, welcome_text, parse_mode="HTML")
