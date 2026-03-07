@@ -2,106 +2,124 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 223 53% 4%;
-  --foreground: 210 40% 98%;
-  --card: 223 46% 8%;
-  --card-foreground: 210 40% 98%;
-  --primary: 190 95% 56%;
-  --primary-foreground: 222 47% 8%;
-  --secondary: 224 30% 14%;
-  --secondary-foreground: 210 40% 98%;
-  --accent: 217 30% 18%;
-  --accent-foreground: 210 40% 98%;
-  --border: 221 38% 22%;
-}
-
-* {
-  border-color: hsl(var(--border));
-}
-
-body {
-  font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
-  background:
-    radial-gradient(circle at 10% -10%, rgba(34, 211, 238, 0.2), transparent 40%),
-    radial-gradient(circle at 90% 0%, rgba(59, 130, 246, 0.14), transparent 36%),
-    radial-gradient(circle at 80% 100%, rgba(8, 47, 73, 0.5), transparent 48%),
-    hsl(var(--background));
-  color: hsl(var(--foreground));
-}
-
-.leaflet-container {
-  width: 100%;
-  height: 100%;
-  font-family: inherit;
-}
-
-.leaflet-control-zoom a {
-  background: rgba(2, 6, 23, 0.82) !important;
-  border-color: rgba(71, 85, 105, 0.5) !important;
-  color: #e2e8f0 !important;
-}
-
-.leaflet-control-zoom a:hover {
-  background: rgba(15, 23, 42, 0.95) !important;
-}
-
-.map-pill {
-  min-width: 52px;
-  border-radius: 9999px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 5px 10px;
-  color: #f8fafc;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  backdrop-filter: blur(8px);
-  box-shadow:
-    0 2px 14px rgba(2, 6, 23, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.map-pill.high {
-  background: linear-gradient(135deg, #ef4444, #b91c1c);
-}
-
-.map-pill.medium {
-  background: linear-gradient(135deg, #f59e0b, #b45309);
-}
-
-.map-pill.low {
-  background: linear-gradient(135deg, #10b981, #047857);
-}
-
-.map-pill.active {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow:
-    0 8px 24px rgba(34, 211, 238, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.glass {
-  background: linear-gradient(
-    180deg,
-    rgba(15, 23, 42, 0.9) 0%,
-    rgba(2, 6, 23, 0.75) 100%
-  );
-  backdrop-filter: blur(10px);
-}
-
-.fade-up {
-  animation: fadeUp 450ms ease-out;
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+@layer base {
+  :root {
+    --background: 223 53% 4%;
+    --foreground: 210 40% 98%;
+    --card: 223 46% 8%;
+    --card-foreground: 210 40% 98%;
+    --primary: 190 95% 56%;
+    --primary-foreground: 222 47% 8%;
+    --secondary: 224 30% 14%;
+    --secondary-foreground: 210 40% 98%;
+    --accent: 217 30% 18%;
+    --accent-foreground: 210 40% 98%;
+    --border: 221 38% 22%;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+    background:
+      radial-gradient(
+        circle at 10% -10%,
+        rgba(34, 211, 238, 0.2),
+        transparent 40%
+      ),
+      radial-gradient(
+        circle at 90% 0%,
+        rgba(59, 130, 246, 0.14),
+        transparent 36%
+      ),
+      radial-gradient(
+        circle at 80% 100%,
+        rgba(8, 47, 73, 0.5),
+        transparent 48%
+      ),
+      hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+}
+
+@layer components {
+  .leaflet-container {
+    width: 100%;
+    height: 100%;
+    font-family: inherit;
+  }
+
+  .leaflet-control-zoom a {
+    background: rgba(2, 6, 23, 0.82) !important;
+    border-color: rgba(71, 85, 105, 0.5) !important;
+    color: #e2e8f0 !important;
+  }
+
+  .leaflet-control-zoom a:hover {
+    background: rgba(15, 23, 42, 0.95) !important;
+  }
+
+  .map-pill {
+    min-width: 52px;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    padding: 5px 10px;
+    color: #f8fafc;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    backdrop-filter: blur(8px);
+    box-shadow:
+      0 2px 14px rgba(2, 6, 23, 0.45),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .map-pill.high {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+  }
+
+  .map-pill.medium {
+    background: linear-gradient(135deg, #f59e0b, #b45309);
+  }
+
+  .map-pill.low {
+    background: linear-gradient(135deg, #10b981, #047857);
+  }
+
+  .map-pill.active {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow:
+      0 8px 24px rgba(34, 211, 238, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  }
+
+  .glass {
+    background: linear-gradient(
+      180deg,
+      rgba(15, 23, 42, 0.9) 0%,
+      rgba(2, 6, 23, 0.75) 100%
+    );
+    backdrop-filter: blur(10px);
+  }
+
+  .fade-up {
+    animation: fadeUp 450ms ease-out;
+  }
+}
+
+@layer utilities {
+  @keyframes fadeUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 }
