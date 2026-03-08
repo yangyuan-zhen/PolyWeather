@@ -1,3 +1,4 @@
+import csv
 import requests
 import re
 import time
@@ -392,6 +393,9 @@ class WeatherDataCollector:
                 "station_name": latest.get("name", icao),
                 "timestamp": datetime.utcnow().isoformat(),
                 "observation_time": obs_time,
+                "report_time": latest.get("reportTime"),
+                "receipt_time": latest.get("receiptTime"),
+                "obs_time_epoch": latest.get("obsTime"),
                 "current": {
                     "temp": round(temp, 1) if temp is not None else None,
                     "max_temp_so_far": round(max_so_far, 1)
@@ -405,6 +409,7 @@ class WeatherDataCollector:
                     "visibility_mi": latest.get("visib"),
                     "wx_desc": latest.get("wxString"),
                     "altimeter": latest.get("altim"),
+                    "raw_metar": latest.get("rawOb"),
                     "clouds": latest.get("clouds", []),
                 },
                 "recent_temps": recent_temps,  # 最近4条: [("15:00", 5), ("14:20", 5), ...]
