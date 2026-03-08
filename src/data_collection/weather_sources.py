@@ -759,7 +759,12 @@ class WeatherDataCollector:
                         "lat": lat,
                         "lon": lon,
                         "temp": round(display_temp, 1),
-                        "istNo": icao # 用 ICAO ID 作为标识
+                        "istNo": icao,  # 用 ICAO ID 作为标识
+                        "icao": icao,
+                        "wind_dir": obs.get("wdir"),
+                        "wind_speed": obs.get("wspd"),
+                        "wind_speed_kt": obs.get("wspd"),
+                        "raw_metar": obs.get("rawOb"),
                     })
             
             if results:

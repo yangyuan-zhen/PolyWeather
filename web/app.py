@@ -591,6 +591,110 @@ def _normalize_city_or_404(name: str) -> str:
     return city
 
 
+def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "name": data.get("name"),
+        "display_name": data.get("display_name"),
+        "icao": data.get("risk", {}).get("icao"),
+        "local_time": data.get("local_time"),
+        "temp_symbol": data.get("temp_symbol"),
+        "current": {
+            "temp": data.get("current", {}).get("temp"),
+            "obs_time": data.get("current", {}).get("obs_time"),
+        },
+        "deb": {
+            "prediction": data.get("deb", {}).get("prediction"),
+        },
+        "risk": {
+            "level": data.get("risk", {}).get("level"),
+            "warning": data.get("risk", {}).get("warning"),
+        },
+        "updated_at": data.get("updated_at"),
+    }
+
+
+def _build_city_detail_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+    distribution = data.get("probabilities", {}).get("distribution", []) or []
+    primary_bucket = distribution[0] if distribution else None
+    return {
+        "city": data.get("name"),
+        "fetched_at": data.get("updated_at"),
+        "overview": {
+            "name": data.get("name"),
+            "display_name": data.get("display_name"),
+            "icao": data.get("risk", {}).get("icao"),
+            "airport": data.get("risk", {}).get("airport"),
+            "lat": data.get("lat"),
+            "lon": data.get("lon"),
+            "local_time": data.get("local_time"),
+            "local_date": data.get("local_date"),
+            "temp_symbol": data.get("temp_symbol"),
+            "current_temp": data.get("current", {}).get("temp"),
+            "deb_prediction": data.get("deb", {}).get("prediction"),
+            "risk_level": data.get("risk", {}).get("level"),
+            "risk_warning": data.get("risk", {}).get("warning"),
+            "updated_at": data.get("updated_at"),
+        },
+        "official": {
+            "available": bool(data.get("current", {}).get("temp") is not None),
+            "metar": {
+                "observation_time": data.get("current", {}).get("obs_time"),
+                "obs_age_min": data.get("current", {}).get("obs_age_min"),
+                "report_time": data.get("current", {}).get("report_time"),
+                "receipt_time": data.get("current", {}).get("receipt_time"),
+                "raw_metar": data.get("current", {}).get("raw_metar"),
+                "current": data.get("current"),
+            },
+            "weather_gov": {},
+            "mgm": data.get("mgm") or {},
+            "mgm_nearby": data.get("mgm_nearby") or [],
+            "nearby_source": "mgm" if data.get("name") == "ankara" else "metar_cluster",
+        },
+        "timeseries": {
+            "metar_recent_obs": data.get("metar_recent_obs") or [],
+            "metar_today_obs": data.get("metar_today_obs") or [],
+            "hourly": data.get("hourly") or {},
+            "mgm_hourly": (data.get("mgm") or {}).get("hourly", []),
+            "forecast_daily": (data.get("forecast") or {}).get("daily", []),
+        },
+        "models": data.get("multi_model") or {},
+        "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
+        "market_scan": {
+            "available": False,
+            "reason": "Market layer is not available on the current backend build.",
+            "primary_market": None,
+            "selected_date": data.get("local_date"),
+            "selected_condition_id": None,
+            "selected_slug": None,
+            "temperature_bucket": primary_bucket,
+            "model_probability": (
+                (primary_bucket.get("probability") / 100.0)
+                if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None
+                else None
+            ),
+            "market_price": None,
+            "edge_percent": None,
+            "signal_label": "MONITOR",
+            "confidence": "low",
+            "yes_token": None,
+            "no_token": None,
+            "yes_buy": None,
+            "yes_sell": None,
+            "no_buy": None,
+            "no_sell": None,
+            "last_trade_price": None,
+            "liquidity": None,
+            "volume": None,
+            "sparkline": [p.get("probability", 0) for p in distribution[:8] if isinstance(p, dict)],
+            "recent_trades": [],
+            "websocket": {},
+        },
+        "risk": data.get("risk"),
+        "ai_analysis": data.get("ai_analysis") or "",
+        "errors": {},
+    }
+
+
 @app.get("/api/history/{name}")
 async def city_history(name: str):
     """Return historical accuracy data (DEB, mu, actuals) for a city."""
@@ -624,6 +728,20 @@ async def city_history(name: str):
             "mgm": float(mgm) if mgm is not None else None,
         })
     return {"history": out}
+
+
+@app.get("/api/city/{name}/summary")
+async def city_summary(name: str, force_refresh: bool = False):
+    city = _normalize_city_or_404(name)
+    data = _analyze(city, force_refresh=force_refresh)
+    return _build_city_summary_payload(data)
+
+
+@app.get("/api/city/{name}/detail")
+async def city_detail_aggregate(name: str, force_refresh: bool = False):
+    city = _normalize_city_or_404(name)
+    data = _analyze(city, force_refresh=force_refresh)
+    return _build_city_detail_payload(data)
 
 # ──────────────────────────────────────────────────────────
 #  Entrypoint

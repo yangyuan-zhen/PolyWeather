@@ -123,3 +123,132 @@
     }
   }
 }
+
+
+@layer components {
+  .nearby-marker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(15, 23, 42, 0.9);
+    color: rgba(226, 232, 240, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    box-shadow: 0 10px 28px rgba(2, 6, 23, 0.45);
+    backdrop-filter: blur(10px);
+    white-space: nowrap;
+  }
+
+  .nearby-name {
+    color: rgba(148, 163, 184, 0.95);
+  }
+
+  .nearby-temp {
+    color: #fff;
+    font-weight: 800;
+  }
+
+  .nearby-unit {
+    color: rgba(148, 163, 184, 0.85);
+    font-size: 9px;
+  }
+
+  .wind-info {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 4px;
+    padding-left: 6px;
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(34, 211, 238, 0.9);
+    font-size: 10px;
+  }
+
+  .wind-arrow {
+    display: inline-block;
+    transform-origin: center;
+  }
+
+  .city-marker {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .marker-bubble {
+    position: relative;
+    min-width: 46px;
+    padding: 5px 10px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 800;
+    text-align: center;
+    color: white;
+    border: 1px solid transparent;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .marker-bubble::after {
+    content: "";
+    position: absolute;
+    bottom: -6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid transparent;
+  }
+
+  .marker-bubble.risk-high {
+    background: linear-gradient(135deg, #dc2626, #ef4444);
+    border-color: rgba(239, 68, 68, 0.5);
+  }
+
+  .marker-bubble.risk-high::after { border-top-color: #ef4444; }
+
+  .marker-bubble.risk-medium {
+    background: linear-gradient(135deg, #d97706, #f59e0b);
+    border-color: rgba(245, 158, 11, 0.5);
+  }
+
+  .marker-bubble.risk-medium::after { border-top-color: #f59e0b; }
+
+  .marker-bubble.risk-low {
+    background: linear-gradient(135deg, #059669, #10b981);
+    border-color: rgba(16, 185, 129, 0.5);
+  }
+
+  .marker-bubble.risk-low::after { border-top-color: #10b981; }
+
+  .marker-name {
+    margin-top: 8px;
+    font-size: 10px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.88);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+  }
+
+  .city-marker.selected .marker-bubble {
+    animation: markerGlow 2s ease-in-out infinite;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(51, 65, 85, 0.75);
+    border-radius: 9999px;
+  }
+}
+
+@keyframes markerGlow {
+  0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
+  50% { box-shadow: 0 10px 26px rgba(34,211,238,0.35); }
+}

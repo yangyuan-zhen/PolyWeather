@@ -238,6 +238,10 @@ export interface CityAnalysis {
     clouds_raw: Array<{ cover: string; base: number | null }>;
     visibility_mi: number | null;
     wx_desc: string | null;
+    raw_metar?: string | null;
+    report_time?: string | null;
+    receipt_time?: string | null;
+    obs_time_epoch?: number | null;
   };
   mgm?: {
     temp?: number | null;
@@ -317,6 +321,7 @@ export interface CityDetail {
     weather_gov: WeatherGovData;
     mgm: any;
     mgm_nearby: any[];
+    nearby_source?: string;
   };
   timeseries: {
     metar_recent_obs: any[];

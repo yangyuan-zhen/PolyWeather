@@ -40,6 +40,10 @@ let tempChart = null;
 const AUTO_REFRESH_MS = 60 * 60 * 1000; // 1 hour
 let selectedForecastDate = null;
 let nearbyLayerGroup = null;
+let autoNearbyCity = null;
+let autoNearbyLoading = false;
+const AUTO_NEARBY_MIN_ZOOM = 8;
+const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
 
 // ──────────────────────────────────────────────────────────
 //  Map Setup
@@ -74,6 +78,7 @@ function initMap() {
 
   // Handle zoom-based visibility for local stations and minor cities
   map.on("zoomend", updateMapVisibility);
+  map.on("moveend", maybeAutoShowNearbyStations);
 }
 
 function updateMapVisibility() {
@@ -93,6 +98,73 @@ function updateMapVisibility() {
   Object.values(markers).forEach(({ marker }) => {
     if (!map.hasLayer(marker)) map.addLayer(marker);
   });
+
+  maybeAutoShowNearbyStations();
+}
+
+function getNearestCityForCenter() {
+  if (!map) return null;
+  const center = map.getCenter();
+  let best = null;
+
+  Object.entries(markers).forEach(([cityName, entry]) => {
+    const city = entry.city;
+    if (city?.lat == null || city?.lon == null) return;
+    const distance = map.distance(center, L.latLng(city.lat, city.lon));
+    if (distance > AUTO_NEARBY_MAX_DISTANCE_M) return;
+    if (!best || distance < best.distance) {
+      best = { cityName, distance };
+    }
+  });
+
+  return best?.cityName || null;
+}
+
+async function maybeAutoShowNearbyStations() {
+  if (!map || !nearbyLayerGroup) return;
+  if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
+    autoNearbyCity = null;
+    nearbyLayerGroup.clearLayers();
+    return;
+  }
+
+  const targetCity = getNearestCityForCenter();
+  if (!targetCity) {
+    autoNearbyCity = null;
+    nearbyLayerGroup.clearLayers();
+    return;
+  }
+
+  if (
+    autoNearbyCity === targetCity &&
+    nearbyLayerGroup.getLayers().length > 0
+  ) {
+    return;
+  }
+
+  autoNearbyCity = targetCity;
+
+  if (cityDataCache[targetCity]) {
+    renderNearbyStations(cityDataCache[targetCity], true);
+    return;
+  }
+
+  if (autoNearbyLoading) return;
+  autoNearbyLoading = true;
+  try {
+    const data = await fetchCityDetail(targetCity, false);
+    cityDataCache[targetCity] = data;
+    saveCache();
+    renderNearbyStations(data, true);
+    if (data.current?.temp != null) {
+      updateMarkerTemp(targetCity, data.current.temp);
+      updateCityListInfo(data);
+    }
+  } catch (e) {
+    console.error(`Auto nearby load failed for ${targetCity}:`, e);
+  } finally {
+    autoNearbyLoading = false;
+  }
 }
 
 // ──────────────────────────────────────────────────────────
@@ -258,13 +330,31 @@ async function fetchCityDetail(cityName, force = false) {
 // ──────────────────────────────────────────────────────────
 //  Nearby Map Stations Rendering
 // ──────────────────────────────────────────────────────────
-function renderNearbyStations(data) {
+function renderNearbyStations(data, preserveView = false) {
   if (!nearbyLayerGroup) return;
   nearbyLayerGroup.clearLayers();
 
-  if (!data.mgm_nearby || data.mgm_nearby.length === 0) {
+  const allNearby = Array.isArray(data.mgm_nearby) ? data.mgm_nearby : [];
+  const isAnkara = String(data.name || "").toLowerCase() === "ankara";
+  const ankaraPriority = [
+    "Airport (MGM/17128)",
+    "Ankara (Bölge/Center)",
+    "Etimesgut",
+    "Keçiören",
+    "Pursaklar",
+    "Çubuk",
+    "Kalecik",
+  ];
+  const ankaraNearby = isAnkara
+    ? ankaraPriority
+        .map((name) => allNearby.find((st) => st?.name === name))
+        .filter(Boolean)
+    : allNearby;
+  const nearbyStations = ankaraNearby.length > 0 ? ankaraNearby : allNearby;
+
+  if (nearbyStations.length === 0) {
     // Regular city zoom-in
-    if (data.lat != null && data.lon != null) {
+    if (!preserveView && data.lat != null && data.lon != null) {
       map.flyTo([data.lat, data.lon], 10, {
         animate: true,
         duration: 1.5,
@@ -281,7 +371,7 @@ function renderNearbyStations(data) {
     latLngs.push([data.lat, data.lon]);
   }
 
-  data.mgm_nearby.forEach((st) => {
+  nearbyStations.forEach((st) => {
     // Filter out stations too far if needed, but il handles grouping nicely.
     // Skip if it is the exact same marker as main (though coordinates might slightly differ)
     const sym = data.temp_symbol || "°C";
@@ -289,7 +379,7 @@ function renderNearbyStations(data) {
     let windHtml = "";
     if (st.wind_dir != null) {
       const rot = (parseFloat(st.wind_dir) + 180) % 360;
-      const speedRaw = parseFloat(st.wind_speed);
+      const speedRaw = parseFloat(st.wind_speed ?? st.wind_speed_kt);
       const speed = !isNaN(speedRaw) ? `${speedRaw.toFixed(1)}k` : "";
       windHtml = `
         <div class="wind-info">
@@ -316,6 +406,10 @@ function renderNearbyStations(data) {
     const marker = L.marker([st.lat, st.lon], { icon }).addTo(nearbyLayerGroup);
     latLngs.push([st.lat, st.lon]);
   });
+
+  if (preserveView) {
+    return;
+  }
 
   if (latLngs.length > 1) {
     const bounds = L.latLngBounds(latLngs);
@@ -363,12 +457,7 @@ async function loadCityDetail(cityName, force = false) {
 
     // Update marker and list
     if (data.current?.temp != null) {
-      const displayTemp =
-        data.current.max_so_far != null &&
-        data.current.max_so_far >= data.current.temp
-          ? data.current.max_so_far
-          : data.current.temp;
-      updateMarkerTemp(cityName, displayTemp);
+      updateMarkerTemp(cityName, data.current.temp);
       updateCityListInfo(data);
     }
   } catch (e) {
@@ -879,7 +968,7 @@ function renderProbabilities(data) {
 
   let html = "";
   if (mu != null) {
-    html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">期望值 μ = ${mu}${data.temp_symbol}</div>`;
+    html += `<div style="font-size:11px;color:var(--text-muted);margin-bottom:6px;">动态分布中心= ${mu}${data.temp_symbol}</div>`;
   }
 
   probs.forEach((p, i) => {
@@ -895,7 +984,6 @@ function renderProbabilities(data) {
   });
   container.innerHTML = html;
 
-  // Animate bars
   requestAnimationFrame(() => {
     container.querySelectorAll(".prob-bar-fill").forEach((bar, i) => {
       const pct = Math.round(probs[i].probability * 100);
@@ -922,7 +1010,9 @@ function formatCents(price) {
   const n = Number(price);
   if (!Number.isFinite(n)) return "--";
   const cents = Math.round(n * 1000) / 10;
-  return Number.isInteger(cents) ? `${cents.toFixed(0)}c` : `${cents.toFixed(1)}c`;
+  return Number.isInteger(cents)
+    ? `${cents.toFixed(0)}c`
+    : `${cents.toFixed(1)}c`;
 }
 
 function renderModels(data) {
@@ -1080,6 +1170,7 @@ function closePanel() {
   document
     .querySelectorAll(".city-item")
     .forEach((el) => el.classList.remove("active"));
+  maybeAutoShowNearbyStations();
 }
 
 // ──────────────────────────────────────────────────────────
@@ -1095,12 +1186,7 @@ function startAutoRefresh() {
         cityDataCache[selectedCity] = data;
         renderPanel(data);
         if (data.current?.temp != null) {
-          const displayTemp =
-            data.current.max_so_far != null &&
-            data.current.max_so_far >= data.current.temp
-              ? data.current.max_so_far
-              : data.current.temp;
-          updateMarkerTemp(selectedCity, displayTemp);
+          updateMarkerTemp(selectedCity, data.current.temp);
           updateCityListInfo(data);
         }
         flashLiveBadge();
@@ -1177,65 +1263,109 @@ async function openHistoryModal() {
   modal.classList.remove("hidden");
   title.textContent = `历史准确率对账 - ${selectedCity.toUpperCase()}`;
   statsDiv.innerHTML =
-    '<span style="color:var(--text-muted)">正在获取底层数据库...</span>';
+    '<span style="color:var(--text-muted)">正在获取历史数据...</span>';
 
   try {
     const res = await fetch(`/api/history/${encodeURIComponent(selectedCity)}`);
     const json = await res.json();
     const data = json.history || [];
+    const cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 14);
+    const recentData = data.filter((row) => {
+      if (!row?.date) return false;
+      const rowDate = new Date(`${row.date}T00:00:00`);
+      return !Number.isNaN(rowDate.getTime()) && rowDate >= cutoff;
+    });
 
-    if (data.length === 0) {
+    if (recentData.length === 0) {
       statsDiv.innerHTML =
-        '<span style="color:var(--text-muted)">暂无该城市历史数据</span>';
+        '<span style="color:var(--text-muted)">\u8fd115\u5929\u6682\u65e0\u8be5\u57ce\u5e02\u5386\u53f2\u6570\u636e</span>';
       if (historyChartInst) historyChartInst.destroy();
       return;
     }
 
-    // Compute stats
     let hits = 0;
-    let debErrors = [];
-    let muErrors = [];
-
+    const debErrors = [];
     const dates = [];
     const actuals = [];
     const debs = [];
-    const mus = [];
     const mgms = [];
+    const cityLocalDate = cityDataCache?.[selectedCity]?.local_date || null;
+    const settledData = recentData.filter((row) => {
+      if (!row?.date) return false;
+      return cityLocalDate
+        ? row.date < cityLocalDate
+        : row.date < new Date().toISOString().slice(0, 10);
+    });
 
-    data.forEach((row) => {
+    recentData.forEach((row) => {
       dates.push(row.date);
       actuals.push(row.actual);
       debs.push(row.deb);
-      mus.push(row.mu);
       mgms.push(row.mgm);
+    });
 
+    settledData.forEach((row) => {
       if (row.actual != null && row.deb != null) {
         debErrors.push(Math.abs(row.actual - row.deb));
         if (Math.round(row.actual) === Math.round(row.deb)) {
           hits++;
         }
       }
-      if (row.actual != null && row.mu != null) {
-        muErrors.push(Math.abs(row.actual - row.mu));
-      }
     });
 
     const hitRate = debErrors.length
       ? ((hits / debErrors.length) * 100).toFixed(0)
-      : 0;
+      : "--";
     const debMae = debErrors.length
       ? (debErrors.reduce((a, b) => a + b, 0) / debErrors.length).toFixed(1)
-      : "-";
-    const muMae = muErrors.length
-      ? (muErrors.reduce((a, b) => a + b, 0) / muErrors.length).toFixed(1)
-      : "-";
+      : "--";
+    const hasMgm =
+      selectedCity === "ankara" && mgms.some((value) => value != null);
 
     statsDiv.innerHTML = `
-      <div class="h-stat-card"><span class="label">DEB 结算胜率 (WU)</span><span class="val">${hitRate}%</span></div>
-      <div class="h-stat-card"><span class="label">DEB MAE</span><span class="val">${debMae}°</span></div>
-      <div class="h-stat-card"><span class="label">μ (概率) MAE</span><span class="val">${muMae}°</span></div>
-      <div class="h-stat-card"><span class="label">有效样本数</span><span class="val">${data.length}天</span></div>
+      <div class="h-stat-card"><span class="label">DEB ???? (WU)</span><span class="val">${hitRate === "--" ? "--" : `${hitRate}%`}</span></div>
+      <div class="h-stat-card"><span class="label">DEB MAE</span><span class="val">${debMae}?</span></div>
+      <div class="h-stat-card"><span class="label">?15??????</span><span class="val">${settledData.length}?</span></div>
     `;
+
+    const datasets = [
+      {
+        label: "实测最高温",
+        data: actuals,
+        borderColor: "#f87171",
+        backgroundColor: "rgba(248, 113, 113, 0.1)",
+        borderWidth: 2,
+        tension: 0.2,
+        pointRadius: 4,
+        pointBackgroundColor: "#f87171",
+        pointBorderColor: "#fff",
+        zIndex: 10,
+      },
+      {
+        label: "DEB 融合",
+        data: debs,
+        borderColor: "#34d399",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        borderDash: [5, 4],
+        tension: 0.2,
+        pointRadius: 3,
+      },
+    ];
+
+    if (hasMgm) {
+      datasets.push({
+        label: "MGM 官方预报",
+        data: mgms,
+        borderColor: "#fb923c",
+        backgroundColor: "transparent",
+        borderWidth: 2,
+        tension: 0.2,
+        pointRadius: 3,
+      });
+    }
 
     if (historyChartInst) historyChartInst.destroy();
     const ctx = document.getElementById("historyChart").getContext("2d");
@@ -1244,50 +1374,7 @@ async function openHistoryModal() {
       type: "line",
       data: {
         labels: dates,
-        datasets: [
-          {
-            label: "实测最高温",
-            data: actuals,
-            borderColor: "#f87171", // red
-            backgroundColor: "rgba(248, 113, 113, 0.1)",
-            borderWidth: 2,
-            tension: 0.2,
-            pointRadius: 4,
-            pointBackgroundColor: "#f87171",
-            pointBorderColor: "#fff",
-            zIndex: 10,
-          },
-          {
-            label: "DEB 融合",
-            data: debs,
-            borderColor: "#34d399", // emerald
-            backgroundColor: "transparent",
-            borderWidth: 2,
-            borderDash: [5, 4],
-            tension: 0.2,
-            pointRadius: 3,
-          },
-          {
-            label: "μ (概率锚定)",
-            data: mus,
-            borderColor: "#a78bfa", // purple
-            backgroundColor: "transparent",
-            borderWidth: 2,
-            borderDash: [2, 2],
-            tension: 0.2,
-            pointRadius: 3,
-          },
-          {
-            label: "MGM 官方预报",
-            data: mgms,
-            borderColor: "#fb923c", // orange
-            backgroundColor: "transparent",
-            borderWidth: 2,
-            tension: 0.2,
-            pointRadius: 3,
-            hidden: false, // Show by default for Ankara
-          },
-        ],
+        datasets,
       },
       options: {
         responsive: true,
@@ -1387,11 +1474,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     cities.forEach((c) => {
       const cached = cityDataCache[c.name];
       if (cached && cached.current?.temp != null) {
-        c._temp =
-          cached.current.max_so_far != null &&
-          cached.current.max_so_far >= cached.current.temp
-            ? cached.current.max_so_far
-            : cached.current.temp;
+        c._temp = cached.current.temp;
       }
     });
 
