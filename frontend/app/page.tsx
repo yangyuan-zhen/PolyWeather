@@ -3,7 +3,7 @@
     <main className="h-screen w-screen overflow-hidden bg-black">
       <iframe
         title="PolyWeather Legacy Dashboard"
-        src="/legacy/index.html?v=legacy-v16"
+      src="/legacy/index.html?v=legacy-v19"
         className="h-full w-full border-0"
       />
     </main>

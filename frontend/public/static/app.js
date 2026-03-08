@@ -1036,6 +1036,51 @@ function renderForecast(data) {
   sunEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
 }
 
+function renderAI(data) {
+  const container = document.getElementById("aiAnalysis");
+  if (!container) return;
+
+  const analysis = data?.ai_analysis;
+  const placeholder =
+    '<span class="ai-placeholder">暂无 AI 分析，当前以结构化气象与模型数据为主。</span>';
+
+  if (!analysis) {
+    container.innerHTML = placeholder;
+    return;
+  }
+
+  if (typeof analysis === "string") {
+    const trimmed = analysis.trim();
+    container.innerHTML = trimmed
+      ? escapeHtml(trimmed).replace(/\n/g, "<br>")
+      : placeholder;
+    return;
+  }
+
+  const summary = analysis.summary || analysis.text || analysis.message || "";
+  const bullets = Array.isArray(analysis.highlights)
+    ? analysis.highlights
+    : Array.isArray(analysis.points)
+      ? analysis.points
+      : [];
+
+  if (!summary && !bullets.length) {
+    container.innerHTML = placeholder;
+    return;
+  }
+
+  const bulletHtml = bullets.length
+    ? `<ul class="ai-list">${bullets
+        .map((item) => `<li>${escapeHtml(String(item))}</li>`)
+        .join("")}</ul>`
+    : "";
+
+  container.innerHTML = `
+    ${summary ? `<div class="ai-summary">${escapeHtml(String(summary)).replace(/\n/g, "<br>")}</div>` : ""}
+    ${bulletHtml}
+  `;
+}
+
 function switchForecastDate(cityName, dateStr) {
   if (selectedCity !== cityName) return;
 
@@ -1402,13 +1447,77 @@ function computeFrontTrendSignal(data, dateStr) {
   };
 }
 
-function buildShortTermNowcast(data, dateStr) {
+function buildShortTermNowcast(data, dateStr, slice) {
   if (dateStr && dateStr !== data.local_date) {
+    const futureSlice = Array.isArray(slice) && slice.length
+      ? slice
+      : getFutureSlice(data, dateStr);
+    const peakCandidates = futureSlice.filter((point) => {
+      const hour = Number.parseInt(String(point.label || "").split(":")[0], 10);
+      return Number.isFinite(hour) && hour >= 12 && hour <= 18;
+    });
+    const targetSlice = peakCandidates.length ? peakCandidates : futureSlice;
+    const maxIndex = targetSlice.reduce((bestIdx, point, idx, arr) => {
+      const temp = Number(point.temp);
+      const bestTemp = Number(arr[bestIdx]?.temp);
+      if (!Number.isFinite(temp)) return bestIdx;
+      if (!Number.isFinite(bestTemp) || temp > bestTemp) return idx;
+      return bestIdx;
+    }, 0);
+    const peakSlice = targetSlice.slice(
+      Math.max(0, maxIndex - 1),
+      Math.min(targetSlice.length, maxIndex + 2),
+    );
+    if (!peakSlice.length) {
+      return `
+        <div><strong>目标日期：</strong>${escapeHtml(dateStr)}</div>
+        <div><strong>峰值窗口：</strong>暂无足够的小时级 forecast 数据，无法生成目标日午后峰值窗口判断。</div>
+      `;
+    }
+
+    const sym = data.temp_symbol || "\u00B0C";
+    const start = peakSlice[0];
+    const end = peakSlice[peakSlice.length - 1];
+    const startTemp = Number(start.temp);
+    const endTemp = Number(end.temp);
+    const startDew = Number(start.dewPoint);
+    const endDew = Number(end.dewPoint);
+    const startPressure = Number(start.pressure);
+    const endPressure = Number(end.pressure);
+    const precipValues = peakSlice
+      .map((point) => Number(point.precipProb))
+      .filter((v) => Number.isFinite(v));
+    const cloudValues = peakSlice
+      .map((point) => Number(point.cloudCover))
+      .filter((v) => Number.isFinite(v));
+    const maxPrecip = precipValues.length ? Math.max(...precipValues) : 0;
+    const maxCloud = cloudValues.length ? Math.max(...cloudValues) : 0;
+    const firstBucket = trendBucketFromDir(start.windDir);
+    const lastBucket = trendBucketFromDir(end.windDir);
+    const windowDelta =
+      Number.isFinite(startTemp) && Number.isFinite(endTemp)
+        ? endTemp - startTemp
+        : null;
+    const windowDewDelta =
+      Number.isFinite(startDew) && Number.isFinite(endDew)
+        ? endDew - startDew
+        : null;
+    const windowPressureDelta =
+      Number.isFinite(startPressure) && Number.isFinite(endPressure)
+        ? endPressure - startPressure
+        : null;
+    const peakPoint = targetSlice[maxIndex] || peakSlice[peakSlice.length - 1];
+    const peakTemp = Number(peakPoint?.temp);
+
     return `
-      <div><strong>适用范围：</strong>近 0-2 小时临近判断只适用于当前日期，不适用于未来日期。</div>
       <div><strong>目标日期：</strong>${escapeHtml(dateStr)}</div>
-      <div><strong>当前主站：</strong>${data.current?.temp ?? "--"}${data.temp_symbol || "\u00B0C"} @ ${data.current?.obs_time || "--"}</div>
-      <div><strong>说明：</strong>未来日期请主要参考上方温度走势、结算概率分布、多模型预报，以及未来 6-48 小时趋势。</div>
+      <div><strong>峰值窗口：</strong>${escapeHtml(start.label)} - ${escapeHtml(end.label)}（优先取 12:00-18:00）</div>
+      <div><strong>峰值预判：</strong>${Number.isFinite(peakTemp) ? `${peakTemp.toFixed(1)}${sym}` : "--"} @ ${escapeHtml(peakPoint?.label || "--")}</div>
+      <div><strong>窗口温度：</strong>${Number.isFinite(startTemp) ? `${startTemp.toFixed(1)}${sym}` : "--"} → ${Number.isFinite(endTemp) ? `${endTemp.toFixed(1)}${sym}` : "--"}（${formatDelta(windowDelta, sym)}）</div>
+      <div><strong>露点变化：</strong>${formatDelta(windowDewDelta, sym)}，用于判断午后暖湿输入是否增强。</div>
+      <div><strong>风向演变：</strong>${bucketLabel(firstBucket)} → ${bucketLabel(lastBucket)}，关注峰值前后是否转南风或回摆北风。</div>
+      <div><strong>气压变化：</strong>${formatDelta(windowPressureDelta, " hPa")}，上升更偏向冷空气压入。</div>
+      <div><strong>降水 / 云量：</strong>${Math.round(maxPrecip)}% / ${Math.round(maxCloud)}%，用于判断峰值时段是否受云系压制。</div>
     `;
   }
 
@@ -1472,9 +1581,6 @@ function buildShortTermNowcast(data, dateStr) {
     );
   }
 
-  lines.push(
-    "<div><strong>\u5de5\u7a0b\u53e3\u5f84\uff1a</strong>\u77ed\u65f6\u5224\u65ad\u4ee5 METAR \u4e3b\u7ad9\u4e3a\u51c6\uff1bAnkara \u53e0\u52a0 MGM \u5468\u8fb9\u7ad9\uff0c\u7f8e\u56fd\u57ce\u5e02\u540e\u7eed\u53ef\u53e0\u52a0 Mesonet \u4f5c\u4e3a\u589e\u5f3a\u5c42\u3002</div>",
-  );
   return lines.join("");
 }
 
@@ -1568,6 +1674,7 @@ function openFutureForecastModal(data, dateStr) {
   const modelBars = document.getElementById("futureModelBars");
   const trendGrid = document.getElementById("futureTrendGrid");
   const nowcast = document.getElementById("futureNowcast");
+  const nowcastTitle = document.getElementById("futureNowcastTitle");
   const sym = data.temp_symbol || "\u00B0C";
 
   const forecastEntry = (data.forecast?.daily || []).find((item) => item.date === dateStr) || null;
@@ -1598,7 +1705,13 @@ function openFutureForecastModal(data, dateStr) {
   probBars.innerHTML = buildProbabilityBarsHtml(probabilities);
   modelBars.innerHTML = buildModelBarsHtml(models, deb, sym);
   trendGrid.innerHTML = buildTrendCards(front.metrics);
-  nowcast.innerHTML = buildShortTermNowcast(data, dateStr);
+  if (nowcastTitle) {
+    nowcastTitle.innerHTML =
+      dateStr === data.local_date
+        ? "&#9201; 未来 0-2 小时临近判断"
+        : "&#9201; 目标日午后峰值窗口";
+  }
+  nowcast.innerHTML = buildShortTermNowcast(data, dateStr, slice);
 
   renderFutureForecastChart(data, dateStr, slice);
   modal.classList.remove("hidden");
