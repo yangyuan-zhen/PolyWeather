@@ -50,6 +50,7 @@ graph LR
   - Manual subscription activation via Telegram DM.
   - Small, focused paid Telegram channel for signal tests.
   - Invitation-only Web Access (Vercel).
+  - Validate city-specific edge before scaling, with Ankara as the flagship strategy city.
 
 ### 🛠️ Phase 2: Automation (USDC)
 
@@ -66,6 +67,20 @@ graph LR
   - **Accuracy Leaderboard**: Monthly reports of DEB vs Market outcomes.
   - **Self-Serve Portal**: User dashboard for billing and alert settings.
 
+### 📡 API Expansion Priority
+
+- **P0-1 Market Layer**
+  - Polymarket Gamma discovery + `py-clob-client` pricing / order book
+- **P0-2 Official Observation Layer**
+  - Aviation Weather / METAR
+  - weather.gov official forecast / observation / alert context
+- **P1 Lead Layer**
+  - Ankara keeps Turkish MGM nearby network
+  - U.S. cities may later receive Mesonet enhancement without replacing METAR
+- **P2 Product Layer**
+  - Stripe / Polygon-USDC automation
+  - Realtime sync and user entitlement system
+
 ---
 
 ## 🚧 Critical Constraints
@@ -76,4 +91,4 @@ graph LR
 
 ---
 
-**📅 Last Updated**: 2026-03-06
+**📅 Last Updated**: 2026-03-09

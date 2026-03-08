@@ -22,6 +22,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 - [x] DEB Blending Algorithm
 - [x] Proactive Telegram Alert Engine
 - [x] Vercel Dashboard Infrastructure
+- [x] Legacy dashboard running behind Next.js/Vercel
 
 ---
 
@@ -32,6 +33,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 | **Monolithic Bot**     | `bot_listener.py` is hard to test and evolve.       | Isolate UI interaction from business logic into `src/analysis`.  |
 | **Subscription Store** | No persistent record of who has paid.               | Migrate from in-memory user checks to **Supabase/PostgreSQL**.   |
 | **Alert Transparency** | Operators cannot easily audit "why" an alert fired. | Add an `Evidence` metadata block to all internal alert payloads. |
+| **Encoding Drift**     | Legacy frontend files have suffered mixed encodings.| Normalize all legacy static files to UTF-8 and stop editing them with incompatible encodings. |
 
 ---
 
@@ -42,6 +44,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 | **Hard-coded Thresholds** | Modification requires code changes (e.g., 5s CD).   | Extract all business constants into a structured `config.yaml`.              |
 | **Simulation Harness**    | No way to "replay" a rainy day to test alert logic. | Build a `ReplayEngine` using `data/daily_records.json`.                      |
 | **Backend Naming**        | Artifacts of "market price" logic remain in naming. | Systematic refactor of variable names to reflect weather-intelligence focus. |
+| **Legacy Frontend Debt**  | Large `public/static/app.js` mixes data, UI, charts, and modal logic. | Gradually extract panel, chart, and modal logic into typed modules without changing the current layout contract. |
 
 ---
 
@@ -59,7 +62,8 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 1.  **DB Integration**: Connect Supabase to `src/database/db_manager.py`.
 2.  **Alert Transparency**: Append logic metrics (slope, lead delta) to push messages.
 3.  **Authentication**: Secure `/api/city` on Vercel with subscription keys.
+4.  **UTF-8 Cleanup**: Remove remaining mojibake from legacy static files and comments.
 
 ---
 
-**📅 Last Updated**: 2026-03-06
+**📅 Last Updated**: 2026-03-09

@@ -18,6 +18,7 @@ Production URL:
 - Vercel serves the web UI
 - FastAPI on VPS serves API only
 - The old FastAPI static website has been removed
+- The production page shell is still the legacy dashboard embedded by `app/page.tsx`
 
 Current request flow:
 - Browser -> Vercel frontend
@@ -52,6 +53,11 @@ Thin BFF routes currently exposed by Next:
 - `GET /api/city/[name]`
 - `GET /api/history/[name]`
 
+Current frontend behavior:
+- `/` keeps the world overview layout
+- City clicks stay inside the same layout and load the right-side panel
+- Future forecast dates open a modal instead of mutating the base panel
+
 ## Vercel Deployment
 
 1. Import the repo into Vercel
@@ -65,4 +71,4 @@ Thin BFF routes currently exposed by Next:
 - The page shell currently embeds the legacy dashboard HTML from `public/legacy/index.html`
 - If you change files under `public/static`, deploy to Vercel to make them live
 
-Last updated: 2026-03-06
+Last updated: 2026-03-09

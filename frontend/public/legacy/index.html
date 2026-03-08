@@ -1,47 +1,41 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PolyWeather — 天气衍生品智能地图</title>
-    <meta name="description" content="PolyWeather 天气衍生品智能地图。实时 METAR、MGM、DEB 融合预报与 AI 分析。">
+    <title>PolyWeather - 天气衍生品智能地图</title>
+    <meta name="description" content="PolyWeather 天气衍生品智能地图，聚合 METAR、MGM、DEB、多模型预报与历史对账分析。">
 
-    <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
-    <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/static/style.css?v=legacy-v3">
+    <link rel="stylesheet" href="/static/style.css?v=legacy-v15">
 </head>
 
 <body>
-    <!-- ── Map ── -->
     <div id="map"></div>
 
-    <!-- ── Header Overlay ── -->
     <header id="header">
         <div class="brand">
-            <h1>🌡️ PolyWeather</h1>
+            <h1>PolyWeather</h1>
             <span class="subtitle">天气衍生品智能分析</span>
         </div>
-        <button class="info-btn" id="btnShowGuide" title="查看系统技术说明">ℹ️ 技术说明</button>
+        <button class="info-btn" id="btnShowGuide" title="查看系统技术说明">技术说明</button>
         <div class="live-badge" id="liveBadge">
             <span class="pulse-dot"></span>
             <span>实时</span>
         </div>
-        <button class="refresh-btn" id="refreshAllBtn" title="刷新所有数据">⟳</button>
-        </div>
+        <button class="refresh-btn" id="refreshAllBtn" title="刷新所有数据" aria-label="刷新所有数据">↻</button>
     </header>
 
-    <!-- ── City List Sidebar (left) ── -->
     <nav id="cityList" class="city-list">
         <div class="city-list-header">
-            <span>🏙️ 监控城市</span>
+            <span>监控城市</span>
             <span class="city-count" id="cityCount">0</span>
         </div>
         <div id="cityListItems" class="city-list-items">
@@ -49,8 +43,7 @@
         </div>
     </nav>
 
-    <!-- ── Detail Panel (right) ── -->
-    <aside id="panel" class="detail-panel hidden">
+        <aside id="panel" class="detail-panel hidden">
         <div class="panel-header">
             <button class="panel-close" id="panelClose">✕</button>
             <div class="panel-title-area">
@@ -58,13 +51,12 @@
                 <div class="panel-meta">
                     <span id="panelRiskBadge" class="risk-badge">—</span>
                     <span id="panelLocalTime" class="local-time">—</span>
-                    <button class="history-btn" id="btnShowHistory" title="查看历史记录与准确率">📊 历史对账</button>
+                    <button class="history-btn" id="btnShowHistory" title="查看历史记录与准确率">历史对账</button>
                 </div>
             </div>
         </div>
 
         <div id="panelContent" class="panel-body">
-            <!-- ── Temperature Hero ── -->
             <section class="hero-section">
                 <div class="hero-weather" id="heroWeather"></div>
                 <div class="hero-temp">
@@ -74,127 +66,111 @@
                 <div class="hero-max-time" id="heroMaxTime"></div>
                 <div class="hero-details">
                     <div class="hero-item">
-                        <span class="label">📍 当前实测</span>
+                        <span class="label">当前实测</span>
                         <span class="value" id="heroCurrent">—</span>
                     </div>
                     <div class="hero-item">
-                        <span class="label">🎯 WU 结算</span>
+                        <span class="label">WU 结算参考</span>
                         <span class="value highlight" id="heroWU">—</span>
                     </div>
                     <div class="hero-item">
-                        <span class="label">🧬 DEB 预测</span>
+                        <span class="label">DEB 预测</span>
                         <span class="value" id="heroDEB">—</span>
                     </div>
                 </div>
-                <div class="hero-sub" id="heroSub">
-                    <!-- obs time, cloud, wind -->
-                </div>
+                <div class="hero-sub" id="heroSub"></div>
             </section>
 
-            <!-- ── Trend Sparkline ── -->
             <section class="chart-section">
-                <h3>📊 今日温度走势</h3>
+                <h3>今日温度走势</h3>
                 <div class="chart-wrapper">
                     <canvas id="tempChart"></canvas>
                 </div>
                 <div class="chart-legend" id="chartLegend"></div>
             </section>
 
-            <!-- ── Probability Bars ── -->
             <section class="prob-section">
-                <h3>🎲 结算概率分布</h3>
-                <div id="probBars" class="prob-bars">
-                    <!-- Dynamically populated -->
-                </div>
+                <h3>结算概率分布</h3>
+                <div id="probBars" class="prob-bars"></div>
             </section>
 
-            <!-- ── Multi-Model Comparison ── -->
             <section class="models-section">
-                <h3>🔬 多模型预报</h3>
-                <div id="modelBars" class="model-bars">
-                    <!-- Dynamically populated -->
-                </div>
+                <h3>多模型预报</h3>
+                <div id="modelBars" class="model-bars"></div>
             </section>
 
-            <!-- ── Forecast Table ── -->
             <section class="forecast-section">
-                <h3>📅 多日预报</h3>
+                <h3>多日预报</h3>
                 <div id="forecastTable" class="forecast-table"></div>
                 <div class="sun-info" id="sunInfo"></div>
             </section>
 
-            <!-- ── AI Analysis ── -->
             <section class="ai-section">
-                <h3>🤖 AI 深度分析</h3>
+                <h3>AI 深度分析</h3>
                 <div id="aiAnalysis" class="ai-box">
                     <span class="ai-placeholder">点击城市后加载...</span>
                 </div>
             </section>
 
-
-            <!-- ── Risk Profile ── -->
             <section class="risk-section">
-                <h3>⚠️ 数据偏差风险</h3>
+                <h3>数据偏差风险</h3>
                 <div id="riskInfo" class="risk-info"></div>
             </section>
         </div>
     </aside>
 
-    </div>
-
-    <!-- ── Loading Overlay ── -->
     <div id="loading" class="loading-overlay hidden">
         <div class="loading-spinner"></div>
         <span>正在获取气象数据，请稍候...</span>
     </div>
 
-    <!-- ── Technical Guide Modal ── -->
+    <!-- 鈹€鈹€ Technical Guide Modal 鈹€鈹€ -->
     <div id="guideModal" class="modal-overlay hidden">
         <div class="modal-content large">
             <div class="modal-header">
-                <h2>📚 PolyWeather 系统技术说明</h2>
-                <button class="modal-close" id="guideModalClose">✕</button>
+                <h2>&#128218; PolyWeather &#x7CFB;&#x7EDF;&#x6280;&#x672F;&#x8BF4;&#x660E;</h2>
+                <button class="modal-close" id="guideModalClose">&#x2715;</button>
             </div>
             <div class="modal-body">
                 <div class="guide-grid">
                     <div class="guide-card">
-                        <h3>🧬 DEB 动态融合预测</h3>
-                        <p><b>Dynamic Ensemble Blending</b> 是系统的核心算法。它不只是简单的平均值，而是根据各个模型（ECMWF, GFS, MGM等）在**过去 30
-                            天**内的实际表现，动态分配权重。表现越稳的模型，在最终决策中占比越高。</p>
+                        <h3>&#129518; DEB &#x52A8;&#x6001;&#x878D;&#x5408;&#x9884;&#x6D4B;</h3>
+                        <p><b>Dynamic Ensemble Blending</b> &#x662F;&#x7CFB;&#x7EDF;&#x7684;&#x6838;&#x5FC3;&#x9884;&#x6D4B;&#x5C42;&#x3002;&#x5B83;&#x4E0D;&#x662F;&#x5BF9; ECMWF&#x3001;GFS&#x3001;ICON&#x3001;GEM&#x3001;JMA &#x7B49;&#x6A21;&#x578B;&#x7684;&#x7B80;&#x5355;&#x5E73;&#x5747;&#xFF0C;&#x800C;&#x662F;&#x7ED3;&#x5408;&#x6700;&#x8FD1;&#x6837;&#x672C;&#x8868;&#x73B0;&#x3001;&#x5F53;&#x524D;&#x5B9E;&#x51B5;&#x4E0E;&#x57CE;&#x5E02;&#x504F;&#x7F6E;&#x540E;&#x5F97;&#x5230;&#x7684;&#x52A8;&#x6001;&#x52A0;&#x6743;&#x7ED3;&#x679C;&#x3002;</p>
                     </div>
                     <div class="guide-card">
-                        <h3>🎲 结算概率引擎 (μ)</h3>
-                        <p>基于正态分布模型。我们提取所有预报模型的离散度作为**不确定性系数 ($\sigma$)**，结合 DEB 预测值作为**期望值 ($\mu$)**。这能告诉你某个温度区间（如 10°C
-                            盘口）发生的真实概率，辅助对冲决策。</p>
+                        <h3>&#127919; &#x7ED3;&#x7B97;&#x6982;&#x7387;&#x5F15;&#x64CE;</h3>
+                        <p>&#x53F3;&#x4FA7;&#x7684;&#x7ED3;&#x7B97;&#x6982;&#x7387;&#x5206;&#x5E03;&#x57FA;&#x4E8E; DEB &#x9884;&#x6D4B;&#x503C;&#x4E0E;&#x591A;&#x6A21;&#x578B;&#x79BB;&#x6563;&#x5EA6;&#x52A8;&#x6001;&#x8BA1;&#x7B97;&#x3002;&#x03BC;&#x4EE3;&#x8868;&#x5F53;&#x524D;&#x5206;&#x5E03;&#x4E2D;&#x5FC3;&#xFF0C;&#x4F1A;&#x968F;&#x7740;&#x6A21;&#x578B;&#x3001;&#x5B9E;&#x51B5;&#x548C;&#x65F6;&#x95F4;&#x53D8;&#x5316;&#x800C;&#x53D8;&#x52A8;&#xFF0C;&#x4E0D;&#x662F;&#x56FA;&#x5B9A;&#x9884;&#x62A5;&#x503C;&#x3002;</p>
                     </div>
                     <div class="guide-card">
-                        <h3>📍 结算点 (Airport) 逻辑</h3>
-                        <p>Polymarket 结算是以**机场 METAR
-                            气象站**为准。在安卡拉等复杂城市，我们同时监控**市中心总站**（潜力热岛）和**机场站**（物理结算点）。当两者温差巨大时，往往预示着随后的补涨跳升机会。</p>
+                        <h3>&#9992;&#65039; &#x7ED3;&#x7B97;&#x70B9;&#x4E0E;&#x4E3B;&#x89C2;&#x6D4B;&#x6E90;</h3>
+                        <p>Polymarket &#x7ED3;&#x7B97;&#x903B;&#x8F91;&#x4EE5;&#x673A;&#x573A; METAR &#x4E3A;&#x4E3B;&#x3002;&#x7CFB;&#x7EDF;&#x73B0;&#x5728;&#x4F18;&#x5148;&#x4F7F;&#x7528; Aviation Weather API &#x7684;&#x673A;&#x573A;&#x62A5;&#x6587;&#x4E0E;&#x539F;&#x59CB; METAR&#xFF0C;&#x5E76;&#x533A;&#x5206;&#x89C2;&#x6D4B;&#x65F6;&#x95F4;&#x4E0E;&#x63A5;&#x6536;&#x65F6;&#x95F4;&#xFF0C;&#x907F;&#x514D;&#x628A;&#x53D1;&#x5E03;&#x5EF6;&#x8FDF;&#x8BEF;&#x8BA4;&#x6210;&#x6E29;&#x5EA6;&#x53D8;&#x5316;&#x3002;</p>
                     </div>
                     <div class="guide-card">
-                        <h3>⚠️ 风险偏置档案</h3>
-                        <p>系统记录了每个城市机场站与市区的距离、海拔差及季度性偏差。例如，首尔仁川机场因靠海，最高温通常比市区偏低；慕尼黑机场因海拔高，夜间降温极快。这些偏置已自动整合进 AI 分析逻辑中。
-                        </p>
+                        <h3>&#128205; Ankara &#x4E13;&#x5C5E;&#x589E;&#x5F3A;</h3>
+                        <p>Ankara &#x4E0D;&#x8D70;&#x901A;&#x7528;&#x57CE;&#x5E02;&#x903B;&#x8F91;&#x3002;&#x7ED3;&#x7B97;&#x4E3B;&#x7AD9;&#x4EE5; LTAC / Esenbo&#287;a &#x4E3A;&#x51C6;&#xFF0C;&#x5468;&#x8FB9;&#x9886;&#x5148;&#x4FE1;&#x53F7;&#x4F18;&#x5148;&#x53C2;&#x8003; Turkish MGM &#x7AD9;&#x7F51;&#xFF0C;&#x5176;&#x4E2D; <b>Ankara (B&#246;lge/Center)</b> &#x662F;&#x91CD;&#x70B9;&#x76D1;&#x63A7;&#x7AD9;&#xFF0C;&#x4E0D;&#x7531; Etimesgut &#x4EE3;&#x66FF;&#x3002;</p>
                     </div>
                     <div class="guide-card">
-                        <h3>📈 未来日期概率分布</h3>
-                        <p>当你切换到未来 3-5 天时，系统会基于各模型对该日期的预报分歧度重新计算概率。分歧越大，分布越扁平（风险高）；共识越强，分布越尖锐（机会明朗）。</p>
+                        <h3>&#128198; &#x672A;&#x6765;&#x65E5;&#x671F;&#x5206;&#x6790;</h3>
+                        <p>&#x70B9;&#x51FB;&#x591A;&#x65E5;&#x9884;&#x62A5;&#x540E;&#x6253;&#x5F00;&#x7684;&#x6A21;&#x6001;&#x6846;&#xFF0C;&#x4E3B;&#x8981;&#x7528;&#x4E8E;&#x5206;&#x6790;&#x4E0B;&#x4E00;&#x4E2A;&#x4EA4;&#x6613;&#x65E5;&#x3002; 6-48 &#x5C0F;&#x65F6;&#x8D8B;&#x52BF;&#x4EE5; weather.gov &#x548C; Open-Meteo &#x4E3A;&#x4E3B;&#xFF0C;&#x90E8;&#x5206;&#x57CE;&#x5E02;&#x53EF;&#x4F1A;&#x8865;&#x5145; Meteoblue&#xFF1B; 0-2 &#x5C0F;&#x65F6;&#x4E34;&#x8FD1;&#x5224;&#x65AD;&#x5219;&#x4F18;&#x5148;&#x770B; METAR &#x4E0E;&#x5468;&#x8FB9;&#x7AD9;&#x3002;</p>
+                    </div>
+                    <div class="guide-card">
+                        <h3>&#128202; &#x5386;&#x53F2;&#x5BF9;&#x8D26;&#x89C4;&#x5219;</h3>
+                        <p>&#x5386;&#x53F2;&#x51C6;&#x786E;&#x7387;&#x5BF9;&#x8D26;&#x53EA;&#x7EDF;&#x8BA1;&#x5DF2;&#x7ED3;&#x7B97;&#x7684;&#x6837;&#x672C;&#x3002;&#x7F51;&#x9875;&#x7AEF;&#x91C7;&#x7528;&#x8FD1;15&#x5929;&#x6EDA;&#x52A8;&#x89C6;&#x56FE;&#xFF0C;&#x673A;&#x5668;&#x4EBA; /deb &#x62A5;&#x544A;&#x91C7;&#x7528;&#x8FD1;7&#x5929;&#x7A97;&#x53E3;&#xFF0C;&#x4E0D;&#x628A;&#x5F53;&#x5929;&#x672A;&#x7ED3;&#x7B97;&#x7684;&#x6837;&#x672C;&#x7B97;&#x5165;&#x80DC;&#x7387;&#x548C; MAE&#x3002;</p>
                     </div>
                 </div>
                 <div class="guide-footer">
-                    <p>※ 数据来源：NOAA METAR, Turkish MGM, Open-Meteo Ensemble, Meteoblue, NWS.</p>
+                    <p>&#x203B; &#x6570;&#x636E;&#x6E90;&#x4EE5; Aviation Weather / METAR&#x3001;Turkish MGM&#x3001;Open-Meteo&#x3001;weather.gov &#x4E3A;&#x4E3B;&#xFF0C;&#x90E8;&#x5206;&#x57CE;&#x5E02;&#x8865;&#x5145; Meteoblue&#x3002;</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- ── History Chart Modal ── -->
+    <!-- 鈹€鈹€ History Chart Modal 鈹€鈹€ -->
     <div id="historyModal" class="modal-overlay hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>&#128202; <span id="historyModalTitle">&#x5386;&#x53F2;&#x51C6;&#x786E;&#x7387;</span></h2>
-                <button class="modal-close" id="historyModalClose">✕</button>
+                <h2>&#128202; <span id="historyModalTitle">&#x5386;&#x53F2;&#x51C6;&#x786E;&#x7387;&#x5BF9;&#x8D26;</span></h2>
+                <button class="modal-close" id="historyModalClose">&#x2715;</button>
             </div>
             <div class="modal-body">
                 <div class="history-stats" id="historyStats"></div>
@@ -205,13 +181,61 @@
         </div>
     </div>
 
+    <div id="futureForecastModal" class="modal-overlay hidden">
+        <div class="modal-content large future-modal">
+            <div class="modal-header">
+                <h2>&#128198; <span id="futureForecastTitle">&#x672A;&#x6765;&#x65E5;&#x671F;&#x5206;&#x6790;</span></h2>
+                <button class="modal-close" id="futureForecastClose" aria-label="&#x5173;&#x95ED;&#x672A;&#x6765;&#x65E5;&#x671F;&#x5206;&#x6790;">&#x2715;</button>
+            </div>
+            <div class="modal-body future-modal-body">
+                <div class="history-stats" id="futureForecastStats"></div>
+
+                <section class="future-modal-section">
+                    <h3>&#128200; &#x6E29;&#x5EA6;&#x8D70;&#x52BF;</h3>
+                    <div class="history-chart-wrapper future-chart-wrapper">
+                        <canvas id="futureForecastChart"></canvas>
+                    </div>
+                </section>
+
+                <div class="future-modal-grid">
+                    <section class="future-modal-section">
+                        <h3>&#127919; &#x7ED3;&#x7B97;&#x6982;&#x7387;&#x5206;&#x5E03;</h3>
+                        <div id="futureProbBars" class="prob-bars future-prob-bars"></div>
+                    </section>
+
+                    <section class="future-modal-section">
+                        <h3>&#129518; &#x591A;&#x6A21;&#x578B;&#x9884;&#x62A5;</h3>
+                        <div id="futureModelBars" class="model-bars"></div>
+                    </section>
+                </div>
+
+                <div class="future-modal-grid">
+                    <section class="future-modal-section">
+                        <h3><span class="section-inline-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M10 19V10"/><path d="M16 19V7"/><path d="M22 19V13"/></svg></span>&#x672A;&#x6765; 6-48 &#x5C0F;&#x65F6;&#x8D8B;&#x52BF;</h3>
+                        <div id="futureTrendGrid" class="future-trend-grid"></div>
+                    </section>
+
+                    <section class="future-modal-section">
+                        <h3>&#9201; &#x672A;&#x6765; 0-2 &#x5C0F;&#x65F6;&#x4E34;&#x8FD1;&#x5224;&#x65AD;</h3>
+                        <div id="futureNowcast" class="future-text-block"></div>
+                    </section>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <!-- Leaflet Heatmap Plugin -->
     <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-    <script src="/static/app.js?v=legacy-v3"></script>
+    <script src="/static/app.js?v=legacy-v15"></script>
 </body>
 
 </html>
+
+
+
+

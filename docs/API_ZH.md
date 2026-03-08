@@ -1,26 +1,32 @@
-# PolyWeather API 接口文档 (v1.0)
+# PolyWeather API 接口文档 (v1.1)
 
-本文档详细介绍了 PolyWeather 后端提供的 RESTful API 接口。该后端基于 FastAPI 构建，主要为前端地图和终端面板提供实时天气分析、模型预测及历史对账数据。
+本文档说明当前 PolyWeather 后端实际提供的 HTTP API。后端由 `web/app.py` 提供，前端网页通过 Next.js BFF 代理访问这些接口。
 
 ---
 
 ## 1. 基础信息
 
-- **Base URL**: `http://127.0.0.1:8000` (本地) 或 `https://your-vps-ip:8000` (服务器)
-- **数据格式**: JSON
-- **速率限制**: 默认无限制，建议前端缓存时间 5 分钟。
+- **本地 Base URL**: `http://127.0.0.1:8000`
+- **生产 Base URL**: `http://<your-vps-ip>:8000` 或绑定后的 HTTPS API 域名
+- **响应格式**: JSON
+- **缓存策略**:
+  - `/api/cities`: 5 分钟
+  - `/api/city/{name}`: 30 秒
+  - `/api/history/{name}`: 15 分钟
+  - `/api/city/{name}/summary`: 30 秒
+  - `/api/city/{name}/detail`: 30 秒
 
 ---
 
 ## 2. 接口列表
 
-### 2.1 获取城市列表
-
-返回所有受监控的城市及其基础坐标和风险等级。
+### 2.1 获取监控城市列表
 
 - **URL**: `/api/cities`
 - **Method**: `GET`
-- **返回示例**:
+- **用途**: 返回首页左侧监控城市与世界地图 marker 的基础元数据。
+
+**响应示例**
 
 ```json
 {
@@ -28,11 +34,11 @@
     {
       "name": "ankara",
       "display_name": "Ankara",
-      "lat": 39.93,
-      "lon": 32.85,
+      "lat": 40.1281,
+      "lon": 32.9951,
       "risk_level": "medium",
       "risk_emoji": "🟡",
-      "airport": "Esenboga",
+      "airport": "Esenboğa",
       "icao": "LTAC",
       "temp_unit": "celsius",
       "is_major": true
@@ -41,115 +47,187 @@
 }
 ```
 
-### 2.2 获取城市详情分析
-
-获取指定城市的实时实测数据、多模型预测对比、DEB 算法预测以及 AI 决策建议。
+### 2.2 获取城市实时分析
 
 - **URL**: `/api/city/{name}`
 - **Method**: `GET`
 - **参数**:
-  - `name` (string): 城市名称或别名（不区分大小写，如 `ankara`, `ldn`）。
-  - `force_refresh` (bool, optional): 是否强制跳过缓存刷新数据。默认 `false`。
-- **返回示例**:
+  - `name`: 城市名或别名，如 `ankara`、`new-york`
+  - `force_refresh` (可选): `true` 时跳过缓存
+- **用途**: 首页右侧详情面板与地图数据的主接口。
 
-```json
-{
-  "name": "ankara",
-  "display_name": "Ankara",
-  "lat": 39.93,
-  "lon": 32.85,
-  "temp_symbol": "°C",
-  "local_time": "2024-03-08 10:30:00",
-  "risk": {
-    "level": "medium",
-    "warning": "模型分歧较大",
-    "icao": "LTAC"
-  },
-  "current": {
-    "temp": 12.5,
-    "max_so_far": 14.2,
-    "obs_time": "10:20",
-    "wx_desc": "Cloudy"
-  },
-  "multi_model": {
-    "ECMWF": 15.1,
-    "GFS": 14.8,
-    "MGM": 15.5
-  },
-  "deb": {
-    "prediction": 15.2
-  },
-  "ai_analysis": "当前模型一致性较好，建议参考 DEB 预测值..."
-}
-```
+**当前核心字段**
+
+- `display_name`
+- `local_time`
+- `local_date`
+- `temp_symbol`
+- `risk`
+- `current`
+- `mgm`
+- `mgm_nearby`
+- `forecast`
+- `multi_model`
+- `deb`
+- `ensemble`
+- `probabilities`
+- `trend`
+- `metar_today_obs`
+- `metar_recent_obs`
+- `hourly`
+- `hourly_next_48h`
+- `updated_at`
+
+**说明**
+
+- `current.raw_metar` 现在直接透出 Aviation Weather API 返回的原始 METAR 报文。
+- `mgm` 只对 Ankara 这类确实有 Turkish MGM 覆盖的城市有值。
+- `mgm_nearby` 当前是一个复用字段：
+  - Ankara: Turkish MGM 周边站
+  - 多数其他城市: AviationWeather METAR cluster
 
 ### 2.3 获取历史对账数据
 
-获取指定城市的过去几天内的预测值与真实最高温的对比记录，用于评估模型准确率。
-
 - **URL**: `/api/history/{name}`
 - **Method**: `GET`
-- **参数**:
-  - `name` (string): 城市名称。
-- **返回示例**:
+- **用途**: 历史准确率对账弹窗与机器人 `/deb` 命令的数据基础。
+
+**响应示例**
 
 ```json
 {
   "history": [
     {
-      "date": "2024-03-07",
-      "actual": 14.0,
-      "deb": 14.2,
-      "mu": 14.1,
-      "mgm": 14.5
+      "date": "2026-03-07",
+      "actual": 7.0,
+      "deb": 6.5,
+      "mu": 7.2,
+      "mgm": 8.0
     }
   ]
 }
 ```
 
+**说明**
+
+- 网页端历史对账只统计 **近 15 天已结算样本**
+- 当天未结算样本可以画在图里，但不计入胜率与 MAE
+
+### 2.4 获取城市摘要
+
+- **URL**: `/api/city/{name}/summary`
+- **Method**: `GET`
+- **用途**: 轻量摘要接口，适合未来做 hover 预取或低开销列表更新。
+
+**字段**
+
+- `name`
+- `display_name`
+- `icao`
+- `local_time`
+- `temp_symbol`
+- `current.temp`
+- `deb.prediction`
+- `risk.level`
+- `risk.warning`
+- `updated_at`
+
+### 2.5 获取城市聚合详情
+
+- **URL**: `/api/city/{name}/detail`
+- **Method**: `GET`
+- **用途**: 面向未来的单请求聚合详情接口，便于把 `city + summary + history + future analysis` 整合到一个载荷中。
+
+**当前结构**
+
+- `overview`
+- `official`
+- `timeseries`
+- `models`
+- `probabilities`
+- `future`
+
+**说明**
+
+- 当前首页 legacy 布局还主要使用 `/api/city/{name}` 和 `/api/history/{name}`
+- `/api/city/{name}/detail` 已用于后续更完整详情态的聚合设计
+
 ---
 
 ## 3. 核心对象定义
 
-### 3.1 风险等级 (Risk Level)
+### 3.1 风险等级
 
-- `low` (🟢): 预测一致，波动小。
-- `medium` (🟡): 存在轻微模型分歧或数据延迟。
-- `high` (🔴): 模型严重打架，市场风险极高。
+- `low`: 低风险，模型与实测较一致
+- `medium`: 中风险，存在一定分歧或本地站点偏置
+- `high`: 高风险，模型冲突大或盘面博弈价值高
 
-### 3.2 预测模型 (Models)
+### 3.2 DEB
 
-- `ECMWF`: 欧洲中期天气预报中心（全球最准）。
-- `GFS`: 美国全球预测系统。
-- `MGM`: 土耳其国家气象局（针对特定城市非常精准）。
-- `DEB`: PolyWeather 独家加权融合算法成果。
+`DEB` 是 PolyWeather 的动态融合预测层，不是简单平均值。它会结合：
 
----
+- 多模型预测值
+- 近期表现
+- 实况修正
+- 城市级偏置
 
-## 4. 数据来源与第三方 API
+### 3.3 μ
 
-系统通过多源聚合链路确保数据的真实性与前瞻性，以下是目前集成的核心数据源：
-
-### 4.1 核心实测数据 (Settlement Data)
-
-- **NOAA Aviation Weather (METAR)**: 全球机场官方航空气象报文，也是 Polymarket 官方结算参考源。
-- **Iowa Mesonet (IEM)**: 提供 1-5 分钟级别的超高频 ASOS/METAR 实时观测，是高频交易对账的核心源。
-- **MGM (土耳其国家气象局)**: 提供土耳其境内（如安卡拉）最精细的本地观测站数据。
-
-### 4.2 模型预测数据 (Forecast Data)
-
-- **Open-Meteo**: 聚合 ECMWF (欧洲中期)、GFS (美国)、ICON (德国) 等全球顶级大型数值预报模型。
-- **Meteoblue**: 针对地形复杂的城市提供高精度修正预测（需 API Key）。
-- **NWS (美国气象局)**: 美国本土城市的官方权威预报。
-
-### 4.3 智能化分析
-
-- **Groq API**: 驱动 AI 态势感知引擎，基于多源数据生成实时中文交易分析报告（需 API Key）。
+`μ` 代表当前结算分布中心，是一个**动态期望值**，会随着模型、实况、趋势变化而变化。  
+它不应直接与固定 forecast 用同一口径做静态历史对账。
 
 ---
 
-## 5. 常见问题
+## 4. 数据源与第三方 API
 
-- **404 Error**: 检查城市名是否拼写正确，或是否在支持列表中。
-- **500 Error**: 后端与气象数据源（如 METAR）同步失败，通常 1 分钟后会自动恢复。
-- **数据延迟**: METAR 实测数据通常每 30-60 分钟更新一次。
+### 4.1 主观测源
+
+- **Aviation Weather / METAR**
+  - 当前全球机场主观测源
+  - 同时提供结构化字段与 `rawOb`
+
+### 4.2 Ankara 专属源
+
+- **Turkish MGM**
+  - Ankara 主官方增强层
+  - 包括 `Ankara (Bölge/Center)` 与周边站点
+
+### 4.3 预测源
+
+- **Open-Meteo**
+- **weather.gov**（美国城市）
+- **Meteoblue**（部分城市）
+- **多模型集合**: ECMWF / GFS / ICON / GEM / JMA
+
+---
+
+## 5. 当前口径说明
+
+- 首页地图主 marker 显示 **当前温度**
+- 右侧详情面板展示当前实测、DEB、结算概率、多模型、多日预报
+- 未来日期分析模态框：
+  - 显示温度走势、结算概率分布、多模型预报、未来 6-48 小时趋势、未来 0-2 小时临近判断
+  - 已移除独立“冷锋 / 暖锋判断”模块
+
+---
+
+## 6. 常见问题
+
+- **接口 500**
+  - 先检查 `polyweather_web` 是否启动成功
+  - 再看 `docker-compose logs -f polyweather_web`
+
+- **METAR 看起来慢几分钟**
+  - 通常是官方链路入库/发布延迟，不一定是本地轮询慢
+  - 请同时看：
+    - `current.obs_time`
+    - `current.report_time`
+    - `current.receipt_time`
+
+- **网页显示旧内容**
+  - 先确认 Vercel 已部署新版本
+  - 再强刷浏览器缓存
+
+---
+
+**最后更新**: 2026-03-09

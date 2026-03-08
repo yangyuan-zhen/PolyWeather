@@ -262,6 +262,12 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     h_times = hourly.get("time", [])
     h_temps = hourly.get("temperature_2m", [])
     h_rad = hourly.get("shortwave_radiation", [])
+    h_dew = hourly.get("dew_point_2m", [])
+    h_pressure = hourly.get("pressure_msl", [])
+    h_wspd = hourly.get("wind_speed_10m", [])
+    h_wdir = hourly.get("wind_direction_10m", [])
+    h_precip_prob = hourly.get("precipitation_probability", [])
+    h_cloud_cover = hourly.get("cloud_cover", [])
 
     peak_hours = []
     if h_times and h_temps and om_today is not None:
@@ -325,6 +331,54 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             today_hourly["times"].append(ts.split("T")[1][:5])
             today_hourly["temps"].append(h_temps[i] if i < len(h_temps) else None)
             today_hourly["radiation"].append(h_rad[i] if i < len(h_rad) else None)
+
+    # ── 12b. Next 48h hourly block for future-date analysis modal ──
+    next_48h_hourly = {
+        "times": [],
+        "temps": [],
+        "radiation": [],
+        "dew_point": [],
+        "pressure_msl": [],
+        "wind_speed_10m": [],
+        "wind_direction_10m": [],
+        "precipitation_probability": [],
+        "cloud_cover": [],
+    }
+    try:
+        local_anchor = datetime.strptime(
+            f"{local_date_str} {local_time_str}", "%Y-%m-%d %H:%M"
+        )
+    except Exception:
+        local_anchor = None
+
+    if local_anchor is not None:
+        horizon = local_anchor + timedelta(hours=48)
+        for i, ts in enumerate(h_times):
+            try:
+                ts_dt = datetime.fromisoformat(ts)
+            except Exception:
+                continue
+            if ts_dt < local_anchor or ts_dt > horizon:
+                continue
+            next_48h_hourly["times"].append(ts)
+            next_48h_hourly["temps"].append(h_temps[i] if i < len(h_temps) else None)
+            next_48h_hourly["radiation"].append(h_rad[i] if i < len(h_rad) else None)
+            next_48h_hourly["dew_point"].append(h_dew[i] if i < len(h_dew) else None)
+            next_48h_hourly["pressure_msl"].append(
+                h_pressure[i] if i < len(h_pressure) else None
+            )
+            next_48h_hourly["wind_speed_10m"].append(
+                h_wspd[i] if i < len(h_wspd) else None
+            )
+            next_48h_hourly["wind_direction_10m"].append(
+                h_wdir[i] if i < len(h_wdir) else None
+            )
+            next_48h_hourly["precipitation_probability"].append(
+                h_precip_prob[i] if i < len(h_precip_prob) else None
+            )
+            next_48h_hourly["cloud_cover"].append(
+                h_cloud_cover[i] if i < len(h_cloud_cover) else None
+            )
 
     # ── 13. Cloud description (METAR primary, MGM fallback) ──
     clouds = mc.get("clouds", [])
@@ -512,6 +566,10 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "sunset": sunset,
             "sunshine_hours": sunshine_h,
         },
+        "source_forecasts": {
+            "weather_gov": raw.get("nws") or {},
+            "meteoblue": raw.get("meteoblue") or {},
+        },
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
@@ -528,6 +586,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "status": peak_status,
         },
         "hourly": today_hourly,
+        "hourly_next_48h": next_48h_hourly,
         "metar_today_obs": [
             {"time": t, "temp": v}
             for t, v in (metar.get("today_obs", []) if metar else [])

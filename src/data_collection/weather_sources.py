@@ -790,7 +790,9 @@ class WeatherDataCollector:
             points_resp.raise_for_status()
             points_data = points_resp.json()
 
-            forecast_url = points_data.get("properties", {}).get("forecast")
+            properties = points_data.get("properties", {})
+            forecast_url = properties.get("forecast")
+            hourly_url = properties.get("forecastHourly")
             if not forecast_url:
                 return None
 
@@ -804,6 +806,41 @@ class WeatherDataCollector:
             periods = forecast_data.get("properties", {}).get("periods", [])
             if not periods:
                 return None
+
+            hourly_periods = []
+            if hourly_url:
+                hourly_resp = self.session.get(
+                    hourly_url, headers=headers, timeout=self.timeout
+                )
+                hourly_resp.raise_for_status()
+                hourly_data = hourly_resp.json()
+                hourly_periods = hourly_data.get("properties", {}).get("periods", [])[:48]
+
+            active_alerts = []
+            try:
+                alerts_resp = self.session.get(
+                    "https://api.weather.gov/alerts/active",
+                    params={"point": f"{lat},{lon}"},
+                    headers=headers,
+                    timeout=self.timeout,
+                )
+                alerts_resp.raise_for_status()
+                alerts_data = alerts_resp.json()
+                for feature in alerts_data.get("features", [])[:8]:
+                    ap = feature.get("properties", {})
+                    active_alerts.append(
+                        {
+                            "event": ap.get("event"),
+                            "headline": ap.get("headline"),
+                            "severity": ap.get("severity"),
+                            "certainty": ap.get("certainty"),
+                            "urgency": ap.get("urgency"),
+                            "effective": ap.get("effective"),
+                            "ends": ap.get("ends"),
+                        }
+                    )
+            except Exception:
+                active_alerts = []
 
             # 3. 提取今日最高温（找 isDaytime=True 的第一个）
             today_high = None
@@ -822,6 +859,36 @@ class WeatherDataCollector:
                 "source": "nws",
                 "today_high": today_high,
                 "unit": "fahrenheit",
+                "forecast_periods": [
+                    {
+                        "name": p.get("name"),
+                        "start_time": p.get("startTime"),
+                        "end_time": p.get("endTime"),
+                        "is_daytime": p.get("isDaytime"),
+                        "temperature": p.get("temperature"),
+                        "temperature_trend": p.get("temperatureTrend"),
+                        "wind_speed": p.get("windSpeed"),
+                        "wind_direction": p.get("windDirection"),
+                        "short_forecast": p.get("shortForecast"),
+                        "detailed_forecast": p.get("detailedForecast"),
+                        "precipitation_probability": (p.get("probabilityOfPrecipitation") or {}).get("value"),
+                    }
+                    for p in periods[:14]
+                ],
+                "hourly_periods": [
+                    {
+                        "start_time": p.get("startTime"),
+                        "end_time": p.get("endTime"),
+                        "temperature": p.get("temperature"),
+                        "temperature_unit": p.get("temperatureUnit"),
+                        "wind_speed": p.get("windSpeed"),
+                        "wind_direction": p.get("windDirection"),
+                        "short_forecast": p.get("shortForecast"),
+                        "precipitation_probability": (p.get("probabilityOfPrecipitation") or {}).get("value"),
+                    }
+                    for p in hourly_periods
+                ],
+                "active_alerts": active_alerts,
             }
         except Exception as e:
             logger.warning(f"NWS 请求失败: {e}")
@@ -849,7 +916,7 @@ class WeatherDataCollector:
                 "latitude": lat,
                 "longitude": lon,
                 "current_weather": "true",
-                "hourly": "temperature_2m,shortwave_radiation",
+                "hourly": "temperature_2m,shortwave_radiation,dew_point_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation_probability,cloud_cover",
                 "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
@@ -1436,16 +1503,14 @@ class WeatherDataCollector:
                     # 获取时区偏移以过滤 METAR
                     utc_offset = open_meteo.get("utc_offset", 0)
 
-                # 对伦敦，获取 Meteoblue 预测 (公认最准)
-                if city_lower == "london":
-                    mb_data = self.fetch_from_meteoblue(
-                        lat,
-                        lon,
-                        timezone_name=open_meteo.get("timezone", "UTC"),
-                        use_fahrenheit=use_fahrenheit,
-                    )
-                    if mb_data:
-                        results["meteoblue"] = mb_data
+                mb_data = self.fetch_from_meteoblue(
+                    lat,
+                    lon,
+                    timezone_name=open_meteo.get("timezone", "UTC"),
+                    use_fahrenheit=use_fahrenheit,
+                )
+                if mb_data:
+                    results["meteoblue"] = mb_data
 
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:

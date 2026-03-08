@@ -41,11 +41,11 @@ This project utilizes a production-grade decoupled architecture for high availab
 ## 🚀 Core Features
 
 - **📡 Full-Spectrum Collection**
-  - **Major Models**: Real-time sync for ECMWF, GFS, ICON, GEM, and JMA high temperatures.
-  - **Observed Data**: Global airport METAR reports + official Turkish MGM station-level data.
-  - **Centralized Correction**: Integrated `17130` (Center) official data specifically for Ankara.
+  - **Major Models**: Real-time sync for ECMWF, GFS, ICON, GEM, JMA, and Open-Meteo daily/hourly guidance.
+  - **Observed Data**: Aviation Weather / METAR as the primary observation source, plus official Turkish MGM station-level data for Ankara.
+  - **City Specialization**: Integrated `17130` (`Ankara (Bölge/Center)`) as the key Ankara lead station, without replacing LTAC settlement observation.
 - **⚖️ DEB Smart Blending**
-  - Dynamic weighting of forecasts based on recent 7-day historical performance.
+  - Dynamic weighting of forecasts based on recent historical performance and city-specific reliability.
 - **🔔 Alert Engine**
   - **Momentum Spike**: Captures rapid temperature changes within 30 minutes.
   - **Forecast Breakthrough**: Fires when observations exceed all model predictions plus a safety margin.
@@ -64,6 +64,23 @@ This project utilizes a production-grade decoupled architecture for high availab
 | **Momentum**     | 30min temperature slope exceed threshold      | Captures sudden weather fronts                |
 | **Breakthrough** | Pierces all model highs + margin              | Captures high-volatility outlier events       |
 | **Advection**    | Lead station rise + Wind match                | Gain 20-40 minutes of lead time for execution |
+
+---
+
+## 🧭 Current Data Logic
+
+- **Primary observation source**: Aviation Weather / METAR
+- **Ankara enhancement**:
+  - Settlement observation: `LTAC / Esenboğa`
+  - Official lead station: `Ankara (Bölge/Center)` / `17130`
+  - Nearby station layer: Turkish MGM station network
+- **Other cities nearby layer**:
+  - Current production logic uses Aviation Weather METAR clusters
+  - U.S. cities may later receive Mesonet augmentation, but METAR remains the base layer
+- **Historical benchmarking rules**:
+  - Web dashboard: rolling last 15 settled days
+  - Telegram `/deb`: rolling last 7 settled days
+  - The current in-progress day is excluded from win rate and MAE
 
 ---
 
@@ -127,7 +144,7 @@ Associate the `frontend` directory as the project root on Vercel for automatic C
 | :-------- | :-------------------------------------- | :------------- |
 | `/city`   | Query real-time analysis for a city     | `/city ankara` |
 | `/deb`    | View historical accuracy of DEB model   | `/deb london`  |
-| `/points` | View your activity points & leaderboard | `/points`      |
+| `/top`    | View activity leaderboard               | `/top`         |
 | `/help`   | Get detailed instructions               | `/help`        |
 
 ---
@@ -136,11 +153,14 @@ Associate the `frontend` directory as the project root on Vercel for automatic C
 > **Commercialization**: This project currently offers **Web Dashboard ($5/mo)** and **Telegram Signal Channel ($1/mo)** subscriptions.
 > Point-earning via group participation is active and points can be redeemed for access.
 
----
+> [!NOTE]
+> **Frontend Model**: The production website still uses the legacy high-density dashboard shell under `frontend/public/legacy/index.html`, embedded through the Next.js app shell.
 
 ---
 
-**📅 Last Updated**: 2026-03-08
+---
+
+**📅 Last Updated**: 2026-03-09
 **🚀 Status**: v1.0 Stable - Professional Quant UI Locked
 
 > [!TIP]
