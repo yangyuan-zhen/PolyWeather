@@ -1325,9 +1325,9 @@ async function openHistoryModal() {
       selectedCity === "ankara" && mgms.some((value) => value != null);
 
     statsDiv.innerHTML = `
-      <div class="h-stat-card"><span class="label">DEB ???? (WU)</span><span class="val">${hitRate === "--" ? "--" : `${hitRate}%`}</span></div>
-      <div class="h-stat-card"><span class="label">DEB MAE</span><span class="val">${debMae}?</span></div>
-      <div class="h-stat-card"><span class="label">?15??????</span><span class="val">${settledData.length}?</span></div>
+      <div class="h-stat-card"><span class="label">DEB 结算胜率 (WU)</span><span class="val">${hitRate === "--" ? "--" : `${hitRate}%`}</span></div>
+      <div class="h-stat-card"><span class="label">DEB MAE</span><span class="val">${debMae}&deg;</span></div>
+      <div class="h-stat-card"><span class="label">近15天已结算样本</span><span class="val">${settledData.length}天</span></div>
     `;
 
     const datasets = [
