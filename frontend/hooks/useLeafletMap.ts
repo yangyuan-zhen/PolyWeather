@@ -110,6 +110,7 @@ export function useLeafletMap({
   const nearbyLayerRef = useRef<L.LayerGroup | null>(null);
   const autoNearbyCityRef = useRef<string | null>(null);
   const loadingAutoNearbyRef = useRef(false);
+  const handlingAutoNearbyRef = useRef(false);
   const lastMovedCityRef = useRef<string | null>(null);
   const suspendMotionRef = useRef(suspendMotion);
   const hasFittedInitialBoundsRef = useRef(false);
@@ -335,77 +336,79 @@ export function useLeafletMap({
     }
 
     async function maybeAutoShowNearbyStations() {
-      if (suspendMotion) {
-        map.stop();
+      if (handlingAutoNearbyRef.current) {
         return;
       }
-
-      if (selectedDetail) {
-        // Just render stations, no camera move from here
-        renderNearbyStations(selectedDetail, true);
-        return;
-      }
-
-      // If no city selected, reset the move tracker
-      lastMovedCityRef.current = null;
-
-      if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
-        autoNearbyCityRef.current = null;
-        layer.clearLayers();
-        return;
-      }
-
-      const center = map.getCenter();
-      let best: { cityName: string; distance: number } | null = null;
-      for (const [cityName, entry] of Object.entries(markersRef.current)) {
-        const distance = map.distance(
-          center,
-          L.latLng(entry.city.lat, entry.city.lon),
-        );
-        if (distance > AUTO_NEARBY_MAX_DISTANCE_M) continue;
-        if (!best || distance < best.distance) {
-          best = { cityName, distance };
-        }
-      }
-
-      const targetCity = best?.cityName || null;
-      if (!targetCity) {
-        autoNearbyCityRef.current = null;
-        layer.clearLayers();
-        return;
-      }
-
-      if (
-        autoNearbyCityRef.current === targetCity &&
-        layer.getLayers().length > 0
-      ) {
-        return;
-      }
-
-      autoNearbyCityRef.current = targetCity;
-      const cachedDetail = cityDetailsByName[targetCity];
-      if (cachedDetail) {
-        renderNearbyStations(cachedDetail, true);
-        return;
-      }
-
-      if (loadingAutoNearbyRef.current) return;
-      loadingAutoNearbyRef.current = true;
+      handlingAutoNearbyRef.current = true;
       try {
-        const detail = await onEnsureCityDetailRef.current(targetCity, false);
-        renderNearbyStations(detail, true);
-      } catch {
+        if (selectedDetail) {
+          // Just render stations, no camera move from here
+          renderNearbyStations(selectedDetail, true);
+          return;
+        }
+
+        if (suspendMotion) {
+          return;
+        }
+
+        // If no city selected, reset the move tracker
+        lastMovedCityRef.current = null;
+
+        if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
+          autoNearbyCityRef.current = null;
+          layer.clearLayers();
+          return;
+        }
+
+        const center = map.getCenter();
+        let best: { cityName: string; distance: number } | null = null;
+        for (const [cityName, entry] of Object.entries(markersRef.current)) {
+          const distance = map.distance(
+            center,
+            L.latLng(entry.city.lat, entry.city.lon),
+          );
+          if (distance > AUTO_NEARBY_MAX_DISTANCE_M) continue;
+          if (!best || distance < best.distance) {
+            best = { cityName, distance };
+          }
+        }
+
+        const targetCity = best?.cityName || null;
+        if (!targetCity) {
+          autoNearbyCityRef.current = null;
+          layer.clearLayers();
+          return;
+        }
+
+        if (
+          autoNearbyCityRef.current === targetCity &&
+          layer.getLayers().length > 0
+        ) {
+          return;
+        }
+
+        autoNearbyCityRef.current = targetCity;
+        const cachedDetail = cityDetailsByName[targetCity];
+        if (cachedDetail) {
+          renderNearbyStations(cachedDetail, true);
+          return;
+        }
+
+        if (loadingAutoNearbyRef.current) return;
+        loadingAutoNearbyRef.current = true;
+        try {
+          const detail = await onEnsureCityDetailRef.current(targetCity, false);
+          renderNearbyStations(detail, true);
+        } catch {
+        } finally {
+          loadingAutoNearbyRef.current = false;
+        }
       } finally {
-        loadingAutoNearbyRef.current = false;
+        handlingAutoNearbyRef.current = false;
       }
     }
 
     const syncVisibility = () => {
-      if (suspendMotion) {
-        map.stop();
-        return;
-      }
-
       if (map.getZoom() < 7) {
         if (map.hasLayer(layer)) {
           map.removeLayer(layer);

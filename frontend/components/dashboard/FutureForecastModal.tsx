@@ -5,34 +5,29 @@ import clsx from "clsx";
 import { CSSProperties } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useI18n } from "@/hooks/useI18n";
 import {
   ModelForecast,
   ProbabilityDistribution,
 } from "@/components/dashboard/PanelSections";
 import {
+  getClimateDrivers,
   getFutureModalView,
+  getSettlementRiskNarrative,
   getShortTermNowcastLines,
   getTemperatureChartData,
   getWeatherSummary,
   parseAiAnalysis,
 } from "@/lib/dashboard-utils";
 
-function getConfidenceLabel(confidence: string) {
-  return (
-    {
-      high: "高",
-      medium: "中",
-      low: "低",
-    }[confidence] || confidence
-  );
-}
-
 function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
   const store = useDashboardStore();
+  const { locale, t } = useI18n();
   const detail = store.selectedDetail;
-  const view = detail ? getFutureModalView(detail, dateStr) : null;
+  const view = detail ? getFutureModalView(detail, dateStr, locale) : null;
   const isToday = detail ? dateStr === detail.local_date : false;
-  const todayChartData = detail && isToday ? getTemperatureChartData(detail) : null;
+  const todayChartData =
+    detail && isToday ? getTemperatureChartData(detail, locale) : null;
 
   const canvasRef = useChart(
     () => {
@@ -53,7 +48,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             borderWidth: 2,
             data: todayChartData.datasets.mgmHourlyPoints,
             fill: false,
-            label: "MGM 预报",
+            label: locale === "en-US" ? "MGM Forecast" : "MGM 预报",
             pointHoverRadius: 6,
             pointRadius: 3,
             spanGaps: true,
@@ -66,7 +61,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             borderWidth: 1.5,
             data: todayChartData.datasets.debPast,
             fill: true,
-            label: "DEB 预报",
+            label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
             pointHoverRadius: 3,
             pointRadius: 0,
             tension: 0.3,
@@ -77,7 +72,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             borderWidth: 1.5,
             data: todayChartData.datasets.debFuture,
             fill: false,
-            label: "DEB 预报",
+            label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
             pointRadius: 0,
             tension: 0.3,
           });
@@ -89,7 +84,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           borderWidth: 0,
           data: todayChartData.datasets.metarPoints,
           fill: false,
-          label: "METAR 实测",
+          label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
           order: 0,
           pointHoverRadius: 7,
           pointRadius: 5,
@@ -102,7 +97,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             borderWidth: 0,
             data: todayChartData.datasets.mgmPoints,
             fill: false,
-            label: "MGM 实测",
+            label: locale === "en-US" ? "MGM Observation" : "MGM 实测",
             order: -1,
             pointHoverRadius: 9,
             pointRadius: 7,
@@ -120,7 +115,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             borderWidth: 1,
             data: todayChartData.datasets.temps,
             fill: false,
-            label: "OM 原始",
+            label: locale === "en-US" ? "OM Raw" : "OM 原始",
             pointRadius: 0,
             tension: 0.3,
           });
@@ -198,7 +193,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               borderColor: "#22d3ee",
               data: view.slice.map((point) => point.temp),
               fill: false,
-              label: "Open-Meteo 温度",
+              label: locale === "en-US" ? "Open-Meteo Temperature" : "Open-Meteo 温度",
               pointRadius: 2,
               tension: 0.28,
             },
@@ -208,7 +203,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               borderDash: [5, 4],
               data: view.slice.map((point) => point.dewPoint),
               fill: false,
-              label: "露点",
+              label: locale === "en-US" ? "Dew Point" : "露点",
               pointRadius: 0,
               tension: 0.24,
             },
@@ -258,7 +253,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         type: "line",
       } satisfies ChartConfiguration<"line">;
     },
-    [detail, isToday, todayChartData, view],
+    [detail, isToday, locale, todayChartData, view],
   );
 
   return (
@@ -268,7 +263,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
       </div>
       {isToday && (
         <div className="chart-legend">
-          {todayChartData?.legendText || "暂无机场报文或小时级实测数据"}
+          {todayChartData?.legendText || t("future.chartLegendEmpty")}
         </div>
       )}
     </>
@@ -277,20 +272,23 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
 
 export function FutureForecastModal() {
   const store = useDashboardStore();
+  const { locale, t } = useI18n();
   const detail = store.selectedDetail;
   const dateStr = store.futureModalDate;
 
   if (!detail || !dateStr) return null;
 
   const isToday = dateStr === detail.local_date;
-  const view = getFutureModalView(detail, dateStr);
-  const nowcastRows = getShortTermNowcastLines(detail, dateStr);
+  const view = getFutureModalView(detail, dateStr, locale);
+  const nowcastRows = getShortTermNowcastLines(detail, dateStr, locale);
+  const riskLines = getSettlementRiskNarrative(detail, locale);
+  const climateDrivers = getClimateDrivers(detail, locale);
   const ai = parseAiAnalysis(detail.ai_analysis);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
     "--score-position": scorePosition,
   } as CSSProperties & { "--score-position": string };
-  const weatherSummary = getWeatherSummary(detail);
+  const weatherSummary = getWeatherSummary(detail, locale);
 
   return (
     <div
@@ -308,13 +306,18 @@ export function FutureForecastModal() {
         <div className="modal-header">
           <h2 id="future-modal-title">
             {isToday
-              ? `${detail.display_name.toUpperCase()} · 今日日内分析`
-              : `${detail.display_name.toUpperCase()} · ${dateStr} 未来日期分析`}
+              ? t("future.todayTitle", {
+                  city: detail.display_name.toUpperCase(),
+                })
+              : t("future.dateTitle", {
+                  city: detail.display_name.toUpperCase(),
+                  date: dateStr,
+                })}
           </h2>
           <button
             type="button"
             className="modal-close"
-            aria-label={isToday ? "关闭今日日内分析" : "关闭未来日期分析"}
+            aria-label={isToday ? t("future.closeTodayAria") : t("future.closeDateAria")}
             onClick={store.closeFutureModal}
           >
             ×
@@ -326,35 +329,35 @@ export function FutureForecastModal() {
             {isToday && (
               <>
                 <div className="h-stat-card">
-                  <span className="label">当前实测</span>
+                  <span className="label">{t("future.currentObs")}</span>
                   <span className="val">
                     {detail.current?.temp ?? "--"}
                     {detail.temp_symbol} @{detail.current?.obs_time || "--"}
                   </span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">当前天气</span>
+                  <span className="label">{t("future.currentWeather")}</span>
                   <span className="val">
                     {weatherSummary.weatherIcon} {weatherSummary.weatherText}
                   </span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">WU 结算参考</span>
+                  <span className="label">{t("future.wuRef")}</span>
                   <span className="val">
                     {detail.current?.wu_settlement ?? "--"}
                     {detail.temp_symbol}
                   </span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">日出时间</span>
+                  <span className="label">{t("future.sunrise")}</span>
                   <span className="val">{detail.forecast?.sunrise || "--"}</span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">日落时间</span>
+                  <span className="label">{t("future.sunset")}</span>
                   <span className="val">{detail.forecast?.sunset || "--"}</span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">日照时长</span>
+                  <span className="label">{t("future.sunshine")}</span>
                   <span className="val">
                     {detail.forecast?.sunshine_hours != null
                       ? `${detail.forecast.sunshine_hours}h`
@@ -365,27 +368,29 @@ export function FutureForecastModal() {
             )}
 
             <div className="h-stat-card">
-              <span className="label">{isToday ? "今日预报高温" : "目标日预报"}</span>
+              <span className="label">
+                {isToday ? t("future.todayForecastHigh") : t("future.targetForecast")}
+              </span>
               <span className="val">
                 {view.forecastEntry?.max_temp ?? "--"}
                 {detail.temp_symbol}
               </span>
             </div>
             <div className="h-stat-card">
-              <span className="label">DEB 预测</span>
+              <span className="label">{t("future.deb")}</span>
               <span className="val">
                 {view.deb ?? "--"}
                 {detail.temp_symbol}
               </span>
             </div>
             <div className="h-stat-card">
-              <span className="label">动态分布中心</span>
+              <span className="label">{t("future.mu")}</span>
               <span className="val">
                 {view.mu != null ? `${view.mu.toFixed(1)}${detail.temp_symbol}` : "--"}
               </span>
             </div>
             <div className="h-stat-card">
-              <span className="label">趋势评分</span>
+              <span className="label">{t("future.score")}</span>
               <span className="val">
                 {view.front.score > 0 ? "+" : ""}
                 {view.front.score}
@@ -394,17 +399,17 @@ export function FutureForecastModal() {
           </div>
 
           <section className="future-modal-section">
-            <h3>{isToday ? "今日温度走势" : "目标日小时走势"}</h3>
+            <h3>{isToday ? t("future.todayTempTrend") : t("future.targetTempTrend")}</h3>
             <DailyTemperatureChart dateStr={dateStr} />
           </section>
 
           <div className="future-modal-grid">
             <section className="future-modal-section">
-              <h3>结算概率分布</h3>
+              <h3>{t("future.probability")}</h3>
               <ProbabilityDistribution detail={detail} targetDate={dateStr} hideTitle />
             </section>
             <section className="future-modal-section">
-              <h3>多模型预报</h3>
+              <h3>{t("future.models")}</h3>
               <ModelForecast detail={detail} targetDate={dateStr} hideTitle />
             </section>
           </div>
@@ -427,17 +432,20 @@ export function FutureForecastModal() {
                     <path d="M22 19V13" />
                   </svg>
                 </span>
-                {isToday ? "今日日内结构信号" : "未来 6-48 小时趋势"}
+                {isToday ? t("future.structureToday") : t("future.structureDate")}
               </h3>
               <div className="future-front-score">
                 <div className="future-front-bar" style={barStyle} />
                 <div className="future-front-meta">
-                  <span className="future-front-pill">判断: {view.front.label}</span>
                   <span className="future-front-pill">
-                    置信度: {getConfidenceLabel(view.front.confidence)}
+                    {t("future.judgement")}: {view.front.label}
                   </span>
                   <span className="future-front-pill">
-                    最大降水概率: {Math.round(view.front.precipMax)}%
+                    {t("future.confidence")}:{" "}
+                    {t(`confidence.${view.front.confidence}`)}
+                  </span>
+                  <span className="future-front-pill">
+                    {t("future.maxPrecip")}: {Math.round(view.front.precipMax)}%
                   </span>
                 </div>
                 <div className="future-text-block">{view.front.summary}</div>
@@ -462,7 +470,7 @@ export function FutureForecastModal() {
             </section>
 
             <section className="future-modal-section">
-              <h3>AI 深度分析</h3>
+              <h3>{t("future.ai")}</h3>
               <div className="future-text-block">
                 {ai.summary ? <div>{ai.summary}</div> : null}
 
@@ -475,7 +483,7 @@ export function FutureForecastModal() {
                 )}
 
                 {!ai.summary && ai.bullets.length === 0 && (
-                  <div>暂无 AI 分析，当前以结构化气象与模型数据为主。</div>
+                  <div>{t("future.noAi")}</div>
                 )}
 
                 <div style={{ marginTop: "14px" }}>
@@ -489,7 +497,7 @@ export function FutureForecastModal() {
 
                 {view.front.weatherGovPeriods.length > 0 && (
                   <div style={{ marginTop: "10px" }}>
-                    <strong>weather.gov 文本: </strong>
+                    <strong>{t("future.weatherGov")}: </strong>
                     {view.front.weatherGovPeriods
                       .map((period) => period.short_forecast || period.detailed_forecast)
                       .filter(Boolean)
@@ -499,6 +507,36 @@ export function FutureForecastModal() {
               </div>
             </section>
           </div>
+
+          {isToday && (
+            <div className="future-modal-grid">
+              <section className="future-modal-section">
+                <h3>{t("future.risk")}</h3>
+                <div className="risk-info">
+                  {riskLines.map((line) => (
+                    <div key={line} className="risk-row">
+                      <span style={{ color: "var(--accent-cyan)", opacity: 0.6 }}>
+                        •
+                      </span>
+                      <span>{line}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="future-modal-section">
+                <h3>{t("future.climate")}</h3>
+                <div className="insight-list">
+                  {climateDrivers.map((driver) => (
+                    <div key={driver.label} className="insight-item">
+                      <div className="insight-title">{driver.label}</div>
+                      <div className="insight-text">{driver.text}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
         </div>
       </div>
     </div>

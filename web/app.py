@@ -28,7 +28,9 @@ from loguru import logger
 from src.utils.config_loader import load_config
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES
+from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accuracy
+from src.analysis.settlement_rounding import wu_round
 
 # ──────────────────────────────────────────────────────────
 #  Setup
@@ -49,6 +51,7 @@ app.add_middleware(
 
 _config = load_config()
 _weather = WeatherDataCollector(_config)
+_market_layer = PolymarketReadOnlyLayer()
 
 from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
 
@@ -129,7 +132,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         if " " in max_temp_time:
             max_temp_time = max_temp_time.split(" ")[1][:5]
 
-    wu_settle = round(max_so_far) if max_so_far is not None else None
+    wu_settle = wu_round(max_so_far) if max_so_far is not None else None
 
     # Observation time → local
     obs_time_str = ""
@@ -672,9 +675,30 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_city_detail_payload(data: Dict[str, Any]) -> Dict[str, Any]:
+def _build_city_detail_payload(
+    data: Dict[str, Any],
+    market_slug: Optional[str] = None,
+) -> Dict[str, Any]:
     distribution = data.get("probabilities", {}).get("distribution", []) or []
     primary_bucket = distribution[0] if distribution else None
+    model_probability = (
+        (primary_bucket.get("probability") / 100.0)
+        if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None
+        else None
+    )
+    fallback_sparkline = [
+        p.get("probability", 0)
+        for p in distribution[:8]
+        if isinstance(p, dict)
+    ]
+    market_scan = _market_layer.build_market_scan(
+        city=data.get("name"),
+        target_date=data.get("local_date"),
+        temperature_bucket=primary_bucket if isinstance(primary_bucket, dict) else None,
+        model_probability=model_probability,
+        fallback_sparkline=fallback_sparkline,
+        forced_market_slug=market_slug,
+    )
     return {
         "city": data.get("name"),
         "fetched_at": data.get("updated_at"),
@@ -718,36 +742,7 @@ def _build_city_detail_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "models": data.get("multi_model") or {},
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
-        "market_scan": {
-            "available": False,
-            "reason": "Market layer is not available on the current backend build.",
-            "primary_market": None,
-            "selected_date": data.get("local_date"),
-            "selected_condition_id": None,
-            "selected_slug": None,
-            "temperature_bucket": primary_bucket,
-            "model_probability": (
-                (primary_bucket.get("probability") / 100.0)
-                if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None
-                else None
-            ),
-            "market_price": None,
-            "edge_percent": None,
-            "signal_label": "MONITOR",
-            "confidence": "low",
-            "yes_token": None,
-            "no_token": None,
-            "yes_buy": None,
-            "yes_sell": None,
-            "no_buy": None,
-            "no_sell": None,
-            "last_trade_price": None,
-            "liquidity": None,
-            "volume": None,
-            "sparkline": [p.get("probability", 0) for p in distribution[:8] if isinstance(p, dict)],
-            "recent_trades": [],
-            "websocket": {},
-        },
+        "market_scan": market_scan,
         "risk": data.get("risk"),
         "ai_analysis": data.get("ai_analysis") or "",
         "errors": {},
@@ -797,10 +792,14 @@ async def city_summary(name: str, force_refresh: bool = False):
 
 
 @app.get("/api/city/{name}/detail")
-async def city_detail_aggregate(name: str, force_refresh: bool = False):
+async def city_detail_aggregate(
+    name: str,
+    force_refresh: bool = False,
+    market_slug: Optional[str] = None,
+):
     city = _normalize_city_or_404(name)
     data = _analyze(city, force_refresh=force_refresh)
-    return _build_city_detail_payload(data)
+    return _build_city_detail_payload(data, market_slug=market_slug)
 
 # ──────────────────────────────────────────────────────────
 #  Entrypoint

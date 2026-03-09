@@ -2,9 +2,11 @@
 
 import clsx from "clsx";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useI18n } from "@/hooks/useI18n";
 
 export function CitySidebar() {
   const store = useDashboardStore();
+  const { t } = useI18n();
   const sortedCities = [...store.cities].sort((a, b) => {
     const order = { high: 0, medium: 1, low: 2 };
     return (
@@ -16,7 +18,7 @@ export function CitySidebar() {
   return (
     <nav className="city-list">
       <div className="city-list-header">
-        <span>监控城市</span>
+        <span>{t("sidebar.title")}</span>
         <span className="city-count">{store.cities.length}</span>
       </div>
 
@@ -45,17 +47,17 @@ export function CitySidebar() {
                 >
                   {snapshot?.current?.temp != null
                     ? `${snapshot.current.temp}${snapshot.temp_symbol || "°C"}`
-                    : "--"}
+                    : t("common.na")}
                 </span>
               </div>
 
               <div className="city-item-info">
                 <span className="city-local-time">
-                  {snapshot?.local_time ? `🕐 ${snapshot.local_time}` : ""}
+                  {snapshot?.local_time ? `🕒 ${snapshot.local_time}` : ""}
                 </span>
                 <span className="city-max-info">
                   {detail?.current?.max_temp_time
-                    ? `峰值 @ ${detail.current.max_temp_time}`
+                    ? t("sidebar.peakAt", { time: detail.current.max_temp_time })
                     : ""}
                 </span>
               </div>

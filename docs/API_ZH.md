@@ -137,7 +137,10 @@
 
 - **URL**: `/api/city/{name}/detail`
 - **Method**: `GET`
-- **用途**: 面向后续商业化聚合视图的单请求聚合接口。
+- **用途**: 商业化聚合视图单请求接口（已接入 P0 只读价格层）。
+- **可选参数**:
+  - `force_refresh=true|false`
+  - `market_slug=<slug>`（调试优先直查；传入后优先按 slug 精确定位市场，跳过自动发现）
 
 **当前结构**
 
@@ -153,7 +156,15 @@
 **说明**
 
 - 当前生产前端主链路仍以 `/api/city/{name}` + `/api/history/{name}` 为主。
-- `/api/city/{name}/detail` 已提供聚合结构，供后续产品层扩展接入。
+- `/api/city/{name}/detail` 当前已包含 Polymarket P0 只读字段：
+  - `primary_market`
+  - `selected_condition_id`
+  - `yes_token` / `no_token`
+  - `yes_buy` / `yes_sell` / `no_buy` / `no_sell`
+  - `market_price`（优先 midpoint）
+  - `edge_percent`（`(model_probability - market_price) * 100`）
+  - `signal_label`（`BUY YES` / `BUY NO` / `MONITOR`）
+  - `websocket.asset_ids` / `websocket.condition_ids`（仅用于订阅标识，P0 不下单）
 
 ---
 

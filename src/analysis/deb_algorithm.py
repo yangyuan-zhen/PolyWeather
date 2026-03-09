@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
+from src.analysis.settlement_rounding import wu_round
 
 # Cross-platform file locking
 import sys
@@ -99,26 +100,38 @@ def update_daily_record(
     if date_str not in data[city_name]:
         data[city_name][date_str] = {}
 
-    # 避免无意义的频繁磁盘写入
-    old_actual = data[city_name][date_str].get("actual_high")
-    if (
-        old_actual == actual_high
-        and data[city_name][date_str].get("forecasts") == forecasts
-    ):
-        return
-
-    data[city_name][date_str]["forecasts"] = forecasts
-    data[city_name][date_str]["actual_high"] = actual_high
-    if deb_prediction is not None:
-        data[city_name][date_str]["deb_prediction"] = deb_prediction
-    if mu is not None:
-        data[city_name][date_str]["mu"] = round(mu, 2)
+    compact_probs = None
     if probabilities is not None:
         # Store compact: [{"v": 25, "p": 0.8}, ...]
-        data[city_name][date_str]["prob_snapshot"] = [
+        compact_probs = [
             {"v": p["value"], "p": p["probability"]}
             for p in probabilities[:4]
         ]
+
+    # 避免无意义的频繁磁盘写入
+    existing = data[city_name][date_str]
+    old_actual = existing.get("actual_high")
+    old_deb = existing.get("deb_prediction")
+    old_mu = existing.get("mu")
+    old_probs = existing.get("prob_snapshot")
+    next_mu = round(mu, 2) if mu is not None else None
+    if (
+        old_actual == actual_high
+        and existing.get("forecasts") == forecasts
+        and (deb_prediction is None or old_deb == deb_prediction)
+        and (mu is None or old_mu == next_mu)
+        and (compact_probs is None or old_probs == compact_probs)
+    ):
+        return
+
+    existing["forecasts"] = forecasts
+    existing["actual_high"] = actual_high
+    if deb_prediction is not None:
+        existing["deb_prediction"] = deb_prediction
+    if mu is not None:
+        existing["mu"] = next_mu
+    if probabilities is not None:
+        existing["prob_snapshot"] = compact_probs
 
     # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
     cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
@@ -173,7 +186,12 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
 
         for model in current_forecasts.keys():
             if model in past_forecasts and past_forecasts[model] is not None:
-                errors[model].append(abs(past_forecasts[model] - actual))
+                try:
+                    pv = float(past_forecasts[model])
+                    av = float(actual)
+                except (TypeError, ValueError):
+                    continue
+                errors[model].append(abs(pv - av))
 
         days_used += 1
         if days_used >= lookback_days:
@@ -182,6 +200,8 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
     # 如果有效历史天数 < 2 天，还是使用等权
     if days_used < 2:
         valid_vals = [v for v in current_forecasts.values() if v is not None]
+        if not valid_vals:
+            return None, f"暂无有效模型数据(由于仅{days_used}天历史)"
         avg = sum(valid_vals) / len(valid_vals)
         return round(avg, 1), f"等权平均(由于仅{days_used}天历史)"
 
@@ -263,8 +283,8 @@ def get_deb_accuracy(city_name):
             continue
 
         total += 1
-        deb_wu = round(deb_pred)
-        actual_wu = round(actual)
+        deb_wu = wu_round(deb_pred)
+        actual_wu = wu_round(actual)
         if deb_wu == actual_wu:
             hits += 1
         errors.append(abs(deb_pred - actual))
@@ -328,13 +348,13 @@ def get_mu_accuracy(city_name):
 
         total += 1
         mu_errors.append(abs(mu_val - actual))
-        if round(mu_val) == round(actual):
+        if wu_round(mu_val) == wu_round(actual):
             mu_hits += 1
 
         # Brier Score from probability snapshot
         prob_snap = record.get("prob_snapshot", [])
         if prob_snap:
-            actual_wu = round(actual)
+            actual_wu = wu_round(actual)
             bs = 0.0
             for entry in prob_snap:
                 predicted_p = entry.get("p", 0)

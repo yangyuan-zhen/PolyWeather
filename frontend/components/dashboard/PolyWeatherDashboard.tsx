@@ -6,6 +6,7 @@ import {
   DashboardStoreProvider,
   useDashboardStore,
 } from "@/hooks/useDashboardStore";
+import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
 import { DetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
@@ -16,6 +17,7 @@ import { MapCanvas } from "@/components/dashboard/MapCanvas";
 
 function DashboardScreen() {
   const store = useDashboardStore();
+  const { t } = useI18n();
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -61,7 +63,7 @@ function DashboardScreen() {
       {showLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner" />
-          <span>正在获取气象数据，请稍候...</span>
+          <span>{t("dashboard.loading")}</span>
         </div>
       )}
     </div>
@@ -70,8 +72,10 @@ function DashboardScreen() {
 
 export function PolyWeatherDashboard() {
   return (
-    <DashboardStoreProvider>
-      <DashboardScreen />
-    </DashboardStoreProvider>
+    <I18nProvider>
+      <DashboardStoreProvider>
+        <DashboardScreen />
+      </DashboardStoreProvider>
+    </I18nProvider>
   );
 }

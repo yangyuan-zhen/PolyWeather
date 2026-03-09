@@ -13,6 +13,7 @@ from src.analysis.deb_algorithm import (
     get_deb_accuracy,
     update_daily_record,
 )
+from src.analysis.settlement_rounding import wu_round
 from src.data_collection.city_risk_profiles import get_city_risk_profile
 
 
@@ -348,7 +349,7 @@ def analyze_weather_trend(
                 ai_features.append(f"🎲 数学概率分布：{prob_str}")
 
     elif is_dead_market:
-        settled_wu = round(max_so_far) if max_so_far is not None else 0
+        settled_wu = wu_round(max_so_far) if max_so_far is not None else 0
         dead_msg = f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} (死盘确认)"
         insights.append(dead_msg)
         ai_features.append("🎲 状态: 确认死盘，结算已无悬念。")
@@ -375,7 +376,7 @@ def analyze_weather_trend(
 
     # === Settlement boundary ===
     if max_so_far is not None:
-        settled = round(max_so_far)
+        settled = wu_round(max_so_far)
         fractional = max_so_far - int(max_so_far)
         dist_to_boundary = abs(fractional - 0.5)
         if dist_to_boundary <= 0.3:
@@ -437,7 +438,7 @@ def analyze_weather_trend(
         ai_features.append(f"🌡️ 当前实测温度: {cur_temp}{temp_symbol}。")
     if max_so_far is not None:
         ai_features.append(
-            f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} (WU结算={round(max_so_far)}{temp_symbol})。"
+            f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} (WU结算={wu_round(max_so_far)}{temp_symbol})。"
         )
     if city_name:
         _profile = get_city_risk_profile(city_name)
@@ -486,7 +487,7 @@ def analyze_weather_trend(
                 for t, p in sorted_probs[:4]
             ]
         elif is_dead_market and max_so_far is not None:
-            _prob_list = [{"value": round(max_so_far), "probability": 1.0}]
+            _prob_list = [{"value": wu_round(max_so_far), "probability": 1.0}]
 
         update_daily_record(
             city_name,
@@ -524,7 +525,7 @@ def analyze_weather_trend(
         "forecast_miss_deg": forecast_miss_deg,
         "max_so_far": max_so_far,
         "cur_temp": cur_temp,
-        "wu_settle": round(max_so_far) if max_so_far is not None else None,
+        "wu_settle": wu_round(max_so_far) if max_so_far is not None else None,
     }
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features), structured
@@ -543,12 +544,12 @@ def calculate_prob_distribution(
         # 0.5 * (1 + erf( (x-m)/(s*sqrt(2)) ))
         return 0.5 * (1 + math.erf((x - m) / (sigma * math.sqrt(2))))
 
-    min_possible_wu = round(max_so_far) if max_so_far is not None else -999
+    min_possible_wu = wu_round(max_so_far) if max_so_far is not None else -999
     probs = {}
     
     # Range: mu +/- 3 sigma or at least +/- 2 degrees
     search_range = max(2, int(sigma * 2.5))
-    target_mu = round(mu)
+    target_mu = wu_round(mu)
     
     for n in range(target_mu - search_range, target_mu + search_range + 1):
         if n < min_possible_wu:

@@ -40,6 +40,19 @@ class WeatherDataCollector:
         "munich": ["EDDM", "EDMO", "EDJA"],
     }
 
+    # Meteoblue 仅在增益最大的城市启用（减少配额消耗与冗余请求）
+    METEOBLUE_PRIORITY_CITIES = {
+        "london",
+        "paris",
+        "seoul",
+        "toronto",
+        "buenos aires",
+        "wellington",
+        "lucknow",
+        "sao paulo",
+        "munich",
+    }
+
     def __init__(self, config: dict):
         self.config = config
         weather_cfg = config.get("weather", {})
@@ -1503,14 +1516,15 @@ class WeatherDataCollector:
                     # 获取时区偏移以过滤 METAR
                     utc_offset = open_meteo.get("utc_offset", 0)
 
-                mb_data = self.fetch_from_meteoblue(
-                    lat,
-                    lon,
-                    timezone_name=open_meteo.get("timezone", "UTC"),
-                    use_fahrenheit=use_fahrenheit,
-                )
-                if mb_data:
-                    results["meteoblue"] = mb_data
+                if city_lower in self.METEOBLUE_PRIORITY_CITIES:
+                    mb_data = self.fetch_from_meteoblue(
+                        lat,
+                        lon,
+                        timezone_name=open_meteo.get("timezone", "UTC"),
+                        use_fahrenheit=use_fahrenheit,
+                    )
+                    if mb_data:
+                        results["meteoblue"] = mb_data
 
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:

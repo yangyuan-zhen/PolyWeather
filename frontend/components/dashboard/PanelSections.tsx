@@ -4,11 +4,13 @@ import { ChartConfiguration } from "chart.js/auto";
 import clsx from "clsx";
 import { useChart } from "@/hooks/useChart";
 import { useCityData, useDashboardStore } from "@/hooks/useDashboardStore";
+import { useI18n } from "@/hooks/useI18n";
 import { CityDetail } from "@/lib/dashboard-types";
 import {
   getHeroMetaItems,
   getModelView,
   getProbabilityView,
+  getRiskBadgeLabel,
   getTemperatureChartData,
   getWeatherSummary,
   parseAiAnalysis,
@@ -20,10 +22,11 @@ function EmptyState({ text }: { text: string }) {
 
 export function HeroSummary() {
   const { data } = useCityData();
+  const { locale } = useI18n();
   if (!data) return null;
 
-  const { weatherIcon, weatherText } = getWeatherSummary(data);
-  const metaItems = getHeroMetaItems(data);
+  const { weatherIcon, weatherText } = getWeatherSummary(data, locale);
+  const metaItems = getHeroMetaItems(data, locale);
   const current = data.current || {};
   const isMax =
     current.max_so_far != null &&
@@ -45,12 +48,14 @@ export function HeroSummary() {
       </div>
       <div className="hero-max-time">
         {isMax && current.max_temp_time
-          ? `该城市今日最高温出现在当地时间 ${current.max_temp_time}`
+          ? locale === "en-US"
+            ? `Today's peak temperature appeared at local time ${current.max_temp_time}`
+            : `该城市今日最高温出现在当地时间 ${current.max_temp_time}`
           : ""}
       </div>
       <div className="hero-details">
         <div className="hero-item">
-          <span className="label">当前实测</span>
+          <span className="label">{locale === "en-US" ? "Current Obs" : "当前实测"}</span>
           <span className="value">
             {current.temp != null
               ? `${current.temp}${data.temp_symbol} @${current.obs_time || "--"}`
@@ -58,7 +63,9 @@ export function HeroSummary() {
           </span>
         </div>
         <div className="hero-item">
-          <span className="label">WU 结算参考</span>
+          <span className="label">
+            {locale === "en-US" ? "WU Settlement Ref" : "WU 结算参考"}
+          </span>
           <span className="value highlight">
             {current.wu_settlement != null
               ? `${current.wu_settlement}${data.temp_symbol}`
@@ -66,7 +73,7 @@ export function HeroSummary() {
           </span>
         </div>
         <div className="hero-item">
-          <span className="label">DEB 预测</span>
+          <span className="label">{locale === "en-US" ? "DEB Forecast" : "DEB 预测"}</span>
           <span className="value">
             {data.deb?.prediction != null
               ? `${data.deb.prediction}${data.temp_symbol}`
@@ -85,7 +92,8 @@ export function HeroSummary() {
 
 export function TemperatureChart() {
   const { data } = useCityData();
-  const chartData = data ? getTemperatureChartData(data) : null;
+  const { locale, t } = useI18n();
+  const chartData = data ? getTemperatureChartData(data, locale) : null;
 
   const canvasRef = useChart(
     () => {
@@ -105,7 +113,7 @@ export function TemperatureChart() {
           borderWidth: 2,
           data: chartData.datasets.mgmHourlyPoints,
           fill: false,
-          label: "MGM 预报",
+          label: locale === "en-US" ? "MGM Forecast" : "MGM 预报",
           pointHoverRadius: 6,
           pointRadius: 3,
           spanGaps: true,
@@ -118,7 +126,7 @@ export function TemperatureChart() {
           borderWidth: 1.5,
           data: chartData.datasets.debPast,
           fill: true,
-          label: "DEB 预报",
+          label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
           pointHoverRadius: 3,
           pointRadius: 0,
           tension: 0.3,
@@ -129,7 +137,7 @@ export function TemperatureChart() {
           borderWidth: 1.5,
           data: chartData.datasets.debFuture,
           fill: false,
-          label: "DEB 预报",
+          label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
           pointRadius: 0,
           tension: 0.3,
         });
@@ -141,7 +149,7 @@ export function TemperatureChart() {
         borderWidth: 0,
         data: chartData.datasets.metarPoints,
         fill: false,
-        label: "METAR 实测",
+        label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
         order: 0,
         pointHoverRadius: 7,
         pointRadius: 5,
@@ -154,7 +162,7 @@ export function TemperatureChart() {
           borderWidth: 0,
           data: chartData.datasets.mgmPoints,
           fill: false,
-          label: "MGM 实测",
+          label: locale === "en-US" ? "MGM Observation" : "MGM 实测",
           order: -1,
           pointHoverRadius: 9,
           pointRadius: 7,
@@ -172,7 +180,7 @@ export function TemperatureChart() {
           borderWidth: 1,
           data: chartData.datasets.temps,
           fill: false,
-          label: "OM 原始",
+          label: locale === "en-US" ? "OM Raw" : "OM 原始",
           pointRadius: 0,
           tension: 0.3,
         });
@@ -221,16 +229,16 @@ export function TemperatureChart() {
         type: "line",
       } satisfies ChartConfiguration<"line">;
     },
-    [data, chartData],
+    [data, chartData, locale],
   );
 
   return (
     <section className="chart-section">
-      <h3>今日温度走势</h3>
+      <h3>{t("section.todayTempTrend")}</h3>
       <div className="chart-wrapper">
         <canvas ref={canvasRef} />
       </div>
-      <div className="chart-legend">{chartData?.legendText || "暂无小时级数据"}</div>
+      <div className="chart-legend">{chartData?.legendText || t("section.chartEmpty")}</div>
     </section>
   );
 }
@@ -244,22 +252,25 @@ export function ProbabilityDistribution({
   hideTitle?: boolean;
   targetDate?: string | null;
 }) {
+  const { t } = useI18n();
   const view = getProbabilityView(detail, targetDate);
 
   return (
     <section className="prob-section">
-      {!hideTitle && <h3>结算概率分布</h3>}
+      {!hideTitle && <h3>{t("section.probability")}</h3>}
       <div className="prob-bars">
         {view.mu != null && (
           <div
             style={{ color: "var(--text-muted)", fontSize: "11px", marginBottom: "6px" }}
           >
-            动态分布中心 μ = {view.mu.toFixed(1)}
-            {detail.temp_symbol}
+            {t("section.mu", {
+              unit: detail.temp_symbol || "",
+              value: view.mu.toFixed(1),
+            })}
           </div>
         )}
         {view.probabilities.length === 0 ? (
-          <EmptyState text="暂无概率数据" />
+          <EmptyState text={t("section.noProb")} />
         ) : (
           view.probabilities.slice(0, 6).map((bucket, index) => {
             const probability = Math.round(Number(bucket.probability || 0) * 100);
@@ -294,6 +305,7 @@ export function ModelForecast({
   hideTitle?: boolean;
   targetDate?: string | null;
 }) {
+  const { t } = useI18n();
   const view = getModelView(detail, targetDate);
   const modelEntries = Object.entries(view.models).filter(([, value]) =>
     Number.isFinite(Number(value)),
@@ -307,10 +319,10 @@ export function ModelForecast({
 
   return (
     <section className="models-section">
-      {!hideTitle && <h3>多模型预报</h3>}
+      {!hideTitle && <h3>{t("section.models")}</h3>}
       <div className="model-bars">
         {!modelEntries.length ? (
-          <EmptyState text="暂无多模型预报" />
+          <EmptyState text={t("section.noModels")} />
         ) : (
           <>
             {modelEntries
@@ -378,15 +390,16 @@ export function ModelForecast({
 export function ForecastTable() {
   const store = useDashboardStore();
   const { data } = useCityData();
+  const { t } = useI18n();
   if (!data) return null;
 
   const daily = data.forecast?.daily || [];
   return (
     <section className="forecast-section">
-      <h3>多日预报</h3>
+      <h3>{t("forecast.title")}</h3>
       <div className="forecast-table">
         {daily.length === 0 ? (
-          <EmptyState text="暂无多日预报" />
+          <EmptyState text={t("forecast.empty")} />
         ) : (
           daily.map((day, index) => {
             const isToday = day.date === data.local_date || index === 0;
@@ -403,7 +416,7 @@ export function ForecastTable() {
                 }}
               >
                 <div className="f-date">
-                  {isToday ? "今天" : day.date.substring(5).replace("-", "/")}
+                  {isToday ? t("forecast.today") : day.date.substring(5).replace("-", "/")}
                 </div>
                 <div className="f-temp">
                   {day.max_temp}
@@ -420,17 +433,16 @@ export function ForecastTable() {
 
 export function AiAnalysis() {
   const { data } = useCityData();
+  const { t } = useI18n();
   if (!data) return null;
   const ai = parseAiAnalysis(data.ai_analysis);
 
   return (
     <section className="ai-section">
-      <h3>AI 深度分析</h3>
+      <h3>{t("section.ai")}</h3>
       <div className="ai-box">
         {!ai.summary && ai.bullets.length === 0 ? (
-          <span className="ai-placeholder">
-            暂无 AI 分析，当前以结构化气象与模型数据为主。
-          </span>
+          <span className="ai-placeholder">{t("section.aiEmpty")}</span>
         ) : (
           <>
             {ai.summary && <div className="ai-summary">{ai.summary}</div>}
@@ -450,30 +462,31 @@ export function AiAnalysis() {
 
 export function RiskInfo() {
   const { data } = useCityData();
+  const { t } = useI18n();
   if (!data) return null;
   const risk = data.risk || {};
 
   return (
     <section className="risk-section">
-      <h3>数据偏差风险</h3>
+      <h3>{t("section.risk")}</h3>
       <div className="risk-info">
         {!risk.airport ? (
-          <span style={{ color: "var(--text-muted)" }}>暂无风险档案</span>
+          <span style={{ color: "var(--text-muted)" }}>{t("section.noRiskProfile")}</span>
         ) : (
           <>
             <div className="risk-row">
-              <span className="risk-label">机场</span>
+              <span className="risk-label">{t("section.airport")}</span>
               <span>
                 {risk.airport} ({risk.icao})
               </span>
             </div>
             <div className="risk-row">
-              <span className="risk-label">距离</span>
+              <span className="risk-label">{t("section.distance")}</span>
               <span>{risk.distance_km}km</span>
             </div>
             {risk.warning && (
               <div className="risk-row">
-                <span className="risk-label">注意</span>
+                <span className="risk-label">{t("section.note")}</span>
                 <span>{risk.warning}</span>
               </div>
             )}
