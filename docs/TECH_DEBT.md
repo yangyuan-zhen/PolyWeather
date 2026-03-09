@@ -1,20 +1,20 @@
-﻿# 🛠️ Technical Debt & Engineering Backlog
+# 🛠️ Technical Debt & Engineering Backlog
 
 > **Vision**: Moving from a research script to a production SaaS.
 
 ---
 
-## 🏛️ System Health: 75%
+## 🏛️ System Health: 82%
 
 ```mermaid
 pie title System Health & Tech Debt
-    "Stable Engine" : 75
-    "Centralized Logic Debt" : 10
-    "Subscription DB Debt" : 10
-    "Testing/Replay Debt" : 5
+    "Stable Engine" : 82
+    "Entitlement/Payments Debt" : 8
+    "Test/Replay Debt" : 6
+    "Observability Debt" : 4
 ```
 
-The core engine is stable, but several infrastructure "shortcut" decisions remain.
+The core weather engine and React dashboard runtime are now stable, but product-layer infrastructure debt is still material.
 
 ### Current Stable Modules
 
@@ -22,7 +22,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 - [x] DEB Blending Algorithm
 - [x] Proactive Telegram Alert Engine
 - [x] Vercel Dashboard Infrastructure
-- [x] Legacy dashboard running behind Next.js/Vercel
+- [x] React component-driven dashboard runtime (replacing legacy `public/static/app.js` rendering path)
 
 ---
 
@@ -33,7 +33,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 | **Monolithic Bot**     | `bot_listener.py` is hard to test and evolve.       | Isolate UI interaction from business logic into `src/analysis`.  |
 | **Subscription Store** | No persistent record of who has paid.               | Migrate from in-memory user checks to **Supabase/PostgreSQL**.   |
 | **Alert Transparency** | Operators cannot easily audit "why" an alert fired. | Add an `Evidence` metadata block to all internal alert payloads. |
-| **Encoding Drift**     | Legacy frontend files have suffered mixed encodings.| Normalize all legacy static files to UTF-8 and stop editing them with incompatible encodings. |
+| **Entitlement Guard**  | Dashboard routes are public by default.             | Add JWT/session gating in Next.js middleware + backend checks.    |
 
 ---
 
@@ -44,7 +44,7 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 | **Hard-coded Thresholds** | Modification requires code changes (e.g., 5s CD).   | Extract all business constants into a structured `config.yaml`.              |
 | **Simulation Harness**    | No way to "replay" a rainy day to test alert logic. | Build a `ReplayEngine` using `data/daily_records.json`.                      |
 | **Backend Naming**        | Artifacts of "market price" logic remain in naming. | Systematic refactor of variable names to reflect weather-intelligence focus. |
-| **Legacy Frontend Debt**  | Large `public/static/app.js` mixes data, UI, charts, and modal logic. | Gradually extract panel, chart, and modal logic into typed modules without changing the current layout contract. |
+| **Chart Regression Tests**| UI relies on custom Chart.js lifecycles.            | Add snapshot + interaction tests for chart datasets and legends.             |
 
 ---
 
@@ -60,9 +60,9 @@ The core engine is stable, but several infrastructure "shortcut" decisions remai
 ## 🗓️ Next Milestones
 
 1.  **DB Integration**: Connect Supabase to `src/database/db_manager.py`.
-2.  **Alert Transparency**: Append logic metrics (slope, lead delta) to push messages.
-3.  **Authentication**: Secure `/api/city` on Vercel with subscription keys.
-4.  **UTF-8 Cleanup**: Remove remaining mojibake from legacy static files and comments.
+2.  **Entitlement Layer**: Enforce paid-access middleware on dashboard and API proxy routes.
+3.  **Alert Transparency**: Append logic metrics (slope, lead delta, advection factors) to push payloads.
+4.  **Replay & QA**: Add deterministic replay tests for map/panel/modal interaction regressions.
 
 ---
 

@@ -1,4 +1,4 @@
-﻿# 📈 Commercialization Roadmap
+# 📈 Commercialization Roadmap
 
 > **Target**: Transforming PolyWeather for paid weather intelligence delivery.
 
@@ -6,7 +6,7 @@
 
 ## 🎯 Product Focus
 
-PolyWeather is positioned as a **premium intelligence service** for weather-based prediction markets (**Polymarket**). The value proposition lies in **Ankara-specialization**, **advanced advection forecasting**, and **DEB-weighted consensus**.
+PolyWeather is positioned as a **premium intelligence service** for weather-driven prediction markets (**Polymarket**). The core differentiators remain **Ankara specialization**, **advection-aware signal logic**, and **DEB-weighted consensus**.
 
 ---
 
@@ -15,13 +15,13 @@ PolyWeather is positioned as a **premium intelligence service** for weather-base
 | Tier                 | Price         | Primary Value Proposition                                     |
 | :------------------- | :------------ | :------------------------------------------------------------ |
 | **Telegram Channel** | **$1 / mo**   | High-fidelity proactive alerts, low noise.                    |
-| **Web Dashboard**    | **$5 / mo**   | Comprehensive multi-model view + historical MAE benchmarking. |
-| **VIP Bundle**       | **$5.5 / mo** | Full access to all intelligence streams.                      |
+| **Web Dashboard**    | **$5 / mo**   | Full multi-model context + historical DEB benchmarking.       |
+| **VIP Bundle**       | **$5.5 / mo** | Unified access to dashboard + signal stream.                  |
 
 ### 🛠️ Payment Infrastructure
 
 - **Currency**: Polygon / USDC.
-- **Method**: Initially manual activation; migrating to automatic deposit detection (Phase 2).
+- **Method**: Phase-1 manual activation; Phase-2 automatic deposit detection and entitlement sync.
 
 ---
 
@@ -45,27 +45,28 @@ graph LR
 
 ### 📦 Phase 1: Manual Beta
 
-- **Goal**: Stabilize current alert quality and build core user group.
+- **Goal**: Stabilize signal quality and convert initial paid users.
 - **Actions**:
   - Manual subscription activation via Telegram DM.
-  - Small, focused paid Telegram channel for signal tests.
-  - Invitation-only Web Access (Vercel).
-  - Validate city-specific edge before scaling, with Ankara as the flagship strategy city.
+  - Small paid Telegram channel for low-noise signal validation.
+  - Invite-based Web access while entitlement layer is being finalized.
+  - Keep Ankara as flagship strategy city for product credibility.
 
 ### 🛠️ Phase 2: Automation (USDC)
 
-- **Goal**: Reduce operational friction.
+- **Goal**: Reduce operational friction and improve payment reliability.
 - **Actions**:
-  - **On-chain monitoring**: Detect USDC deposits to unique addresses.
-  - **One-time Links**: Telegram bot automatically generates invite links with `member_limit=1`.
-  - **JWT Auth**: Securing the Next.js frontend with subscriber-only tokens.
+  - **On-chain monitoring**: Detect USDC deposits to dedicated addresses.
+  - **One-time Links**: Bot-generated invite links with strict member limits.
+  - **JWT Auth**: Subscriber-only access control for the Next.js frontend.
 
 ### 🌐 Phase 3: Scaling & Analytics
 
-- **Goal**: Retention and expansion.
+- **Goal**: Improve retention and expand B2C/B2B utility.
 - **Actions**:
-  - **Accuracy Leaderboard**: Monthly reports of DEB vs Market outcomes.
-  - **Self-Serve Portal**: User dashboard for billing and alert settings.
+  - **Accuracy Leaderboard**: Monthly DEB vs settled-actual reports.
+  - **Self-Serve Portal**: Billing, subscription status, and alert preferences.
+  - **Usage Telemetry**: Feature-level analytics for conversion optimization.
 
 ### 📡 API Expansion Priority
 
@@ -79,15 +80,15 @@ graph LR
   - U.S. cities may later receive Mesonet enhancement without replacing METAR
 - **P2 Product Layer**
   - Stripe / Polygon-USDC automation
-  - Realtime sync and user entitlement system
+  - Realtime entitlement sync and subscriber state management
 
 ---
 
 ## 🚧 Critical Constraints
 
-- **Weather-First**: We focus on the **physical variable changes** rather than exchange-side order book execution.
-- **Quality > Quantity**: Alert fatigue will churn subscribers. We enforce a "True Probability Shift" rule for notifications.
-- **Local Niche**: Ankara is our flagship differentiator.
+- **Weather-First**: The product is built around physical weather shifts, not exchange-side execution tooling.
+- **Quality > Quantity**: Alert fatigue directly harms retention; thresholds must favor actionable rarity.
+- **UI Stability**: Commercial rollout assumes layout consistency; visual contract stays fixed while internals evolve.
 
 ---
 

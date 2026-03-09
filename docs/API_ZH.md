@@ -1,6 +1,6 @@
-# PolyWeather API 接口文档 (v1.1)
+# PolyWeather API 接口文档 (v1.2)
 
-本文档说明当前 PolyWeather 后端实际提供的 HTTP API。后端由 `web/app.py` 提供，前端网页通过 Next.js BFF 代理访问这些接口。
+本文档说明当前 PolyWeather 后端实际提供的 HTTP API。后端由 `web/app.py` 提供，前端通过 Next.js BFF 路由代理访问这些接口。
 
 ---
 
@@ -10,11 +10,9 @@
 - **生产 Base URL**: `http://<your-vps-ip>:8000` 或绑定后的 HTTPS API 域名
 - **响应格式**: JSON
 - **缓存策略**:
-  - `/api/cities`: 5 分钟
-  - `/api/city/{name}`: 30 秒
-  - `/api/history/{name}`: 15 分钟
-  - `/api/city/{name}/summary`: 30 秒
-  - `/api/city/{name}/detail`: 30 秒
+  - 后端 `web/app.py` 内部分析缓存：默认 5 分钟（Ankara 为 60 秒）
+  - 前端城市详情缓存：5 分钟 TTL + revision 校验
+  - 前端手动刷新：强制 `force_refresh=true` 跳过缓存
 
 ---
 
@@ -24,7 +22,7 @@
 
 - **URL**: `/api/cities`
 - **Method**: `GET`
-- **用途**: 返回首页左侧监控城市与世界地图 marker 的基础元数据。
+- **用途**: 返回首页左侧监控城市与地图 marker 的基础元数据。
 
 **响应示例**
 
@@ -37,7 +35,7 @@
       "lat": 40.1281,
       "lon": 32.9951,
       "risk_level": "medium",
-      "risk_emoji": "🟡",
+      "risk_emoji": "🟠",
       "airport": "Esenboğa",
       "icao": "LTAC",
       "temp_unit": "celsius",
@@ -54,7 +52,7 @@
 - **参数**:
   - `name`: 城市名或别名，如 `ankara`、`new-york`
   - `force_refresh` (可选): `true` 时跳过缓存
-- **用途**: 首页右侧详情面板与地图数据的主接口。
+- **用途**: 右侧详情卡片、今日分析 modal、图表和周边站点的主数据接口。
 
 **当前核心字段**
 
@@ -76,21 +74,23 @@
 - `metar_recent_obs`
 - `hourly`
 - `hourly_next_48h`
+- `source_forecasts`
+- `multi_model_daily`
 - `updated_at`
 
 **说明**
 
-- `current.raw_metar` 现在直接透出 Aviation Weather API 返回的原始 METAR 报文。
-- `mgm` 只对 Ankara 这类确实有 Turkish MGM 覆盖的城市有值。
-- `mgm_nearby` 当前是一个复用字段：
-  - Ankara: Turkish MGM 周边站
-  - 多数其他城市: AviationWeather METAR cluster
+- `current.raw_metar` 为 Aviation Weather 返回的原始报文字段。
+- `mgm` 仅在具备官方 MGM 覆盖的城市（如 Ankara）有效。
+- `mgm_nearby` 为统一周边站点字段：
+  - Ankara：MGM 官方周边站
+  - 其他多数城市：METAR cluster
 
 ### 2.3 获取历史对账数据
 
 - **URL**: `/api/history/{name}`
 - **Method**: `GET`
-- **用途**: 历史准确率对账弹窗与机器人 `/deb` 命令的数据基础。
+- **用途**: 历史对账弹窗与 `/deb` 指令的历史样本来源。
 
 **响应示例**
 
@@ -110,14 +110,14 @@
 
 **说明**
 
-- 网页端历史对账只统计 **近 15 天已结算样本**
-- 当天未结算样本可以画在图里，但不计入胜率与 MAE
+- 网页端历史图默认展示近期样本，但统计口径只使用已结算日期。
+- 当天未结算样本可用于可视化趋势，不计入胜率与 MAE。
 
 ### 2.4 获取城市摘要
 
 - **URL**: `/api/city/{name}/summary`
 - **Method**: `GET`
-- **用途**: 轻量摘要接口，适合未来做 hover 预取或低开销列表更新。
+- **用途**: 轻量级温度摘要接口，用于首屏地图温度预热与低开销列表更新。
 
 **字段**
 
@@ -127,6 +127,7 @@
 - `local_time`
 - `temp_symbol`
 - `current.temp`
+- `current.obs_time`
 - `deb.prediction`
 - `risk.level`
 - `risk.warning`
@@ -136,7 +137,7 @@
 
 - **URL**: `/api/city/{name}/detail`
 - **Method**: `GET`
-- **用途**: 面向未来的单请求聚合详情接口，便于把 `city + summary + history + future analysis` 整合到一个载荷中。
+- **用途**: 面向后续商业化聚合视图的单请求聚合接口。
 
 **当前结构**
 
@@ -145,12 +146,14 @@
 - `timeseries`
 - `models`
 - `probabilities`
-- `future`
+- `market_scan`
+- `risk`
+- `ai_analysis`
 
 **说明**
 
-- 当前首页 legacy 布局还主要使用 `/api/city/{name}` 和 `/api/history/{name}`
-- `/api/city/{name}/detail` 已用于后续更完整详情态的聚合设计
+- 当前生产前端主链路仍以 `/api/city/{name}` + `/api/history/{name}` 为主。
+- `/api/city/{name}/detail` 已提供聚合结构，供后续产品层扩展接入。
 
 ---
 
@@ -158,23 +161,23 @@
 
 ### 3.1 风险等级
 
-- `low`: 低风险，模型与实测较一致
-- `medium`: 中风险，存在一定分歧或本地站点偏置
-- `high`: 高风险，模型冲突大或盘面博弈价值高
+- `low`: 低风险，模型与实测整体较一致
+- `medium`: 中风险，存在一定分歧或站点偏置
+- `high`: 高风险，模型冲突较大或盘面波动价值高
 
 ### 3.2 DEB
 
-`DEB` 是 PolyWeather 的动态融合预测层，不是简单平均值。它会结合：
+`DEB` 是 PolyWeather 的动态融合预测层，不是简单平均值。它会综合：
 
 - 多模型预测值
 - 近期表现
-- 实况修正
-- 城市级偏置
+- 城市级偏差特征
+- 实况修正上下文
 
 ### 3.3 μ
 
-`μ` 代表当前结算分布中心，是一个**动态期望值**，会随着模型、实况、趋势变化而变化。  
-它不应直接与固定 forecast 用同一口径做静态历史对账。
+`μ` 表示当前结算概率分布中心（动态期望值），会随模型分歧与实况变化而更新。  
+它不应直接按固定 forecast 口径做静态历史对账。
 
 ---
 
@@ -183,31 +186,35 @@
 ### 4.1 主观测源
 
 - **Aviation Weather / METAR**
-  - 当前全球机场主观测源
-  - 同时提供结构化字段与 `rawOb`
+  - 全球机场主观测源
+  - 同时提供结构化字段与原始 METAR 报文
 
 ### 4.2 Ankara 专属源
 
 - **Turkish MGM**
-  - Ankara 主官方增强层
-  - 包括 `Ankara (Bölge/Center)` 与周边站点
+  - Ankara 官方增强层
+  - 含 `Ankara (Bölge/Center)` 与周边站点
 
 ### 4.3 预测源
 
 - **Open-Meteo**
 - **weather.gov**（美国城市）
 - **Meteoblue**（部分城市）
-- **多模型集合**: ECMWF / GFS / ICON / GEM / JMA
+- **多模型集成**: ECMWF / GFS / ICON / GEM / JMA
 
 ---
 
 ## 5. 当前口径说明
 
-- 首页地图主 marker 显示 **当前温度**
-- 右侧详情面板展示当前实测、DEB、结算概率、多模型、多日预报
-- 未来日期分析模态框：
-  - 显示温度走势、结算概率分布、多模型预报、未来 6-48 小时趋势、未来 0-2 小时临近判断
-  - 已移除独立“冷锋 / 暖锋判断”模块
+- 地图 marker 显示当前温度（首屏通过 `summary` 预热）。
+- 点击城市后打开右侧详情卡片，保持当前布局与样式不变。
+- “今日日内分析”在 modal 中展示：
+  - 今日温度走势（含 METAR 实测点）
+  - 结算概率分布
+  - 多模型预报
+  - 今日日内结构信号（规则引擎）
+  - AI 深度分析 + 0-2 小时临近判断
+- modal 打开时地图停止动画；点击空白地图仅关闭右侧卡片，不重置视角。
 
 ---
 
@@ -218,15 +225,16 @@
   - 再看 `docker-compose logs -f polyweather_web`
 
 - **METAR 看起来慢几分钟**
-  - 通常是官方链路入库/发布延迟，不一定是本地轮询慢
-  - 请同时看：
+  - 常见原因是上游发布延迟，不一定是本地轮询问题
+  - 建议同时查看：
     - `current.obs_time`
     - `current.report_time`
     - `current.receipt_time`
 
 - **网页显示旧内容**
-  - 先确认 Vercel 已部署新版本
+  - 先确认 Vercel 已部署最新版本
   - 再强刷浏览器缓存
+  - 如为详情数据，确认是否命中前端 5 分钟 TTL
 
 ---
 
