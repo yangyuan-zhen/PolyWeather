@@ -1,12 +1,12 @@
-﻿export default function HomePage() {
-  return (
-    <main className="h-screen w-screen overflow-hidden bg-black">
-      <iframe
-        title="PolyWeather Legacy Dashboard"
-      src="/legacy/index.html?v=legacy-v19"
-        className="h-full w-full border-0"
-      />
-    </main>
-  );
-}
+import type { Metadata } from "next";
+import { DashboardEntry } from "@/components/dashboard/DashboardEntry";
 
+export const metadata: Metadata = {
+  title: "PolyWeather - 天气衍生品智能地图",
+  description:
+    "PolyWeather 天气衍生品智能地图，聚合 METAR、MGM、DEB、多模型预报与历史对账分析。",
+};
+
+export default function HomePage() {
+  return <DashboardEntry />;
+}

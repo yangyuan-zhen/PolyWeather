@@ -1,0 +1,482 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import L from "leaflet";
+import {
+  CityDetail,
+  CityListItem,
+  CitySummary,
+  NearbyStation,
+} from "@/lib/dashboard-types";
+import { pickAnkaraNearbyStations } from "@/lib/dashboard-utils";
+
+interface UseLeafletMapArgs {
+  cities: CityListItem[];
+  cityDetailsByName: Record<string, CityDetail>;
+  citySummariesByName: Record<string, CitySummary>;
+  onClosePanel: () => void;
+  onEnsureCityDetail: (
+    cityName: string,
+    force?: boolean,
+  ) => Promise<CityDetail>;
+  onRegisterStopMotion: (stopMotion: () => void) => void;
+  onSelectCity: (cityName: string) => void;
+  selectedCity: string | null;
+  selectedDetail: CityDetail | null;
+  suspendMotion: boolean;
+  isLoadingDetail: boolean;
+}
+
+const AUTO_NEARBY_MIN_ZOOM = 8;
+const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
+const MAP_MAX_ZOOM = 19;
+
+function createMarkerIcon(
+  city: CityListItem,
+  snapshot?: Pick<CityDetail, "current" | "temp_symbol"> | CitySummary,
+) {
+  const riskClass = `risk-${city.risk_level}`;
+  const label = city.display_name;
+  const unit = city.temp_unit === "fahrenheit" ? "°F" : "°C";
+  const shortName = label.length > 10 ? `${label.substring(0, 8)}...` : label;
+  const tempText =
+    snapshot?.current?.temp != null ? `${snapshot.current.temp}${unit}` : "--";
+
+  return L.divIcon({
+    className: "",
+    html: `
+      <div class="city-marker" data-city="${city.name}">
+        <div class="marker-bubble ${riskClass}">${tempText}</div>
+        <div class="marker-name">${shortName}</div>
+      </div>
+    `,
+    iconAnchor: [40, 22],
+    iconSize: [80, 44],
+  });
+}
+
+function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
+  const symbol = detail.temp_symbol || "°C";
+  let windHtml = "";
+
+  if (station.wind_dir != null) {
+    const rotation = (Number(station.wind_dir) + 180) % 360;
+    const speedRaw = Number(station.wind_speed ?? station.wind_speed_kt);
+    const speed = Number.isFinite(speedRaw) ? `${speedRaw.toFixed(1)}k` : "";
+    windHtml = `
+      <div class="nearby-wind">
+        <span class="wind-arrow" style="transform: rotate(${rotation}deg)">↑</span>
+        <span class="wind-val">${speed}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="nearby-marker-premium">
+      <div class="nearby-pulse">
+        <div class="pulse-ring"></div>
+        <div class="pulse-core"></div>
+      </div>
+      <div class="nearby-content">
+        <span class="nearby-label">${station.name || station.icao || "OBS"}</span>
+        <div class="nearby-stats">
+          <span class="nearby-temp-val">${station.temp ?? "--"}</span>
+          <span class="nearby-temp-unit">${symbol}</span>
+        </div>
+      </div>
+      ${windHtml}
+    </div>
+  `;
+}
+
+export function useLeafletMap({
+  cities,
+  cityDetailsByName,
+  citySummariesByName,
+  onClosePanel,
+  onEnsureCityDetail,
+  onRegisterStopMotion,
+  onSelectCity,
+  selectedCity,
+  selectedDetail,
+  suspendMotion,
+  isLoadingDetail,
+}: UseLeafletMapArgs) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markersRef = useRef<
+    Record<string, { city: CityListItem; marker: L.Marker }>
+  >({});
+  const nearbyLayerRef = useRef<L.LayerGroup | null>(null);
+  const autoNearbyCityRef = useRef<string | null>(null);
+  const loadingAutoNearbyRef = useRef(false);
+  const lastMovedCityRef = useRef<string | null>(null);
+  const suspendMotionRef = useRef(suspendMotion);
+  const hasFittedInitialBoundsRef = useRef(false);
+  const onClosePanelRef = useRef(onClosePanel);
+  const onRegisterStopMotionRef = useRef(onRegisterStopMotion);
+  const onSelectCityRef = useRef(onSelectCity);
+  const onEnsureCityDetailRef = useRef(onEnsureCityDetail);
+
+  useEffect(() => {
+    onClosePanelRef.current = onClosePanel;
+  }, [onClosePanel]);
+
+  useEffect(() => {
+    onRegisterStopMotionRef.current = onRegisterStopMotion;
+  }, [onRegisterStopMotion]);
+
+  useEffect(() => {
+    onSelectCityRef.current = onSelectCity;
+  }, [onSelectCity]);
+
+  useEffect(() => {
+    onEnsureCityDetailRef.current = onEnsureCityDetail;
+  }, [onEnsureCityDetail]);
+
+  useEffect(() => {
+    suspendMotionRef.current = suspendMotion;
+  }, [suspendMotion]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || mapRef.current) return;
+
+    const map = L.map(container, {
+      attributionControl: true,
+      bounceAtZoomLimits: false,
+      center: [30, 10],
+      maxZoom: MAP_MAX_ZOOM,
+      minZoom: 2,
+      zoom: 3,
+      zoomControl: false,
+    });
+
+    L.control.zoom({ position: "bottomright" }).addTo(map);
+    L.tileLayer(
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+        maxZoom: 19,
+        subdomains: "abcd",
+      },
+    ).addTo(map);
+
+    const nearbyLayer = L.layerGroup().addTo(map);
+    mapRef.current = map;
+    nearbyLayerRef.current = nearbyLayer;
+
+    // Track which city we've already moved to for the current selection
+    onRegisterStopMotionRef.current(() => {
+      map.stop();
+    });
+
+    const handleMapClick = () => {
+      onClosePanelRef.current();
+    };
+    map.on("click", handleMapClick);
+
+    return () => {
+      onRegisterStopMotionRef.current(() => {});
+      map.off("click", handleMapClick);
+      map.remove();
+      mapRef.current = null;
+      nearbyLayerRef.current = null;
+      markersRef.current = {};
+    };
+  }, []);
+
+  // Handle initial view if cities are loaded
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cities.length || hasFittedInitialBoundsRef.current) return;
+
+    // Only run fitBounds once for the initial list of cities
+    const bounds = cities.map((city) => [city.lat, city.lon]) as [
+      number,
+      number,
+    ][];
+    if (bounds.length) {
+      map.fitBounds(bounds, {
+        animate: false,
+        maxZoom: 4,
+        padding: [60, 60],
+      });
+      hasFittedInitialBoundsRef.current = true;
+    }
+  }, [cities]);
+
+  const lastCityDataRef = useRef<
+    Record<string, { temp?: number | null; risk?: string }>
+  >({});
+
+  // Handle marker synchronization
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !cities.length) return;
+
+    const currentMarkers = markersRef.current;
+    const nextMarkers: typeof currentMarkers = {};
+    const nextLastData: typeof lastCityDataRef.current = {};
+
+    cities.forEach((city) => {
+      const detail = cityDetailsByName[city.name];
+      const summary = citySummariesByName[city.name];
+      const snapshot = detail || summary;
+      const existing = currentMarkers[city.name];
+
+      const currentTemp = snapshot?.current?.temp;
+      const currentRisk = city.risk_level;
+      const lastData = lastCityDataRef.current[city.name];
+      const dataChanged =
+        !lastData ||
+        lastData.temp !== currentTemp ||
+        lastData.risk !== currentRisk;
+
+      if (existing) {
+        if (dataChanged) {
+          existing.marker.setIcon(createMarkerIcon(city, snapshot));
+        }
+        nextMarkers[city.name] = { city, marker: existing.marker };
+        nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+        return;
+      }
+
+      // Create new marker
+      const marker = L.marker([city.lat, city.lon], {
+        icon: createMarkerIcon(city, snapshot),
+      }).addTo(map);
+
+      marker.on("click", () => {
+        map.stop();
+        // Reset lastMovedCity so we can re-fly if needed
+        lastMovedCityRef.current = null;
+        onSelectCityRef.current(city.name);
+      });
+
+      nextMarkers[city.name] = { city, marker };
+      nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+    });
+
+    // Cleanup removed markers
+    Object.entries(currentMarkers).forEach(([name, entry]) => {
+      if (!nextMarkers[name]) {
+        map.removeLayer(entry.marker);
+      }
+    });
+
+    markersRef.current = nextMarkers;
+    lastCityDataRef.current = nextLastData;
+  }, [cities, cityDetailsByName, citySummariesByName]);
+
+  useEffect(() => {
+    Object.entries(markersRef.current).forEach(([name, entry]) => {
+      const element = entry.marker.getElement();
+      if (!element) return;
+      const markerRoot = element.querySelector(".city-marker");
+      markerRoot?.classList.toggle("selected", name === selectedCity);
+    });
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (!mapRef.current || !nearbyLayerRef.current) return;
+    const map = mapRef.current;
+    const layer = nearbyLayerRef.current;
+
+    function renderNearbyStations(detail: CityDetail, preserveView = false) {
+      layer.clearLayers();
+
+      const allNearby = Array.isArray(detail.mgm_nearby)
+        ? detail.mgm_nearby
+        : [];
+      const nearbyStations =
+        String(detail.name || "").toLowerCase() === "ankara"
+          ? pickAnkaraNearbyStations(allNearby)
+          : allNearby;
+
+      if (!nearbyStations.length) {
+        if (!preserveView && detail.lat != null && detail.lon != null) {
+          map.flyTo([detail.lat, detail.lon], 10, {
+            animate: true,
+            duration: 1.5,
+            easeLinearity: 0.25,
+          });
+        }
+        return;
+      }
+
+      const latLngs: Array<[number, number]> = [];
+      if (detail.lat != null && detail.lon != null) {
+        latLngs.push([detail.lat, detail.lon]);
+      }
+
+      nearbyStations.forEach((station) => {
+        const sLat = Number(station.lat);
+        const sLon = Number(station.lon);
+        // Ignore invalid (0,0) or null coordinates which cause global zoom-out
+        if (!Number.isFinite(sLat) || !Number.isFinite(sLon)) return;
+        if (Math.abs(sLat) < 0.1 && Math.abs(sLon) < 0.1) return;
+
+        const icon = L.divIcon({
+          className: "",
+          html: buildNearbyIconHtml(detail, station),
+          iconAnchor: [16, 19],
+          iconSize: [240, 38],
+        });
+        L.marker([sLat, sLon], { icon }).addTo(layer);
+        latLngs.push([sLat, sLon]);
+      });
+
+      if (preserveView) return;
+
+      // Note: Movement for selected cities is now handled by the centralized effect.
+      // This section is primarily for auto-discovery movement if needed.
+    }
+
+    async function maybeAutoShowNearbyStations() {
+      if (suspendMotion) {
+        map.stop();
+        return;
+      }
+
+      if (selectedDetail) {
+        // Just render stations, no camera move from here
+        renderNearbyStations(selectedDetail, true);
+        return;
+      }
+
+      // If no city selected, reset the move tracker
+      lastMovedCityRef.current = null;
+
+      if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
+        autoNearbyCityRef.current = null;
+        layer.clearLayers();
+        return;
+      }
+
+      const center = map.getCenter();
+      let best: { cityName: string; distance: number } | null = null;
+      for (const [cityName, entry] of Object.entries(markersRef.current)) {
+        const distance = map.distance(
+          center,
+          L.latLng(entry.city.lat, entry.city.lon),
+        );
+        if (distance > AUTO_NEARBY_MAX_DISTANCE_M) continue;
+        if (!best || distance < best.distance) {
+          best = { cityName, distance };
+        }
+      }
+
+      const targetCity = best?.cityName || null;
+      if (!targetCity) {
+        autoNearbyCityRef.current = null;
+        layer.clearLayers();
+        return;
+      }
+
+      if (
+        autoNearbyCityRef.current === targetCity &&
+        layer.getLayers().length > 0
+      ) {
+        return;
+      }
+
+      autoNearbyCityRef.current = targetCity;
+      const cachedDetail = cityDetailsByName[targetCity];
+      if (cachedDetail) {
+        renderNearbyStations(cachedDetail, true);
+        return;
+      }
+
+      if (loadingAutoNearbyRef.current) return;
+      loadingAutoNearbyRef.current = true;
+      try {
+        const detail = await onEnsureCityDetailRef.current(targetCity, false);
+        renderNearbyStations(detail, true);
+      } catch {
+      } finally {
+        loadingAutoNearbyRef.current = false;
+      }
+    }
+
+    const syncVisibility = () => {
+      if (suspendMotion) {
+        map.stop();
+        return;
+      }
+
+      if (map.getZoom() < 7) {
+        if (map.hasLayer(layer)) {
+          map.removeLayer(layer);
+        }
+      } else if (!map.hasLayer(layer)) {
+        map.addLayer(layer);
+      }
+      void maybeAutoShowNearbyStations();
+    };
+
+    syncVisibility();
+    map.on("zoomend", syncVisibility);
+    map.on("moveend", maybeAutoShowNearbyStations);
+
+    return () => {
+      map.off("zoomend", syncVisibility);
+      map.off("moveend", maybeAutoShowNearbyStations);
+    };
+  }, [cityDetailsByName, selectedCity, selectedDetail, suspendMotion]);
+
+  // Centralized City Selection Zoom Effect
+  // Higher level than selection: we only flyTo once the data is loaded (selectedDetail)
+  // This satisfies "loading之后再出现动画吧"
+  useEffect(() => {
+    if (!selectedCity) {
+      lastMovedCityRef.current = null;
+      return;
+    }
+
+    const map = mapRef.current;
+    if (!map || suspendMotion || !selectedDetail || isLoadingDetail) return;
+
+    // Check if the detail matches the selection (case-insensitive)
+    if (selectedDetail.name?.toLowerCase() !== selectedCity.toLowerCase()) {
+      return;
+    }
+
+    if (lastMovedCityRef.current === selectedCity) return;
+
+    const entry = markersRef.current[selectedCity];
+    if (!entry) return;
+
+    // Lock the move
+    lastMovedCityRef.current = selectedCity;
+
+    // We use a micro-delay (50ms) to allow the browser to settle
+    // after the loading overlay disappears and the detail panel renders.
+    const timer = setTimeout(() => {
+      const currentMap = mapRef.current;
+      if (
+        !currentMap ||
+        lastMovedCityRef.current !== selectedCity ||
+        suspendMotion
+      )
+        return;
+
+      currentMap.stop();
+      currentMap.flyTo([entry.city.lat, entry.city.lon], 11, {
+        animate: true,
+        duration: 1.1,
+        easeLinearity: 0.22,
+      });
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [selectedCity, selectedDetail, suspendMotion, isLoadingDetail]);
+
+  useEffect(() => {
+    if (!suspendMotion) return;
+    mapRef.current?.stop();
+  }, [suspendMotion]);
+
+  return { containerRef };
+}
