@@ -141,7 +141,7 @@ def _market_price_cap_ok(alert_payload: Dict[str, Any], max_yes_buy: float) -> b
     if not isinstance(market, dict) or not market.get("available"):
         return True
 
-    # Prefer the market bucket that maps to Open-Meteo forecast settlement.
+    # Strict rule: use the bucket mapped from Open-Meteo settlement.
     forecast_bucket = market.get("forecast_bucket") or {}
     yes_buy = None
     bucket_label = None
@@ -149,27 +149,14 @@ def _market_price_cap_ok(alert_payload: Dict[str, Any], max_yes_buy: float) -> b
         yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
         bucket_label = str(forecast_bucket.get("label") or "").strip() or None
 
-    # Backward-compatible fallback.
     if yes_buy is None:
-        yes_buy = _norm_prob(market.get("yes_buy"))
-        if not bucket_label:
-            bucket_label = str(market.get("selected_bucket") or "").strip() or None
-
-    if yes_buy is None:
-        # Fallback to first bucket with valid yes_buy if aggregate field is missing.
-        top_rows = market.get("top_bucket_rows") or []
-        if isinstance(top_rows, list):
-            for row in top_rows:
-                if not isinstance(row, dict):
-                    continue
-                yes_buy = _norm_prob(row.get("yes_buy"))
-                if yes_buy is not None:
-                    if not bucket_label:
-                        bucket_label = str(row.get("label") or "").strip() or None
-                    break
-
-    if yes_buy is None:
-        return True
+        logger.info(
+            "trade alert skipped: no mapped forecast bucket city={} om_settle={}".format(
+                alert_payload.get("city"),
+                market.get("open_meteo_settlement"),
+            )
+        )
+        return False
 
     if yes_buy >= max_yes_buy:
         logger.info(

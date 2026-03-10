@@ -813,11 +813,10 @@ class PolymarketReadOnlyLayer:
         if not city_hit:
             return 0.0
 
-        score = 40.0
-
-        weather_hit = any(_contains_token(haystack, keyword) for keyword in WEATHER_KEYWORDS)
-        if not weather_hit:
+        if not self._is_temperature_market(market):
             return 0.0
+
+        score = 40.0
         score += 18.0
 
         d_target = _parse_target_date(target_date)
@@ -873,6 +872,42 @@ class PolymarketReadOnlyLayer:
         )
         score += min(volume / 50000.0, 8.0)
         return score
+
+    def _is_temperature_market(self, market: Dict[str, Any]) -> bool:
+        text_parts = [
+            market.get("question"),
+            market.get("title"),
+            market.get("slug"),
+            market.get("eventSlug"),
+            market.get("description"),
+        ]
+        raw_text = " ".join(str(part or "") for part in text_parts)
+        if not raw_text:
+            return False
+
+        # Hard signal: contains explicit Celsius bucket text like "10C" / "10°C"
+        if re.search(r"(-?\d+(?:\.\d+)?)\s*[°º]?\s*c\b", raw_text, re.IGNORECASE):
+            return True
+
+        text = _normalize_text(raw_text)
+        if not text:
+            return False
+
+        # Weather temperature event patterns.
+        if "highest temperature" in text:
+            return True
+        if "temperature in" in text:
+            return True
+        if "high temperature" in text:
+            return True
+
+        # Conservative fallback: must explicitly mention temperature and boundary wording.
+        if "temperature" in text and any(
+            key in text for key in ("or higher", "or above", "or lower", "or below", "and above", "and below")
+        ):
+            return True
+
+        return False
 
     def _extract_market_date(self, market: Dict[str, Any]) -> Optional[str]:
         for key in (
@@ -1221,6 +1256,10 @@ class PolymarketReadOnlyLayer:
             ]
         ] = []
         for market in candidate_markets:
+            bucket_temp = self._extract_market_bucket_temp(market)
+            if bucket_temp is None:
+                continue
+
             tokens = self._extract_market_tokens(market)
             yes_token, no_token = self._resolve_yes_no_tokens(tokens)
             if not yes_token or not no_token:
@@ -1289,7 +1328,6 @@ class PolymarketReadOnlyLayer:
             if no_sell is None and yes_sell is not None:
                 no_sell = max(0.0, min(1.0, 1.0 - yes_sell))
 
-            bucket_temp = self._extract_market_bucket_temp(market)
             market_slug = str(market.get("slug") or "").strip()
 
             top_rows.append(
