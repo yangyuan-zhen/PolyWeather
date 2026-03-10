@@ -550,7 +550,7 @@ export function ModelForecast({
   hideTitle?: boolean;
   targetDate?: string | null;
 }) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const view = getModelView(detail, targetDate);
   const modelEntries = Object.entries(view.models).filter(([, value]) =>
     Number.isFinite(Number(value)),
@@ -565,6 +565,14 @@ export function ModelForecast({
     ? Math.max(...comparisonValues) + 1
     : 1;
   const range = Math.max(maxValue - minValue, 1);
+  const getModelDisplayName = (name: string) => {
+    if (String(name).trim().toLowerCase() === "meteoblue") {
+      return locale === "en-US"
+        ? "Meteoblue (Daily Max)"
+        : "Meteoblue (日最高温)";
+    }
+    return name;
+  };
 
   return (
     <section className="models-section">
@@ -587,7 +595,7 @@ export function ModelForecast({
                 return (
                   <div key={name} className="model-row">
                     <div className="model-name" title={name}>
-                      {name}
+                      {getModelDisplayName(name)}
                     </div>
                     <div className="model-bar-track">
                       <div

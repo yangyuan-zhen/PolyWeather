@@ -5,6 +5,7 @@ Rule-based weather alert engine for short-horizon trading signals.
 from __future__ import annotations
 
 import math
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -454,13 +455,19 @@ def _bucket_label(bucket: Any) -> Optional[str]:
         or str(bucket.get("range") or "").strip()
     )
     if direct:
-        return direct
+        normalized = re.sub(
+            r"(?<!°)(-?\d+(?:\.\d+)?)\s*C(\+)?",
+            r"\1°C\2",
+            direct,
+            flags=re.IGNORECASE,
+        )
+        return normalized
     value = _sf(bucket.get("value"))
     if value is not None:
-        return f"{round(value)}C"
+        return f"{round(value)}°C"
     temp = _sf(bucket.get("temp"))
     if temp is not None:
-        return f"{round(temp)}C"
+        return f"{round(temp)}°C"
     return None
 
 
@@ -507,6 +514,17 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
                     }
                 )
 
+    market_url = None
+    websocket = scan.get("websocket") or {}
+    if isinstance(websocket, dict):
+        market_url = str(websocket.get("market_url") or "").strip() or None
+    if not market_url:
+        primary_market = scan.get("primary_market") or {}
+        if isinstance(primary_market, dict):
+            slug = str(primary_market.get("slug") or "").strip()
+            if slug:
+                market_url = f"https://polymarket.com/market/{slug}"
+
     return {
         "available": True,
         "selected_bucket": _bucket_label(scan.get("temperature_bucket")),
@@ -523,6 +541,7 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
         "signal_label": scan.get("signal_label"),
         "confidence": scan.get("confidence"),
         "top_bucket_rows": top_bucket_rows,
+        "market_url": market_url,
     }
 
 
@@ -672,7 +691,7 @@ def _build_telegram_messages(
             label = row.get("label") or "--"
             prob_text = _fmt_percent(row.get("probability"))
             yes_buy_text = _fmt_cents(row.get("yes_buy"))
-            lines_zh.append(f"{label} {prob_text} | 买Yes: {yes_buy_text}")
+            lines_zh.append(f"{label} {prob_text} | Yes: {yes_buy_text}")
     if market_snapshot.get("available") and not market_snapshot.get("top_bucket_rows"):
         market_edge = _sf(market_snapshot.get("edge_percent"))
         market_edge_text = f"{market_edge:+.1f}%" if market_edge is not None else "--"
@@ -690,6 +709,8 @@ def _build_telegram_messages(
                 f"市场最热桶：{market_snapshot.get('top_bucket')} "
                 f"({_fmt_percent(market_snapshot.get('top_bucket_prob'))})"
             )
+    if market_snapshot.get("market_url"):
+        lines_zh.append(f"市场链接：{market_snapshot.get('market_url')}")
     lines_zh.append(f"AI 建议：{advice}")
     lines_zh.append(f"点击查看实时地图：{final_map}")
 
@@ -739,7 +760,7 @@ def _build_telegram_messages(
             label = row.get("label") or "--"
             prob_text = _fmt_percent(row.get("probability"))
             yes_buy_text = _fmt_cents(row.get("yes_buy"))
-            lines_en.append(f"{label} {prob_text} | Buy Yes: {yes_buy_text}")
+            lines_en.append(f"{label} {prob_text} | Yes: {yes_buy_text}")
     if market_snapshot.get("available") and not market_snapshot.get("top_bucket_rows"):
         market_edge = _sf(market_snapshot.get("edge_percent"))
         market_edge_text = f"{market_edge:+.1f}%" if market_edge is not None else "--"
@@ -757,6 +778,8 @@ def _build_telegram_messages(
                 f"Top market bucket: {market_snapshot.get('top_bucket')} "
                 f"({_fmt_percent(market_snapshot.get('top_bucket_prob'))})"
             )
+    if market_snapshot.get("market_url"):
+        lines_en.append(f"Market link: {market_snapshot.get('market_url')}")
     lines_en.append(f"Action: {advice}")
     lines_en.append(f"Map: {final_map}")
 

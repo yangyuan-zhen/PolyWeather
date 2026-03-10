@@ -169,7 +169,10 @@ export interface SourceForecasts {
     forecast_periods?: WeatherGovPeriod[];
   };
   meteoblue?: {
+    today_high?: number | null;
     daily_highs?: Array<number | null>;
+    unit?: string | null;
+    url?: string | null;
   };
 }
 

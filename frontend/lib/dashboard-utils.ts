@@ -330,18 +330,58 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
 }
 
 export function getModelView(detail: CityDetail, targetDate?: string | null) {
+  const pickMeteoblueForDate = (dateStr: string) => {
+    const meteoblue = detail.source_forecasts?.meteoblue;
+    if (!meteoblue) return null;
+
+    const dates = detail.forecast?.daily?.map((item) => item.date) || [];
+    const index = dates.findIndex((date) => date === dateStr);
+
+    const dailyHighs = Array.isArray(meteoblue.daily_highs)
+      ? meteoblue.daily_highs
+      : [];
+    if (index >= 0) {
+      const byDailyHigh = Number(dailyHighs[index]);
+      if (Number.isFinite(byDailyHigh)) return byDailyHigh;
+    }
+
+    const todayHigh = Number(meteoblue.today_high);
+    if (
+      Number.isFinite(todayHigh) &&
+      (dateStr === detail.local_date || index === 0)
+    ) {
+      return todayHigh;
+    }
+
+    return null;
+  };
+
+  const withMeteoblue = (
+    models: Record<string, number | null>,
+    dateStr: string,
+  ) => {
+    const nextModels = { ...models };
+    if (!Number.isFinite(Number(nextModels.Meteoblue))) {
+      const meteoblueVal = pickMeteoblueForDate(dateStr);
+      if (Number.isFinite(Number(meteoblueVal))) {
+        nextModels.Meteoblue = Number(meteoblueVal);
+      }
+    }
+    return nextModels;
+  };
+
   const date = targetDate || detail.local_date;
   const daily = detail.multi_model_daily?.[date];
   if (daily) {
     return {
       deb: daily.deb?.prediction ?? null,
-      models: daily.models || {},
+      models: withMeteoblue(daily.models || {}, date),
     };
   }
 
   return {
     deb: detail.deb?.prediction ?? null,
-    models: detail.multi_model || {},
+    models: withMeteoblue(detail.multi_model || {}, date),
   };
 }
 
