@@ -79,6 +79,12 @@ class WeatherDataCollector:
         self._open_meteo_cache_lock = threading.Lock()
         self._ensemble_cache_lock = threading.Lock()
         self._multi_model_cache_lock = threading.Lock()
+        # Open-Meteo 共享 429 冷却计时器：触发限流后所有 OM 端点暂停请求
+        self._open_meteo_rate_limit_until: float = 0.0
+        self._open_meteo_rl_cooldown: int = int(
+            os.getenv("OPEN_METEO_RATE_LIMIT_COOLDOWN_SEC", "900")  # 默认 15 分钟
+        )
+        self._open_meteo_rl_lock = threading.Lock()
         self.meteoblue_cache_ttl_sec = int(
             os.getenv("METEOBLUE_CACHE_TTL_SEC", "7200")
         )
@@ -970,6 +976,16 @@ class WeatherDataCollector:
             f"{forecast_days}:{'f' if use_fahrenheit else 'c'}"
         )
         now_ts = time.time()
+        # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
+        with self._open_meteo_rl_lock:
+            if now_ts < self._open_meteo_rate_limit_until:
+                remaining = int(self._open_meteo_rate_limit_until - now_ts)
+                logger.debug(f"Open-Meteo 冷却期中，跳过请求，还需 {remaining}s")
+                with self._open_meteo_cache_lock:
+                    stale = self._open_meteo_cache.get(cache_key)
+                    if stale and isinstance(stale.get("data"), dict):
+                        return dict(stale["data"])
+                return None
         with self._open_meteo_cache_lock:
             cached = self._open_meteo_cache.get(cache_key)
             if (
@@ -1074,6 +1090,10 @@ class WeatherDataCollector:
                 logger.warning(
                     f"Open-Meteo rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
+                # 设置全局冷却期，避免短时内重复触发 429
+                with self._open_meteo_rl_lock:
+                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
+                    logger.warning(f"Open-Meteo 触发限流，设置 {self._open_meteo_rl_cooldown}s 冷却期")
             else:
                 logger.error(f"Open-Meteo forecast failed: {e}")
             with self._open_meteo_cache_lock:
