@@ -66,11 +66,12 @@ def analyze_weather_trend(
     nws = weather_data.get("nws", {})
 
     empty_result = ("", "", {})
-    if not metar or not open_meteo:
+    if not metar and not mgm:
         return empty_result
 
-    max_so_far = _sf(metar.get("current", {}).get("max_temp_so_far"))
-    cur_temp = _sf(metar.get("current", {}).get("temp"))
+    max_so_far = _sf(metar.get("current", {}).get("max_temp_so_far")) if metar else _sf(mgm.get("current", {}).get("mgm_max_temp"))
+    cur_temp = _sf(metar.get("current", {}).get("temp")) if metar else _sf(mgm.get("current", {}).get("temp"))
+
     daily = open_meteo.get("daily", {})
     hourly = open_meteo.get("hourly", {})
     times = hourly.get("time", [])

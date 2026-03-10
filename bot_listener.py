@@ -386,8 +386,8 @@ def start_bot():
                 except Exception:
                     return None
 
-            temp_unit = open_meteo.get("unit", "celsius")
-            temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
+            city_is_fahrenheit = city_name.strip().lower() in ["dallas", "new york", "chicago", "miami", "atlanta", "seattle"]
+            temp_symbol = "°F" if city_is_fahrenheit else "°C"
 
             # --- 1. 紧凑 Header (城市 + 时间 + 风险状态) ---
             local_time = open_meteo.get("current", {}).get("local_time", "")
