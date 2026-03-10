@@ -232,11 +232,6 @@ def _diff_positions(
     if notify_closed:
         for key, old_pos in previous.items():
             if key not in current:
-                # 关仓也按价格过滤：只推送买入价在 [min_price, max_price] 范围内的关仓
-                closed_price = _safe_float(old_pos.get("avg_price"))
-                if closed_price < min_price or closed_price > max_price:
-                    logger.debug(f"skipped closed position due to price range limit: market={old_pos.get('title')} price={closed_price}")
-                    continue
                 changes.append(("closed", old_pos))
 
     return changes
