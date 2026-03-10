@@ -3,6 +3,7 @@ import os
 import threading
 import time
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -242,6 +243,21 @@ def _fmt_price(value: float) -> str:
     return f"{value:.3f}"
 
 
+def _should_show_avg_price(avg_price: float) -> bool:
+    # Extreme prices near 0/1 are usually not informative for activity alerts.
+    min_show = max(
+        0.0,
+        min(1.0, _env_float("POLYMARKET_WALLET_ACTIVITY_AVG_PRICE_SHOW_MIN", 0.01)),
+    )
+    max_show = max(
+        0.0,
+        min(1.0, _env_float("POLYMARKET_WALLET_ACTIVITY_AVG_PRICE_SHOW_MAX", 0.99)),
+    )
+    if min_show > max_show:
+        min_show, max_show = max_show, min_show
+    return min_show <= avg_price <= max_show
+
+
 def _format_change_block(
     change_type: str,
     wallet: str,
@@ -278,7 +294,9 @@ def _format_change_block(
     else:
         lines.append(f"Size: {_safe_float(pos.get('size')):.3f}")
 
-    lines.append(f"Avg Price: {_fmt_price(_safe_float(pos.get('avg_price')))}")
+    avg_price = _safe_float(pos.get("avg_price"))
+    if _should_show_avg_price(avg_price):
+        lines.append(f"Avg Price: {_fmt_price(avg_price)}")
     lines.append(f"Position Value: {_fmt_usd(_safe_float(pos.get('position_value')))}")
 
     pnl = _safe_float(pos.get("cash_pnl"))
@@ -293,12 +311,16 @@ def _build_message(
     changes: List[Tuple[str, Dict[str, Any]]],
     max_changes: int,
 ) -> str:
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    now_bj = (
+        datetime.now(timezone.utc)
+        .astimezone(ZoneInfo("Asia/Shanghai"))
+        .strftime("%Y-%m-%d %H:%M:%S")
+    )
     shown = changes[:max_changes]
     lines = [f"🚨 Wallet Activity ({len(changes)} changes):", ""]
 
     for idx, (change_type, pos) in enumerate(shown):
-        lines.append(_format_change_block(change_type, wallet, pos, now_utc))
+        lines.append(_format_change_block(change_type, wallet, pos, f"{now_bj} 北京时间"))
         if idx != len(shown) - 1:
             lines.append("")
 
@@ -409,5 +431,11 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
+
+
+
+
+
+
 
 
