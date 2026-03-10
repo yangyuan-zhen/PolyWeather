@@ -63,12 +63,12 @@ def start_bot():
         bot.reply_to(
             message,
             (
-                f"鉂?绉垎涓嶈冻锛屾棤娉曟墽琛?<b>{label}</b>\n"
-                f"褰撳墠绉垎: <code>{balance}</code>\n"
-                f"闇€瑕佺Н鍒? <code>{required}</code>\n"
-                f"杩樺樊绉垎: <code>{missing}</code>\n\n"
-                f"绉垎瑙勫垯锛氭瘡鏃ョ鍒?鏈夋晥鍙戣█婊?{MESSAGE_MIN_LENGTH} 瀛?鑾峰緱 <b>{MESSAGE_POINTS}</b> 绉垎锛?
-                f"姣忔棩涓婇檺 {MESSAGE_DAILY_CAP} 鍒嗐€?
+                f"❌ 积分不足，无法执行 <b>{label}</b>\n"
+                f"当前积分: <code>{balance}</code>\n"
+                f"需要积分: <code>{required}</code>\n"
+                f"还差积分: <code>{missing}</code>\n\n"
+                f"积分规则：每日签到（有效发言满 {MESSAGE_MIN_LENGTH} 字）获得 <b>{MESSAGE_POINTS}</b> 积分，"
+                f"每日上限 {MESSAGE_DAILY_CAP} 分。"
             ),
             parse_mode="HTML",
         )
