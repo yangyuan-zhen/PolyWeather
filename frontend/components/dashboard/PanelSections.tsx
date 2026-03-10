@@ -552,8 +552,8 @@ export function ModelForecast({
 }) {
   const { locale, t } = useI18n();
   const view = getModelView(detail, targetDate);
-  const modelEntries = Object.entries(view.models).filter(([, value]) =>
-    Number.isFinite(Number(value)),
+  const modelEntries = Object.entries(view.models).filter(
+    ([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)),
   );
   const numericValues = modelEntries.map(([, value]) => Number(value));
   const comparisonValues =
@@ -567,9 +567,7 @@ export function ModelForecast({
   const range = Math.max(maxValue - minValue, 1);
   const getModelDisplayName = (name: string) => {
     if (String(name).trim().toLowerCase() === "meteoblue") {
-      return locale === "en-US"
-        ? "Meteoblue (Daily Max)"
-        : "Meteoblue (日最高温)";
+      return "Meteoblue";
     }
     return name;
   };

@@ -715,69 +715,6 @@ export function FutureForecastModal() {
                           {settlementBucketLabel}
                         </strong>
                       </div>
-
-                      <div className="market-edge-box">
-                        <div className="market-edge-header">
-                          <span>
-                            📊 {locale === "en-US" ? "Core Edge" : "核心测算"}
-                          </span>
-                          <strong
-                            className={clsx(
-                              "market-edge-val",
-                              Number(marketScan?.edge_percent) > 0
-                                ? "positive"
-                                : "negative",
-                            )}
-                          >
-                            ({marketEdge})
-                          </strong>
-                        </div>
-                        <div className="market-edge-compare">
-                          <div className="edge-stat">
-                            <span className="edge-label">
-                              {locale === "en-US" ? "Model Prob:" : "模型概率:"}
-                            </span>
-                            <strong className="edge-value">
-                              {modelProbability}
-                            </strong>
-                          </div>
-                          <div className="edge-stat">
-                            <span className="edge-label">
-                              {locale === "en-US"
-                                ? "Market Prob:"
-                                : "市场概率:"}
-                            </span>
-                            <strong className="edge-value">
-                              {marketMidpoint}
-                            </strong>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Layer 2: Order Book */}
-                    <div className="market-layer-book">
-                      <div className="market-sub-title">
-                        📈 {locale === "en-US" ? "Order Book" : "订单簿报价"}
-                      </div>
-                      <div className="market-book-row">
-                        <span className="book-label">YES:</span>
-                        <span className="book-quote">
-                          <strong>{marketYesBuy}</strong> /{" "}
-                          <strong>{marketYesSell}</strong>
-                        </span>
-                        <span className="book-spread">
-                          ({locale === "en-US" ? "Spread" : "价差"}{" "}
-                          {marketSpread})
-                        </span>
-                      </div>
-                      <div className="market-book-row">
-                        <span className="book-label">NO:</span>
-                        <span className="book-quote">
-                          <strong>{marketNoBuy}</strong> /{" "}
-                          <strong>{marketNoSell}</strong>
-                        </span>
-                      </div>
                     </div>
 
                     {/* Layer 3: Context */}

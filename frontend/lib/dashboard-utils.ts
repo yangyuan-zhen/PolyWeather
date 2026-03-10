@@ -330,28 +330,34 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
 }
 
 export function getModelView(detail: CityDetail, targetDate?: string | null) {
+  const toFiniteNumber = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === "") return null;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+
   const pickMeteoblueForDate = (dateStr: string) => {
     const meteoblue = detail.source_forecasts?.meteoblue;
     if (!meteoblue) return null;
 
     const dates = detail.forecast?.daily?.map((item) => item.date) || [];
     const index = dates.findIndex((date) => date === dateStr);
+    const todayHigh = toFiniteNumber(meteoblue.today_high);
+
+    // Today must always use Meteoblue daily max (today_high) first.
+    if (dateStr === detail.local_date && todayHigh != null) {
+      return todayHigh;
+    }
 
     const dailyHighs = Array.isArray(meteoblue.daily_highs)
       ? meteoblue.daily_highs
       : [];
     if (index >= 0) {
-      const byDailyHigh = Number(dailyHighs[index]);
-      if (Number.isFinite(byDailyHigh)) return byDailyHigh;
+      const byDailyHigh = toFiniteNumber(dailyHighs[index]);
+      if (byDailyHigh != null) return byDailyHigh;
     }
 
-    const todayHigh = Number(meteoblue.today_high);
-    if (
-      Number.isFinite(todayHigh) &&
-      (dateStr === detail.local_date || index === 0)
-    ) {
-      return todayHigh;
-    }
+    if (index === 0 && todayHigh != null) return todayHigh;
 
     return null;
   };
@@ -361,11 +367,14 @@ export function getModelView(detail: CityDetail, targetDate?: string | null) {
     dateStr: string,
   ) => {
     const nextModels = { ...models };
-    if (!Number.isFinite(Number(nextModels.Meteoblue))) {
+    const existing = toFiniteNumber(nextModels.Meteoblue);
+    if (existing == null) {
       const meteoblueVal = pickMeteoblueForDate(dateStr);
-      if (Number.isFinite(Number(meteoblueVal))) {
-        nextModels.Meteoblue = Number(meteoblueVal);
+      if (meteoblueVal != null) {
+        nextModels.Meteoblue = meteoblueVal;
       }
+    } else {
+      nextModels.Meteoblue = existing;
     }
     return nextModels;
   };
