@@ -211,6 +211,7 @@ def _diff_positions(
         # 价格过滤：如果设置了价格区间，不符合的直接跳过
         price = _safe_float(now_pos.get("avg_price"))
         if price < min_price or price > max_price:
+            logger.debug(f"skipped position due to price range limit: market={now_pos.get('title')} price={price}")
             continue
 
         old_pos = previous.get(key)
@@ -378,7 +379,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
 
         logger.info(
             f"polymarket wallet activity watcher started users={len(users)} "
-            f"poll={poll_sec}s data_api={data_api_url} state_path={state_path}"
+            f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price}"
         )
 
         while True:
