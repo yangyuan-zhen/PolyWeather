@@ -96,6 +96,13 @@ class WeatherDataCollector:
         self._metar_cache: Dict[str, Dict] = {}
         self._metar_cache_lock = threading.Lock()
 
+        # 磁盘持久化缓存：重启后即可加载上次的预报数据，避免冷启动请求爆发
+        self._disk_cache_path = os.getenv(
+            "OPEN_METEO_DISK_CACHE_PATH", "/app/.cache/open_meteo_cache.json"
+        )
+        self._disk_cache_lock = threading.Lock()
+        self._load_open_meteo_disk_cache()
+
         # 设置代理
         proxy = config.get("proxy")
         if proxy:
@@ -105,6 +112,65 @@ class WeatherDataCollector:
             logger.info(f"正在使用天气数据代理: {proxy}")
 
         logger.info("天气数据采集器初始化完成。")
+
+    def _load_open_meteo_disk_cache(self) -> None:
+        """启动时从磁盘加载 Open-Meteo 三类缓存，避免重启后冷启动打爆 API"""
+        import json as _json
+        try:
+            if not os.path.exists(self._disk_cache_path):
+                return
+            with open(self._disk_cache_path, "r", encoding="utf-8") as f:
+                saved = _json.load(f)
+            now = time.time()
+            # 最多允许加载 2× TTL 的旧数据（TTL 内视为新鲜，超出则过期但仍可作为 stale fallback）
+            max_age = max(
+                self.open_meteo_cache_ttl_sec,
+                self.open_meteo_ensemble_cache_ttl_sec,
+                self.open_meteo_multi_model_cache_ttl_sec,
+            ) * 2
+            loaded = 0
+            for key, entry in saved.get("forecast", {}).items():
+                if now - float(entry.get("t", 0)) < max_age:
+                    self._open_meteo_cache[key] = entry
+                    loaded += 1
+            for key, entry in saved.get("ensemble", {}).items():
+                if now - float(entry.get("t", 0)) < max_age:
+                    self._ensemble_cache[key] = entry
+                    loaded += 1
+            for key, entry in saved.get("multi_model", {}).items():
+                if now - float(entry.get("t", 0)) < max_age:
+                    self._multi_model_cache[key] = entry
+                    loaded += 1
+            if loaded:
+                logger.info(f"✅ 从磁盘加载 Open-Meteo 缓存 {loaded} 条 ({self._disk_cache_path})")
+        except Exception as e:
+            logger.warning(f"磁盘缓存加载失败（首次启动不影响运行）: {e}")
+
+    def _flush_open_meteo_disk_cache(self) -> None:
+        """将三类 Open-Meteo 内存缓存持久化到磁盘"""
+        import json as _json
+        try:
+            os.makedirs(os.path.dirname(self._disk_cache_path), exist_ok=True)
+            with self._open_meteo_cache_lock:
+                forecast_snapshot = dict(self._open_meteo_cache)
+            with self._ensemble_cache_lock:
+                ensemble_snapshot = dict(self._ensemble_cache)
+            with self._multi_model_cache_lock:
+                multi_model_snapshot = dict(self._multi_model_cache)
+            payload = {
+                "forecast": forecast_snapshot,
+                "ensemble": ensemble_snapshot,
+                "multi_model": multi_model_snapshot,
+                "saved_at": time.time(),
+            }
+            with self._disk_cache_lock:
+                tmp_path = self._disk_cache_path + ".tmp"
+                with open(tmp_path, "w", encoding="utf-8") as f:
+                    _json.dump(payload, f)
+                os.replace(tmp_path, self._disk_cache_path)  # 原子替换，防止写入一半时被读到
+        except Exception as e:
+            logger.warning(f"磁盘缓存写入失败: {e}")
+
 
     def fetch_from_openweather(self, city: str, country: str = None) -> Optional[Dict]:
         """
@@ -1083,6 +1149,7 @@ class WeatherDataCollector:
                     "t": time.time(),
                     "data": dict(result),
                 }
+            self._flush_open_meteo_disk_cache()
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -1119,6 +1186,17 @@ class WeatherDataCollector:
             f"{'f' if use_fahrenheit else 'c'}"
         )
         now_ts = time.time()
+        # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
+        with self._open_meteo_rl_lock:
+            if now_ts < self._open_meteo_rate_limit_until:
+                remaining = int(self._open_meteo_rate_limit_until - now_ts)
+                logger.debug(f"Open-Meteo Ensemble 冷却期中，跳过请求，还需 {remaining}s")
+                with self._ensemble_cache_lock:
+                    stale = self._ensemble_cache.get(cache_key)
+                    if stale and isinstance(stale.get("data"), dict):
+                        return dict(stale["data"])
+                return None
+                
         with self._ensemble_cache_lock:
             cached = self._ensemble_cache.get(cache_key)
             if (
@@ -1200,6 +1278,7 @@ class WeatherDataCollector:
                     "t": time.time(),
                     "data": dict(result),
                 }
+            self._flush_open_meteo_disk_cache()
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -1207,6 +1286,8 @@ class WeatherDataCollector:
                 logger.warning(
                     f"Ensemble API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
+                with self._open_meteo_rl_lock:
+                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
             else:
                 logger.warning(f"Ensemble API 请求失败: {e}")
             with self._ensemble_cache_lock:
@@ -1241,6 +1322,17 @@ class WeatherDataCollector:
             f"{'f' if use_fahrenheit else 'c'}"
         )
         now_ts = time.time()
+        # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
+        with self._open_meteo_rl_lock:
+            if now_ts < self._open_meteo_rate_limit_until:
+                remaining = int(self._open_meteo_rate_limit_until - now_ts)
+                logger.debug(f"Open-Meteo Multi-model 冷却期中，跳过请求，还需 {remaining}s")
+                with self._multi_model_cache_lock:
+                    stale = self._multi_model_cache.get(cache_key)
+                    if stale and isinstance(stale.get("data"), dict):
+                        return dict(stale["data"])
+                return None
+
         with self._multi_model_cache_lock:
             cached = self._multi_model_cache.get(cache_key)
             if (
@@ -1321,6 +1413,7 @@ class WeatherDataCollector:
                     "t": time.time(),
                     "data": dict(result),
                 }
+            self._flush_open_meteo_disk_cache()
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -1328,6 +1421,8 @@ class WeatherDataCollector:
                 logger.warning(
                     f"Multi-model API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
+                with self._open_meteo_rl_lock:
+                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
             else:
                 logger.warning(f"Multi-model API 请求失败: {e}")
             with self._multi_model_cache_lock:
