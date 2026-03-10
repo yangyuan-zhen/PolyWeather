@@ -80,10 +80,15 @@ class WeatherDataCollector:
         self._ensemble_cache_lock = threading.Lock()
         self._multi_model_cache_lock = threading.Lock()
         self.meteoblue_cache_ttl_sec = int(
-            os.getenv("METEOBLUE_CACHE_TTL_SEC", "1800")
+            os.getenv("METEOBLUE_CACHE_TTL_SEC", "7200")
         )
         self._meteoblue_cache: Dict[str, Dict] = {}
         self._meteoblue_cache_lock = threading.Lock()
+        self.metar_cache_ttl_sec = int(
+            os.getenv("METAR_CACHE_TTL_SEC", "600")  # 默认 10 分钟
+        )
+        self._metar_cache: Dict[str, Dict] = {}
+        self._metar_cache_lock = threading.Lock()
 
         # 设置代理
         proxy = config.get("proxy")
@@ -267,6 +272,14 @@ class WeatherDataCollector:
             logger.warning(f"未找到城市 {city} 对应的 ICAO 代码")
             return None
 
+        cache_key = f"{icao}:{utc_offset}:{use_fahrenheit}"
+        now_ts = time.time()
+        with self._metar_cache_lock:
+            cached = self._metar_cache.get(cache_key)
+            if cached and now_ts - cached["t"] < self.metar_cache_ttl_sec:
+                logger.debug(f"METAR cache hit {icao} age={int(now_ts - cached['t'])}s")
+                return cached["d"]
+
         try:
             # NOAA Aviation Weather API (免费，无需 Key)
             url = "https://aviationweather.gov/api/data/metar"
@@ -287,6 +300,7 @@ class WeatherDataCollector:
             data = response.json()
             if not data:
                 return None
+
 
             # 1. 取最新的观测作为当前状态
             latest = data[0]
@@ -457,11 +471,17 @@ class WeatherDataCollector:
                 f"✈️ METAR {icao}: {temp:.1f}°{'F' if use_fahrenheit else 'C'} "
                 f"(obs: {obs_time})"
             )
-
+            with self._metar_cache_lock:
+                self._metar_cache[cache_key] = {"d": result, "t": now_ts}
             return result
 
         except requests.exceptions.RequestException as e:
             logger.error(f"METAR 请求失败 ({icao}): {e}")
+            with self._metar_cache_lock:
+                stale = self._metar_cache.get(cache_key)
+                if stale:
+                    logger.warning(f"METAR {icao} 请求失败，使用缓存回退")
+                    return stale["d"]
             return None
         except (KeyError, IndexError, TypeError) as e:
             logger.error(f"METAR 数据解析失败 ({icao}): {e}")
