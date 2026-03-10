@@ -10,6 +10,7 @@ from loguru import logger
 from web3 import Web3
 
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
 ERC20_ABI = [
     {
         "constant": True,
@@ -26,6 +27,16 @@ ERC20_ABI = [
         "type": "function",
     },
 ]
+
+# Source: Polymarket official developer docs (Polygon contract addresses)
+# https://docs.polymarket.com/developers/market-makers/setup
+DEFAULT_POLYMARKET_CONTRACTS: Dict[str, str] = {
+    "USDC.e": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+    "CTF": "0x4d97dcd97ec945f40cf65f87097ace5ea0476045",
+    "CTF_EXCHANGE": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E",
+    "NEG_RISK_CTF_EXCHANGE": "0xC5d563A36AE78145C45a50134d48A1215220f80a",
+    "NEG_RISK_ADAPTER": "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
+}
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -91,15 +102,70 @@ def _cleanup_seen_tx(state: Dict[str, Any], now_ts: int, keep_sec: int) -> None:
         seen.pop(tx_hash, None)
 
 
+def _normalize_addr(value: Any) -> str:
+    if value is None:
+        return ""
+    text = str(value).strip().lower()
+    if text.startswith("0x") and len(text) == 42:
+        return text
+    return ""
+
+
 def _parse_addresses(raw: Optional[str]) -> Set[str]:
     out: Set[str] = set()
     if not raw:
         return out
     for part in raw.split(","):
-        addr = part.strip().lower()
-        if addr and addr.startswith("0x") and len(addr) == 42:
+        addr = _normalize_addr(part)
+        if addr:
             out.add(addr)
     return out
+
+
+def _parse_polymarket_contracts(raw: Optional[str]) -> Dict[str, str]:
+    """
+    Parse env like:
+    - "0xabc...,0xdef..."
+    - "CTF:0xabc...,EXCHANGE:0xdef..."
+    """
+    result: Dict[str, str] = {}
+    if not raw:
+        return result
+    for part in raw.split(","):
+        segment = str(part).strip()
+        if not segment:
+            continue
+        label = "CUSTOM_PM"
+        address_part = segment
+        if ":" in segment:
+            maybe_label, maybe_addr = segment.split(":", 1)
+            maybe_addr_n = _normalize_addr(maybe_addr)
+            if maybe_addr_n:
+                label = (maybe_label or "CUSTOM_PM").strip() or "CUSTOM_PM"
+                address_part = maybe_addr_n
+        addr = _normalize_addr(address_part)
+        if not addr:
+            continue
+        if addr not in result:
+            result[addr] = label
+    return result
+
+
+def _build_polymarket_contract_map() -> Dict[str, str]:
+    include_defaults = _env_bool("POLYGON_WALLET_WATCH_INCLUDE_DEFAULT_PM_CONTRACTS", True)
+    merged: Dict[str, str] = {}
+
+    if include_defaults:
+        for label, addr in DEFAULT_POLYMARKET_CONTRACTS.items():
+            normalized = _normalize_addr(addr)
+            if normalized:
+                merged[normalized] = label
+
+    custom = _parse_polymarket_contracts(os.getenv("POLYGON_WALLET_WATCH_POLYMARKET_CONTRACTS"))
+    for addr, label in custom.items():
+        merged[addr] = label
+
+    return merged
 
 
 def _polygon_scan_tx_url(tx_hash: str) -> str:
@@ -123,69 +189,139 @@ def _format_matic(wei_value: int) -> str:
     return f"{matic.normalize():f}".rstrip("0").rstrip(".")
 
 
+def _format_amount(amount: Decimal) -> str:
+    if amount == amount.to_integral_value():
+        return str(int(amount))
+    return f"{amount.normalize():f}".rstrip("0").rstrip(".")
+
+
 def _safe_lower(value: Any) -> str:
     if value is None:
         return ""
     return str(value).lower()
 
 
-def _extract_transfer_events(
+def _topic_to_addr(topic: Any) -> str:
+    try:
+        return _normalize_addr("0x" + topic.hex()[-40:])
+    except Exception:
+        return ""
+
+
+def _get_token_meta(
+    w3: Web3,
+    token_addr: str,
+    token_meta_cache: Dict[str, Tuple[str, int]],
+) -> Tuple[str, int]:
+    symbol, decimals = token_meta_cache.get(token_addr, ("ERC20", 18))
+    if token_addr in token_meta_cache:
+        return symbol, decimals
+
+    try:
+        token = w3.eth.contract(address=Web3.to_checksum_address(token_addr), abi=ERC20_ABI)
+        symbol_raw = token.functions.symbol().call()
+        decimals_raw = token.functions.decimals().call()
+        symbol = str(symbol_raw or "ERC20")
+        decimals = int(decimals_raw)
+    except Exception:
+        symbol = "ERC20"
+        decimals = 18
+
+    token_meta_cache[token_addr] = (symbol, decimals)
+    return symbol, decimals
+
+
+def _extract_receipt_signals(
     w3: Web3,
     receipt: Any,
     watch_set: Set[str],
+    pm_contracts: Dict[str, str],
     token_meta_cache: Dict[str, Tuple[str, int]],
-) -> List[str]:
-    lines: List[str] = []
+) -> Dict[str, Any]:
+    transfer_lines: List[str] = []
+    approval_lines: List[str] = []
+    touched_labels: Set[str] = set()
+    pm_hit = False
+
     for log in receipt.logs or []:
         try:
-            if not log.topics or len(log.topics) < 3:
+            log_addr = _normalize_addr(log.address)
+            if log_addr in pm_contracts:
+                pm_hit = True
+                touched_labels.add(pm_contracts[log_addr])
+
+            topics = log.topics or []
+            if not topics:
                 continue
-            topic0 = log.topics[0].hex().lower()
-            if topic0 != TRANSFER_TOPIC:
-                continue
+            topic0 = topics[0].hex().lower()
 
-            from_addr = "0x" + log.topics[1].hex()[-40:]
-            to_addr = "0x" + log.topics[2].hex()[-40:]
-            from_addr = from_addr.lower()
-            to_addr = to_addr.lower()
-            if from_addr not in watch_set and to_addr not in watch_set:
-                continue
+            if topic0 == TRANSFER_TOPIC and len(topics) >= 3:
+                from_addr = _topic_to_addr(topics[1])
+                to_addr = _topic_to_addr(topics[2])
+                if from_addr not in watch_set and to_addr not in watch_set:
+                    continue
 
-            token_addr = _safe_lower(log.address)
-            symbol, decimals = token_meta_cache.get(token_addr, ("ERC20", 18))
-            if token_addr not in token_meta_cache:
-                try:
-                    token = w3.eth.contract(address=Web3.to_checksum_address(token_addr), abi=ERC20_ABI)
-                    symbol_raw = token.functions.symbol().call()
-                    decimals_raw = token.functions.decimals().call()
-                    symbol = str(symbol_raw or "ERC20")
-                    decimals = int(decimals_raw)
-                except Exception:
-                    symbol = "ERC20"
-                    decimals = 18
-                token_meta_cache[token_addr] = (symbol, decimals)
+                other_addr = to_addr if from_addr in watch_set else from_addr
+                other_label = pm_contracts.get(other_addr)
+                if other_label:
+                    pm_hit = True
+                    touched_labels.add(other_label)
 
-            amount_int = int(log.data.hex(), 16) if log.data else 0
-            amount = Decimal(amount_int) / (Decimal(10) ** Decimal(max(decimals, 0)))
-            amount_txt = f"{amount.normalize():f}".rstrip("0").rstrip(".") if amount else "0"
+                symbol, decimals = _get_token_meta(w3, log_addr, token_meta_cache)
+                amount_int = int(log.data.hex(), 16) if log.data else 0
+                amount = Decimal(amount_int) / (Decimal(10) ** Decimal(max(decimals, 0)))
 
-            direction = "IN" if to_addr in watch_set and from_addr not in watch_set else "OUT"
-            if from_addr in watch_set and to_addr in watch_set:
-                direction = "SELF"
+                if from_addr in watch_set and to_addr in watch_set:
+                    direction = "SELF"
+                elif to_addr in watch_set:
+                    direction = "IN"
+                else:
+                    direction = "OUT"
 
-            lines.append(
-                f"- {direction} {symbol}: {amount_txt} ({_short(from_addr)} -> {_short(to_addr)})"
-            )
+                # Keep transfer line only when it is clearly Polymarket related.
+                if other_label or log_addr in pm_contracts:
+                    target = other_label or pm_contracts.get(log_addr) or _short(other_addr)
+                    transfer_lines.append(
+                        f"- {direction} {symbol}: {_format_amount(amount)} (对手: {target})"
+                    )
+
+            if topic0 == APPROVAL_TOPIC and len(topics) >= 3:
+                owner = _topic_to_addr(topics[1])
+                spender = _topic_to_addr(topics[2])
+                if owner not in watch_set:
+                    continue
+                spender_label = pm_contracts.get(spender)
+                if not spender_label:
+                    continue
+
+                pm_hit = True
+                touched_labels.add(spender_label)
+
+                symbol, decimals = _get_token_meta(w3, log_addr, token_meta_cache)
+                amount_int = int(log.data.hex(), 16) if log.data else 0
+                amount = Decimal(amount_int) / (Decimal(10) ** Decimal(max(decimals, 0)))
+                approval_lines.append(
+                    f"- APPROVE {symbol}: {_format_amount(amount)} -> {spender_label}"
+                )
         except Exception:
             continue
-    return lines
+
+    return {
+        "pm_hit": pm_hit,
+        "transfer_lines": transfer_lines,
+        "approval_lines": approval_lines,
+        "touched_labels": sorted(touched_labels),
+    }
 
 
 def _build_message(
     tx: Any,
     block_ts: int,
     matched_wallet: str,
+    touched_labels: List[str],
     transfer_lines: List[str],
+    approval_lines: List[str],
+    tx_to_label: Optional[str],
 ) -> str:
     tx_hash = tx["hash"].hex()
     from_addr = _safe_lower(tx.get("from"))
@@ -202,21 +338,33 @@ def _build_message(
 
     matic_value = int(tx.get("value", 0) or 0)
     block_time = datetime.fromtimestamp(block_ts, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    selector = str(tx.get("input") or "")[:10] if tx.get("input") else "0x"
 
     lines = [
-        "⛓ Polygon 钱包异动",
+        "⛓ Polymarket 钱包动作",
         f"钱包: {_short(matched_wallet)}",
         f"方向: {direction}",
         f"MATIC: {_format_matic(matic_value)}",
         f"区块: {tx.get('blockNumber')}",
         f"时间: {block_time}",
-        f"Tx: {tx_hash}",
+        f"方法选择器: {selector}",
     ]
 
+    if tx_to_label:
+        lines.append(f"直连合约: {tx_to_label}")
+
+    if touched_labels:
+        lines.append(f"相关合约: {', '.join(touched_labels)}")
+
     if transfer_lines:
-        lines.append("Token 转账:")
+        lines.append("Token 动作:")
         lines.extend(transfer_lines[:6])
 
+    if approval_lines:
+        lines.append("授权动作:")
+        lines.extend(approval_lines[:4])
+
+    lines.append(f"Tx: {tx_hash}")
     lines.append(f"交易链接: {_polygon_scan_tx_url(tx_hash)}")
     lines.append(f"钱包链接: {_polygon_scan_addr_url(matched_wallet)}")
     return "\n".join(lines)
@@ -227,6 +375,8 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     rpc_url = os.getenv("POLYGON_RPC_URL")
     watch_set = _parse_addresses(os.getenv("POLYGON_WALLET_WATCH_ADDRESSES"))
+    polymarket_only = _env_bool("POLYGON_WALLET_WATCH_POLYMARKET_ONLY", True)
+    pm_contracts = _build_polymarket_contract_map()
 
     if not enabled:
         logger.info("polygon wallet watcher disabled")
@@ -239,6 +389,9 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
         return None
     if not watch_set:
         logger.warning("polygon wallet watcher skipped: POLYGON_WALLET_WATCH_ADDRESSES is empty")
+        return None
+    if polymarket_only and not pm_contracts:
+        logger.warning("polygon wallet watcher skipped: no polymarket contracts configured")
         return None
 
     poll_sec = max(3, _env_int("POLYGON_WALLET_WATCH_INTERVAL_SEC", 8))
@@ -272,6 +425,7 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
 
         logger.info(
             f"polygon wallet watcher started wallets={len(watch_set)} "
+            f"polymarket_only={polymarket_only} pm_contracts={len(pm_contracts)} "
             f"poll={poll_sec}s confirmations={confirmations} state_path={state_path}"
         )
 
@@ -312,29 +466,48 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
                         if tx_hash in state.get("seen_tx", {}):
                             continue
 
+                        tx_to = _normalize_addr(tx.get("to"))
+                        tx_to_label = pm_contracts.get(tx_to)
+                        pm_hit = bool(tx_to_label)
                         transfer_lines: List[str] = []
+                        approval_lines: List[str] = []
+                        touched_labels: List[str] = [tx_to_label] if tx_to_label else []
+
                         try:
                             receipt = w3.eth.get_transaction_receipt(tx["hash"])
-                            transfer_lines = _extract_transfer_events(
+                            parsed = _extract_receipt_signals(
                                 w3=w3,
                                 receipt=receipt,
                                 watch_set=watch_set,
+                                pm_contracts=pm_contracts,
                                 token_meta_cache=token_meta_cache,
                             )
+                            pm_hit = pm_hit or bool(parsed.get("pm_hit"))
+                            transfer_lines = parsed.get("transfer_lines") or []
+                            approval_lines = parsed.get("approval_lines") or []
+                            touched = parsed.get("touched_labels") or []
+                            touched_labels = sorted(set(touched_labels + touched))
                         except Exception:
                             transfer_lines = []
+                            approval_lines = []
+
+                        if polymarket_only and not pm_hit:
+                            continue
 
                         message = _build_message(
                             tx=tx,
                             block_ts=block_ts,
                             matched_wallet=matched_wallet,
+                            touched_labels=touched_labels,
                             transfer_lines=transfer_lines,
+                            approval_lines=approval_lines,
+                            tx_to_label=tx_to_label,
                         )
                         bot.send_message(chat_id, message, disable_web_page_preview=True)
                         state.setdefault("seen_tx", {})[tx_hash] = cycle_ts
                         logger.info(
                             f"polygon wallet alert pushed wallet={matched_wallet} "
-                            f"tx={tx_hash} block={block_num}"
+                            f"tx={tx_hash} block={block_num} polymarket={pm_hit}"
                         )
 
                     state["last_scanned_block"] = block_num
@@ -352,3 +525,4 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
     )
     thread.start()
     return thread
+

@@ -12,6 +12,7 @@ if project_root not in sys.path:
 from src.utils.config_loader import load_config  # type: ignore # noqa: E402
 from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore # noqa: E402
 from src.onchain.polygon_wallet_watcher import start_polygon_wallet_watch_loop  # type: ignore # noqa: E402
+from src.onchain.polymarket_wallet_activity_watcher import start_polymarket_wallet_activity_loop  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
@@ -44,6 +45,7 @@ def start_bot():
     weather = WeatherDataCollector(config)
     start_trade_alert_push_loop(bot, config)
     start_polygon_wallet_watch_loop(bot)
+    start_polymarket_wallet_activity_loop(bot)
 
     def _display_name(user) -> str:
         return user.username or user.first_name or f"User_{user.id}"
@@ -812,4 +814,5 @@ def start_bot():
 
 if __name__ == "__main__":
     start_bot()
+
 
