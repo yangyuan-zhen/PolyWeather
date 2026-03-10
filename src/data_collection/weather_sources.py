@@ -64,6 +64,21 @@ class WeatherDataCollector:
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()
+        self.open_meteo_cache_ttl_sec = int(
+            os.getenv("OPEN_METEO_CACHE_TTL_SEC", "900")
+        )
+        self.open_meteo_ensemble_cache_ttl_sec = int(
+            os.getenv("OPEN_METEO_ENSEMBLE_CACHE_TTL_SEC", "900")
+        )
+        self.open_meteo_multi_model_cache_ttl_sec = int(
+            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_TTL_SEC", "900")
+        )
+        self._open_meteo_cache: Dict[str, Dict] = {}
+        self._ensemble_cache: Dict[str, Dict] = {}
+        self._multi_model_cache: Dict[str, Dict] = {}
+        self._open_meteo_cache_lock = threading.Lock()
+        self._ensemble_cache_lock = threading.Lock()
+        self._multi_model_cache_lock = threading.Lock()
         self.meteoblue_cache_ttl_sec = int(
             os.getenv("METEOBLUE_CACHE_TTL_SEC", "1800")
         )
@@ -265,7 +280,6 @@ class WeatherDataCollector:
             response = self.session.get(
                 url,
                 params=params,
-                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -931,6 +945,20 @@ class WeatherDataCollector:
             forecast_days: Number of forecast days to fetch (default 14 to cover all market dates)
             use_fahrenheit: Whether to return temperatures in Fahrenheit (for US markets)
         """
+        cache_key = (
+            f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
+            f"{forecast_days}:{'f' if use_fahrenheit else 'c'}"
+        )
+        now_ts = time.time()
+        with self._open_meteo_cache_lock:
+            cached = self._open_meteo_cache.get(cache_key)
+            if (
+                cached
+                and now_ts - float(cached.get("t", 0)) < self.open_meteo_cache_ttl_sec
+            ):
+                cached_data = cached.get("data")
+                if isinstance(cached_data, dict):
+                    return dict(cached_data)
         try:
             url = "https://api.open-meteo.com/v1/forecast"
             params = {
@@ -941,7 +969,6 @@ class WeatherDataCollector:
                 "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
-                "_t": int(time.time()),  # 禁用缓存，强制刷新
             }
 
             # 显式指定单位，防止 API 默认行为漂移
@@ -953,7 +980,6 @@ class WeatherDataCollector:
             response = self.session.get(
                 url,
                 params=params,
-                headers={"Cache-Control": "no-cache", "Pragma": "no-cache"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -1003,7 +1029,7 @@ class WeatherDataCollector:
             local_now = now_utc + timedelta(seconds=utc_offset)
             local_time_str = local_now.strftime("%Y-%m-%d %H:%M")
 
-            return {
+            result = {
                 "source": "open-meteo",
                 "timestamp": now_utc.isoformat(),
                 "timezone": timezone_name,
@@ -1016,8 +1042,26 @@ class WeatherDataCollector:
                 "daily": daily_data,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
+            with self._open_meteo_cache_lock:
+                self._open_meteo_cache[cache_key] = {
+                    "t": time.time(),
+                    "data": dict(result),
+                }
+            return result
         except Exception as e:
-            logger.error(f"Open-Meteo forecast failed: {e}")
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logger.warning(
+                    f"Open-Meteo rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
+                )
+            else:
+                logger.error(f"Open-Meteo forecast failed: {e}")
+            with self._open_meteo_cache_lock:
+                stale = self._open_meteo_cache.get(cache_key)
+                if stale and isinstance(stale.get("data"), dict):
+                    fallback = dict(stale["data"])
+                    fallback["stale_cache"] = True
+                    return fallback
             return None
 
     def fetch_ensemble(
@@ -1030,6 +1074,21 @@ class WeatherDataCollector:
         从 Open-Meteo Ensemble API 获取 51 成员集合预报
         用于计算预报不确定性范围（散度）
         """
+        cache_key = (
+            f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
+            f"{'f' if use_fahrenheit else 'c'}"
+        )
+        now_ts = time.time()
+        with self._ensemble_cache_lock:
+            cached = self._ensemble_cache.get(cache_key)
+            if (
+                cached
+                and now_ts - float(cached.get("t", 0))
+                < self.open_meteo_ensemble_cache_ttl_sec
+            ):
+                cached_data = cached.get("data")
+                if isinstance(cached_data, dict):
+                    return dict(cached_data)
         try:
             url = "https://ensemble-api.open-meteo.com/v1/ensemble"
             params = {
@@ -1038,7 +1097,6 @@ class WeatherDataCollector:
                 "daily": "temperature_2m_max",
                 "timezone": "auto",
                 "forecast_days": 3,
-                "_t": int(time.time()),
             }
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
@@ -1048,7 +1106,6 @@ class WeatherDataCollector:
             response = self.session.get(
                 url,
                 params=params,
-                headers={"Cache-Control": "no-cache"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -1098,9 +1155,26 @@ class WeatherDataCollector:
                 f"📊 Ensemble ({n} members): median={median:.1f}, "
                 f"p10={p10:.1f}, p90={p90:.1f}"
             )
+            with self._ensemble_cache_lock:
+                self._ensemble_cache[cache_key] = {
+                    "t": time.time(),
+                    "data": dict(result),
+                }
             return result
         except Exception as e:
-            logger.warning(f"Ensemble API 请求失败: {e}")
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logger.warning(
+                    f"Ensemble API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
+                )
+            else:
+                logger.warning(f"Ensemble API 请求失败: {e}")
+            with self._ensemble_cache_lock:
+                stale = self._ensemble_cache.get(cache_key)
+                if stale and isinstance(stale.get("data"), dict):
+                    fallback = dict(stale["data"])
+                    fallback["stale_cache"] = True
+                    return fallback
             return None
 
     def fetch_multi_model(
@@ -1122,6 +1196,21 @@ class WeatherDataCollector:
 
         返回 3 天的预报数据，支持今日+明日共识分析
         """
+        cache_key = (
+            f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
+            f"{'f' if use_fahrenheit else 'c'}"
+        )
+        now_ts = time.time()
+        with self._multi_model_cache_lock:
+            cached = self._multi_model_cache.get(cache_key)
+            if (
+                cached
+                and now_ts - float(cached.get("t", 0))
+                < self.open_meteo_multi_model_cache_ttl_sec
+            ):
+                cached_data = cached.get("data")
+                if isinstance(cached_data, dict):
+                    return dict(cached_data)
         try:
             url = "https://api.open-meteo.com/v1/forecast"
             models = "ecmwf_ifs025,gfs_seamless,icon_seamless,gem_seamless,jma_seamless"
@@ -1132,7 +1221,6 @@ class WeatherDataCollector:
                 "models": models,
                 "timezone": "auto",
                 "forecast_days": 3,
-                "_t": int(time.time()),
             }
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
@@ -1140,7 +1228,6 @@ class WeatherDataCollector:
             response = self.session.get(
                 url,
                 params=params,
-                headers={"Cache-Control": "no-cache"},
                 timeout=self.timeout,
             )
             response.raise_for_status()
@@ -1182,15 +1269,33 @@ class WeatherDataCollector:
                 f"🔬 Multi-model ({len(forecasts)}个, {len(daily_forecasts)}天): {labels_str}"
             )
 
-            return {
+            result = {
                 "source": "multi_model",
                 "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
                 "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
                 "dates": dates,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
+            with self._multi_model_cache_lock:
+                self._multi_model_cache[cache_key] = {
+                    "t": time.time(),
+                    "data": dict(result),
+                }
+            return result
         except Exception as e:
-            logger.warning(f"Multi-model API 请求失败: {e}")
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logger.warning(
+                    f"Multi-model API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
+                )
+            else:
+                logger.warning(f"Multi-model API 请求失败: {e}")
+            with self._multi_model_cache_lock:
+                stale = self._multi_model_cache.get(cache_key)
+                if stale and isinstance(stale.get("data"), dict):
+                    fallback = dict(stale["data"])
+                    fallback["stale_cache"] = True
+                    return fallback
             return None
 
     def fetch_from_meteoblue(
@@ -1586,6 +1691,15 @@ class WeatherDataCollector:
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
                 if metar_data:
                     results["metar"] = metar_data
+                if city_lower in self.METEOBLUE_PRIORITY_CITIES:
+                    mb_data = self.fetch_from_meteoblue(
+                        lat,
+                        lon,
+                        timezone_name="UTC",
+                        use_fahrenheit=use_fahrenheit,
+                    )
+                    if mb_data:
+                        results["meteoblue"] = mb_data
                 if use_fahrenheit:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:

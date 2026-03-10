@@ -392,6 +392,14 @@ def start_bot():
             # --- 1. 紧凑 Header (城市 + 时间 + 风险状态) ---
             local_time = open_meteo.get("current", {}).get("local_time", "")
             time_str = local_time.split(" ")[1][:5] if " " in local_time else "N/A"
+            if time_str == "N/A":
+                metar_obs = metar.get("observation_time", "") if metar else ""
+                if "T" in metar_obs:
+                    time_str = metar_obs.split("T")[1][:5]
+                elif " " in metar_obs:
+                    time_str = metar_obs.split(" ")[1][:5]
+                elif metar_obs:
+                    time_str = str(metar_obs)[:5]
 
             risk_profile = get_city_risk_profile(city_name)
             risk_emoji = risk_profile.get("risk_level", "⚠️") if risk_profile else "⚠️"
@@ -414,11 +422,27 @@ def start_bot():
             nws_high = _sf(weather_data.get("nws", {}).get("today_high"))
             mgm_high = _sf(mgm.get("today_high"))
             mb_high = _sf(weather_data.get("meteoblue", {}).get("today_high"))
+            metar_max_so_far = _sf(metar.get("current", {}).get("max_temp_so_far")) if metar else None
 
             # 今天对比
-            today_t = max_temps[0] if max_temps else "N/A"
+            today_t = _sf(max_temps[0]) if max_temps else None
+            fallback_source = None
+            if today_t is None:
+                for source_name, candidate in (
+                    ("MB", mb_high),
+                    ("NWS", nws_high),
+                    ("MGM", mgm_high),
+                    ("METAR", metar_max_so_far),
+                ):
+                    if candidate is not None:
+                        today_t = candidate
+                        fallback_source = source_name
+                        break
+            today_t_display = (
+                f"{today_t:.1f}" if isinstance(today_t, (int, float)) else "N/A"
+            )
             comp_parts = []
-            sources = ["Open-Meteo"]
+            sources = ["Open-Meteo"] if max_temps else []
 
             if mb_high is not None:
                 sources.append("MB")
@@ -441,6 +465,10 @@ def start_bot():
                     if isinstance(mgm_high, (int, float))
                     else f"🇺🇸 MGM: {mgm_high}"
                 )
+            if fallback_source and fallback_source not in sources:
+                sources.append(fallback_source)
+            if not sources:
+                sources = ["N/A"]
 
             # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
             divergence_warning = ""
@@ -457,7 +485,7 @@ def start_bot():
 
             msg_lines.append(f"\n📊 <b>预报 ({sources_str})</b>")
             msg_lines.append(
-                f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>{divergence_warning}"
+                f"👉 <b>今天: {today_t_display}{temp_symbol}{comp_str}</b>{divergence_warning}"
             )
 
             # 明后天
