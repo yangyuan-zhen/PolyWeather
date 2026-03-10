@@ -311,8 +311,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
                 t_str, t_val = item
                 if t_str is None or t_val is None:
                     continue
-                hh, mm = str(t_str).split(":")
-                parsed_obs.append((int(hh), int(mm), float(t_val)))
+                hh, minute_part = str(t_str).split(":")
+                parsed_obs.append((int(hh), int(minute_part), float(t_val)))
             except Exception:
                 continue
         if parsed_obs:
