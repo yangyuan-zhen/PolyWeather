@@ -232,7 +232,11 @@ def _diff_positions(
     if notify_closed:
         for key, old_pos in previous.items():
             if key not in current:
-                # 关闭仓位时通常也检查一下关闭时的价格（如果需要的话，这里暂时保留 notify_closed 逻辑）
+                # 关仓也按价格过滤：只推送买入价在 [min_price, max_price] 范围内的关仓
+                closed_price = _safe_float(old_pos.get("avg_price"))
+                if closed_price < min_price or closed_price > max_price:
+                    logger.debug(f"skipped closed position due to price range limit: market={old_pos.get('title')} price={closed_price}")
+                    continue
                 changes.append(("closed", old_pos))
 
     return changes
@@ -363,7 +367,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     min_size_abs = max(0.0, _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_SIZE_ABS", 0.001))
     min_size_delta = max(0.0, _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_SIZE_DELTA", 0.001))
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
-    notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", True)
+    notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
 
     # 价格过滤范围配置
@@ -446,7 +450,6 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
-
 
 
 
