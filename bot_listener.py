@@ -464,17 +464,21 @@ def start_bot():
             # 今天对比
             today_t = _sf(max_temps[0]) if max_temps else None
             fallback_source = None
+            metar_only_fallback = False
             if today_t is None:
                 for source_name, candidate in (
                     ("MB", mb_high),
                     ("NWS", nws_high),
                     ("MGM", mgm_high),
-                    ("METAR", metar_max_so_far),
                 ):
                     if candidate is not None:
                         today_t = candidate
                         fallback_source = source_name
                         break
+            if today_t is None and metar_max_so_far is not None:
+                # Last-resort display only: do not treat METAR as a forecast source
+                today_t = metar_max_so_far
+                metar_only_fallback = True
             today_t_display = (
                 f"{today_t:.1f}" if isinstance(today_t, (int, float)) else "N/A"
             )
@@ -511,6 +515,10 @@ def start_bot():
                     )
             if fallback_source and fallback_source not in sources:
                 sources.append(fallback_source)
+            if metar_only_fallback:
+                if not sources:
+                    sources = ["Model unavailable"]
+                comp_parts.append(f"METAR实测回退: {metar_max_so_far:.1f}{temp_symbol}")
             if not sources:
                 sources = ["N/A"]
 
@@ -534,9 +542,9 @@ def start_bot():
             )
 
             # 明后天
+            mgm_daily = mgm.get("daily_forecasts", {}) or {}
             if len(dates) > 1:
                 future_forecasts = []
-                mgm_daily = mgm.get("daily_forecasts", {}) or {}
                 for d, t in zip(dates[1:], max_temps[1:]):
                     # 检查 MGM 是否有该日期的预报
                     mgm_f = mgm_daily.get(d)
@@ -547,6 +555,26 @@ def start_bot():
                     else:
                         future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
                 msg_lines.append("📅 " + " | ".join(future_forecasts))
+            elif mgm_daily:
+                # Open-Meteo missing: still show next 2 days from MGM daily forecast
+                from datetime import datetime, timezone, timedelta
+
+                local_now = datetime.now(timezone.utc).astimezone(
+                    timezone(timedelta(seconds=int(fallback_utc_offset)))
+                )
+                today_local = local_now.strftime("%Y-%m-%d")
+                future_forecasts = []
+                for d in sorted(mgm_daily.keys()):
+                    if d <= today_local:
+                        continue
+                    t = mgm_daily.get(d)
+                    if t is None:
+                        continue
+                    future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
+                    if len(future_forecasts) >= 2:
+                        break
+                if future_forecasts:
+                    msg_lines.append("📅 " + " | ".join(future_forecasts))
 
             # --- 3.5 日出日落 + 日照时长 ---
             sunrises = daily.get("sunrise", [])
@@ -831,7 +859,9 @@ def start_bot():
                     # 构建更全的背景数据给 AI
 
                     # 补充多模型分歧
-                    mm = weather_data.get("multi_model", {})
+                    mm = weather_data.get("multi_model", {}) or {}
+                    if not isinstance(mm, dict):
+                        mm = {}
                     if mm.get("forecasts"):
                         mm_str = " | ".join(
                             [

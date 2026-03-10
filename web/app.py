@@ -111,6 +111,16 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     mgm = raw.get("mgm") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
+    if not isinstance(om, dict):
+        om = {}
+    if not isinstance(metar, dict):
+        metar = {}
+    if not isinstance(mgm, dict):
+        mgm = {}
+    if not isinstance(ens_raw, dict):
+        ens_raw = {}
+    if not isinstance(mm, dict):
+        mm = {}
     risk = CITY_RISK_PROFILES.get(city, {})
 
     # ── 2. Current conditions (METAR primary, MGM fallback) ──

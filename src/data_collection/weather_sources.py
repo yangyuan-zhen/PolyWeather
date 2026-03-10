@@ -1810,6 +1810,12 @@ class WeatherDataCollector:
         # 严格判断是否为美国市场（必须完全匹配列表或缩写）
         use_fahrenheit = city_lower in us_cities
 
+        # Turkish cities: keep MGM model fallback alive when Open-Meteo is rate-limited.
+        turkish_provinces = {
+            "ankara": ("17128", "Ankara"),  # settlement reference: Esenboğa airport
+            "istanbul": ("17060", "Istanbul"),
+        }
+
         if use_fahrenheit:
             logger.info(f"🌡️ {city} 使用华氏度 (°F)")
         else:
@@ -1907,6 +1913,35 @@ class WeatherDataCollector:
                 )
                 if metar_data:
                     results["metar"] = metar_data
+
+                # Turkish fallback: keep MGM forecasts and nearby stations available
+                if city_lower in turkish_provinces:
+                    istno, province = turkish_provinces[city_lower]
+                    mgm_data = self.fetch_from_mgm(istno)
+                    if istno == "17128":
+                        mgm_city_center = self.fetch_from_mgm("17130")
+                        if mgm_city_center and mgm_data:
+                            mgm_data["today_high"] = mgm_city_center.get("today_high")
+                            mgm_data["daily_forecasts"] = mgm_city_center.get(
+                                "daily_forecasts"
+                            )
+                    if mgm_data:
+                        results["mgm"] = mgm_data
+                        nearby = self.fetch_mgm_nearby_stations(
+                            province, root_ist_no=istno
+                        )
+                        if nearby:
+                            results["mgm_nearby"] = nearby
+
+                # Global nearby fallback from METAR clusters
+                if city_lower in self.CITY_METAR_CLUSTERS and "mgm_nearby" not in results:
+                    cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
+                    cluster_data = self.fetch_metar_nearby_cluster(
+                        cluster_icaos, use_fahrenheit=use_fahrenheit
+                    )
+                    if cluster_data:
+                        results["mgm_nearby"] = cluster_data
+
                 if city_lower in self.METEOBLUE_PRIORITY_CITIES:
                     mb_data = self.fetch_from_meteoblue(
                         lat,
@@ -1920,6 +1955,16 @@ class WeatherDataCollector:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:
                         results["nws"] = nws_data
+
+                # Still try ensemble / multi-model from stale cache while OM is cooling down
+                ens_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
+                if ens_data:
+                    results["ensemble"] = ens_data
+                mm_data = self.fetch_multi_model(
+                    lat, lon, use_fahrenheit=use_fahrenheit
+                )
+                if mm_data:
+                    results["multi_model"] = mm_data
         else:
             # 降级方案（无经纬度）
             metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
