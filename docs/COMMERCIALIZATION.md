@@ -12,11 +12,11 @@ PolyWeather is positioned as a **premium intelligence service** for weather-driv
 
 ## 💰 Pricing & Monetization
 
-| Tier                 | Price         | Primary Value Proposition                                     |
-| :------------------- | :------------ | :------------------------------------------------------------ |
-| **Telegram Channel** | **$1 / mo**   | High-fidelity proactive alerts, low noise.                    |
-| **Web Dashboard**    | **$5 / mo**   | Full multi-model context + historical DEB benchmarking.       |
-| **VIP Bundle**       | **$5.5 / mo** | Unified access to dashboard + signal stream.                  |
+| Tier                 | Price         | Primary Value Proposition                               |
+| :------------------- | :------------ | :------------------------------------------------------ |
+| **Telegram Channel** | **$1 / mo**   | High-fidelity proactive alerts, low noise.              |
+| **Web Dashboard**    | **$5 / mo**   | Full multi-model context + historical DEB benchmarking. |
+| **VIP Bundle**       | **$5.5 / mo** | Unified access to dashboard + signal stream.            |
 
 ### 🛠️ Payment Infrastructure
 
@@ -92,4 +92,4 @@ graph LR
 
 ---
 
-**📅 Last Updated**: 2026-03-09
+**📅 Last Updated**: 2026-03-10

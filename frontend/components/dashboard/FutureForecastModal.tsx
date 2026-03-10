@@ -1,5 +1,17 @@
 "use client";
 
+import {
+  Cloud,
+  CloudFog,
+  CloudLightning,
+  CloudRain,
+  CloudSnow,
+  CloudSun,
+  Search,
+  Sun,
+  Wind,
+} from "lucide-react";
+
 import { ChartConfiguration } from "chart.js/auto";
 import clsx from "clsx";
 import { CSSProperties } from "react";
@@ -20,6 +32,155 @@ import {
   parseAiAnalysis,
 } from "@/lib/dashboard-utils";
 
+function normalizeMarketValue(value?: number | null) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
+  return Math.max(0, Math.min(1, numeric));
+}
+
+function WeatherIcon({ emoji, size = 32 }: { emoji: string; size?: number }) {
+  if (emoji === "☀️") return <Sun size={size} color="#facc15" />;
+  if (emoji === "⛅" || emoji === "🌤️")
+    return <CloudSun size={size} color="#38bdf8" />;
+  if (emoji === "☁️") return <Cloud size={size} color="#94a3b8" />;
+  if (emoji === "🌧️" || emoji === "🌦️")
+    return <CloudRain size={size} color="#60a5fa" />;
+  if (emoji === "⛈️") return <CloudLightning size={size} color="#c084fc" />;
+  if (emoji === "❄️" || emoji === "🌨️")
+    return <CloudSnow size={size} color="#7dd3fc" />;
+  if (emoji === "🌫️") return <CloudFog size={size} color="#a1a1aa" />;
+  if (emoji === "💨") return <Wind size={size} color="#cbd5e1" />;
+  return <Search size={size} color="#64748b" />;
+}
+
+function formatMarketPercent(value?: number | null) {
+  const normalized = normalizeMarketValue(value);
+  if (normalized == null) return "--";
+  return `${(normalized * 100).toFixed(1)}%`;
+}
+
+function formatMarketPriceCents(value?: number | null) {
+  const normalized = normalizeMarketValue(value);
+  if (normalized == null) return "--";
+  const cents = normalized * 100;
+  const rounded = Math.round(cents * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}¢`;
+}
+
+function formatSignedPercent(value?: number | null) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  const sign = numeric > 0 ? "+" : "";
+  return `${sign}${numeric.toFixed(1)}%`;
+}
+
+function formatSpreadPercent(low?: number | null, high?: number | null) {
+  const a = normalizeMarketValue(low);
+  const b = normalizeMarketValue(high);
+  if (a == null || b == null) return "--";
+  const spreadCents = Math.abs((b - a) * 100);
+  const rounded = Math.round(spreadCents * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}¢`;
+}
+
+function resolveCounterPrice(
+  directValue?: number | null,
+  mirrorValue?: number | null,
+) {
+  const direct = normalizeMarketValue(directValue);
+  if (direct != null) return direct;
+  const mirror = normalizeMarketValue(mirrorValue);
+  if (mirror == null) return null;
+  return Math.max(0, Math.min(1, 1 - mirror));
+}
+
+function formatBucketLabel(
+  bucket?: {
+    label?: string | null;
+    bucket?: string | null;
+    range?: string | null;
+    value?: number | null;
+    temp?: number | null;
+  } | null,
+) {
+  if (!bucket) return "--";
+  const direct =
+    String(bucket.label || "").trim() ||
+    String(bucket.bucket || "").trim() ||
+    String(bucket.range || "").trim();
+  if (direct) {
+    let str = direct.toUpperCase().replace(/\s+/g, "");
+    str = str.replace(/°?C($|\+|-)/g, "℃$1");
+    if (!str.includes("℃") && /[0-9]/.test(str)) {
+      str += "℃";
+    }
+    return str;
+  }
+
+  const temp = Number(bucket.value ?? bucket.temp);
+  if (Number.isFinite(temp)) {
+    return `${Math.round(temp)}℃`;
+  }
+  return "--";
+}
+
+function parseMetarSignedInt(token: string) {
+  if (!token) return null;
+  const normalized = token.toUpperCase();
+  if (!/^[M]?\d{2}$/.test(normalized)) return null;
+  const value = Number(normalized.replace("M", ""));
+  if (!Number.isFinite(value)) return null;
+  return normalized.startsWith("M") ? -value : value;
+}
+
+function parseMetarTempDew(rawMetar?: string | null) {
+  const text = String(rawMetar || "").toUpperCase();
+  if (!text)
+    return { tempC: null as number | null, dewC: null as number | null };
+  const match = text.match(/\s(M?\d{2})\/(M?\d{2})(?:\s|$)/);
+  if (!match)
+    return { tempC: null as number | null, dewC: null as number | null };
+  return {
+    tempC: parseMetarSignedInt(match[1]),
+    dewC: parseMetarSignedInt(match[2]),
+  };
+}
+
+function estimateHumidityFromTempDew(
+  tempC?: number | null,
+  dewC?: number | null,
+) {
+  const t = Number(tempC);
+  const d = Number(dewC);
+  if (!Number.isFinite(t) || !Number.isFinite(d)) return null;
+  const es = Math.exp((17.625 * t) / (243.04 + t));
+  const ed = Math.exp((17.625 * d) / (243.04 + d));
+  const rh = (ed / es) * 100;
+  if (!Number.isFinite(rh)) return null;
+  return Math.max(0, Math.min(100, rh));
+}
+
+function parseVisibilityText(
+  rawMetar?: string | null,
+  visibilityMi?: number | null,
+) {
+  const direct = Number(visibilityMi);
+  if (Number.isFinite(direct)) {
+    return `${direct} mi`;
+  }
+
+  const text = String(rawMetar || "").toUpperCase();
+  if (!text) return "--";
+  if (text.includes("CAVOK")) return ">=6 mi";
+
+  const sm = text.match(/\s(\d{1,2}(?:\/\d)?)SM(?:\s|$)/);
+  if (sm) {
+    return `${sm[1]} mi`;
+  }
+  return "--";
+}
+
 function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
@@ -29,186 +190,103 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
   const todayChartData =
     detail && isToday ? getTemperatureChartData(detail, locale) : null;
 
-  const canvasRef = useChart(
-    () => {
-      if (!detail || !view) {
-        return {
-          data: { datasets: [], labels: [] },
-          type: "line",
-        } satisfies ChartConfiguration<"line">;
-      }
+  const canvasRef = useChart(() => {
+    if (!detail || !view) {
+      return {
+        data: { datasets: [], labels: [] },
+        type: "line",
+      } satisfies ChartConfiguration<"line">;
+    }
 
-      if (isToday && todayChartData) {
-        const datasets: NonNullable<ChartConfiguration<"line">["data"]>["datasets"] = [];
+    if (isToday && todayChartData) {
+      const datasets: NonNullable<
+        ChartConfiguration<"line">["data"]
+      >["datasets"] = [];
 
-        if (todayChartData.datasets.hasMgmHourly) {
-          datasets.push({
-            backgroundColor: "rgba(234, 179, 8, 0.05)",
-            borderColor: "rgba(234, 179, 8, 0.8)",
-            borderWidth: 2,
-            data: todayChartData.datasets.mgmHourlyPoints,
-            fill: false,
-            label: locale === "en-US" ? "MGM Forecast" : "MGM 预报",
-            pointHoverRadius: 6,
-            pointRadius: 3,
-            spanGaps: true,
-            tension: 0.3,
-          });
-        } else {
-          datasets.push({
-            backgroundColor: "rgba(52, 211, 153, 0.05)",
-            borderColor: "rgba(52, 211, 153, 0.6)",
-            borderWidth: 1.5,
-            data: todayChartData.datasets.debPast,
-            fill: true,
-            label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
-            pointHoverRadius: 3,
-            pointRadius: 0,
-            tension: 0.3,
-          });
-          datasets.push({
-            borderColor: "rgba(52, 211, 153, 0.35)",
-            borderDash: [5, 3],
-            borderWidth: 1.5,
-            data: todayChartData.datasets.debFuture,
-            fill: false,
-            label: locale === "en-US" ? "DEB Forecast" : "DEB 预报",
-            pointRadius: 0,
-            tension: 0.3,
-          });
-        }
-
+      if (todayChartData.datasets.hasMgmHourly) {
         datasets.push({
-          backgroundColor: "#22d3ee",
-          borderColor: "#22d3ee",
-          borderWidth: 0,
-          data: todayChartData.datasets.metarPoints,
+          backgroundColor: "rgba(234, 179, 8, 0.05)",
+          borderColor: "rgba(234, 179, 8, 0.8)",
+          borderWidth: 2,
+          data: todayChartData.datasets.mgmHourlyPoints,
           fill: false,
-          label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
-          order: 0,
-          pointHoverRadius: 7,
-          pointRadius: 5,
+          label: locale === "en-US" ? "MGM Forecast" : "MGM 预测",
+          pointHoverRadius: 6,
+          pointRadius: 3,
+          spanGaps: true,
+          tension: 0.3,
         });
-
-        if (todayChartData.datasets.mgmPoints.some((value) => value != null)) {
-          datasets.push({
-            backgroundColor: "#facc15",
-            borderColor: "#facc15",
-            borderWidth: 0,
-            data: todayChartData.datasets.mgmPoints,
-            fill: false,
-            label: locale === "en-US" ? "MGM Observation" : "MGM 实测",
-            order: -1,
-            pointHoverRadius: 9,
-            pointRadius: 7,
-            showLine: false,
-          });
-        }
-
-        if (
-          !todayChartData.datasets.hasMgmHourly &&
-          Math.abs(todayChartData.datasets.offset) > 0.3
-        ) {
-          datasets.push({
-            borderColor: "rgba(99, 102, 241, 0.2)",
-            borderDash: [2, 4],
-            borderWidth: 1,
-            data: todayChartData.datasets.temps,
-            fill: false,
-            label: locale === "en-US" ? "OM Raw" : "OM 原始",
-            pointRadius: 0,
-            tension: 0.3,
-          });
-        }
-
-        return {
-          data: {
-            datasets,
-            labels: todayChartData.times,
-          },
-          options: {
-            interaction: { intersect: false, mode: "index" },
-            maintainAspectRatio: false,
-            plugins: {
-              legend: {
-                labels: {
-                  color: "#94a3b8",
-                  filter: (legendItem, chartData) => {
-                    const text = String(legendItem.text || "");
-                    if (!text) return false;
-                    if (!text.includes("DEB")) return true;
-
-                    const firstDebIndex = (chartData.datasets || []).findIndex((dataset) =>
-                      String(dataset.label || "").includes("DEB"),
-                    );
-                    return legendItem.datasetIndex === firstDebIndex;
-                  },
-                  font: { family: "Inter", size: 11 },
-                },
-              },
-              tooltip: {
-                backgroundColor: "rgba(15, 23, 42, 0.96)",
-                borderColor: "rgba(34, 211, 238, 0.2)",
-                borderWidth: 1,
-              },
-            },
-            responsive: true,
-            scales: {
-              x: {
-                grid: { color: "rgba(255,255,255,0.04)" },
-                ticks: {
-                  callback: (_value, index) =>
-                    typeof index === "number" && index % 3 === 0
-                      ? todayChartData.times[index]
-                      : "",
-                  color: "#64748b",
-                  font: { family: "Inter", size: 10 },
-                  maxRotation: 0,
-                },
-              },
-              y: {
-                grid: { color: "rgba(255,255,255,0.04)" },
-                max: todayChartData.max,
-                min: todayChartData.min,
-                ticks: {
-                  callback: (value) => `${value}${detail.temp_symbol || "°C"}`,
-                  color: "#64748b",
-                  font: { family: "Inter", size: 10 },
-                },
-              },
-            },
-          },
-          type: "line",
-        } satisfies ChartConfiguration<"line">;
+      } else {
+        datasets.push({
+          backgroundColor: "rgba(52, 211, 153, 0.05)",
+          borderColor: "rgba(52, 211, 153, 0.6)",
+          borderWidth: 1.5,
+          data: todayChartData.datasets.debPast,
+          fill: true,
+          label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
+          pointHoverRadius: 3,
+          pointRadius: 0,
+          tension: 0.3,
+        });
+        datasets.push({
+          borderColor: "rgba(52, 211, 153, 0.35)",
+          borderDash: [5, 3],
+          borderWidth: 1.5,
+          data: todayChartData.datasets.debFuture,
+          fill: false,
+          label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
+          pointRadius: 0,
+          tension: 0.3,
+        });
       }
 
-      const labels = view.slice.map((point) => point.label);
-      const unit = detail.temp_symbol || "°C";
+      datasets.push({
+        backgroundColor: "#22d3ee",
+        borderColor: "#22d3ee",
+        borderWidth: 0,
+        data: todayChartData.datasets.metarPoints,
+        fill: false,
+        label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
+        order: 0,
+        pointHoverRadius: 7,
+        pointRadius: 5,
+      });
+
+      if (todayChartData.datasets.mgmPoints.some((value) => value != null)) {
+        datasets.push({
+          backgroundColor: "#facc15",
+          borderColor: "#facc15",
+          borderWidth: 0,
+          data: todayChartData.datasets.mgmPoints,
+          fill: false,
+          label: locale === "en-US" ? "MGM Observation" : "MGM 实测",
+          order: -1,
+          pointHoverRadius: 9,
+          pointRadius: 7,
+          showLine: false,
+        });
+      }
+
+      if (
+        !todayChartData.datasets.hasMgmHourly &&
+        Math.abs(todayChartData.datasets.offset) > 0.3
+      ) {
+        datasets.push({
+          borderColor: "rgba(99, 102, 241, 0.2)",
+          borderDash: [2, 4],
+          borderWidth: 1,
+          data: todayChartData.datasets.temps,
+          fill: false,
+          label: locale === "en-US" ? "OM Raw" : "OM 原始",
+          pointRadius: 0,
+          tension: 0.3,
+        });
+      }
 
       return {
         data: {
-          datasets: [
-            {
-              backgroundColor: "rgba(34, 211, 238, 0.08)",
-              borderColor: "#22d3ee",
-              data: view.slice.map((point) => point.temp),
-              fill: false,
-              label: locale === "en-US" ? "Open-Meteo Temperature" : "Open-Meteo 温度",
-              pointRadius: 2,
-              tension: 0.28,
-            },
-            {
-              backgroundColor: "transparent",
-              borderColor: "#a78bfa",
-              borderDash: [5, 4],
-              data: view.slice.map((point) => point.dewPoint),
-              fill: false,
-              label: locale === "en-US" ? "Dew Point" : "露点",
-              pointRadius: 0,
-              tension: 0.24,
-            },
-          ],
-          labels,
+          datasets,
+          labels: todayChartData.times,
         },
         options: {
           interaction: { intersect: false, mode: "index" },
@@ -217,6 +295,16 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             legend: {
               labels: {
                 color: "#94a3b8",
+                filter: (legendItem, chartData) => {
+                  const text = String(legendItem.text || "");
+                  if (!text) return false;
+                  if (!text.includes("DEB")) return true;
+
+                  const firstDebIndex = (chartData.datasets || []).findIndex(
+                    (dataset) => String(dataset.label || "").includes("DEB"),
+                  );
+                  return legendItem.datasetIndex === firstDebIndex;
+                },
                 font: { family: "Inter", size: 11 },
               },
             },
@@ -224,10 +312,6 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               backgroundColor: "rgba(15, 23, 42, 0.96)",
               borderColor: "rgba(34, 211, 238, 0.2)",
               borderWidth: 1,
-              callbacks: {
-                label: (ctx) =>
-                  `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}${unit}`,
-              },
             },
           },
           responsive: true,
@@ -235,6 +319,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             x: {
               grid: { color: "rgba(255,255,255,0.04)" },
               ticks: {
+                callback: (_value, index) =>
+                  typeof index === "number" && index % 3 === 0
+                    ? todayChartData.times[index]
+                    : "",
                 color: "#64748b",
                 font: { family: "Inter", size: 10 },
                 maxRotation: 0,
@@ -242,8 +330,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
             },
             y: {
               grid: { color: "rgba(255,255,255,0.04)" },
+              max: todayChartData.max,
+              min: todayChartData.min,
               ticks: {
-                callback: (value) => `${value}${unit}`,
+                callback: (value) => `${value}${detail.temp_symbol || "°C"}`,
                 color: "#64748b",
                 font: { family: "Inter", size: 10 },
               },
@@ -252,9 +342,80 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         },
         type: "line",
       } satisfies ChartConfiguration<"line">;
-    },
-    [detail, isToday, locale, todayChartData, view],
-  );
+    }
+
+    const labels = view.slice.map((point) => point.label);
+    const unit = detail.temp_symbol || "°C";
+
+    return {
+      data: {
+        datasets: [
+          {
+            backgroundColor: "rgba(34, 211, 238, 0.08)",
+            borderColor: "#22d3ee",
+            data: view.slice.map((point) => point.temp),
+            fill: false,
+            label:
+              locale === "en-US" ? "Open-Meteo Temperature" : "Open-Meteo 温度",
+            pointRadius: 2,
+            tension: 0.28,
+          },
+          {
+            backgroundColor: "transparent",
+            borderColor: "#a78bfa",
+            borderDash: [5, 4],
+            data: view.slice.map((point) => point.dewPoint),
+            fill: false,
+            label: locale === "en-US" ? "Dew Point" : "露点",
+            pointRadius: 0,
+            tension: 0.24,
+          },
+        ],
+        labels,
+      },
+      options: {
+        interaction: { intersect: false, mode: "index" },
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              color: "#94a3b8",
+              font: { family: "Inter", size: 11 },
+            },
+          },
+          tooltip: {
+            backgroundColor: "rgba(15, 23, 42, 0.96)",
+            borderColor: "rgba(34, 211, 238, 0.2)",
+            borderWidth: 1,
+            callbacks: {
+              label: (ctx) =>
+                `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}${unit}`,
+            },
+          },
+        },
+        responsive: true,
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: {
+              color: "#64748b",
+              font: { family: "Inter", size: 10 },
+              maxRotation: 0,
+            },
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: {
+              callback: (value) => `${value}${unit}`,
+              color: "#64748b",
+              font: { family: "Inter", size: 10 },
+            },
+          },
+        },
+      },
+      type: "line",
+    } satisfies ChartConfiguration<"line">;
+  }, [detail, isToday, locale, todayChartData, view]);
 
   return (
     <>
@@ -274,6 +435,7 @@ export function FutureForecastModal() {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
+  const marketScan = store.selectedMarketScan;
   const dateStr = store.futureModalDate;
 
   if (!detail || !dateStr) return null;
@@ -289,6 +451,88 @@ export function FutureForecastModal() {
     "--score-position": scorePosition,
   } as CSSProperties & { "--score-position": string };
   const weatherSummary = getWeatherSummary(detail, locale);
+  const marketMidpoint = formatMarketPercent(
+    marketScan?.market_price ?? marketScan?.yes_token?.implied_probability,
+  );
+  const modelProbability = formatMarketPercent(marketScan?.model_probability);
+  const marketYesBuy = formatMarketPriceCents(marketScan?.yes_buy);
+  const marketYesSell = formatMarketPriceCents(marketScan?.yes_sell);
+  const marketNoBuy = formatMarketPriceCents(
+    resolveCounterPrice(marketScan?.no_buy, marketScan?.yes_buy),
+  );
+  const marketNoSell = formatMarketPriceCents(
+    resolveCounterPrice(marketScan?.no_sell, marketScan?.yes_sell),
+  );
+  const marketEdge = formatSignedPercent(marketScan?.edge_percent);
+  const marketSpread = formatSpreadPercent(
+    marketScan?.yes_buy,
+    marketScan?.yes_sell,
+  );
+  const topBucket = Array.isArray(marketScan?.top_buckets)
+    ? [...marketScan.top_buckets]
+        .map((item) => ({
+          ...item,
+          probability: normalizeMarketValue(item?.probability),
+        }))
+        .filter(
+          (
+            item,
+          ): item is {
+            label?: string | null;
+            bucket?: string | null;
+            range?: string | null;
+            value?: number | null;
+            temp?: number | null;
+            probability: number;
+          } => item.probability != null,
+        )
+        .sort((a, b) => b.probability - a.probability)[0]
+    : null;
+  const settlementBucketLabel = formatBucketLabel(
+    marketScan?.temperature_bucket,
+  );
+  const hottestBucketLabel = formatBucketLabel(topBucket);
+  const hottestBucketProb = formatMarketPercent(topBucket?.probability);
+  const marketSignal = marketScan?.signal_label
+    ? `${marketScan.signal_label}${
+        marketScan.confidence ? ` / ${marketScan.confidence}` : ""
+      }`
+    : "--";
+  const metarParsed = parseMetarTempDew(detail.current?.raw_metar);
+  const fallbackDewpoint =
+    detail.current?.dewpoint ??
+    metarParsed.dewC ??
+    (Array.isArray(detail.hourly_next_48h?.dew_point)
+      ? detail.hourly_next_48h?.dew_point?.[0]
+      : null);
+  const fallbackHumidity =
+    detail.current?.humidity ??
+    estimateHumidityFromTempDew(
+      detail.current?.temp ?? metarParsed.tempC,
+      fallbackDewpoint,
+    );
+  const topObservedTemp =
+    detail.current?.max_so_far != null
+      ? detail.current.max_so_far
+      : detail.current?.temp;
+  const currentTempText =
+    detail.current?.temp != null
+      ? `${detail.current.temp}${detail.temp_symbol}`
+      : "--";
+  const humidityText =
+    fallbackHumidity != null ? `${Math.round(fallbackHumidity)}%` : "--";
+  const dewpointText =
+    fallbackDewpoint != null
+      ? `${fallbackDewpoint}${detail.temp_symbol}`
+      : "--";
+  const windText =
+    detail.current?.wind_speed_kt != null
+      ? `${detail.current.wind_speed_kt} kt`
+      : "--";
+  const visibilityText = parseVisibilityText(
+    detail.current?.raw_metar,
+    detail.current?.visibility_mi,
+  );
 
   return (
     <div
@@ -304,20 +548,49 @@ export function FutureForecastModal() {
     >
       <div className="modal-content large future-modal">
         <div className="modal-header">
-          <h2 id="future-modal-title">
-            {isToday
-              ? t("future.todayTitle", {
-                  city: detail.display_name.toUpperCase(),
-                })
-              : t("future.dateTitle", {
-                  city: detail.display_name.toUpperCase(),
-                  date: dateStr,
-                })}
+          <h2
+            id="future-modal-title"
+            className="future-modal-title-with-actions"
+          >
+            <span>
+              {isToday
+                ? t("future.todayTitle", {
+                    city: detail.display_name.toUpperCase(),
+                  })
+                : t("future.dateTitle", {
+                    city: detail.display_name.toUpperCase(),
+                    date: dateStr,
+                  })}
+            </span>
+            <button
+              className={clsx(
+                "future-refresh-btn",
+                store.loadingState.marketScan && "spinning",
+              )}
+              onClick={() => store.openTodayModal(true)}
+              title={locale === "en-US" ? "Refresh Data" : "刷新数据"}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
           </h2>
           <button
             type="button"
             className="modal-close"
-            aria-label={isToday ? t("future.closeTodayAria") : t("future.closeDateAria")}
+            aria-label={
+              isToday ? t("future.closeTodayAria") : t("future.closeDateAria")
+            }
             onClick={store.closeFutureModal}
           >
             ×
@@ -325,217 +598,419 @@ export function FutureForecastModal() {
         </div>
 
         <div className="modal-body future-modal-body">
-          <div className="history-stats">
-            {isToday && (
-              <>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.currentObs")}</span>
-                  <span className="val">
-                    {detail.current?.temp ?? "--"}
-                    {detail.temp_symbol} @{detail.current?.obs_time || "--"}
-                  </span>
+          {isToday ? (
+            <div className="future-v2-layout">
+              <aside className="future-v2-left">
+                <section className="future-v2-card future-v2-hero-card">
+                  <h3 className="future-v2-hero-title">
+                    {locale === "en-US"
+                      ? "Current Conditions"
+                      : "实况与气象特征"}
+                  </h3>
+                  <div className="future-v2-hero-main">
+                    <div className="future-v2-hero-temp">{currentTempText}</div>
+                    <div className="future-v2-hero-divider" />
+                    <div className="future-v2-hero-weather">
+                      <span className="future-v2-hero-icon">
+                        <WeatherIcon
+                          emoji={weatherSummary.weatherIcon}
+                          size={42}
+                        />
+                      </span>
+                      <span>{weatherSummary.weatherText}</span>
+                    </div>
+                  </div>
+                  <div className="future-v2-hero-obs">
+                    @{detail.current?.obs_time || "--"}
+                  </div>
+                  <div className="future-v2-mini-grid">
+                    <div className="future-v2-mini-item">
+                      <span>
+                        {locale === "en-US" ? "High So Far" : "目前最高温"}
+                      </span>
+                      <strong>
+                        {topObservedTemp ?? "--"}
+                        {detail.temp_symbol}
+                      </strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>{locale === "en-US" ? "Sunrise" : "日出时间"}</span>
+                      <strong>{detail.forecast?.sunrise || "--"}</strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>{locale === "en-US" ? "Sunset" : "日落时间"}</span>
+                      <strong>{detail.forecast?.sunset || "--"}</strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>
+                        {locale === "en-US" ? "Sunshine" : "日照时长"}
+                      </span>
+                      <strong>
+                        {detail.forecast?.sunshine_hours != null
+                          ? `${detail.forecast.sunshine_hours}h`
+                          : "--"}
+                      </strong>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="future-v2-card">
+                  <h4 className="future-v2-card-title">
+                    {locale === "en-US" ? "Current Metrics" : "当前指标"}
+                  </h4>
+                  <div className="future-v2-mini-grid future-v2-mini-grid-tight">
+                    <div className="future-v2-mini-item">
+                      <span>{locale === "en-US" ? "Humidity" : "湿度"}</span>
+                      <strong>{humidityText}</strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>{locale === "en-US" ? "Dew Point" : "露点"}</span>
+                      <strong>{dewpointText}</strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>{locale === "en-US" ? "Wind" : "风速"}</span>
+                      <strong>{windText}</strong>
+                    </div>
+                    <div className="future-v2-mini-item">
+                      <span>
+                        {locale === "en-US" ? "Visibility" : "能见度"}
+                      </span>
+                      <strong>{visibilityText}</strong>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="future-v2-card">
+                  <h4 className="future-v2-card-title">
+                    {locale === "en-US" ? "Market Alignment" : "市场对照"}
+                  </h4>
+                  <div className="future-v2-market-v3">
+                    {/* Loading Overlay */}
+                    {store.loadingState.marketScan && (
+                      <div className="market-layer-loading-overlay">
+                        <div
+                          className="loading-spinner"
+                          style={{
+                            marginBottom: "8px",
+                            width: "24px",
+                            height: "24px",
+                            borderWidth: "2px",
+                          }}
+                        />
+                        {locale === "en-US"
+                          ? "Crunching Polymarket Edges..."
+                          : "正在计算市场对手盘..."}
+                      </div>
+                    )}
+
+                    {/* Layer 1: Target & Edge */}
+                    <div className="market-layer-target">
+                      <div className="market-target-header">
+                        <span>
+                          {locale === "en-US"
+                            ? "Target Bucket:"
+                            : "结算温度区间："}
+                        </span>
+                        <strong className="market-target-bucket">
+                          {settlementBucketLabel}
+                        </strong>
+                      </div>
+
+                      <div className="market-edge-box">
+                        <div className="market-edge-header">
+                          <span>
+                            📊 {locale === "en-US" ? "Core Edge" : "核心测算"}
+                          </span>
+                          <strong
+                            className={clsx(
+                              "market-edge-val",
+                              Number(marketScan?.edge_percent) > 0
+                                ? "positive"
+                                : "negative",
+                            )}
+                          >
+                            ({marketEdge})
+                          </strong>
+                        </div>
+                        <div className="market-edge-compare">
+                          <div className="edge-stat">
+                            <span className="edge-label">
+                              {locale === "en-US" ? "Model Prob:" : "模型概率:"}
+                            </span>
+                            <strong className="edge-value">
+                              {modelProbability}
+                            </strong>
+                          </div>
+                          <div className="edge-stat">
+                            <span className="edge-label">
+                              {locale === "en-US"
+                                ? "Market Prob:"
+                                : "市场概率:"}
+                            </span>
+                            <strong className="edge-value">
+                              {marketMidpoint}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Layer 2: Order Book */}
+                    <div className="market-layer-book">
+                      <div className="market-sub-title">
+                        📈 {locale === "en-US" ? "Order Book" : "订单簿报价"}
+                      </div>
+                      <div className="market-book-row">
+                        <span className="book-label">YES:</span>
+                        <span className="book-quote">
+                          <strong>{marketYesBuy}</strong> /{" "}
+                          <strong>{marketYesSell}</strong>
+                        </span>
+                        <span className="book-spread">
+                          ({locale === "en-US" ? "Spread" : "价差"}{" "}
+                          {marketSpread})
+                        </span>
+                      </div>
+                      <div className="market-book-row">
+                        <span className="book-label">NO:</span>
+                        <span className="book-quote">
+                          <strong>{marketNoBuy}</strong> /{" "}
+                          <strong>{marketNoSell}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Layer 3: Context */}
+                    <div className="market-layer-context">
+                      <div className="market-sub-title">
+                        👀 {locale === "en-US" ? "Market Radar" : "情绪雷达"}
+                      </div>
+                      <div className="market-context-row">
+                        <span>
+                          {locale === "en-US"
+                            ? "Top Volume Bucket:"
+                            : "市场当前押注最热:"}
+                        </span>
+                        <strong>
+                          {hottestBucketLabel}{" "}
+                          {hottestBucketProb !== "--"
+                            ? `(${hottestBucketProb})`
+                            : ""}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="future-v2-market-signal mt-3">
+                    {locale === "en-US" ? "Signal" : "信号"}:{" "}
+                    <strong>{marketSignal}</strong>
+                  </div>
+                </section>
+              </aside>
+
+              <main className="future-v2-right">
+                <section className="future-modal-section future-v2-main-chart">
+                  <h3>
+                    {locale === "en-US"
+                      ? "Today's temperature forecast (obs + market)"
+                      : "今日气温预测（观测 + 市场）"}
+                  </h3>
+                  <DailyTemperatureChart dateStr={dateStr} />
+                </section>
+
+                <div className="future-modal-grid">
+                  <section className="future-modal-section">
+                    <h3>{t("future.probability")}</h3>
+                    <div style={{ position: "relative", minHeight: "120px" }}>
+                      {/* Loading Overlay */}
+                      {store.loadingState.marketScan && (
+                        <div className="market-layer-loading-overlay">
+                          <div
+                            className="loading-spinner"
+                            style={{
+                              marginBottom: "8px",
+                              width: "24px",
+                              height: "24px",
+                              borderWidth: "2px",
+                            }}
+                          />
+                          {locale === "en-US"
+                            ? "Crunching Polymarket Edges..."
+                            : "正在同步市场挂单..."}
+                        </div>
+                      )}
+                      <ProbabilityDistribution
+                        detail={detail}
+                        targetDate={dateStr}
+                        hideTitle
+                        marketScan={marketScan}
+                      />
+                    </div>
+                  </section>
+                  <section className="future-modal-section">
+                    <h3>{t("future.models")}</h3>
+                    <ModelForecast
+                      detail={detail}
+                      targetDate={dateStr}
+                      hideTitle
+                    />
+                  </section>
                 </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.currentWeather")}</span>
-                  <span className="val">
-                    {weatherSummary.weatherIcon} {weatherSummary.weatherText}
-                  </span>
+
+                <div className="future-modal-grid">
+                  <section className="future-modal-section">
+                    <h3>{t("future.structureToday")}</h3>
+                    <div className="future-front-score">
+                      <div className="future-front-bar" style={barStyle}>
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            left: "50%",
+                            width: "2px",
+                            background: "rgba(255, 255, 255, 0.2)",
+                            transform: "translateX(-50%)",
+                            zIndex: 1,
+                          }}
+                        />
+                      </div>
+                      <div className="future-front-meta">
+                        <span className="future-front-pill">
+                          {t("future.judgement")}: {view.front.label}
+                        </span>
+                        <span className="future-front-pill">
+                          {t("future.confidence")}:{" "}
+                          {t(`confidence.${view.front.confidence}`)}
+                        </span>
+                        <span className="future-front-pill">
+                          {t("future.maxPrecip")}:{" "}
+                          {Math.round(view.front.precipMax)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="future-trend-grid">
+                      {view.front.metrics.slice(0, 6).map((metric) => (
+                        <div key={metric.label} className="future-trend-card">
+                          <div className="future-trend-label">
+                            {metric.label}
+                          </div>
+                          <div
+                            className={clsx(
+                              "future-trend-value",
+                              metric.tone === "warm" && "warm",
+                              metric.tone === "cold" && "cold",
+                            )}
+                          >
+                            {metric.value}
+                          </div>
+                          <div className="future-trend-note">{metric.note}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="future-modal-section">
+                    <h3>{t("future.ai")}</h3>
+                    <div className="future-text-block">
+                      {ai.summary ? (
+                        <div>{ai.summary}</div>
+                      ) : (
+                        <div>{t("future.noAi")}</div>
+                      )}
+                      {ai.bullets.length > 0 && (
+                        <div style={{ marginTop: "10px" }}>
+                          {ai.bullets.slice(0, 3).map((item) => (
+                            <div key={item}>{item}</div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ marginTop: "12px" }}>
+                        {nowcastRows.slice(0, 4).map(([label, value]) => (
+                          <div key={label}>
+                            <strong>{label}: </strong>
+                            {value}
+                          </div>
+                        ))}
+                      </div>
+                      {riskLines.length > 0 && (
+                        <div style={{ marginTop: "12px" }}>
+                          <strong>
+                            {locale === "en-US" ? "Risk" : "风险"}:{" "}
+                          </strong>
+                          {riskLines[0]}
+                        </div>
+                      )}
+                      {climateDrivers.length > 0 && (
+                        <div style={{ marginTop: "8px" }}>
+                          <strong>
+                            {locale === "en-US" ? "Climate" : "气候"}:{" "}
+                          </strong>
+                          {climateDrivers[0].text}
+                        </div>
+                      )}
+                    </div>
+                  </section>
                 </div>
+              </main>
+            </div>
+          ) : (
+            <>
+              <div className="history-stats">
                 <div className="h-stat-card">
-                  <span className="label">{t("future.wuRef")}</span>
+                  <span className="label">{t("future.targetForecast")}</span>
                   <span className="val">
-                    {detail.current?.wu_settlement ?? "--"}
+                    {view.forecastEntry?.max_temp ?? "--"}
                     {detail.temp_symbol}
                   </span>
                 </div>
                 <div className="h-stat-card">
-                  <span className="label">{t("future.sunrise")}</span>
-                  <span className="val">{detail.forecast?.sunrise || "--"}</span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.sunset")}</span>
-                  <span className="val">{detail.forecast?.sunset || "--"}</span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.sunshine")}</span>
+                  <span className="label">{t("future.deb")}</span>
                   <span className="val">
-                    {detail.forecast?.sunshine_hours != null
-                      ? `${detail.forecast.sunshine_hours}h`
+                    {view.deb ?? "--"}
+                    {detail.temp_symbol}
+                  </span>
+                </div>
+                <div className="h-stat-card">
+                  <span className="label">{t("future.mu")}</span>
+                  <span className="val">
+                    {view.mu != null
+                      ? `${view.mu.toFixed(1)}${detail.temp_symbol}`
                       : "--"}
                   </span>
                 </div>
-              </>
-            )}
-
-            <div className="h-stat-card">
-              <span className="label">
-                {isToday ? t("future.todayForecastHigh") : t("future.targetForecast")}
-              </span>
-              <span className="val">
-                {view.forecastEntry?.max_temp ?? "--"}
-                {detail.temp_symbol}
-              </span>
-            </div>
-            <div className="h-stat-card">
-              <span className="label">{t("future.deb")}</span>
-              <span className="val">
-                {view.deb ?? "--"}
-                {detail.temp_symbol}
-              </span>
-            </div>
-            <div className="h-stat-card">
-              <span className="label">{t("future.mu")}</span>
-              <span className="val">
-                {view.mu != null ? `${view.mu.toFixed(1)}${detail.temp_symbol}` : "--"}
-              </span>
-            </div>
-            <div className="h-stat-card">
-              <span className="label">{t("future.score")}</span>
-              <span className="val">
-                {view.front.score > 0 ? "+" : ""}
-                {view.front.score}
-              </span>
-            </div>
-          </div>
-
-          <section className="future-modal-section">
-            <h3>{isToday ? t("future.todayTempTrend") : t("future.targetTempTrend")}</h3>
-            <DailyTemperatureChart dateStr={dateStr} />
-          </section>
-
-          <div className="future-modal-grid">
-            <section className="future-modal-section">
-              <h3>{t("future.probability")}</h3>
-              <ProbabilityDistribution detail={detail} targetDate={dateStr} hideTitle />
-            </section>
-            <section className="future-modal-section">
-              <h3>{t("future.models")}</h3>
-              <ModelForecast detail={detail} targetDate={dateStr} hideTitle />
-            </section>
-          </div>
-
-          <div className="future-modal-grid">
-            <section className="future-modal-section">
-              <h3>
-                <span className="section-inline-icon" aria-hidden="true">
-                  <svg
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.9"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M4 19V5" />
-                    <path d="M10 19V10" />
-                    <path d="M16 19V7" />
-                    <path d="M22 19V13" />
-                  </svg>
-                </span>
-                {isToday ? t("future.structureToday") : t("future.structureDate")}
-              </h3>
-              <div className="future-front-score">
-                <div className="future-front-bar" style={barStyle} />
-                <div className="future-front-meta">
-                  <span className="future-front-pill">
-                    {t("future.judgement")}: {view.front.label}
-                  </span>
-                  <span className="future-front-pill">
-                    {t("future.confidence")}:{" "}
-                    {t(`confidence.${view.front.confidence}`)}
-                  </span>
-                  <span className="future-front-pill">
-                    {t("future.maxPrecip")}: {Math.round(view.front.precipMax)}%
+                <div className="h-stat-card">
+                  <span className="label">{t("future.score")}</span>
+                  <span className="val">
+                    {view.front.score > 0 ? "+" : ""}
+                    {view.front.score}
                   </span>
                 </div>
-                <div className="future-text-block">{view.front.summary}</div>
               </div>
-              <div className="future-trend-grid">
-                {view.front.metrics.map((metric) => (
-                  <div key={metric.label} className="future-trend-card">
-                    <div className="future-trend-label">{metric.label}</div>
-                    <div
-                      className={clsx(
-                        "future-trend-value",
-                        metric.tone === "warm" && "warm",
-                        metric.tone === "cold" && "cold",
-                      )}
-                    >
-                      {metric.value}
-                    </div>
-                    <div className="future-trend-note">{metric.note}</div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="future-modal-section">
-              <h3>{t("future.ai")}</h3>
-              <div className="future-text-block">
-                {ai.summary ? <div>{ai.summary}</div> : null}
-
-                {ai.bullets.length > 0 && (
-                  <div style={{ marginTop: ai.summary ? "10px" : 0 }}>
-                    {ai.bullets.map((item) => (
-                      <div key={item}>{item}</div>
-                    ))}
-                  </div>
-                )}
-
-                {!ai.summary && ai.bullets.length === 0 && (
-                  <div>{t("future.noAi")}</div>
-                )}
-
-                <div style={{ marginTop: "14px" }}>
-                  {nowcastRows.map(([label, value]) => (
-                    <div key={label}>
-                      <strong>{label}: </strong>
-                      {value}
-                    </div>
-                  ))}
-                </div>
-
-                {view.front.weatherGovPeriods.length > 0 && (
-                  <div style={{ marginTop: "10px" }}>
-                    <strong>{t("future.weatherGov")}: </strong>
-                    {view.front.weatherGovPeriods
-                      .map((period) => period.short_forecast || period.detailed_forecast)
-                      .filter(Boolean)
-                      .join(" / ")}
-                  </div>
-                )}
-              </div>
-            </section>
-          </div>
-
-          {isToday && (
-            <div className="future-modal-grid">
-              <section className="future-modal-section">
-                <h3>{t("future.risk")}</h3>
-                <div className="risk-info">
-                  {riskLines.map((line) => (
-                    <div key={line} className="risk-row">
-                      <span style={{ color: "var(--accent-cyan)", opacity: 0.6 }}>
-                        •
-                      </span>
-                      <span>{line}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
 
               <section className="future-modal-section">
-                <h3>{t("future.climate")}</h3>
-                <div className="insight-list">
-                  {climateDrivers.map((driver) => (
-                    <div key={driver.label} className="insight-item">
-                      <div className="insight-title">{driver.label}</div>
-                      <div className="insight-text">{driver.text}</div>
-                    </div>
-                  ))}
-                </div>
+                <h3>{t("future.targetTempTrend")}</h3>
+                <DailyTemperatureChart dateStr={dateStr} />
               </section>
-            </div>
+
+              <div className="future-modal-grid">
+                <section className="future-modal-section">
+                  <h3>{t("future.probability")}</h3>
+                  <ProbabilityDistribution
+                    detail={detail}
+                    targetDate={dateStr}
+                    hideTitle
+                  />
+                </section>
+                <section className="future-modal-section">
+                  <h3>{t("future.models")}</h3>
+                  <ModelForecast
+                    detail={detail}
+                    targetDate={dateStr}
+                    hideTitle
+                  />
+                </section>
+              </div>
+            </>
           )}
         </div>
       </div>

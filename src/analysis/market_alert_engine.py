@@ -421,6 +421,111 @@ def _join_trigger_types_cn(rules: Dict[str, Dict[str, Any]]) -> str:
     return " + ".join(parts)
 
 
+def _norm_probability(v: Any) -> Optional[float]:
+    n = _sf(v)
+    if n is None:
+        return None
+    if n > 1.0:
+        n = n / 100.0
+    return max(0.0, min(1.0, n))
+
+
+def _fmt_percent(v: Any) -> str:
+    n = _norm_probability(v)
+    if n is None:
+        return "--"
+    return f"{n * 100:.1f}%"
+
+
+def _fmt_cents(v: Any) -> str:
+    n = _norm_probability(v)
+    if n is None:
+        return "--"
+    cents = n * 100.0
+    return f"{cents:.1f}c"
+
+
+def _bucket_label(bucket: Any) -> Optional[str]:
+    if not isinstance(bucket, dict):
+        return None
+    direct = (
+        str(bucket.get("label") or "").strip()
+        or str(bucket.get("bucket") or "").strip()
+        or str(bucket.get("range") or "").strip()
+    )
+    if direct:
+        return direct
+    value = _sf(bucket.get("value"))
+    if value is not None:
+        return f"{round(value)}C"
+    temp = _sf(bucket.get("temp"))
+    if temp is not None:
+        return f"{round(temp)}C"
+    return None
+
+
+def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
+    scan = city_weather.get("market_scan") or {}
+    if not isinstance(scan, dict):
+        return {"available": False}
+    if not scan.get("available"):
+        return {"available": False}
+
+    yes_buy = _norm_probability(scan.get("yes_buy"))
+    yes_sell = _norm_probability(scan.get("yes_sell"))
+    market_prob = _norm_probability(
+        scan.get("market_price")
+        or ((scan.get("yes_token") or {}).get("implied_probability"))
+    )
+    model_prob = _norm_probability(scan.get("model_probability"))
+    spread = None
+    if yes_buy is not None and yes_sell is not None:
+        spread = abs(yes_sell - yes_buy)
+
+    top_bucket = None
+    top_bucket_rows: List[Dict[str, Any]] = []
+    top_buckets = scan.get("top_buckets") or []
+    if isinstance(top_buckets, list):
+        normalized = []
+        for row in top_buckets:
+            if not isinstance(row, dict):
+                continue
+            p = _norm_probability(row.get("probability"))
+            if p is None:
+                continue
+            normalized.append((p, row))
+        if normalized:
+            normalized.sort(key=lambda x: x[0], reverse=True)
+            top_bucket = normalized[0][1]
+            for p, row in normalized[:4]:
+                top_bucket_rows.append(
+                    {
+                        "label": _bucket_label(row),
+                        "probability": p,
+                        "yes_buy": _norm_probability(row.get("yes_buy")),
+                        "yes_sell": _norm_probability(row.get("yes_sell")),
+                    }
+                )
+
+    return {
+        "available": True,
+        "selected_bucket": _bucket_label(scan.get("temperature_bucket")),
+        "top_bucket": _bucket_label(top_bucket) if isinstance(top_bucket, dict) else None,
+        "top_bucket_prob": _norm_probability(
+            top_bucket.get("probability") if isinstance(top_bucket, dict) else None
+        ),
+        "market_prob": market_prob,
+        "model_prob": model_prob,
+        "yes_buy": yes_buy,
+        "yes_sell": yes_sell,
+        "spread": spread,
+        "edge_percent": _sf(scan.get("edge_percent")),
+        "signal_label": scan.get("signal_label"),
+        "confidence": scan.get("confidence"),
+        "top_bucket_rows": top_bucket_rows,
+    }
+
+
 def _build_advice_cn(
     rules: Dict[str, Dict[str, Any]],
     temp_symbol: str,
@@ -472,6 +577,7 @@ def _build_telegram_messages(
     city_weather: Dict[str, Any],
     rules: Dict[str, Dict[str, Any]],
     map_url: Optional[str],
+    market_snapshot: Optional[Dict[str, Any]] = None,
     suppression: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, str]:
     temp_symbol = city_weather.get("temp_symbol", "°C")
@@ -482,6 +588,7 @@ def _build_telegram_messages(
     center_deb = rules.get("ankara_center_deb_hit", {})
     momentum = rules.get("momentum_spike", {})
     advection = rules.get("advection", {})
+    market_snapshot = market_snapshot or _extract_market_snapshot(city_weather)
 
     if current_temp is None:
         return {"zh": "", "en": ""}
@@ -559,6 +666,30 @@ def _build_telegram_messages(
         lines_zh.append(peak_line)
     if lead_line:
         lines_zh.append(lead_line)
+    if market_snapshot.get("available") and market_snapshot.get("top_bucket_rows"):
+        lines_zh.append("市场结算概率分布（Top4）：")
+        for row in (market_snapshot.get("top_bucket_rows") or [])[:4]:
+            label = row.get("label") or "--"
+            prob_text = _fmt_percent(row.get("probability"))
+            yes_buy_text = _fmt_cents(row.get("yes_buy"))
+            lines_zh.append(f"{label} {prob_text} | 买Yes: {yes_buy_text}")
+    if market_snapshot.get("available") and not market_snapshot.get("top_bucket_rows"):
+        market_edge = _sf(market_snapshot.get("edge_percent"))
+        market_edge_text = f"{market_edge:+.1f}%" if market_edge is not None else "--"
+        lines_zh.append(
+            "市场联动：同桶 "
+            f"模型 {_fmt_percent(market_snapshot.get('model_prob'))} vs "
+            f"市场 {_fmt_percent(market_snapshot.get('market_prob'))} | "
+            f"Yes {_fmt_cents(market_snapshot.get('yes_buy'))}/{_fmt_cents(market_snapshot.get('yes_sell'))} | "
+            f"点差 {_fmt_cents(market_snapshot.get('spread'))} | "
+            f"偏差 {market_edge_text} | "
+            f"信号 {market_snapshot.get('signal_label') or '--'}/{market_snapshot.get('confidence') or '--'}"
+        )
+        if market_snapshot.get("top_bucket"):
+            lines_zh.append(
+                f"市场最热桶：{market_snapshot.get('top_bucket')} "
+                f"({_fmt_percent(market_snapshot.get('top_bucket_prob'))})"
+            )
     lines_zh.append(f"AI 建议：{advice}")
     lines_zh.append(f"点击查看实时地图：{final_map}")
 
@@ -602,6 +733,30 @@ def _build_telegram_messages(
                 f"Peak state: intraday high {max_so_far:.1f}{temp_symbol} at {max_temp_time}, "
                 f"now off by {rollback:.1f}{temp_symbol}"
             )
+    if market_snapshot.get("available") and market_snapshot.get("top_bucket_rows"):
+        lines_en.append("Settlement distribution (Top4):")
+        for row in (market_snapshot.get("top_bucket_rows") or [])[:4]:
+            label = row.get("label") or "--"
+            prob_text = _fmt_percent(row.get("probability"))
+            yes_buy_text = _fmt_cents(row.get("yes_buy"))
+            lines_en.append(f"{label} {prob_text} | Buy Yes: {yes_buy_text}")
+    if market_snapshot.get("available") and not market_snapshot.get("top_bucket_rows"):
+        market_edge = _sf(market_snapshot.get("edge_percent"))
+        market_edge_text = f"{market_edge:+.1f}%" if market_edge is not None else "--"
+        lines_en.append(
+            "Market: same-bucket "
+            f"model {_fmt_percent(market_snapshot.get('model_prob'))} vs "
+            f"market {_fmt_percent(market_snapshot.get('market_prob'))} | "
+            f"Yes {_fmt_cents(market_snapshot.get('yes_buy'))}/{_fmt_cents(market_snapshot.get('yes_sell'))} | "
+            f"spread {_fmt_cents(market_snapshot.get('spread'))} | "
+            f"edge {market_edge_text} | "
+            f"signal {market_snapshot.get('signal_label') or '--'}/{market_snapshot.get('confidence') or '--'}"
+        )
+        if market_snapshot.get("top_bucket"):
+            lines_en.append(
+                f"Top market bucket: {market_snapshot.get('top_bucket')} "
+                f"({_fmt_percent(market_snapshot.get('top_bucket_prob'))})"
+            )
     lines_en.append(f"Action: {advice}")
     lines_en.append(f"Map: {final_map}")
 
@@ -618,6 +773,7 @@ def build_trading_alerts(
     temp_symbol = city_weather.get("temp_symbol", "°C")
     city = city_weather.get("name", "")
     now = datetime.now(timezone.utc).isoformat()
+    market_snapshot = _extract_market_snapshot(city_weather)
 
     rules: Dict[str, Dict[str, Any]] = {
         "ankara_center_deb_hit": _calc_ankara_center_deb_alert(city_weather, temp_symbol),
@@ -658,6 +814,7 @@ def build_trading_alerts(
         city_weather=city_weather,
         rules=rules,
         map_url=map_url,
+        market_snapshot=market_snapshot,
         suppression=suppression,
     )
 
@@ -668,6 +825,7 @@ def build_trading_alerts(
         "severity": severity,
         "trigger_count": len(triggered),
         "rules": rules,
+        "market_snapshot": market_snapshot,
         "suppression": suppression,
         "triggered_alerts": triggered,
         "telegram": telegram,

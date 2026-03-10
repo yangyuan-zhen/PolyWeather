@@ -181,6 +181,71 @@ export interface DailyModelForecast {
   probabilities?: ProbabilityBucket[];
 }
 
+export interface MarketToken {
+  outcome?: string | null;
+  token_id?: string | null;
+  implied_probability?: number | null;
+  buy_price?: number | null;
+  sell_price?: number | null;
+  midpoint?: number | null;
+  last_trade_price?: number | null;
+}
+
+export interface MarketPrimary {
+  id?: string | null;
+  question?: string | null;
+  slug?: string | null;
+  condition_id?: string | null;
+  end_date?: string | null;
+  active?: boolean;
+  closed?: boolean;
+  liquidity?: number | null;
+  volume?: number | null;
+}
+
+export interface MarketTopBucket {
+  label?: string | null;
+  value?: number | null;
+  temp?: number | null;
+  probability?: number | null;
+  market_price?: number | null;
+  yes_buy?: number | null;
+  yes_sell?: number | null;
+  no_buy?: number | null;
+  no_sell?: number | null;
+  slug?: string | null;
+  question?: string | null;
+  is_primary?: boolean;
+}
+
+export interface MarketScan {
+  available?: boolean;
+  reason?: string | null;
+  primary_market?: MarketPrimary | null;
+  selected_date?: string | null;
+  selected_condition_id?: string | null;
+  selected_slug?: string | null;
+  temperature_bucket?: ProbabilityBucket | null;
+  model_probability?: number | null;
+  market_price?: number | null;
+  edge_percent?: number | null;
+  signal_label?: string | null;
+  confidence?: string | null;
+  yes_token?: MarketToken | null;
+  no_token?: MarketToken | null;
+  yes_buy?: number | null;
+  yes_sell?: number | null;
+  no_buy?: number | null;
+  no_sell?: number | null;
+  last_trade_price?: number | null;
+  liquidity?: number | null;
+  volume?: number | null;
+  sparkline?: number[];
+  top_buckets?: MarketTopBucket[] | null;
+  recent_trades?: unknown[];
+  websocket?: Record<string, unknown>;
+}
+
 export interface AiAnalysisStructured {
   summary?: string | null;
   text?: string | null;
@@ -227,6 +292,7 @@ export interface CityDetail {
   updated_at?: string;
   multi_model_daily?: Record<string, DailyModelForecast>;
   source_forecasts?: SourceForecasts;
+  market_scan?: MarketScan;
 }
 
 export interface HistoryPoint {
@@ -241,6 +307,7 @@ export interface LoadingState {
   cityDetail: boolean;
   refresh: boolean;
   history: boolean;
+  marketScan?: boolean;
 }
 
 export interface HistoryState {

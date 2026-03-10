@@ -46,9 +46,13 @@ This project uses a decoupled production setup for reliability and iteration spe
   - **City Specialization**: `17130` (`Ankara (Bölge/Center)`) remains the Ankara lead station without replacing LTAC settlement observation.
 - **⚖️ DEB Smart Blending**
   - Dynamic weighting based on city-level performance and current model spread.
-- **🧩 React Dashboard Runtime**
+- **📈 Market Data Integration**
+  - Live Polymarket quotes, probabilities, and dynamic settlement bucket tracking.
+  - Automatic Market Edge and Spread calculation comparing DEB vs Market.
+- **🧩 React Dashboard Runtime (v1.2)**
+  - Fully internationalized (i18n) with English and Simplified Chinese support.
+  - Premium UI: Glassmorphism overlays, dynamic "Sonar Pulse" markers, and fluid loading states.
   - Typed store + typed API client + Leaflet/Chart.js lifecycle wrappers.
-  - City click workflow: map focus + right panel open + nearby stations render.
   - Today analysis workflow: open modal + freeze map motion.
 - **🔔 Alert Engine**
   - **Momentum Spike**: Captures rapid short-window temperature slope changes.
@@ -140,12 +144,12 @@ Set `frontend` as the Vercel root directory for automatic CI/CD.
 
 ## 💬 Bot Commands
 
-| Command   | Description                             | Example        |
-| :-------- | :-------------------------------------- | :------------- |
-| `/city`   | Query real-time analysis for a city     | `/city ankara` |
-| `/deb`    | View historical accuracy of DEB model   | `/deb london`  |
-| `/top`    | View activity leaderboard               | `/top`         |
-| `/help`   | Get detailed instructions               | `/help`        |
+| Command | Description                           | Example        |
+| :------ | :------------------------------------ | :------------- |
+| `/city` | Query real-time analysis for a city   | `/city ankara` |
+| `/deb`  | View historical accuracy of DEB model | `/deb london`  |
+| `/top`  | View activity leaderboard             | `/top`         |
+| `/help` | Get detailed instructions             | `/help`        |
 
 ---
 
@@ -161,8 +165,8 @@ Set `frontend` as the Vercel root directory for automatic CI/CD.
 
 ---
 
-**📅 Last Updated**: 2026-03-09
-**🚀 Status**: v1.1 Stable - React Dashboard Runtime in Production
+**📅 Last Updated**: 2026-03-10
+**🚀 Status**: v1.2 Stable - React Dashboard with i18n & Polymarket Integration in Production
 
 > [!TIP]
-> **Production Note**: The UI layout and visual contract remain unchanged while data flow, map lifecycle, and modal interaction are now managed by typed React modules.
+> **Production Note**: The UI layout remains consistent while introducing full internationalization, market quote integration, and premium visual feedback (glassmorphism overlays, sonar markers).

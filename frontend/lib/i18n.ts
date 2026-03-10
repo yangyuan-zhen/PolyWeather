@@ -71,7 +71,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "future.score": "趋势评分",
     "future.todayTempTrend": "今日温度走势",
     "future.targetTempTrend": "目标日小时走势",
-    "future.probability": "结算概率分布",
+    "future.probability": "模型结算概率分布",
     "future.models": "多模型预报",
     "future.structureToday": "今日日内结构信号",
     "future.structureDate": "未来 6-48 小时趋势",
@@ -91,7 +91,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "section.todayTempTrend": "今日温度走势",
     "section.chartEmpty": "暂无小时级数据",
-    "section.probability": "结算概率分布",
+    "section.probability": "模型结算概率分布",
     "section.mu": "动态分布中心 μ = {value}{unit}",
     "section.noProb": "暂无概率数据",
     "section.models": "多模型预报",
@@ -133,7 +133,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
       "No scenery image matched. You can still review station and observation profile below.",
     "detail.profile": "City Profile",
     "detail.todayMiniTrend": "Today's Intraday Trend (Compact)",
-    "detail.chartLegendEmpty": "No hourly observations or forecast curve available.",
+    "detail.chartLegendEmpty":
+      "No hourly observations or forecast curve available.",
 
     "forecast.title": "Multi-day Forecast",
     "forecast.empty": "No multi-day forecast available",
@@ -171,7 +172,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "future.score": "Trend Score",
     "future.todayTempTrend": "Today's Temperature Trend",
     "future.targetTempTrend": "Target-day Hourly Trend",
-    "future.probability": "Settlement Probability Distribution",
+    "future.probability": "Model Settlement Probabilities",
     "future.models": "Multi-model Forecast",
     "future.structureToday": "Intraday Structural Signal",
     "future.structureDate": "6-48h Structural Trend",
@@ -179,11 +180,13 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "future.confidence": "Confidence",
     "future.maxPrecip": "Max Precip Probability",
     "future.ai": "AI Deep Analysis",
-    "future.noAi": "No AI analysis available. Structured meteorological and model data are used as baseline.",
+    "future.noAi":
+      "No AI analysis available. Structured meteorological and model data are used as baseline.",
     "future.weatherGov": "weather.gov text",
     "future.risk": "Settlement & Deviation Risk",
     "future.climate": "What Mainly Drives Local Climate",
-    "future.chartLegendEmpty": "No METAR bulletin or hourly observations available",
+    "future.chartLegendEmpty":
+      "No METAR bulletin or hourly observations available",
 
     "confidence.high": "High",
     "confidence.medium": "Medium",
@@ -191,13 +194,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "section.todayTempTrend": "Today's Temperature Trend",
     "section.chartEmpty": "No hourly data available",
-    "section.probability": "Settlement Probability Distribution",
+    "section.probability": "Model Settlement Probabilities",
     "section.mu": "Dynamic center μ = {value}{unit}",
     "section.noProb": "No probability data available",
     "section.models": "Multi-model Forecast",
     "section.noModels": "No multi-model forecast available",
     "section.ai": "AI Deep Analysis",
-    "section.aiEmpty": "No AI analysis available. Structured meteorological and model data are currently used.",
+    "section.aiEmpty":
+      "No AI analysis available. Structured meteorological and model data are currently used.",
     "section.risk": "Data Deviation Risk",
     "section.noRiskProfile": "No risk profile available",
     "section.airport": "Airport",

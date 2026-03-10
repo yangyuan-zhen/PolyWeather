@@ -394,6 +394,7 @@ class PolymarketReadOnlyLayer:
             "liquidity": None,
             "volume": None,
             "sparkline": fallback_sparkline or [],
+            "top_buckets": [],
             "recent_trades": [],
             "websocket": {},
         }
@@ -485,6 +486,13 @@ class PolymarketReadOnlyLayer:
 
         signal_label, confidence = self._derive_signal(edge_percent, liquidity)
 
+        top_buckets = self._build_top_temperature_buckets(
+            city_key=city_key,
+            target_date=date_str,
+            primary_market=market,
+            limit=4,
+        )
+
         yes_payload = {
             "outcome": yes_token.get("outcome") or "Yes",
             "token_id": yes_token.get("token_id"),
@@ -551,6 +559,7 @@ class PolymarketReadOnlyLayer:
                 "liquidity": liquidity,
                 "volume": volume,
                 "sparkline": sparkline_values,
+                "top_buckets": top_buckets,
                 "websocket": {
                     "market_url": market_url,
                     "asset_ids": [
@@ -1174,3 +1183,232 @@ class PolymarketReadOnlyLayer:
         if slug:
             return f"https://polymarket.com/market/{slug}"
         return None
+
+    def _build_top_temperature_buckets(
+        self,
+        city_key: str,
+        target_date: str,
+        primary_market: Dict[str, Any],
+        limit: int = 4,
+    ) -> List[Dict[str, Any]]:
+        candidate_markets = self._collect_related_temperature_markets(
+            city_key=city_key,
+            target_date=target_date,
+            primary_market=primary_market,
+        )
+        if not candidate_markets:
+            return []
+
+        ranked: List[
+            Tuple[
+                float,
+                float,
+                Dict[str, Any],
+                Dict[str, Any],
+                Dict[str, Any],
+                Dict[str, Any],
+                Dict[str, Any],
+            ]
+        ] = []
+        for market in candidate_markets:
+            tokens = self._extract_market_tokens(market)
+            yes_token, no_token = self._resolve_yes_no_tokens(tokens)
+            if not yes_token or not no_token:
+                continue
+
+            yes_token_id = str(yes_token.get("token_id") or "").strip()
+            no_token_id = str(no_token.get("token_id") or "").strip()
+            yes_prices = self._get_token_market_data(yes_token_id) if yes_token_id else {}
+            no_prices = self._get_token_market_data(no_token_id) if no_token_id else {}
+
+            yes_midpoint = _extract_price(yes_prices.get("midpoint"))
+            yes_implied = _extract_price(yes_token.get("implied_probability"))
+            no_implied = _extract_price(no_token.get("implied_probability"))
+            market_prob = (
+                yes_midpoint
+                if yes_midpoint is not None
+                else (
+                    yes_implied
+                    if yes_implied is not None
+                    else (1.0 - no_implied if no_implied is not None else None)
+                )
+            )
+            if market_prob is None:
+                continue
+
+            market_prob = max(0.0, min(1.0, float(market_prob)))
+            volume = (
+                _extract_price(
+                    market.get("volumeNum")
+                    or market.get("volume")
+                    or market.get("volume24hr")
+                )
+                or 0.0
+            )
+            ranked.append(
+                (
+                    market_prob,
+                    volume,
+                    market,
+                    yes_token,
+                    no_token,
+                    yes_prices,
+                    no_prices,
+                )
+            )
+
+        if not ranked:
+            return []
+
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        top_rows: List[Dict[str, Any]] = []
+        max_items = max(1, int(limit or 4))
+        primary_slug = str(primary_market.get("slug") or "").strip().lower()
+
+        for market_prob, _volume, market, yes_token, no_token, yes_prices, no_prices in ranked[
+            :max_items
+        ]:
+            yes_buy = _extract_price(yes_prices.get("buy"))
+            yes_sell = _extract_price(yes_prices.get("sell"))
+            yes_midpoint = _extract_price(yes_prices.get("midpoint")) or market_prob
+            no_buy = _extract_price(no_prices.get("buy"))
+            no_sell = _extract_price(no_prices.get("sell"))
+
+            if no_buy is None and yes_buy is not None:
+                no_buy = max(0.0, min(1.0, 1.0 - yes_buy))
+            if no_sell is None and yes_sell is not None:
+                no_sell = max(0.0, min(1.0, 1.0 - yes_sell))
+
+            bucket_temp = self._extract_market_bucket_temp(market)
+            market_slug = str(market.get("slug") or "").strip()
+
+            top_rows.append(
+                {
+                    "label": self._extract_market_bucket_label(market, bucket_temp),
+                    "value": bucket_temp,
+                    "temp": bucket_temp,
+                    "probability": market_prob,
+                    "market_price": yes_midpoint,
+                    "yes_buy": yes_buy,
+                    "yes_sell": yes_sell,
+                    "no_buy": no_buy,
+                    "no_sell": no_sell,
+                    "slug": market_slug or None,
+                    "question": market.get("question") or market.get("title"),
+                    "is_primary": bool(
+                        primary_slug
+                        and market_slug
+                        and primary_slug == market_slug.strip().lower()
+                    ),
+                }
+            )
+
+        return top_rows
+
+    def _collect_related_temperature_markets(
+        self,
+        city_key: str,
+        target_date: str,
+        primary_market: Dict[str, Any],
+    ) -> List[Dict[str, Any]]:
+        related: List[Dict[str, Any]] = []
+        canonical_event_slug = self._build_weather_event_slug(city_key, target_date)
+        if canonical_event_slug:
+            related.extend(self._load_event_markets(canonical_event_slug))
+
+        event_slug = self._extract_event_slug(primary_market)
+        if event_slug and event_slug != canonical_event_slug:
+            related.extend(self._load_event_markets(event_slug))
+
+        if not related:
+            for market in self._load_markets(active_only=True):
+                if self._score_market(city_key, target_date, market) <= 0:
+                    continue
+                if self._extract_market_bucket_temp(market) is None:
+                    continue
+                related.append(market)
+
+        related.append(primary_market)
+
+        unique: List[Dict[str, Any]] = []
+        seen = set()
+        for market in related:
+            if not isinstance(market, dict):
+                continue
+            dedupe_key = str(
+                market.get("id")
+                or market.get("slug")
+                or market.get("conditionId")
+                or ""
+            ).strip()
+            if not dedupe_key:
+                continue
+            if dedupe_key in seen:
+                continue
+            seen.add(dedupe_key)
+            unique.append(market)
+        return unique
+
+    def _extract_event_slug(self, market: Dict[str, Any]) -> Optional[str]:
+        event_slug = str(market.get("eventSlug") or "").strip().lower()
+        if event_slug:
+            return event_slug
+
+        slug = str(market.get("slug") or "").strip().lower()
+        if not slug:
+            return None
+
+        trimmed = re.sub(
+            r"-(?:m)?\d+(?:-\d+)?c(?:-or-(?:higher|lower|above|below))?$",
+            "",
+            slug,
+        )
+        trimmed = trimmed.strip("-")
+        return trimmed or None
+
+    def _load_event_markets(self, event_slug: str) -> List[Dict[str, Any]]:
+        normalized_slug = str(event_slug or "").strip().lower()
+        if not normalized_slug:
+            return []
+
+        try:
+            resp = self._session.get(
+                f"{self.gamma_url}/events",
+                params={"slug": normalized_slug, "limit": 5},
+                timeout=self.http_timeout,
+            )
+            resp.raise_for_status()
+            payload = resp.json()
+        except Exception:
+            return []
+
+        events = payload if isinstance(payload, list) else []
+        out: List[Dict[str, Any]] = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_item_slug = str(event.get("slug") or "").strip().lower()
+            if event_item_slug and event_item_slug != normalized_slug:
+                continue
+            for market in event.get("markets") or []:
+                if not isinstance(market, dict):
+                    continue
+                market["eventSlug"] = market.get("eventSlug") or event_item_slug
+                market["eventTitle"] = market.get("eventTitle") or event.get("title")
+                out.append(market)
+        return out
+
+    def _extract_market_bucket_label(
+        self,
+        market: Dict[str, Any],
+        bucket_temp: Optional[float],
+    ) -> str:
+        question = str(market.get("question") or market.get("title") or "").strip()
+        text = question.lower()
+        if bucket_temp is not None:
+            if "or higher" in text or "or above" in text or "and above" in text:
+                return f"{bucket_temp:g}C+"
+            if "or lower" in text or "or below" in text or "and below" in text:
+                return f"<={bucket_temp:g}C"
+            return f"{bucket_temp:g}C"
+        return question or str(market.get("slug") or "")

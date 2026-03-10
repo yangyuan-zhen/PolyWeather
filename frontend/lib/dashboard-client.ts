@@ -3,6 +3,7 @@
 import {
   CityDetail,
   CityListItem,
+  MarketScan,
   CitySummary,
   HistoryPoint,
 } from "@/lib/dashboard-types";
@@ -12,6 +13,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPoint[]>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
+const pendingMarketScanRequests = new Map<string, Promise<MarketScan | null>>();
 
 type CityCacheMeta = {
   cachedAt: number;
@@ -134,20 +136,75 @@ export const dashboardClient = {
 
   async getCityDetail(cityName: string, options?: { force?: boolean }) {
     const force = options?.force ?? false;
-    const requestKey = `${cityName}::${force ? "force" : "cached"}`;
-    const existing = pendingCityDetailRequests.get(requestKey);
-    if (existing) {
-      return existing;
+    if (!force) {
+      const requestKey = `${cityName}::cached`;
+      const existing = pendingCityDetailRequests.get(requestKey);
+      if (existing) {
+        return existing;
+      }
+
+      const request = fetchJson<CityDetail>(
+        `/api/city/${normalizeCityName(cityName)}?force_refresh=false`,
+      ).finally(() => {
+        pendingCityDetailRequests.delete(requestKey);
+      });
+
+      pendingCityDetailRequests.set(requestKey, request);
+      return request;
     }
 
-    const request = fetchJson<CityDetail>(
-      `/api/city/${normalizeCityName(cityName)}?force_refresh=${force}`,
-    ).finally(() => {
-      pendingCityDetailRequests.delete(requestKey);
+    const params = new URLSearchParams({
+      force_refresh: "true",
+      _ts: String(Date.now()),
     });
+    return fetchJson<CityDetail>(
+      `/api/city/${normalizeCityName(cityName)}?${params.toString()}`,
+    );
+  },
 
-    pendingCityDetailRequests.set(requestKey, request);
-    return request;
+  async getCityMarketScan(
+    cityName: string,
+    options?: { force?: boolean; marketSlug?: string | null },
+  ) {
+    const force = options?.force ?? false;
+    const marketSlug = options?.marketSlug || null;
+    if (!force) {
+      const requestKey = `${cityName}::cached::${marketSlug || "-"}`;
+      const existing = pendingMarketScanRequests.get(requestKey);
+      if (existing) {
+        return existing;
+      }
+
+      const params = new URLSearchParams({
+        force_refresh: "false",
+      });
+      if (marketSlug) {
+        params.set("market_slug", marketSlug);
+      }
+
+      const request = fetchJson<{ market_scan?: MarketScan }>(
+        `/api/city/${normalizeCityName(cityName)}/detail?${params.toString()}`,
+      )
+        .then((data) => data.market_scan || null)
+        .finally(() => {
+          pendingMarketScanRequests.delete(requestKey);
+        });
+
+      pendingMarketScanRequests.set(requestKey, request);
+      return request;
+    }
+
+    const params = new URLSearchParams({
+      force_refresh: "true",
+      _ts: String(Date.now()),
+    });
+    if (marketSlug) {
+      params.set("market_slug", marketSlug);
+    }
+
+    return fetchJson<{ market_scan?: MarketScan }>(
+      `/api/city/${normalizeCityName(cityName)}/detail?${params.toString()}`,
+    ).then((data) => data.market_scan || null);
   },
 
   async getHistory(cityName: string) {

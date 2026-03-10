@@ -21,6 +21,7 @@ import {
   HistoryPoint,
   HistoryState,
   LoadingState,
+  MarketScan,
 } from "@/lib/dashboard-types";
 
 interface DashboardStoreValue extends DashboardState {
@@ -35,13 +36,15 @@ interface DashboardStoreValue extends DashboardState {
   openFutureModal: (dateStr: string) => void;
   openGuide: () => void;
   openHistory: () => Promise<void>;
-  openTodayModal: () => Promise<void>;
+  openTodayModal: (forceRefresh?: boolean) => Promise<void>;
   registerMapStopMotion: (stopMotion: () => void) => void;
   refreshAll: () => Promise<void>;
   refreshSelectedCity: () => Promise<void>;
+  selectedMarketScan: MarketScan | null;
   selectedDetail: CityDetail | null;
   selectCity: (cityName: string) => Promise<void>;
   setForecastDate: (dateStr: string | null) => void;
+  marketScanByCityName: Record<string, MarketScan>;
 }
 
 const DashboardStoreContext = createContext<DashboardStoreValue | null>(null);
@@ -52,6 +55,7 @@ function getInitialLoadingState(): LoadingState {
     cityDetail: false,
     history: false,
     refresh: false,
+    marketScan: false,
   };
 }
 
@@ -177,6 +181,9 @@ export function DashboardStoreProvider({
   const [cityDetailMetaByName, setCityDetailMetaByName] = useState<
     Record<string, { cachedAt: number; revision: string }>
   >(() => initialCache.meta);
+  const [marketScanByCityName, setMarketScanByCityName] = useState<
+    Record<string, MarketScan>
+  >({});
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedForecastDate, setSelectedForecastDate] = useState<
@@ -202,6 +209,9 @@ export function DashboardStoreProvider({
   );
   const selectedDetail = selectedCity
     ? cityDetailsByName[selectedCity] || null
+    : null;
+  const selectedMarketScan = selectedCity
+    ? marketScanByCityName[selectedCity] || null
     : null;
 
   useEffect(() => {
@@ -241,7 +251,9 @@ export function DashboardStoreProvider({
       }
     }
 
-    const latestDetail = await dashboardClient.getCityDetail(cityName, { force });
+    const latestDetail = await dashboardClient.getCityDetail(cityName, {
+      force,
+    });
     const detail = mergeAiAnalysisIfStable(cached, latestDetail);
     setCityDetailsByName((current) => ({
       ...current,
@@ -259,6 +271,29 @@ export function DashboardStoreProvider({
       },
     }));
     return detail;
+  };
+
+  const ensureCityMarketScan = async (
+    cityName: string,
+    force = false,
+    marketSlug?: string | null,
+  ) => {
+    const cached = marketScanByCityName[cityName];
+    if (!force && cached && !marketSlug) {
+      return cached;
+    }
+
+    const latestScan = await dashboardClient.getCityMarketScan(cityName, {
+      force,
+      marketSlug,
+    });
+    if (latestScan) {
+      setMarketScanByCityName((current) => ({
+        ...current,
+        [cityName]: latestScan,
+      }));
+    }
+    return latestScan;
   };
 
   const loadCities = async () => {
@@ -330,6 +365,8 @@ export function DashboardStoreProvider({
     try {
       const detail = await ensureCityDetail(cityName);
       setSelectedForecastDate(detail.local_date);
+      // 预热市场数据，不做 await 阻塞，后台静默拉取
+      void ensureCityMarketScan(cityName, false).catch(() => {});
     } finally {
       setLoadingState((current) => ({ ...current, cityDetail: false }));
     }
@@ -433,24 +470,50 @@ export function DashboardStoreProvider({
       },
       openGuide: () => setIsGuideOpen(true),
       openHistory,
-      openTodayModal: async () => {
-        if (!selectedCity || loadingState.cityDetail || loadingState.refresh) {
+      openTodayModal: async (forceRefresh?: boolean) => {
+        if (!selectedCity || loadingState.cityDetail) {
           return;
         }
 
         mapStopMotionRef.current();
-        setLoadingState((current) => ({ ...current, refresh: true }));
+        const cachedDetail = cityDetailsByName[selectedCity];
+
+        // 乐观 UI: 有缓存则立刻秒开 modal，不阻塞显示
+        if (cachedDetail?.local_date) {
+          setSelectedForecastDate(cachedDetail.local_date);
+          setFutureModalDate(cachedDetail.local_date);
+          setLoadingState((current) => ({ ...current, marketScan: true }));
+        } else {
+          setLoadingState((current) => ({
+            ...current,
+            refresh: true,
+            marketScan: true,
+          }));
+        }
+
+        // 异步静默拉取最新气象与市场数据
         try {
           const detail = await ensureCityDetail(selectedCity, true);
           setSelectedForecastDate(detail.local_date);
           setFutureModalDate(detail.local_date);
+
+          try {
+            // 如果缓存里没有或者想要强制刷新，则拉取最新市场数据
+            await ensureCityMarketScan(
+              selectedCity,
+              forceRefresh || !marketScanByCityName[selectedCity],
+            );
+          } catch {}
         } catch {
-          const fallback = cityDetailsByName[selectedCity];
-          if (fallback?.local_date) {
-            setFutureModalDate(fallback.local_date);
+          if (cachedDetail?.local_date) {
+            setFutureModalDate(cachedDetail.local_date);
           }
         } finally {
-          setLoadingState((current) => ({ ...current, refresh: false }));
+          setLoadingState((current) => ({
+            ...current,
+            refresh: false,
+            marketScan: false,
+          }));
         }
       },
       registerMapStopMotion: (stopMotion: () => void) => {
@@ -458,12 +521,14 @@ export function DashboardStoreProvider({
       },
       refreshAll,
       refreshSelectedCity,
+      selectedMarketScan,
       selectedCity,
       selectedDetail,
       selectedForecastDate,
       selectCity,
       setForecastDate: (dateStr: string | null) =>
         setSelectedForecastDate(dateStr),
+      marketScanByCityName,
     }),
     [
       cities,
@@ -474,6 +539,8 @@ export function DashboardStoreProvider({
       isPanelOpen,
       isGuideOpen,
       loadingState,
+      marketScanByCityName,
+      selectedMarketScan,
       selectedCity,
       selectedDetail,
       selectedForecastDate,

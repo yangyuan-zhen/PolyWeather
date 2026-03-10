@@ -681,11 +681,15 @@ def _build_city_detail_payload(
 ) -> Dict[str, Any]:
     distribution = data.get("probabilities", {}).get("distribution", []) or []
     primary_bucket = distribution[0] if distribution else None
-    model_probability = (
-        (primary_bucket.get("probability") / 100.0)
-        if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None
-        else None
-    )
+    model_probability = None
+    if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None:
+        try:
+            raw_probability = float(primary_bucket.get("probability"))
+            model_probability = (
+                raw_probability / 100.0 if raw_probability > 1.0 else raw_probability
+            )
+        except Exception:
+            model_probability = None
     fallback_sparkline = [
         p.get("probability", 0)
         for p in distribution[:8]

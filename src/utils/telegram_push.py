@@ -117,6 +117,12 @@ def _trigger_type_key(alert_payload: Dict[str, Any]) -> str:
         for alert in (alert_payload.get("triggered_alerts") or [])
         if alert.get("type")
     )
+    market = alert_payload.get("market_snapshot") or {}
+    if isinstance(market, dict) and market.get("available"):
+        signal = str(market.get("signal_label") or "").strip()
+        bucket = str(market.get("selected_bucket") or "").strip()
+        if signal:
+            trigger_types.append(f"mkt:{signal}:{bucket}")
     return "|".join(trigger_types)
 
 
@@ -127,6 +133,7 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     breakthrough = rules.get("forecast_breakthrough") or {}
     advection = rules.get("advection") or {}
     suppression = alert_payload.get("suppression") or {}
+    market = alert_payload.get("market_snapshot") or {}
 
     signature_payload = {
         "city": alert_payload.get("city"),
@@ -149,6 +156,18 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
         "suppression_reason": suppression.get("reason"),
         "suppression_peak_time": suppression.get("max_temp_time"),
         "suppression_rollback": round(float(suppression.get("rollback") or 0.0), 1),
+        "market_available": bool(market.get("available")),
+        "market_bucket": market.get("selected_bucket"),
+        "market_top_bucket": market.get("top_bucket"),
+        "market_top_bucket_prob": round(float(market.get("top_bucket_prob") or 0.0), 3),
+        "market_prob": round(float(market.get("market_prob") or 0.0), 3),
+        "model_prob": round(float(market.get("model_prob") or 0.0), 3),
+        "market_yes_buy": round(float(market.get("yes_buy") or 0.0), 3),
+        "market_yes_sell": round(float(market.get("yes_sell") or 0.0), 3),
+        "market_spread": round(float(market.get("spread") or 0.0), 3),
+        "market_edge_percent": round(float(market.get("edge_percent") or 0.0), 2),
+        "market_signal": market.get("signal_label"),
+        "market_confidence": market.get("confidence"),
     }
     raw = json.dumps(signature_payload, sort_keys=True, ensure_ascii=True)
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
@@ -160,10 +179,18 @@ def build_trade_alert_for_city(
     force_refresh: bool = False,
     target_date: Optional[str] = None,
 ) -> Dict[str, Any]:
-    from web.app import _analyze
+    from web.app import _analyze, _build_city_detail_payload
     from src.analysis.market_alert_engine import build_trading_alerts
 
     city_weather = _analyze(city, force_refresh=force_refresh)
+    try:
+        aggregate_detail = _build_city_detail_payload(city_weather)
+        market_scan = aggregate_detail.get("market_scan")
+        if isinstance(market_scan, dict):
+            city_weather = {**city_weather, "market_scan": market_scan}
+    except Exception as exc:
+        logger.debug(f"market scan attach skipped city={city}: {exc}")
+
     resolved_target_date = target_date or city_weather.get("local_date")
     if resolved_target_date:
         datetime.strptime(resolved_target_date, "%Y-%m-%d")
@@ -212,7 +239,7 @@ def _maybe_send_alert(
     last_sig_ts = int((state.get("by_signature") or {}).get(signature) or 0)
     last_city_active = bool(last_city.get("active"))
 
-    if last_city_active and last_city_key == trigger_key:
+    if last_city_active and last_city_key == trigger_key and last_city_sig == signature:
         return False
 
     if last_city_ts and now_ts - last_city_ts < cooldown_sec:

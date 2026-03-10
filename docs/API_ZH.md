@@ -160,9 +160,10 @@
   - `primary_market`
   - `selected_condition_id`
   - `yes_token` / `no_token`
-  - `yes_buy` / `yes_sell` / `no_buy` / `no_sell`
+  - `yes_buy` / `yes_sell` / `no_buy` / `no_sell` / `model_probability`
   - `market_price`（优先 midpoint）
   - `edge_percent`（`(model_probability - market_price) * 100`）
+  - `temperature_bucket` / `top_buckets` （结算温度桶及市场概率）
   - `signal_label`（`BUY YES` / `BUY NO` / `MONITOR`）
   - `websocket.asset_ids` / `websocket.condition_ids`（仅用于订阅标识，P0 不下单）
 
@@ -249,4 +250,4 @@
 
 ---
 
-**最后更新**: 2026-03-09
+**最后更新**: 2026-03-10

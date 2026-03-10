@@ -292,6 +292,20 @@ export interface MarketScan {
   liquidity: number | null;
   volume: number | null;
   sparkline: number[];
+  top_buckets?: Array<{
+    label?: string | null;
+    value?: number | null;
+    temp?: number | null;
+    probability?: number | null;
+    market_price?: number | null;
+    yes_buy?: number | null;
+    yes_sell?: number | null;
+    no_buy?: number | null;
+    no_sell?: number | null;
+    slug?: string | null;
+    question?: string | null;
+    is_primary?: boolean;
+  }>;
   recent_trades: Trade[];
   websocket: any;
 }
