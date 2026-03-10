@@ -138,8 +138,21 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     obs_time_str = ""
     metar_age_min = None
     obs_t = metar.get("observation_time", "") if metar else ""
-    # 优先从 API 获取偏移，若失败则使用 CITIES 预设的静态偏移 (兜底当地时间)
-    utc_offset = om.get("utc_offset", info.get("tz", 0))
+    # 优先从 API 获取偏移；若缺失则尝试 NWS 动态偏移；最后回退静态配置
+    utc_offset = om.get("utc_offset")
+    if utc_offset is None:
+        try:
+            nws_periods = (raw.get("nws", {}) or {}).get("forecast_periods", []) or []
+            if nws_periods:
+                first_start = nws_periods[0].get("start_time")
+                if first_start:
+                    maybe_dt = datetime.fromisoformat(str(first_start))
+                    if maybe_dt.utcoffset() is not None:
+                        utc_offset = int(maybe_dt.utcoffset().total_seconds())
+        except Exception:
+            utc_offset = None
+    if utc_offset is None:
+        utc_offset = info.get("tz", 0)
     if obs_t and "T" in obs_t:
         try:
             dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
@@ -183,6 +196,25 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     om_today = _sf(maxtemps[0]) if maxtemps else None
 
     forecast_daily = [{"date": d, "max_temp": t} for d, t in zip(dates, maxtemps)]
+    if om_today is None:
+        nws_high = _sf(raw.get("nws", {}).get("today_high"))
+        mb_high = _sf(raw.get("meteoblue", {}).get("today_high"))
+        mgm_high = _sf(mgm.get("today_high")) if mgm else None
+        fallback_high = (
+            nws_high
+            if nws_high is not None
+            else mb_high
+            if mb_high is not None
+            else mgm_high
+            if mgm_high is not None
+            else max_so_far
+            if max_so_far is not None
+            else cur_temp
+        )
+        if fallback_high is not None:
+            om_today = float(fallback_high)
+            if not forecast_daily:
+                forecast_daily = [{"date": local_date_str, "max_temp": om_today}]
     sunrise = (
         sunrises[0].split("T")[1][:5]
         if sunrises and "T" in str(sunrises[0])
@@ -271,6 +303,29 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     h_wdir = hourly.get("wind_direction_10m", [])
     h_precip_prob = hourly.get("precipitation_probability", [])
     h_cloud_cover = hourly.get("cloud_cover", [])
+    if (not h_times or not h_temps) and metar:
+        metar_today_obs = metar.get("today_obs", []) or []
+        parsed_obs = []
+        for item in metar_today_obs:
+            try:
+                t_str, t_val = item
+                if t_str is None or t_val is None:
+                    continue
+                hh, mm = str(t_str).split(":")
+                parsed_obs.append((int(hh), int(mm), float(t_val)))
+            except Exception:
+                continue
+        if parsed_obs:
+            parsed_obs.sort(key=lambda x: (x[0], x[1]))
+            h_times = [f"{local_date_str}T{hh:02d}:{mm:02d}" for hh, mm, _ in parsed_obs]
+            h_temps = [v for _, _, v in parsed_obs]
+            h_rad = [0 for _ in parsed_obs]
+            h_dew = [None for _ in parsed_obs]
+            h_pressure = [None for _ in parsed_obs]
+            h_wspd = [None for _ in parsed_obs]
+            h_wdir = [None for _ in parsed_obs]
+            h_precip_prob = [None for _ in parsed_obs]
+            h_cloud_cover = [None for _ in parsed_obs]
 
     peak_hours = []
     if h_times and h_temps and om_today is not None:

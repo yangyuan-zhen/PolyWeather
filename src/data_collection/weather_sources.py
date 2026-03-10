@@ -98,10 +98,17 @@ class WeatherDataCollector:
 
         # 磁盘持久化缓存：重启后即可加载上次的预报数据，避免冷启动请求爆发
         self._disk_cache_path = os.getenv(
-            "OPEN_METEO_DISK_CACHE_PATH", "/app/.cache/open_meteo_cache.json"
+            "OPEN_METEO_DISK_CACHE_PATH", "/app/data/open_meteo_cache.json"
+        )
+        self._disk_cache_max_age_sec = int(
+            os.getenv("OPEN_METEO_DISK_CACHE_MAX_AGE_SEC", "86400")
         )
         self._disk_cache_lock = threading.Lock()
+        self._disk_cache_last_mtime: float = 0.0
         self._load_open_meteo_disk_cache()
+        logger.info(
+            f"Open-Meteo 磁盘缓存路径: {self._disk_cache_path} (max_age={self._disk_cache_max_age_sec}s)"
+        )
 
         # 设置代理
         proxy = config.get("proxy")
@@ -117,34 +124,69 @@ class WeatherDataCollector:
         """启动时从磁盘加载 Open-Meteo 三类缓存，避免重启后冷启动打爆 API"""
         import json as _json
         try:
-            if not os.path.exists(self._disk_cache_path):
+            path = self._disk_cache_path
+            if not os.path.exists(path):
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                with open(path, "w", encoding="utf-8") as f:
+                    _json.dump(
+                        {
+                            "forecast": {},
+                            "ensemble": {},
+                            "multi_model": {},
+                            "saved_at": time.time(),
+                        },
+                        f,
+                    )
+                self._disk_cache_last_mtime = os.path.getmtime(path)
                 return
-            with open(self._disk_cache_path, "r", encoding="utf-8") as f:
+            current_mtime = os.path.getmtime(path)
+            if current_mtime <= self._disk_cache_last_mtime:
+                return
+            with open(path, "r", encoding="utf-8") as f:
                 saved = _json.load(f)
             now = time.time()
-            # 最多允许加载 2× TTL 的旧数据（TTL 内视为新鲜，超出则过期但仍可作为 stale fallback）
-            max_age = max(
-                self.open_meteo_cache_ttl_sec,
-                self.open_meteo_ensemble_cache_ttl_sec,
-                self.open_meteo_multi_model_cache_ttl_sec,
-            ) * 2
+            max_age = max(600, self._disk_cache_max_age_sec)
             loaded = 0
-            for key, entry in saved.get("forecast", {}).items():
-                if now - float(entry.get("t", 0)) < max_age:
-                    self._open_meteo_cache[key] = entry
-                    loaded += 1
-            for key, entry in saved.get("ensemble", {}).items():
-                if now - float(entry.get("t", 0)) < max_age:
-                    self._ensemble_cache[key] = entry
-                    loaded += 1
-            for key, entry in saved.get("multi_model", {}).items():
-                if now - float(entry.get("t", 0)) < max_age:
-                    self._multi_model_cache[key] = entry
-                    loaded += 1
+            with self._open_meteo_cache_lock:
+                for key, entry in saved.get("forecast", {}).items():
+                    if now - float(entry.get("t", 0)) < max_age:
+                        old = self._open_meteo_cache.get(key)
+                        if old is None or float(entry.get("t", 0)) >= float(old.get("t", 0)):
+                            self._open_meteo_cache[key] = entry
+                            loaded += 1
+            with self._ensemble_cache_lock:
+                for key, entry in saved.get("ensemble", {}).items():
+                    if now - float(entry.get("t", 0)) < max_age:
+                        old = self._ensemble_cache.get(key)
+                        if old is None or float(entry.get("t", 0)) >= float(old.get("t", 0)):
+                            self._ensemble_cache[key] = entry
+                            loaded += 1
+            with self._multi_model_cache_lock:
+                for key, entry in saved.get("multi_model", {}).items():
+                    if now - float(entry.get("t", 0)) < max_age:
+                        old = self._multi_model_cache.get(key)
+                        if old is None or float(entry.get("t", 0)) >= float(old.get("t", 0)):
+                            self._multi_model_cache[key] = entry
+                            loaded += 1
+            self._disk_cache_last_mtime = current_mtime
             if loaded:
                 logger.info(f"✅ 从磁盘加载 Open-Meteo 缓存 {loaded} 条 ({self._disk_cache_path})")
         except Exception as e:
             logger.warning(f"磁盘缓存加载失败（首次启动不影响运行）: {e}")
+
+    def _maybe_reload_open_meteo_disk_cache(self) -> None:
+        """跨进程共享缓存：当缓存文件有更新时增量重载到当前进程内存"""
+        try:
+            path = self._disk_cache_path
+            if not os.path.exists(path):
+                return
+            current_mtime = os.path.getmtime(path)
+            if current_mtime <= self._disk_cache_last_mtime:
+                return
+            self._load_open_meteo_disk_cache()
+        except Exception:
+            # 不影响主流程
+            pass
 
     def _flush_open_meteo_disk_cache(self) -> None:
         """将三类 Open-Meteo 内存缓存持久化到磁盘"""
@@ -168,6 +210,7 @@ class WeatherDataCollector:
                 with open(tmp_path, "w", encoding="utf-8") as f:
                     _json.dump(payload, f)
                 os.replace(tmp_path, self._disk_cache_path)  # 原子替换，防止写入一半时被读到
+            self._disk_cache_last_mtime = os.path.getmtime(self._disk_cache_path)
         except Exception as e:
             logger.warning(f"磁盘缓存写入失败: {e}")
 
@@ -1041,6 +1084,7 @@ class WeatherDataCollector:
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
             f"{forecast_days}:{'f' if use_fahrenheit else 'c'}"
         )
+        self._maybe_reload_open_meteo_disk_cache()
         now_ts = time.time()
         # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
         with self._open_meteo_rl_lock:
@@ -1195,6 +1239,7 @@ class WeatherDataCollector:
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
             f"{'f' if use_fahrenheit else 'c'}"
         )
+        self._maybe_reload_open_meteo_disk_cache()
         now_ts = time.time()
         # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
         with self._open_meteo_rl_lock:
@@ -1340,6 +1385,7 @@ class WeatherDataCollector:
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
             f"{'f' if use_fahrenheit else 'c'}"
         )
+        self._maybe_reload_open_meteo_disk_cache()
         now_ts = time.time()
         # ── 429 冷却期检查（所有 Open-Meteo 端点共享）─────────────────
         with self._open_meteo_rl_lock:
@@ -1851,7 +1897,14 @@ class WeatherDataCollector:
                     results["multi_model"] = mm_data
             else:
                 # Open-Meteo 失败时，仍然尝试获取 METAR 和 NWS
-                metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
+                fallback_utc_offset = int(
+                    self.CITY_REGISTRY.get(city_lower, {}).get("tz_offset", 0)
+                )
+                metar_data = self.fetch_metar(
+                    city,
+                    use_fahrenheit=use_fahrenheit,
+                    utc_offset=fallback_utc_offset,
+                )
                 if metar_data:
                     results["metar"] = metar_data
                 if city_lower in self.METEOBLUE_PRIORITY_CITIES:

@@ -14,6 +14,7 @@ from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore 
 from src.onchain.polygon_wallet_watcher import start_polygon_wallet_watch_loop  # type: ignore # noqa: E402
 from src.onchain.polymarket_wallet_activity_watcher import start_polymarket_wallet_activity_loop  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
+from src.data_collection.city_registry import CITY_REGISTRY  # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
 from src.database.db_manager import DBManager
@@ -376,6 +377,20 @@ def start_bot():
             open_meteo = weather_data.get("open-meteo", {})
             metar = weather_data.get("metar", {})
             mgm = weather_data.get("mgm") or {}
+            city_meta = CITY_REGISTRY.get(city_name.lower(), {})
+            fallback_utc_offset = int(city_meta.get("tz_offset", 0))
+            nws_periods = (weather_data.get("nws", {}) or {}).get("forecast_periods", []) or []
+            if nws_periods:
+                try:
+                    from datetime import datetime as _dt
+
+                    first_start = nws_periods[0].get("start_time")
+                    if first_start:
+                        maybe_dt = _dt.fromisoformat(str(first_start))
+                        if maybe_dt.utcoffset() is not None:
+                            fallback_utc_offset = int(maybe_dt.utcoffset().total_seconds())
+                except Exception:
+                    pass
 
             # 鏁板€煎綊涓€鍖?
             def _sf(v):
@@ -395,11 +410,33 @@ def start_bot():
             if time_str == "N/A":
                 metar_obs = metar.get("observation_time", "") if metar else ""
                 if "T" in metar_obs:
-                    time_str = metar_obs.split("T")[1][:5]
+                    try:
+                        from datetime import datetime, timezone, timedelta
+
+                        dt = datetime.fromisoformat(metar_obs.replace("Z", "+00:00"))
+                        utc_offset_for_view = open_meteo.get("utc_offset")
+                        if utc_offset_for_view is None:
+                            utc_offset_for_view = fallback_utc_offset
+                        local_dt = dt.astimezone(
+                            timezone(timedelta(seconds=int(utc_offset_for_view)))
+                        )
+                        time_str = local_dt.strftime("%H:%M")
+                    except Exception:
+                        time_str = metar_obs.split("T")[1][:5]
                 elif " " in metar_obs:
                     time_str = metar_obs.split(" ")[1][:5]
                 elif metar_obs:
                     time_str = str(metar_obs)[:5]
+                else:
+                    try:
+                        from datetime import datetime, timezone, timedelta
+
+                        local_now = datetime.now(timezone.utc).astimezone(
+                            timezone(timedelta(seconds=int(fallback_utc_offset)))
+                        )
+                        time_str = local_now.strftime("%H:%M")
+                    except Exception:
+                        pass
 
             risk_profile = get_city_risk_profile(city_name)
             risk_emoji = risk_profile.get("risk_level", "⚠️") if risk_profile else "⚠️"
@@ -556,9 +593,11 @@ def start_bot():
                         from datetime import datetime, timezone, timedelta
 
                         dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
-                        utc_offset = open_meteo.get("utc_offset", 0)
+                        utc_offset = open_meteo.get("utc_offset")
+                        if utc_offset is None:
+                            utc_offset = fallback_utc_offset
                         local_dt = dt.astimezone(
-                            timezone(timedelta(seconds=utc_offset))
+                            timezone(timedelta(seconds=int(utc_offset)))
                         )
                         obs_t_str = local_dt.strftime("%H:%M")
                         # 计算数据年龄
