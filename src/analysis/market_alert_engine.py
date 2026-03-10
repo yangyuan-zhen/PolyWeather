@@ -7,7 +7,9 @@ from __future__ import annotations
 import math
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from src.analysis.settlement_rounding import wu_round
 
 
 def _sf(v: Any) -> Optional[float]:
@@ -471,6 +473,130 @@ def _bucket_label(bucket: Any) -> Optional[str]:
     return None
 
 
+def _to_celsius(temp: Optional[float], temp_symbol: str) -> Optional[float]:
+    if temp is None:
+        return None
+    if "F" in (temp_symbol or "").upper():
+        return (temp - 32.0) * 5.0 / 9.0
+    return temp
+
+
+def _extract_open_meteo_today_high_c(city_weather: Dict[str, Any]) -> Optional[float]:
+    forecast = city_weather.get("forecast") or {}
+    om_today = _sf(forecast.get("today_high"))
+
+    if om_today is None:
+        om = city_weather.get("open-meteo") or {}
+        daily = om.get("daily") or {}
+        series = daily.get("temperature_2m_max") or []
+        if isinstance(series, list) and series:
+            om_today = _sf(series[0])
+
+    if om_today is None:
+        return None
+
+    temp_symbol = str(city_weather.get("temp_symbol") or "")
+    return _to_celsius(om_today, temp_symbol)
+
+
+def _bucket_value(row: Dict[str, Any]) -> Optional[float]:
+    for key in ("value", "temp"):
+        value = _sf(row.get(key))
+        if value is not None:
+            return value
+
+    label = str(row.get("label") or "").strip()
+    m = re.search(r"(-?\d+(?:\.\d+)?)", label)
+    if not m:
+        return None
+    return _sf(m.group(1))
+
+
+def _bucket_bounds(row: Dict[str, Any]) -> Optional[Tuple[Optional[float], Optional[float]]]:
+    value = _bucket_value(row)
+    if value is None:
+        return None
+
+    label = str(row.get("label") or "").lower()
+    is_upper_tail = any(key in label for key in ("+", "or higher", "or above", "and above"))
+    is_lower_tail = any(key in label for key in ("<=", "or lower", "or below", "and below"))
+
+    if is_upper_tail and not is_lower_tail:
+        return value, None
+    if is_lower_tail and not is_upper_tail:
+        return None, value
+    return value, value
+
+
+def _distance_to_bucket(target: float, bounds: Tuple[Optional[float], Optional[float]]) -> float:
+    lower, upper = bounds
+    if lower is not None and target < lower:
+        return lower - target
+    if upper is not None and target > upper:
+        return target - upper
+    return 0.0
+
+
+def _pick_bucket_for_forecast(
+    rows: List[Dict[str, Any]],
+    forecast_settlement: Optional[int],
+    forecast_today_high_c: Optional[float],
+) -> Optional[Dict[str, Any]]:
+    if not rows:
+        return None
+
+    target = (
+        float(forecast_settlement)
+        if forecast_settlement is not None
+        else forecast_today_high_c
+    )
+    if target is None:
+        return None
+
+    best_row: Optional[Dict[str, Any]] = None
+    best_distance: Optional[float] = None
+    best_probability = -1.0
+    best_rank = 10**9
+
+    for idx, row in enumerate(rows):
+        bounds = _bucket_bounds(row)
+        if not bounds:
+            continue
+
+        distance = _distance_to_bucket(target, bounds)
+        probability = _norm_probability(row.get("probability"))
+        probability_rank = probability if probability is not None else -1.0
+
+        if best_row is None:
+            best_row = row
+            best_distance = distance
+            best_probability = probability_rank
+            best_rank = idx
+            continue
+
+        assert best_distance is not None
+        if distance < best_distance:
+            best_row = row
+            best_distance = distance
+            best_probability = probability_rank
+            best_rank = idx
+            continue
+
+        if abs(distance - best_distance) <= 1e-9:
+            if probability_rank > best_probability:
+                best_row = row
+                best_distance = distance
+                best_probability = probability_rank
+                best_rank = idx
+            elif abs(probability_rank - best_probability) <= 1e-9 and idx < best_rank:
+                best_row = row
+                best_distance = distance
+                best_probability = probability_rank
+                best_rank = idx
+
+    return best_row
+
+
 def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
     scan = city_weather.get("market_scan") or {}
     if not isinstance(scan, dict):
@@ -491,10 +617,14 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
 
     top_bucket = None
     top_bucket_rows: List[Dict[str, Any]] = []
-    top_buckets = scan.get("top_buckets") or []
-    if isinstance(top_buckets, list):
+    all_bucket_rows: List[Dict[str, Any]] = []
+    source_buckets = scan.get("all_buckets")
+    if not isinstance(source_buckets, list) or not source_buckets:
+        source_buckets = scan.get("top_buckets") or []
+
+    if isinstance(source_buckets, list):
         normalized = []
-        for row in top_buckets:
+        for row in source_buckets:
             if not isinstance(row, dict):
                 continue
             p = _norm_probability(row.get("probability"))
@@ -504,15 +634,21 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
         if normalized:
             normalized.sort(key=lambda x: x[0], reverse=True)
             top_bucket = normalized[0][1]
-            for p, row in normalized[:4]:
-                top_bucket_rows.append(
+            for p, row in normalized:
+                row_slug = str(row.get("slug") or "").strip()
+                row_market_url = f"https://polymarket.com/market/{row_slug}" if row_slug else None
+                all_bucket_rows.append(
                     {
                         "label": _bucket_label(row),
                         "probability": p,
                         "yes_buy": _norm_probability(row.get("yes_buy")),
                         "yes_sell": _norm_probability(row.get("yes_sell")),
+                        "value": _sf(row.get("value") or row.get("temp")),
+                        "slug": row_slug or None,
+                        "market_url": row_market_url,
                     }
                 )
+            top_bucket_rows = all_bucket_rows[:4]
 
     market_url = None
     websocket = scan.get("websocket") or {}
@@ -524,6 +660,17 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
             slug = str(primary_market.get("slug") or "").strip()
             if slug:
                 market_url = f"https://polymarket.com/market/{slug}"
+
+    open_meteo_today_high_c = _extract_open_meteo_today_high_c(city_weather)
+    open_meteo_settlement = wu_round(open_meteo_today_high_c)
+    forecast_bucket = _pick_bucket_for_forecast(
+        rows=all_bucket_rows,
+        forecast_settlement=open_meteo_settlement,
+        forecast_today_high_c=open_meteo_today_high_c,
+    )
+    forecast_market_url = None
+    if isinstance(forecast_bucket, dict):
+        forecast_market_url = str(forecast_bucket.get("market_url") or "").strip() or None
 
     return {
         "available": True,
@@ -541,7 +688,12 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
         "signal_label": scan.get("signal_label"),
         "confidence": scan.get("confidence"),
         "top_bucket_rows": top_bucket_rows,
-        "market_url": market_url,
+        "all_bucket_rows": all_bucket_rows,
+        "open_meteo_today_high_c": open_meteo_today_high_c,
+        "open_meteo_settlement": open_meteo_settlement,
+        "forecast_bucket": forecast_bucket,
+        "primary_market_url": market_url,
+        "market_url": forecast_market_url or market_url,
     }
 
 
@@ -786,6 +938,81 @@ def _build_telegram_messages(
     return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
 
 
+def _build_telegram_messages_mispricing(
+    city_weather: Dict[str, Any],
+    rules: Dict[str, Dict[str, Any]],
+    market_snapshot: Optional[Dict[str, Any]] = None,
+) -> Dict[str, str]:
+    temp_symbol = str(city_weather.get("temp_symbol") or "°C")
+    city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
+    current = city_weather.get("current") or {}
+    current_temp = _sf(current.get("temp"))
+    if current_temp is None:
+        return {"zh": "", "en": ""}
+
+    snapshot = market_snapshot or _extract_market_snapshot(city_weather)
+    momentum = rules.get("momentum_spike", {})
+    local_time = str(city_weather.get("local_time") or "").strip()
+    obs_time = str(current.get("obs_time") or "").strip()
+
+    delta_temp = _sf(momentum.get("delta_temp"))
+    delta_min = momentum.get("delta_minutes")
+    momentum_emoji = "➡️"
+    if delta_temp is not None:
+        momentum_emoji = "🚀" if delta_temp > 0 else ("📉" if delta_temp < 0 else "➡️")
+
+    dynamic_text = f"实测 {current_temp:.1f}{temp_symbol}"
+    if delta_temp is not None and delta_min is not None:
+        dynamic_text = (
+            f"实测 {current_temp:.1f}{temp_symbol} "
+            f"({int(delta_min)}min 内 {delta_temp:+.1f}{temp_symbol}) {momentum_emoji}"
+        )
+
+    om_high_c = _sf(snapshot.get("open_meteo_today_high_c"))
+    om_settle = snapshot.get("open_meteo_settlement")
+    forecast_bucket = snapshot.get("forecast_bucket") or {}
+    match_bucket_label = str(forecast_bucket.get("label") or "--").strip() or "--"
+    match_bucket_yes = _fmt_cents(forecast_bucket.get("yes_buy"))
+    market_url = str(
+        snapshot.get("market_url")
+        or snapshot.get("primary_market_url")
+        or ""
+    ).strip()
+
+    lines_zh = [f"🚨 PolyWeather 错价雷达 [{city_name}]"]
+    lines_zh.append("")
+    if om_high_c is not None and om_settle is not None:
+        lines_zh.append(
+            f"基准：Open-Meteo 今日高温 {om_high_c:.1f}C（结算参考 {om_settle}C）"
+        )
+    else:
+        lines_zh.append("基准：Open-Meteo 今日高温 --（结算参考 --）")
+    lines_zh.append(f"命中桶：{match_bucket_label} | Yes: {match_bucket_yes}")
+    lines_zh.append("触发：该桶 Yes 价格 < 10c，疑似低估")
+    lines_zh.append("")
+    lines_zh.append(f"动态：{dynamic_text}")
+    if local_time or obs_time:
+        if local_time and obs_time:
+            lines_zh.append(f"时间：当地 {local_time} | 观测 {obs_time}")
+        elif local_time:
+            lines_zh.append(f"时间：当地 {local_time}")
+        else:
+            lines_zh.append(f"时间：观测 {obs_time}")
+    lines_zh.append("")
+    if market_url:
+        lines_zh.append(f"市场链接：{market_url}")
+
+    lines_en = [
+        f"🚨 PolyWeather Mispricing Radar [{city_name}]",
+        "",
+        f"Now: {dynamic_text}",
+    ]
+    if market_url:
+        lines_en.append(f"Market link: {market_url}")
+
+    return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
+
+
 def build_trading_alerts(
     city_weather: Dict[str, Any],
     map_url: Optional[str] = None,
@@ -833,12 +1060,10 @@ def build_trading_alerts(
         if force_push and severity == "none":
             severity = "medium"
 
-    telegram = _build_telegram_messages(
+    telegram = _build_telegram_messages_mispricing(
         city_weather=city_weather,
         rules=rules,
-        map_url=map_url,
         market_snapshot=market_snapshot,
-        suppression=suppression,
     )
 
     return {

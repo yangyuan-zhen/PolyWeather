@@ -36,6 +36,28 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return float(raw)
+    except Exception:
+        return default
+
+
+def _norm_prob(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        n = float(v)
+    except Exception:
+        return None
+    if n > 1.0:
+        n = n / 100.0
+    return max(0.0, min(1.0, n))
+
+
 def _parse_city_list(raw: Optional[str]) -> List[str]:
     if not raw:
         return list(CITY_REGISTRY.keys())
@@ -109,6 +131,58 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
         return False
     severity = str(alert_payload.get("severity") or "none").lower()
     return SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK.get(min_severity, 0)
+
+
+def _market_price_cap_ok(alert_payload: Dict[str, Any], max_yes_buy: float) -> bool:
+    if max_yes_buy >= 1.0:
+        return True
+
+    market = alert_payload.get("market_snapshot") or {}
+    if not isinstance(market, dict) or not market.get("available"):
+        return True
+
+    # Prefer the market bucket that maps to Open-Meteo forecast settlement.
+    forecast_bucket = market.get("forecast_bucket") or {}
+    yes_buy = None
+    bucket_label = None
+    if isinstance(forecast_bucket, dict):
+        yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
+        bucket_label = str(forecast_bucket.get("label") or "").strip() or None
+
+    # Backward-compatible fallback.
+    if yes_buy is None:
+        yes_buy = _norm_prob(market.get("yes_buy"))
+        if not bucket_label:
+            bucket_label = str(market.get("selected_bucket") or "").strip() or None
+
+    if yes_buy is None:
+        # Fallback to first bucket with valid yes_buy if aggregate field is missing.
+        top_rows = market.get("top_bucket_rows") or []
+        if isinstance(top_rows, list):
+            for row in top_rows:
+                if not isinstance(row, dict):
+                    continue
+                yes_buy = _norm_prob(row.get("yes_buy"))
+                if yes_buy is not None:
+                    if not bucket_label:
+                        bucket_label = str(row.get("label") or "").strip() or None
+                    break
+
+    if yes_buy is None:
+        return True
+
+    if yes_buy >= max_yes_buy:
+        logger.info(
+            "trade alert skipped by mispricing cap city={} bucket={} om_settle={} yes_buy={} cap={}".format(
+                alert_payload.get("city"),
+                bucket_label or "--",
+                market.get("open_meteo_settlement"),
+                round(yes_buy, 4),
+                round(max_yes_buy, 4),
+            )
+        )
+        return False
+    return True
 
 
 def _trigger_type_key(alert_payload: Dict[str, Any]) -> str:
@@ -218,6 +292,12 @@ def _maybe_send_alert(
     last_by_city = state.setdefault("last_by_city", {})
     last_city = last_by_city.get(city) or {}
     is_active = _severity_ok(alert_payload, min_severity, min_trigger_count)
+    max_yes_buy = max(
+        0.0,
+        min(1.0, _env_float("TELEGRAM_ALERT_MISPRICING_MAX_YES_BUY", 0.10)),
+    )
+    if not _market_price_cap_ok(alert_payload, max_yes_buy):
+        is_active = False
     message = ((alert_payload.get("telegram") or {}).get("zh") or "").strip()
 
     if not is_active or not message:

@@ -486,12 +486,21 @@ class PolymarketReadOnlyLayer:
 
         signal_label, confidence = self._derive_signal(edge_percent, liquidity)
 
-        top_buckets = self._build_top_temperature_buckets(
+        top_bucket_limit = max(
+            1,
+            _safe_int(os.getenv("POLYMARKET_TOP_BUCKET_LIMIT", "4"), 4),
+        )
+        all_bucket_limit = max(
+            top_bucket_limit,
+            _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "24"), 24),
+        )
+        all_buckets = self._build_top_temperature_buckets(
             city_key=city_key,
             target_date=date_str,
             primary_market=market,
-            limit=4,
+            limit=all_bucket_limit,
         )
+        top_buckets = list(all_buckets[:top_bucket_limit])
 
         yes_payload = {
             "outcome": yes_token.get("outcome") or "Yes",
@@ -560,6 +569,7 @@ class PolymarketReadOnlyLayer:
                 "volume": volume,
                 "sparkline": sparkline_values,
                 "top_buckets": top_buckets,
+                "all_buckets": all_buckets,
                 "websocket": {
                     "market_url": market_url,
                     "asset_ids": [
