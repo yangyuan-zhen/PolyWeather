@@ -85,6 +85,12 @@ class WeatherDataCollector:
             os.getenv("OPEN_METEO_RATE_LIMIT_COOLDOWN_SEC", "900")  # 默认 15 分钟
         )
         self._open_meteo_rl_lock = threading.Lock()
+        # Open-Meteo burst control: avoid hammering API with many cities at once.
+        self._open_meteo_min_interval_sec: float = float(
+            os.getenv("OPEN_METEO_MIN_CALL_INTERVAL_SEC", "3")
+        )
+        self._open_meteo_last_call_ts: float = 0.0
+        self._open_meteo_call_lock = threading.Lock()
         self.meteoblue_cache_ttl_sec = int(
             os.getenv("METEOBLUE_CACHE_TTL_SEC", "7200")
         )
@@ -214,6 +220,22 @@ class WeatherDataCollector:
         except Exception as e:
             logger.warning(f"磁盘缓存写入失败: {e}")
 
+
+    def _wait_open_meteo_slot(self, endpoint: str) -> None:
+        """Simple per-process rate gate for Open-Meteo endpoints."""
+        min_interval = self._open_meteo_min_interval_sec
+        if min_interval <= 0:
+            return
+        with self._open_meteo_call_lock:
+            now_ts = time.time()
+            wait_for = min_interval - (now_ts - self._open_meteo_last_call_ts)
+            if wait_for > 0:
+                logger.debug(
+                    f"Open-Meteo {endpoint} 限流保护：sleep {wait_for:.2f}s (min_interval={min_interval:.2f}s)"
+                )
+                time.sleep(wait_for)
+                now_ts = time.time()
+            self._open_meteo_last_call_ts = now_ts
 
     def fetch_from_openweather(self, city: str, country: str = None) -> Optional[Dict]:
         """
@@ -1123,6 +1145,7 @@ class WeatherDataCollector:
             else:
                 params["temperature_unit"] = "celsius"
 
+            self._wait_open_meteo_slot("forecast")
             response = self.session.get(
                 url,
                 params=params,
@@ -1276,6 +1299,7 @@ class WeatherDataCollector:
             else:
                 params["temperature_unit"] = "celsius"
 
+            self._wait_open_meteo_slot("ensemble")
             response = self.session.get(
                 url,
                 params=params,
@@ -1422,6 +1446,7 @@ class WeatherDataCollector:
             if use_fahrenheit:
                 params["temperature_unit"] = "fahrenheit"
 
+            self._wait_open_meteo_slot("multi-model")
             response = self.session.get(
                 url,
                 params=params,
