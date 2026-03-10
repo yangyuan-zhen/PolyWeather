@@ -552,9 +552,35 @@ export function ModelForecast({
 }) {
   const { locale, t } = useI18n();
   const view = getModelView(detail, targetDate);
-  const modelEntries = Object.entries(view.models).filter(
-    ([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)),
+  const fallbackMeteoblue = detail.source_forecasts?.meteoblue?.today_high;
+  const modelsMap = { ...view.models };
+
+  // 强行插入 Meteoblue，防止 helper 函数或日期对齐导致其被剔除
+  if (
+    modelsMap["Meteoblue"] == null &&
+    fallbackMeteoblue != null &&
+    (!targetDate || targetDate === detail.local_date)
+  ) {
+    modelsMap["Meteoblue"] = fallbackMeteoblue;
+  }
+
+  const modelEntries = Object.entries(modelsMap).filter(
+    ([, value]) =>
+      value !== null && value !== undefined && Number.isFinite(Number(value)),
   );
+
+  // 如果没有任何数值，给出提示
+  if (modelEntries.length === 0) {
+    return (
+      <section className="models-section">
+        {!hideTitle && <h3>{t("section.models")}</h3>}
+        <div className="model-bars">
+          <EmptyState text={t("section.noModels")} />
+        </div>
+      </section>
+    );
+  }
+
   const numericValues = modelEntries.map(([, value]) => Number(value));
   const comparisonValues =
     view.deb != null ? [...numericValues, Number(view.deb)] : numericValues;
@@ -576,72 +602,66 @@ export function ModelForecast({
     <section className="models-section">
       {!hideTitle && <h3>{t("section.models")}</h3>}
       <div className="model-bars">
-        {!modelEntries.length ? (
-          <EmptyState text={t("section.noModels")} />
-        ) : (
-          <>
-            {modelEntries
-              .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
-              .map(([name, value]) => {
-                const numeric = Number(value);
-                const width = ((numeric - minValue) / range) * 100;
-                const debLine =
-                  view.deb != null
-                    ? ((Number(view.deb) - minValue) / range) * 100
-                    : null;
+        {modelEntries
+          .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+          .map(([name, value]) => {
+            const numeric = Number(value);
+            const width = ((numeric - minValue) / range) * 100;
+            const debLine =
+              view.deb != null
+                ? ((Number(view.deb) - minValue) / range) * 100
+                : null;
 
-                return (
-                  <div key={name} className="model-row">
-                    <div className="model-name" title={name}>
-                      {getModelDisplayName(name)}
-                    </div>
-                    <div className="model-bar-track">
-                      <div
-                        className="model-bar-fill"
-                        style={{ width: `${width}%` }}
-                      >
-                        {numeric}
-                        {detail.temp_symbol}
-                      </div>
-                      {debLine != null && (
-                        <div
-                          className="model-deb-line"
-                          style={{ left: `${debLine}%` }}
-                        />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            {view.deb != null && (
-              <div
-                className="model-row"
-                style={{
-                  borderTop: "1px solid rgba(255,255,255,0.06)",
-                  marginTop: "6px",
-                  paddingTop: "6px",
-                }}
-              >
-                <div
-                  className="model-name"
-                  style={{ color: "var(--accent-cyan)", fontWeight: 700 }}
-                >
-                  DEB
+            return (
+              <div key={name} className="model-row">
+                <div className="model-name" title={name}>
+                  {getModelDisplayName(name)}
                 </div>
                 <div className="model-bar-track">
                   <div
-                    className="model-bar-fill deb"
-                    style={{
-                      width: `${((Number(view.deb) - minValue) / range) * 100}%`,
-                    }}
+                    className="model-bar-fill"
+                    style={{ width: `${width}%` }}
                   >
-                    {Number(view.deb)}
+                    {numeric}
                     {detail.temp_symbol}
                   </div>
+                  {debLine != null && (
+                    <div
+                      className="model-deb-line"
+                      style={{ left: `${debLine}%` }}
+                    />
+                  )}
                 </div>
               </div>
-            )}
-          </>
+            );
+          })}
+        {view.deb != null && (
+          <div
+            className="model-row"
+            style={{
+              borderTop: "1px solid rgba(255,255,255,0.06)",
+              marginTop: "6px",
+              paddingTop: "6px",
+            }}
+          >
+            <div
+              className="model-name"
+              style={{ color: "var(--accent-cyan)", fontWeight: 700 }}
+            >
+              DEB
+            </div>
+            <div className="model-bar-track">
+              <div
+                className="model-bar-fill deb"
+                style={{
+                  width: `${((Number(view.deb) - minValue) / range) * 100}%`,
+                }}
+              >
+                {Number(view.deb)}
+                {detail.temp_symbol}
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </section>
