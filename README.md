@@ -49,15 +49,15 @@ This project uses a decoupled production setup for reliability and iteration spe
 - **📈 Market Data Integration**
   - Live Polymarket quotes, probabilities, and dynamic settlement bucket tracking.
   - Automatic Market Edge and Spread calculation comparing DEB vs Market.
-- **🧩 React Dashboard Runtime (v1.2)**
-  - Fully internationalized (i18n) with English and Simplified Chinese support.
-  - Premium UI: Glassmorphism overlays, dynamic "Sonar Pulse" markers, and fluid loading states.
-  - Typed store + typed API client + Leaflet/Chart.js lifecycle wrappers.
-  - Today analysis workflow: open modal + freeze map motion.
-- **🔔 Alert Engine**
+- **🧩 React Quant Dashboard (v2.0)**
+  - **Pull-based Dynamic Cache**: Default 5-minute TTL safety lock, with a 1-minute high-frequency bypass exclusively for Ankara (ANKARA).
+  - **Optimistic UI & Cache Breakthrough**: Manual `force_refresh` trigger maintains legacy observations during load to prevent screen flickering, isolating loading states only to external polymarket edges.
+  - **Dark Quant Aesthetics**: Upgraded from emojis to native `lucide-react` SVGs. Re-engineered cold/warm structure progress bars, dynamic threshold palettes, and fluid 100% card widths.
+  - **Bilingual & Seamless**: Built-in comprehensive `i18n.ts` with transparent localization mapping.
+- **🔔 Edge Analytics & Alerts**
   - **Momentum Spike**: Captures rapid short-window temperature slope changes.
   - **Forecast Breakthrough**: Fires when observations break model envelopes plus margin.
-  - **Advection Monitoring**: Tracks warm/cold advection using lead-station behavior and wind direction.
+  - **Advection Monitoring**: Combines lead-station and wind direction to judge cold/warm advections against live temperature drifts.
 
 ---
 
