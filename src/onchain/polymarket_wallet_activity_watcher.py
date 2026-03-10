@@ -202,10 +202,17 @@ def _diff_positions(
     current: Dict[str, Dict[str, Any]],
     min_size_delta: float,
     notify_closed: bool,
+    min_price: float = 0.0,
+    max_price: float = 1.0,
 ) -> List[Tuple[str, Dict[str, Any]]]:
     changes: List[Tuple[str, Dict[str, Any]]] = []
 
     for key, now_pos in current.items():
+        # 价格过滤：如果设置了价格区间，不符合的直接跳过
+        price = _safe_float(now_pos.get("avg_price"))
+        if price < min_price or price > max_price:
+            continue
+
         old_pos = previous.get(key)
         if old_pos is None:
             changes.append(("new", now_pos))
@@ -224,6 +231,7 @@ def _diff_positions(
     if notify_closed:
         for key, old_pos in previous.items():
             if key not in current:
+                # 关闭仓位时通常也检查一下关闭时的价格（如果需要的话，这里暂时保留 notify_closed 逻辑）
                 changes.append(("closed", old_pos))
 
     return changes
@@ -357,6 +365,10 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", True)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
 
+    # 价格过滤范围配置
+    min_price = _env_float("POLYMARKET_WALLET_ACTIVITY_AVG_PRICE_SHOW_MIN", 0.0)
+    max_price = _env_float("POLYMARKET_WALLET_ACTIVITY_AVG_PRICE_SHOW_MAX", 1.0)
+
     state_path = _state_file()
     session = requests.Session()
 
@@ -399,6 +411,8 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                         current=current,
                         min_size_delta=min_size_delta,
                         notify_closed=notify_closed,
+                        min_price=min_price,
+                        max_price=max_price,
                     )
 
                     if changes:
