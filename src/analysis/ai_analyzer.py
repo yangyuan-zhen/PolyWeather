@@ -1,4 +1,6 @@
+import hashlib
 import os
+import threading
 import time
 import requests
 from loguru import logger
@@ -9,16 +11,56 @@ MODELS = [
     "llama-3.1-8b-instant",
 ]
 
+# ── 本地缓存 ──────────────────────────────────────────────
+# key: sha1(city_name + weather_insights[:200])
+# value: {"result": str, "t": float}
+_ai_cache: dict = {}
+_ai_cache_lock = threading.Lock()
+
+# 全局 429 冷却期：触发限流后暂停一段时间内的所有 Groq 请求
+_rate_limit_until: float = 0.0
+_rate_limit_lock = threading.Lock()
+
 
 def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> str:
     """
     通过 Groq API (LLaMA 3.3 70B) 对天气态势进行极速交易分析
-    内置自动重试 + 模型降级机制
+    内置自动重试 + 模型降级机制 + 本地 TTL 缓存 + 全局 429 冷却期
     """
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         logger.warning("GROQ_API_KEY 未配置，跳过 AI 分析")
         return ""
+
+    # ── 缓存配置 ─────────────────────────────────────────
+    cache_ttl = int(os.getenv("GROQ_CACHE_TTL_SEC", "1200"))          # 默认 20 分钟
+    rl_cooldown = int(os.getenv("GROQ_RATE_LIMIT_COOLDOWN_SEC", "600"))  # 默认 10 分钟
+
+    # 缓存 key：城市名 + 天气摘要前 200 字符（同城市、同数据不重复打 API）
+    cache_raw = f"{city_name}:{weather_insights[:200]}"
+    cache_key = hashlib.sha1(cache_raw.encode("utf-8")).hexdigest()[:16]
+
+    now = time.time()
+
+    # ── 命中缓存则直接返回 ────────────────────────────────
+    with _ai_cache_lock:
+        cached = _ai_cache.get(cache_key)
+        if cached and now - cached["t"] < cache_ttl:
+            logger.debug(f"Groq AI cache hit city={city_name} age={int(now - cached['t'])}s")
+            return cached["result"]
+
+    # ── 全局 429 冷却期检查 ───────────────────────────────
+    with _rate_limit_lock:
+        global _rate_limit_until
+        if now < _rate_limit_until:
+            remaining = int(_rate_limit_until - now)
+            logger.warning(f"Groq 冷却期中，还需等待 {remaining}s，跳过本次请求")
+            # 如果有旧缓存，返回旧结果（过期但总比没有好）
+            with _ai_cache_lock:
+                stale = _ai_cache.get(cache_key)
+                if stale:
+                    return stale["result"] + "\n<i>（AI 分析来自缓存，数据可能略旧）</i>"
+            return "\n⚠️ Groq AI 限流中，请稍后再试"
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
@@ -103,6 +145,9 @@ P4 **预报背景**（最低优先级）：
 
                 if model != MODELS[0]:
                     logger.info(f"Groq 降级到备用模型 {model} 成功")
+                # ── 写入缓存 ─────────────────────────────────
+                with _ai_cache_lock:
+                    _ai_cache[cache_key] = {"result": content, "t": time.time()}
                 return content
 
             except requests.exceptions.HTTPError as e:
@@ -115,6 +160,13 @@ P4 **预报背景**（最低优先级）：
                 logger.warning(
                     f"Groq {model} 失败 (HTTP {status}): {error_body}. 尝试下一个..."
                 )
+                if status == 429:
+                    # 触发限流：设置全局冷却期，后续请求不再尝试
+                    with _rate_limit_lock:
+                        global _rate_limit_until
+                        _rate_limit_until = time.time() + rl_cooldown
+                    logger.warning(f"Groq 触发限流，设置 {rl_cooldown}s 全局冷却期")
+                    break  # 不再尝试其他模型，直接走 stale cache 逻辑
                 if status in (500, 502, 503) and attempt == 0:
                     time.sleep(1.5)
                     continue
@@ -125,4 +177,10 @@ P4 **预报背景**（最低优先级）：
                 break
 
     logger.error("所有 Groq 模型均不可用")
-    return "\n⚠️ Groq AI 暂时不可用，请稍后再试"
+    # ── 有旧缓存则返回旧结果 ──────────────────────────────
+    with _ai_cache_lock:
+        stale = _ai_cache.get(cache_key)
+        if stale:
+            logger.info(f"Groq 不可用，返回旧缓存结果 city={city_name} age={int(time.time()-stale['t'])}s")
+            return stale["result"] + "\n<i>（⚠️ AI 分析来自上次缓存）</i>"
+    return ""
