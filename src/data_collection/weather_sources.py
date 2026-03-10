@@ -1,7 +1,9 @@
 import csv
+import os
 import requests
 import re
 import time
+import threading
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 from loguru import logger
@@ -42,6 +44,7 @@ class WeatherDataCollector:
 
     # Meteoblue 仅在增益最大的城市启用（减少配额消耗与冗余请求）
     METEOBLUE_PRIORITY_CITIES = {
+        "ankara",
         "london",
         "paris",
         "seoul",
@@ -61,6 +64,11 @@ class WeatherDataCollector:
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()
+        self.meteoblue_cache_ttl_sec = int(
+            os.getenv("METEOBLUE_CACHE_TTL_SEC", "1800")
+        )
+        self._meteoblue_cache: Dict[str, Dict] = {}
+        self._meteoblue_cache_lock = threading.Lock()
 
         # 设置代理
         proxy = config.get("proxy")
@@ -1194,10 +1202,23 @@ class WeatherDataCollector:
     ) -> Optional[Dict]:
         """
         通过 Meteoblue 官方 API 获取高精度预测数据
+        带本地缓存，避免频繁请求触发 429。
         """
         if not self.meteoblue_key:
             logger.warning("Meteoblue API Key 未配置，跳过抓取。")
             return None
+
+        cache_key = f"{round(float(lat), 4)}:{round(float(lon), 4)}:{'f' if use_fahrenheit else 'c'}"
+        now_ts = time.time()
+        with self._meteoblue_cache_lock:
+            cached = self._meteoblue_cache.get(cache_key)
+            if (
+                cached
+                and now_ts - float(cached.get("t", 0)) < self.meteoblue_cache_ttl_sec
+            ):
+                cached_data = cached.get("data")
+                if isinstance(cached_data, dict):
+                    return dict(cached_data)
 
         try:
             # 1. 调用官方 API (使用 basic-day 包，它是多模型 ML 融合结果)
@@ -1246,12 +1267,29 @@ class WeatherDataCollector:
             else:
                 result["daily_highs"] = max_temps
 
+            with self._meteoblue_cache_lock:
+                self._meteoblue_cache[cache_key] = {
+                    "t": now_ts,
+                    "data": dict(result),
+                }
+
             logger.info(
                 f"✅ Meteoblue API 获取成功 ({lat},{lon}): 今天 {result['today_high']}{result['unit']}"
             )
             return result
         except Exception as e:
-            logger.error(f"Meteoblue API fetch failed: {e}")
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
+            if status_code == 429:
+                logger.warning("Meteoblue API 限流(429)，尝试使用本地缓存回退。")
+            else:
+                logger.error(f"Meteoblue API fetch failed: {e}")
+
+            with self._meteoblue_cache_lock:
+                stale = self._meteoblue_cache.get(cache_key)
+                if stale and isinstance(stale.get("data"), dict):
+                    fallback = dict(stale["data"])
+                    fallback["stale_cache"] = True
+                    return fallback
             return None
 
     def extract_date_from_title(self, title: str) -> Optional[str]:

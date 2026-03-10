@@ -1,16 +1,17 @@
-import sys
+﻿import sys
 import os
 from typing import List
 import telebot  # type: ignore
 from loguru import logger  # type: ignore
 
-# 确保项目根目录在 sys.path 中
+# 纭繚椤圭洰鏍圭洰褰曞湪 sys.path 涓?
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from src.utils.config_loader import load_config  # type: ignore # noqa: E402
 from src.utils.telegram_push import start_trade_alert_push_loop  # type: ignore # noqa: E402
+from src.onchain.polygon_wallet_watcher import start_polygon_wallet_watch_loop  # type: ignore # noqa: E402
 from src.data_collection.weather_sources import WeatherDataCollector  # type: ignore # noqa: E402
 from src.data_collection.city_risk_profiles import get_city_risk_profile  # type: ignore # noqa: E402
 from src.analysis.deb_algorithm import calculate_dynamic_weights, update_daily_record  # noqa: E402
@@ -25,7 +26,7 @@ DEB_QUERY_COST = 1
 
 
 def analyze_weather_trend(weather_data, temp_symbol, city_name=None):
-    """Thin wrapper — delegates to shared trend_engine module."""
+    """Thin wrapper 鈥?delegates to shared trend_engine module."""
     from src.analysis.trend_engine import analyze_weather_trend as _analyze
     display_str, ai_context, _structured = _analyze(weather_data, temp_symbol, city_name)
     return display_str, ai_context
@@ -35,13 +36,14 @@ def start_bot():
     config = load_config()
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
-        logger.error("未找到 TELEGRAM_BOT_TOKEN 环境变量")
+        logger.error("鏈壘鍒?TELEGRAM_BOT_TOKEN 鐜鍙橀噺")
         return
 
     bot = telebot.TeleBot(token)
     db = DBManager()
     weather = WeatherDataCollector(config)
     start_trade_alert_push_loop(bot, config)
+    start_polygon_wallet_watch_loop(bot)
 
     def _display_name(user) -> str:
         return user.username or user.first_name or f"User_{user.id}"
@@ -59,12 +61,12 @@ def start_bot():
         bot.reply_to(
             message,
             (
-                f"❌ 积分不足，无法执行 <b>{label}</b>\n"
-                f"当前积分: <code>{balance}</code>\n"
-                f"需要积分: <code>{required}</code>\n"
-                f"还差积分: <code>{missing}</code>\n\n"
-                f"积分规则：每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
-                f"每日上限 {MESSAGE_DAILY_CAP} 分。"
+                f"鉂?绉垎涓嶈冻锛屾棤娉曟墽琛?<b>{label}</b>\n"
+                f"褰撳墠绉垎: <code>{balance}</code>\n"
+                f"闇€瑕佺Н鍒? <code>{required}</code>\n"
+                f"杩樺樊绉垎: <code>{missing}</code>\n\n"
+                f"绉垎瑙勫垯锛氭瘡鏃ョ鍒?鏈夋晥鍙戣█婊?{MESSAGE_MIN_LENGTH} 瀛?鑾峰緱 <b>{MESSAGE_POINTS}</b> 绉垎锛?
+                f"姣忔棩涓婇檺 {MESSAGE_DAILY_CAP} 鍒嗐€?
             ),
             parse_mode="HTML",
         )
@@ -73,15 +75,15 @@ def start_bot():
     @bot.message_handler(commands=["start", "help"])
     def send_welcome(message):
         welcome_text = (
-            "🌡️ <b>PolyWeather 天气查询机器人</b>\n\n"
-            "可用指令:\n"
-            f"/city [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
-            f"/deb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
-            "/top - 查看积分排行榜\n"
-            "/id - 获取当前聊天的 Chat ID\n\n"
-            "示例: <code>/city 伦敦</code>\n"
-            f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
-            f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
+            "馃尅锔?<b>PolyWeather 澶╂皵鏌ヨ鏈哄櫒浜?/b>\n\n"
+            "鍙敤鎸囦护:\n"
+            f"/city [鍩庡競鍚峕 - 鏌ヨ鍩庡競澶╂皵棰勬祴涓庡疄娴?(娑堣€?{CITY_QUERY_COST} 绉垎)\n"
+            f"/deb [鍩庡競鍚峕 - 鏌ョ湅 DEB 铻嶅悎棰勬祴鍑嗙‘鐜?(娑堣€?{DEB_QUERY_COST} 绉垎)\n"
+            "/top - 鏌ョ湅绉垎鎺掕姒淺n"
+            "/id - 鑾峰彇褰撳墠鑱婂ぉ鐨?Chat ID\n\n"
+            "绀轰緥: <code>/city 浼︽暒</code>\n"
+            f"馃挕 <i>鎻愮ず: 姣忔棩绛惧埌(鏈夋晥鍙戣█婊?{MESSAGE_MIN_LENGTH} 瀛?鑾峰緱 <b>{MESSAGE_POINTS}</b> 绉垎锛?
+            f"姣忔棩涓婇檺 {MESSAGE_DAILY_CAP} 鍒嗐€?/i>"
         )
         bot.reply_to(message, welcome_text, parse_mode="HTML")
 
@@ -89,44 +91,44 @@ def start_bot():
     def get_chat_id(message):
         bot.reply_to(
             message,
-            f"🎯 当前聊天的 Chat ID 是: <code>{message.chat.id}</code>",
+            f"馃幆 褰撳墠鑱婂ぉ鐨?Chat ID 鏄? <code>{message.chat.id}</code>",
             parse_mode="HTML",
         )
 
     @bot.message_handler(commands=["top"])
     def show_points(message):
-        """显示当前用户的积分及排行榜"""
+        """鏄剧ず褰撳墠鐢ㄦ埛鐨勭Н鍒嗗強鎺掕姒?""
         user = message.from_user
         db.upsert_user(user.id, _display_name(user))
         user_info = db.get_user(user.id)
         
         leaderboard = db.get_leaderboard(limit=5)
-        rank_text = "🏆 <b>PolyWeather 活跃度排行榜</b>\n"
-        rank_text += "────────────────────\n"
+        rank_text = "馃弳 <b>PolyWeather 娲昏穬搴︽帓琛屾</b>\n"
+        rank_text += "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€\n"
         for i, entry in enumerate(leaderboard):
-            medal = ["🥇", "🥈", "🥉", "  ", "  "][i] if i < 5 else "  "
-            rank_text += f"{medal} {entry['username'][:12]}: <b>{entry['points']}</b> 点\n"
+            medal = ["馃", "馃", "馃", "  ", "  "][i] if i < 5 else "  "
+            rank_text += f"{medal} {entry['username'][:12]}: <b>{entry['points']}</b> 鐐筡n"
         
         if user_info:
-            rank_text += "────────────────────\n"
+            rank_text += "鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€\n"
             rank_text += (
-                f"👤 <b>我的状态：</b>\n"
-                f"└ 积分: <code>{user_info['points']}</code>\n"
-                f"└ 发言: <code>{user_info['message_count']}</code> 次\n"
-                f"└ 今日发言积分: <code>{user_info.get('daily_points') or 0}/{MESSAGE_DAILY_CAP}</code>\n"
-                f"└ /city 消耗: <code>{CITY_QUERY_COST}</code> | /deb 消耗: <code>{DEB_QUERY_COST}</code>"
+                f"馃懁 <b>鎴戠殑鐘舵€侊細</b>\n"
+                f"鈹?绉垎: <code>{user_info['points']}</code>\n"
+                f"鈹?鍙戣█: <code>{user_info['message_count']}</code> 娆n"
+                f"鈹?浠婃棩鍙戣█绉垎: <code>{user_info.get('daily_points') or 0}/{MESSAGE_DAILY_CAP}</code>\n"
+                f"鈹?/city 娑堣€? <code>{CITY_QUERY_COST}</code> | /deb 娑堣€? <code>{DEB_QUERY_COST}</code>"
             )
         
         bot.send_message(message.chat.id, rank_text, parse_mode="HTML")
     @bot.message_handler(commands=["deb"])
     def deb_accuracy(message):
-        """查询 DEB 融合预测的近 7 天准确率。"""
+        """鏌ヨ DEB 铻嶅悎棰勬祴鐨勮繎 7 澶╁噯纭巼銆?""
         try:
             parts = message.text.split(maxsplit=1)
             if len(parts) < 2:
                 bot.reply_to(
                     message,
-                    "❌ 用法: <code>/deb ankara</code>",
+                    "鉂?鐢ㄦ硶: <code>/deb ankara</code>",
                     parse_mode="HTML",
                 )
                 return
@@ -147,7 +149,7 @@ def start_bot():
             if city_name not in data or not data[city_name]:
                 bot.reply_to(
                     message,
-                    f"❌ 暂无 {city_name} 的历史数据。",
+                    f"鉂?鏆傛棤 {city_name} 鐨勫巻鍙叉暟鎹€?,
                     parse_mode="HTML",
                 )
                 return
@@ -172,9 +174,9 @@ def start_bot():
             recent_items.sort(key=lambda item: item[0])
 
             lines = [
-                f"📊 <b>DEB 准确率报告 - {city_name.title()}</b>",
+                f"馃搳 <b>DEB 鍑嗙‘鐜囨姤鍛?- {city_name.title()}</b>",
                 "",
-                "📅 <b>近7日记录：</b>",
+                "馃搮 <b>杩?鏃ヨ褰曪細</b>",
             ]
             total_days = 0
             hits = 0
@@ -205,7 +207,7 @@ def start_bot():
                 actual_wu = round(actual)
 
                 if date_str == today_str:
-                    lines.append(f"  {date_str}: 📍 今天进行中 (实测暂 {actual:.1f})")
+                    lines.append(f"  {date_str}: 馃搷 浠婂ぉ杩涜涓?(瀹炴祴鏆?{actual:.1f})")
                 elif deb_pred is not None:
                     total_days += 1
                     deb_wu = round(deb_pred)
@@ -217,18 +219,18 @@ def start_bot():
                     signed_errors.append(err)
 
                     if hit:
-                        result_icon = "✅"
-                        err_text = f"偏差{abs(err):.1f}°"
+                        result_icon = "鉁?
+                        err_text = f"鍋忓樊{abs(err):.1f}掳"
                     elif err < 0:
-                        result_icon = "❌"
-                        err_text = f"低估{abs(err):.1f}°"
+                        result_icon = "鉂?
+                        err_text = f"浣庝及{abs(err):.1f}掳"
                     else:
-                        result_icon = "❌"
-                        err_text = f"高估{abs(err):.1f}°"
+                        result_icon = "鉂?
+                        err_text = f"楂樹及{abs(err):.1f}掳"
 
-                    retro = "≈" if "deb_prediction" not in record else ""
+                    retro = "鈮? if "deb_prediction" not in record else ""
                     lines.append(
-                        f"  {date_str}: DEB {retro}{deb_pred:.1f}→{deb_wu} vs 实测 {actual:.1f}→{actual_wu} "
+                        f"  {date_str}: DEB {retro}{deb_pred:.1f}鈫抺deb_wu} vs 瀹炴祴 {actual:.1f}鈫抺actual_wu} "
                         f"{result_icon} {err_text}"
                     )
 
@@ -246,18 +248,18 @@ def start_bot():
                 deb_mae = sum(deb_errors) / len(deb_errors)
                 lines.append("")
                 lines.append(
-                    f"🎯 <b>DEB 总战绩：</b>WU命中 {hits}/{total_days} (<b>{hit_rate:.0f}%</b>) | MAE: {deb_mae:.1f}°"
+                    f"馃幆 <b>DEB 鎬绘垬缁╋細</b>WU鍛戒腑 {hits}/{total_days} (<b>{hit_rate:.0f}%</b>) | MAE: {deb_mae:.1f}掳"
                 )
 
                 if model_errors:
                     lines.append("")
-                    lines.append("📈 <b>模型 MAE 对比：</b>")
+                    lines.append("馃搱 <b>妯″瀷 MAE 瀵规瘮锛?/b>")
                     model_maes = {m: sum(e) / len(e) for m, e in model_errors.items() if e}
                     sorted_models = sorted(model_maes.items(), key=lambda item: item[1])
                     for model, mae in sorted_models:
-                        tag = " ⭐" if mae <= deb_mae else ""
-                        lines.append(f"  {model}: {mae:.1f}°{tag}")
-                    lines.append(f"  <b>DEB融合: {deb_mae:.1f}°</b>")
+                        tag = " 猸? if mae <= deb_mae else ""
+                        lines.append(f"  {model}: {mae:.1f}掳{tag}")
+                    lines.append(f"  <b>DEB铻嶅悎: {deb_mae:.1f}掳</b>")
 
                 mean_bias = sum(signed_errors) / len(signed_errors)
                 underest = sum(1 for e in signed_errors if e < -0.3)
@@ -265,55 +267,55 @@ def start_bot():
                 accurate = total_days - underest - overest
 
                 lines.append("")
-                lines.append("🔍 <b>偏差分析：</b>")
+                lines.append("馃攳 <b>鍋忓樊鍒嗘瀽锛?/b>")
                 if abs(mean_bias) > 0.3:
-                    bias_label = "系统性低估" if mean_bias < 0 else "系统性高估"
-                    lines.append(f"  ⚠️ {bias_label}：平均偏差 {mean_bias:+.1f}°")
+                    bias_label = "绯荤粺鎬т綆浼? if mean_bias < 0 else "绯荤粺鎬ч珮浼?
+                    lines.append(f"  鈿狅笍 {bias_label}锛氬钩鍧囧亸宸?{mean_bias:+.1f}掳")
                 else:
-                    lines.append(f"  ✅ 整体无明显系统偏差：平均偏差 {mean_bias:+.1f}°")
-                lines.append(f"  低估 {underest} 次 | 高估 {overest} 次 | 准确 {accurate} 次")
+                    lines.append(f"  鉁?鏁翠綋鏃犳槑鏄剧郴缁熷亸宸細骞冲潎鍋忓樊 {mean_bias:+.1f}掳")
+                lines.append(f"  浣庝及 {underest} 娆?| 楂樹及 {overest} 娆?| 鍑嗙‘ {accurate} 娆?)
 
                 lines.append("")
-                lines.append("💡 <b>建议：</b>")
+                lines.append("馃挕 <b>寤鸿锛?/b>")
                 if underest > overest and abs(mean_bias) > 0.5:
                     lines.append(
-                        f"  该城市模型集体低估趋势明显（{mean_bias:+.1f}°），实际最高温可能比 DEB 融合值高 "
-                        f"{abs(mean_bias):.0f}-{abs(mean_bias) + 0.5:.0f}°。交易时建议适当看高。"
+                        f"  璇ュ煄甯傛ā鍨嬮泦浣撲綆浼拌秼鍔挎槑鏄撅紙{mean_bias:+.1f}掳锛夛紝瀹為檯鏈€楂樻俯鍙兘姣?DEB 铻嶅悎鍊奸珮 "
+                        f"{abs(mean_bias):.0f}-{abs(mean_bias) + 0.5:.0f}掳銆備氦鏄撴椂寤鸿閫傚綋鐪嬮珮銆?
                     )
                 elif overest > underest and abs(mean_bias) > 0.5:
                     lines.append(
-                        f"  该城市模型集体高估趋势明显（{mean_bias:+.1f}°），实际最高温可能低于 DEB 融合值。交易时注意追高风险。"
+                        f"  璇ュ煄甯傛ā鍨嬮泦浣撻珮浼拌秼鍔挎槑鏄撅紙{mean_bias:+.1f}掳锛夛紝瀹為檯鏈€楂樻俯鍙兘浣庝簬 DEB 铻嶅悎鍊笺€備氦鏄撴椂娉ㄦ剰杩介珮椋庨櫓銆?
                     )
                 elif deb_mae > 1.5:
-                    lines.append(f"  近期模型波动较大（MAE {deb_mae:.1f}°），建议降低对单一日预测的信任度。")
+                    lines.append(f"  杩戞湡妯″瀷娉㈠姩杈冨ぇ锛圡AE {deb_mae:.1f}掳锛夛紝寤鸿闄嶄綆瀵瑰崟涓€鏃ラ娴嬬殑淇′换搴︺€?)
                 elif hit_rate >= 60:
-                    lines.append("  DEB 近期表现稳定，可继续作为主要参考。")
+                    lines.append("  DEB 杩戞湡琛ㄧ幇绋冲畾锛屽彲缁х画浣滀负涓昏鍙傝€冦€?)
                 else:
-                    lines.append("  近期准确率一般，建议结合主站实测与周边站点共同判断。")
+                    lines.append("  杩戞湡鍑嗙‘鐜囦竴鑸紝寤鸿缁撳悎涓荤珯瀹炴祴涓庡懆杈圭珯鐐瑰叡鍚屽垽鏂€?)
 
                 lines.append("")
-                lines.append("📝 MAE = 平均绝对误差，越小越准。⭐ = 优于 DEB 融合。")
-                lines.append("🗓 统计窗口：近7天滚动样本。")
+                lines.append("馃摑 MAE = 骞冲潎缁濆璇樊锛岃秺灏忚秺鍑嗐€傗瓙 = 浼樹簬 DEB 铻嶅悎銆?)
+                lines.append("馃棑 缁熻绐楀彛锛氳繎7澶╂粴鍔ㄦ牱鏈€?)
             else:
                 lines.append("")
-                lines.append("⏳ 近7天尚无完整的 DEB 预测记录。")
+                lines.append("鈴?杩?澶╁皻鏃犲畬鏁寸殑 DEB 棰勬祴璁板綍銆?)
 
             lines.append("")
-            lines.append(f"💳 本次消耗 <code>{DEB_QUERY_COST}</code> 积分。")
+            lines.append(f"馃挸 鏈娑堣€?<code>{DEB_QUERY_COST}</code> 绉垎銆?)
             bot.reply_to(message, "\n".join(lines), parse_mode="HTML")
         except Exception as e:
-            bot.reply_to(message, f"❌ 查询失败: {e}")
+            bot.reply_to(message, f"鉂?鏌ヨ澶辫触: {e}")
 
     @bot.message_handler(commands=["city"])
 
     def get_city_info(message):
-        """查询指定城市的天气详情"""
+        """鏌ヨ鎸囧畾鍩庡競鐨勫ぉ姘旇鎯?""
         try:
             parts = message.text.split(maxsplit=1)
             if len(parts) < 2:
                 bot.reply_to(
                     message,
-                    "❓ 请输入城市名称\n\n用法: <code>/city chicago</code>",
+                    "鉂?璇疯緭鍏ュ煄甯傚悕绉癨n\n鐢ㄦ硶: <code>/city chicago</code>",
                     parse_mode="HTML",
                 )
                 return
@@ -321,35 +323,35 @@ def start_bot():
             from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
             city_input = parts[1].strip().lower()
             
-            # --- 使用统一注册表解析城市 ---
+            # --- 浣跨敤缁熶竴娉ㄥ唽琛ㄨВ鏋愬煄甯?---
             SUPPORTED_CITIES = list(CITY_REGISTRY.keys())
 
-            # 1. 第一优先级：全称或别名完全匹配
+            # 1. 绗竴浼樺厛绾э細鍏ㄧО鎴栧埆鍚嶅畬鍏ㄥ尮閰?
             city_name = ALIASES.get(city_input)
             if not city_name and city_input in SUPPORTED_CITIES:
                 city_name = city_input
 
-            # 2. 第二优先级：前缀模糊匹配
+            # 2. 绗簩浼樺厛绾э細鍓嶇紑妯＄硦鍖归厤
             if not city_name and len(city_input) >= 2:
-                # 搜别名
+                # 鎼滃埆鍚?
                 for k, v in ALIASES.items():
                     if k.startswith(city_input):
                         city_name = v
                         break
-                # 搜城市全名
+                # 鎼滃煄甯傚叏鍚?
                 if not city_name:
                     for full_name in SUPPORTED_CITIES:
                         if full_name.startswith(city_input):
                             city_name = full_name
                             break
 
-            # 3. 未找到 → 报错
+            # 3. 鏈壘鍒?鈫?鎶ラ敊
             if not city_name:
                 city_list = ", ".join(sorted(SUPPORTED_CITIES))
                 bot.reply_to(
                     message,
-                    f"❌ 未找到城市: <b>{city_input}</b>\n\n"
-                    f"支持的城市: {city_list}",
+                    f"鉂?鏈壘鍒板煄甯? <b>{city_input}</b>\n\n"
+                    f"鏀寔鐨勫煄甯? {city_list}",
                     parse_mode="HTML",
                 )
                 return
@@ -358,12 +360,12 @@ def start_bot():
                 return
 
             bot.send_message(
-                message.chat.id, f"🔍 正在查询 {city_name.title()} 的天气数据..."
+                message.chat.id, f"馃攳 姝ｅ湪鏌ヨ {city_name.title()} 鐨勫ぉ姘旀暟鎹?.."
             )
 
             coords = weather.get_coordinates(city_name)
             if not coords:
-                bot.reply_to(message, f"❌ 未找到城市坐标: {city_name}")
+                bot.reply_to(message, f"鉂?鏈壘鍒板煄甯傚潗鏍? {city_name}")
                 return
 
             weather_data = weather.fetch_all_sources(
@@ -373,7 +375,7 @@ def start_bot():
             metar = weather_data.get("metar", {})
             mgm = weather_data.get("mgm") or {}
 
-            # 数值归一化
+            # 鏁板€煎綊涓€鍖?
             def _sf(v):
                 if v is None:
                     return None
@@ -383,26 +385,26 @@ def start_bot():
                     return None
 
             temp_unit = open_meteo.get("unit", "celsius")
-            temp_symbol = "°F" if temp_unit == "fahrenheit" else "°C"
+            temp_symbol = "掳F" if temp_unit == "fahrenheit" else "掳C"
 
-            # --- 1. 紧凑 Header (城市 + 时间 + 风险状态) ---
+            # --- 1. 绱у噾 Header (鍩庡競 + 鏃堕棿 + 椋庨櫓鐘舵€? ---
             local_time = open_meteo.get("current", {}).get("local_time", "")
             time_str = local_time.split(" ")[1][:5] if " " in local_time else "N/A"
 
             risk_profile = get_city_risk_profile(city_name)
-            risk_emoji = risk_profile.get("risk_level", "⚪") if risk_profile else "⚪"
+            risk_emoji = risk_profile.get("risk_level", "鈿?) if risk_profile else "鈿?
 
-            msg_header = f"📍 <b>{city_name.title()}</b> ({time_str}) {risk_emoji}"
+            msg_header = f"馃搷 <b>{city_name.title()}</b> ({time_str}) {risk_emoji}"
             msg_lines = [msg_header]
 
-            # --- 2. 紧凑 风险提示 ---
+            # --- 2. 绱у噾 椋庨櫓鎻愮ず ---
             if risk_profile:
-                bias = risk_profile.get("bias", "±0.0")
+                bias = risk_profile.get("bias", "卤0.0")
                 msg_lines.append(
-                    f"⚠️ {risk_profile.get('airport_name', '')}: {bias}{temp_symbol} | {risk_profile.get('warning', '')}"
+                    f"鈿狅笍 {risk_profile.get('airport_name', '')}: {bias}{temp_symbol} | {risk_profile.get('warning', '')}"
                 )
 
-            # --- 3. 紧凑 预测区 ---
+            # --- 3. 绱у噾 棰勬祴鍖?---
             daily = open_meteo.get("daily", {})
             dates = daily.get("time", [])[:3]
             max_temps = daily.get("temperature_2m_max", [])[:3]
@@ -411,7 +413,7 @@ def start_bot():
             mgm_high = _sf(mgm.get("today_high"))
             mb_high = _sf(weather_data.get("meteoblue", {}).get("today_high"))
 
-            # 今天对比
+            # 浠婂ぉ瀵规瘮
             today_t = max_temps[0] if max_temps else "N/A"
             comp_parts = []
             sources = ["Open-Meteo"]
@@ -433,45 +435,45 @@ def start_bot():
             if mgm_high is not None:
                 sources.append("MGM")
                 comp_parts.append(
-                    f"🇹🇷 MGM: {mgm_high:.1f}{temp_symbol}"
+                    f"馃嚬馃嚪 MGM: {mgm_high:.1f}{temp_symbol}"
                     if isinstance(mgm_high, (int, float))
-                    else f"🇹🇷 MGM: {mgm_high}"
+                    else f"馃嚬馃嚪 MGM: {mgm_high}"
                 )
 
-            # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
+            # 妫€鏌ユ槸鍚︽湁鏄捐憲鍒嗘 (瓒呰繃 5掳F 鎴?2.5掳C)
             divergence_warning = ""
             if mb_high is not None and max_temps:
                 diff = abs(mb_high - (_sf(max_temps[0]) or 0))
                 threshold = 5.0 if temp_unit == "fahrenheit" else 2.5
                 if diff > threshold:
                     divergence_warning = (
-                        f" ⚠️ <b>模型显著分歧 ({diff:.1f}{temp_symbol})</b>"
+                        f" 鈿狅笍 <b>妯″瀷鏄捐憲鍒嗘 ({diff:.1f}{temp_symbol})</b>"
                     )
 
             comp_str = f" ({' | '.join(comp_parts)})" if comp_parts else ""
             sources_str = " | ".join(sources)
 
-            msg_lines.append(f"\n📊 <b>预报 ({sources_str})</b>")
+            msg_lines.append(f"\n馃搳 <b>棰勬姤 ({sources_str})</b>")
             msg_lines.append(
-                f"👉 <b>今天: {today_t}{temp_symbol}{comp_str}</b>{divergence_warning}"
+                f"馃憠 <b>浠婂ぉ: {today_t}{temp_symbol}{comp_str}</b>{divergence_warning}"
             )
 
-            # 明后天
+            # 鏄庡悗澶?
             if len(dates) > 1:
                 future_forecasts = []
                 mgm_daily = mgm.get("daily_forecasts", {}) or {}
                 for d, t in zip(dates[1:], max_temps[1:]):
-                    # 检查 MGM 是否有该日期的预报
+                    # 妫€鏌?MGM 鏄惁鏈夎鏃ユ湡鐨勯鎶?
                     mgm_f = mgm_daily.get(d)
                     if mgm_f is not None:
                         future_forecasts.append(
-                            f"{d[5:]}: {t}{temp_symbol} | 🇹🇷 <b>MGM: {mgm_f}{temp_symbol}</b>"
+                            f"{d[5:]}: {t}{temp_symbol} | 馃嚬馃嚪 <b>MGM: {mgm_f}{temp_symbol}</b>"
                         )
                     else:
                         future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
-                msg_lines.append("📅 " + " | ".join(future_forecasts))
+                msg_lines.append("馃搮 " + " | ".join(future_forecasts))
 
-            # --- 3.5 日出日落 + 日照时长 ---
+            # --- 3.5 鏃ュ嚭鏃ヨ惤 + 鏃ョ収鏃堕暱 ---
             sunrises = daily.get("sunrise", [])
             sunsets = daily.get("sunset", [])
             sunshine_durations = daily.get("sunshine_duration", [])
@@ -486,14 +488,14 @@ def start_bot():
                     if "T" in str(sunsets[0])
                     else sunsets[0]
                 )
-                sun_line = f"🌅 日出 {sunrise_t} | 🌇 日落 {sunset_t}"
+                sun_line = f"馃寘 鏃ュ嚭 {sunrise_t} | 馃寚 鏃ヨ惤 {sunset_t}"
                 if sunshine_durations:
-                    sunshine_hours = sunshine_durations[0] / 3600  # 秒 -> 小时
-                    sun_line += f" | ☀️ 日照 {sunshine_hours:.1f}h"
+                    sunshine_hours = sunshine_durations[0] / 3600  # 绉?-> 灏忔椂
+                    sun_line += f" | 鈽€锔?鏃ョ収 {sunshine_hours:.1f}h"
                 msg_lines.append(sun_line)
 
-            # --- 4. 核心 实测区 (合并 METAR 和 MGM) ---
-            # 基础数据优先用 METAR
+            # --- 4. 鏍稿績 瀹炴祴鍖?(鍚堝苟 METAR 鍜?MGM) ---
+            # 鍩虹鏁版嵁浼樺厛鐢?METAR
             cur_temp = _sf(
                 metar.get("current", {}).get("temp")
                 if metar
@@ -506,7 +508,7 @@ def start_bot():
                 metar.get("current", {}).get("max_temp_time") if metar else None
             )
             obs_t_str = "N/A"
-            metar_age_min = None  # METAR 数据年龄（分钟）
+            metar_age_min = None  # METAR 鏁版嵁骞撮緞锛堝垎閽燂級
             main_source = "METAR" if metar else "MGM"
 
             if metar:
@@ -521,7 +523,7 @@ def start_bot():
                             timezone(timedelta(seconds=utc_offset))
                         )
                         obs_t_str = local_dt.strftime("%H:%M")
-                        # 计算数据年龄
+                        # 璁＄畻鏁版嵁骞撮緞
                         now_utc = datetime.now(timezone.utc)
                         metar_age_min = int((now_utc - dt).total_seconds() / 60)
                     elif " " in obs_t:
@@ -543,27 +545,27 @@ def start_bot():
                     m_time = m_time.split(" ")[1][:5]
                 obs_t_str = m_time
 
-            # 数据年龄标注
+            # 鏁版嵁骞撮緞鏍囨敞
             age_tag = ""
             if metar_age_min is not None:
                 if metar_age_min >= 60:
-                    age_tag = f" ⚠️{metar_age_min}分钟前"
+                    age_tag = f" 鈿狅笍{metar_age_min}鍒嗛挓鍓?
                 elif metar_age_min >= 30:
-                    age_tag = f" ⏳{metar_age_min}分钟前"
+                    age_tag = f" 鈴硔metar_age_min}鍒嗛挓鍓?
 
             max_str = ""
             if max_p is not None:
                 import math
 
                 settled_val = math.floor(max_p + 0.5)
-                max_str = f" (最高: {max_p}{temp_symbol}"
+                max_str = f" (鏈€楂? {max_p}{temp_symbol}"
                 if max_p_time:
                     max_str += f" @{max_p_time}"
-                max_str += f" → WU {settled_val}{temp_symbol})"
+                max_str += f" 鈫?WU {settled_val}{temp_symbol})"
 
-            # --- 天气状况总结 ---
+            # --- 澶╂皵鐘跺喌鎬荤粨 ---
             wx_summary = ""
-            # 优先使用 METAR 天气现象
+            # 浼樺厛浣跨敤 METAR 澶╂皵鐜拌薄
             metar_wx = metar.get("current", {}).get("wx_desc", "") if metar else ""
             metar_clouds = metar.get("current", {}).get("clouds", []) if metar else []
             mgm_cloud = mgm.get("current", {}).get("cloud_cover") if mgm else None
@@ -586,21 +588,21 @@ def start_bot():
                 fog_codes = {"FG", "BR", "HZ", "FZFG"}
                 ts_codes = {"TS", "TSRA"}
                 if ts_codes & wx_tokens:
-                    wx_summary = "⛈️ 雷暴"
+                    wx_summary = "鉀堬笍 闆锋毚"
                 elif {"+RA", "+SN"} & wx_tokens:
-                    wx_summary = "🌧️ 大雨" if "+RA" in wx_tokens else "❄️ 大雪"
+                    wx_summary = "馃導锔?澶ч洦" if "+RA" in wx_tokens else "鉂勶笍 澶ч洩"
                 elif rain_codes & wx_tokens:
                     wx_summary = (
-                        "🌧️ 小雨" if {"-RA", "-DZ", "DZ"} & wx_tokens else "🌧️ 下雨"
+                        "馃導锔?灏忛洦" if {"-RA", "-DZ", "DZ"} & wx_tokens else "馃導锔?涓嬮洦"
                     )
                 elif snow_codes & wx_tokens:
-                    wx_summary = "❄️ 下雪"
+                    wx_summary = "鉂勶笍 涓嬮洩"
                 elif fog_codes & wx_tokens:
-                    wx_summary = "🌫️ 雾/霾"
+                    wx_summary = "馃尗锔?闆?闇?
 
-            # 如果 METAR 没有特殊现象，用云量推断
+            # 濡傛灉 METAR 娌℃湁鐗规畩鐜拌薄锛岀敤浜戦噺鎺ㄦ柇
             if not wx_summary:
-                # 优先 METAR 云层，回退 MGM
+                # 浼樺厛 METAR 浜戝眰锛屽洖閫€ MGM
                 cover_code = ""
                 if metar_clouds:
                     cover_code = metar_clouds[-1].get("cover", "")
@@ -608,98 +610,98 @@ def start_bot():
                 if cover_code in ("SKC", "CLR") or (
                     cover_code == "" and mgm_cloud is not None and mgm_cloud <= 1
                 ):
-                    wx_summary = "☀️ 晴"
+                    wx_summary = "鈽€锔?鏅?
                 elif cover_code == "FEW" or (
                     cover_code == "" and mgm_cloud is not None and mgm_cloud <= 2
                 ):
-                    wx_summary = "🌤️ 晴间少云"
+                    wx_summary = "馃尋锔?鏅撮棿灏戜簯"
                 elif cover_code == "SCT" or (
                     cover_code == "" and mgm_cloud is not None and mgm_cloud <= 4
                 ):
-                    wx_summary = "⛅ 晴间多云"
+                    wx_summary = "鉀?鏅撮棿澶氫簯"
                 elif cover_code == "BKN" or (
                     cover_code == "" and mgm_cloud is not None and mgm_cloud <= 6
                 ):
-                    wx_summary = "🌥️ 多云"
+                    wx_summary = "馃尌锔?澶氫簯"
                 elif cover_code == "OVC" or (
                     cover_code == "" and mgm_cloud is not None and mgm_cloud <= 8
                 ):
-                    wx_summary = "☁️ 阴天"
+                    wx_summary = "鈽侊笍 闃村ぉ"
                 elif mgm_cloud is not None:
                     cloud_names = {
-                        0: "☀️ 晴",
-                        1: "🌤️ 晴",
-                        2: "🌤️ 少云",
-                        3: "⛅ 散云",
-                        4: "⛅ 散云",
-                        5: "🌥️ 多云",
-                        6: "🌥️ 多云",
-                        7: "☁️ 阴",
-                        8: "☁️ 阴天",
+                        0: "鈽€锔?鏅?,
+                        1: "馃尋锔?鏅?,
+                        2: "馃尋锔?灏戜簯",
+                        3: "鉀?鏁ｄ簯",
+                        4: "鉀?鏁ｄ簯",
+                        5: "馃尌锔?澶氫簯",
+                        6: "馃尌锔?澶氫簯",
+                        7: "鈽侊笍 闃?,
+                        8: "鈽侊笍 闃村ぉ",
                     }
                     wx_summary = cloud_names.get(mgm_cloud, "")
 
             wx_display = f" {wx_summary}" if wx_summary else ""
             msg_lines.append(
-                f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}"
+                f"\n鉁堬笍 <b>瀹炴祴 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}"
             )
 
             if mgm:
                 m_c = mgm.get("current", {})
-                # 翻译风向
+                # 缈昏瘧椋庡悜
                 wind_dir = m_c.get("wind_dir")
                 wind_speed_ms = m_c.get("wind_speed_ms")
                 dir_str = ""
                 if wind_dir is not None:
-                    dirs = ["北", "东北", "东", "东南", "南", "西南", "西", "西北"]
-                    dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "风 "
+                    dirs = ["鍖?, "涓滃寳", "涓?, "涓滃崡", "鍗?, "瑗垮崡", "瑗?, "瑗垮寳"]
+                    dir_str = dirs[int((float(wind_dir) + 22.5) % 360 / 45)] + "椋?"
 
-                # 体感和湿度（跳过缺失数据）
+                # 浣撴劅鍜屾箍搴︼紙璺宠繃缂哄け鏁版嵁锛?
                 feels_like = m_c.get("feels_like")
                 humidity = m_c.get("humidity")
                 if feels_like is not None or humidity is not None:
                     parts = []
                     if feels_like is not None:
-                        parts.append(f"🌡️ 体感: {feels_like}°C")
+                        parts.append(f"馃尅锔?浣撴劅: {feels_like}掳C")
                     
-                    # 针对安卡拉，补充市区(Center)实测值
-                    ankara_center = next((s for s in weather_data.get("mgm_nearby", []) if "Bölge/Center" in s.get("name", "")), None)
+                    # 閽堝瀹夊崱鎷夛紝琛ュ厖甯傚尯(Center)瀹炴祴鍊?
+                    ankara_center = next((s for s in weather_data.get("mgm_nearby", []) if "B枚lge/Center" in s.get("name", "")), None)
                     if ankara_center:
-                        parts.append(f"Ankara (Bölge/Center): <b>{ankara_center['temp']}°C</b>")
+                        parts.append(f"Ankara (B枚lge/Center): <b>{ankara_center['temp']}掳C</b>")
                         
                     if humidity is not None:
-                        parts.append(f"💧 {humidity}%")
+                        parts.append(f"馃挧 {humidity}%")
                     msg_lines.append(f"   [MGM] {' | '.join(parts)}")
 
-                # 风况（跳过缺失数据）
+                # 椋庡喌锛堣烦杩囩己澶辨暟鎹級
                 if wind_dir is not None and wind_speed_ms is not None:
                     msg_lines.append(
-                        f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({wind_speed_ms} m/s) | 💧 降水: {m_c.get('rain_24h') or 0}mm"
+                        f"   [MGM] 馃尙锔?{dir_str}{wind_dir}掳 ({wind_speed_ms} m/s) | 馃挧 闄嶆按: {m_c.get('rain_24h') or 0}mm"
                     )
 
-                # 新增：气压和云量
+                # 鏂板锛氭皵鍘嬪拰浜戦噺
                 extra_parts = []
                 pressure = m_c.get("pressure")
                 if pressure is not None:
-                    extra_parts.append(f"🌡 气压: {pressure}hPa")
+                    extra_parts.append(f"馃尅 姘斿帇: {pressure}hPa")
                 cloud_cover = m_c.get("cloud_cover")
                 if cloud_cover is not None:
                     cloud_desc_map = {
-                        0: "晴朗",
-                        1: "少云",
-                        2: "少云",
-                        3: "散云",
-                        4: "散云",
-                        5: "多云",
-                        6: "多云",
-                        7: "很多云",
-                        8: "阴天",
+                        0: "鏅存湕",
+                        1: "灏戜簯",
+                        2: "灏戜簯",
+                        3: "鏁ｄ簯",
+                        4: "鏁ｄ簯",
+                        5: "澶氫簯",
+                        6: "澶氫簯",
+                        7: "寰堝浜?,
+                        8: "闃村ぉ",
                     }
                     cloud_text = cloud_desc_map.get(cloud_cover, f"{cloud_cover}/8")
-                    extra_parts.append(f"☁️ 云量: {cloud_text}({cloud_cover}/8)")
+                    extra_parts.append(f"鈽侊笍 浜戦噺: {cloud_text}({cloud_cover}/8)")
                 mgm_max = m_c.get("mgm_max_temp")
                 if mgm_max is not None:
-                    extra_parts.append(f"🌡️ MGM最高: {mgm_max}°C")
+                    extra_parts.append(f"馃尅锔?MGM鏈€楂? {mgm_max}掳C")
                 if extra_parts:
                     msg_lines.append(f"   [MGM] {' | '.join(extra_parts)}")
 
@@ -713,45 +715,45 @@ def start_bot():
                 cloud_desc = ""
                 if clouds:
                     c_map = {
-                        "BKN": "多云",
-                        "OVC": "阴天",
-                        "FEW": "少云",
-                        "SCT": "散云",
-                        "SKC": "晴",
-                        "CLR": "晴",
+                        "BKN": "澶氫簯",
+                        "OVC": "闃村ぉ",
+                        "FEW": "灏戜簯",
+                        "SCT": "鏁ｄ簯",
+                        "SKC": "鏅?,
+                        "CLR": "鏅?,
                     }
                     main = clouds[-1]
-                    cloud_desc = f"☁️ {c_map.get(main.get('cover'), main.get('cover'))}"
+                    cloud_desc = f"鈽侊笍 {c_map.get(main.get('cover'), main.get('cover'))}"
 
                 prefix = "[METAR]" if mgm else "   "
                 if not mgm:
                     msg_lines.append(
-                        f"   {prefix} 💨 {wind or 0}kt ({wind_dir or 0}°) | 👁️ {vis or 10}mi"
+                        f"   {prefix} 馃挩 {wind or 0}kt ({wind_dir or 0}掳) | 馃憗锔?{vis or 10}mi"
                     )
 
                 if cloud_desc:
                     msg_lines.append(
-                        f"   {prefix} {cloud_desc} | 👁️ {vis or 10}mi | 💨 {wind or 0}kt"
+                        f"   {prefix} {cloud_desc} | 馃憗锔?{vis or 10}mi | 馃挩 {wind or 0}kt"
                     )
 
-            # --- 5. 态势特征提取 ---
+            # --- 5. 鎬佸娍鐗瑰緛鎻愬彇 ---
             feature_str, ai_context = analyze_weather_trend(
                 weather_data, temp_symbol, city_name
             )
             if feature_str:
-                # 仅将最核心的信息展示给用户作为"态势分析"
-                # 但后面会把更全的数据传给 AI
-                msg_lines.append("\n💡 <b>分析</b>:")
+                # 浠呭皢鏈€鏍稿績鐨勪俊鎭睍绀虹粰鐢ㄦ埛浣滀负"鎬佸娍鍒嗘瀽"
+                # 浣嗗悗闈細鎶婃洿鍏ㄧ殑鏁版嵁浼犵粰 AI
+                msg_lines.append("\n馃挕 <b>鍒嗘瀽</b>:")
                 for line in feature_str.split("\n"):
                     if line.strip():
                         msg_lines.append(f"- {line.strip()}")
 
-                # --- 6. Groq AI 深度分析 ---
+                # --- 6. Groq AI 娣卞害鍒嗘瀽 ---
                 try:
                     from src.analysis.ai_analyzer import get_ai_analysis
-                    # 构建更全的背景数据给 AI
+                    # 鏋勫缓鏇村叏鐨勮儗鏅暟鎹粰 AI
 
-                    # 补充多模型分歧
+                    # 琛ュ厖澶氭ā鍨嬪垎姝?
                     mm = weather_data.get("multi_model", {})
                     if mm.get("forecasts"):
                         mm_str = " | ".join(
@@ -761,26 +763,26 @@ def start_bot():
                                 if v
                             ]
                         )
-                        ai_context += f"\n模型分歧: {mm_str}"
+                        ai_context += f"\n妯″瀷鍒嗘: {mm_str}"
 
                     ai_result = get_ai_analysis(ai_context, city_name, temp_symbol)
                     if ai_result:
                         msg_lines.append(f"\n{ai_result}")
                 except Exception as e:
-                    logger.error(f"调用 Groq AI 分析失败: {e}")
+                    logger.error(f"璋冪敤 Groq AI 鍒嗘瀽澶辫触: {e}")
 
-            msg_lines.append(f"\n💳 本次消耗 <b>{CITY_QUERY_COST}</b> 积分。")
+            msg_lines.append(f"\n馃挸 鏈娑堣€?<b>{CITY_QUERY_COST}</b> 绉垎銆?)
             bot.send_message(message.chat.id, "\n".join(msg_lines), parse_mode="HTML")
 
         except Exception as e:
             import traceback
 
-            logger.error(f"查询失败: {e}\n{traceback.format_exc()}")
-            bot.reply_to(message, f"❌ 查询失败: {e}")
+            logger.error(f"鏌ヨ澶辫触: {e}\n{traceback.format_exc()}")
+            bot.reply_to(message, f"鉂?鏌ヨ澶辫触: {e}")
 
     @bot.message_handler(func=lambda message: True, content_types=['text'])
     def track_activity(message):
-        """全量监听消息，用于记录群内发言积分(非指令消息)"""
+        """鍏ㄩ噺鐩戝惉娑堟伅锛岀敤浜庤褰曠兢鍐呭彂瑷€绉垎(闈炴寚浠ゆ秷鎭?"""
         if message.text.startswith('/'):
             return
         if message.chat.type not in ("group", "supergroup"):
@@ -804,9 +806,10 @@ def start_bot():
                 f"daily_points={result.get('daily_points')}/{MESSAGE_DAILY_CAP}"
             )
 
-    logger.info("🤖 Bot 启动中...")
+    logger.info("馃 Bot 鍚姩涓?..")
     bot.infinity_polling()
 
 
 if __name__ == "__main__":
     start_bot()
+
