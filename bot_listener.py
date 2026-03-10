@@ -445,26 +445,33 @@ def start_bot():
             sources = ["Open-Meteo"] if max_temps else []
 
             if mb_high is not None:
-                sources.append("MB")
-                comp_parts.append(
-                    f"MB: {mb_high:.1f}{temp_symbol}"
-                    if isinstance(mb_high, (int, float))
-                    else f"MB: {mb_high}"
-                )
+                if "MB" not in sources:
+                    sources.append("MB")
+                # 只在非 fallback（即 Open-Meteo 存在）时显示为对比，否则作为 today_t 已显示
+                if fallback_source != "MB":
+                    comp_parts.append(
+                        f"MB: {mb_high:.1f}{temp_symbol}"
+                        if isinstance(mb_high, (int, float))
+                        else f"MB: {mb_high}"
+                    )
             if nws_high is not None:
-                sources.append("NWS")
-                comp_parts.append(
-                    f"NWS: {nws_high:.1f}{temp_symbol}"
-                    if isinstance(nws_high, (int, float))
-                    else f"NWS: {nws_high}"
-                )
+                if "NWS" not in sources:
+                    sources.append("NWS")
+                if fallback_source != "NWS":
+                    comp_parts.append(
+                        f"NWS: {nws_high:.1f}{temp_symbol}"
+                        if isinstance(nws_high, (int, float))
+                        else f"NWS: {nws_high}"
+                    )
             if mgm_high is not None:
-                sources.append("MGM")
-                comp_parts.append(
-                    f"🇺🇸 MGM: {mgm_high:.1f}{temp_symbol}"
-                    if isinstance(mgm_high, (int, float))
-                    else f"🇺🇸 MGM: {mgm_high}"
-                )
+                if "MGM" not in sources:
+                    sources.append("MGM")
+                if fallback_source != "MGM":
+                    comp_parts.append(
+                        f"MGM: {mgm_high:.1f}{temp_symbol}"
+                        if isinstance(mgm_high, (int, float))
+                        else f"MGM: {mgm_high}"
+                    )
             if fallback_source and fallback_source not in sources:
                 sources.append(fallback_source)
             if not sources:
@@ -472,8 +479,9 @@ def start_bot():
 
             # 检查是否有显著分歧 (超过 5°F 或 2.5°C)
             divergence_warning = ""
-            if mb_high is not None and max_temps:
-                diff = abs(mb_high - (_sf(max_temps[0]) or 0))
+            base_for_divergence = _sf(max_temps[0]) if max_temps else today_t
+            if mb_high is not None and base_for_divergence is not None:
+                diff = abs(mb_high - base_for_divergence)
                 threshold = 5.0 if temp_unit == "fahrenheit" else 2.5
                 if diff > threshold:
                     divergence_warning = (
