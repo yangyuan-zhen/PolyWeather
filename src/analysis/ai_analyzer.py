@@ -32,6 +32,8 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
         logger.warning("GROQ_API_KEY 未配置，跳过 AI 分析")
         return ""
 
+    global _rate_limit_until  # 必须在函数顶部声明，不能放在 with 块内
+
     # ── 缓存配置 ─────────────────────────────────────────
     cache_ttl = int(os.getenv("GROQ_CACHE_TTL_SEC", "1200"))          # 默认 20 分钟
     rl_cooldown = int(os.getenv("GROQ_RATE_LIMIT_COOLDOWN_SEC", "600"))  # 默认 10 分钟
@@ -51,7 +53,6 @@ def get_ai_analysis(weather_insights: str, city_name: str, temp_symbol: str) -> 
 
     # ── 全局 429 冷却期检查 ───────────────────────────────
     with _rate_limit_lock:
-        global _rate_limit_until
         if now < _rate_limit_until:
             remaining = int(_rate_limit_until - now)
             logger.warning(f"Groq 冷却期中，还需等待 {remaining}s，跳过本次请求")
@@ -163,7 +164,6 @@ P4 **预报背景**（最低优先级）：
                 if status == 429:
                     # 触发限流：设置全局冷却期，后续请求不再尝试
                     with _rate_limit_lock:
-                        global _rate_limit_until
                         _rate_limit_until = time.time() + rl_cooldown
                     logger.warning(f"Groq 触发限流，设置 {rl_cooldown}s 全局冷却期")
                     break  # 不再尝试其他模型，直接走 stale cache 逻辑
