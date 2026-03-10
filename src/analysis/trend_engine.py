@@ -214,6 +214,8 @@ def analyze_weather_trend(
     ens_data = {"p10": ens_p10, "p90": ens_p90, "median": ens_median}
 
     sigma = None
+    fallback_sigma = False
+
     if ens_p10 is not None and ens_p90 is not None and ens_median is not None:
         msg1 = (
             f"📊 <b>集合预报</b>：中位数 {ens_median}{temp_symbol}，"
@@ -283,6 +285,23 @@ def analyze_weather_trend(
             sigma *= 0.3
         elif first_peak_h <= local_hour_frac <= last_peak_h:
             sigma *= 0.7
+    else:
+        # Fallback for sigma when ensemble is missing
+        fallback_sigma = True
+        if forecast_highs and len(forecast_highs) > 1:
+            sigma = max(0.6, (max(forecast_highs) - min(forecast_highs)) / 2.0)
+        else:
+            sigma = 1.0
+            
+        if city_name:
+            acc = get_deb_accuracy(city_name)
+            if acc and acc[1] > sigma:
+                sigma = acc[1]
+
+        if local_hour_frac > last_peak_h:
+            sigma *= 0.3
+        elif first_peak_h <= local_hour_frac <= last_peak_h:
+            sigma *= 0.7
 
     # === Dead Market ===
     is_dead_market = False
@@ -296,30 +315,34 @@ def analyze_weather_trend(
     probabilities: List[Dict[str, Any]] = []
     forecast_miss_deg = 0.0
 
-    if ens_p10 is not None and ens_p90 is not None and not is_dead_market:
-        # Forecast miss magnitude
-        if max_so_far is not None and forecast_median is not None:
-            forecast_miss_deg = round(forecast_median - max_so_far, 1)
-
-        # Reality-anchored μ
-        if (
-            max_so_far is not None
-            and forecast_median is not None
-            and peak_status in ("past", "in_window")
-            and max_so_far < forecast_median - 2.0
-        ):
-            if is_cooling or peak_status == "past":
-                mu = max_so_far
+    if (ens_p10 is not None and ens_p90 is not None) or fallback_sigma:
+        if not is_dead_market:
+            # Forecast miss magnitude
+            if max_so_far is not None and forecast_median is not None:
+                forecast_miss_deg = round(forecast_median - max_so_far, 1)
+    
+            fallback_center = forecast_median if forecast_median is not None else (forecast_high if forecast_high is not None else cur_temp)
+            center = ens_median if ens_median is not None else fallback_center
+    
+            # Reality-anchored μ
+            if (
+                max_so_far is not None
+                and forecast_median is not None
+                and peak_status in ("past", "in_window")
+                and max_so_far < forecast_median - 2.0
+            ):
+                if is_cooling or peak_status == "past":
+                    mu = max_so_far
+                else:
+                    mu = max_so_far + 0.5
             else:
-                mu = max_so_far + 0.5
-        else:
-            mu = (
-                forecast_median * 0.7 + ens_median * 0.3
-                if forecast_median is not None
-                else ens_median
-            )
-            if max_so_far is not None and max_so_far > mu:
-                mu = max_so_far + (0.3 if not is_cooling else 0.0)
+                mu = (
+                    forecast_median * 0.7 + center * 0.3
+                    if forecast_median is not None and center is not None
+                    else center
+                )
+                if max_so_far is not None and mu is not None and max_so_far > mu:
+                    mu = max_so_far + (0.3 if not is_cooling else 0.0)
 
         # Forecast miss severity for AI
         if forecast_miss_deg > 2.0 and peak_status in ("past", "in_window"):
