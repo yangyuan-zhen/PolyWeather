@@ -543,6 +543,10 @@ def start_bot():
 
             # 明后天
             mgm_daily = mgm.get("daily_forecasts", {}) or {}
+            mm_raw = weather_data.get("multi_model", {}) or {}
+            mm_daily = mm_raw.get("daily_forecasts", {}) if isinstance(mm_raw, dict) else {}
+            mb_daily = weather_data.get("meteoblue", {}).get("daily_highs", []) or []
+            nws_periods = weather_data.get("nws", {}).get("forecast_periods", []) or []
             if len(dates) > 1:
                 future_forecasts = []
                 for d, t in zip(dates[1:], max_temps[1:]):
@@ -571,6 +575,75 @@ def start_bot():
                     if t is None:
                         continue
                     future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")
+                    if len(future_forecasts) >= 2:
+                        break
+                if future_forecasts:
+                    msg_lines.append("📅 " + " | ".join(future_forecasts))
+            elif isinstance(mm_daily, dict) and mm_daily:
+                # Open-Meteo missing: fallback to multi-model daily medians
+                from datetime import datetime, timezone, timedelta
+
+                local_now = datetime.now(timezone.utc).astimezone(
+                    timezone(timedelta(seconds=int(fallback_utc_offset)))
+                )
+                today_local = local_now.strftime("%Y-%m-%d")
+                future_forecasts = []
+                for d in sorted(mm_daily.keys()):
+                    if d <= today_local:
+                        continue
+                    day_models = mm_daily.get(d, {}) or {}
+                    vals = []
+                    for v in day_models.values():
+                        vv = _sf(v)
+                        if vv is not None:
+                            vals.append(vv)
+                    if not vals:
+                        continue
+                    vals.sort()
+                    median_v = vals[len(vals) // 2]
+                    future_forecasts.append(f"{d[5:]}: MM中位 {median_v:.1f}{temp_symbol}")
+                    if len(future_forecasts) >= 2:
+                        break
+                if future_forecasts:
+                    msg_lines.append("📅 " + " | ".join(future_forecasts))
+            elif isinstance(mb_daily, list) and len(mb_daily) > 1:
+                # Open-Meteo missing: fallback to Meteoblue daily highs
+                from datetime import datetime, timezone, timedelta
+
+                local_now = datetime.now(timezone.utc).astimezone(
+                    timezone(timedelta(seconds=int(fallback_utc_offset)))
+                )
+                future_forecasts = []
+                for idx in range(1, min(3, len(mb_daily))):
+                    t = _sf(mb_daily[idx])
+                    if t is None:
+                        continue
+                    d = (local_now + timedelta(days=idx)).strftime("%m-%d")
+                    future_forecasts.append(f"{d}: MB {t:.1f}{temp_symbol}")
+                if future_forecasts:
+                    msg_lines.append("📅 " + " | ".join(future_forecasts))
+            elif isinstance(nws_periods, list) and nws_periods:
+                # US fallback: use next daytime NWS periods
+                from datetime import datetime, timezone, timedelta
+
+                local_now = datetime.now(timezone.utc).astimezone(
+                    timezone(timedelta(seconds=int(fallback_utc_offset)))
+                )
+                today_local = local_now.strftime("%Y-%m-%d")
+                future_forecasts = []
+                seen_days = set()
+                for p in nws_periods:
+                    if not p.get("is_daytime"):
+                        continue
+                    temp_v = _sf(p.get("temperature"))
+                    start_time = str(p.get("start_time") or "")
+                    if temp_v is None or "T" not in start_time:
+                        continue
+                    day_str = start_time[:10]
+                    if day_str <= today_local or day_str in seen_days:
+                        continue
+                    seen_days.add(day_str)
+                    future_forecasts.append(f"{day_str[5:]}: NWS {temp_v:.0f}{temp_symbol}")
                     if len(future_forecasts) >= 2:
                         break
                 if future_forecasts:
