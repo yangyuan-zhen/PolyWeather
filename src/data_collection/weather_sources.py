@@ -1154,13 +1154,23 @@ class WeatherDataCollector:
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
+                retry_after_str = getattr(e.response, "headers", {}).get("Retry-After")
+                cooldown_to_use = self._open_meteo_rl_cooldown
+                if retry_after_str:
+                    try:
+                        parsed = int(retry_after_str)
+                        if parsed > 0:
+                            cooldown_to_use = min(parsed + 60, 3600)  # Add 60s buffer, max 1 hour
+                            logger.info(f"Open-Meteo 响应包含 Retry-After: {retry_after_str}s")
+                    except ValueError:
+                        pass
                 logger.warning(
                     f"Open-Meteo rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
                 # 设置全局冷却期，避免短时内重复触发 429
                 with self._open_meteo_rl_lock:
-                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
-                    logger.warning(f"Open-Meteo 触发限流，设置 {self._open_meteo_rl_cooldown}s 冷却期")
+                    self._open_meteo_rate_limit_until = time.time() + cooldown_to_use
+                    logger.warning(f"Open-Meteo 触发限流，设置 {cooldown_to_use}s 冷却期")
             else:
                 logger.error(f"Open-Meteo forecast failed: {e}")
             with self._open_meteo_cache_lock:
@@ -1283,11 +1293,20 @@ class WeatherDataCollector:
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
+                retry_after_str = getattr(e.response, "headers", {}).get("Retry-After")
+                cooldown_to_use = self._open_meteo_rl_cooldown
+                if retry_after_str:
+                    try:
+                        parsed = int(retry_after_str)
+                        if parsed > 0:
+                            cooldown_to_use = min(parsed + 60, 3600)
+                    except ValueError:
+                        pass
                 logger.warning(
                     f"Ensemble API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
                 with self._open_meteo_rl_lock:
-                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
+                    self._open_meteo_rate_limit_until = time.time() + cooldown_to_use
             else:
                 logger.warning(f"Ensemble API 请求失败: {e}")
             with self._ensemble_cache_lock:
@@ -1418,11 +1437,20 @@ class WeatherDataCollector:
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code == 429:
+                retry_after_str = getattr(e.response, "headers", {}).get("Retry-After")
+                cooldown_to_use = self._open_meteo_rl_cooldown
+                if retry_after_str:
+                    try:
+                        parsed = int(retry_after_str)
+                        if parsed > 0:
+                            cooldown_to_use = min(parsed + 60, 3600)
+                    except ValueError:
+                        pass
                 logger.warning(
                     f"Multi-model API rate limited (429), fallback to cache if available: lat={lat}, lon={lon}"
                 )
                 with self._open_meteo_rl_lock:
-                    self._open_meteo_rate_limit_until = time.time() + self._open_meteo_rl_cooldown
+                    self._open_meteo_rate_limit_until = time.time() + cooldown_to_use
             else:
                 logger.warning(f"Multi-model API 请求失败: {e}")
             with self._multi_model_cache_lock:
