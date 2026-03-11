@@ -2,6 +2,7 @@
 
 import { ChartConfiguration } from "chart.js/auto";
 import clsx from "clsx";
+import { useEffect, useRef } from "react";
 import { ForecastTable } from "@/components/dashboard/PanelSections";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
@@ -127,6 +128,7 @@ export function DetailPanel() {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
+  const panelRef = useRef<HTMLElement | null>(null);
   const isOverlayOpen =
     Boolean(store.futureModalDate) ||
     store.historyState.isOpen ||
@@ -139,18 +141,49 @@ export function DetailPanel() {
     !isOverlayOpen;
   const profileStats = detail ? getCityProfileStats(detail, locale) : [];
   const scenery = getCityScenery(detail?.name);
+  const blurActiveElement = () => {
+    if (typeof document === "undefined") return;
+    const active = document.activeElement;
+    if (active instanceof HTMLElement) {
+      active.blur();
+    }
+  };
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    if (!isVisible) {
+      panel.setAttribute("inert", "");
+      if (
+        typeof document !== "undefined" &&
+        panel.contains(document.activeElement)
+      ) {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) {
+          active.blur();
+        }
+      }
+      return;
+    }
+
+    panel.removeAttribute("inert");
+  }, [isVisible]);
 
   return (
     <aside
+      ref={panelRef}
       className={clsx("detail-panel", isVisible && "visible")}
-      aria-hidden={!isVisible}
     >
       <div className="panel-header">
         <button
           type="button"
           className="panel-close"
           aria-label={t("detail.closeAria")}
-          onClick={store.closePanel}
+          onClick={() => {
+            blurActiveElement();
+            store.closePanel();
+          }}
         >
           ×
         </button>
@@ -169,7 +202,10 @@ export function DetailPanel() {
               type="button"
               className="history-btn"
               title={t("detail.todayAnalysis")}
-              onClick={() => void store.openTodayModal()}
+              onClick={() => {
+                blurActiveElement();
+                void store.openTodayModal();
+              }}
               disabled={!detail}
             >
               {t("detail.todayAnalysis")}
@@ -178,7 +214,10 @@ export function DetailPanel() {
               type="button"
               className="history-btn"
               title={t("detail.history")}
-              onClick={() => void store.openHistory()}
+              onClick={() => {
+                blurActiveElement();
+                void store.openHistory();
+              }}
               disabled={!detail}
             >
               {t("detail.history")}
