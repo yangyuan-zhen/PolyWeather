@@ -12,34 +12,47 @@
 - 将模型概率与 Polymarket 只读市场数据对齐，输出错价/风险信号。
 - Web 仪表盘与 Telegram 机器人共用同一套核心逻辑。
 
-## 思维导图
+## 概览图
 
 ```mermaid
-mindmap
-  root((PolyWeather Pro))
-    "数据层"
-      "METAR (Aviation Weather / METAR)"
-      "MGM (土耳其 MGM)"
-      "安卡拉主站 (17130 Center)"
-      "Open-Meteo"
-      "weather.gov (美国城市)"
-      "Polymarket (P0 只读)"
-    "分析层"
-      "DEB (动态误差平衡)"
-      "概率引擎 (mu + 桶分布)"
-      "趋势引擎"
-      "城市风险档案"
-      "错价雷达"
-    "交付层"
-      "FastAPI"
-      "Next.js 仪表盘"
-      "Telegram Bot"
-      "预警推送"
-    "运维层"
-      "Docker Compose (VPS)"
-      "Vercel (前端)"
-      "缓存 + force_refresh"
-      "Speed Insights"
+flowchart TD
+    A["PolyWeather Pro"]
+
+    subgraph DL["数据层"]
+        DL1["METAR (Aviation Weather / METAR)"]
+        DL2["MGM (土耳其 MGM)"]
+        DL3["安卡拉主站 (17130 Center)"]
+        DL4["Open-Meteo"]
+        DL5["weather.gov (美国城市)"]
+        DL6["Polymarket (P0 只读)"]
+    end
+
+    subgraph AL["分析层"]
+        AL1["DEB (动态误差平衡)"]
+        AL2["概率引擎 (mu + 桶分布)"]
+        AL3["趋势引擎"]
+        AL4["城市风险档案"]
+        AL5["错价雷达"]
+    end
+
+    subgraph DEL["交付层"]
+        DEL1["FastAPI"]
+        DEL2["Next.js 仪表盘"]
+        DEL3["Telegram Bot"]
+        DEL4["预警推送"]
+    end
+
+    subgraph OL["运维层"]
+        OL1["Docker Compose (VPS)"]
+        OL2["Vercel (前端)"]
+        OL3["缓存 + force_refresh"]
+        OL4["Speed Insights"]
+    end
+
+    A --> DL
+    A --> AL
+    A --> DEL
+    A --> OL
 ```
 
 ## 系统架构

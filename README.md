@@ -12,34 +12,47 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 - Maps model view to Polymarket read-only market data for mispricing/risk scan.
 - Delivers the same core logic to web dashboard and Telegram bot.
 
-## Mindmap
+## Overview Diagram
 
 ```mermaid
-mindmap
-  root((PolyWeather Pro))
-    "Data Layer"
-      "METAR (Aviation Weather / METAR)"
-      "MGM (Turkey MGM)"
-      "Station 17130 (Ankara Center 17130)"
-      "Open-Meteo"
-      "weather.gov (US cities)"
-      "Polymarket (P0 Read-only)"
-    "Analysis Layer"
-      "DEB (Dynamic Error Balancing)"
-      "Probability Engine (mu + buckets)"
-      "Trend Engine"
-      "Risk Profiles"
-      "Mispricing Radar"
-    "Delivery Layer"
-      "FastAPI"
-      "Next.js Dashboard"
-      "Telegram Bot"
-      "Alert Push"
-    "Ops Layer"
-      "Docker Compose (VPS backend + bot)"
-      "Vercel (frontend)"
-      "Cache + force_refresh"
-      "Speed Insights"
+flowchart TD
+    A["PolyWeather Pro"]
+
+    subgraph DL["Data Layer"]
+        DL1["METAR (Aviation Weather / METAR)"]
+        DL2["MGM (Turkey MGM)"]
+        DL3["Station 17130 (Ankara Center 17130)"]
+        DL4["Open-Meteo"]
+        DL5["weather.gov (US cities)"]
+        DL6["Polymarket (P0 Read-only)"]
+    end
+
+    subgraph AL["Analysis Layer"]
+        AL1["DEB (Dynamic Error Balancing)"]
+        AL2["Probability Engine (mu + buckets)"]
+        AL3["Trend Engine"]
+        AL4["Risk Profiles"]
+        AL5["Mispricing Radar"]
+    end
+
+    subgraph DEL["Delivery Layer"]
+        DEL1["FastAPI"]
+        DEL2["Next.js Dashboard"]
+        DEL3["Telegram Bot"]
+        DEL4["Alert Push"]
+    end
+
+    subgraph OL["Ops Layer"]
+        OL1["Docker Compose (VPS backend + bot)"]
+        OL2["Vercel (frontend)"]
+        OL3["Cache + force_refresh"]
+        OL4["Speed Insights"]
+    end
+
+    A --> DL
+    A --> AL
+    A --> DEL
+    A --> OL
 ```
 
 ## Architecture

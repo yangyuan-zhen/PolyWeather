@@ -7,20 +7,33 @@ Purpose: keep engineering debt explicit while shipping production features.
 ## 1. Debt Landscape
 
 ```mermaid
-mindmap
-  root((Tech Debt))
-    "Architecture"
-      "Monolithic bot entry"
-      "Shared runtime coupling"
-    "Product Infra"
-      "Entitlement hardening"
-      "Subscription persistence"
-    "Quality"
-      "Replay harness"
-      "Broader regression tests"
-    "Observability"
-      "Alert evidence trace"
-      "SLO dashboards"
+flowchart TD
+    A["Tech Debt"]
+
+    subgraph AR["Architecture"]
+        AR1["Monolithic bot entry"]
+        AR2["Shared runtime coupling"]
+    end
+
+    subgraph PI["Product Infra"]
+        PI1["Entitlement hardening"]
+        PI2["Subscription persistence"]
+    end
+
+    subgraph Q["Quality"]
+        Q1["Replay harness"]
+        Q2["Broader regression tests"]
+    end
+
+    subgraph O["Observability"]
+        O1["Alert evidence trace"]
+        O2["SLO dashboards"]
+    end
+
+    A --> AR
+    A --> PI
+    A --> Q
+    A --> O
 ```
 
 Current system health estimate: **84% stable / 16% debt**.

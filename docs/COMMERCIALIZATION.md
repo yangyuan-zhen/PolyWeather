@@ -15,27 +15,40 @@ It is a decision-support layer for temperature-settlement markets:
 
 ---
 
-## 2. Business Mindmap
+## 2. Business Overview Diagram
 
 ```mermaid
-mindmap
-  root((PolyWeather Monetization))
-    "Product"
-      "Telegram Signal Channel"
-      "Web Dashboard"
-      "VIP Bundle"
-    "Pricing"
-      "Entry 1 USD"
-      "Dashboard 5 USD"
-      "Bundle 5.5 USD"
-    "Access Control"
-      "Manual activation (P1)"
-      "Wallet/USDC detection (P2)"
-      "Entitlement middleware"
-    "Growth"
-      "Accuracy reports"
-      "Retention analytics"
-      "User preference center"
+flowchart TD
+    A["PolyWeather Monetization"]
+
+    subgraph P["Product"]
+        P1["Telegram Signal Channel"]
+        P2["Web Dashboard"]
+        P3["VIP Bundle"]
+    end
+
+    subgraph R["Pricing"]
+        R1["Entry 1 USD"]
+        R2["Dashboard 5 USD"]
+        R3["Bundle 5.5 USD"]
+    end
+
+    subgraph AC["Access Control"]
+        AC1["Manual activation (P1)"]
+        AC2["Wallet/USDC detection (P2)"]
+        AC3["Entitlement middleware"]
+    end
+
+    subgraph G["Growth"]
+        G1["Accuracy reports"]
+        G2["Retention analytics"]
+        G3["User preference center"]
+    end
+
+    A --> P
+    A --> R
+    A --> AC
+    A --> G
 ```
 
 ---

@@ -20,22 +20,27 @@
 ## 2. API 思维导图
 
 ```mermaid
-mindmap
-  root((PolyWeather API))
-    "城市列表"
-      "GET /api/cities"
-    "城市主数据"
-      "GET /api/city/{name}"
-      "GET /api/city/{name}/summary"
-      "GET /api/city/{name}/detail"
-    "历史数据"
-      "GET /api/history/{name}"
-    "关键对象"
-      "current"
-      "forecast"
-      "probabilities (mu + distribution)"
-      "multi_model / multi_model_daily"
-      "market_scan (P0 只读)"
+flowchart TD
+    A["PolyWeather API"]
+
+    subgraph E["接口分组"]
+        E1["GET /api/cities"]
+        E2["GET /api/city/{name}"]
+        E3["GET /api/city/{name}/summary"]
+        E4["GET /api/city/{name}/detail"]
+        E5["GET /api/history/{name}"]
+    end
+
+    subgraph O["关键对象"]
+        O1["current"]
+        O2["forecast"]
+        O3["probabilities (mu + distribution)"]
+        O4["multi_model / multi_model_daily"]
+        O5["market_scan (P0 只读)"]
+    end
+
+    A --> E
+    A --> O
 ```
 
 ---
