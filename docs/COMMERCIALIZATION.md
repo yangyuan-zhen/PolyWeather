@@ -20,22 +20,22 @@ It is a decision-support layer for temperature-settlement markets:
 ```mermaid
 mindmap
   root((PolyWeather Monetization))
-    Product
-      Telegram Signal Channel
-      Web Dashboard
-      VIP Bundle
-    Pricing
-      [Entry 1 USD]
-      [Dashboard 5 USD]
-      [Bundle 5.5 USD]
-    Access Control
-      [Manual activation (P1)]
-      [Wallet/USDC detection (P2)]
-      Entitlement middleware
-    Growth
-      Accuracy reports
-      Retention analytics
-      User preference center
+    "Product"
+      "Telegram Signal Channel"
+      "Web Dashboard"
+      "VIP Bundle"
+    "Pricing"
+      "Entry 1 USD"
+      "Dashboard 5 USD"
+      "Bundle 5.5 USD"
+    "Access Control"
+      "Manual activation (P1)"
+      "Wallet/USDC detection (P2)"
+      "Entitlement middleware"
+    "Growth"
+      "Accuracy reports"
+      "Retention analytics"
+      "User preference center"
 ```
 
 ---

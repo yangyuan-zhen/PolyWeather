@@ -9,18 +9,18 @@ Purpose: keep engineering debt explicit while shipping production features.
 ```mermaid
 mindmap
   root((Tech Debt))
-    Architecture
-      Monolithic bot entry
-      Shared runtime coupling
-    Product Infra
-      Entitlement hardening
-      Subscription persistence
-    Quality
-      Replay harness
-      Broader regression tests
-    Observability
-      Alert evidence trace
-      SLO dashboards
+    "Architecture"
+      "Monolithic bot entry"
+      "Shared runtime coupling"
+    "Product Infra"
+      "Entitlement hardening"
+      "Subscription persistence"
+    "Quality"
+      "Replay harness"
+      "Broader regression tests"
+    "Observability"
+      "Alert evidence trace"
+      "SLO dashboards"
 ```
 
 Current system health estimate: **84% stable / 16% debt**.
