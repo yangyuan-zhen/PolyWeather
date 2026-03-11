@@ -58,6 +58,17 @@ def _render_local_time(
     metar: Dict[str, Any],
     fallback_utc_offset: int,
 ) -> str:
+    utc_offset = open_meteo.get("utc_offset")
+    if utc_offset is None:
+        utc_offset = fallback_utc_offset
+    try:
+        local_now = datetime.now(timezone.utc).astimezone(
+            timezone(timedelta(seconds=int(utc_offset)))
+        )
+        return local_now.strftime("%H:%M")
+    except Exception:
+        pass
+
     local_time = (open_meteo.get("current") or {}).get("local_time", "")
     if " " in str(local_time):
         return str(local_time).split(" ")[1][:5]
@@ -79,13 +90,49 @@ def _render_local_time(
     if metar_obs:
         return str(metar_obs)[:5]
 
-    try:
-        local_now = datetime.now(timezone.utc).astimezone(
-            timezone(timedelta(seconds=int(fallback_utc_offset)))
-        )
-        return local_now.strftime("%H:%M")
-    except Exception:
-        return "N/A"
+    return "N/A"
+
+
+def _derive_mgm_daily_highs_from_hourly(
+    mgm: Dict[str, Any],
+    fallback_utc_offset: int,
+) -> Dict[str, float]:
+    if not isinstance(mgm, dict):
+        return {}
+    hourly = mgm.get("hourly")
+    if not isinstance(hourly, list) or not hourly:
+        return {}
+
+    daily_highs: Dict[str, float] = {}
+    local_tz = timezone(timedelta(seconds=int(fallback_utc_offset)))
+    for row in hourly:
+        if not isinstance(row, dict):
+            continue
+        temp = _sf(row.get("temp"))
+        raw_time = str(row.get("time") or "").strip()
+        if temp is None or not raw_time:
+            continue
+
+        date_key = None
+        if "T" in raw_time:
+            try:
+                dt = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+                if dt.tzinfo is not None:
+                    dt = dt.astimezone(local_tz)
+                date_key = dt.strftime("%Y-%m-%d")
+            except Exception:
+                if len(raw_time) >= 10 and raw_time[4] == "-" and raw_time[7] == "-":
+                    date_key = raw_time[:10]
+        elif len(raw_time) >= 10 and raw_time[4] == "-" and raw_time[7] == "-":
+            date_key = raw_time[:10]
+
+        if not date_key:
+            continue
+
+        prev = daily_highs.get(date_key)
+        daily_highs[date_key] = temp if prev is None else max(prev, temp)
+
+    return daily_highs
 
 
 def _append_future_forecast_lines(
@@ -98,6 +145,12 @@ def _append_future_forecast_lines(
 ) -> None:
     mgm = weather_data.get("mgm") or {}
     mgm_daily = (mgm.get("daily_forecasts") or {}) if isinstance(mgm, dict) else {}
+    mgm_hourly_daily = _derive_mgm_daily_highs_from_hourly(mgm, fallback_utc_offset)
+    if not isinstance(mgm_daily, dict):
+        mgm_daily = {}
+    for date_key, day_high in mgm_hourly_daily.items():
+        if date_key not in mgm_daily:
+            mgm_daily[date_key] = day_high
     mm_raw = weather_data.get("multi_model") or {}
     mm_daily = mm_raw.get("daily_forecasts", {}) if isinstance(mm_raw, dict) else {}
     mb_daily = (weather_data.get("meteoblue") or {}).get("daily_highs", []) or []
@@ -108,8 +161,9 @@ def _append_future_forecast_lines(
         for d, t in zip(dates[1:], max_temps[1:]):
             mgm_value = mgm_daily.get(d) if isinstance(mgm_daily, dict) else None
             if mgm_value is not None:
+                mgm_display = f"{float(mgm_value):.1f}"
                 future_forecasts.append(
-                    f"{d[5:]}: {t}{temp_symbol} | 🇺🇸 <b>MGM: {mgm_value}{temp_symbol}</b>"
+                    f"{d[5:]}: {t}{temp_symbol} | 🇺🇸 <b>MGM: {mgm_display}{temp_symbol}</b>"
                 )
             else:
                 future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")

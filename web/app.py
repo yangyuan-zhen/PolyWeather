@@ -144,7 +144,12 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     sym = "°F" if is_f else "°C"
 
     # ── 1. Fetch raw data ──
-    raw = _weather.fetch_all_sources(city, lat=lat, lon=lon)
+    raw = _weather.fetch_all_sources(
+        city,
+        lat=lat,
+        lon=lon,
+        force_refresh=force_refresh,
+    )
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
     mgm = raw.get("mgm") or {}
@@ -786,7 +791,45 @@ def _build_city_detail_payload(
     market_slug: Optional[str] = None,
 ) -> Dict[str, Any]:
     distribution = data.get("probabilities", {}).get("distribution", []) or []
-    primary_bucket = distribution[0] if distribution else None
+    city_name = str(data.get("name") or "").strip().lower()
+    model_map = data.get("multi_model") or {}
+    if not isinstance(model_map, dict):
+        model_map = {}
+
+    # Mispricing anchor temperature:
+    # - Ankara: use MGM today-high forecast
+    # - Others: use Open-Meteo today-high forecast
+    anchor_temp = None
+    if city_name == "ankara":
+        anchor_temp = _sf(model_map.get("MGM"))
+    else:
+        anchor_temp = _sf(model_map.get("Open-Meteo"))
+
+    if anchor_temp is None and city_name == "ankara":
+        # Keep radar available when MGM is missing unexpectedly.
+        anchor_temp = _sf(model_map.get("Open-Meteo"))
+
+    primary_bucket = None
+    if isinstance(distribution, list) and distribution:
+        if anchor_temp is None:
+            primary_bucket = distribution[0]
+        else:
+            ranked_buckets = []
+            for idx, row in enumerate(distribution):
+                if not isinstance(row, dict):
+                    continue
+                bucket_temp = _sf(row.get("value"))
+                bucket_prob = _sf(row.get("probability"))
+                if bucket_temp is None:
+                    continue
+                prob_rank = bucket_prob if bucket_prob is not None else -1.0
+                ranked_buckets.append((abs(bucket_temp - anchor_temp), -prob_rank, idx, row))
+            if ranked_buckets:
+                ranked_buckets.sort(key=lambda x: (x[0], x[1], x[2]))
+                primary_bucket = ranked_buckets[0][3]
+            else:
+                primary_bucket = distribution[0]
+
     model_probability = None
     if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None:
         try:

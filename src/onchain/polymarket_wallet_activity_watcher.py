@@ -237,6 +237,109 @@ def _diff_positions(
     return changes
 
 
+def _merge_pending_update(
+    pending_updates: Dict[str, Dict[str, Any]],
+    pos_key: str,
+    pos: Dict[str, Any],
+    now_ts: int,
+) -> None:
+    entry = pending_updates.get(pos_key)
+    size_delta = _safe_float(pos.get("size_delta"))
+    old_size = _safe_float(pos.get("old_size"))
+    new_size = _safe_float(pos.get("size"))
+    old_avg = _safe_float(pos.get("old_avg_price"))
+    new_avg = _safe_float(pos.get("avg_price"))
+
+    if entry is None:
+        pending_updates[pos_key] = {
+            "count": 1,
+            "first_ts": now_ts,
+            "last_ts": now_ts,
+            "title": pos.get("title"),
+            "slug": pos.get("slug"),
+            "event_slug": pos.get("event_slug"),
+            "outcome": pos.get("outcome"),
+            "asset": pos.get("asset"),
+            "condition_id": pos.get("condition_id"),
+            "old_size": old_size,
+            "size": new_size,
+            "size_delta": size_delta,
+            "old_avg_price": old_avg,
+            "avg_price": new_avg,
+            "position_value": _safe_float(pos.get("position_value")),
+            "cash_pnl": _safe_float(pos.get("cash_pnl")),
+            "percent_pnl": _safe_float(pos.get("percent_pnl")),
+        }
+        return
+
+    entry["count"] = int(entry.get("count", 1)) + 1
+    entry["last_ts"] = now_ts
+    entry["size_delta"] = _safe_float(entry.get("size_delta")) + size_delta
+    entry["size"] = new_size
+    entry["avg_price"] = new_avg
+    entry["position_value"] = _safe_float(pos.get("position_value"))
+    entry["cash_pnl"] = _safe_float(pos.get("cash_pnl"))
+    entry["percent_pnl"] = _safe_float(pos.get("percent_pnl"))
+    pending_updates[pos_key] = entry
+
+
+def _finalize_pending_update(
+    pending_entry: Dict[str, Any],
+    now_ts: int,
+) -> Dict[str, Any]:
+    first_ts = int(pending_entry.get("first_ts") or now_ts)
+    last_ts = int(pending_entry.get("last_ts") or now_ts)
+    return {
+        "title": pending_entry.get("title") or "",
+        "slug": pending_entry.get("slug") or "",
+        "event_slug": pending_entry.get("event_slug") or "",
+        "outcome": pending_entry.get("outcome") or "",
+        "asset": pending_entry.get("asset") or "",
+        "condition_id": pending_entry.get("condition_id") or "",
+        "old_size": _safe_float(pending_entry.get("old_size")),
+        "size": _safe_float(pending_entry.get("size")),
+        "size_delta": _safe_float(pending_entry.get("size_delta")),
+        "old_avg_price": _safe_float(pending_entry.get("old_avg_price")),
+        "avg_price": _safe_float(pending_entry.get("avg_price")),
+        "position_value": _safe_float(pending_entry.get("position_value")),
+        "cash_pnl": _safe_float(pending_entry.get("cash_pnl")),
+        "percent_pnl": _safe_float(pending_entry.get("percent_pnl")),
+        "agg_count": int(pending_entry.get("count") or 1),
+        "agg_span_sec": max(0, last_ts - first_ts),
+    }
+
+
+def _flush_ready_pending_updates(
+    pending_updates: Dict[str, Dict[str, Any]],
+    now_ts: int,
+    debounce_sec: int,
+    max_hold_sec: int,
+    force_keys: Optional[set] = None,
+) -> List[Tuple[str, Dict[str, Any]]]:
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    keys = list(pending_updates.keys())
+    for key in keys:
+        entry = pending_updates.get(key)
+        if not isinstance(entry, dict):
+            pending_updates.pop(key, None)
+            continue
+
+        if force_keys and key in force_keys:
+            out.append(("update", _finalize_pending_update(entry, now_ts)))
+            pending_updates.pop(key, None)
+            continue
+
+        first_ts = int(entry.get("first_ts") or now_ts)
+        last_ts = int(entry.get("last_ts") or now_ts)
+        quiet_enough = (now_ts - last_ts) >= debounce_sec
+        held_too_long = (now_ts - first_ts) >= max_hold_sec
+        if quiet_enough or held_too_long:
+            out.append(("update", _finalize_pending_update(entry, now_ts)))
+            pending_updates.pop(key, None)
+
+    return out
+
+
 def _fmt_pct(value: float) -> str:
     # Data API may return either ratio (0.12) or percent (12.0).
     display = value * 100.0 if abs(value) <= 1.5 else value
@@ -279,8 +382,14 @@ def _format_change_block(
     lines: List[str] = []
     if change_type == "new":
         lines.append("🆕 新开仓位")
+    elif change_type == "closed":
+        lines.append("❌ 仓位关闭")
     else:
-        lines.append("🔄 仓位更新")
+        agg_count = int(pos.get("agg_count") or 1)
+        if agg_count > 1:
+            lines.append("🔁 连续仓位变动汇总")
+        else:
+            lines.append("🔄 仓位更新")
 
     lines.append(f"钱包: {_short(wallet)}")
     if market_url:
@@ -295,11 +404,20 @@ def _format_change_block(
         now_size = _safe_float(pos.get("size"))
         delta = _safe_float(pos.get("size_delta"))
         lines.append(f"持有数量: {old_size:.3f} -> {now_size:.3f} (Δ {delta:+.3f})")
+        agg_count = int(pos.get("agg_count") or 1)
+        if agg_count > 1:
+            span_sec = int(_safe_float(pos.get("agg_span_sec")))
+            lines.append(f"变动次数: {agg_count} 次 | 聚合窗口: {span_sec}s")
     else:
         lines.append(f"持有数量: {_safe_float(pos.get('size')):.3f}")
 
     avg_price = _safe_float(pos.get("avg_price"))
-    if _should_show_avg_price(avg_price):
+    old_avg_price = _safe_float(pos.get("old_avg_price"))
+    agg_count = int(pos.get("agg_count") or 1)
+    if change_type == "update" and agg_count > 1:
+        if _should_show_avg_price(old_avg_price) or _should_show_avg_price(avg_price):
+            lines.append(f"建仓均价: {_fmt_price(old_avg_price)} -> {_fmt_price(avg_price)}")
+    elif _should_show_avg_price(avg_price):
         lines.append(f"建仓均价: {_fmt_price(avg_price)}")
     lines.append(f"当前价值: {_fmt_usd(_safe_float(pos.get('position_value')))}")
 
@@ -360,6 +478,14 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
+    update_debounce_sec = max(
+        poll_sec,
+        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_DEBOUNCE_SEC", 90),
+    )
+    update_max_hold_sec = max(
+        update_debounce_sec,
+        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_MAX_HOLD_SEC", 240),
+    )
 
     # 价格过滤范围配置
     min_price = _env_float("POLYMARKET_WALLET_ACTIVITY_AVG_PRICE_SHOW_MIN", 0.0)
@@ -374,13 +500,15 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
 
         logger.info(
             f"polymarket wallet activity watcher started users={len(users)} "
-            f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price}"
+            f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
+            f"update_debounce={update_debounce_sec}s update_max_hold={update_max_hold_sec}s"
         )
 
         while True:
             touched = False
             for user in users:
                 try:
+                    now_ts = int(time.time())
                     rows = _fetch_positions(
                         session=session,
                         base_url=data_api_url,
@@ -388,19 +516,30 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                         timeout_sec=timeout_sec,
                     )
                     current = _build_snapshot(rows, min_size_abs=min_size_abs)
-                    prev = (
-                        (users_state.get(user) or {}).get("positions")
-                        if isinstance(users_state.get(user), dict)
-                        else {}
-                    ) or {}
 
-                    if not prev and not bootstrap_alert:
-                        users_state[user] = {
-                            "positions": current,
-                            "updated_at": int(time.time()),
-                        }
-                        touched = True
-                        continue
+                    user_state = users_state.get(user) if isinstance(users_state.get(user), dict) else {}
+                    prev = (user_state.get("positions") if isinstance(user_state, dict) else {}) or {}
+                    if not isinstance(prev, dict):
+                        prev = {}
+                    pending_updates = (
+                        user_state.get("pending_updates") if isinstance(user_state, dict) else {}
+                    ) or {}
+                    if not isinstance(pending_updates, dict):
+                        pending_updates = {}
+                    initialized = bool(user_state.get("initialized")) if isinstance(user_state, dict) else False
+
+                    # First cycle for each wallet only initializes baseline unless bootstrap alert is enabled.
+                    if not initialized:
+                        if not bootstrap_alert:
+                            users_state[user] = {
+                                "positions": current,
+                                "pending_updates": {},
+                                "initialized": True,
+                                "updated_at": now_ts,
+                            }
+                            touched = True
+                            continue
+                        prev = {}
 
                     changes = _diff_positions(
                         previous=prev,
@@ -411,16 +550,63 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                         max_price=max_price,
                     )
 
-                    if changes:
-                        msg = _build_message(user, changes, max_changes=max_changes)
+                    outgoing: List[Tuple[str, Dict[str, Any]]] = []
+                    for change_type, pos in changes:
+                        pos_key = _position_key(pos)
+                        if change_type == "update":
+                            _merge_pending_update(
+                                pending_updates=pending_updates,
+                                pos_key=pos_key,
+                                pos=pos,
+                                now_ts=now_ts,
+                            )
+                            continue
+
+                        outgoing.extend(
+                            _flush_ready_pending_updates(
+                                pending_updates=pending_updates,
+                                now_ts=now_ts,
+                                debounce_sec=update_debounce_sec,
+                                max_hold_sec=update_max_hold_sec,
+                                force_keys={pos_key},
+                            )
+                        )
+                        outgoing.append((change_type, pos))
+
+                    # If a key disappeared from snapshot, flush pending summary now.
+                    missing_keys = {k for k in pending_updates.keys() if k not in current}
+                    if missing_keys:
+                        outgoing.extend(
+                            _flush_ready_pending_updates(
+                                pending_updates=pending_updates,
+                                now_ts=now_ts,
+                                debounce_sec=update_debounce_sec,
+                                max_hold_sec=update_max_hold_sec,
+                                force_keys=missing_keys,
+                            )
+                        )
+
+                    outgoing.extend(
+                        _flush_ready_pending_updates(
+                            pending_updates=pending_updates,
+                            now_ts=now_ts,
+                            debounce_sec=update_debounce_sec,
+                            max_hold_sec=update_max_hold_sec,
+                        )
+                    )
+
+                    if outgoing:
+                        msg = _build_message(user, outgoing, max_changes=max_changes)
                         bot.send_message(chat_id, msg, disable_web_page_preview=True)
                         logger.info(
-                            f"wallet activity pushed user={user} changes={len(changes)}"
+                            f"wallet activity pushed user={user} changes={len(outgoing)}"
                         )
 
                     users_state[user] = {
                         "positions": current,
-                        "updated_at": int(time.time()),
+                        "pending_updates": pending_updates,
+                        "initialized": True,
+                        "updated_at": now_ts,
                     }
                     touched = True
                 except Exception:
@@ -441,10 +627,6 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
-
-
-
-
 
 
 

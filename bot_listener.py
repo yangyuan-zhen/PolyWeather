@@ -3,7 +3,7 @@ import os
 import telebot  # type: ignore
 from loguru import logger  # type: ignore
 
-# 纭繚椤圭洰鏍圭洰褰曞湪 sys.path 涓?
+# 确保项目根目录在 sys.path 中
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
@@ -339,7 +339,10 @@ def start_bot():
                 return
 
             weather_data = weather.fetch_all_sources(
-                city_name, lat=coords["lat"], lon=coords["lon"]
+                city_name,
+                lat=coords["lat"],
+                lon=coords["lon"],
+                force_refresh=True,
             )
             city_report = build_city_query_report(
                 city_name=city_name,

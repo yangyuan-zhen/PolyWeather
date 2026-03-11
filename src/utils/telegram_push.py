@@ -133,12 +133,23 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
     return SEVERITY_RANK.get(severity, 0) >= SEVERITY_RANK.get(min_severity, 0)
 
 
-def _market_price_cap_ok(alert_payload: Dict[str, Any], max_yes_buy: float) -> bool:
+def _market_price_cap_ok(
+    alert_payload: Dict[str, Any],
+    max_yes_buy: float,
+    require_actionable_quote: bool = False,
+) -> bool:
     if max_yes_buy >= 1.0:
         return True
 
     market = alert_payload.get("market_snapshot") or {}
     if not isinstance(market, dict) or not market.get("available"):
+        if require_actionable_quote:
+            logger.info(
+                "trade alert skipped: market snapshot unavailable city={}".format(
+                    alert_payload.get("city"),
+                )
+            )
+            return False
         return True
 
     # Strict rule: use the bucket mapped from Open-Meteo settlement.
@@ -149,10 +160,11 @@ def _market_price_cap_ok(alert_payload: Dict[str, Any], max_yes_buy: float) -> b
         yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
         bucket_label = str(forecast_bucket.get("label") or "").strip() or None
 
-    if yes_buy is None:
+    if yes_buy is None or yes_buy <= 0.0:
         logger.info(
-            "trade alert skipped: no mapped forecast bucket city={} om_settle={}".format(
+            "trade alert skipped: no actionable mapped bucket quote city={} bucket={} om_settle={}".format(
                 alert_payload.get("city"),
+                bucket_label or "--",
                 market.get("open_meteo_settlement"),
             )
         )
@@ -321,6 +333,7 @@ def _maybe_send_alert(
     cooldown_sec: int,
     min_severity: str,
     min_trigger_count: int,
+    mispricing_only: bool,
 ) -> bool:
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
@@ -330,7 +343,11 @@ def _maybe_send_alert(
         0.0,
         min(1.0, _env_float("TELEGRAM_ALERT_MISPRICING_MAX_YES_BUY", 0.10)),
     )
-    if not _market_price_cap_ok(alert_payload, max_yes_buy):
+    if not _market_price_cap_ok(
+        alert_payload,
+        max_yes_buy,
+        require_actionable_quote=mispricing_only,
+    ):
         is_active = False
     message = ((alert_payload.get("telegram") or {}).get("zh") or "").strip()
 
@@ -430,6 +447,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                         cooldown_sec=cooldown_sec,
                         min_severity=min_severity,
                         min_trigger_count=min_trigger_count,
+                        mispricing_only=mispricing_only,
                     ):
                         try:
                             _save_state(state_path, state)

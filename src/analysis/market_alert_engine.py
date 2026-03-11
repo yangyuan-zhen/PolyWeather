@@ -473,6 +473,18 @@ def _bucket_label(bucket: Any) -> Optional[str]:
     return None
 
 
+def _row_yes_buy_prob(row: Dict[str, Any]) -> Optional[float]:
+    if not isinstance(row, dict):
+        return None
+    return _norm_probability(row.get("yes_buy"))
+
+
+def _has_actionable_yes_buy_quote(row: Dict[str, Any]) -> bool:
+    quote = _row_yes_buy_prob(row)
+    # 0 usually means no actionable orderbook bid, not a tradable quote.
+    return quote is not None and quote > 0.0
+
+
 def _to_celsius(temp: Optional[float], temp_symbol: str) -> Optional[float]:
     if temp is None:
         return None
@@ -555,6 +567,7 @@ def _pick_bucket_for_forecast(
 
     best_row: Optional[Dict[str, Any]] = None
     best_distance: Optional[float] = None
+    best_has_quote = False
     best_probability = -1.0
     best_rank = 10**9
 
@@ -564,12 +577,14 @@ def _pick_bucket_for_forecast(
             continue
 
         distance = _distance_to_bucket(target, bounds)
+        has_quote = _has_actionable_yes_buy_quote(row)
         probability = _norm_probability(row.get("probability"))
         probability_rank = probability if probability is not None else -1.0
 
         if best_row is None:
             best_row = row
             best_distance = distance
+            best_has_quote = has_quote
             best_probability = probability_rank
             best_rank = idx
             continue
@@ -578,19 +593,32 @@ def _pick_bucket_for_forecast(
         if distance < best_distance:
             best_row = row
             best_distance = distance
+            best_has_quote = has_quote
             best_probability = probability_rank
             best_rank = idx
             continue
 
         if abs(distance - best_distance) <= 1e-9:
-            if probability_rank > best_probability:
+            if has_quote and not best_has_quote:
                 best_row = row
                 best_distance = distance
+                best_has_quote = has_quote
                 best_probability = probability_rank
                 best_rank = idx
-            elif abs(probability_rank - best_probability) <= 1e-9 and idx < best_rank:
+            elif has_quote == best_has_quote and probability_rank > best_probability:
                 best_row = row
                 best_distance = distance
+                best_has_quote = has_quote
+                best_probability = probability_rank
+                best_rank = idx
+            elif (
+                has_quote == best_has_quote
+                and abs(probability_rank - best_probability) <= 1e-9
+                and idx < best_rank
+            ):
+                best_row = row
+                best_distance = distance
+                best_has_quote = has_quote
                 best_probability = probability_rank
                 best_rank = idx
 
@@ -972,7 +1000,12 @@ def _build_telegram_messages_mispricing(
     om_settle = snapshot.get("open_meteo_settlement")
     forecast_bucket = snapshot.get("forecast_bucket") or {}
     match_bucket_label = str(forecast_bucket.get("label") or "--").strip() or "--"
-    match_bucket_yes = _fmt_cents(forecast_bucket.get("yes_buy"))
+    match_bucket_yes_prob = _norm_probability(forecast_bucket.get("yes_buy"))
+    match_bucket_yes = (
+        _fmt_cents(match_bucket_yes_prob)
+        if match_bucket_yes_prob is not None and match_bucket_yes_prob > 0.0
+        else "--"
+    )
     market_url = str(
         snapshot.get("market_url")
         or snapshot.get("primary_market_url")

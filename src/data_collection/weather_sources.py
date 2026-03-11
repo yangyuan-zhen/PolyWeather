@@ -1797,8 +1797,46 @@ class WeatherDataCollector:
 
         return None
 
+    def _evict_city_caches(
+        self,
+        city: str,
+        lat: Optional[float],
+        lon: Optional[float],
+        use_fahrenheit: bool,
+    ) -> None:
+        """Drop in-memory caches for one city before a force-refresh query."""
+        if lat is not None and lon is not None:
+            base = f"{round(float(lat), 4)}:{round(float(lon), 4)}"
+            unit = "f" if use_fahrenheit else "c"
+            open_meteo_key = f"{base}:14:{unit}"
+            ensemble_key = f"{base}:{unit}"
+            meteoblue_key = ensemble_key
+            multi_model_key = ensemble_key
+
+            with self._open_meteo_cache_lock:
+                self._open_meteo_cache.pop(open_meteo_key, None)
+            with self._ensemble_cache_lock:
+                self._ensemble_cache.pop(ensemble_key, None)
+            with self._multi_model_cache_lock:
+                self._multi_model_cache.pop(multi_model_key, None)
+            with self._meteoblue_cache_lock:
+                self._meteoblue_cache.pop(meteoblue_key, None)
+
+        icao = self.get_icao_code(city)
+        if icao:
+            prefix = f"{icao}:"
+            with self._metar_cache_lock:
+                for key in list(self._metar_cache.keys()):
+                    if key.startswith(prefix):
+                        self._metar_cache.pop(key, None)
+
     def fetch_all_sources(
-        self, city: str, lat: float = None, lon: float = None, country: str = None
+        self,
+        city: str,
+        lat: float = None,
+        lon: float = None,
+        country: str = None,
+        force_refresh: bool = False,
     ) -> Dict:
         """
         Fetch weather data from all available sources
@@ -1835,9 +1873,17 @@ class WeatherDataCollector:
         # 严格判断是否为美国市场（必须完全匹配列表或缩写）
         use_fahrenheit = city_lower in us_cities
 
+        if force_refresh:
+            self._evict_city_caches(
+                city=city,
+                lat=lat,
+                lon=lon,
+                use_fahrenheit=use_fahrenheit,
+            )
+
         # Turkish cities: keep MGM model fallback alive when Open-Meteo is rate-limited.
         turkish_provinces = {
-            "ankara": ("17128", "Ankara"),  # settlement reference: Esenboğa airport
+            "ankara": ("17130", "Ankara"),  # MGM center station
             "istanbul": ("17060", "Istanbul"),
         }
 
@@ -1862,23 +1908,14 @@ class WeatherDataCollector:
 
                 # 对土耳其城市，额外获取 MGM 官方数据与周边测站
                 turkish_provinces = {
-                    "ankara": ("17128", "Ankara"),  # 使用机场站 (Esenboğa Havalimanı) 作为结算参考主站
+                    "ankara": ("17130", "Ankara"),  # use one MGM station consistently
                     "istanbul": ("17060", "Istanbul"),
                 }
                 if city_lower in turkish_provinces:
                     istno, province = turkish_provinces[city_lower]
-                    # 核心逻辑：实测用 istno (17128), 预报强制去 17130 拿
+                    # Use one station for both current conditions and forecasts.
                     mgm_data = self.fetch_from_mgm(istno)
-                    
-                    # 如果当前是机场站 (17128)，我们额外去 17130 拿一次预报
-                    if istno == "17128":
-                        mgm_city_center = self.fetch_from_mgm("17130")
-                        if mgm_city_center and mgm_data:
-                            # 用市中心的预报覆盖机场可能缺失的预报
-                            mgm_data["today_high"] = mgm_city_center.get("today_high")
-                            mgm_data["daily_forecasts"] = mgm_city_center.get("daily_forecasts")
-                            logger.info("⚡ 已同步 MGM 安卡拉总部 (17130) 的官方最高温预报")
-                    
+
                     if mgm_data:
                         results["mgm"] = mgm_data
                         nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
@@ -1943,13 +1980,6 @@ class WeatherDataCollector:
                 if city_lower in turkish_provinces:
                     istno, province = turkish_provinces[city_lower]
                     mgm_data = self.fetch_from_mgm(istno)
-                    if istno == "17128":
-                        mgm_city_center = self.fetch_from_mgm("17130")
-                        if mgm_city_center and mgm_data:
-                            mgm_data["today_high"] = mgm_city_center.get("today_high")
-                            mgm_data["daily_forecasts"] = mgm_city_center.get(
-                                "daily_forecasts"
-                            )
                     if mgm_data:
                         results["mgm"] = mgm_data
                         nearby = self.fetch_mgm_nearby_stations(

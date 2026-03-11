@@ -1128,6 +1128,7 @@ class PolymarketReadOnlyLayer:
                 )
                 orderbook_raw = self._safe_call(clob, "get_order_book", token_id)
                 book, book_liquidity = self._normalize_orderbook(orderbook_raw)
+                buy, sell = self._resolve_trade_prices(buy=buy, sell=sell, book=book)
                 return {
                     "buy": buy,
                     "sell": sell,
@@ -1150,6 +1151,7 @@ class PolymarketReadOnlyLayer:
         )
         orderbook_raw = self._clob_get("/book", {"token_id": token_id})
         book, book_liquidity = self._normalize_orderbook(orderbook_raw)
+        buy, sell = self._resolve_trade_prices(buy=buy, sell=sell, book=book)
         return {
             "buy": buy,
             "sell": sell,
@@ -1173,6 +1175,19 @@ class PolymarketReadOnlyLayer:
             return resp.json()
         except Exception:
             return None
+
+    def _resolve_trade_prices(
+        self,
+        buy: Optional[float],
+        sell: Optional[float],
+        book: Optional[Dict[str, Any]],
+    ) -> Tuple[Optional[float], Optional[float]]:
+        payload = book if isinstance(book, dict) else {}
+        best_bid = _extract_price(payload.get("best_bid"))
+        best_ask = _extract_price(payload.get("best_ask"))
+        resolved_buy = best_ask if best_ask is not None else buy
+        resolved_sell = best_bid if best_bid is not None else sell
+        return resolved_buy, resolved_sell
 
     def _normalize_orderbook(self, orderbook_raw: Any) -> Tuple[Optional[Dict[str, Any]], Optional[float]]:
         payload = _to_plain_dict(orderbook_raw)
@@ -1210,6 +1225,8 @@ class PolymarketReadOnlyLayer:
         _parse_side(bids_raw, bid_levels)
         _parse_side(asks_raw, ask_levels)
 
+        bid_levels.sort(key=lambda level: level[0], reverse=True)
+        ask_levels.sort(key=lambda level: level[0])
         best_bid = bid_levels[0][0] if bid_levels else None
         best_ask = ask_levels[0][0] if ask_levels else None
         normalized = {
