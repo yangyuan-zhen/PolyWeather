@@ -4,6 +4,16 @@
 
 官方看板：[polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
 
+## 产品截图
+
+### 全球看板
+
+![PolyWeather 全球地图看板](docs/images/demo_map.png)
+
+### 城市分析（Ankara）
+
+![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
+
 ## 这个项目在做什么
 
 - 聚合监控城市的实测与预报数据。
