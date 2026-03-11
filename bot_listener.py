@@ -132,7 +132,11 @@ def start_bot():
             from datetime import datetime as _dt, timedelta as _td
             import os as _os
 
-            from src.analysis.deb_algorithm import load_history, _is_excluded_model_name
+            from src.analysis.deb_algorithm import (
+                load_history,
+                _is_excluded_model_name,
+                reconcile_recent_actual_highs,
+            )
             from src.data_collection.city_registry import ALIASES
 
             city_input = parts[1].strip().lower()
@@ -153,6 +157,9 @@ def start_bot():
             if not _ensure_query_points(message, DEB_QUERY_COST, "/deb"):
                 return
 
+            reconcile_info = reconcile_recent_actual_highs(city_name, lookback_days=7)
+            # Reload in case reconciliation updated the file
+            data = load_history(history_file)
             city_data = data[city_name]
             today = _dt.now().date()
             today_str = today.strftime("%Y-%m-%d")
@@ -174,6 +181,17 @@ def start_bot():
                 "",
                 "📅 <b>近日记录：</b>",
             ]
+            if (
+                isinstance(reconcile_info, dict)
+                and reconcile_info.get("ok")
+                and int(reconcile_info.get("updated") or 0) > 0
+            ):
+                lines.extend(
+                    [
+                        f"🔁 已用 METAR 历史回填修正 {int(reconcile_info.get('updated'))} 天实测最高温",
+                        "",
+                    ]
+                )
             total_days = 0
             hits = 0
             deb_errors = []

@@ -1,6 +1,7 @@
 import os
 import json
 from datetime import datetime, timedelta
+import requests
 from src.analysis.settlement_rounding import wu_round
 
 # Cross-platform file locking
@@ -78,6 +79,141 @@ def save_history(filepath, data):
         _history_mtime = os.path.getmtime(filepath)
     except Exception as e:
         print(f"Error saving history: {e}")
+
+
+def _parse_metar_row_time(row):
+    """Parse METAR row timestamp from aviationweather API payload."""
+    candidates = [
+        row.get("reportTime"),
+        row.get("receiptTime"),
+        row.get("observation_time"),
+    ]
+    for raw in candidates:
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        except Exception:
+            continue
+    obs_epoch = row.get("obsTime")
+    if obs_epoch is not None:
+        try:
+            return datetime.utcfromtimestamp(int(obs_epoch))
+        except Exception:
+            pass
+    return None
+
+
+def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
+    """
+    Reconcile recent `actual_high` values using historical METAR data from
+    aviationweather.gov to fix stale/wrong daily records.
+    """
+    try:
+        from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
+
+        city_key = str(city_name or "").strip().lower()
+        city_key = ALIASES.get(city_key, city_key)
+        city_meta = CITY_REGISTRY.get(city_key)
+        if not isinstance(city_meta, dict):
+            return {"ok": False, "reason": "unknown_city", "updated": 0}
+
+        icao = str(city_meta.get("icao") or "").strip().upper()
+        if not icao:
+            return {"ok": False, "reason": "missing_icao", "updated": 0}
+
+        tz_offset = int(city_meta.get("tz_offset") or 0)
+        use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
+
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        history_file = os.path.join(project_root, "data", "daily_records.json")
+        data = load_history(history_file)
+        city_data = data.get(city_key) or {}
+        if not isinstance(city_data, dict) or not city_data:
+            return {"ok": True, "reason": "no_city_history", "updated": 0}
+
+        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
+        local_today = local_now.strftime("%Y-%m-%d")
+        cutoff = (local_now - timedelta(days=max(lookback_days, 1) + 1)).strftime(
+            "%Y-%m-%d"
+        )
+        target_dates = sorted(
+            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+        )
+        if not target_dates:
+            return {"ok": True, "reason": "no_target_dates", "updated": 0}
+
+        try:
+            min_target = datetime.strptime(target_dates[0], "%Y-%m-%d")
+            span_hours = int((local_now - min_target).total_seconds() / 3600) + 12
+        except Exception:
+            span_hours = (lookback_days + 3) * 24
+        span_hours = max(72, min(240, span_hours))
+
+        url = (
+            f"https://aviationweather.gov/api/data/metar"
+            f"?ids={icao}&format=json&hours={span_hours}"
+        )
+        resp = requests.get(url, timeout=12)
+        resp.raise_for_status()
+        rows = resp.json() or []
+        if not isinstance(rows, list):
+            rows = []
+
+        daily_max_c = {}
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            temp = row.get("temp")
+            if temp is None:
+                continue
+            obs_dt = _parse_metar_row_time(row)
+            if obs_dt is None:
+                continue
+            local_dt = obs_dt + timedelta(seconds=tz_offset)
+            d = local_dt.strftime("%Y-%m-%d")
+            if d < cutoff or d >= local_today:
+                continue
+            try:
+                t = float(temp)
+            except Exception:
+                continue
+            prev = daily_max_c.get(d)
+            if prev is None or t > prev:
+                daily_max_c[d] = t
+
+        updated = 0
+        for d in target_dates:
+            t_c = daily_max_c.get(d)
+            if t_c is None:
+                continue
+            corrected = round(t_c * 9 / 5 + 32, 1) if use_fahrenheit else round(t_c, 1)
+            rec = city_data.get(d) or {}
+            old = rec.get("actual_high")
+            try:
+                old_val = float(old) if old is not None else None
+            except Exception:
+                old_val = None
+            if old_val is None or abs(old_val - corrected) >= 0.1:
+                rec["actual_high"] = corrected
+                city_data[d] = rec
+                updated += 1
+
+        if updated > 0:
+            data[city_key] = city_data
+            save_history(history_file, data)
+
+        return {
+            "ok": True,
+            "updated": updated,
+            "scanned_dates": len(target_dates),
+            "metar_rows": len(rows),
+            "icao": icao,
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e), "updated": 0}
 
 
 def update_daily_record(
