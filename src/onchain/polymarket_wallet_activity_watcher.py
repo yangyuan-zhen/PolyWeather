@@ -76,6 +76,51 @@ def _parse_addresses(raw: Optional[str]) -> List[str]:
     return out
 
 
+def _parse_address_aliases(raw: Optional[str]) -> Dict[str, str]:
+    """
+    Parse wallet aliases from either:
+    - JSON object: {"0xabc...": "Whale A", "0xdef...": "Whale B"}
+    - CSV pairs: 0xabc...=Whale A,0xdef...=Whale B
+    """
+    out: Dict[str, str] = {}
+    if not raw:
+        return out
+
+    text = str(raw).strip()
+    if not text:
+        return out
+
+    if text.startswith("{"):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, dict):
+                for k, v in parsed.items():
+                    addr = _normalize_addr(k)
+                    alias = str(v or "").strip()
+                    if addr and alias:
+                        out[addr] = alias
+            return out
+        except Exception:
+            pass
+
+    for part in text.split(","):
+        row = part.strip()
+        if not row:
+            continue
+        if "=" in row:
+            left, right = row.split("=", 1)
+        elif ":" in row:
+            left, right = row.split(":", 1)
+        else:
+            continue
+        addr = _normalize_addr(left)
+        alias = str(right or "").strip()
+        if addr and alias:
+            out[addr] = alias
+
+    return out
+
+
 def _state_file() -> str:
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return os.path.join(root, "data", "polymarket_wallet_activity_state.json")
@@ -374,6 +419,7 @@ def _should_show_avg_price(avg_price: float) -> bool:
 def _format_change_block(
     change_type: str,
     wallet: str,
+    wallet_alias: Optional[str],
     pos: Dict[str, Any],
     now_utc: str,
 ) -> str:
@@ -393,11 +439,14 @@ def _format_change_block(
         else:
             lines.append("🔄 仓位更新")
 
-    lines.append(f"钱包: {_short(wallet)}")
+    wallet_label = _short(wallet)
+    if wallet_alias:
+        wallet_label = f"{wallet_alias} ({wallet_label})"
+    lines.append(f"钱包: {wallet_label}")
+    lines.append(f"市场: {title}")
     if market_url:
-        lines.append(f"市场: {title} ({market_url})")
-    else:
-        lines.append(f"市场: {title}")
+        # Keep raw URL on its own line so Telegram can generate link preview.
+        lines.append(f"链接: {market_url}")
 
     lines.append(f"买入方向: {outcome}")
 
@@ -434,6 +483,7 @@ def _build_message(
     wallet: str,
     changes: List[Tuple[str, Dict[str, Any]]],
     max_changes: int,
+    wallet_alias: Optional[str] = None,
 ) -> str:
     now_bj = (
         datetime.now(timezone.utc)
@@ -444,7 +494,15 @@ def _build_message(
     lines = [f"🚨 钱包异动监控 ({len(changes)} 个异动):", ""]
 
     for idx, (change_type, pos) in enumerate(shown):
-        lines.append(_format_change_block(change_type, wallet, pos, f"{now_bj} 北京时间"))
+        lines.append(
+            _format_change_block(
+                change_type,
+                wallet,
+                wallet_alias,
+                pos,
+                f"{now_bj} 北京时间",
+            )
+        )
         if idx != len(shown) - 1:
             lines.append("")
 
@@ -459,6 +517,9 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     users = _parse_addresses(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
+    user_aliases = _parse_address_aliases(
+        os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
+    )
 
     if not enabled:
         logger.info("polymarket wallet activity watcher disabled")
@@ -499,6 +560,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
+    link_preview = _env_bool("POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW", True)
     default_debounce_sec = max(poll_sec, 30)
     update_debounce_sec = max(
         poll_sec,
@@ -653,8 +715,17 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                     )
 
                     if outgoing:
-                        msg = _build_message(user, outgoing, max_changes=max_changes)
-                        bot.send_message(chat_id, msg, disable_web_page_preview=True)
+                        msg = _build_message(
+                            user,
+                            outgoing,
+                            max_changes=max_changes,
+                            wallet_alias=user_aliases.get(user),
+                        )
+                        bot.send_message(
+                            chat_id,
+                            msg,
+                            disable_web_page_preview=not link_preview,
+                        )
                         logger.info(
                             f"wallet activity pushed user={user} changes={len(outgoing)}"
                         )
@@ -687,4 +758,3 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
-
