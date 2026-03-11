@@ -330,67 +330,18 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
 }
 
 export function getModelView(detail: CityDetail, targetDate?: string | null) {
-  const toFiniteNumber = (value: unknown): number | null => {
-    if (value === null || value === undefined || value === "") return null;
-    const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric : null;
-  };
-
-  const pickMeteoblueForDate = (dateStr: string) => {
-    const meteoblue = detail.source_forecasts?.meteoblue;
-    if (!meteoblue) return null;
-
-    const dates = detail.forecast?.daily?.map((item) => item.date) || [];
-    const index = dates.findIndex((date) => date === dateStr);
-    const todayHigh = toFiniteNumber(meteoblue.today_high);
-
-    // Today must always use Meteoblue daily max (today_high) first.
-    if (dateStr === detail.local_date && todayHigh != null) {
-      return todayHigh;
-    }
-
-    const dailyHighs = Array.isArray(meteoblue.daily_highs)
-      ? meteoblue.daily_highs
-      : [];
-    if (index >= 0) {
-      const byDailyHigh = toFiniteNumber(dailyHighs[index]);
-      if (byDailyHigh != null) return byDailyHigh;
-    }
-
-    if (index === 0 && todayHigh != null) return todayHigh;
-
-    return null;
-  };
-
-  const withMeteoblue = (
-    models: Record<string, number | null>,
-    dateStr: string,
-  ) => {
-    const nextModels = { ...models };
-    const existing = toFiniteNumber(nextModels.Meteoblue);
-    if (existing == null) {
-      const meteoblueVal = pickMeteoblueForDate(dateStr);
-      if (meteoblueVal != null) {
-        nextModels.Meteoblue = meteoblueVal;
-      }
-    } else {
-      nextModels.Meteoblue = existing;
-    }
-    return nextModels;
-  };
-
   const date = targetDate || detail.local_date;
   const daily = detail.multi_model_daily?.[date];
   if (daily) {
     return {
       deb: daily.deb?.prediction ?? null,
-      models: withMeteoblue(daily.models || {}, date),
+      models: daily.models || {},
     };
   }
 
   return {
     deb: detail.deb?.prediction ?? null,
-    models: withMeteoblue(detail.multi_model || {}, date),
+    models: detail.multi_model || {},
   };
 }
 
@@ -712,10 +663,6 @@ export function computeFrontTrendSignal(
           ? isEnglish(locale)
             ? "Temperature declines with pressure rebound and/or northerly shift. Next 6-48h leans cold-front suppression."
             : "温度下滑、气压回升或风向转北，未来 6-48 小时更像冷锋或冷平流压制。"
-          : detail.name !== "ankara" && Boolean(detail.source_forecasts?.meteoblue)
-            ? isEnglish(locale)
-              ? "Structured trend layer mainly uses weather.gov, Open-Meteo and Meteoblue for 6-48h warm/cold flow judgement."
-              : "结构化来源以 weather.gov、Open-Meteo、Meteoblue 为主，用于判断未来 6-48 小时冷暖平流趋势。"
             : isEnglish(locale)
               ? "Structured trend layer mainly uses weather.gov and Open-Meteo for 6-48h warm/cold flow judgement."
               : "结构化来源以 weather.gov 和 Open-Meteo 为主，用于判断未来 6-48 小时冷暖平流趋势。",

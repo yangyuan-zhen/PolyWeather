@@ -552,17 +552,7 @@ export function ModelForecast({
 }) {
   const { locale, t } = useI18n();
   const view = getModelView(detail, targetDate);
-  const fallbackMeteoblue = detail.source_forecasts?.meteoblue?.today_high;
   const modelsMap = { ...view.models };
-
-  // 强行插入 Meteoblue，防止 helper 函数或日期对齐导致其被剔除
-  if (
-    modelsMap["Meteoblue"] == null &&
-    fallbackMeteoblue != null &&
-    (!targetDate || targetDate === detail.local_date)
-  ) {
-    modelsMap["Meteoblue"] = fallbackMeteoblue;
-  }
 
   const modelEntries = Object.entries(modelsMap).filter(
     ([, value]) =>
@@ -591,12 +581,6 @@ export function ModelForecast({
     ? Math.max(...comparisonValues) + 1
     : 1;
   const range = Math.max(maxValue - minValue, 1);
-  const getModelDisplayName = (name: string) => {
-    if (String(name).trim().toLowerCase() === "meteoblue") {
-      return "Meteoblue";
-    }
-    return name;
-  };
 
   return (
     <section className="models-section">
@@ -615,7 +599,7 @@ export function ModelForecast({
             return (
               <div key={name} className="model-row">
                 <div className="model-name" title={name}>
-                  {getModelDisplayName(name)}
+                  {name}
                 </div>
                 <div className="model-bar-track">
                   <div

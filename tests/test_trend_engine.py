@@ -62,7 +62,6 @@ def _make_weather_data(
             "p90": ens_p90,
         },
         "multi_model": {"forecasts": multi_model or {}},
-        "meteoblue": {},
         "nws": {},
     }
     return data

@@ -22,7 +22,7 @@ const GUIDE_CARDS = {
       title: "Ankara 专属增强",
     },
     {
-      body: "点击多日预报后的模态框，主要用于分析下一个交易日。6-48 小时趋势以 weather.gov 和 Open-Meteo 为主，部分城市补充 Meteoblue；0-2 小时临近判断优先看 METAR 与周边站。",
+      body: "点击多日预报后的模态框，主要用于分析下一个交易日。6-48 小时趋势以 weather.gov 和 Open-Meteo 为主；0-2 小时临近判断优先看 METAR 与周边站。",
       title: "未来日期分析",
     },
     {
@@ -48,7 +48,7 @@ const GUIDE_CARDS = {
       title: "Ankara-specific Enhancement",
     },
     {
-      body: "The multi-day modal focuses on next-session analysis. 6-48h trend mainly relies on weather.gov and Open-Meteo, with Meteoblue in selected cities; 0-2h nowcast prioritizes METAR and nearby stations.",
+      body: "The multi-day modal focuses on next-session analysis. 6-48h trend mainly relies on weather.gov and Open-Meteo; 0-2h nowcast prioritizes METAR and nearby stations.",
       title: "Future-date Analysis",
     },
     {

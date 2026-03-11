@@ -186,7 +186,6 @@ export interface ModelComparison {
   JMA?: number;
   MGM?: number;
   NWS?: number;
-  Meteoblue?: number;
 }
 
 export interface DEBAnalysis {

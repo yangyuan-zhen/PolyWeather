@@ -62,7 +62,6 @@ def analyze_weather_trend(
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
     mgm = weather_data.get("mgm") or {}
-    mb = weather_data.get("meteoblue", {})
     nws = weather_data.get("nws", {})
 
     empty_result = ("", "", {})
@@ -81,8 +80,6 @@ def analyze_weather_trend(
     current_forecasts: Dict[str, Optional[float]] = {}
     if daily.get("temperature_2m_max"):
         current_forecasts["Open-Meteo"] = _sf(daily.get("temperature_2m_max")[0])
-    if mb.get("today_high") is not None:
-        current_forecasts["Meteoblue"] = _sf(mb.get("today_high"))
     if nws.get("today_high") is not None:
         current_forecasts["NWS"] = _sf(nws.get("today_high"))
     

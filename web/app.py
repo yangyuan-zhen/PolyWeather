@@ -252,13 +252,10 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     forecast_daily = [{"date": d, "max_temp": t} for d, t in zip(dates, maxtemps)]
     if om_today is None:
         nws_high = _sf(raw.get("nws", {}).get("today_high"))
-        mb_high = _sf(raw.get("meteoblue", {}).get("today_high"))
         mgm_high = _sf(mgm.get("today_high")) if mgm else None
         fallback_high = (
             nws_high
             if nws_high is not None
-            else mb_high
-            if mb_high is not None
             else mgm_high
             if mgm_high is not None
             else max_so_far
@@ -291,9 +288,6 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     nws_high = _sf(raw.get("nws", {}).get("today_high"))
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
-    mb_high = _sf(raw.get("meteoblue", {}).get("today_high"))
-    if mb_high is not None:
-        current_forecasts["Meteoblue"] = mb_high
     mgm_high = _sf(mgm.get("today_high")) if mgm else None
     if mgm_high is not None:
         current_forecasts["MGM"] = mgm_high
@@ -680,7 +674,6 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         },
         "source_forecasts": {
             "weather_gov": raw.get("nws") or {},
-            "meteoblue": raw.get("meteoblue") or {},
         },
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,

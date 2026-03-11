@@ -211,7 +211,6 @@
 
 - **Open-Meteo**
 - **weather.gov**（美国城市）
-- **Meteoblue**（部分城市）
 - **多模型集成**: ECMWF / GFS / ICON / GEM / JMA
 
 ---

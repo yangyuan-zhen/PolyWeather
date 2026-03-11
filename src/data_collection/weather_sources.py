@@ -42,25 +42,10 @@ class WeatherDataCollector:
         "munich": ["EDDM", "EDMO", "EDJA"],
     }
 
-    # Meteoblue 仅在增益最大的城市启用（减少配额消耗与冗余请求）
-    METEOBLUE_PRIORITY_CITIES = {
-        "ankara",
-        "london",
-        "paris",
-        "seoul",
-        "toronto",
-        "buenos aires",
-        "wellington",
-        "lucknow",
-        "sao paulo",
-        "munich",
-    }
-
     def __init__(self, config: dict):
         self.config = config
         weather_cfg = config.get("weather", {})
         self.wunderground_key = weather_cfg.get("wunderground_api_key")
-        self.meteoblue_key = weather_cfg.get("meteoblue_api_key")
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()
@@ -91,11 +76,6 @@ class WeatherDataCollector:
         )
         self._open_meteo_last_call_ts: float = 0.0
         self._open_meteo_call_lock = threading.Lock()
-        self.meteoblue_cache_ttl_sec = int(
-            os.getenv("METEOBLUE_CACHE_TTL_SEC", "7200")
-        )
-        self._meteoblue_cache: Dict[str, Dict] = {}
-        self._meteoblue_cache_lock = threading.Lock()
         self.metar_cache_ttl_sec = int(
             os.getenv("METAR_CACHE_TTL_SEC", "600")  # 默认 10 分钟
         )
@@ -1558,105 +1538,6 @@ class WeatherDataCollector:
                     return fallback
             return None
 
-    def fetch_from_meteoblue(
-        self,
-        lat: float,
-        lon: float,
-        timezone_name: str = "UTC",
-        use_fahrenheit: bool = False,
-    ) -> Optional[Dict]:
-        """
-        通过 Meteoblue 官方 API 获取高精度预测数据
-        带本地缓存，避免频繁请求触发 429。
-        """
-        if not self.meteoblue_key:
-            logger.warning("Meteoblue API Key 未配置，跳过抓取。")
-            return None
-
-        cache_key = f"{round(float(lat), 4)}:{round(float(lon), 4)}:{'f' if use_fahrenheit else 'c'}"
-        now_ts = time.time()
-        with self._meteoblue_cache_lock:
-            cached = self._meteoblue_cache.get(cache_key)
-            if (
-                cached
-                and now_ts - float(cached.get("t", 0)) < self.meteoblue_cache_ttl_sec
-            ):
-                cached_data = cached.get("data")
-                if isinstance(cached_data, dict):
-                    return dict(cached_data)
-
-        try:
-            # 1. 调用官方 API (使用 basic-day 包，它是多模型 ML 融合结果)
-            # 格式: https://my.meteoblue.com/packages/basic-day?apikey=KEY&lat=LAT&lon=LON&format=json
-            url = "https://my.meteoblue.com/packages/basic-day"
-            params = {
-                "apikey": self.meteoblue_key,
-                "lat": lat,
-                "lon": lon,
-                "format": "json",
-                "as_daylight": "true",
-            }
-
-            response = self.session.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-
-            day_data = data.get("data_day", {})
-            max_temps = day_data.get("temperature_max", [])
-
-            if not max_temps:
-                logger.warning(
-                    f"Meteoblue API 返回数据中找不到最高温 (坐标: {lat},{lon})"
-                )
-                return None
-
-            # 2. 转换单位
-            def c_to_f(c):
-                return round((c * 9 / 5) + 32, 1)
-
-            result = {
-                "source": "meteoblue",
-                "today_high": None,
-                "daily_highs": [],
-                "unit": "fahrenheit" if use_fahrenheit else "celsius",
-                "url": f"https://www.meteoblue.com/en/weather/week/{lat}N{lon}E",  # 仅供参考
-            }
-
-            # 提取今日最高
-            mb_today_c = max_temps[0]
-            result["today_high"] = c_to_f(mb_today_c) if use_fahrenheit else mb_today_c
-
-            # 提取接下来几天的最高温
-            if use_fahrenheit:
-                result["daily_highs"] = [c_to_f(t) for t in max_temps]
-            else:
-                result["daily_highs"] = max_temps
-
-            with self._meteoblue_cache_lock:
-                self._meteoblue_cache[cache_key] = {
-                    "t": now_ts,
-                    "data": dict(result),
-                }
-
-            logger.info(
-                f"✅ Meteoblue API 获取成功 ({lat},{lon}): 今天 {result['today_high']}{result['unit']}"
-            )
-            return result
-        except Exception as e:
-            status_code = getattr(getattr(e, "response", None), "status_code", None)
-            if status_code == 429:
-                logger.warning("Meteoblue API 限流(429)，尝试使用本地缓存回退。")
-            else:
-                logger.error(f"Meteoblue API fetch failed: {e}")
-
-            with self._meteoblue_cache_lock:
-                stale = self._meteoblue_cache.get(cache_key)
-                if stale and isinstance(stale.get("data"), dict):
-                    fallback = dict(stale["data"])
-                    fallback["stale_cache"] = True
-                    return fallback
-            return None
-
     def extract_date_from_title(self, title: str) -> Optional[str]:
         """
         从标题中提取日期并标准化为 YYYY-MM-DD
@@ -1836,7 +1717,6 @@ class WeatherDataCollector:
             unit = "f" if use_fahrenheit else "c"
             open_meteo_key = f"{base}:14:{unit}"
             ensemble_key = f"{base}:{unit}"
-            meteoblue_key = ensemble_key
             multi_model_key = ensemble_key
 
             with self._open_meteo_cache_lock:
@@ -1845,8 +1725,6 @@ class WeatherDataCollector:
                 self._ensemble_cache.pop(ensemble_key, None)
             with self._multi_model_cache_lock:
                 self._multi_model_cache.pop(multi_model_key, None)
-            with self._meteoblue_cache_lock:
-                self._meteoblue_cache.pop(meteoblue_key, None)
 
         icao = self.get_icao_code(city)
         if icao:
@@ -1962,16 +1840,6 @@ class WeatherDataCollector:
                     # 获取时区偏移以过滤 METAR
                     utc_offset = open_meteo.get("utc_offset", 0)
 
-                if city_lower in self.METEOBLUE_PRIORITY_CITIES:
-                    mb_data = self.fetch_from_meteoblue(
-                        lat,
-                        lon,
-                        timezone_name=open_meteo.get("timezone", "UTC"),
-                        use_fahrenheit=use_fahrenheit,
-                    )
-                    if mb_data:
-                        results["meteoblue"] = mb_data
-
                 # 对美国城市，额外获取 NWS 高精预报
                 if use_fahrenheit:
                     nws_data = self.fetch_nws(lat, lon)
@@ -2023,15 +1891,6 @@ class WeatherDataCollector:
                     if cluster_data:
                         results["mgm_nearby"] = cluster_data
 
-                if city_lower in self.METEOBLUE_PRIORITY_CITIES:
-                    mb_data = self.fetch_from_meteoblue(
-                        lat,
-                        lon,
-                        timezone_name="UTC",
-                        use_fahrenheit=use_fahrenheit,
-                    )
-                    if mb_data:
-                        results["meteoblue"] = mb_data
                 if use_fahrenheit:
                     nws_data = self.fetch_nws(lat, lon)
                     if nws_data:

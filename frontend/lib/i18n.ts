@@ -42,7 +42,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "guide.title": "📎 PolyWeather 系统技术说明",
     "guide.closeAria": "关闭技术说明",
     "guide.footer":
-      "数据源以 Aviation Weather / METAR、Turkish MGM、Open-Meteo、weather.gov 为主，部分城市补充 Meteoblue。",
+      "数据源以 Aviation Weather / METAR、Turkish MGM、Open-Meteo、weather.gov 为主。",
 
     "history.title": "📊 历史准确率对账 - {city}",
     "history.closeAria": "关闭历史对账",
@@ -143,7 +143,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "guide.title": "📎 PolyWeather Technical Overview",
     "guide.closeAria": "Close technical overview",
     "guide.footer":
-      "Primary data sources are Aviation Weather / METAR, Turkish MGM, Open-Meteo, and weather.gov, with Meteoblue added for selected cities.",
+      "Primary data sources are Aviation Weather / METAR, Turkish MGM, Open-Meteo, and weather.gov.",
 
     "history.title": "📊 Historical Reconciliation - {city}",
     "history.closeAria": "Close history reconciliation",

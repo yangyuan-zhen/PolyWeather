@@ -1265,6 +1265,7 @@ class PolymarketReadOnlyLayer:
             Tuple[
                 float,
                 float,
+                float,
                 Dict[str, Any],
                 Dict[str, Any],
                 Dict[str, Any],
@@ -1315,6 +1316,7 @@ class PolymarketReadOnlyLayer:
                 (
                     market_prob,
                     volume,
+                    bucket_temp,
                     market,
                     yes_token,
                     no_token,
@@ -1331,7 +1333,16 @@ class PolymarketReadOnlyLayer:
         max_items = max(1, int(limit or 4))
         primary_slug = str(primary_market.get("slug") or "").strip().lower()
 
-        for market_prob, _volume, market, yes_token, no_token, yes_prices, no_prices in ranked[
+        for (
+            market_prob,
+            _volume,
+            bucket_temp,
+            market,
+            yes_token,
+            no_token,
+            yes_prices,
+            no_prices,
+        ) in ranked[
             :max_items
         ]:
             yes_buy = _extract_price(yes_prices.get("buy"))

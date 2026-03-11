@@ -1,6 +1,5 @@
 # Weather API Configuration
 weather:
-  meteoblue_api_key: null # Set via METEOBLUE_API_KEY env var
   timeout: 30
 
 # Target Cities

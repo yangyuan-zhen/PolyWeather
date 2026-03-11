@@ -175,7 +175,6 @@ def _append_future_forecast_lines(
             mgm_daily[date_key] = day_high
     mm_raw = weather_data.get("multi_model") or {}
     mm_daily = mm_raw.get("daily_forecasts", {}) if isinstance(mm_raw, dict) else {}
-    mb_daily = (weather_data.get("meteoblue") or {}).get("daily_highs", []) or []
     nws_periods = (weather_data.get("nws") or {}).get("forecast_periods", []) or []
 
     if len(dates) > 1:
@@ -227,18 +226,6 @@ def _append_future_forecast_lines(
             future.append(f"{day[5:]}: MM中位 {median:.1f}{temp_symbol}")
             if len(future) >= 2:
                 break
-        if future:
-            lines.append("📅 " + " | ".join(future))
-        return
-
-    if isinstance(mb_daily, list) and len(mb_daily) > 1:
-        future = []
-        for idx in range(1, min(3, len(mb_daily))):
-            day_temp = _sf(mb_daily[idx])
-            if day_temp is None:
-                continue
-            day = (local_now + timedelta(days=idx)).strftime("%m-%d")
-            future.append(f"{day}: MB {day_temp:.1f}{temp_symbol}")
         if future:
             lines.append("📅 " + " | ".join(future))
         return
@@ -358,14 +345,13 @@ def build_city_query_report(
 
     nws_high = _sf((weather_data.get("nws") or {}).get("today_high"))
     mgm_high = _sf((mgm.get("today_high") if isinstance(mgm, dict) else None))
-    mb_high = _sf((weather_data.get("meteoblue") or {}).get("today_high"))
     metar_max_so_far = _sf((metar.get("current") or {}).get("max_temp_so_far"))
 
     today_t = _sf(max_temps[0]) if max_temps else None
     fallback_source = None
     metar_only_fallback = False
     if today_t is None:
-        for source_name, candidate in (("MB", mb_high), ("NWS", nws_high), ("MGM", mgm_high)):
+        for source_name, candidate in (("NWS", nws_high), ("MGM", mgm_high)):
             if candidate is not None:
                 today_t = candidate
                 fallback_source = source_name
@@ -378,11 +364,6 @@ def build_city_query_report(
     sources = ["Open-Meteo"] if max_temps else []
     comp_parts: List[str] = []
 
-    if mb_high is not None:
-        if "MB" not in sources:
-            sources.append("MB")
-        if fallback_source != "MB":
-            comp_parts.append(f"MB: {mb_high:.1f}{temp_symbol}")
     if nws_high is not None:
         if "NWS" not in sources:
             sources.append("NWS")
@@ -402,18 +383,10 @@ def build_city_query_report(
     if not sources:
         sources = ["N/A"]
 
-    divergence_warning = ""
-    base_for_divergence = _sf(max_temps[0]) if max_temps else today_t
-    if mb_high is not None and base_for_divergence is not None:
-        diff = abs(mb_high - base_for_divergence)
-        threshold = 5.0 if city_is_fahrenheit else 2.5
-        if diff > threshold:
-            divergence_warning = f" ⚠️ <b>模型显著分歧 ({diff:.1f}{temp_symbol})</b>"
-
     comp_str = f" ({' | '.join(comp_parts)})" if comp_parts else ""
     msg_lines.append(f"\n📊 <b>预报 ({' | '.join(sources)})</b>")
     msg_lines.append(
-        f"👉 <b>今天: {today_t_display}{temp_symbol}{comp_str}</b>{divergence_warning}"
+        f"👉 <b>今天: {today_t_display}{temp_symbol}{comp_str}</b>"
     )
 
     _append_future_forecast_lines(
