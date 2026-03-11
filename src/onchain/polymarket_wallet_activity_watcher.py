@@ -204,8 +204,10 @@ def _diff_positions(
     notify_closed: bool,
     min_price: float = 0.0,
     max_price: float = 1.0,
+    min_avg_price_delta: float = 0.002,
 ) -> List[Tuple[str, Dict[str, Any]]]:
     changes: List[Tuple[str, Dict[str, Any]]] = []
+    min_avg_price_delta = max(0.0, min_avg_price_delta)
 
     for key, now_pos in current.items():
         # 价格过滤：如果设置了价格区间，不符合的直接跳过
@@ -222,7 +224,7 @@ def _diff_positions(
         size_delta = now_pos["size"] - old_pos.get("size", 0.0)
         avg_delta = now_pos["avg_price"] - old_pos.get("avg_price", 0.0)
 
-        if abs(size_delta) >= min_size_delta or abs(avg_delta) >= 1e-9:
+        if abs(size_delta) >= min_size_delta or abs(avg_delta) >= min_avg_price_delta:
             merged = {**now_pos}
             merged["size_delta"] = size_delta
             merged["old_size"] = old_pos.get("size", 0.0)
@@ -475,16 +477,22 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     timeout_sec = max(5, _env_int("POLYMARKET_WALLET_ACTIVITY_TIMEOUT_SEC", 10))
     min_size_abs = max(0.0, _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_SIZE_ABS", 0.001))
     min_size_delta = max(0.0, _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_SIZE_DELTA", 0.001))
+    min_avg_price_delta = max(
+        0.0,
+        _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_AVG_PRICE_DELTA", 0.002),
+    )
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
+    default_debounce_sec = max(poll_sec, 30)
     update_debounce_sec = max(
         poll_sec,
-        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_DEBOUNCE_SEC", 90),
+        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_DEBOUNCE_SEC", default_debounce_sec),
     )
+    default_update_max_hold_sec = max(update_debounce_sec, 120)
     update_max_hold_sec = max(
         update_debounce_sec,
-        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_MAX_HOLD_SEC", 240),
+        _env_int("POLYMARKET_WALLET_ACTIVITY_UPDATE_MAX_HOLD_SEC", default_update_max_hold_sec),
     )
 
     # 价格过滤范围配置
@@ -501,10 +509,12 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         logger.info(
             f"polymarket wallet activity watcher started users={len(users)} "
             f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
+            f"min_avg_price_delta={min_avg_price_delta} "
             f"update_debounce={update_debounce_sec}s update_max_hold={update_max_hold_sec}s"
         )
 
         while True:
+            cycle_started = time.time()
             touched = False
             for user in users:
                 try:
@@ -548,6 +558,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                         notify_closed=notify_closed,
                         min_price=min_price,
                         max_price=max_price,
+                        min_avg_price_delta=min_avg_price_delta,
                     )
 
                     outgoing: List[Tuple[str, Dict[str, Any]]] = []
@@ -618,7 +629,9 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                 except Exception:
                     logger.exception("failed to save wallet activity state")
 
-            time.sleep(poll_sec)
+            elapsed = time.time() - cycle_started
+            sleep_sec = max(0.0, poll_sec - elapsed)
+            time.sleep(sleep_sec)
 
     thread = threading.Thread(
         target=_runner,
@@ -627,6 +640,5 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
-
 
 
