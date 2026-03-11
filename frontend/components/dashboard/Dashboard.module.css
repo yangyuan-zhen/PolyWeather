@@ -314,7 +314,7 @@
 .root :global(.city-list-items) {
   overflow-y: auto;
   flex: 1;
-  padding: 4px;
+  padding: 6px 6px 8px;
 }
 .root :global(.city-list-items::-webkit-scrollbar) {
   width: 4px;
@@ -327,12 +327,82 @@
   border-radius: 2px;
 }
 
+.root :global(.city-group) {
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.35);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.root :global(.city-group:last-child) {
+  margin-bottom: 0;
+}
+
+.root :global(.city-group-header) {
+  width: 100%;
+  border: none;
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.root :global(.city-group-title) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+}
+
+.root :global(.city-group-meta) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.root :global(.city-group-count) {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  padding: 0 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(99, 102, 241, 0.26);
+  color: var(--text-primary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.root :global(.city-group-arrow) {
+  font-size: 11px;
+  color: var(--text-muted);
+  transform: rotate(-90deg);
+  transition: transform 0.2s ease;
+}
+
+.root :global(.city-group-arrow.expanded) {
+  transform: rotate(0deg);
+}
+
+.root :global(.city-group-items) {
+  padding: 4px;
+}
+
+.root :global(.city-group.collapsed .city-group-items) {
+  display: none;
+}
+
 .root :global(.city-item) {
   width: 100%;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border-radius: 10px;
   cursor: pointer;
   transition: var(--transition);
@@ -354,26 +424,14 @@
 .root :global(.city-item-main) {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
 }
 
 .root :global(.city-item .city-name-text) {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-}
-
-.root :global(.city-item .city-temp) {
-  margin-left: auto;
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--accent-cyan);
-  opacity: 0;
-  transition: var(--transition);
-}
-.root :global(.city-item .city-temp.loaded) {
-  opacity: 1;
 }
 
 .root :global(.city-item-info) {
@@ -381,7 +439,7 @@
   justify-content: space-between;
   align-items: center;
   padding-left: 20px; /* Align with name text, after the dot */
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
@@ -411,8 +469,8 @@
 
 .root :global(.city-item .city-temp) {
   margin-left: auto;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--accent-cyan);
   opacity: 0;
   transition: var(--transition);

@@ -18,6 +18,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "sidebar.title": "监控城市",
     "sidebar.peakAt": "峰值 @ {time}",
+    "sidebar.group.high": "高风险",
+    "sidebar.group.medium": "中风险",
+    "sidebar.group.low": "低风险",
+    "sidebar.group.other": "其他",
 
     "dashboard.loading": "正在获取气象数据，请稍候...",
 
@@ -118,6 +122,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "sidebar.title": "Monitored Cities",
     "sidebar.peakAt": "Peak @ {time}",
+    "sidebar.group.high": "High Risk",
+    "sidebar.group.medium": "Medium Risk",
+    "sidebar.group.low": "Low Risk",
+    "sidebar.group.other": "Others",
 
     "dashboard.loading": "Loading weather data, please wait...",
 
