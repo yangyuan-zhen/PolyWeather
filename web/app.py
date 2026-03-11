@@ -809,12 +809,20 @@ def _build_city_detail_payload(
     # Mispricing anchor temperature:
     # use the highest value across all available model highs.
     anchor_temp = None
-    for raw_value in model_map.values():
+    anchor_model = None
+    for model_name, raw_value in model_map.items():
         value = _sf(raw_value)
         if value is None:
             continue
         if anchor_temp is None or value > anchor_temp:
             anchor_temp = value
+            anchor_model = str(model_name or "").strip() or None
+
+    anchor_temp_c = anchor_temp
+    temp_symbol = str(data.get("temp_symbol") or "")
+    if anchor_temp_c is not None and "F" in temp_symbol.upper():
+        anchor_temp_c = (anchor_temp_c - 32.0) * 5.0 / 9.0
+    anchor_settlement = wu_round(anchor_temp_c) if anchor_temp_c is not None else None
 
     primary_bucket = None
     if isinstance(distribution, list) and distribution:
@@ -859,6 +867,12 @@ def _build_city_detail_payload(
         fallback_sparkline=fallback_sparkline,
         forced_market_slug=market_slug,
     )
+    if isinstance(market_scan, dict):
+        market_scan["anchor_model"] = anchor_model
+        market_scan["anchor_high"] = anchor_temp
+        market_scan["anchor_settlement"] = anchor_settlement
+        # Keep legacy key for compatibility with old checks.
+        market_scan["open_meteo_settlement"] = anchor_settlement
     return {
         "city": data.get("name"),
         "fetched_at": data.get("updated_at"),
