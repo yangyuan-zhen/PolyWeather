@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { buildBackendRequestHeaders } from "@/lib/backend-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   if (!API_BASE) {
@@ -14,7 +15,7 @@ export async function GET() {
   try {
     const res = await fetch(`${API_BASE}/api/cities`, {
       headers: buildBackendRequestHeaders(),
-      next: { revalidate: 120 },
+      cache: "no-store",
     });
     if (!res.ok) {
       const raw = await res.text();
