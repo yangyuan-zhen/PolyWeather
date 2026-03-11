@@ -44,7 +44,26 @@ cities:
     country: "Germany"
     latitude: 48.3538
     longitude: 11.7861
-
+  - id: "hong_kong"
+    city: "Hong Kong"
+    country: "China"
+    latitude: 22.3080
+    longitude: 113.9185
+  - id: "shanghai"
+    city: "Shanghai"
+    country: "China"
+    latitude: 31.1434
+    longitude: 121.8052
+  - id: "singapore"
+    city: "Singapore"
+    country: "Singapore"
+    latitude: 1.3644
+    longitude: 103.9915
+  - id: "tokyo"
+    city: "Tokyo"
+    country: "Japan"
+    latitude: 35.5523
+    longitude: 139.7798
 # Logging
 logging:
   level: "INFO"
