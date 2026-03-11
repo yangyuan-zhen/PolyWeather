@@ -152,8 +152,12 @@ def _market_price_cap_ok(
             return False
         return True
 
-    # Strict rule: use the bucket mapped from Open-Meteo settlement.
+    # Strict rule: use the bucket mapped from multi-model anchor settlement.
     forecast_bucket = market.get("forecast_bucket") or {}
+    settle_ref = market.get("anchor_settlement")
+    if settle_ref is None:
+        settle_ref = market.get("open_meteo_settlement")
+    anchor_model = str(market.get("anchor_model") or "").strip() or "--"
     yes_buy = None
     bucket_label = None
     if isinstance(forecast_bucket, dict):
@@ -162,20 +166,22 @@ def _market_price_cap_ok(
 
     if yes_buy is None or yes_buy <= 0.0:
         logger.info(
-            "trade alert skipped: no actionable mapped bucket quote city={} bucket={} om_settle={}".format(
+            "trade alert skipped: no actionable mapped bucket quote city={} bucket={} anchor_model={} anchor_settle={}".format(
                 alert_payload.get("city"),
                 bucket_label or "--",
-                market.get("open_meteo_settlement"),
+                anchor_model,
+                settle_ref,
             )
         )
         return False
 
     if yes_buy >= max_yes_buy:
         logger.info(
-            "trade alert skipped by mispricing cap city={} bucket={} om_settle={} yes_buy={} cap={}".format(
+            "trade alert skipped by mispricing cap city={} bucket={} anchor_model={} anchor_settle={} yes_buy={} cap={}".format(
                 alert_payload.get("city"),
                 bucket_label or "--",
-                market.get("open_meteo_settlement"),
+                anchor_model,
+                settle_ref,
                 round(yes_buy, 4),
                 round(max_yes_buy, 4),
             )

@@ -511,6 +511,31 @@ def _extract_open_meteo_today_high_c(city_weather: Dict[str, Any]) -> Optional[f
     return _to_celsius(om_today, temp_symbol)
 
 
+def _extract_multi_model_anchor_high_c(
+    city_weather: Dict[str, Any],
+) -> Tuple[Optional[float], Optional[str]]:
+    multi_model = city_weather.get("multi_model") or {}
+    temp_symbol = str(city_weather.get("temp_symbol") or "")
+    if isinstance(multi_model, dict):
+        anchor_model: Optional[str] = None
+        anchor_high_c: Optional[float] = None
+        for model_name, raw_value in multi_model.items():
+            value = _to_celsius(_sf(raw_value), temp_symbol)
+            if value is None:
+                continue
+            if anchor_high_c is None or value > anchor_high_c:
+                anchor_high_c = value
+                anchor_model = str(model_name or "").strip() or None
+        if anchor_high_c is not None:
+            return anchor_high_c, anchor_model
+
+    # Fallback keeps behavior resilient when multi-model data is unexpectedly missing.
+    fallback_high_c = _extract_open_meteo_today_high_c(city_weather)
+    if fallback_high_c is not None:
+        return fallback_high_c, "Open-Meteo"
+    return None, None
+
+
 def _bucket_value(row: Dict[str, Any]) -> Optional[float]:
     for key in ("value", "temp"):
         value = _sf(row.get(key))
@@ -689,12 +714,12 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
             if slug:
                 market_url = f"https://polymarket.com/market/{slug}"
 
-    open_meteo_today_high_c = _extract_open_meteo_today_high_c(city_weather)
-    open_meteo_settlement = wu_round(open_meteo_today_high_c)
+    anchor_today_high_c, anchor_model = _extract_multi_model_anchor_high_c(city_weather)
+    anchor_settlement = wu_round(anchor_today_high_c)
     forecast_bucket = _pick_bucket_for_forecast(
         rows=all_bucket_rows,
-        forecast_settlement=open_meteo_settlement,
-        forecast_today_high_c=open_meteo_today_high_c,
+        forecast_settlement=anchor_settlement,
+        forecast_today_high_c=anchor_today_high_c,
     )
     forecast_market_url = None
     if isinstance(forecast_bucket, dict):
@@ -717,8 +742,12 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
         "confidence": scan.get("confidence"),
         "top_bucket_rows": top_bucket_rows,
         "all_bucket_rows": all_bucket_rows,
-        "open_meteo_today_high_c": open_meteo_today_high_c,
-        "open_meteo_settlement": open_meteo_settlement,
+        "anchor_today_high_c": anchor_today_high_c,
+        "anchor_settlement": anchor_settlement,
+        "anchor_model": anchor_model,
+        # Backward-compatible aliases for existing consumers.
+        "open_meteo_today_high_c": anchor_today_high_c,
+        "open_meteo_settlement": anchor_settlement,
         "forecast_bucket": forecast_bucket,
         "primary_market_url": market_url,
         "market_url": forecast_market_url or market_url,
@@ -996,8 +1025,13 @@ def _build_telegram_messages_mispricing(
             f"({int(delta_min)}min 内 {delta_temp:+.1f}{temp_symbol}) {momentum_emoji}"
         )
 
-    om_high_c = _sf(snapshot.get("open_meteo_today_high_c"))
-    om_settle = snapshot.get("open_meteo_settlement")
+    anchor_high_c = _sf(snapshot.get("anchor_today_high_c"))
+    if anchor_high_c is None:
+        anchor_high_c = _sf(snapshot.get("open_meteo_today_high_c"))
+    anchor_settle = snapshot.get("anchor_settlement")
+    if anchor_settle is None:
+        anchor_settle = snapshot.get("open_meteo_settlement")
+    anchor_model = str(snapshot.get("anchor_model") or "").strip()
     forecast_bucket = snapshot.get("forecast_bucket") or {}
     match_bucket_label = str(forecast_bucket.get("label") or "--").strip() or "--"
     match_bucket_yes_prob = _norm_probability(forecast_bucket.get("yes_buy"))
@@ -1014,12 +1048,17 @@ def _build_telegram_messages_mispricing(
 
     lines_zh = [f"🚨 PolyWeather 错价雷达 [{city_name}]"]
     lines_zh.append("")
-    if om_high_c is not None and om_settle is not None:
-        lines_zh.append(
-            f"基准：Open-Meteo 今日高温 {om_high_c:.1f}C（结算参考 {om_settle}C）"
-        )
+    if anchor_high_c is not None and anchor_settle is not None:
+        if anchor_model:
+            lines_zh.append(
+                f"基准：多模型最高温 {anchor_model} {anchor_high_c:.1f}C（结算参考 {anchor_settle}C）"
+            )
+        else:
+            lines_zh.append(
+                f"基准：多模型最高温 {anchor_high_c:.1f}C（结算参考 {anchor_settle}C）"
+            )
     else:
-        lines_zh.append("基准：Open-Meteo 今日高温 --（结算参考 --）")
+        lines_zh.append("基准：多模型最高温 --（结算参考 --）")
     lines_zh.append(f"命中桶：{match_bucket_label} | Yes: {match_bucket_yes}")
     lines_zh.append("触发：该桶 Yes 价格 < 10c，疑似低估")
     lines_zh.append("")
@@ -1176,6 +1215,9 @@ def _build_alert_evidence(
             "confidence": market_snapshot.get("confidence"),
             "top_bucket": market_snapshot.get("top_bucket"),
             "top_bucket_prob": market_snapshot.get("top_bucket_prob"),
+            "anchor_today_high_c": market_snapshot.get("anchor_today_high_c"),
+            "anchor_settlement": market_snapshot.get("anchor_settlement"),
+            "anchor_model": market_snapshot.get("anchor_model"),
             "open_meteo_today_high_c": market_snapshot.get("open_meteo_today_high_c"),
             "open_meteo_settlement": market_snapshot.get("open_meteo_settlement"),
             "forecast_bucket": {

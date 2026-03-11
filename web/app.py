@@ -802,23 +802,19 @@ def _build_city_detail_payload(
     if not isinstance(distribution, list) or not distribution:
         distribution = data.get("probabilities", {}).get("distribution", []) or []
 
-    city_name = str(data.get("name") or "").strip().lower()
     model_map = selected_daily.get("models") or data.get("multi_model") or {}
     if not isinstance(model_map, dict):
         model_map = {}
 
     # Mispricing anchor temperature:
-    # - Ankara: use MGM today-high forecast
-    # - Others: use Open-Meteo today-high forecast
+    # use the highest value across all available model highs.
     anchor_temp = None
-    if city_name == "ankara":
-        anchor_temp = _sf(model_map.get("MGM"))
-    else:
-        anchor_temp = _sf(model_map.get("Open-Meteo"))
-
-    if anchor_temp is None and city_name == "ankara":
-        # Keep radar available when MGM is missing unexpectedly.
-        anchor_temp = _sf(model_map.get("Open-Meteo"))
+    for raw_value in model_map.values():
+        value = _sf(raw_value)
+        if value is None:
+            continue
+        if anchor_temp is None or value > anchor_temp:
+            anchor_temp = value
 
     primary_bucket = None
     if isinstance(distribution, list) and distribution:
