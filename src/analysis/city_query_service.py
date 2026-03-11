@@ -103,7 +103,8 @@ def _derive_mgm_daily_highs_from_hourly(
     if not isinstance(hourly, list) or not hourly:
         return {}
 
-    daily_highs: Dict[str, float] = {}
+    samples: List[Tuple[str, float]] = []
+    parsed_datetimes: List[datetime] = []
     local_tz = timezone(timedelta(seconds=int(fallback_utc_offset)))
     for row in hourly:
         if not isinstance(row, dict):
@@ -119,6 +120,9 @@ def _derive_mgm_daily_highs_from_hourly(
                 dt = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
                 if dt.tzinfo is not None:
                     dt = dt.astimezone(local_tz)
+                else:
+                    dt = dt.replace(tzinfo=local_tz)
+                parsed_datetimes.append(dt)
                 date_key = dt.strftime("%Y-%m-%d")
             except Exception:
                 if len(raw_time) >= 10 and raw_time[4] == "-" and raw_time[7] == "-":
@@ -129,6 +133,24 @@ def _derive_mgm_daily_highs_from_hourly(
         if not date_key:
             continue
 
+        samples.append((date_key, temp))
+
+    if not samples:
+        return {}
+
+    # Guardrail: do not derive "daily highs" from short intraday snippets.
+    if parsed_datetimes:
+        parsed_datetimes.sort()
+        horizon_hours = (
+            parsed_datetimes[-1] - parsed_datetimes[0]
+        ).total_seconds() / 3600.0
+        if horizon_hours < 30:
+            return {}
+    elif len(samples) < 24:
+        return {}
+
+    daily_highs: Dict[str, float] = {}
+    for date_key, temp in samples:
         prev = daily_highs.get(date_key)
         daily_highs[date_key] = temp if prev is None else max(prev, temp)
 
@@ -163,7 +185,7 @@ def _append_future_forecast_lines(
             if mgm_value is not None:
                 mgm_display = f"{float(mgm_value):.1f}"
                 future_forecasts.append(
-                    f"{d[5:]}: {t}{temp_symbol} | 🇺🇸 <b>MGM: {mgm_display}{temp_symbol}</b>"
+                    f"{d[5:]}: {t}{temp_symbol} | <b>MGM: {mgm_display}{temp_symbol}</b>"
                 )
             else:
                 future_forecasts.append(f"{d[5:]}: {t}{temp_symbol}")

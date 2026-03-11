@@ -768,22 +768,48 @@ class WeatherDataCollector:
 
             # 5. Fallback for daily_forecasts from hourly data
             if not results.get("daily_forecasts") and results.get("hourly"):
-                from collections import defaultdict
-                daily_max = defaultdict(list)
-                for h in results["hourly"]:
-                    t = h.get("time", "")
-                    temp = h.get("temp")
-                    if t and temp is not None:
-                        # Extract date from ISO timestamp like "2026-03-05T12:00:00.000Z"
-                        date_str = t[:10]
-                        daily_max[date_str].append(temp)
-                if daily_max:
-                    results["daily_forecasts"] = {}
-                    for d, temps in sorted(daily_max.items()):
-                        results["daily_forecasts"][d] = max(temps)
+                # Guardrail: avoid treating short intraday snippets as full-day highs.
+                hourly_rows = results.get("hourly") or []
+                parsed_times = []
+                for h in hourly_rows:
+                    t = str(h.get("time") or "")
+                    if "T" not in t:
+                        continue
+                    try:
+                        parsed_times.append(datetime.fromisoformat(t.replace("Z", "+00:00")))
+                    except Exception:
+                        continue
+
+                horizon_hours = 0.0
+                if len(parsed_times) >= 2:
+                    parsed_times.sort()
+                    horizon_hours = (
+                        parsed_times[-1] - parsed_times[0]
+                    ).total_seconds() / 3600.0
+
+                if len(hourly_rows) >= 24 or horizon_hours >= 30:
+                    from collections import defaultdict
+
+                    daily_max = defaultdict(list)
+                    for h in hourly_rows:
+                        t = h.get("time", "")
+                        temp = h.get("temp")
+                        if t and temp is not None:
+                            # Extract date from ISO timestamp like "2026-03-05T12:00:00.000Z"
+                            date_str = t[:10]
+                            daily_max[date_str].append(temp)
+                    if daily_max:
+                        results["daily_forecasts"] = {}
+                        for d, temps in sorted(daily_max.items()):
+                            results["daily_forecasts"][d] = max(temps)
+                        logger.info(
+                            f"📋 MGM daily_forecasts (from hourly fallback): "
+                            f"{dict(results['daily_forecasts'])}"
+                        )
+                else:
                     logger.info(
-                        f"📋 MGM daily_forecasts (from hourly fallback): "
-                        f"{dict(results['daily_forecasts'])}"
+                        "📋 Skip MGM daily_forecasts hourly fallback: "
+                        f"hourly points={len(hourly_rows)}, horizon={horizon_hours:.1f}h"
                     )
 
             return results if "current" in results else None
