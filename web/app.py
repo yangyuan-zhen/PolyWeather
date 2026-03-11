@@ -21,7 +21,7 @@ if _root not in sys.path:
 if _file_dir not in sys.path:
     sys.path.insert(0, _file_dir)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
@@ -75,6 +75,45 @@ CITIES: Dict[str, Dict[str, Any]] = {
 _cache: Dict[str, Dict] = {}
 CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60  # Ankara measurement updates frequent, narrower cache
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+_ENTITLEMENT_GUARD_ENABLED = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
+_ENTITLEMENT_HEADER = "x-polyweather-entitlement"
+_ENTITLEMENT_TOKEN = (os.getenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN") or "").strip()
+
+
+def _extract_bearer_token(auth_header: Optional[str]) -> Optional[str]:
+    if not auth_header:
+        return None
+    parts = auth_header.strip().split()
+    if len(parts) == 2 and parts[0].lower() == "bearer":
+        return parts[1].strip()
+    return None
+
+
+def _assert_entitlement(request: Request) -> None:
+    if not _ENTITLEMENT_GUARD_ENABLED:
+        return
+
+    if not _ENTITLEMENT_TOKEN:
+        raise HTTPException(
+            status_code=503,
+            detail="Entitlement guard is enabled but backend token is not configured",
+        )
+
+    token = request.headers.get(_ENTITLEMENT_HEADER)
+    if not token:
+        token = _extract_bearer_token(request.headers.get("authorization"))
+
+    if token != _ENTITLEMENT_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def _sf(v) -> Optional[float]:
@@ -672,8 +711,9 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 #  Routes
 # ──────────────────────────────────────────────────────────
 @app.get("/api/cities")
-async def list_cities():
+async def list_cities(request: Request):
     """Return all supported cities with coordinates and risk level."""
+    _assert_entitlement(request)
     try:
         out = []
         for name, info in CITIES.items():
@@ -701,8 +741,9 @@ async def list_cities():
 
 
 @app.get("/api/city/{name}")
-async def city_detail(name: str, force_refresh: bool = False):
+async def city_detail(request: Request, name: str, force_refresh: bool = False):
     """Return full weather analysis for a single city."""
+    _assert_entitlement(request)
     name = name.lower().strip().replace("-", " ")
     name = ALIASES.get(name, name)
     if name not in CITIES:
@@ -819,8 +860,9 @@ def _build_city_detail_payload(
 
 
 @app.get("/api/history/{name}")
-async def city_history(name: str):
+async def city_history(request: Request, name: str):
     """Return historical accuracy data (DEB, mu, actuals) for a city."""
+    _assert_entitlement(request)
     name = name.lower().strip().replace("-", " ")
     name = ALIASES.get(name, name)
     
@@ -854,7 +896,8 @@ async def city_history(name: str):
 
 
 @app.get("/api/city/{name}/summary")
-async def city_summary(name: str, force_refresh: bool = False):
+async def city_summary(request: Request, name: str, force_refresh: bool = False):
+    _assert_entitlement(request)
     city = _normalize_city_or_404(name)
     data = _analyze(city, force_refresh=force_refresh)
     return _build_city_summary_payload(data)
@@ -862,10 +905,12 @@ async def city_summary(name: str, force_refresh: bool = False):
 
 @app.get("/api/city/{name}/detail")
 async def city_detail_aggregate(
+    request: Request,
     name: str,
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
 ):
+    _assert_entitlement(request)
     city = _normalize_city_or_404(name)
     data = _analyze(city, force_refresh=force_refresh)
     return _build_city_detail_payload(data, market_slug=market_slug)

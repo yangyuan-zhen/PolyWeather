@@ -1013,6 +1013,154 @@ def _build_telegram_messages_mispricing(
     return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
 
 
+def _select_rule_evidence(rule: Dict[str, Any], keys: List[str]) -> Dict[str, Any]:
+    out: Dict[str, Any] = {}
+    for key in keys:
+        if key in rule:
+            out[key] = rule.get(key)
+    return out
+
+
+def _build_alert_evidence(
+    city_weather: Dict[str, Any],
+    rules: Dict[str, Dict[str, Any]],
+    triggered: List[Dict[str, Any]],
+    suppression: Dict[str, Any],
+    market_snapshot: Dict[str, Any],
+    temp_symbol: str,
+) -> Dict[str, Any]:
+    current = city_weather.get("current") or {}
+    deb = city_weather.get("deb") or {}
+
+    momentum = rules.get("momentum_spike") or {}
+    breakthrough = rules.get("forecast_breakthrough") or {}
+    advection = rules.get("advection") or {}
+    ankara_center = rules.get("ankara_center_deb_hit") or {}
+
+    top_rows = []
+    for row in (market_snapshot.get("top_bucket_rows") or [])[:4]:
+        if not isinstance(row, dict):
+            continue
+        top_rows.append(
+            {
+                "label": row.get("label"),
+                "probability": row.get("probability"),
+                "yes_buy": row.get("yes_buy"),
+                "yes_sell": row.get("yes_sell"),
+                "market_url": row.get("market_url"),
+            }
+        )
+
+    trigger_types = [row.get("type") for row in triggered if row.get("type")]
+    forecast_bucket = market_snapshot.get("forecast_bucket") or {}
+
+    return {
+        "version": 1,
+        "city": city_weather.get("name"),
+        "generated_local_time": city_weather.get("local_time"),
+        "observed_at": current.get("obs_time"),
+        "temp_symbol": temp_symbol,
+        "inputs": {
+            "current_temp": _sf(current.get("temp")),
+            "deb_prediction": _sf(deb.get("prediction")),
+            "wu_settle": current.get("wu_settle"),
+            "obs_age_min": current.get("obs_age_min"),
+        },
+        "trigger_summary": {
+            "trigger_count": len(trigger_types),
+            "trigger_types": trigger_types,
+            "suppressed": bool(suppression.get("suppressed")),
+            "suppression_reason": suppression.get("reason"),
+            "suppression_snapshot": _select_rule_evidence(
+                suppression,
+                [
+                    "minutes_since_peak",
+                    "rollback",
+                    "rollback_threshold",
+                    "max_temp_time",
+                    "max_so_far",
+                    "current_temp",
+                ],
+            ),
+        },
+        "rules": {
+            "momentum_spike": _select_rule_evidence(
+                momentum,
+                [
+                    "triggered",
+                    "direction",
+                    "delta_temp",
+                    "delta_minutes",
+                    "slope_30m",
+                    "threshold_30m",
+                ],
+            ),
+            "forecast_breakthrough": _select_rule_evidence(
+                breakthrough,
+                [
+                    "triggered",
+                    "baseline_model",
+                    "baseline_high",
+                    "current_temp",
+                    "margin",
+                    "threshold",
+                    "model_coverage",
+                ],
+            ),
+            "advection": _select_rule_evidence(
+                advection,
+                [
+                    "triggered",
+                    "lead_delta",
+                    "threshold_delta",
+                    "wind_now",
+                    "wind_prev",
+                    "turned_southerly",
+                    "wind_alignment_deg",
+                    "lead_window_minutes",
+                ],
+            ),
+            "ankara_center_deb_hit": _select_rule_evidence(
+                ankara_center,
+                [
+                    "triggered",
+                    "deb_prediction",
+                    "airport_temp",
+                    "margin_vs_deb",
+                    "center_lead_vs_airport",
+                ],
+            ),
+        },
+        "market": {
+            "available": bool(market_snapshot.get("available")),
+            "market_prob": market_snapshot.get("market_prob"),
+            "model_prob": market_snapshot.get("model_prob"),
+            "edge_percent": market_snapshot.get("edge_percent"),
+            "yes_buy": market_snapshot.get("yes_buy"),
+            "yes_sell": market_snapshot.get("yes_sell"),
+            "spread": market_snapshot.get("spread"),
+            "signal_label": market_snapshot.get("signal_label"),
+            "confidence": market_snapshot.get("confidence"),
+            "top_bucket": market_snapshot.get("top_bucket"),
+            "top_bucket_prob": market_snapshot.get("top_bucket_prob"),
+            "open_meteo_today_high_c": market_snapshot.get("open_meteo_today_high_c"),
+            "open_meteo_settlement": market_snapshot.get("open_meteo_settlement"),
+            "forecast_bucket": {
+                "label": forecast_bucket.get("label"),
+                "probability": forecast_bucket.get("probability"),
+                "yes_buy": forecast_bucket.get("yes_buy"),
+                "yes_sell": forecast_bucket.get("yes_sell"),
+                "market_url": forecast_bucket.get("market_url"),
+            }
+            if isinstance(forecast_bucket, dict)
+            else None,
+            "top4": top_rows,
+            "market_url": market_snapshot.get("market_url"),
+            "primary_market_url": market_snapshot.get("primary_market_url"),
+        },
+    }
+
+
 def build_trading_alerts(
     city_weather: Dict[str, Any],
     map_url: Optional[str] = None,
@@ -1065,6 +1213,14 @@ def build_trading_alerts(
         rules=rules,
         market_snapshot=market_snapshot,
     )
+    evidence = _build_alert_evidence(
+        city_weather=city_weather,
+        rules=rules,
+        triggered=triggered,
+        suppression=suppression,
+        market_snapshot=market_snapshot,
+        temp_symbol=temp_symbol,
+    )
 
     return {
         "city": city,
@@ -1076,6 +1232,7 @@ def build_trading_alerts(
         "market_snapshot": market_snapshot,
         "suppression": suppression,
         "triggered_alerts": triggered,
+        "evidence": evidence,
         "telegram": telegram,
     }
 

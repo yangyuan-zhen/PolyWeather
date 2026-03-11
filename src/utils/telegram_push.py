@@ -187,6 +187,53 @@ def _trigger_type_key(alert_payload: Dict[str, Any]) -> str:
     return "|".join(trigger_types)
 
 
+def _evidence_brief(alert_payload: Dict[str, Any]) -> str:
+    evidence = alert_payload.get("evidence") or {}
+    if not isinstance(evidence, dict):
+        return "--"
+
+    trigger_summary = evidence.get("trigger_summary") or {}
+    rules = evidence.get("rules") or {}
+    market = evidence.get("market") or {}
+    momentum = rules.get("momentum_spike") or {}
+    advection = rules.get("advection") or {}
+    breakthrough = rules.get("forecast_breakthrough") or {}
+
+    parts: List[str] = []
+    trigger_types = trigger_summary.get("trigger_types")
+    if isinstance(trigger_types, list) and trigger_types:
+        parts.append(f"triggers={','.join(str(t) for t in trigger_types)}")
+
+    slope = momentum.get("slope_30m")
+    if slope is not None:
+        parts.append(f"slope_30m={slope}")
+
+    lead_delta = advection.get("lead_delta")
+    if lead_delta is not None:
+        parts.append(f"lead_delta={lead_delta}")
+
+    margin = breakthrough.get("margin")
+    if margin is not None:
+        parts.append(f"break_margin={margin}")
+
+    edge = market.get("edge_percent")
+    if edge is not None:
+        parts.append(f"edge_pct={edge}")
+
+    forecast_bucket = market.get("forecast_bucket") or {}
+    if isinstance(forecast_bucket, dict):
+        label = str(forecast_bucket.get("label") or "").strip()
+        yes_buy = forecast_bucket.get("yes_buy")
+        if label:
+            parts.append(f"bucket={label}")
+        if yes_buy is not None:
+            parts.append(f"yes_buy={yes_buy}")
+
+    if not parts:
+        return "--"
+    return "; ".join(parts)
+
+
 def _alert_signature(alert_payload: Dict[str, Any]) -> str:
     rules = alert_payload.get("rules") or {}
     center_deb = rules.get("ankara_center_deb_hit") or {}
@@ -321,11 +368,13 @@ def _maybe_send_alert(
         "severity": alert_payload.get("severity"),
         "ts": now_ts,
         "active": True,
+        "evidence": alert_payload.get("evidence"),
     }
     state.setdefault("by_signature", {})[signature] = now_ts
     logger.info(
         f"trade alert pushed city={city} severity={alert_payload.get('severity')} "
-        f"trigger_count={alert_payload.get('trigger_count')} trigger_key={trigger_key}"
+        f"trigger_count={alert_payload.get('trigger_count')} trigger_key={trigger_key} "
+        f"evidence={_evidence_brief(alert_payload)}"
     )
     return True
 
@@ -340,7 +389,13 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         logger.warning("telegram alert push loop skipped: TELEGRAM_CHAT_ID is not set")
         return None
 
-    interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
+    mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
+    if mispricing_only:
+        interval_sec = max(
+            300, _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200)
+        )
+    else:
+        interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
     cooldown_sec = max(interval_sec, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800))
     min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 2))
     min_severity = os.getenv("TELEGRAM_ALERT_MIN_SEVERITY", "medium").strip().lower()
@@ -353,7 +408,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         except Exception:
             logger.exception(f"failed to initialize telegram push state path={state_path}")
         logger.info(
-            f"telegram alert push loop started cities={len(cities)} interval={interval_sec}s "
+            f"telegram alert push loop started mode={'mispricing-only' if mispricing_only else 'full'} "
+            f"cities={len(cities)} interval={interval_sec}s "
             f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
             f"state_path={state_path}"
         )

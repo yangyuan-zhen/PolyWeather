@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildBackendRequestHeaders } from "@/lib/backend-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -12,7 +13,7 @@ export async function GET() {
 
   try {
     const res = await fetch(`${API_BASE}/api/cities`, {
-      headers: { Accept: "application/json" },
+      headers: buildBackendRequestHeaders(),
       next: { revalidate: 120 },
     });
     if (!res.ok) {
