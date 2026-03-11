@@ -18,15 +18,15 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 mindmap
   root((PolyWeather Pro))
     Data Layer
-      METAR(Aviation Weather / METAR)
-      MGM(Turkey MGM)
-      Station 17130(Ankara Center 17130)
+      "METAR(Aviation Weather / METAR)"
+      "MGM(Turkey MGM)"
+      "Station 17130(Ankara Center 17130)"
       Open-Meteo
-      weather.gov(US cities)
-      Polymarket(P0 Read-only)
+      "weather.gov(US cities)"
+      "Polymarket(P0 Read-only)"
     Analysis Layer
-      DEB(Dynamic Error Balancing)
-      Probability Engine(mu + buckets)
+      "DEB(Dynamic Error Balancing)"
+      "Probability Engine(mu + buckets)"
       Trend Engine
       Risk Profiles
       Mispricing Radar
@@ -36,9 +36,9 @@ mindmap
       Telegram Bot
       Alert Push
     Ops Layer
-      Docker Compose(VPS backend + bot)
-      Vercel(frontend)
-      Cache + force_refresh
+      "Docker Compose(VPS backend + bot)"
+      "Vercel(frontend)"
+      "Cache + force_refresh"
       Speed Insights
 ```
 
@@ -65,14 +65,14 @@ graph TD
 
 ## Current Source Policy
 
-| Domain | Source Policy |
-| :-- | :-- |
-| Primary observation | Aviation Weather / METAR |
-| Ankara enhancement | MGM + nearby stations, lead station fixed to `17130` |
-| Forecast baseline | Open-Meteo |
-| US official context | weather.gov |
-| Market layer | Polymarket P0 read-only discovery + quotes |
-| Removed source | Meteoblue (fully removed from code and docs) |
+| Domain              | Source Policy                                        |
+| :------------------ | :--------------------------------------------------- |
+| Primary observation | Aviation Weather / METAR                             |
+| Ankara enhancement  | MGM + nearby stations, lead station fixed to `17130` |
+| Forecast baseline   | Open-Meteo                                           |
+| US official context | weather.gov                                          |
+| Market layer        | Polymarket P0 read-only discovery + quotes           |
+| Removed source      | Meteoblue (fully removed from code and docs)         |
 
 ## Recent Changes (2026-03-11)
 
@@ -114,12 +114,12 @@ npm run build
 
 ## Command Surface (Telegram)
 
-| Command | Purpose |
-| :-- | :-- |
-| `/city <name>` | City real-time analysis |
-| `/deb <name>` | DEB historical reconciliation |
-| `/top` | User leaderboard |
-| `/help` | Help and command usage |
+| Command        | Purpose                       |
+| :------------- | :---------------------------- |
+| `/city <name>` | City real-time analysis       |
+| `/deb <name>`  | DEB historical reconciliation |
+| `/top`         | User leaderboard              |
+| `/help`        | Help and command usage        |
 
 ## Documentation Index
 

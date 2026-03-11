@@ -23,32 +23,32 @@
 mindmap
   root((PolyWeather API))
     城市列表
-      GET /api/cities
+      "GET /api/cities"
     城市主数据
-      GET /api/city/{name}
-      GET /api/city/{name}/summary
-      GET /api/city/{name}/detail
+      "GET /api/city/{name}"
+      "GET /api/city/{name}/summary"
+      "GET /api/city/{name}/detail"
     历史数据
-      GET /api/history/{name}
+      "GET /api/history/{name}"
     关键对象
       current
       forecast
-      probabilities(mu + distribution)
+      "probabilities(mu + distribution)"
       multi_model / multi_model_daily
-      market_scan(P0 只读)
+      "market_scan(P0 只读)"
 ```
 
 ---
 
 ## 3. 接口总览
 
-| 接口 | 方法 | 用途 |
-| :-- | :-- | :-- |
-| `/api/cities` | GET | 城市清单与地图基础信息 |
-| `/api/city/{name}` | GET | 城市主分析数据（侧栏/今日分析主来源） |
-| `/api/city/{name}/summary` | GET | 轻量摘要（首屏预热/低开销更新） |
-| `/api/city/{name}/detail` | GET | 聚合详情 + Polymarket P0 只读市场层 |
-| `/api/history/{name}` | GET | 历史对账数据 |
+| 接口                       | 方法 | 用途                                  |
+| :------------------------- | :--- | :------------------------------------ |
+| `/api/cities`              | GET  | 城市清单与地图基础信息                |
+| `/api/city/{name}`         | GET  | 城市主分析数据（侧栏/今日分析主来源） |
+| `/api/city/{name}/summary` | GET  | 轻量摘要（首屏预热/低开销更新）       |
+| `/api/city/{name}/detail`  | GET  | 聚合详情 + Polymarket P0 只读市场层   |
+| `/api/history/{name}`      | GET  | 历史对账数据                          |
 
 ---
 

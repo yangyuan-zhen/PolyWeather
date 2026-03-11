@@ -18,27 +18,27 @@
 mindmap
   root((PolyWeather Pro))
     数据层
-      METAR(Aviation Weather / METAR)
-      MGM(土耳其 MGM)
-      安卡拉主站(17130 Center)
+      "METAR(Aviation Weather / METAR)"
+      "MGM(土耳其 MGM)"
+      "安卡拉主站(17130 Center)"
       Open-Meteo
-      weather.gov(美国城市)
-      Polymarket(P0 只读)
+      "weather.gov(美国城市)"
+      "Polymarket(P0 只读)"
     分析层
-      DEB(动态误差平衡)
-      概率引擎(mu + 桶分布)
+      "DEB(动态误差平衡)"
+      "概率引擎(mu + 桶分布)"
       趋势引擎
       城市风险档案
       错价雷达
     交付层
       FastAPI
-      Next.js 仪表盘
-      Telegram Bot
+      "Next.js 仪表盘"
+      "Telegram Bot"
       预警推送
     运维层
-      Docker Compose(VPS)
-      Vercel(前端)
-      缓存 + force_refresh
+      "Docker Compose(VPS)"
+      "Vercel(前端)"
+      "缓存 + force_refresh"
       Speed Insights
 ```
 
@@ -65,14 +65,14 @@ graph TD
 
 ## 当前数据源口径
 
-| 领域 | 当前口径 |
-| :-- | :-- |
-| 主观测源 | Aviation Weather / METAR |
-| Ankara 增强 | MGM + 周边站，领先站固定 `17130` |
-| 预报基线 | Open-Meteo |
-| 美国官方语义层 | weather.gov |
-| 市场层 | Polymarket P0 只读发现 + 报价 |
-| 已移除 | Meteoblue（代码与文档已全部移除） |
+| 领域           | 当前口径                          |
+| :------------- | :-------------------------------- |
+| 主观测源       | Aviation Weather / METAR          |
+| Ankara 增强    | MGM + 周边站，领先站固定 `17130`  |
+| 预报基线       | Open-Meteo                        |
+| 美国官方语义层 | weather.gov                       |
+| 市场层         | Polymarket P0 只读发现 + 报价     |
+| 已移除         | Meteoblue（代码与文档已全部移除） |
 
 ## 最近更新（2026-03-11）
 
@@ -113,12 +113,12 @@ npm run build
 
 ## Telegram 命令
 
-| 命令 | 用途 |
-| :-- | :-- |
+| 命令           | 用途         |
+| :------------- | :----------- |
 | `/city <name>` | 城市实时分析 |
-| `/deb <name>` | DEB 历史对账 |
-| `/top` | 用户排行榜 |
-| `/help` | 帮助说明 |
+| `/deb <name>`  | DEB 历史对账 |
+| `/top`         | 用户排行榜   |
+| `/help`        | 帮助说明     |
 
 ## 文档索引
 

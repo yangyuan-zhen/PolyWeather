@@ -29,8 +29,8 @@ mindmap
       Dashboard 5 USD
       Bundle 5.5 USD
     Access Control
-      Manual activation(P1)
-      Wallet/USDC detection(P2)
+      "Manual activation(P1)"
+      "Wallet/USDC detection(P2)"
       Entitlement middleware
     Growth
       Accuracy reports
@@ -42,11 +42,11 @@ mindmap
 
 ## 3. Packaging and Pricing
 
-| Tier | Price | Value |
-| :-- | :-- | :-- |
-| Telegram Channel | $1 / month | Low-noise proactive signal feed |
-| Web Dashboard | $5 / month | Full multi-model context + reconciliation |
-| VIP Bundle | $5.5 / month | Dashboard + signal stream |
+| Tier             | Price        | Value                                     |
+| :--------------- | :----------- | :---------------------------------------- |
+| Telegram Channel | $1 / month   | Low-noise proactive signal feed           |
+| Web Dashboard    | $5 / month   | Full multi-model context + reconciliation |
+| VIP Bundle       | $5.5 / month | Dashboard + signal stream                 |
 
 Payment direction:
 
@@ -85,12 +85,12 @@ graph LR
 
 ## 5. Technical Dependencies for Revenue
 
-| Dependency | Why it matters |
-| :-- | :-- |
-| Entitlement guard | Prevents unpaid dashboard/API access |
-| Subscriber store | Persistent paid user state |
-| Audit trail | Explains why each alert fired |
-| Observability | Detects degradation before churn |
+| Dependency           | Why it matters                                                   |
+| :------------------- | :--------------------------------------------------------------- |
+| Entitlement guard    | Prevents unpaid dashboard/API access                             |
+| Subscriber store     | Persistent paid user state                                       |
+| Audit trail          | Explains why each alert fired                                    |
+| Observability        | Detects degradation before churn                                 |
 | Frontend performance | Impacts conversion and retention (Speed Insights now integrated) |
 
 ---
