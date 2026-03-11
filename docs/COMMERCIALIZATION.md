@@ -1,95 +1,107 @@
-# 📈 Commercialization Roadmap
+# Commercialization Roadmap
 
-> **Target**: Transforming PolyWeather for paid weather intelligence delivery.
-
----
-
-## 🎯 Product Focus
-
-PolyWeather is positioned as a **premium intelligence service** for weather-driven prediction markets (**Polymarket**). The core differentiators remain **Ankara specialization**, **advection-aware signal logic**, and **DEB-weighted consensus**.
+Target: make PolyWeather a sustainable paid weather-intelligence product.
 
 ---
 
-## 💰 Pricing & Monetization
+## 1. Product Positioning
 
-| Tier                 | Price         | Primary Value Proposition                               |
-| :------------------- | :------------ | :------------------------------------------------------ |
-| **Telegram Channel** | **$1 / mo**   | High-fidelity proactive alerts, low noise.              |
-| **Web Dashboard**    | **$5 / mo**   | Full multi-model context + historical DEB benchmarking. |
-| **VIP Bundle**       | **$5.5 / mo** | Unified access to dashboard + signal stream.            |
+PolyWeather is not a generic weather app.  
+It is a decision-support layer for temperature-settlement markets:
 
-### 🛠️ Payment Infrastructure
-
-- **Currency**: Polygon / USDC.
-- **Method**: Phase-1 manual activation; Phase-2 automatic deposit detection and entitlement sync.
+- observation-first (METAR/MGM),
+- settlement-aware probability modeling (DEB + mu/buckets),
+- market mapping (Polymarket read-only) for actionable edge detection.
 
 ---
 
-## 🗺️ Execution Roadmap
+## 2. Business Mindmap
+
+```mermaid
+mindmap
+  root((PolyWeather Monetization))
+    Product
+      Telegram Signal Channel
+      Web Dashboard
+      VIP Bundle
+    Pricing
+      Entry 1 USD
+      Dashboard 5 USD
+      Bundle 5.5 USD
+    Access Control
+      Manual activation(P1)
+      Wallet/USDC detection(P2)
+      Entitlement middleware
+    Growth
+      Accuracy reports
+      Retention analytics
+      User preference center
+```
+
+---
+
+## 3. Packaging and Pricing
+
+| Tier | Price | Value |
+| :-- | :-- | :-- |
+| Telegram Channel | $1 / month | Low-noise proactive signal feed |
+| Web Dashboard | $5 / month | Full multi-model context + reconciliation |
+| VIP Bundle | $5.5 / month | Dashboard + signal stream |
+
+Payment direction:
+
+- Currency: Polygon USDC
+- Phasing: manual activation first, then automated entitlement sync
+
+---
+
+## 4. Execution Phases
 
 ```mermaid
 graph LR
-    P1[Phase 1: Manual Beta] --> P2[Phase 2: USDC Automation]
-    P2 --> P3[Phase 3: Scaling & Analytics]
-
-    subgraph P1_Detail [Manual Operations]
-        P1 -->|DM Bot| Pay[Manual Payment]
-        Pay -->|Invite| Link[One-time Link]
-    end
-
-    subgraph P2_Detail [Smart Automation]
-        P2 -->|Monitor| Chain[Polygon/USDC]
-        Chain -->|Auto| Access[JWT/Sub Activation]
-    end
+    P1[Phase 1 Manual Beta] --> P2[Phase 2 Payment Automation]
+    P2 --> P3[Phase 3 Growth and B2B]
 ```
 
-### 📦 Phase 1: Manual Beta
+### Phase 1: Manual Beta
 
-- **Goal**: Stabilize signal quality and convert initial paid users.
-- **Actions**:
-  - Manual subscription activation via Telegram DM.
-  - Small paid Telegram channel for low-noise signal validation.
-  - Invite-based Web access while entitlement layer is being finalized.
-  - Keep Ankara as flagship strategy city for product credibility.
+- Keep paid channel small, optimize signal quality first.
+- Manual payment confirmation + manual entitlement grant.
+- Invite-gated dashboard while access control hardens.
 
-### 🛠️ Phase 2: Automation (USDC)
+### Phase 2: Payment Automation
 
-- **Goal**: Reduce operational friction and improve payment reliability.
-- **Actions**:
-  - **On-chain monitoring**: Detect USDC deposits to dedicated addresses.
-  - **One-time Links**: Bot-generated invite links with strict member limits.
-  - **JWT Auth**: Subscriber-only access control for the Next.js frontend.
+- Detect wallet payment events (USDC).
+- Auto-issue/refresh entitlement.
+- Enforce route-level and API-level access guards.
 
-### 🌐 Phase 3: Scaling & Analytics
+### Phase 3: Growth and Expansion
 
-- **Goal**: Improve retention and expand B2C/B2B utility.
-- **Actions**:
-  - **Accuracy Leaderboard**: Monthly DEB vs settled-actual reports.
-  - **Self-Serve Portal**: Billing, subscription status, and alert preferences.
-  - **Usage Telemetry**: Feature-level analytics for conversion optimization.
-
-### 📡 API Expansion Priority
-
-- **P0-1 Market Layer**
-  - Polymarket Gamma discovery + `py-clob-client` pricing / order book
-- **P0-2 Official Observation Layer**
-  - Aviation Weather / METAR
-  - weather.gov official forecast / observation / alert context
-- **P1 Lead Layer**
-  - Ankara keeps Turkish MGM nearby network
-  - U.S. cities may later receive Mesonet enhancement without replacing METAR
-- **P2 Product Layer**
-  - Stripe / Polygon-USDC automation
-  - Realtime entitlement sync and subscriber state management
+- Self-serve billing and subscription panel.
+- Operator analytics and feature usage telemetry.
+- Optional B2B API package for quant teams.
 
 ---
 
-## 🚧 Critical Constraints
+## 5. Technical Dependencies for Revenue
 
-- **Weather-First**: The product is built around physical weather shifts, not exchange-side execution tooling.
-- **Quality > Quantity**: Alert fatigue directly harms retention; thresholds must favor actionable rarity.
-- **UI Stability**: Commercial rollout assumes layout consistency; visual contract stays fixed while internals evolve.
+| Dependency | Why it matters |
+| :-- | :-- |
+| Entitlement guard | Prevents unpaid dashboard/API access |
+| Subscriber store | Persistent paid user state |
+| Audit trail | Explains why each alert fired |
+| Observability | Detects degradation before churn |
+| Frontend performance | Impacts conversion and retention (Speed Insights now integrated) |
 
 ---
 
-**📅 Last Updated**: 2026-03-10
+## 6. Immediate Commercial Priorities
+
+1. Finish robust entitlement middleware in frontend and backend.
+2. Persist subscriber/payment state in managed DB.
+3. Publish transparent monthly accuracy and signal-quality reports.
+4. Add support playbooks for false-alert and stale-data incidents.
+
+---
+
+Last Updated: `2026-03-11`

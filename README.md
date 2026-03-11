@@ -1,172 +1,136 @@
-# 🌡️ PolyWeather Pro
+# PolyWeather Pro
 
-> **Professional Weather Intelligence System** — Specialized in edge data collection, DEB smart blending, and real-time decision alerts.
+Production weather-intelligence stack for temperature settlement markets.
 
----
+Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
 
-## 💎 Project Vision
+## What This Project Does
 
-PolyWeather is a specialized intelligence system built for **Polymarket** high-stakes participants. We aggregate top-tier meteorological sources, apply proprietary **DEB (Dynamic Error Balancing)** logic, and surface **actionable shift signals** at critical decision windows.
+- Aggregates weather observations and forecasts for monitored cities.
+- Blends multi-model forecasts with DEB (Dynamic Error Balancing).
+- Computes settlement-oriented probability buckets (mu-centered distribution).
+- Maps model view to Polymarket read-only market data for mispricing/risk scan.
+- Delivers the same core logic to web dashboard and Telegram bot.
 
----
+## Mindmap
 
-## 🏗️ Production Architecture
+```mermaid
+mindmap
+  root((PolyWeather Pro))
+    Data Layer
+      METAR(Aviation Weather / METAR)
+      MGM(Turkey MGM)
+      Station 17130(Ankara Center 17130)
+      Open-Meteo
+      weather.gov(US cities)
+      Polymarket(P0 Read-only)
+    Analysis Layer
+      DEB(Dynamic Error Balancing)
+      Probability Engine(mu + buckets)
+      Trend Engine
+      Risk Profiles
+      Mispricing Radar
+    Delivery Layer
+      FastAPI
+      Next.js Dashboard
+      Telegram Bot
+      Alert Push
+    Ops Layer
+      Docker Compose(VPS backend + bot)
+      Vercel(frontend)
+      Cache + force_refresh
+      Speed Insights
+```
 
-This project uses a decoupled production setup for reliability and iteration speed:
-
-- **Frontend**: A **Next.js** dashboard on **Vercel** with React component rendering.
-- **Backend API**: A **FastAPI** service on VPS for low-latency weather aggregation and analysis.
-- **Bot & Alert Heartbeat**: A **Telegram Bot** on VPS for minute-level scanning and push alerts.
-
-🔗 **Official Visit**: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
-
----
-
-## 🖼️ Preview & Interaction
-
-<p align="center">
-  <img src="docs/images/demo_ankara.png" alt="PolyWeather Demo - Ankara Live Analysis" width="450">
-  <br>
-  <em>📊 <b>Deep Query View</b>: DEB blended forecast + settlement probability + AI analysis context</em>
-</p>
-
-<p align="center">
-  <img src="./docs/images/demo_map.png" alt="PolyWeather Web Map" width="850">
-  <br>
-  <em>🗺️ <b>Omni-Dashboard</b>: global station markers + nearby station context + right-side city intelligence panel</em>
-</p>
-
----
-
-## 🚀 Core Features
-
-- **📡 Full-Spectrum Collection**
-  - **Major Models**: ECMWF, GFS, ICON, GEM, JMA, Open-Meteo, and city-level daily/hourly guidance.
-  - **Observed Data**: Aviation Weather / METAR as the primary observation source, plus Turkish MGM coverage for Ankara.
-  - **City Specialization**: `17130` (`Ankara (Bölge/Center)`) remains the Ankara lead station without replacing LTAC settlement observation.
-- **⚖️ DEB Smart Blending**
-  - Dynamic weighting based on city-level performance and current model spread.
-- **📈 Market Data Integration**
-  - Live Polymarket quotes, probabilities, and dynamic settlement bucket tracking.
-  - Automatic Market Edge and Spread calculation comparing DEB vs Market.
-- **🧩 React Quant Dashboard (v2.0)**
-  - **Pull-based Dynamic Cache**: Default 5-minute TTL safety lock, with a 1-minute high-frequency bypass exclusively for Ankara (ANKARA).
-  - **Optimistic UI & Cache Breakthrough**: Manual `force_refresh` trigger maintains legacy observations during load to prevent screen flickering, isolating loading states only to external polymarket edges.
-  - **Dark Quant Aesthetics**: Upgraded from emojis to native `lucide-react` SVGs. Re-engineered cold/warm structure progress bars, dynamic threshold palettes, and fluid 100% card widths.
-  - **Bilingual & Seamless**: Built-in comprehensive `i18n.ts` with transparent localization mapping.
-- **🔔 Edge Analytics & Alerts**
-  - **Momentum Spike**: Captures rapid short-window temperature slope changes.
-  - **Forecast Breakthrough**: Fires when observations break model envelopes plus margin.
-  - **Advection Monitoring**: Combines lead-station and wind direction to judge cold/warm advections against live temperature drifts.
-
----
-
-## 🔐 Alert Logic Details
-
-| Trigger Name     | Core Logic                                    | Trading Value                                 |
-| :--------------- | :-------------------------------------------- | :-------------------------------------------- |
-| **Center Hit**   | Detects DEB trigger only at Ankara HQ `17130` | **Highest priority signal**, the "truth"      |
-| **Momentum**     | 30min temperature slope exceed threshold      | Captures sudden weather fronts                |
-| **Breakthrough** | Pierces all model highs + margin              | Captures high-volatility outlier events       |
-| **Advection**    | Lead station rise + Wind match                | Gain 20-40 minutes of lead time for execution |
-
----
-
-## 🧭 Current Data Logic
-
-- **Primary observation source**: Aviation Weather / METAR
-- **Ankara enhancement**:
-  - Settlement observation: `LTAC / Esenboğa`
-  - Official lead station: `Ankara (Bölge/Center)` / `17130`
-  - Nearby station layer: Turkish MGM network (Ankara-specific preferred station ordering)
-- **Other cities nearby layer**:
-  - Production currently uses Aviation Weather METAR clusters
-  - U.S. cities may later receive Mesonet augmentation while METAR stays baseline
-- **Frontend request optimization**:
-  - Initial map temperatures preload via `/api/city/{name}/summary`
-  - City detail cache TTL = 5 minutes, revision probe avoids unnecessary refetch
-  - Map movements, panel toggles, and modal open/close do not trigger redundant requests
-  - Manual refresh always bypasses cache (`force_refresh=true`)
-
----
-
-## 🏗️ System Architecture
+## Architecture
 
 ```mermaid
 graph TD
-    subgraph "Client / Terminals"
-        Web[Next.js React Web App]
-        TG[Telegram Client]
-    end
+    User[Web / Telegram User] --> FE[Next.js Frontend on Vercel]
+    User --> Bot[Telegram Bot on VPS]
+    FE --> API[FastAPI Service]
+    Bot --> API
 
-    subgraph "Edge Deployment (Vercel)"
-        Web --> |BFF Routes| Fast[FastAPI API]
-    end
+    API --> WX[Weather Data Collector]
+    WX --> METAR[METAR / Aviation Weather]
+    WX --> MGM[MGM API / nearby stations]
+    WX --> OM[Open-Meteo]
+    WX --> NWS[weather.gov]
 
-    subgraph "Core Hub (VPS)"
-        Fast --- |Shared Logic| Worker[Alert Engine / Worker]
-        Bot[Telegram Bot] --- |Shared Logic| Worker
-    end
-
-    subgraph "External Sources"
-        Worker --> |Pull| MGM[MGM Weather]
-        Worker --> |Pull| METAR[Airport METAR]
-        Worker --> |Pull| OM[Open-Meteo]
-        Worker --> |Pull| MM[Multi-Model Integration]
-    end
-
-    Worker --> |Push Alert| TG
-    Bot --> |Query| Worker
+    API --> DEB[DEB + Trend + Probability Engines]
+    API --> PM[Polymarket Read-only Layer]
+    PM --> Gamma[Gamma API]
+    PM --> CLOB[CLOB / py-clob-client]
 ```
 
----
+## Current Source Policy
 
-## 🛠️ Deployment
+| Domain | Source Policy |
+| :-- | :-- |
+| Primary observation | Aviation Weather / METAR |
+| Ankara enhancement | MGM + nearby stations, lead station fixed to `17130` |
+| Forecast baseline | Open-Meteo |
+| US official context | weather.gov |
+| Market layer | Polymarket P0 read-only discovery + quotes |
+| Removed source | Meteoblue (fully removed from code and docs) |
 
-### 1. Backend / Bot (VPS)
+## Recent Changes (2026-03-11)
+
+- Removed all Meteoblue API integration and references.
+- Fixed market top-bucket rendering path by deduplicating repeated temperature buckets.
+- Added frontend fallback guard when market top buckets collapse to low-quality duplicates.
+- Fixed detail panel accessibility issue (`aria-hidden` focus conflict) using `inert` + active-element blur.
+- Added Vercel Speed Insights integration in `frontend/app/layout.tsx`.
+
+## Repositories and Runtime Paths
+
+- Frontend: `frontend/` (Next.js App Router)
+- Backend API: `web/app.py` and `src/`
+- Telegram runtime: `bot_listener.py` + `src/analysis/*`
+- Docs: `docs/`
+
+## Quick Start
+
+### Backend + Bot (VPS / Docker)
 
 ```bash
-# Pull source
-git pull
-
-# Environment
-# Edit .env with TELEGRAM_BOT_TOKEN and other keys
-
-# Launch
-docker-compose up -d --build
+docker compose up -d --build
 ```
 
-### 2. Frontend (Vercel)
+### Frontend (local)
 
-Set `frontend` as the Vercel root directory for automatic CI/CD.
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
----
+### Frontend production build check
 
-## 💬 Bot Commands
+```bash
+cd frontend
+npm run build
+```
 
-| Command | Description                           | Example        |
-| :------ | :------------------------------------ | :------------- |
-| `/city` | Query real-time analysis for a city   | `/city ankara` |
-| `/deb`  | View historical accuracy of DEB model | `/deb london`  |
-| `/top`  | View activity leaderboard             | `/top`         |
-| `/help` | Get detailed instructions             | `/help`        |
+## Command Surface (Telegram)
 
----
+| Command | Purpose |
+| :-- | :-- |
+| `/city <name>` | City real-time analysis |
+| `/deb <name>` | DEB historical reconciliation |
+| `/top` | User leaderboard |
+| `/help` | Help and command usage |
 
-> [!NOTE]
-> **Commercialization**: Current plans keep **Web Dashboard ($5/mo)** and **Telegram Signal Channel ($1/mo)** as the core entry offers.
-> User entitlement and payment automation are tracked in `docs/COMMERCIALIZATION.md`.
+## Documentation Index
 
-> [!NOTE]
-> **Frontend Model**: Production rendering is now fully handled by React components under `frontend/components/dashboard` and hooks under `frontend/hooks`.
-> Legacy static files are retained for reference, but no longer act as the main runtime path.
+- Chinese API guide: `docs/API_ZH.md`
+- Commercial roadmap: `docs/COMMERCIALIZATION.md`
+- Tech debt (EN): `docs/TECH_DEBT.md`
+- Tech debt (ZH): `docs/TECH_DEBT_ZH.md`
+- Chinese overview: `README_ZH.md`
 
----
+## Status
 
----
-
-**📅 Last Updated**: 2026-03-10
-**🚀 Status**: v1.2 Stable - React Dashboard with i18n & Polymarket Integration in Production
-
-> [!TIP]
-> **Production Note**: The UI layout remains consistent while introducing full internationalization, market quote integration, and premium visual feedback (glassmorphism overlays, sonar markers).
+- Version: `v1.3`
+- Last Updated: `2026-03-11`
+- Runtime: Stable (web + bot + market read-only layer in production)
