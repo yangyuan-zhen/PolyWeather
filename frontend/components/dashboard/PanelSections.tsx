@@ -119,6 +119,19 @@ function getMarketTopBuckets(scan?: MarketScan | null) {
     );
 }
 
+function getMarketTopBucketKey(bucket: MarketTopBucket) {
+  const valueNum = Number(bucket?.value);
+  if (Number.isFinite(valueNum)) return `v:${valueNum.toFixed(2)}`;
+
+  const tempNum = Number(bucket?.temp);
+  if (Number.isFinite(tempNum)) return `t:${tempNum.toFixed(2)}`;
+
+  const parsed = parseTempFromText(bucket?.label);
+  if (parsed != null) return `l:${parsed.toFixed(2)}`;
+
+  return `s:${String(bucket?.slug || bucket?.question || bucket?.label || "")}`;
+}
+
 export function HeroSummary() {
   const { data } = useCityData();
   const { locale } = useI18n();
@@ -367,11 +380,23 @@ export function ProbabilityDistribution({
   const marketNoText = toPercent(marketNoPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
   const marketTopBuckets = isToday ? getMarketTopBuckets(marketScan) : [];
-  const sortedMarketTopBuckets = [...marketTopBuckets]
-    .sort((a, b) => Number(b.probability || 0) - Number(a.probability || 0))
-    .slice(0, 4);
+  const sortedMarketTopBuckets = (() => {
+    const sorted = [...marketTopBuckets].sort(
+      (a, b) => Number(b.probability || 0) - Number(a.probability || 0),
+    );
+    const deduped: Array<MarketTopBucket & { probability: number }> = [];
+    const seenKeys = new Set<string>();
+    for (const row of sorted) {
+      const key = getMarketTopBucketKey(row);
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      deduped.push(row);
+      if (deduped.length >= 4) break;
+    }
+    return deduped;
+  })();
   const useMarketTopBuckets =
-    marketScan?.available && sortedMarketTopBuckets.length > 0;
+    marketScan?.available && sortedMarketTopBuckets.length >= 2;
   const topMarketBucketText = toPercent(sortedMarketTopBuckets[0]?.probability);
 
   return (

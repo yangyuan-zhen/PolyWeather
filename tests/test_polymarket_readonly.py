@@ -60,3 +60,85 @@ def test_fetch_token_market_data_prefers_orderbook_executable_prices():
     assert data["midpoint"] == 0.5
     assert data["last_trade_price"] == 0.49
 
+
+def test_build_top_temperature_buckets_dedupes_same_temperature():
+    layer = PolymarketReadOnlyLayer()
+
+    primary_market = {
+        "slug": "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher",
+        "question": "Will the highest temperature in Ankara be 14C or higher on March 12?",
+        "volumeNum": 1000,
+    }
+    markets = [
+        primary_market,
+        {
+            "slug": "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher-v2",
+            "question": "Will the highest temperature in Ankara be 14C or higher on March 12? (v2)",
+            "volumeNum": 900,
+        },
+        {
+            "slug": "highest-temperature-in-ankara-on-march-12-2026-13c-or-higher",
+            "question": "Will the highest temperature in Ankara be 13C or higher on March 12?",
+            "volumeNum": 1100,
+        },
+        {
+            "slug": "highest-temperature-in-ankara-on-march-12-2026-12c-or-higher",
+            "question": "Will the highest temperature in Ankara be 12C or higher on March 12?",
+            "volumeNum": 1200,
+        },
+        {
+            "slug": "highest-temperature-in-ankara-on-march-12-2026-14c-or-lower",
+            "question": "Will the highest temperature in Ankara be 14C or lower on March 12?",
+            "volumeNum": 1300,
+        },
+    ]
+    layer._collect_related_temperature_markets = (
+        lambda city_key, target_date, primary_market: markets
+    )
+
+    def _fake_extract_market_tokens(market):
+        slug = str(market.get("slug") or "")
+        return [
+            {"outcome": "Yes", "token_id": f"{slug}|yes"},
+            {"outcome": "No", "token_id": f"{slug}|no"},
+        ]
+
+    layer._extract_market_tokens = _fake_extract_market_tokens
+
+    midpoint_map = {
+        "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher": 0.79,
+        "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher-v2": 0.16,
+        "highest-temperature-in-ankara-on-march-12-2026-13c-or-higher": 0.06,
+        "highest-temperature-in-ankara-on-march-12-2026-12c-or-higher": 0.01,
+        "highest-temperature-in-ankara-on-march-12-2026-14c-or-lower": 0.92,
+    }
+
+    def _fake_get_token_market_data(token_id):
+        slug, side = str(token_id).split("|", 1)
+        if side == "yes":
+            midpoint = midpoint_map.get(slug, 0.5)
+            return {
+                "midpoint": midpoint,
+                "buy": max(0.0, min(1.0, midpoint + 0.01)),
+                "sell": max(0.0, min(1.0, midpoint - 0.01)),
+            }
+        midpoint = 1.0 - midpoint_map.get(slug, 0.5)
+        return {
+            "midpoint": midpoint,
+            "buy": max(0.0, min(1.0, midpoint + 0.01)),
+            "sell": max(0.0, min(1.0, midpoint - 0.01)),
+        }
+
+    layer._get_token_market_data = _fake_get_token_market_data
+
+    rows = layer._build_top_temperature_buckets(
+        city_key="ankara",
+        target_date="2026-03-12",
+        primary_market=primary_market,
+        limit=4,
+    )
+
+    values = [row.get("value") for row in rows]
+    assert len(values) == len(set(values))
+    assert rows[0]["value"] == 14.0
+    assert all(not str(row.get("label") or "").startswith("<=") for row in rows)

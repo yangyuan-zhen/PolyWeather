@@ -1332,52 +1332,72 @@ class PolymarketReadOnlyLayer:
         top_rows: List[Dict[str, Any]] = []
         max_items = max(1, int(limit or 4))
         primary_slug = str(primary_market.get("slug") or "").strip().lower()
+        primary_direction = self._extract_market_bucket_direction(primary_market)
+        seen_temp_keys: set = set()
 
-        for (
-            market_prob,
-            _volume,
-            bucket_temp,
-            market,
-            yes_token,
-            no_token,
-            yes_prices,
-            no_prices,
-        ) in ranked[
-            :max_items
-        ]:
-            yes_buy = _extract_price(yes_prices.get("buy"))
-            yes_sell = _extract_price(yes_prices.get("sell"))
-            yes_midpoint = _extract_price(yes_prices.get("midpoint")) or market_prob
-            no_buy = _extract_price(no_prices.get("buy"))
-            no_sell = _extract_price(no_prices.get("sell"))
+        def _append_rows(enforce_primary_direction: bool) -> None:
+            for (
+                market_prob,
+                _volume,
+                bucket_temp,
+                market,
+                yes_token,
+                no_token,
+                yes_prices,
+                no_prices,
+            ) in ranked:
+                row_direction = self._extract_market_bucket_direction(market)
+                if (
+                    enforce_primary_direction
+                    and primary_direction in {"above", "below"}
+                    and row_direction != primary_direction
+                ):
+                    continue
 
-            if no_buy is None and yes_buy is not None:
-                no_buy = max(0.0, min(1.0, 1.0 - yes_buy))
-            if no_sell is None and yes_sell is not None:
-                no_sell = max(0.0, min(1.0, 1.0 - yes_sell))
+                temp_key = f"{round(float(bucket_temp), 2):.2f}"
+                if temp_key in seen_temp_keys:
+                    continue
 
-            market_slug = str(market.get("slug") or "").strip()
+                yes_buy = _extract_price(yes_prices.get("buy"))
+                yes_sell = _extract_price(yes_prices.get("sell"))
+                yes_midpoint = _extract_price(yes_prices.get("midpoint")) or market_prob
+                no_buy = _extract_price(no_prices.get("buy"))
+                no_sell = _extract_price(no_prices.get("sell"))
 
-            top_rows.append(
-                {
-                    "label": self._extract_market_bucket_label(market, bucket_temp),
-                    "value": bucket_temp,
-                    "temp": bucket_temp,
-                    "probability": market_prob,
-                    "market_price": yes_midpoint,
-                    "yes_buy": yes_buy,
-                    "yes_sell": yes_sell,
-                    "no_buy": no_buy,
-                    "no_sell": no_sell,
-                    "slug": market_slug or None,
-                    "question": market.get("question") or market.get("title"),
-                    "is_primary": bool(
-                        primary_slug
-                        and market_slug
-                        and primary_slug == market_slug.strip().lower()
-                    ),
-                }
-            )
+                if no_buy is None and yes_buy is not None:
+                    no_buy = max(0.0, min(1.0, 1.0 - yes_buy))
+                if no_sell is None and yes_sell is not None:
+                    no_sell = max(0.0, min(1.0, 1.0 - yes_sell))
+
+                market_slug = str(market.get("slug") or "").strip()
+                top_rows.append(
+                    {
+                        "label": self._extract_market_bucket_label(market, bucket_temp),
+                        "value": bucket_temp,
+                        "temp": bucket_temp,
+                        "probability": market_prob,
+                        "market_price": yes_midpoint,
+                        "yes_buy": yes_buy,
+                        "yes_sell": yes_sell,
+                        "no_buy": no_buy,
+                        "no_sell": no_sell,
+                        "slug": market_slug or None,
+                        "question": market.get("question") or market.get("title"),
+                        "is_primary": bool(
+                            primary_slug
+                            and market_slug
+                            and primary_slug == market_slug.strip().lower()
+                        ),
+                    }
+                )
+                seen_temp_keys.add(temp_key)
+                if len(top_rows) >= max_items:
+                    break
+
+        if primary_direction in {"above", "below"}:
+            _append_rows(enforce_primary_direction=True)
+        if len(top_rows) < max_items:
+            _append_rows(enforce_primary_direction=False)
 
         return top_rows
 
@@ -1480,11 +1500,51 @@ class PolymarketReadOnlyLayer:
         bucket_temp: Optional[float],
     ) -> str:
         question = str(market.get("question") or market.get("title") or "").strip()
-        text = question.lower()
+        direction = self._extract_market_bucket_direction(market)
         if bucket_temp is not None:
-            if "or higher" in text or "or above" in text or "and above" in text:
+            if direction == "above":
                 return f"{bucket_temp:g}C+"
-            if "or lower" in text or "or below" in text or "and below" in text:
+            if direction == "below":
                 return f"<={bucket_temp:g}C"
             return f"{bucket_temp:g}C"
         return question or str(market.get("slug") or "")
+
+    def _extract_market_bucket_direction(self, market: Dict[str, Any]) -> str:
+        text = " ".join(
+            str(part or "")
+            for part in (
+                market.get("question"),
+                market.get("title"),
+                market.get("slug"),
+            )
+        ).lower()
+        if not text:
+            return "exact"
+
+        if any(
+            token in text
+            for token in (
+                "or higher",
+                "or above",
+                "and above",
+                "forhigher",
+                "forabove",
+                "or-higher",
+                "or-above",
+            )
+        ):
+            return "above"
+        if any(
+            token in text
+            for token in (
+                "or lower",
+                "or below",
+                "and below",
+                "forlower",
+                "forbelow",
+                "or-lower",
+                "or-below",
+            )
+        ):
+            return "below"
+        return "exact"
