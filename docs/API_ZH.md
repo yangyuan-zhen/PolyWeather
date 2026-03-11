@@ -1,4 +1,4 @@
-# PolyWeather API 文档（v1.3）
+# PolyWeather API 文档（v1.2）
 
 本文档描述当前后端真实可用接口（`web/app.py`）。  
 前端一般通过 Next.js BFF 路由代理访问这些接口。
