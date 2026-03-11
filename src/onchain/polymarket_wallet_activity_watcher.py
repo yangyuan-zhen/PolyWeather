@@ -279,10 +279,8 @@ def _format_change_block(
     lines: List[str] = []
     if change_type == "new":
         lines.append("🆕 新开仓位")
-    elif change_type == "update":
-        lines.append("🔄 仓位更新")
     else:
-        lines.append("❌ 仓位平除")
+        lines.append("🔄 仓位更新")
 
     lines.append(f"钱包: {_short(wallet)}")
     if market_url:
@@ -297,8 +295,6 @@ def _format_change_block(
         now_size = _safe_float(pos.get("size"))
         delta = _safe_float(pos.get("size_delta"))
         lines.append(f"持有数量: {old_size:.3f} -> {now_size:.3f} (Δ {delta:+.3f})")
-    elif change_type == "closed":
-        lines.append(f"持有数量: 0.000 (原为 {_safe_float(pos.get('size')):.3f})")
     else:
         lines.append(f"持有数量: {_safe_float(pos.get('size')):.3f}")
 
