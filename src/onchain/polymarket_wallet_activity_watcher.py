@@ -278,39 +278,39 @@ def _format_change_block(
 
     lines: List[str] = []
     if change_type == "new":
-        lines.append("🆕 New Position")
+        lines.append("🆕 新开仓位")
     elif change_type == "update":
-        lines.append("🔄 Position Update")
+        lines.append("🔄 仓位更新")
     else:
-        lines.append("❌ Position Closed")
+        lines.append("❌ 仓位平除")
 
-    lines.append(f"Wallet: {_short(wallet)}")
+    lines.append(f"钱包: {_short(wallet)}")
     if market_url:
-        lines.append(f"Market: {title} ({market_url})")
+        lines.append(f"市场: {title} ({market_url})")
     else:
-        lines.append(f"Market: {title}")
+        lines.append(f"市场: {title}")
 
-    lines.append(f"Outcome: {outcome}")
+    lines.append(f"买入方向: {outcome}")
 
     if change_type == "update":
         old_size = _safe_float(pos.get("old_size"))
         now_size = _safe_float(pos.get("size"))
         delta = _safe_float(pos.get("size_delta"))
-        lines.append(f"Size: {old_size:.3f} -> {now_size:.3f} (Δ {delta:+.3f})")
+        lines.append(f"持有数量: {old_size:.3f} -> {now_size:.3f} (Δ {delta:+.3f})")
     elif change_type == "closed":
-        lines.append(f"Size: 0.000 (was {_safe_float(pos.get('size')):.3f})")
+        lines.append(f"持有数量: 0.000 (原为 {_safe_float(pos.get('size')):.3f})")
     else:
-        lines.append(f"Size: {_safe_float(pos.get('size')):.3f}")
+        lines.append(f"持有数量: {_safe_float(pos.get('size')):.3f}")
 
     avg_price = _safe_float(pos.get("avg_price"))
     if _should_show_avg_price(avg_price):
-        lines.append(f"Avg Price: {_fmt_price(avg_price)}")
-    lines.append(f"Position Value: {_fmt_usd(_safe_float(pos.get('position_value')))}")
+        lines.append(f"建仓均价: {_fmt_price(avg_price)}")
+    lines.append(f"当前价值: {_fmt_usd(_safe_float(pos.get('position_value')))}")
 
     pnl = _safe_float(pos.get("cash_pnl"))
     pnl_pct = _safe_float(pos.get("percent_pnl"))
-    lines.append(f"PnL: {_fmt_usd(pnl)} ({_fmt_pct(pnl_pct)})")
-    lines.append(f"Time: {now_utc}")
+    lines.append(f"盈亏: {_fmt_usd(pnl)} ({_fmt_pct(pnl_pct)})")
+    lines.append(f"时间: {now_utc}")
     return "\n".join(lines)
 
 
@@ -325,7 +325,7 @@ def _build_message(
         .strftime("%Y-%m-%d %H:%M:%S")
     )
     shown = changes[:max_changes]
-    lines = [f"🚨 Wallet Activity ({len(changes)} changes):", ""]
+    lines = [f"🚨 钱包异动监控 ({len(changes)} 个异动):", ""]
 
     for idx, (change_type, pos) in enumerate(shown):
         lines.append(_format_change_block(change_type, wallet, pos, f"{now_bj} 北京时间"))
@@ -334,7 +334,7 @@ def _build_message(
 
     if len(changes) > max_changes:
         lines.append("")
-        lines.append(f"... and {len(changes) - max_changes} more changes")
+        lines.append(f"... 以及其他 {len(changes) - max_changes} 个异动")
 
     return "\n".join(lines)
 
