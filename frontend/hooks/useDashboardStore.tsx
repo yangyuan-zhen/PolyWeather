@@ -33,7 +33,7 @@ interface DashboardStoreValue extends DashboardState {
   futureModalDate: string | null;
   isGuideOpen: boolean;
   loadCities: () => Promise<void>;
-  openFutureModal: (dateStr: string) => void;
+  openFutureModal: (dateStr: string, forceRefresh?: boolean) => void;
   openGuide: () => void;
   openHistory: () => Promise<void>;
   openTodayModal: (forceRefresh?: boolean) => Promise<void>;
@@ -158,6 +158,11 @@ function mergeAiAnalysisIfStable(
   };
 }
 
+function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
+  const normalizedDate = String(targetDate || "").trim() || "local";
+  return `${cityName}::${normalizedDate}`;
+}
+
 export function DashboardStoreProvider({
   children,
 }: {
@@ -210,8 +215,13 @@ export function DashboardStoreProvider({
   const selectedDetail = selectedCity
     ? cityDetailsByName[selectedCity] || null
     : null;
+  const selectedMarketDate =
+    futureModalDate || selectedForecastDate || selectedDetail?.local_date || null;
+  const selectedMarketScanKey = selectedCity
+    ? getMarketScanCacheKey(selectedCity, selectedMarketDate)
+    : null;
   const selectedMarketScan = selectedCity
-    ? marketScanByCityName[selectedCity] || null
+    ? marketScanByCityName[selectedMarketScanKey || ""] || null
     : null;
 
   useEffect(() => {
@@ -277,8 +287,10 @@ export function DashboardStoreProvider({
     cityName: string,
     force = false,
     marketSlug?: string | null,
+    targetDate?: string | null,
   ) => {
-    const cached = marketScanByCityName[cityName];
+    const cacheKey = getMarketScanCacheKey(cityName, targetDate);
+    const cached = marketScanByCityName[cacheKey];
     if (!force && cached && !marketSlug) {
       return cached;
     }
@@ -286,11 +298,12 @@ export function DashboardStoreProvider({
     const latestScan = await dashboardClient.getCityMarketScan(cityName, {
       force,
       marketSlug,
+      targetDate,
     });
     if (latestScan) {
       setMarketScanByCityName((current) => ({
         ...current,
-        [cityName]: latestScan,
+        [cacheKey]: latestScan,
       }));
     }
     return latestScan;
@@ -366,7 +379,9 @@ export function DashboardStoreProvider({
       const detail = await ensureCityDetail(cityName);
       setSelectedForecastDate(detail.local_date);
       // 预热市场数据，不做 await 阻塞，后台静默拉取
-      void ensureCityMarketScan(cityName, false).catch(() => {});
+      void ensureCityMarketScan(cityName, false, null, detail.local_date).catch(
+        () => {},
+      );
     } finally {
       setLoadingState((current) => ({ ...current, cityDetail: false }));
     }
@@ -464,9 +479,22 @@ export function DashboardStoreProvider({
       isGuideOpen,
       loadCities,
       loadingState,
-      openFutureModal: (dateStr: string) => {
+      openFutureModal: (dateStr: string, forceRefresh = false) => {
         mapStopMotionRef.current();
         setFutureModalDate(dateStr);
+        if (!selectedCity) return;
+        const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
+        setLoadingState((current) => ({ ...current, marketScan: true }));
+        void ensureCityMarketScan(
+          selectedCity,
+          forceRefresh || !marketScanByCityName[cacheKey],
+          null,
+          dateStr,
+        )
+          .catch(() => {})
+          .finally(() => {
+            setLoadingState((current) => ({ ...current, marketScan: false }));
+          });
       },
       openGuide: () => setIsGuideOpen(true),
       openHistory,
@@ -499,9 +527,15 @@ export function DashboardStoreProvider({
 
           try {
             // 如果缓存里没有或者想要强制刷新，则拉取最新市场数据
+            const marketKey = getMarketScanCacheKey(
+              selectedCity,
+              detail.local_date,
+            );
             await ensureCityMarketScan(
               selectedCity,
-              forceRefresh || !marketScanByCityName[selectedCity],
+              forceRefresh || !marketScanByCityName[marketKey],
+              null,
+              detail.local_date,
             );
           } catch {}
         } catch {

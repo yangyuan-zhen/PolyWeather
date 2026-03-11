@@ -782,10 +782,28 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
 def _build_city_detail_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
 ) -> Dict[str, Any]:
-    distribution = data.get("probabilities", {}).get("distribution", []) or []
+    local_date = str(data.get("local_date") or "").strip()
+    requested_date = str(target_date or "").strip()
+    selected_date = requested_date or local_date
+
+    multi_model_daily = data.get("multi_model_daily") or {}
+    selected_daily = (
+        multi_model_daily.get(selected_date)
+        if isinstance(multi_model_daily, dict)
+        else None
+    )
+    if not isinstance(selected_daily, dict):
+        selected_daily = {}
+        selected_date = local_date
+
+    distribution = selected_daily.get("probabilities")
+    if not isinstance(distribution, list) or not distribution:
+        distribution = data.get("probabilities", {}).get("distribution", []) or []
+
     city_name = str(data.get("name") or "").strip().lower()
-    model_map = data.get("multi_model") or {}
+    model_map = selected_daily.get("models") or data.get("multi_model") or {}
     if not isinstance(model_map, dict):
         model_map = {}
 
@@ -839,7 +857,7 @@ def _build_city_detail_payload(
     ]
     market_scan = _market_layer.build_market_scan(
         city=data.get("name"),
-        target_date=data.get("local_date"),
+        target_date=selected_date or data.get("local_date"),
         temperature_bucket=primary_bucket if isinstance(primary_bucket, dict) else None,
         model_probability=model_probability,
         fallback_sparkline=fallback_sparkline,
@@ -945,11 +963,16 @@ async def city_detail_aggregate(
     name: str,
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
 ):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
     data = _analyze(city, force_refresh=force_refresh)
-    return _build_city_detail_payload(data, market_slug=market_slug)
+    return _build_city_detail_payload(
+        data,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
 
 # ──────────────────────────────────────────────────────────
 #  Entrypoint

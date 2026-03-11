@@ -28,12 +28,14 @@ function EmptyState({ text }: { text: string }) {
 }
 
 function toPercent(value?: number | null) {
+  if (value == null) return null;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   return `${(numeric * 100).toFixed(1)}%`;
 }
 
 function toPriceCents(value?: number | null) {
+  if (value == null) return null;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   const normalized = numeric > 1 ? numeric / 100 : numeric;
@@ -54,16 +56,20 @@ function parseTempFromText(value: unknown) {
 }
 
 function getBucketTemp(bucket: ProbabilityBucket) {
-  const byValue = Number(bucket.value);
-  if (Number.isFinite(byValue)) return byValue;
+  if (bucket.value != null) {
+    const byValue = Number(bucket.value);
+    if (Number.isFinite(byValue)) return byValue;
+  }
   return parseTempFromText(bucket.label || bucket.bucket || bucket.range);
 }
 
 function getMarketBucketTemp(scan?: MarketScan | null) {
   if (!scan) return null;
 
-  const byBucketValue = Number(scan.temperature_bucket?.value);
-  if (Number.isFinite(byBucketValue)) return byBucketValue;
+  if (scan.temperature_bucket?.value != null) {
+    const byBucketValue = Number(scan.temperature_bucket.value);
+    if (Number.isFinite(byBucketValue)) return byBucketValue;
+  }
 
   const byBucketLabel = parseTempFromText(
     scan.temperature_bucket?.label ||
@@ -83,21 +89,29 @@ function getMarketBucketTemp(scan?: MarketScan | null) {
 }
 
 function getMarketYesPrice(scan?: MarketScan | null) {
-  const preferred = Number(scan?.market_price);
-  if (Number.isFinite(preferred)) return preferred;
-  const implied = Number(scan?.yes_token?.implied_probability);
-  return Number.isFinite(implied) ? implied : null;
+  if (scan?.market_price != null) {
+    const preferred = Number(scan.market_price);
+    if (Number.isFinite(preferred)) return preferred;
+  }
+  if (scan?.yes_token?.implied_probability != null) {
+    const implied = Number(scan.yes_token.implied_probability);
+    if (Number.isFinite(implied)) return implied;
+  }
+  return null;
 }
 
 function getMarketNoPrice(scan?: MarketScan | null) {
-  const direct = Number(scan?.no_buy);
-  if (Number.isFinite(direct)) return direct;
+  if (scan?.no_buy != null) {
+    const direct = Number(scan.no_buy);
+    if (Number.isFinite(direct)) return direct;
+  }
   const marketYes = getMarketYesPrice(scan);
   if (marketYes != null) return Math.max(0, Math.min(1, 1 - marketYes));
   return null;
 }
 
 function normalizeMarketProbability(value?: number | null) {
+  if (value == null) return null;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
@@ -120,11 +134,15 @@ function getMarketTopBuckets(scan?: MarketScan | null) {
 }
 
 function getMarketTopBucketKey(bucket: MarketTopBucket) {
-  const valueNum = Number(bucket?.value);
-  if (Number.isFinite(valueNum)) return `v:${valueNum.toFixed(2)}`;
+  if (bucket?.value != null) {
+    const valueNum = Number(bucket.value);
+    if (Number.isFinite(valueNum)) return `v:${valueNum.toFixed(2)}`;
+  }
 
-  const tempNum = Number(bucket?.temp);
-  if (Number.isFinite(tempNum)) return `t:${tempNum.toFixed(2)}`;
+  if (bucket?.temp != null) {
+    const tempNum = Number(bucket.temp);
+    if (Number.isFinite(tempNum)) return `t:${tempNum.toFixed(2)}`;
+  }
 
   const parsed = parseTempFromText(bucket?.label);
   if (parsed != null) return `l:${parsed.toFixed(2)}`;

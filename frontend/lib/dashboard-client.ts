@@ -164,12 +164,19 @@ export const dashboardClient = {
 
   async getCityMarketScan(
     cityName: string,
-    options?: { force?: boolean; marketSlug?: string | null },
+    options?: {
+      force?: boolean;
+      marketSlug?: string | null;
+      targetDate?: string | null;
+    },
   ) {
     const force = options?.force ?? false;
     const marketSlug = options?.marketSlug || null;
+    const targetDate = options?.targetDate || null;
     if (!force) {
-      const requestKey = `${cityName}::cached::${marketSlug || "-"}`;
+      const requestKey = `${cityName}::cached::${marketSlug || "-"}::${
+        targetDate || "-"
+      }`;
       const existing = pendingMarketScanRequests.get(requestKey);
       if (existing) {
         return existing;
@@ -180,6 +187,9 @@ export const dashboardClient = {
       });
       if (marketSlug) {
         params.set("market_slug", marketSlug);
+      }
+      if (targetDate) {
+        params.set("target_date", targetDate);
       }
 
       const request = fetchJson<{ market_scan?: MarketScan }>(
@@ -200,6 +210,9 @@ export const dashboardClient = {
     });
     if (marketSlug) {
       params.set("market_slug", marketSlug);
+    }
+    if (targetDate) {
+      params.set("target_date", targetDate);
     }
 
     return fetchJson<{ market_scan?: MarketScan }>(

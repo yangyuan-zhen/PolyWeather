@@ -33,6 +33,7 @@ import {
 } from "@/lib/dashboard-utils";
 
 function normalizeMarketValue(value?: number | null) {
+  if (value == null) return null;
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   if (numeric > 1) return Math.max(0, Math.min(1, numeric / 100));
@@ -567,7 +568,13 @@ export function FutureForecastModal() {
                 "future-refresh-btn",
                 store.loadingState.marketScan && "spinning",
               )}
-              onClick={() => store.openTodayModal(true)}
+              onClick={() => {
+                if (isToday) {
+                  void store.openTodayModal(true);
+                  return;
+                }
+                store.openFutureModal(dateStr, true);
+              }}
               title={locale === "en-US" ? "Refresh Data" : "刷新数据"}
             >
               <svg
@@ -936,6 +943,7 @@ export function FutureForecastModal() {
                     detail={detail}
                     targetDate={dateStr}
                     hideTitle
+                    marketScan={marketScan}
                   />
                 </section>
                 <section className="future-modal-section">
