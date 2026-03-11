@@ -481,6 +481,21 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         0.0,
         _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_AVG_PRICE_DELTA", 0.002),
     )
+    immediate_on_size_delta = _env_bool(
+        "POLYMARKET_WALLET_ACTIVITY_IMMEDIATE_ON_SIZE_DELTA",
+        True,
+    )
+    immediate_size_delta_min = max(
+        min_size_delta,
+        _env_float(
+            "POLYMARKET_WALLET_ACTIVITY_IMMEDIATE_SIZE_DELTA_MIN",
+            min_size_delta,
+        ),
+    )
+    immediate_cooldown_sec = max(
+        0,
+        _env_int("POLYMARKET_WALLET_ACTIVITY_IMMEDIATE_COOLDOWN_SEC", 20),
+    )
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
@@ -510,6 +525,9 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
             f"polymarket wallet activity watcher started users={len(users)} "
             f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
             f"min_avg_price_delta={min_avg_price_delta} "
+            f"immediate_on_size_delta={immediate_on_size_delta} "
+            f"immediate_size_delta_min={immediate_size_delta_min} "
+            f"immediate_cooldown={immediate_cooldown_sec}s "
             f"update_debounce={update_debounce_sec}s update_max_hold={update_max_hold_sec}s"
         )
 
@@ -536,6 +554,11 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                     ) or {}
                     if not isinstance(pending_updates, dict):
                         pending_updates = {}
+                    update_push_meta = (
+                        user_state.get("update_push_meta") if isinstance(user_state, dict) else {}
+                    ) or {}
+                    if not isinstance(update_push_meta, dict):
+                        update_push_meta = {}
                     initialized = bool(user_state.get("initialized")) if isinstance(user_state, dict) else False
 
                     # First cycle for each wallet only initializes baseline unless bootstrap alert is enabled.
@@ -544,6 +567,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                             users_state[user] = {
                                 "positions": current,
                                 "pending_updates": {},
+                                "update_push_meta": {},
                                 "initialized": True,
                                 "updated_at": now_ts,
                             }
@@ -565,6 +589,26 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                     for change_type, pos in changes:
                         pos_key = _position_key(pos)
                         if change_type == "update":
+                            size_delta_abs = abs(_safe_float(pos.get("size_delta")))
+                            if (
+                                immediate_on_size_delta
+                                and size_delta_abs >= immediate_size_delta_min
+                            ):
+                                last_push_ts = int(update_push_meta.get(pos_key) or 0)
+                                if now_ts - last_push_ts >= immediate_cooldown_sec:
+                                    outgoing.extend(
+                                        _flush_ready_pending_updates(
+                                            pending_updates=pending_updates,
+                                            now_ts=now_ts,
+                                            debounce_sec=update_debounce_sec,
+                                            max_hold_sec=update_max_hold_sec,
+                                            force_keys={pos_key},
+                                        )
+                                    )
+                                    outgoing.append((change_type, pos))
+                                    update_push_meta[pos_key] = now_ts
+                                    continue
+
                             _merge_pending_update(
                                 pending_updates=pending_updates,
                                 pos_key=pos_key,
@@ -596,6 +640,8 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                                 force_keys=missing_keys,
                             )
                         )
+                        for missing_key in missing_keys:
+                            update_push_meta.pop(missing_key, None)
 
                     outgoing.extend(
                         _flush_ready_pending_updates(
@@ -616,6 +662,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                     users_state[user] = {
                         "positions": current,
                         "pending_updates": pending_updates,
+                        "update_push_meta": update_push_meta,
                         "initialized": True,
                         "updated_at": now_ts,
                     }
@@ -640,5 +687,4 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     )
     thread.start()
     return thread
-
 
