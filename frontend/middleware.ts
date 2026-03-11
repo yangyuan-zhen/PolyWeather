@@ -6,6 +6,10 @@ function isStaticAsset(pathname: string) {
   return (
     pathname.startsWith("/_next/") ||
     pathname.startsWith("/favicon") ||
+    pathname === "/apple-touch-icon.png" ||
+    pathname === "/manifest.webmanifest" ||
+    pathname === "/site.webmanifest" ||
+    pathname.startsWith("/android-chrome-") ||
     pathname.startsWith("/robots.txt") ||
     pathname.startsWith("/sitemap.xml") ||
     pathname.startsWith("/icons/") ||
