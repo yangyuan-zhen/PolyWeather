@@ -18,27 +18,27 @@
 mindmap
   root((PolyWeather Pro))
     数据层
-      "METAR(Aviation Weather / METAR)"
-      "MGM(土耳其 MGM)"
-      "安卡拉主站(17130 Center)"
+      [METAR (Aviation Weather / METAR)]
+      [MGM (土耳其 MGM)]
+      [安卡拉主站 (17130 Center)]
       Open-Meteo
-      "weather.gov(美国城市)"
-      "Polymarket(P0 只读)"
+      [weather.gov (美国城市)]
+      [Polymarket (P0 只读)]
     分析层
-      "DEB(动态误差平衡)"
-      "概率引擎(mu + 桶分布)"
+      [DEB (动态误差平衡)]
+      [概率引擎 (mu + 桶分布)]
       趋势引擎
       城市风险档案
       错价雷达
     交付层
       FastAPI
-      "Next.js 仪表盘"
-      "Telegram Bot"
+      [Next.js 仪表盘]
+      [Telegram Bot]
       预警推送
     运维层
-      "Docker Compose(VPS)"
-      "Vercel(前端)"
-      "缓存 + force_refresh"
+      [Docker Compose (VPS)]
+      [Vercel (前端)]
+      [缓存 + force_refresh]
       Speed Insights
 ```
 

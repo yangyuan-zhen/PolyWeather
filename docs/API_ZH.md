@@ -23,19 +23,19 @@
 mindmap
   root((PolyWeather API))
     城市列表
-      "GET /api/cities"
+      [GET /api/cities]
     城市主数据
-      "GET /api/city/{name}"
-      "GET /api/city/{name}/summary"
-      "GET /api/city/{name}/detail"
+      [GET /api/city/:name]
+      [GET /api/city/:name/summary]
+      [GET /api/city/:name/detail]
     历史数据
-      "GET /api/history/{name}"
+      [GET /api/history/:name]
     关键对象
       current
       forecast
-      "probabilities(mu + distribution)"
-      multi_model / multi_model_daily
-      "market_scan(P0 只读)"
+      [probabilities (mu + distribution)]
+      [multi_model / multi_model_daily]
+      [market_scan (P0 只读)]
 ```
 
 ---

@@ -18,15 +18,15 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 mindmap
   root((PolyWeather Pro))
     Data Layer
-      "METAR(Aviation Weather / METAR)"
-      "MGM(Turkey MGM)"
-      "Station 17130(Ankara Center 17130)"
+      [METAR (Aviation Weather / METAR)]
+      [MGM (Turkey MGM)]
+      [Station 17130 (Ankara Center 17130)]
       Open-Meteo
-      "weather.gov(US cities)"
-      "Polymarket(P0 Read-only)"
+      [weather.gov (US cities)]
+      [Polymarket (P0 Read-only)]
     Analysis Layer
-      "DEB(Dynamic Error Balancing)"
-      "Probability Engine(mu + buckets)"
+      [DEB (Dynamic Error Balancing)]
+      [Probability Engine (mu + buckets)]
       Trend Engine
       Risk Profiles
       Mispricing Radar
@@ -36,9 +36,9 @@ mindmap
       Telegram Bot
       Alert Push
     Ops Layer
-      "Docker Compose(VPS backend + bot)"
-      "Vercel(frontend)"
-      "Cache + force_refresh"
+      [Docker Compose (VPS backend + bot)]
+      [Vercel (frontend)]
+      [Cache + force_refresh]
       Speed Insights
 ```
 

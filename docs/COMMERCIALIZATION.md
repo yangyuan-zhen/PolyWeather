@@ -25,12 +25,12 @@ mindmap
       Web Dashboard
       VIP Bundle
     Pricing
-      Entry 1 USD
-      Dashboard 5 USD
-      Bundle 5.5 USD
+      [Entry 1 USD]
+      [Dashboard 5 USD]
+      [Bundle 5.5 USD]
     Access Control
-      "Manual activation(P1)"
-      "Wallet/USDC detection(P2)"
+      [Manual activation (P1)]
+      [Wallet/USDC detection (P2)]
       Entitlement middleware
     Growth
       Accuracy reports
