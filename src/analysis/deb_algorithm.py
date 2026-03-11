@@ -37,6 +37,11 @@ _history_cache = {}
 _history_mtime = 0
 
 
+def _is_excluded_model_name(model_name: str) -> bool:
+    normalized = str(model_name or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+    return "meteoblue" in normalized
+
+
 def load_history(filepath):
     global _history_cache, _history_mtime
     if not os.path.exists(filepath):
@@ -100,6 +105,11 @@ def update_daily_record(
     if date_str not in data[city_name]:
         data[city_name][date_str] = {}
 
+    # 统一过滤已弃用模型，避免历史/展示残留
+    forecasts = {
+        k: v for k, v in (forecasts or {}).items() if not _is_excluded_model_name(k)
+    }
+
     compact_probs = None
     if probabilities is not None:
         # Store compact: [{"v": 25, "p": 0.8}, ...]
@@ -123,6 +133,13 @@ def update_daily_record(
         and (compact_probs is None or old_probs == compact_probs)
     ):
         return
+
+    # actual_high 应该是日内最高温，理论上不应下降；防止异常写入覆盖已确认高值
+    if old_actual is not None and actual_high is not None:
+        try:
+            actual_high = max(float(old_actual), float(actual_high))
+        except Exception:
+            pass
 
     existing["forecasts"] = forecasts
     existing["actual_high"] = actual_high
@@ -154,6 +171,12 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
     )
     history_file = os.path.join(project_root, "data", "daily_records.json")
     data = load_history(history_file)
+
+    current_forecasts = {
+        k: v
+        for k, v in (current_forecasts or {}).items()
+        if not _is_excluded_model_name(k)
+    }
 
     if city_name not in data or not data[city_name]:
         # 没有历史数据，返回简单的平均/中位数

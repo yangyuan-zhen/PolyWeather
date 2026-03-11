@@ -132,7 +132,7 @@ def start_bot():
             from datetime import datetime as _dt, timedelta as _td
             import os as _os
 
-            from src.analysis.deb_algorithm import load_history
+            from src.analysis.deb_algorithm import load_history, _is_excluded_model_name
             from src.data_collection.city_registry import ALIASES
 
             city_input = parts[1].strip().lower()
@@ -196,7 +196,11 @@ def start_bot():
                     continue
 
                 if deb_pred is None and forecasts:
-                    valid_preds = [float(v) for v in forecasts.values() if v is not None]
+                    valid_preds = [
+                        float(v)
+                        for k, v in forecasts.items()
+                        if v is not None and not _is_excluded_model_name(k)
+                    ]
                     if valid_preds:
                         deb_pred = round(sum(valid_preds) / len(valid_preds), 1)
 
@@ -232,6 +236,8 @@ def start_bot():
 
                 if date_str != today_str and actual is not None:
                     for model, pred in forecasts.items():
+                        if _is_excluded_model_name(model):
+                            continue
                         if pred is None:
                             continue
                         try:

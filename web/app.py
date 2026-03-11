@@ -126,6 +126,18 @@ def _sf(v) -> Optional[float]:
         return None
 
 
+def _is_excluded_model_name(model_name: str) -> bool:
+    normalized = (
+        str(model_name or "")
+        .strip()
+        .lower()
+        .replace(" ", "")
+        .replace("_", "")
+        .replace("-", "")
+    )
+    return "meteoblue" in normalized
+
+
 # ──────────────────────────────────────────────────────────
 #  Core Analysis  (replicates bot_listener logic → JSON)
 # ──────────────────────────────────────────────────────────
@@ -283,7 +295,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if om_today is not None:
         current_forecasts["Open-Meteo"] = om_today
     for m, v in mm.get("forecasts", {}).items():
-        if v is not None:
+        if v is not None and not _is_excluded_model_name(m):
             current_forecasts[m] = _sf(v)
     nws_high = _sf(raw.get("nws", {}).get("today_high"))
     if nws_high is not None:
@@ -594,6 +606,10 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             mgm_daily = mgm.get("daily_forecasts", {})
             if d_str in mgm_daily:
                 day_m["MGM"] = _sf(mgm_daily[d_str])
+
+            day_m = {
+                m: v for m, v in day_m.items() if not _is_excluded_model_name(m)
+            }
             
             d_val, d_winfo = None, ""
             d_probs = []
@@ -914,7 +930,11 @@ def _build_city_detail_payload(
             "mgm_hourly": (data.get("mgm") or {}).get("hourly", []),
             "forecast_daily": (data.get("forecast") or {}).get("daily", []),
         },
-        "models": data.get("multi_model") or {},
+        "models": {
+            k: v
+            for k, v in (data.get("multi_model") or {}).items()
+            if not _is_excluded_model_name(k)
+        },
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
         "market_scan": market_scan,
         "risk": data.get("risk"),

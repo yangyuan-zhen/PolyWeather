@@ -6,12 +6,14 @@ for both Telegram bot and web dashboard.
 """
 
 import math
+from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Tuple, Dict, Any
 
 from src.analysis.deb_algorithm import (
     calculate_dynamic_weights,
     get_deb_accuracy,
     update_daily_record,
+    _is_excluded_model_name,
 )
 from src.analysis.settlement_rounding import wu_round
 from src.data_collection.city_risk_profiles import get_city_risk_profile
@@ -89,7 +91,7 @@ def analyze_weather_trend(
 
     mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
     for m_name, m_val in mm_forecasts.items():
-        if m_val is not None:
+        if m_val is not None and not _is_excluded_model_name(m_name):
             current_forecasts[m_name] = _sf(m_val)
 
     forecast_highs = [h for h in current_forecasts.values() if h is not None]
@@ -100,18 +102,54 @@ def analyze_weather_trend(
 
     wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
 
-    # === Local time ===
-    local_time_full = open_meteo.get("current", {}).get("local_time", "")
-    try:
-        local_date_str = local_time_full.split(" ")[0]
-        time_parts = local_time_full.split(" ")[1].split(":")
-        local_hour = int(time_parts[0])
-        local_minute = int(time_parts[1]) if len(time_parts) > 1 else 0
-    except Exception:
-        from datetime import datetime
-        local_date_str = datetime.now().strftime("%Y-%m-%d")
-        local_hour = datetime.now().hour
-        local_minute = datetime.now().minute
+    # === Local time/date (do not trust cached Open-Meteo local_time for date key) ===
+    utc_offset = _sf(open_meteo.get("utc_offset"))
+    if utc_offset is None and city_name:
+        try:
+            from src.data_collection.city_registry import CITY_REGISTRY
+
+            city_meta = CITY_REGISTRY.get(str(city_name).lower())
+            if isinstance(city_meta, dict):
+                utc_offset = _sf(city_meta.get("tz_offset"))
+        except Exception:
+            pass
+
+    city_now = None
+    if utc_offset is not None:
+        try:
+            city_now = datetime.now(timezone.utc).astimezone(
+                timezone(timedelta(seconds=int(utc_offset)))
+            )
+        except Exception:
+            city_now = None
+
+    local_time_full = str((open_meteo.get("current") or {}).get("local_time") or "").strip()
+    if city_now is not None:
+        local_date_str = city_now.strftime("%Y-%m-%d")
+        local_hour = city_now.hour
+        local_minute = city_now.minute
+    else:
+        try:
+            local_date_str = local_time_full.split(" ")[0]
+            time_parts = local_time_full.split(" ")[1].split(":")
+            local_hour = int(time_parts[0])
+            local_minute = int(time_parts[1]) if len(time_parts) > 1 else 0
+        except Exception:
+            fallback_now = datetime.now()
+            local_date_str = fallback_now.strftime("%Y-%m-%d")
+            local_hour = fallback_now.hour
+            local_minute = fallback_now.minute
+
+    # Use METAR observation date in city local time when available (reliable for actual_high date key).
+    metar_obs_time_raw = str(metar.get("observation_time") or "").strip()
+    if metar_obs_time_raw and utc_offset is not None:
+        try:
+            metar_obs_dt = datetime.fromisoformat(metar_obs_time_raw.replace("Z", "+00:00"))
+            local_date_str = metar_obs_dt.astimezone(
+                timezone(timedelta(seconds=int(utc_offset)))
+            ).strftime("%Y-%m-%d")
+        except Exception:
+            pass
     local_hour_frac = local_hour + local_minute / 60
 
     # === DEB ===
