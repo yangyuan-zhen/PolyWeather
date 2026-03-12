@@ -3,6 +3,15 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  ArrowRight,
+  Chrome,
+  Cloud,
+  CloudRain,
+  Lock,
+  Mail,
+  Sun,
+} from "lucide-react";
+import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
@@ -119,154 +128,128 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     }
   };
 
+  const isLogin = mode === "login";
+
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        background:
-          "radial-gradient(circle at 18% 15%, #0f2b59 0%, #0a1a39 38%, #050b16 100%)",
-        color: "#d8e6ff",
-        padding: "24px",
-      }}
-    >
-      <section
-        style={{
-          width: "100%",
-          maxWidth: 460,
-          borderRadius: 16,
-          border: "1px solid rgba(84, 118, 177, 0.45)",
-          background: "rgba(8, 18, 37, 0.9)",
-          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.4)",
-          padding: 24,
-        }}
-      >
-        <h1 style={{ margin: 0, fontSize: 28 }}>PolyWeather 登录</h1>
-        <p style={{ marginTop: 10, color: "#9db5df", lineHeight: 1.5 }}>
-          优先推荐 Google 一键登录，邮箱注册/登录可并行使用。
-        </p>
+    <div className="relative flex min-h-screen w-full items-center justify-center overflow-hidden bg-[#0f172a] font-sans">
+      <div className="absolute left-[-10%] top-[-10%] h-[40vw] w-[40vw] animate-pulse rounded-full bg-blue-600/20 blur-[120px]" />
+      <div className="absolute bottom-[-10%] right-[-10%] h-[30vw] w-[30vw] rounded-full bg-indigo-500/20 blur-[100px]" />
+
+      <div className="relative mx-4 w-full max-w-[420px] rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+        <div className="mb-8 flex flex-col items-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-400 shadow-lg shadow-blue-500/20">
+            <Cloud className="h-10 w-10 text-white" />
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight text-white">PolyWeather</h1>
+          <p className="mt-2 text-sm text-slate-400">探索世界每一个角落的气象细节</p>
+        </div>
 
         <button
           type="button"
           onClick={() => void onGoogleSignIn()}
           disabled={loading}
-          style={{
-            width: "100%",
-            marginTop: 12,
-            padding: "12px 14px",
-            borderRadius: 10,
-            border: "1px solid rgba(132, 169, 237, 0.5)",
-            background: "linear-gradient(135deg, #1a4c95 0%, #2a6ed2 100%)",
-            color: "#f3f7ff",
-            fontWeight: 700,
-            cursor: "pointer",
-          }}
+          className="mb-6 flex w-full items-center justify-center rounded-xl bg-white px-4 py-3.5 font-semibold text-slate-900 shadow-lg transition-all duration-200 hover:bg-slate-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
-          使用 Google 一键登录
+          <Chrome className="mr-3 h-5 w-5" />
+          使用 Google 账号一键登录
         </button>
 
-        <div style={{ marginTop: 18, marginBottom: 14, color: "#8ea8d8" }}>
-          或使用邮箱 {mode === "login" ? "登录" : "注册"}
+        <div className="my-6 flex items-center">
+          <div className="h-[1px] flex-grow bg-white/10" />
+          <span className="px-4 text-xs font-medium uppercase tracking-widest text-slate-500">
+            或使用邮箱
+          </span>
+          <div className="h-[1px] flex-grow bg-white/10" />
         </div>
 
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+        <div className="mb-6 flex rounded-xl bg-black/20 p-1">
           <button
             type="button"
             onClick={() => setMode("login")}
-            style={{
-              flex: 1,
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid rgba(116, 148, 206, 0.45)",
-              background: mode === "login" ? "#1c4a90" : "transparent",
-              color: "#d8e6ff",
-              cursor: "pointer",
-            }}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+              isLogin
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
           >
-            邮箱登录
+            登录
           </button>
           <button
             type="button"
             onClick={() => setMode("signup")}
-            style={{
-              flex: 1,
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid rgba(116, 148, 206, 0.45)",
-              background: mode === "signup" ? "#1c4a90" : "transparent",
-              color: "#d8e6ff",
-              cursor: "pointer",
-            }}
+            className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+              !isLogin
+                ? "bg-blue-600 text-white shadow-md"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
           >
-            邮箱注册
+            注册
           </button>
         </div>
 
-        <form onSubmit={(event) => void onEmailSubmit(event)}>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            placeholder="you@example.com"
-            style={{
-              width: "100%",
-              marginBottom: 10,
-              padding: "12px",
-              borderRadius: 8,
-              border: "1px solid rgba(116, 148, 206, 0.4)",
-              background: "rgba(10, 23, 47, 0.92)",
-              color: "#e6f0ff",
-            }}
-          />
-          <input
-            type="password"
-            required
-            minLength={6}
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            placeholder="至少 6 位密码"
-            style={{
-              width: "100%",
-              marginBottom: 12,
-              padding: "12px",
-              borderRadius: 8,
-              border: "1px solid rgba(116, 148, 206, 0.4)",
-              background: "rgba(10, 23, 47, 0.92)",
-              color: "#e6f0ff",
-            }}
-          />
+        <form onSubmit={(event) => void onEmailSubmit(event)} className="space-y-4">
+          <div className="relative">
+            <Mail className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="you@example.com"
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-slate-600 transition-all focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
+          <div className="relative">
+            <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder={isLogin ? "输入密码" : "设置至少 6 位密码"}
+              className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-slate-600 transition-all focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            />
+          </div>
+
           <button
             type="submit"
             disabled={loading}
-            style={{
-              width: "100%",
-              padding: "12px 14px",
-              borderRadius: 10,
-              border: "1px solid rgba(105, 214, 179, 0.55)",
-              background: "linear-gradient(135deg, #1b8a71 0%, #1aa387 100%)",
-              color: "#f0fffb",
-              fontWeight: 700,
-              cursor: "pointer",
-            }}
+            className="group mt-8 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 font-bold text-white shadow-xl shadow-blue-600/20 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {mode === "login" ? "邮箱登录" : "邮箱注册"}
+            {isLogin ? "开启天气之旅" : "立即创建账号"}
+            <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
         </form>
 
-        {errorText ? (
-          <p style={{ marginTop: 12, color: "#ff8b96" }}>{errorText}</p>
-        ) : null}
-        {infoText ? (
-          <p style={{ marginTop: 12, color: "#77e0be" }}>{infoText}</p>
-        ) : null}
+        {errorText ? <p className="mt-4 text-sm text-rose-300">{errorText}</p> : null}
+        {infoText ? <p className="mt-4 text-sm text-emerald-300">{infoText}</p> : null}
 
-        <p style={{ marginTop: 16, color: "#8ea8d8", fontSize: 13 }}>
-          登录后将跳转到: <code>{nextPath}</code>
+        <div className="mt-8 text-center">
+          <p className="text-xs text-slate-500">
+            {isLogin ? "登录后将为您个性化定制首页数据" : "注册即代表同意我们的服务条款"}
+          </p>
+        </div>
+
+        <p className="mt-3 text-center text-[11px] text-slate-500">
+          登录后跳转到: <code>{nextPath}</code>
         </p>
-      </section>
-    </main>
+
+        {!supabaseReady ? (
+          <p className="mt-3 text-center text-sm text-rose-300">
+            Supabase 未配置，无法使用登录
+          </p>
+        ) : null}
+      </div>
+
+      <div className="absolute bottom-8 flex items-center gap-4 text-sm text-slate-600">
+        <span className="flex items-center">
+          <Sun className="mr-1 h-4 w-4" /> 实时数据
+        </span>
+        <span className="flex items-center">
+          <CloudRain className="mr-1 h-4 w-4" /> 高精度预测
+        </span>
+      </div>
+    </div>
   );
 }
-
