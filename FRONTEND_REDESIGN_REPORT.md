@@ -1,262 +1,137 @@
-# 前端重新设计完成报告
+# 前端交付与重构报告（2026-03-12）
 
-## 概述
+## 1. 报告目的
 
-按照 `docs/images/demo_map.png` 的设计，已成功重新设计和实现了 PolyWeather 首页核心布局。
+本报告用于说明当前线上前端（`frontend/`）的真实实现状态，替代旧版“单次改版完成报告”。
 
-## 核心设计
+---
 
-### 三列布局架构
+## 2. 当前前端架构
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    顶部导航栏 (高度: 48px)                   │
-├──────────────┬──────────────────────────────┬───────────────┤
-│              │                              │               │
-│   左侧边栏   │       中央地图展示区         │  右侧详情面板 │
-│   (宽: 192px)│    (Leaflet全球地图)        │  (宽: 288px)  │
-│              │                              │               │
-│  • Logo      │  • 全球地图视图              │  • 大温度显示 │
-│  • 搜索框    │  • 彩色圆形标记              │  • 观测信息   │
-│  • 城市列表  │  • 风险等级标色              │  • 小时趋势图 │
-│  • 温度显示  │                              │  • 概率分布   │
-│              │                              │  • 多模型预报 │
-│              │                              │  • 多日预报   │
-└──────────────┴──────────────────────────────┴───────────────┘
+```mermaid
+flowchart LR
+    B["Browser"] --> N["Next.js App Router (Vercel)"]
+    N --> RH["Route Handlers /api/*"]
+    RH --> F["FastAPI (VPS)"]
+
+    N --> STORE["Dashboard Store"]
+    STORE --> MAP["MapCanvas"]
+    STORE --> SIDEBAR["CitySidebar"]
+    STORE --> PANEL["DetailPanel + Modal"]
 ```
 
-x
+### 2.1 组件分层（实际）
 
-## 实现细节
+- 页面入口：`frontend/app/page.tsx` + `frontend/components/dashboard/DashboardEntry.tsx`
+- 核心容器：`frontend/components/dashboard/PolyWeatherDashboard.tsx`
+- 主要视图：
+  - `MapCanvas.tsx`
+  - `CitySidebar.tsx`
+  - `DetailPanel.tsx`
+  - `FutureForecastModal.tsx`
+  - `HistoryModal.tsx`
+  - `GuideModal.tsx`
+- 状态管理：`frontend/hooks/useDashboardStore.tsx`
 
-### 1. 左侧城市列表面板 (192px)
+---
 
-```
-功能:
-  • Logo 和标题: "PolyWeather"
-  • 搜索输入框: 搜索城市功能
-  • 城市列表:
-    - 显示所有支持的城市
-    - 当前温度显示
-    - 风险等级颜色指示器
-    - 活跃城市高亮显示
-    - 可点击选择切换城市
+## 3. 本轮已落地能力
 
-样式:
-  - 背景: slate-900/50
-  - 边框: slate-800
-  - 活跃状态: cyan-500 高亮
-  - 悬停效果: bg-slate-800/30
-```
+### 3.1 侧栏风险分组折叠（已完成）
 
-### 2. 中央地图展示区 (Leaflet)
+- 按 `high / medium / low / other` 分组展示城市。
+- 分组支持折叠/展开。
+- 保留“本地时间”和“峰值时间”显示。
+- 折叠状态持久化到 `localStorage`（`polyWeather_sidebar_groups_v1`）。
 
-```
-功能:
-  • Leaflet 全球地图
-  • 动态缩放控制
-  • 多个城市标记
+### 3.2 选中城市状态持久化（已完成）
 
-标记样式:
-  • 圆形标记，半径 24px
-  • 显示当前温度（度数字）
-  • 颜色编码 (基于风险等级):
-    - 高风险: 红色 (#ef4444)
-    - 中风险: 橙色 (#f97316)
-    - 低风险: 绿色 (#10b981)
-    - 默认: 青色 (#06b6d4)
-  • 发光效果: box-shadow
-  • 点击弹窗显示详细信息
-```
+- 最近一次选中城市持久化到 `localStorage`（`polyWeather_selected_city_v1`）。
+- 页面刷新后自动恢复。
 
-### 3. 右侧详情面板 (288px)
+### 3.3 未来日期分析与市场扫描（已完成）
 
-#### a. 大温度显示区域
+- 前端通过 `target_date` 调用 `/api/city/{name}/detail`。
+- 未来日期 modal 可展示对应日期的模型概率与市场扫描。
 
-```
-┌─────────────────────────────────┐
-│                                 │
-│          12.0°C                 │
-│      (文字大小: 3xl/48px)      │
-│      (颜色: 青色 - cyan-400)    │
-│                                 │
-│  观测时间: 11°C @17:00          │
-│                                 │
-│  ┌────┬────┬────┐              │
-│  │Obs │DEB │Fcst│              │
-│  │1.0 │6.6 │5.9 │  (三列参考)  │
-│  └────┴────┴────┘              │
-│                                 │
-└─────────────────────────────────┘
-```
+### 3.4 市场概率分布去重保护（已完成）
 
-#### b. 小时趋势图
+- 后端温度桶去重后，前端仍保留兜底去重逻辑。
+- 避免“同温度重复四行”导致的可视化误导。
 
-```
-简化的柱状图:
-  • 显示最近 12 小时的温度
-  • 动态高度基于温度值
-  • 渐变颜色: cyan-500 → cyan-400
-  • 高度: 80px
-```
+### 3.5 可访问性修复（已完成）
 
-#### c. 概率分布
+- 解决详情侧栏关闭时 `aria-hidden` 焦点冲突。
+- 方案：`inert` + `activeElement.blur()`。
 
-```
-水平条形图:
-  • 显示温度概率分布
-  • 显示前 3 个最高概率的温度范围
-  • 动态条形宽度
-  • 渐变背景: cyan-500 → emerald-500
+### 3.6 图标与性能观测（已完成）
+
+- 已接入 favicon/Apple touch icon/manifest。
+- 已集成 Vercel Speed Insights 与 Analytics。
+
+---
+
+## 4. 缓存与性能策略（当前状态）
+
+### 4.1 BFF HTTP 缓存（Vercel）
+
+- `/api/cities`：`ETag` + `s-maxage=300`
+- `/api/city/{name}/summary`：`ETag` + `s-maxage=20`
+- `/api/history/{name}`：`ETag` + `s-maxage=60`
+- `summary?force_refresh=true`：`Cache-Control: no-store`
+
+### 4.2 前端本地缓存
+
+- `sessionStorage`：城市详情缓存（5 分钟 TTL + revision 探测）
+- 请求去重：并发请求合并（pending request map）
+- `localStorage`：选中城市 + 侧栏折叠状态
+
+### 4.3 当前明确未做
+
+- Service Worker Cache API
+- IndexedDB
+
+---
+
+## 5. 验收记录
+
+### 5.1 前端缓存验收脚本
+
+```bash
+./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-#### d. 多模型预报
+当前结果：`PASS (14 passed)`。
 
-```
-模型列表 (GFS, ECMWF, ICON, GEM, Open-Meteo, DEB):
-  • 每个模型显示一条横向进度条
-  • 指示器显示预报值在范围内的位置
-  • 显示精确温度值
-  • 支持动态模型范围计算
+### 5.2 自动化测试
+
+```bash
+.\\venv\\Scripts\\python.exe -m pytest -q
 ```
 
-#### e. 多日预报
+当前结果：`31 passed`。
 
-```
-4 天预报卡片:
-  • 网格布局 (4列)
-  • 显示日期 (Day 0, Day 1, ...)
-  • 显示最高温度
-  • 简洁的卡片设计
-```
+---
 
-## 颜色主题
+## 6. 风险与改进点
 
-### 暗色主题 (Dark Mode)
+1. `frontend/.next` 构建产物在本地可见，需继续确保不进入版本管理。
+2. 前端缓存策略已覆盖 P0+P1，但离线能力仍未建设（无 SW/IndexedDB）。
+3. 多源数据仍依赖后端聚合延迟，前端仅能做缓存与降噪，不可替代后端刷新节奏。
 
-```
-背景:
-  - 主背景: slate-950 (#030712)
-  - 面板背景: slate-900/50
-  - 组件背景: slate-800/50
+---
 
-文本:
-  - 主文本: slate-200
-  - 次文本: slate-400
-  - 强调文本: cyan-400 (#06b6d4)
+## 7. 结论
 
-边框:
-  - 主边框: slate-800
-  - 次边框: slate-700/50
+当前前端已从“单体页面”演进为组件化 dashboard，具备：
 
-强调色:
-  - 主强调: cyan-400 (#06b6d4)
-  - 辅助强调: emerald-500 (#10b981)
-  - 警告: rose-500 (#ef4444)
-```
+- 风险分组侧栏与状态持久化
+- 未来日期分析与市场扫描联动
+- BFF 标准缓存头（`ETag/304`）
+- 可访问性修复与基础性能观测
 
-## 文件变更
+可以支持继续推进商业化接入，但支付相关能力仍需后端与权限体系配套完成。
 
-### 新建文件
+---
 
-1. **`frontend/components/dashboard/map-dashboard.tsx`** (新建)
-   - 核心三列布局组件
-   - 城市列表、地图、详情面板的主容器
-   - 包含所有数据处理和渲染逻辑
-
-### 修改文件
-
-1. **`frontend/app/page.tsx`**
-   - 重新设计，移除 `TerminalDashboard`
-   - 改用新的 `MapDashboard` 组件
-   - 简化页面结构，减少代码冗余
-
-2. **`frontend/components/dashboard/map-view.tsx`**
-   - 更新地图标记类型定义
-   - 改用新的 `createTemperatureMarker` 标记样式
-   - 适配新的数据结构 (`color`, `temp` 而非 `value`)
-
-## 技术实现
-
-### 关键技术点
-
-1. **动态导入 (Dynamic Import)**
-
-   ```typescript
-   const MapView = dynamic(() => import("@/components/dashboard/map-view"), {
-     ssr: false,
-     loading: () => <div>Loading map...</div>,
-   });
-   ```
-
-   - 解决 Leaflet SSR 兼容性问题
-   - 提高首屏加载性能
-
-2. **响应式布局**
-   - Flex 布局实现三列设计
-   - 固定宽度边栏 (192px, 288px)
-   - 弹性地图中央区域
-
-3. **数据可视化**
-   - 柱状图 (hourly trend)
-   - 条形图 (probability, models)
-   - 网格布局 (daily forecast)
-
-4. **交互设计**
-   - 城市列表可点击切换
-   - 地图标记可悬停显示信息
-   - 搜索框输入过滤城市
-
-## 性能优化
-
-1. **编译状态**
-   ✅ 编译成功
-   ✅ 没有 TypeScript 错误
-   ✅ 没有构建警告
-
-2. **打包大小**
-   - 首页大小: 8.29 kB
-   - 首屏 JS: 121 kB
-   - 支持静态预渲染
-
-## 部署检查清单
-
-- [x] 前端编译通过
-- [x] 无 TypeScript 错误
-- [x] 无构建警告
-- [x] SSR 兼容性解决
-- [x] 数据绑定就绪
-- [x] 响应式设计完成
-- [x] 颜色主题应用
-- [x] 交互功能实现
-
-## 下一步工作
-
-1. **数据集成**
-   - 从后端 API 动态获取所有城市数据
-   - 实现实时数据更新
-
-2. **城市级地图**
-   - 为每个城市添加多个测站标记
-   - 显示周边观测点信息
-
-3. **高级分析**
-   - 实现点击地图标记显示详细分析
-   - 添加时间滑块用于历史数据回放
-
-4. **市场数据集成**
-   - 在详情面板添加 Polymarket 市场信息
-   - 显示市场价格和概率对比
-
-## 总结
-
-✅ **首页设计完全按照 `demo_map.png` 的风格重新实现**
-
-- 三列布局清晰分工
-- 暗色主题统一协调
-- 数据可视化专业美观
-- 交互流畅直观
-- 代码结构清晰可维护
-- 编译部署无误
-
-前端现已准备就绪，可以与后端 API 进行数据集成测试。
+最后更新：`2026-03-12`

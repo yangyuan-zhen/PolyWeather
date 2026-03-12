@@ -4,91 +4,90 @@ Purpose: keep engineering debt explicit while shipping production features.
 
 ---
 
-## 1. Debt Landscape
+## 1. Debt Snapshot
+
+Current estimate: **90% stable / 10% debt**.
 
 ```mermaid
 flowchart TD
     A["Tech Debt"]
 
-    subgraph AR["Architecture"]
-        AR1["Monolithic bot entry"]
-        AR2["Shared runtime coupling"]
-    end
-
-    subgraph PI["Product Infra"]
-        PI1["Entitlement hardening"]
-        PI2["Subscription persistence"]
+    subgraph PI["Payment Infra"]
+        PI1["Payment event ingestion"]
+        PI2["Subscriber persistence"]
+        PI3["Entitlement parity"]
     end
 
     subgraph Q["Quality"]
         Q1["Replay harness"]
-        Q2["Broader regression tests"]
+        Q2["Mixed integration tests"]
     end
 
     subgraph O["Observability"]
-        O1["Alert evidence trace"]
-        O2["SLO dashboards"]
+        O1["Alert evidence schema"]
+        O2["Ops dashboards"]
     end
 
-    A --> AR
     A --> PI
     A --> Q
     A --> O
 ```
 
-Current system health estimate: **86% stable / 14% debt**.
-
 ---
 
 ## 2. Recently Closed (2026-03-12)
 
-- Meteoblue API path fully removed from backend, frontend, config and docs.
-- Market top-bucket duplicate temperature issue fixed (backend dedupe + frontend guard).
-- Detail panel a11y conflict fixed (`aria-hidden` focus conflict resolved with `inert` + blur).
-- Vercel Speed Insights integrated for frontend performance telemetry.
-- Frontend BFF `ETag + Cache-Control` landed for cities/summary/history (`force_refresh` keeps `no-store`).
-- Mispricing radar now hard-skips non-tradable markets (closed/inactive/not accepting orders/past endDate).
-- AI analysis now includes peak-window hard constraints (before-window cannot claim "locked"/"confirmed floor").
+- Bot entry refactor completed:
+  - `bot_listener.py` simplified to thin entrypoint.
+  - Runtime split into orchestrator/handlers/services/analysis/guard/coordinator layers.
+- Startup diagnostics landed:
+  - `/diag` command
+  - loop-level startup status reporting (trade alerts, polygon watcher, polymarket watcher)
+- Multi-model anchor migration completed for mispricing radar (replaced single Open-Meteo anchor).
+- Non-tradable market hard-skip guard completed (closed/inactive/not accepting orders/past end time).
+- Wallet activity watcher upgraded with alias parsing, link preview switch, and anti-spam debounce/immediate controls.
+- Frontend BFF HTTP caching (`ETag`/`304`) completed for cities/summary/history.
+- Meteoblue fully removed from runtime paths and docs.
 
 ---
 
-## 3. High Priority Debt
+## 3. Active High-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Monolithic bot entry (`bot_listener.py`) | Hard to test and safely refactor | Split orchestration, IO and analysis modules |
-| Entitlement enforcement consistency | Revenue leakage risk | Align frontend middleware and backend enforcement |
-| Subscriber persistence model | Manual operations do not scale | Move to managed PostgreSQL/Supabase state |
-| Alert explainability | Operator trust and debugging cost | Standardize evidence payload per alert |
+| Payment event ingestion pipeline | Cannot automate paid access reliably | Build idempotent onchain payment ingest + reconciliation worker |
+| Subscriber persistence model | Manual entitlement ops do not scale | Add managed PostgreSQL/Supabase subscriber state |
+| Entitlement parity matrix | Access leaks/false denies across channels | Unify policy across frontend middleware, backend API, and bot guard |
+| Alert evidence contract | Harder to debug false positives quickly | Standardize machine-readable evidence schema for each push |
 
 ---
 
-## 4. Medium Priority Debt
+## 4. Active Medium-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Replay simulation harness | Hard to reproduce edge cases | Build deterministic replay over stored records |
-| Chart/UI regression coverage | Visual regressions can slip | Add snapshot + interaction test coverage |
-| Config centralization | Threshold changes are error-prone | Consolidate runtime knobs into structured config |
-| Naming cleanup | Legacy terms reduce clarity | Refactor naming in market/weather boundary layer |
+| Replay simulation harness | Edge-case regressions hard to reproduce | Deterministic replay from stored weather + market snapshots |
+| End-to-end integration coverage | Runtime regressions can slip | Add integration tests for `/api/city/{name}/detail` + push decisions |
+| Config sprawl | Tuning is error-prone | Consolidate env knobs into structured config groups |
+| Naming and data contracts | Boundary confusion persists | Normalize model/market field naming and compatibility aliases |
 
 ---
 
-## 5. Low Priority Debt
+## 5. Active Low-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Cold-start behavior | First request latency variance | Add warming strategy for top city routes |
-| Storage abstraction | Local file assumptions remain | Continue moving state to remote services |
+| Cold-start variance | First request latency jitter | Add prewarm strategy for top city routes |
+| Local state files | Harder multi-instance scaling | Continue migration to managed storage |
 
 ---
 
 ## 6. Next Milestones
 
-1. Entitlement parity: one policy across frontend and backend.
-2. Subscriber DB integration and migration scripts.
-3. Alert evidence schema + tooling for quick operator audit.
-4. Replay runner for weather/market mixed regression scenarios.
+1. Land subscriber DB + entitlement expiry model.
+2. Ship payment ingest + automatic entitlement sync.
+3. Add replay harness for weather/market mixed scenarios.
+4. Publish alert evidence schema and operator tooling.
 
 ---
 

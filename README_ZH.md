@@ -14,120 +14,99 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 这个项目在做什么
+## 核心能力
 
-- 聚合监控城市的实测与预报数据。
-- 用 DEB（Dynamic Error Balancing）做动态融合预测。
-- 计算结算导向的温度概率分布（`μ` + 温度桶）。
-- 将模型概率与 Polymarket 只读市场数据对齐，输出错价/风险信号。
-- Web 仪表盘与 Telegram 机器人共用同一套核心逻辑。
+- 聚合 20 个监控城市的实时实测与预报数据。
+- 通过 DEB（Dynamic Error Balancing）融合多模型最高温。
+- 输出结算导向的概率分布（`mu` + 温度桶）。
+- 将模型观点映射到 Polymarket 只读市场，做错价扫描。
+- Web 仪表盘与 Telegram 机器人复用同一套分析内核。
 
-## 概览图
+## 当前架构
+
+```mermaid
+flowchart LR
+    U["用户（Web / Telegram）"] --> FE["Next.js 前端（Vercel）"]
+    U --> BOT["Telegram Bot（VPS）"]
+    FE --> API["FastAPI /web/app.py"]
+    BOT --> API
+
+    API --> WX["Weather Collector"]
+    WX --> METAR["Aviation Weather（METAR）"]
+    WX --> MGM["MGM（土耳其站网）"]
+    WX --> OM["Open-Meteo"]
+    WX --> NWS["weather.gov（美国城市）"]
+
+    API --> ANALYSIS["DEB + 趋势 + 概率 + 市场扫描"]
+    ANALYSIS --> PM["Polymarket 只读层"]
+```
+
+## Bot 运行分层
 
 ```mermaid
 flowchart TD
-    A["PolyWeather Pro"]
-
-    subgraph DL["数据层"]
-        DL1["METAR (Aviation Weather / METAR)"]
-        DL2["MGM (土耳其 MGM)"]
-        DL3["安卡拉主站 (17130 Center)"]
-        DL4["Open-Meteo"]
-        DL5["weather.gov (美国城市)"]
-        DL6["Polymarket (P0 只读)"]
-    end
-
-    subgraph AL["分析层"]
-        AL1["DEB (动态误差平衡)"]
-        AL2["概率引擎 (mu + 桶分布)"]
-        AL3["趋势引擎"]
-        AL4["城市风险档案"]
-        AL5["错价雷达"]
-    end
-
-    subgraph DEL["交付层"]
-        DEL1["FastAPI"]
-        DEL2["Next.js 仪表盘"]
-        DEL3["Telegram Bot"]
-        DEL4["预警推送"]
-    end
-
-    subgraph OL["运维层"]
-        OL1["Docker Compose (VPS)"]
-        OL2["Vercel (前端)"]
-        OL3["缓存 + force_refresh"]
-        OL4["Speed Insights"]
-    end
-
-    A --> DL
-    A --> AL
-    A --> DEL
-    A --> OL
+    E["bot_listener.py"] --> O["src/bot/orchestrator.py"]
+    O --> H["src/bot/handlers/*"]
+    O --> S["src/bot/services/*"]
+    O --> A["src/bot/analysis/*"]
+    O --> G["src/bot/command_guard.py"]
+    O --> R["src/bot/runtime_coordinator.py"]
 ```
 
-## 系统架构
+## 数据源口径
 
-```mermaid
-graph TD
-    User[Web / Telegram 用户] --> FE[Vercel Next.js 前端]
-    User --> Bot[VPS Telegram Bot]
-    FE --> API[FastAPI 服务]
-    Bot --> API
+| 领域 | 当前口径 |
+| :-- | :-- |
+| 主观测源 | Aviation Weather / METAR |
+| Ankara 增强 | MGM + 周边站，领先站固定 `17130` |
+| 预报基线 | Open-Meteo + 多模型（ECMWF/GFS/ICON/GEM/JMA） |
+| 美国官方语义层 | weather.gov |
+| 市场层 | Polymarket P0 只读发现 + 报价 |
+| 已移除 | Meteoblue（代码与文档已彻底移除） |
 
-    API --> WX[Weather Collector]
-    WX --> METAR[METAR / Aviation Weather]
-    WX --> MGM[MGM API / 周边站]
-    WX --> OM[Open-Meteo]
-    WX --> NWS[weather.gov]
+## 监控城市（20）
 
-    API --> DEB[DEB + 趋势 + 概率引擎]
-    API --> PM[Polymarket 只读层]
-    PM --> Gamma[Gamma API]
-    PM --> CLOB[CLOB / py-clob-client]
-```
+- 欧洲/中东：Ankara、London、Paris、Munich
+- 亚太：Seoul、Hong Kong、Shanghai、Singapore、Tokyo、Wellington
+- 美洲：Toronto、New York、Chicago、Dallas、Miami、Atlanta、Seattle、Buenos Aires、Sao Paulo
+- 南亚：Lucknow
 
-## 当前数据源口径
+## 本轮主要更新（2026-03-12）
 
-| 领域           | 当前口径                          |
-| :------------- | :-------------------------------- |
-| 主观测源       | Aviation Weather / METAR          |
-| Ankara 增强    | MGM + 周边站，领先站固定 `17130`  |
-| 预报基线       | Open-Meteo                        |
-| 美国官方语义层 | weather.gov                       |
-| 市场层         | Polymarket P0 只读发现 + 报价     |
-| 已移除         | Meteoblue（代码与文档已全部移除） |
-
-## 最近更新（2026-03-12）
-
-- 完整移除 Meteoblue API 及全部引用。
-- 前端 BFF 增加 `ETag + Cache-Control`：
-  - `/api/cities`
-  - `/api/city/{name}/summary`（`force_refresh=true` 仍保持 `no-store`）
-  - `/api/history/{name}`
-- 前端状态持久化优化：
-  - 记住上次选中城市（`localStorage`）
-  - 记住侧边栏风险分组折叠状态（`localStorage`）
-  - 详情命中缓存时做后台 revision 检查，静默更新陈旧数据
-- 错价雷达安全加固：
-  - 市场 `closed` / 不活跃 / 不接受下单 / 超过 `endDate` 时跳过推送
-  - `market_scan.primary_market` 透传可交易状态字段
-- AI 决策时段约束：
-  - 上下文显式注入峰值窗口状态（`before` / `in_window` / `past`）
-  - 峰值窗口前禁止“已锁定/已确认底线”结论
-- 修复市场“最热温度桶”重复温度刷屏问题（后端按温度去重 + 前端兜底去重）。
-- 修复详情面板可访问性告警（`aria-hidden` 焦点冲突），改为 `inert + blur`。
-- 集成 Vercel Speed Insights（`frontend/app/layout.tsx`）。
+1. Bot 分层改造完成：
+   - `bot_listener.py` 变为极薄入口。
+   - 运行时迁移到 orchestrator + handlers/services/analysis 分层。
+   - 启动循环由 `StartupCoordinator` 统一编排，并通过 `/diag` 暴露诊断。
+2. 错价雷达口径升级：
+   - 锚点从“单一 Open-Meteo 结算”改为“多模型最高温锚点”。
+   - 不可交易市场硬拦截（`closed` / inactive / 不接单 / 过结束时间）。
+   - 未来日期分析支持 `target_date`（聚合详情接口）。
+3. 钱包异动监听升级：
+   - 支持钱包昵称映射（`POLYMARKET_WALLET_ACTIVITY_USER_ALIASES`）。
+   - 支持 Telegram 链接预览开关（`POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW`）。
+   - 增加 debounce + 立即推送控制，减少连续下单刷屏。
+4. 前端 P0+P1 缓存与体验优化：
+   - BFF 在 `/api/cities`、`/api/city/{name}/summary`、`/api/history/{name}` 返回 `ETag + 304`。
+   - `summary?force_refresh=true` 保持 `Cache-Control: no-store`。
+   - `sessionStorage` 详情缓存 + 后台 revision 静默探测。
+   - `localStorage` 持久化“选中城市”和“风险分组折叠状态”。
+   - 详情面板可访问性修复（`inert + active-element blur`）。
+5. 可观测性：
+   - 前端集成 Vercel Speed Insights。
+   - Bot 启动和后台循环状态可通过 `/diag` 查看。
 
 ## 目录说明
 
-- 前端：`frontend/`（Next.js App Router）
-- 后端：`web/app.py` 与 `src/`
-- 机器人：`bot_listener.py` + `src/analysis/*`
+- 前端：`frontend/`
+- 后端 API：`web/app.py`、`src/`
+- Telegram 机器人：`bot_listener.py`、`src/bot/*`
+- 钱包监听：`src/onchain/*`
+- 运维脚本：`scripts/`
 - 文档：`docs/`
 
 ## 快速启动
 
-### 后端 + 机器人（VPS / Docker）
+### 后端 + Bot（Docker）
 
 ```bash
 docker compose up -d --build
@@ -141,7 +120,7 @@ npm install
 npm run dev
 ```
 
-### 前端构建校验
+### 前端生产构建
 
 ```bash
 cd frontend
@@ -150,37 +129,52 @@ npm run build
 
 ## 运维验收
 
-### 验证前端缓存头（`ETag` / `304` / `force_refresh=no-store`）
+### 校验前端缓存头（`ETag` / `304` / `force_refresh=no-store`）
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-### 观察错价雷达推送决策日志
+### 观察错价雷达决策日志
 
 ```bash
 docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
 ```
 
-## Telegram 命令
+### 观察钱包异动监听日志
 
-| 命令           | 用途         |
-| :------------- | :----------- |
+```bash
+docker compose logs -f polyweather | egrep "wallet activity watcher started|wallet activity pushed|wallet activity cycle failed"
+```
+
+### Telegram 启动诊断
+
+```text
+/diag
+```
+
+## Telegram 指令面
+
+| 指令 | 用途 |
+| :-- | :-- |
 | `/city <name>` | 城市实时分析 |
-| `/deb <name>`  | DEB 历史对账 |
-| `/top`         | 用户排行榜   |
-| `/help`        | 帮助说明     |
+| `/deb <name>` | DEB 历史对账 |
+| `/top` | 用户积分排行 |
+| `/id` | 查看当前聊天 Chat ID |
+| `/diag` | Bot 启动诊断与后台循环状态 |
+| `/help` | 帮助与用法 |
 
 ## 文档索引
 
+- 英文总览：`README.md`
 - API 文档（中文）：`docs/API_ZH.md`
 - 商业化路线：`docs/COMMERCIALIZATION.md`
 - 技术债（英文）：`docs/TECH_DEBT.md`
 - 技术债（中文）：`docs/TECH_DEBT_ZH.md`
-- 英文总览：`README.md`
+- 前端交付报告：`FRONTEND_REDESIGN_REPORT.md`
 
 ## 当前状态
 
 - 版本：`v1.3`
+- 测试状态：`31 passed`（`.\\venv\\Scripts\\python.exe -m pytest -q`）
 - 最后更新：`2026-03-12`
-- 状态：稳定运行（Web + Bot + 市场只读层）

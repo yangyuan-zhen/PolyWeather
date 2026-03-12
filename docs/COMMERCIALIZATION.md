@@ -6,115 +6,113 @@ Target: make PolyWeather a sustainable paid weather-intelligence product.
 
 ## 1. Product Positioning
 
-PolyWeather is not a generic weather app.  
-It is a decision-support layer for temperature-settlement markets:
+PolyWeather is not a generic weather app. It is a settlement decision layer for temperature markets:
 
 - observation-first (METAR/MGM),
-- settlement-aware probability modeling (DEB + mu/buckets),
-- market mapping (Polymarket read-only) for actionable edge detection.
+- settlement-aware modeling (DEB + mu/buckets),
+- market mapping (Polymarket read-only) for actionable mispricing checks.
 
 ---
 
-## 2. Business Overview Diagram
+## 2. Current Monetization Readiness (2026-03-12)
+
+| Capability | Status | Notes |
+| :-- | :-- | :-- |
+| Frontend entitlement gate | Implemented | Next middleware supports token gate + session cookie |
+| Backend entitlement guard | Implemented | `POLYWEATHER_REQUIRE_ENTITLEMENT` + backend token header |
+| Bot command entitlement pre-hook | Implemented | `/city` and `/deb` can be protected (`POLYWEATHER_BOT_REQUIRE_ENTITLEMENT`) |
+| Payment event ingestion | Not implemented | No automated USDC payment reconciliation yet |
+| Subscriber persistence | Not implemented | Still missing managed subscriber DB |
+| Self-serve billing UI | Not implemented | No user billing center yet |
+
+---
+
+## 3. Access Model
 
 ```mermaid
-flowchart TD
-    A["PolyWeather Monetization"]
+flowchart LR
+    U["User"] --> FE["Frontend (Vercel)"]
+    FE --> MW["Entitlement Middleware"]
+    MW --> BFF["BFF /api/*"]
+    BFF --> API["FastAPI"]
+    API --> G["Backend Entitlement Guard"]
 
-    subgraph P["Product"]
-        P1["Telegram Signal Channel"]
-        P2["Web Dashboard"]
-        P3["VIP Bundle"]
-    end
-
-    subgraph R["Pricing"]
-        R1["Entry 1 USD"]
-        R2["Dashboard 5 USD"]
-        R3["Bundle 5.5 USD"]
-    end
-
-    subgraph AC["Access Control"]
-        AC1["Manual activation (P1)"]
-        AC2["Wallet/USDC detection (P2)"]
-        AC3["Entitlement middleware"]
-    end
-
-    subgraph G["Growth"]
-        G1["Accuracy reports"]
-        G2["Retention analytics"]
-        G3["User preference center"]
-    end
-
-    A --> P
-    A --> R
-    A --> AC
-    A --> G
+    P["Payment Source (USDC / Wallet)"] --> S["Subscriber State (to build)"]
+    S --> MW
+    S --> API
 ```
+
+### Do we need login/register to start charging?
+
+Short answer: **no for phase 1, yes for scale**.
+
+- Phase 1 can run with token/wallet-based entitlement and manual ops.
+- For scale (self-serve renewals, refunds, support, analytics), account identity and subscriber DB become mandatory.
 
 ---
 
-## 3. Packaging and Pricing
+## 4. Packaging and Pricing (Draft)
 
-| Tier             | Price        | Value                                     |
-| :--------------- | :----------- | :---------------------------------------- |
-| Telegram Channel | $1 / month   | Low-noise proactive signal feed           |
-| Web Dashboard    | $5 / month   | Full multi-model context + reconciliation |
-| VIP Bundle       | $5.5 / month | Dashboard + signal stream                 |
+| Tier | Price | Value |
+| :-- | :-- | :-- |
+| Telegram Signal Channel | $1 / month | Low-noise proactive signal stream |
+| Web Dashboard | $5 / month | Full model context + historical reconciliation |
+| VIP Bundle | $5.5 / month | Dashboard + signal stream |
 
 Payment direction:
 
-- Currency: Polygon USDC
-- Phasing: manual activation first, then automated entitlement sync
+- Settlement/network: Polygon USDC
+- Rollout: manual confirmation first, then automated entitlement sync
 
 ---
 
-## 4. Execution Phases
+## 5. Execution Phases
 
-```mermaid
-graph LR
-    P1[Phase 1 Manual Beta] --> P2[Phase 2 Payment Automation]
-    P2 --> P3[Phase 3 Growth and B2B]
-```
+### Phase 1: Manual Paid Beta
 
-### Phase 1: Manual Beta
-
-- Keep paid channel small, optimize signal quality first.
-- Manual payment confirmation + manual entitlement grant.
-- Invite-gated dashboard while access control hardens.
+- Keep user set small and quality-focused.
+- Manual payment confirmation + manual entitlement issue.
+- Weekly accuracy report as trust anchor.
 
 ### Phase 2: Payment Automation
 
-- Detect wallet payment events (USDC).
-- Auto-issue/refresh entitlement.
-- Enforce route-level and API-level access guards.
+- Ingest payment events (wallet/tx).
+- Auto-issue and auto-expire entitlement.
+- Full parity across frontend middleware, backend API, and bot command guard.
 
-### Phase 3: Growth and Expansion
+### Phase 3: Growth and B2B
 
-- Self-serve billing and subscription panel.
-- Operator analytics and feature usage telemetry.
-- Optional B2B API package for quant teams.
-
----
-
-## 5. Technical Dependencies for Revenue
-
-| Dependency           | Why it matters                                                   |
-| :------------------- | :--------------------------------------------------------------- |
-| Entitlement guard    | Prevents unpaid dashboard/API access                             |
-| Subscriber store     | Persistent paid user state                                       |
-| Audit trail          | Explains why each alert fired                                    |
-| Observability        | Detects degradation before churn                                 |
-| Frontend performance | Impacts conversion and retention (Speed Insights now integrated) |
+- Self-serve billing and subscriber console.
+- Retention analytics and feature usage telemetry.
+- Optional B2B/API package.
 
 ---
 
-## 6. Immediate Commercial Priorities
+## 6. P0/P1 Commercial Engineering Backlog
 
-1. Finish robust entitlement middleware in frontend and backend.
-2. Persist subscriber/payment state in managed DB.
-3. Publish transparent monthly accuracy and signal-quality reports.
-4. Add support playbooks for false-alert and stale-data incidents.
+### P0 (before public paid launch)
+
+1. Subscriber store (managed PostgreSQL/Supabase) with entitlement expiry.
+2. Payment event pipeline (idempotent ingest + reconciliation + retry).
+3. Unified entitlement policy matrix (frontend/backend/bot).
+4. Ops audit trail for alerts and entitlement changes.
+
+### P1 (after initial paid users)
+
+1. Billing/entitlement admin console.
+2. User-level support tooling (manual override, extension, refund notes).
+3. Conversion and retention dashboards.
+4. Churn diagnostics linked to alert quality and latency.
 
 ---
 
-Last Updated: `2026-03-11`
+## 7. Commercial Risk Controls
+
+- Revenue leakage: deny by default when entitlement token/state is missing.
+- Signal quality drift: publish monthly transparent accuracy summary.
+- Support load: keep alert evidence standardized in push payloads.
+- Compliance/ops: preserve immutable entitlement and push logs.
+
+---
+
+Last Updated: `2026-03-12`

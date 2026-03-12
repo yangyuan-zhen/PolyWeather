@@ -1,130 +1,90 @@
 # PolyWeather API 文档（v1.3）
 
-本文档描述当前后端真实可用接口（`web/app.py`）。  
-前端一般通过 Next.js BFF 路由代理访问这些接口。
+本文档基于当前代码（`web/app.py` + `frontend/app/api/*`）整理。  
+前端默认通过 Next.js BFF 路由访问后端。
 
 ---
 
 ## 1. 基础信息
 
-- 本地地址：`http://127.0.0.1:8000`
-- 生产地址：`http://<vps-ip>:8000` 或你绑定的 HTTPS 域名
+- 后端直连：`http://127.0.0.1:8000`
+- 前端 BFF：`https://polyweather-pro.vercel.app/api/*`
 - 返回格式：`application/json`
-- 缓存策略：
-  - 后端分析缓存：默认 5 分钟（Ankara 特殊口径 60 秒）
-  - 前端详情缓存：5 分钟 + revision 检查 + 后台静默刷新
-  - 前端 BFF HTTP 缓存（Vercel 层）：
-    - `/api/cities`：`ETag` + `Cache-Control`（`s-maxage=300`）
-    - `/api/city/{name}/summary`：`ETag` + `Cache-Control`（`s-maxage=20`）
-    - `/api/history/{name}`：`ETag` + `Cache-Control`（`s-maxage=60`）
-    - `summary?force_refresh=true`：`Cache-Control: no-store`
-  - 手动刷新：`force_refresh=true` 强制绕过缓存
+- 口径说明：
+  - 结算导向分析以温度最高值和温度桶概率为核心。
+  - Ankara 增强使用 MGM，主站固定 `17130`。
+  - Meteoblue 已移除，不再出现在任何有效字段中。
 
 ---
 
-## 2. API 思维导图
+## 2. 请求链路
 
 ```mermaid
-flowchart TD
-    A["PolyWeather API"]
-
-    subgraph E["接口分组"]
-        E1["GET /api/cities"]
-        E2["GET /api/city/{name}"]
-        E3["GET /api/city/{name}/summary"]
-        E4["GET /api/city/{name}/detail"]
-        E5["GET /api/history/{name}"]
-    end
-
-    subgraph O["关键对象"]
-        O1["current"]
-        O2["forecast"]
-        O3["probabilities (mu + distribution)"]
-        O4["multi_model / multi_model_daily"]
-        O5["market_scan (P0 只读)"]
-    end
-
-    A --> E
-    A --> O
+flowchart LR
+    FE["Browser / Dashboard"] --> BFF["Next.js Route Handlers (/api/*)"]
+    BFF --> API["FastAPI (/web/app.py)"]
+    API --> WX["Weather Collector"]
+    API --> ANA["DEB + Trend + Probabilities + Market Scan"]
+    ANA --> PM["Polymarket Read-only Layer"]
 ```
 
 ---
 
 ## 3. 接口总览
 
-| 接口                       | 方法 | 用途                                  |
-| :------------------------- | :--- | :------------------------------------ |
-| `/api/cities`              | GET  | 城市清单与地图基础信息                |
-| `/api/city/{name}`         | GET  | 城市主分析数据（侧栏/今日分析主来源） |
-| `/api/city/{name}/summary` | GET  | 轻量摘要（首屏预热/低开销更新）       |
-| `/api/city/{name}/detail`  | GET  | 聚合详情 + Polymarket P0 只读市场层   |
-| `/api/history/{name}`      | GET  | 历史对账数据                          |
+| 接口 | 方法 | 用途 |
+| :-- | :-- | :-- |
+| `/api/cities` | GET | 监控城市列表（地图/侧栏） |
+| `/api/city/{name}` | GET | 城市主分析（今日分析核心数据） |
+| `/api/city/{name}/summary` | GET | 轻量摘要（首屏预热/低成本轮询） |
+| `/api/city/{name}/detail` | GET | 聚合详情（含 `market_scan`） |
+| `/api/history/{name}` | GET | 历史对账数据 |
 
 ---
 
-## 4. 关键接口详解
+## 4. 关键接口说明
 
 ### 4.1 `GET /api/cities`
 
-返回监控城市列表（地图 Marker 与侧边栏基础数据）。
+返回监控城市清单。
 
-示例：
+关键字段：
 
-```json
-{
-  "cities": [
-    {
-      "name": "ankara",
-      "display_name": "Ankara",
-      "lat": 39.9334,
-      "lon": 32.8597,
-      "risk_level": "medium",
-      "risk_emoji": "🟠",
-      "airport": "Esenboğa",
-      "icao": "LTAC",
-      "temp_unit": "celsius",
-      "is_major": true
-    }
-  ]
-}
-```
+- `name`, `display_name`
+- `lat`, `lon`
+- `risk_level`, `risk_emoji`
+- `airport`, `icao`
+- `temp_unit`（`celsius` / `fahrenheit`）
 
 ### 4.2 `GET /api/city/{name}`
 
-主数据接口，前端详情面板和今日分析最常用。
+主分析接口，返回当前实况、预报、概率、趋势、AI 分析等。
 
 可选参数：
 
 - `force_refresh=true|false`
 
-核心字段：
+关键字段：
 
-- `name`, `display_name`, `local_date`, `local_time`, `temp_symbol`
-- `risk`
-- `current`
-- `forecast`
+- `current`（温度、今日最高、METAR 观测时间、原始 METAR）
+- `forecast`（今日及多日高温、日出日落、日照时长）
 - `mgm`, `mgm_nearby`
 - `multi_model`, `multi_model_daily`
-- `deb`
-- `ensemble`
+- `deb`, `ensemble`
 - `probabilities`（`mu` + `distribution`）
 - `trend`, `peak`
 - `hourly`, `hourly_next_48h`
-- `source_forecasts`（当前只保留 `weather_gov`）
-- `market_scan`
-- `updated_at`
-
-说明：
-
-- `current.raw_metar` 是原始 METAR 报文。
-- Ankara 专项增强使用 MGM 站网，领先站固定 `17130`。
-- Meteoblue 已彻底移除，不再出现在接口字段中。
+- `source_forecasts.weather_gov`
 
 ### 4.3 `GET /api/city/{name}/summary`
 
-轻量温度摘要，用于地图首屏预热和低成本刷新。
+轻量摘要接口，适合高频刷新列表。
 
-典型字段：
+可选参数：
+
+- `force_refresh=true|false`
+
+关键字段：
 
 - `name`, `display_name`, `icao`
 - `local_time`, `temp_symbol`
@@ -133,21 +93,17 @@ flowchart TD
 - `risk.level`, `risk.warning`
 - `updated_at`
 
-缓存说明：
-
-- 通过前端 BFF 访问时，默认返回 `ETag` 与可缓存 `Cache-Control`。
-- 当 `force_refresh=true` 时，BFF 强制 `no-store`，用于人工排障与即时刷新。
-
 ### 4.4 `GET /api/city/{name}/detail`
 
-聚合视图接口，包含天气分析和市场只读层。
+聚合详情接口，市场分析与未来日期分析都依赖该接口。
 
 可选参数：
 
 - `force_refresh=true|false`
-- `market_slug=<slug>`（调试/定向市场匹配）
+- `market_slug=<slug>`
+- `target_date=YYYY-MM-DD`
 
-关键结构：
+关键返回块：
 
 - `overview`
 - `official`
@@ -158,133 +114,112 @@ flowchart TD
 - `risk`
 - `ai_analysis`
 
-`market_scan`（P0 只读）重点字段：
+`market_scan` 重点字段：
 
-- `primary_market`, `selected_condition_id`, `selected_slug`
-- `yes_token`, `no_token`
+- `available`, `selected_date`, `selected_slug`, `signal_label`
 - `yes_buy`, `yes_sell`, `no_buy`, `no_sell`
-- `market_price`, `model_probability`, `edge_percent`
-- `temperature_bucket`
-- `top_buckets`（前端展示前会再去重）
-- `signal_label`（`BUY YES` / `BUY NO` / `MONITOR`）
-- `websocket.asset_ids`, `websocket.condition_ids`（订阅标识，不涉及下单）
-- `primary_market.tradable`（是否可交易）
-- `primary_market.tradable_reason`（不可交易原因）
-- `primary_market.ended_at_utc`（UTC 结束时刻）
-- `primary_market.accepting_orders`（是否仍接收订单）
+- `temperature_bucket`, `forecast_bucket`, `top_buckets`
+- `anchor_model`, `anchor_high`, `anchor_settlement`
+- `open_meteo_settlement`（兼容旧字段，当前与 `anchor_settlement` 同值）
+- `primary_market.tradable`, `primary_market.tradable_reason`
+- `primary_market.accepting_orders`, `primary_market.ended_at_utc`
 
-注意：
+说明：
 
-- 后端已做温度桶去重与方向优先（优先与主市场同方向的 `or higher`/`or lower` 桶）。
-- 前端还有二次去重兜底，避免重复温度桶刷屏。
-- 错价雷达推送前会二次校验交易状态，若市场已不可交易（`closed` / inactive / 不接单 / 过 `endDate`）会跳过。
+- 当前错价锚点不是单一 Open-Meteo，而是“多模型最高温锚点”。
+- 推送层会再次校验市场可交易性，不可交易市场会跳过。
 
 ### 4.5 `GET /api/history/{name}`
 
-历史对账数据来源。
+历史对账接口。
 
-示例：
+关键字段：
 
-```json
-{
-  "history": [
-    {
-      "date": "2026-03-07",
-      "actual": 7.0,
-      "deb": 6.5,
-      "mu": 7.2,
-      "mgm": 8.0
-    }
-  ]
-}
+- `date`
+- `actual`
+- `deb`
+- `mu`
+- `mgm`
+
+---
+
+## 5. 缓存与刷新策略（当前已实现）
+
+### 5.1 FastAPI 后端缓存
+
+- `_analyze` 结果内存缓存：默认 5 分钟
+- Ankara 特例：60 秒
+- `force_refresh=true`：绕过后端缓存
+
+### 5.2 Next.js BFF HTTP 缓存（Vercel）
+
+- `GET /api/cities`
+  - `ETag`
+  - `Cache-Control: public, max-age=0, s-maxage=300, stale-while-revalidate=1800`
+- `GET /api/city/{name}/summary`
+  - `ETag`
+  - `Cache-Control: public, max-age=0, s-maxage=20, stale-while-revalidate=60`
+- `GET /api/history/{name}`
+  - `ETag`
+  - `Cache-Control: public, max-age=0, s-maxage=60, stale-while-revalidate=300`
+- `summary?force_refresh=true`
+  - `Cache-Control: no-store`
+
+### 5.3 前端本地缓存
+
+- `sessionStorage`
+  - 城市详情缓存（5 分钟 TTL + revision 探测）
+- `localStorage`
+  - 上次选中城市
+  - 侧栏风险分组折叠状态
+
+### 5.4 尚未引入（当前明确未做）
+
+- Service Worker Cache API
+- IndexedDB
+
+---
+
+## 6. 常用调试示例
+
+### 6.1 查询未来日期 `market_scan`
+
+```bash
+curl -s "http://127.0.0.1:8000/api/city/ankara/detail?force_refresh=true&target_date=2026-03-12" \
+| python3 -c "import sys,json; m=json.load(sys.stdin).get('market_scan',{}); print({k:m.get(k) for k in ['available','selected_date','anchor_model','anchor_high','anchor_settlement','yes_buy','no_buy']})"
 ```
 
----
-
-## 5. 请求链路（以 `/api/city/{name}` 为例）
-
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant API as FastAPI
-    participant WX as Weather Collector
-    participant PM as Polymarket RO Layer
-
-    FE->>API: GET /api/city/{name}?force_refresh=...
-    API->>WX: fetch_all_sources(city)
-    WX-->>API: METAR / MGM / Open-Meteo / weather.gov / Multi-model
-    API->>API: DEB + trend + probability
-    API->>PM: build_market_scan(...)
-    PM-->>API: market_scan (read-only)
-    API-->>FE: merged city payload
-```
-
----
-
-## 6. 数据口径
-
-### 6.1 主观测
-
-- Aviation Weather / METAR 是全局主观测源。
-- Ankara：结算主站仍是 `LTAC`，领先信号强化使用 MGM（`17130`）。
-
-### 6.2 预测源
-
-- Open-Meteo
-- weather.gov（美国城市）
-- 多模型：ECMWF / GFS / ICON / GEM / JMA
-
-### 6.3 概率口径
-
-- `mu`：动态分布中心，不是固定结算值。
-- `distribution`：按温度桶输出概率分布，面向结算决策而非通用天气展示。
-
----
-
-## 7. 常见问题
-
-### 7.1 接口 500
-
-- 先检查容器是否启动：`docker compose ps`
-- 查看日志：`docker compose logs -f polyweather_web`
-
-### 7.2 METAR 看起来“延迟”
-
-优先核对：
-
-- `current.obs_time`
-- `current.report_time`
-- `current.receipt_time`
-
-通常是上游发布节奏，不一定是本地轮询问题。
-
-### 7.3 前端仍显示旧内容
-
-- 确认 Vercel 已部署最新构建
-- 浏览器强刷（`Ctrl+F5`）
-- 检查是否命中前端 5 分钟 TTL
-
-### 7.4 为什么 VPS `:8000` 看不到 `ETag`？
-
-- `:8000` 是 FastAPI 后端直连口径，主要负责分析与数据聚合。
-- `ETag/304` 主要由前端 BFF 路由返回（Vercel 域名下的 `/api/*`）。
-- 验证缓存头请用前端域名，而不是后端直连 IP。
-
----
-
-## 8. 验收脚本
-
-项目内置缓存验收脚本：
+### 6.2 验证前端缓存头
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-输出 `Result: PASS` 代表以下链路均正常：
+### 6.3 观察错价雷达跳过原因
 
-- `ETag` 返回
-- `If-None-Match -> 304`
-- `force_refresh=true -> no-store`
+```bash
+docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
+```
+
+---
+
+## 7. 常见问题
+
+### 7.1 VPS `:8000` 为什么看不到 `ETag`？
+
+- `:8000` 是 FastAPI 直连层，主要负责聚合分析。
+- `ETag/304` 在前端 BFF（Vercel 的 `/api/*`）侧实现。
+
+### 7.2 为什么 `target_date` 有时没有市场价格？
+
+- 该日期可能没有可交易市场。
+- 或目标桶在市场里无可用报价（`yes_buy/no_buy` 缺失）。
+- 可先看 `market_scan.available` 与 `primary_market.tradable`。
+
+### 7.3 如何确认 Bot 后台循环是否启动？
+
+- Telegram 里发送 `/diag`。
+- 查看三类循环状态：错价雷达、Polygon 钱包监听、Polymarket 钱包异动监听。
 
 ---
 

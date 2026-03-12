@@ -1,6 +1,6 @@
 # PolyWeather Frontend
 
-This directory is the only web frontend in production.
+This directory contains the production web frontend.
 
 Production URL:
 - https://polyweather-pro.vercel.app/
@@ -8,23 +8,23 @@ Production URL:
 ## Stack
 
 - Next.js App Router
-- React (component-driven dashboard)
+- React (dashboard component architecture)
 - Tailwind CSS
-- Leaflet (map runtime)
-- Chart.js (charts with manual lifecycle wrapper)
-- Typed store + typed data client
+- Leaflet (map)
+- Chart.js
+- Typed dashboard store + typed data client
 
-## Production Model
+## Runtime Model
 
-- Vercel serves the web UI and BFF route handlers
-- FastAPI on VPS serves weather APIs only
-- The old FastAPI static website has been removed
-- The production page shell is React-driven (`components/dashboard/*`), with no runtime dependency on `public/static/app.js`
+- Vercel hosts UI + BFF route handlers.
+- FastAPI on VPS provides weather/analysis APIs.
+- Browser never calls backend directly in normal flow.
 
-Current request flow:
-- Browser -> Vercel frontend
-- React store/client -> Next route handlers
-- Next route handlers -> FastAPI API
+Request path:
+
+1. Browser -> `https://polyweather-pro.vercel.app`
+2. Frontend -> Next route handlers (`/api/*`)
+3. Route handlers -> FastAPI (`POLYWEATHER_API_BASE_URL`)
 
 ## Local Development
 
@@ -38,41 +38,73 @@ npm run dev
 Default local URL:
 - http://localhost:3000
 
-## Required Environment Variable
+## Required Environment Variables
 
 ```env
 POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
 ```
 
-Examples:
-- `http://38.54.27.70:8000`
-- `https://api.example.com`
+Optional entitlement variables:
+
+```env
+POLYWEATHER_DASHBOARD_ACCESS_TOKEN=
+POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
+```
 
 ## Route Handlers
 
-Thin BFF routes currently exposed by Next:
 - `GET /api/cities`
 - `GET /api/city/[name]`
 - `GET /api/city/[name]/summary`
+- `GET /api/city/[name]/detail`
 - `GET /api/history/[name]`
 
-Current frontend behavior:
-- `/` keeps the world overview layout and initial city temperatures preload
-- Marker click: focus map + open right city card + render nearby stations
-- Right-card "今日日内分析": opens modal and freezes map motion
-- Blank-map click: closes right card only, without resetting camera
+Cache behavior:
+
+- `cities` / `summary` / `history` return `ETag` + `Cache-Control`.
+- `summary?force_refresh=true` returns `Cache-Control: no-store`.
+- `city/[name]` and `city/[name]/detail` are dynamic pass-through (no shared HTTP cache).
+
+## Frontend State & Local Cache
+
+- `sessionStorage`:
+  - city detail cache bundle (TTL 5 minutes)
+- `localStorage`:
+  - selected city
+  - sidebar risk-group collapse state
+- in-flight request de-duplication for city detail/summary/history/market scan
+
+## Entitlement
+
+- `frontend/middleware.ts` enforces dashboard/API access when `POLYWEATHER_DASHBOARD_ACCESS_TOKEN` is set.
+- BFF forwards backend entitlement token via `x-polyweather-entitlement` header when configured.
+
+## UI Notes
+
+- Left sidebar supports risk-group collapsible sections.
+- City rows keep local time and peak-time hints visible.
+- Future-date modal requests market scan with `target_date`.
+- Detail panel accessibility uses `inert` + blur when hidden.
+
+## Icons & Manifest
+
+- `frontend/app/favicon.ico`
+- `frontend/app/favicon-16x16.png`
+- `frontend/app/favicon-32x32.png`
+- `frontend/app/apple-touch-icon.png`
+- `frontend/app/site.webmanifest`
 
 ## Vercel Deployment
 
-1. Import the repo into Vercel
-2. Set Root Directory to `frontend`
-3. Set `POLYWEATHER_API_BASE_URL`
+1. Import repo into Vercel
+2. Set Root Directory = `frontend`
+3. Set env vars
 4. Deploy
 
-## Notes
+## Verification
 
-- Backend CORS must allow `https://polyweather-pro.vercel.app`
-- City detail cache TTL is 5 minutes with revision probe; manual refresh bypasses cache
-- UI layout and sizing remain aligned with the legacy visual contract after React migration
+```bash
+./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+```
 
-Last updated: 2026-03-09
+Last updated: `2026-03-12`

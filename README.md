@@ -14,121 +14,99 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## What This Project Does
+## Core Capabilities
 
-- Aggregates weather observations and forecasts for monitored cities.
-- Blends multi-model forecasts with DEB (Dynamic Error Balancing).
-- Computes settlement-oriented probability buckets (mu-centered distribution).
-- Maps model view to Polymarket read-only market data for mispricing/risk scan.
-- Delivers the same core logic to web dashboard and Telegram bot.
+- Aggregates real-time observations and forecasts for 20 monitored cities.
+- Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
+- Produces settlement-oriented probability buckets (`mu` + bucket distribution).
+- Maps weather model view to Polymarket read-only quotes for mispricing scan.
+- Serves the same analysis core to web dashboard and Telegram bot.
 
-## Overview Diagram
+## Architecture (Current)
+
+```mermaid
+flowchart LR
+    U["Users (Web / Telegram)"] --> FE["Next.js Frontend (Vercel)"]
+    U --> BOT["Telegram Bot (VPS)"]
+    FE --> API["FastAPI /web/app.py"]
+    BOT --> API
+
+    API --> WX["Weather Collector"]
+    WX --> METAR["Aviation Weather (METAR)"]
+    WX --> MGM["MGM (Turkey station network)"]
+    WX --> OM["Open-Meteo"]
+    WX --> NWS["weather.gov (US cities)"]
+
+    API --> ANALYSIS["DEB + Trend + Probability + Market Scan"]
+    ANALYSIS --> PM["Polymarket Read-only Layer"]
+```
+
+## Bot Runtime Layout
 
 ```mermaid
 flowchart TD
-    A["PolyWeather Pro"]
-
-    subgraph DL["Data Layer"]
-        DL1["METAR (Aviation Weather / METAR)"]
-        DL2["MGM (Turkey MGM)"]
-        DL3["Station 17130 (Ankara Center 17130)"]
-        DL4["Open-Meteo"]
-        DL5["weather.gov (US cities)"]
-        DL6["Polymarket (P0 Read-only)"]
-    end
-
-    subgraph AL["Analysis Layer"]
-        AL1["DEB (Dynamic Error Balancing)"]
-        AL2["Probability Engine (mu + buckets)"]
-        AL3["Trend Engine"]
-        AL4["Risk Profiles"]
-        AL5["Mispricing Radar"]
-    end
-
-    subgraph DEL["Delivery Layer"]
-        DEL1["FastAPI"]
-        DEL2["Next.js Dashboard"]
-        DEL3["Telegram Bot"]
-        DEL4["Alert Push"]
-    end
-
-    subgraph OL["Ops Layer"]
-        OL1["Docker Compose (VPS backend + bot)"]
-        OL2["Vercel (frontend)"]
-        OL3["Cache + force_refresh"]
-        OL4["Speed Insights"]
-    end
-
-    A --> DL
-    A --> AL
-    A --> DEL
-    A --> OL
+    E["bot_listener.py"] --> O["src/bot/orchestrator.py"]
+    O --> H["src/bot/handlers/*"]
+    O --> S["src/bot/services/*"]
+    O --> A["src/bot/analysis/*"]
+    O --> G["src/bot/command_guard.py"]
+    O --> R["src/bot/runtime_coordinator.py"]
 ```
 
-## Architecture
+## Source Policy
 
-```mermaid
-graph TD
-    User[Web / Telegram User] --> FE[Next.js Frontend on Vercel]
-    User --> Bot[Telegram Bot on VPS]
-    FE --> API[FastAPI Service]
-    Bot --> API
+| Domain | Current Policy |
+| :-- | :-- |
+| Primary observation | Aviation Weather / METAR |
+| Ankara enhancement | MGM + nearby stations, lead station fixed to `17130` |
+| Forecast baseline | Open-Meteo + multi-model (ECMWF/GFS/ICON/GEM/JMA) |
+| US official context | weather.gov |
+| Market layer | Polymarket P0 read-only discovery + quotes |
+| Removed source | Meteoblue (fully removed from runtime and docs) |
 
-    API --> WX[Weather Data Collector]
-    WX --> METAR[METAR / Aviation Weather]
-    WX --> MGM[MGM API / nearby stations]
-    WX --> OM[Open-Meteo]
-    WX --> NWS[weather.gov]
+## Monitored Cities (20)
 
-    API --> DEB[DEB + Trend + Probability Engines]
-    API --> PM[Polymarket Read-only Layer]
-    PM --> Gamma[Gamma API]
-    PM --> CLOB[CLOB / py-clob-client]
-```
+- Europe / Middle East: Ankara, London, Paris, Munich
+- APAC: Seoul, Hong Kong, Shanghai, Singapore, Tokyo, Wellington
+- Americas: Toronto, New York, Chicago, Dallas, Miami, Atlanta, Seattle, Buenos Aires, Sao Paulo
+- South Asia: Lucknow
 
-## Current Source Policy
+## Major Updates (2026-03-12)
 
-| Domain              | Source Policy                                        |
-| :------------------ | :--------------------------------------------------- |
-| Primary observation | Aviation Weather / METAR                             |
-| Ankara enhancement  | MGM + nearby stations, lead station fixed to `17130` |
-| Forecast baseline   | Open-Meteo                                           |
-| US official context | weather.gov                                          |
-| Market layer        | Polymarket P0 read-only discovery + quotes           |
-| Removed source      | Meteoblue (fully removed from code and docs)         |
+1. Bot architecture refactor completed:
+   - `bot_listener.py` is now a thin entrypoint.
+   - Core runtime moved to orchestrator + handlers/services/analysis layers.
+   - Startup loops managed by `StartupCoordinator`, with `/diag` diagnostics.
+2. Mispricing radar hardened:
+   - Anchor changed from single Open-Meteo settlement to multi-model highest-high anchor.
+   - Skip non-tradable markets (`closed`, inactive, not accepting orders, or past end time).
+   - Future-date scan supported via `target_date` in detail aggregate endpoint.
+3. Wallet activity watcher upgraded:
+   - Wallet aliases (`POLYMARKET_WALLET_ACTIVITY_USER_ALIASES`) supported.
+   - Telegram link preview toggle (`POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW`) supported.
+   - Debounce + immediate delta push controls reduce noisy spam bursts.
+4. Frontend P0+P1 cache and UX improvements:
+   - BFF `ETag + 304` on `/api/cities`, `/api/city/{name}/summary`, `/api/history/{name}`.
+   - `force_refresh=true` on summary keeps `Cache-Control: no-store`.
+   - `sessionStorage` city-detail cache + background summary revision probe.
+   - `localStorage` persistence for selected city and risk-group collapse state.
+   - Detail panel accessibility fix (`inert` + active-element blur).
+5. Observability:
+   - Vercel Speed Insights integrated.
+   - Telegram alert/watcher startup diagnostics exposed through `/diag`.
 
-## Recent Changes (2026-03-12)
+## Repository Layout
 
-- Removed all Meteoblue API integration and references.
-- Added frontend BFF `ETag + Cache-Control` for:
-  - `/api/cities`
-  - `/api/city/{name}/summary` (`force_refresh=true` keeps `no-store`)
-  - `/api/history/{name}`
-- Added frontend state persistence:
-  - selected city in `localStorage`
-  - risk-group collapse state in sidebar `localStorage`
-  - background summary revision check to silently refresh stale detail cache
-- Mispricing radar safety hardening:
-  - skip non-tradable markets (`closed`, inactive, not accepting orders, or past `endDate`)
-  - propagate tradable state in `market_scan.primary_market`
-- AI decision guard:
-  - peak-window state (`before` / `in_window` / `past`) now explicitly injected into AI context
-  - before-peak state now forbids "locked/confirmed floor" style conclusions
-- Fixed market top-bucket rendering path by deduplicating repeated temperature buckets.
-- Added frontend fallback guard when market top buckets collapse to low-quality duplicates.
-- Fixed detail panel accessibility issue (`aria-hidden` focus conflict) using `inert` + active-element blur.
-- Added Vercel Speed Insights integration in `frontend/app/layout.tsx`.
-
-## Repositories and Runtime Paths
-
-- Frontend: `frontend/` (Next.js App Router)
-- Backend API: `web/app.py` and `src/`
-- Telegram runtime: `bot_listener.py` + `src/analysis/*`
+- Frontend: `frontend/`
+- Backend API: `web/app.py`, `src/`
+- Telegram bot runtime: `bot_listener.py`, `src/bot/*`
+- Wallet watchers: `src/onchain/*`
+- Ops scripts: `scripts/`
 - Docs: `docs/`
 
 ## Quick Start
 
-### Backend + Bot (VPS / Docker)
+### Backend + Bot (Docker)
 
 ```bash
 docker compose up -d --build
@@ -142,14 +120,14 @@ npm install
 npm run dev
 ```
 
-### Frontend production build check
+### Frontend production build
 
 ```bash
 cd frontend
 npm run build
 ```
 
-## Operations Verification
+## Ops Verification
 
 ### Validate frontend cache headers (`ETag` / `304` / `force_refresh=no-store`)
 
@@ -157,31 +135,46 @@ npm run build
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-### Watch mispricing radar push decisions
+### Watch mispricing radar decisions
 
 ```bash
 docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
 ```
 
-## Command Surface (Telegram)
+### Watch wallet activity watcher startup and pushes
 
-| Command        | Purpose                       |
-| :------------- | :---------------------------- |
-| `/city <name>` | City real-time analysis       |
-| `/deb <name>`  | DEB historical reconciliation |
-| `/top`         | User leaderboard              |
-| `/help`        | Help and command usage        |
+```bash
+docker compose logs -f polyweather | egrep "wallet activity watcher started|wallet activity pushed|wallet activity cycle failed"
+```
+
+### Check bot startup diagnosis in Telegram
+
+```text
+/diag
+```
+
+## Telegram Command Surface
+
+| Command | Purpose |
+| :-- | :-- |
+| `/city <name>` | City real-time analysis |
+| `/deb <name>` | DEB historical reconciliation |
+| `/top` | User leaderboard |
+| `/id` | Show current chat ID |
+| `/diag` | Bot startup diagnostics and loop status |
+| `/help` | Help and usage |
 
 ## Documentation Index
 
+- Chinese overview: `README_ZH.md`
 - Chinese API guide: `docs/API_ZH.md`
 - Commercial roadmap: `docs/COMMERCIALIZATION.md`
 - Tech debt (EN): `docs/TECH_DEBT.md`
 - Tech debt (ZH): `docs/TECH_DEBT_ZH.md`
-- Chinese overview: `README_ZH.md`
+- Frontend delivery report: `FRONTEND_REDESIGN_REPORT.md`
 
 ## Status
 
 - Version: `v1.3`
+- Test status: `31 passed` (`.\\venv\\Scripts\\python.exe -m pytest -q`)
 - Last Updated: `2026-03-12`
-- Runtime: Stable (web + bot + market read-only layer in production)
