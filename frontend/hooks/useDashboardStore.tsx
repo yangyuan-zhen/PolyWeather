@@ -163,6 +163,9 @@ function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
   return `${cityName}::${normalizedDate}`;
 }
 
+const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
+const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
+
 export function DashboardStoreProvider({
   children,
 }: {
@@ -204,6 +207,8 @@ export function DashboardStoreProvider({
   const [isGuideOpen, setIsGuideOpen] = useState(false);
 
   const mapStopMotionRef = useRef<() => void>(() => {});
+  const hydratedSelectionRef = useRef(false);
+  const backgroundSummaryCheckAtRef = useRef<Record<string, number>>({});
   const citySummariesRef = useRef<Record<string, CitySummary>>(
     Object.fromEntries(
       Object.entries(initialCache.details).map(([cityName, detail]) => [
@@ -235,10 +240,55 @@ export function DashboardStoreProvider({
     citySummariesRef.current = citySummariesByName;
   }, [citySummariesByName]);
 
+  const scheduleBackgroundDetailRefresh = (
+    cityName: string,
+    cached: CityDetail,
+    cachedMeta?: { cachedAt: number; revision: string },
+  ) => {
+    const nowTs = Date.now();
+    const lastTs = backgroundSummaryCheckAtRef.current[cityName] || 0;
+    if (nowTs - lastTs < BACKGROUND_SUMMARY_REFRESH_MS) {
+      return;
+    }
+    backgroundSummaryCheckAtRef.current[cityName] = nowTs;
+
+    void dashboardClient
+      .getCitySummary(cityName)
+      .then(async (summary) => {
+        const revision = getCityRevision(summary);
+        if (!revision || revision === cachedMeta?.revision) {
+          return;
+        }
+
+        const latestDetail = await dashboardClient.getCityDetail(cityName, {
+          force: false,
+        });
+        const detail = mergeAiAnalysisIfStable(cached, latestDetail);
+
+        setCityDetailsByName((current) => ({
+          ...current,
+          [cityName]: detail,
+        }));
+        setCitySummariesByName((current) => ({
+          ...current,
+          [cityName]: toCitySummary(detail),
+        }));
+        setCityDetailMetaByName((current) => ({
+          ...current,
+          [cityName]: {
+            cachedAt: Date.now(),
+            revision: getCityRevision(detail),
+          },
+        }));
+      })
+      .catch(() => {});
+  };
+
   const ensureCityDetail = async (cityName: string, force = false) => {
     const cached = cityDetailsByName[cityName];
     const cachedMeta = cityDetailMetaByName[cityName];
     if (!force && cached && dashboardClient.isCityDetailFresh(cachedMeta)) {
+      scheduleBackgroundDetailRefresh(cityName, cached, cachedMeta);
       return cached;
     }
 
@@ -386,6 +436,35 @@ export function DashboardStoreProvider({
       setLoadingState((current) => ({ ...current, cityDetail: false }));
     }
   };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (selectedCity) {
+      window.localStorage.setItem(SELECTED_CITY_STORAGE_KEY, selectedCity);
+    } else {
+      window.localStorage.removeItem(SELECTED_CITY_STORAGE_KEY);
+    }
+  }, [selectedCity]);
+
+  useEffect(() => {
+    if (hydratedSelectionRef.current) return;
+    if (!cities.length) return;
+    if (selectedCity) {
+      hydratedSelectionRef.current = true;
+      return;
+    }
+    if (typeof window === "undefined") return;
+
+    hydratedSelectionRef.current = true;
+    const stored = String(
+      window.localStorage.getItem(SELECTED_CITY_STORAGE_KEY) || "",
+    )
+      .trim()
+      .toLowerCase();
+    if (!stored) return;
+    if (!cities.some((city) => city.name === stored)) return;
+    void selectCity(stored);
+  }, [cities, selectedCity, selectCity]);
 
   const refreshSelectedCity = async () => {
     if (!selectedCity) return;

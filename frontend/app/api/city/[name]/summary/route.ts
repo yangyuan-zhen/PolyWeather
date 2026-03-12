@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { buildBackendRequestHeaders } from "@/lib/backend-auth";
+import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -16,6 +17,7 @@ export async function GET(
 
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
+  const bypassCache = forceRefresh === "true";
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/summary?force_refresh=${forceRefresh}`;
 
   try {
@@ -31,7 +33,18 @@ export async function GET(
       );
     }
     const data = await res.json();
-    return NextResponse.json(data);
+    if (bypassCache) {
+      return NextResponse.json(data, {
+        headers: {
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+    return buildCachedJsonResponse(
+      req,
+      data,
+      "public, max-age=0, s-maxage=20, stale-while-revalidate=60",
+    );
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch city summary", detail: String(error) },

@@ -8,9 +8,44 @@ import { CityListItem } from "@/lib/dashboard-types";
 
 type RiskGroupKey = "high" | "medium" | "low" | "other";
 
+const GROUP_STATE_STORAGE_KEY = "polyWeather_sidebar_groups_v1";
+const DEFAULT_EXPANDED_GROUPS: Record<RiskGroupKey, boolean> = {
+  high: true,
+  medium: true,
+  low: false,
+  other: false,
+};
+
 function toRiskGroup(level?: string): RiskGroupKey {
   if (level === "high" || level === "medium" || level === "low") return level;
   return "other";
+}
+
+function normalizeExpandedGroups(
+  value: unknown,
+): Record<RiskGroupKey, boolean> {
+  if (!value || typeof value !== "object") {
+    return DEFAULT_EXPANDED_GROUPS;
+  }
+  const candidate = value as Partial<Record<RiskGroupKey, unknown>>;
+  return {
+    high:
+      typeof candidate.high === "boolean"
+        ? candidate.high
+        : DEFAULT_EXPANDED_GROUPS.high,
+    medium:
+      typeof candidate.medium === "boolean"
+        ? candidate.medium
+        : DEFAULT_EXPANDED_GROUPS.medium,
+    low:
+      typeof candidate.low === "boolean"
+        ? candidate.low
+        : DEFAULT_EXPANDED_GROUPS.low,
+    other:
+      typeof candidate.other === "boolean"
+        ? candidate.other
+        : DEFAULT_EXPANDED_GROUPS.other,
+  };
 }
 
 export function CitySidebar() {
@@ -18,12 +53,9 @@ export function CitySidebar() {
   const { t } = useI18n();
   const selectedCity = store.selectedCity;
   const riskOrder = { high: 0, medium: 1, low: 2, other: 3 };
-  const [expandedGroups, setExpandedGroups] = useState<Record<RiskGroupKey, boolean>>({
-    high: true,
-    medium: true,
-    low: false,
-    other: false,
-  });
+  const [expandedGroups, setExpandedGroups] = useState<
+    Record<RiskGroupKey, boolean>
+  >(DEFAULT_EXPANDED_GROUPS);
 
   const sortedCities = useMemo(() => [...store.cities].sort((a, b) => {
     const aSelected = a.name === selectedCity;
@@ -60,6 +92,26 @@ export function CitySidebar() {
       current[groupKey] ? current : { ...current, [groupKey]: true },
     );
   }, [selectedCity, store.cities]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = window.localStorage.getItem(GROUP_STATE_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw);
+      setExpandedGroups(normalizeExpandedGroups(parsed));
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(
+        GROUP_STATE_STORAGE_KEY,
+        JSON.stringify(expandedGroups),
+      );
+    } catch {}
+  }, [expandedGroups]);
 
   const groupMeta: Array<{ key: RiskGroupKey; label: string }> = [
     { key: "high", label: t("sidebar.group.high") },

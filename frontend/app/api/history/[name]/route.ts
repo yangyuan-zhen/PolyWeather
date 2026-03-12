@@ -1,10 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { buildBackendRequestHeaders } from "@/lib/backend-auth";
+import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
 export async function GET(
-  _req: Request,
+  req: NextRequest,
   context: { params: Promise<{ name: string }> },
 ) {
   if (!API_BASE) {
@@ -30,7 +31,11 @@ export async function GET(
       );
     }
     const data = await res.json();
-    return NextResponse.json(data);
+    return buildCachedJsonResponse(
+      req,
+      data,
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
+    );
   } catch (error) {
     return NextResponse.json(
       { error: "Failed to fetch history", detail: String(error) },
