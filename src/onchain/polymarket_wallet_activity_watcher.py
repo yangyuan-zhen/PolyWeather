@@ -152,12 +152,11 @@ def _market_url(position: Dict[str, Any]) -> str:
     slug = str(position.get("slug") or "").strip()
     event_slug = str(position.get("event_slug") or "").strip()
 
-    if slug and event_slug:
-        return f"https://polymarket.com/event/{event_slug}/{slug}"
-    if slug:
-        return f"https://polymarket.com/market/{slug}"
+    # Prefer event-level URL first: Telegram preview is usually more stable.
     if event_slug:
         return f"https://polymarket.com/event/{event_slug}"
+    if slug:
+        return f"https://polymarket.com/market/{slug}"
     return ""
 
 
@@ -519,6 +518,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     users = _parse_addresses(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
     user_aliases = _parse_address_aliases(
         os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
+        or os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS_ALIASES")
     )
 
     if not enabled:
@@ -586,6 +586,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         logger.info(
             f"polymarket wallet activity watcher started users={len(users)} "
             f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
+            f"aliases={len(user_aliases)} link_preview={link_preview} "
             f"min_avg_price_delta={min_avg_price_delta} "
             f"immediate_on_size_delta={immediate_on_size_delta} "
             f"immediate_size_delta_min={immediate_size_delta_min} "
