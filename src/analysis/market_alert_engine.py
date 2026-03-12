@@ -704,15 +704,16 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
             top_bucket_rows = all_bucket_rows[:4]
 
     market_url = None
+    primary_market = scan.get("primary_market") or {}
+    if not isinstance(primary_market, dict):
+        primary_market = {}
     websocket = scan.get("websocket") or {}
     if isinstance(websocket, dict):
         market_url = str(websocket.get("market_url") or "").strip() or None
     if not market_url:
-        primary_market = scan.get("primary_market") or {}
-        if isinstance(primary_market, dict):
-            slug = str(primary_market.get("slug") or "").strip()
-            if slug:
-                market_url = f"https://polymarket.com/market/{slug}"
+        slug = str(primary_market.get("slug") or "").strip()
+        if slug:
+            market_url = f"https://polymarket.com/market/{slug}"
 
     anchor_today_high_c, anchor_model = _extract_multi_model_anchor_high_c(city_weather)
     anchor_settlement = wu_round(anchor_today_high_c)
@@ -749,6 +750,15 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
         "open_meteo_today_high_c": anchor_today_high_c,
         "open_meteo_settlement": anchor_settlement,
         "forecast_bucket": forecast_bucket,
+        "selected_date": scan.get("selected_date"),
+        "selected_slug": scan.get("selected_slug"),
+        "primary_market": primary_market,
+        "market_active": primary_market.get("active"),
+        "market_closed": primary_market.get("closed"),
+        "market_accepting_orders": primary_market.get("accepting_orders"),
+        "market_tradable": primary_market.get("tradable"),
+        "market_tradable_reason": primary_market.get("tradable_reason"),
+        "market_ended_at_utc": primary_market.get("ended_at_utc"),
         "primary_market_url": market_url,
         "market_url": forecast_market_url or market_url,
     }

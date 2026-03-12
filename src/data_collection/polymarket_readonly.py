@@ -16,7 +16,7 @@ import re
 import threading
 import time
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -51,6 +51,22 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     except Exception:
         return default
+
+
+def _safe_bool(value: Any) -> Optional[bool]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
 
 
 def _normalize_text(value: Any) -> str:
@@ -178,6 +194,24 @@ def _extract_iso_date(value: Any) -> Optional[str]:
         except Exception:
             continue
     return None
+
+
+def _parse_iso_datetime_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    # Prefer timestamps that include a time component; plain dates are ambiguous.
+    if "T" not in text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _build_city_token_index() -> Dict[str, List[str]]:
@@ -448,20 +482,43 @@ class PolymarketReadOnlyLayer:
             or market.get("volume")
             or market.get("volume24hr")
         )
+        trade_state = self._market_trade_state(market)
+        primary_market_payload = {
+            "id": market.get("id"),
+            "question": market.get("question") or market.get("title"),
+            "slug": market_slug,
+            "condition_id": condition_id,
+            "end_date": market_date,
+            "active": trade_state.get("active"),
+            "closed": trade_state.get("closed"),
+            "accepting_orders": trade_state.get("accepting_orders"),
+            "ended_at_utc": trade_state.get("ended_at_utc"),
+            "tradable": trade_state.get("tradable"),
+            "tradable_reason": trade_state.get("reason"),
+            "liquidity": liquidity,
+            "volume": volume,
+        }
+        if not trade_state.get("tradable"):
+            scan["reason"] = (
+                "Matched market is not tradable."
+                + (
+                    f" reason={trade_state.get('reason')}"
+                    if trade_state.get("reason")
+                    else ""
+                )
+            )
+            scan["primary_market"] = primary_market_payload
+            scan["selected_condition_id"] = condition_id
+            scan["selected_slug"] = market_slug
+            scan["liquidity"] = liquidity
+            scan["volume"] = volume
+            return scan
 
         tokens = self._extract_market_tokens(market)
         yes_token, no_token = self._resolve_yes_no_tokens(tokens)
         if not yes_token or not no_token:
             scan["reason"] = "Matched market has no resolvable YES/NO token pair."
-            scan["primary_market"] = {
-                "condition_id": condition_id,
-                "end_date": market_date,
-                "id": market.get("id"),
-                "liquidity": liquidity,
-                "question": market.get("question") or market.get("title"),
-                "slug": market_slug,
-                "volume": volume,
-            }
+            scan["primary_market"] = primary_market_payload
             scan["selected_condition_id"] = condition_id
             scan["selected_slug"] = market_slug
             scan["liquidity"] = liquidity
@@ -541,17 +598,7 @@ class PolymarketReadOnlyLayer:
             {
                 "available": True,
                 "reason": None,
-                "primary_market": {
-                    "id": market.get("id"),
-                    "question": market.get("question") or market.get("title"),
-                    "slug": market_slug,
-                    "condition_id": condition_id,
-                    "end_date": market_date,
-                    "active": bool(market.get("active", False)),
-                    "closed": bool(market.get("closed", False)),
-                    "liquidity": liquidity,
-                    "volume": volume,
-                },
+                "primary_market": primary_market_payload,
                 "selected_condition_id": condition_id,
                 "selected_slug": market_slug,
                 "market_price": market_price,
@@ -585,6 +632,46 @@ class PolymarketReadOnlyLayer:
             }
         )
         return scan
+
+    def _market_trade_state(self, market: Dict[str, Any]) -> Dict[str, Any]:
+        active = _safe_bool(market.get("active"))
+        closed_raw = _safe_bool(market.get("closed"))
+        closed = bool(closed_raw) if closed_raw is not None else False
+        accepting_orders = _safe_bool(
+            market.get("acceptingOrders", market.get("accepting_orders"))
+        )
+
+        ended_at = None
+        for key in ("endDate", "resolutionDate", "closedTime", "gameStartTime"):
+            parsed = _parse_iso_datetime_utc(market.get(key))
+            if parsed is not None:
+                ended_at = parsed
+                break
+
+        now_utc = datetime.now(timezone.utc)
+        tradable = True
+        reason = None
+        if closed:
+            tradable = False
+            reason = "closed"
+        elif active is False:
+            tradable = False
+            reason = "inactive"
+        elif accepting_orders is False:
+            tradable = False
+            reason = "not_accepting_orders"
+        elif ended_at is not None and ended_at <= now_utc:
+            tradable = False
+            reason = "past_end_time"
+
+        return {
+            "active": active,
+            "closed": closed,
+            "accepting_orders": accepting_orders,
+            "ended_at_utc": ended_at.isoformat() if ended_at is not None else None,
+            "tradable": tradable,
+            "reason": reason,
+        }
 
     def _derive_signal(
         self,
@@ -1274,6 +1361,8 @@ class PolymarketReadOnlyLayer:
             ]
         ] = []
         for market in candidate_markets:
+            if not self._market_trade_state(market).get("tradable"):
+                continue
             bucket_temp = self._extract_market_bucket_temp(market)
             if bucket_temp is None:
                 continue

@@ -3,7 +3,7 @@ import json
 import os
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -56,6 +56,39 @@ def _norm_prob(v: Any) -> Optional[float]:
     if n > 1.0:
         n = n / 100.0
     return max(0.0, min(1.0, n))
+
+
+def _optional_bool(value: Any) -> Optional[bool]:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
+def _parse_iso_datetime_utc(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    if "T" not in text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except Exception:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 def _parse_city_list(raw: Optional[str]) -> List[str]:
@@ -151,6 +184,63 @@ def _market_price_cap_ok(
             )
             return False
         return True
+
+    primary_market = market.get("primary_market") or {}
+    if not isinstance(primary_market, dict):
+        primary_market = {}
+    market_slug = (
+        str(market.get("selected_slug") or "").strip()
+        or str(primary_market.get("slug") or "").strip()
+        or "--"
+    )
+    active = market.get("market_active")
+    if active is None:
+        active = primary_market.get("active")
+    active = _optional_bool(active)
+    closed = market.get("market_closed")
+    if closed is None:
+        closed = primary_market.get("closed")
+    closed = _optional_bool(closed)
+    accepting_orders = market.get("market_accepting_orders")
+    if accepting_orders is None:
+        accepting_orders = primary_market.get(
+            "accepting_orders",
+            primary_market.get("acceptingOrders"),
+        )
+    accepting_orders = _optional_bool(accepting_orders)
+    market_tradable = _optional_bool(market.get("market_tradable"))
+    tradable_reason = str(
+        market.get("market_tradable_reason")
+        or primary_market.get("tradable_reason")
+        or ""
+    ).strip()
+    ended_at = str(
+        market.get("market_ended_at_utc")
+        or primary_market.get("ended_at_utc")
+        or ""
+    ).strip()
+    ended_dt = _parse_iso_datetime_utc(ended_at)
+    is_past_end = ended_dt is not None and ended_dt <= datetime.now(timezone.utc)
+    if (
+        market_tradable is False
+        or closed is True
+        or active is False
+        or accepting_orders is False
+        or is_past_end
+    ):
+        reason = tradable_reason or ("past_end_time" if is_past_end else "market_not_tradable")
+        logger.info(
+            "trade alert skipped: market not tradable city={} slug={} reason={} active={} closed={} accepting_orders={} ended_at={}".format(
+                alert_payload.get("city"),
+                market_slug,
+                reason,
+                active,
+                closed,
+                accepting_orders,
+                ended_at or "--",
+            )
+        )
+        return False
 
     # Strict rule: use the bucket mapped from multi-model anchor settlement.
     forecast_bucket = market.get("forecast_bucket") or {}
@@ -310,7 +400,10 @@ def build_trade_alert_for_city(
 
     city_weather = _analyze(city, force_refresh=force_refresh)
     try:
-        aggregate_detail = _build_city_detail_payload(city_weather)
+        aggregate_detail = _build_city_detail_payload(
+            city_weather,
+            target_date=target_date,
+        )
         market_scan = aggregate_detail.get("market_scan")
         if isinstance(market_scan, dict):
             city_weather = {**city_weather, "market_scan": market_scan}
