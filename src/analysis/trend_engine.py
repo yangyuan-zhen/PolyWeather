@@ -385,34 +385,43 @@ def analyze_weather_trend(
     probabilities: List[Dict[str, Any]] = []
     forecast_miss_deg = 0.0
 
-    if (ens_p10 is not None and ens_p90 is not None) or fallback_sigma:
-        if not is_dead_market:
-            # Forecast miss magnitude
-            if max_so_far is not None and forecast_median is not None:
-                forecast_miss_deg = round(forecast_median - max_so_far, 1)
-    
-            fallback_center = forecast_median if forecast_median is not None else (forecast_high if forecast_high is not None else cur_temp)
-            center = ens_median if ens_median is not None else fallback_center
-    
-            # Reality-anchored μ
-            if (
-                max_so_far is not None
-                and forecast_median is not None
-                and peak_status in ("past", "in_window")
-                and max_so_far < forecast_median - 2.0
-            ):
-                if is_cooling or peak_status == "past":
-                    mu = max_so_far
-                else:
-                    mu = max_so_far + 0.5
+    if is_dead_market:
+        settled_wu = wu_round(max_so_far) if max_so_far is not None else 0
+        dead_msg = f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} (死盘确认)"
+        insights.append(dead_msg)
+        ai_features.append("🎲 状态: 确认死盘，结算已无悬念。")
+        if max_so_far is not None:
+            mu = max_so_far
+            probabilities = [
+                {"value": settled_wu, "range": f"[{settled_wu-0.5}~{settled_wu+0.5})", "probability": 1.0}
+            ]
+    elif (ens_p10 is not None and ens_p90 is not None) or fallback_sigma:
+        # Forecast miss magnitude
+        if max_so_far is not None and forecast_median is not None:
+            forecast_miss_deg = round(forecast_median - max_so_far, 1)
+
+        fallback_center = forecast_median if forecast_median is not None else (forecast_high if forecast_high is not None else cur_temp)
+        center = ens_median if ens_median is not None else fallback_center
+
+        # Reality-anchored μ
+        if (
+            max_so_far is not None
+            and forecast_median is not None
+            and peak_status in ("past", "in_window")
+            and max_so_far < forecast_median - 2.0
+        ):
+            if is_cooling or peak_status == "past":
+                mu = max_so_far
             else:
-                mu = (
-                    forecast_median * 0.7 + center * 0.3
-                    if forecast_median is not None and center is not None
-                    else center
-                )
-                if max_so_far is not None and mu is not None and max_so_far > mu:
-                    mu = max_so_far + (0.3 if not is_cooling else 0.0)
+                mu = max_so_far + 0.5
+        else:
+            mu = (
+                forecast_median * 0.7 + center * 0.3
+                if forecast_median is not None and center is not None
+                else center
+            )
+            if max_so_far is not None and mu is not None and max_so_far > mu:
+                mu = max_so_far + (0.3 if not is_cooling else 0.0)
 
         # Forecast miss severity for AI
         if forecast_miss_deg > 2.0 and peak_status in ("past", "in_window"):
@@ -431,7 +440,7 @@ def analyze_weather_trend(
         mu = probs_result.get("mu", mu)
         probabilities = probs_result.get("probabilities", [])
         sorted_probs = probs_result.get("sorted_probs", [])
-        
+
         if sorted_probs:
             prob_parts = [
                 f"{int(t)}{temp_symbol} [{t - 0.5}~{t + 0.5}) {p * 100:.0f}%"
@@ -441,17 +450,6 @@ def analyze_weather_trend(
                 prob_str = " | ".join(prob_parts)
                 insights.append(f"🎲 <b>结算概率</b> (μ={mu:.1f})：{prob_str}")
                 ai_features.append(f"🎲 数学概率分布：{prob_str}")
-
-    elif is_dead_market:
-        settled_wu = wu_round(max_so_far) if max_so_far is not None else 0
-        dead_msg = f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} (死盘确认)"
-        insights.append(dead_msg)
-        ai_features.append("🎲 状态: 确认死盘，结算已无悬念。")
-        if max_so_far is not None:
-            mu = max_so_far
-            probabilities = [
-                {"value": settled_wu, "range": f"[{settled_wu-0.5}~{settled_wu+0.5})", "probability": 1.0}
-            ]
 
     # === Actual exceeds forecast ===
     if max_so_far is not None and forecast_high is not None:

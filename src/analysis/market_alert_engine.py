@@ -1009,6 +1009,8 @@ def _build_telegram_messages_mispricing(
     city_weather: Dict[str, Any],
     rules: Dict[str, Dict[str, Any]],
     market_snapshot: Optional[Dict[str, Any]] = None,
+    suppression: Optional[Dict[str, Any]] = None,
+    map_url: Optional[str] = None,
 ) -> Dict[str, str]:
     temp_symbol = str(city_weather.get("temp_symbol") or "°C")
     city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
@@ -1019,8 +1021,12 @@ def _build_telegram_messages_mispricing(
 
     snapshot = market_snapshot or _extract_market_snapshot(city_weather)
     momentum = rules.get("momentum_spike", {})
+    center_deb = rules.get("ankara_center_deb_hit", {})
     local_time = str(city_weather.get("local_time") or "").strip()
     obs_time = str(current.get("obs_time") or "").strip()
+    suppressed = bool((suppression or {}).get("suppressed"))
+    has_active_trigger = any(rule.get("triggered") for rule in rules.values())
+    types_cn = "高温已过（暂停推送）" if suppressed else (_join_trigger_types_cn(rules) or "天气状态快照")
 
     delta_temp = _sf(momentum.get("delta_temp"))
     delta_min = momentum.get("delta_minutes")
@@ -1055,9 +1061,34 @@ def _build_telegram_messages_mispricing(
         or snapshot.get("primary_market_url")
         or ""
     ).strip()
+    final_map = map_url or "https://polyweather-pro.vercel.app/"
+    advice = _build_advice_cn(rules, temp_symbol, suppression=suppression)
 
-    lines_zh = [f"🚨 PolyWeather 错价雷达 [{city_name}]"]
+    center_line = ""
+    if center_deb.get("triggered"):
+        center_station = center_deb.get("center_station") or {}
+        center_name = center_station.get("name") or "Ankara Center"
+        center_temp = _sf(center_station.get("temp"))
+        deb_prediction = _sf(center_deb.get("deb_prediction"))
+        airport_temp = _sf(center_deb.get("airport_temp"))
+        lead_gap = _sf(center_deb.get("center_lead_vs_airport"))
+        if center_temp is not None and deb_prediction is not None:
+            center_line = (
+                f"Center信号：{center_name} {center_temp:.1f}{temp_symbol} 已达到 DEB {deb_prediction:.1f}{temp_symbol}"
+            )
+            if airport_temp is not None:
+                center_line += f" | 机场 {airport_temp:.1f}{temp_symbol}"
+            if lead_gap is not None:
+                center_line += f" | 领先 {lead_gap:+.1f}{temp_symbol}"
+
+    if snapshot.get("available"):
+        title_zh = "🚨 PolyWeather 错价雷达"
+    else:
+        title_zh = "🚨 PolyWeather 异动预警" if (has_active_trigger or suppressed) else "📍 PolyWeather 状态快照"
+
+    lines_zh = [f"{title_zh} [{city_name}]"]
     lines_zh.append("")
+    lines_zh.append(f"类型：{types_cn}")
     if anchor_high_c is not None and anchor_settle is not None:
         if anchor_model:
             lines_zh.append(
@@ -1071,6 +1102,8 @@ def _build_telegram_messages_mispricing(
         lines_zh.append("基准：多模型最高温 --（结算参考 --）")
     lines_zh.append(f"命中桶：{match_bucket_label} | Yes: {match_bucket_yes}")
     lines_zh.append("触发：该桶 Yes 价格 < 10c，疑似低估")
+    if center_line:
+        lines_zh.append(center_line)
     lines_zh.append("")
     lines_zh.append(f"动态：{dynamic_text}")
     if local_time or obs_time:
@@ -1080,17 +1113,21 @@ def _build_telegram_messages_mispricing(
             lines_zh.append(f"时间：当地 {local_time}")
         else:
             lines_zh.append(f"时间：观测 {obs_time}")
+    lines_zh.append(f"建议：{advice}")
     lines_zh.append("")
     if market_url:
         lines_zh.append(f"市场链接：{market_url}")
+    lines_zh.append(f"地图：{final_map}")
 
     lines_en = [
         f"🚨 PolyWeather Mispricing Radar [{city_name}]",
         "",
+        f"Type: {types_cn}",
         f"Now: {dynamic_text}",
     ]
     if market_url:
         lines_en.append(f"Market link: {market_url}")
+    lines_en.append(f"Map: {final_map}")
 
     return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
 
@@ -1297,6 +1334,8 @@ def build_trading_alerts(
         city_weather=city_weather,
         rules=rules,
         market_snapshot=market_snapshot,
+        suppression=suppression,
+        map_url=map_url,
     )
     evidence = _build_alert_evidence(
         city_weather=city_weather,

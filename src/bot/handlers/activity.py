@@ -1,0 +1,20 @@
+from __future__ import annotations
+
+from typing import Any
+
+from src.bot.io_layer import BotIOLayer
+
+
+class ActivityHandler:
+    def __init__(self, bot: Any, io_layer: BotIOLayer):
+        self.bot = bot
+        self.io_layer = io_layer
+
+    def register(self) -> None:
+        @self.bot.message_handler(func=lambda message: True, content_types=["text"])
+        def _activity(message):
+            self.handle(message)
+
+    def handle(self, message: Any) -> None:
+        self.io_layer.track_group_text_activity(message)
+
