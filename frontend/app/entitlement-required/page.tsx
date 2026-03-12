@@ -33,9 +33,17 @@ export default async function EntitlementRequiredPage({ searchParams }: Props) {
           Entitlement Required
         </h1>
         <p style={{ marginTop: 12, color: "#9fb2da", lineHeight: 1.6 }}>
-          This dashboard is protected. Append{" "}
-          <code>?access_token=&lt;your-token&gt;</code> to the URL once, and
-          the session cookie will be set automatically.
+          This dashboard is protected. If Supabase auth is enabled, please go to{" "}
+          <a
+            href={`/auth/login?next=${encodeURIComponent(nextPath)}`}
+            style={{ color: "#8fc5ff" }}
+          >
+            /auth/login
+          </a>{" "}
+          to sign in first.
+        </p>
+        <p style={{ marginTop: 12, color: "#9fb2da", lineHeight: 1.6 }}>
+          Legacy mode still supports <code>?access_token=&lt;your-token&gt;</code>.
         </p>
         <p style={{ marginTop: 12, color: "#9fb2da", lineHeight: 1.6 }}>
           Requested path: <code>{nextPath}</code>

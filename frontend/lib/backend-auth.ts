@@ -1,14 +1,67 @@
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { createSupabaseRouteClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
+
 export const BACKEND_ENTITLEMENT_HEADER = "x-polyweather-entitlement";
 
-export function buildBackendRequestHeaders(): HeadersInit {
-  const headers: HeadersInit = {
-    Accept: "application/json",
-  };
+type HeaderBuildResult = {
+  headers: HeadersInit;
+  response: NextResponse | null;
+};
 
-  const token = process.env.POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN?.trim();
-  if (token) {
-    headers[BACKEND_ENTITLEMENT_HEADER] = token;
+function extractBearerToken(headerValue: string | null) {
+  if (!headerValue) return "";
+  const parts = headerValue.trim().split(/\s+/);
+  if (parts.length === 2 && parts[0].toLowerCase() === "bearer") {
+    return parts[1];
+  }
+  return "";
+}
+
+export async function buildBackendRequestHeaders(
+  request: NextRequest,
+): Promise<HeaderBuildResult> {
+  const headers = new Headers({
+    Accept: "application/json",
+  });
+  const backendToken = process.env.POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN?.trim();
+  if (backendToken) {
+    headers.set(BACKEND_ENTITLEMENT_HEADER, backendToken);
   }
 
-  return headers;
+  const incomingAuth = extractBearerToken(request.headers.get("authorization"));
+  if (incomingAuth) {
+    headers.set("Authorization", `Bearer ${incomingAuth}`);
+    return { headers, response: null };
+  }
+
+  if (!hasSupabaseServerEnv()) {
+    return { headers, response: null };
+  }
+
+  const passthroughResponse = new NextResponse(null, { status: 200 });
+  const supabase = createSupabaseRouteClient(request, passthroughResponse);
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const accessToken = session?.access_token || "";
+  if (accessToken) {
+    headers.set("Authorization", `Bearer ${accessToken}`);
+  }
+
+  return { headers, response: passthroughResponse };
+}
+
+export function applyAuthResponseCookies(
+  target: NextResponse,
+  source: NextResponse | null,
+) {
+  if (!source) return target;
+  for (const [name, value] of source.headers.entries()) {
+    if (name.toLowerCase() === "set-cookie") {
+      target.headers.append(name, value);
+    }
+  }
+  return target;
 }

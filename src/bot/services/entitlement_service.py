@@ -4,6 +4,7 @@ import os
 from dataclasses import dataclass
 from typing import Iterable, Set
 
+from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
 from src.database.db_manager import DBManager
 
 
@@ -36,6 +37,10 @@ class BotEntitlementService:
     ):
         self.db = db
         self.enabled = _env_bool("POLYWEATHER_BOT_REQUIRE_ENTITLEMENT", False) if enabled is None else enabled
+        self.use_supabase = _env_bool(
+            "POLYWEATHER_BOT_USE_SUPABASE_ENTITLEMENT",
+            SUPABASE_ENTITLEMENT.enabled,
+        )
         commands = protected_commands or ("/city", "/deb")
         self.protected_commands: Set[str] = {str(c).strip().lower() for c in commands if str(c).strip()}
 
@@ -47,8 +52,15 @@ class BotEntitlementService:
             return EntitlementDecision(True, "command_not_protected")
 
         user = self.db.get_user(user_id) or {}
+        if self.use_supabase:
+            supabase_user_id = str(user.get("supabase_user_id") or "").strip()
+            if not supabase_user_id:
+                return EntitlementDecision(False, "bind_required")
+            if SUPABASE_ENTITLEMENT.has_active_subscription(supabase_user_id):
+                return EntitlementDecision(True, "supabase_subscription_active")
+            return EntitlementDecision(False, "supabase_subscription_required")
+
         has_premium = bool(user.get("is_web_premium") or user.get("is_group_premium"))
         if has_premium:
             return EntitlementDecision(True, "premium_user")
         return EntitlementDecision(False, "premium_required")
-

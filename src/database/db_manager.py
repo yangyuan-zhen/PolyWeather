@@ -45,6 +45,8 @@ class DBManager:
             """)
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
+            self._ensure_column(conn, "users", "supabase_user_id", "TEXT")
+            self._ensure_column(conn, "users", "supabase_email", "TEXT")
             conn.commit()
             logger.info(f"Database initialized successfully path={self.db_path}")
 
@@ -83,6 +85,23 @@ class DBManager:
                 ON CONFLICT(telegram_id) DO UPDATE SET
                 username = excluded.username
             """, (telegram_id, username))
+            conn.commit()
+
+    def bind_supabase_identity(
+        self,
+        telegram_id: int,
+        supabase_user_id: str,
+        supabase_email: str = "",
+    ) -> None:
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET supabase_user_id = ?, supabase_email = ?
+                WHERE telegram_id = ?
+                """,
+                (supabase_user_id.strip(), supabase_email.strip(), telegram_id),
+            )
             conn.commit()
 
     def add_message_activity(

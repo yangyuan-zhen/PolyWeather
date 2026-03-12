@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import clsx from "clsx";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -32,6 +33,15 @@ export function HeaderBar() {
             {t("header.langEn")}
           </button>
         </div>
+
+        <Link
+          href="/account"
+          className="account-btn"
+          title={t("header.accountAria")}
+          aria-label={t("header.accountAria")}
+        >
+          {t("header.account")}
+        </Link>
 
         <button
           type="button"

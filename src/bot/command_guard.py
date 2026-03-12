@@ -25,12 +25,27 @@ class CommandGuard:
         if decision.allowed:
             return True
 
-        self.io_layer.bot.reply_to(
-            message,
-            (
+        if decision.reason == "bind_required":
+            denial_text = (
+                "🔒 当前指令需要订阅权限。\n"
+                "请先绑定账号后再试：\n"
+                "<code>/bind &lt;supabase_user_id&gt; [email]</code>"
+            )
+        elif decision.reason in {"supabase_subscription_required", "premium_required"}:
+            denial_text = (
                 "🔒 当前指令需要高级权限。\n"
                 "请先开通订阅后再使用。"
-            ),
+            )
+        else:
+            denial_text = (
+                "🔒 当前指令需要高级权限。\n"
+                "请先开通订阅后再使用。"
+            )
+
+        self.io_layer.bot.reply_to(
+            message,
+            denial_text,
+            parse_mode="HTML",
         )
         logger.info(
             "bot entitlement blocked command={} user_id={} reason={}",
@@ -44,4 +59,3 @@ class CommandGuard:
         if not self.ensure_entitled(message, command_label):
             return False
         return self.io_layer.ensure_query_points(message, cost, command_label)
-

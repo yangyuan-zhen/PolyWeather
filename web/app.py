@@ -31,6 +31,10 @@ from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accuracy
 from src.analysis.settlement_rounding import wu_round
+from src.auth.supabase_entitlement import (
+    SUPABASE_ENTITLEMENT,
+    extract_bearer_token,
+)
 
 # ──────────────────────────────────────────────────────────
 #  Setup
@@ -89,16 +93,37 @@ _ENTITLEMENT_HEADER = "x-polyweather-entitlement"
 _ENTITLEMENT_TOKEN = (os.getenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN") or "").strip()
 
 
-def _extract_bearer_token(auth_header: Optional[str]) -> Optional[str]:
-    if not auth_header:
-        return None
-    parts = auth_header.strip().split()
-    if len(parts) == 2 and parts[0].lower() == "bearer":
-        return parts[1].strip()
-    return None
+def _legacy_service_token_valid(request: Request) -> bool:
+    token = request.headers.get(_ENTITLEMENT_HEADER)
+    if not token:
+        token = extract_bearer_token(request.headers.get("authorization"))
+    return bool(_ENTITLEMENT_TOKEN and token == _ENTITLEMENT_TOKEN)
 
 
 def _assert_entitlement(request: Request) -> None:
+    if SUPABASE_ENTITLEMENT.enabled:
+        if _legacy_service_token_valid(request):
+            return
+        if not SUPABASE_ENTITLEMENT.configured:
+            raise HTTPException(
+                status_code=503,
+                detail="Supabase auth is enabled but SUPABASE_URL / SUPABASE_ANON_KEY is not configured",
+            )
+
+        access_token = extract_bearer_token(request.headers.get("authorization"))
+        if not access_token:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+
+        identity = SUPABASE_ENTITLEMENT.get_identity(access_token)
+        if not identity:
+            raise HTTPException(status_code=401, detail="Unauthorized")
+        if not SUPABASE_ENTITLEMENT.has_active_subscription(identity.user_id):
+            raise HTTPException(status_code=403, detail="Subscription required")
+
+        request.state.auth_user_id = identity.user_id
+        request.state.auth_email = identity.email
+        return
+
     if not _ENTITLEMENT_GUARD_ENABLED:
         return
 
@@ -108,11 +133,7 @@ def _assert_entitlement(request: Request) -> None:
             detail="Entitlement guard is enabled but backend token is not configured",
         )
 
-    token = request.headers.get(_ENTITLEMENT_HEADER)
-    if not token:
-        token = _extract_bearer_token(request.headers.get("authorization"))
-
-    if token != _ENTITLEMENT_TOKEN:
+    if not _legacy_service_token_valid(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -977,6 +998,36 @@ async def city_history(request: Request, name: str):
             "mgm": float(mgm) if mgm is not None else None,
         })
     return {"history": out}
+
+
+@app.get("/api/auth/me")
+async def auth_me(request: Request):
+    _assert_entitlement(request)
+    user_id = getattr(request.state, "auth_user_id", None)
+    subscription_required = bool(
+        SUPABASE_ENTITLEMENT.enabled and SUPABASE_ENTITLEMENT.require_subscription
+    )
+    subscription_active = None
+    if SUPABASE_ENTITLEMENT.enabled and user_id:
+        try:
+            subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(user_id)
+        except Exception:
+            subscription_active = None
+
+    return {
+        "authenticated": True,
+        "user_id": user_id,
+        "email": getattr(request.state, "auth_email", None),
+        "entitlement_mode": (
+            "supabase"
+            if SUPABASE_ENTITLEMENT.enabled
+            else "legacy_token"
+            if _ENTITLEMENT_GUARD_ENABLED
+            else "disabled"
+        ),
+        "subscription_required": subscription_required,
+        "subscription_active": subscription_active,
+    }
 
 
 @app.get("/api/city/{name}/summary")

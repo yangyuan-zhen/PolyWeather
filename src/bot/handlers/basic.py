@@ -36,6 +36,10 @@ class BasicCommandHandler:
         def _diag(message):
             self.handle_diag(message)
 
+        @self.bot.message_handler(commands=["bind"])
+        def _bind(message):
+            self.handle_bind(message)
+
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
         try:
@@ -70,6 +74,49 @@ class BasicCommandHandler:
         try:
             status = self.runtime_status_provider()
             self.bot.reply_to(message, render_runtime_status_html(status), parse_mode="HTML")
+            trace.set_status("ok")
+        finally:
+            trace.emit()
+
+    def handle_bind(self, message: Any) -> None:
+        trace = CommandTrace("/bind", message)
+        try:
+            parts = (message.text or "").split(maxsplit=2)
+            if len(parts) < 2:
+                self.bot.reply_to(
+                    message,
+                    (
+                        "❌ 用法:\n"
+                        "<code>/bind &lt;supabase_user_id&gt; [email]</code>\n\n"
+                        "示例:\n"
+                        "<code>/bind 11111111-2222-3333-4444-555555555555 user@example.com</code>"
+                    ),
+                    parse_mode="HTML",
+                )
+                trace.set_status("bad_request", "missing_supabase_user_id")
+                return
+
+            supabase_user_id = str(parts[1] or "").strip()
+            if len(supabase_user_id) < 8:
+                self.bot.reply_to(message, "❌ supabase_user_id 格式不正确。")
+                trace.set_status("bad_request", "invalid_supabase_user_id")
+                return
+            supabase_email = str(parts[2] or "").strip() if len(parts) >= 3 else ""
+            user = message.from_user
+            self.io_layer.db.upsert_user(user.id, self.io_layer.display_name(user))
+            self.io_layer.db.bind_supabase_identity(
+                telegram_id=user.id,
+                supabase_user_id=supabase_user_id,
+                supabase_email=supabase_email,
+            )
+            self.bot.reply_to(
+                message,
+                (
+                    "✅ 账号绑定完成。\n"
+                    f"supabase_user_id: <code>{supabase_user_id}</code>"
+                ),
+                parse_mode="HTML",
+            )
             trace.set_status("ok")
         finally:
             trace.emit()

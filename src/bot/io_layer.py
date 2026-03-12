@@ -59,6 +59,7 @@ class BotIOLayer:
             "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "/diag - 查看 Bot 启动诊断\n\n"
+            "/bind - 绑定 Supabase 账号（可选）\n\n"
             "示例: <code>/city 伦敦</code>\n"
             f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
             f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"

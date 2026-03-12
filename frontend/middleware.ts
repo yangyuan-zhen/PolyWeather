@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import {
+  createSupabaseMiddlewareClient,
+  hasSupabaseServerEnv,
+} from "@/lib/supabase/server";
 
 const SESSION_COOKIE = "polyweather_entitlement";
+const SUPABASE_AUTH_ENABLED =
+  String(process.env.POLYWEATHER_AUTH_ENABLED || "")
+    .trim()
+    .toLowerCase() === "true";
 
 function isStaticAsset(pathname: string) {
   return (
@@ -19,10 +27,14 @@ function isStaticAsset(pathname: string) {
 }
 
 function isPublicPage(pathname: string) {
-  return pathname === "/entitlement-required";
+  return (
+    pathname === "/entitlement-required" ||
+    pathname.startsWith("/auth/login") ||
+    pathname.startsWith("/auth/callback")
+  );
 }
 
-export function middleware(request: NextRequest) {
+function handleLegacyTokenGate(request: NextRequest) {
   const requiredToken = process.env.POLYWEATHER_DASHBOARD_ACCESS_TOKEN?.trim();
   if (!requiredToken) {
     return NextResponse.next();
@@ -66,6 +78,52 @@ export function middleware(request: NextRequest) {
   deniedUrl.search = "";
   deniedUrl.searchParams.set("next", pathname);
   return NextResponse.redirect(deniedUrl);
+}
+
+async function handleSupabaseAuthGate(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (isPublicPage(pathname)) {
+    return NextResponse.next();
+  }
+
+  const response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+  const supabase = createSupabaseMiddlewareClient(request, response);
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    return response;
+  }
+
+  if (pathname.startsWith("/api/")) {
+    return NextResponse.json(
+      { error: "Unauthorized", detail: "Supabase session required" },
+      { status: 401 },
+    );
+  }
+
+  const loginUrl = request.nextUrl.clone();
+  loginUrl.pathname = "/auth/login";
+  loginUrl.search = "";
+  loginUrl.searchParams.set("next", pathname);
+  return NextResponse.redirect(loginUrl);
+}
+
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
+
+  if (SUPABASE_AUTH_ENABLED && hasSupabaseServerEnv()) {
+    return handleSupabaseAuthGate(request);
+  }
+  return handleLegacyTokenGate(request);
 }
 
 export const config = {
