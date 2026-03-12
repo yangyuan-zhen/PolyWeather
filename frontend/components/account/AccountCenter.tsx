@@ -81,6 +81,8 @@ type CreatedIntent = {
     to: string;
     data: string;
     value: string;
+    amount_units: string;
+    token_address: string;
   };
 };
 
@@ -130,6 +132,27 @@ function shortAddress(address: string) {
   const text = String(address || "");
   if (!text.startsWith("0x") || text.length < 12) return text || "--";
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function toPaddedHex(value: bigint) {
+  return value.toString(16).padStart(64, "0");
+}
+
+function toPaddedAddress(address: string) {
+  return String(address || "")
+    .toLowerCase()
+    .replace(/^0x/, "")
+    .padStart(64, "0");
+}
+
+function buildAllowanceCalldata(owner: string, spender: string) {
+  // allowance(address owner, address spender)
+  return `0xdd62ed3e${toPaddedAddress(owner)}${toPaddedAddress(spender)}`;
+}
+
+function buildApproveCalldata(spender: string, amount: bigint) {
+  // approve(address spender, uint256 amount)
+  return `0x095ea7b3${toPaddedAddress(spender)}${toPaddedHex(amount)}`;
 }
 
 function InfoItem({ icon: Icon, label, value, status = "default" }: InfoItemProps) {
@@ -324,6 +347,30 @@ export function AccountCenter() {
     } catch {}
   };
 
+  const waitForReceipt = async (
+    txHash: string,
+    timeoutMs = 120000,
+    pollMs = 3000,
+  ) => {
+    const eth = window.ethereum;
+    if (!eth) {
+      throw new Error("MetaMask not found");
+    }
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      const receipt = (await eth.request({
+        method: "eth_getTransactionReceipt",
+        params: [txHash],
+      })) as { status?: string } | null;
+      if (receipt && receipt.status) {
+        if (receipt.status === "0x1") return receipt;
+        throw new Error(`transaction reverted: ${txHash}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    throw new Error(`transaction confirmation timeout: ${txHash}`);
+  };
+
   const planList = paymentConfig?.plans || [];
   const selectedPlan = planList.find((p) => p.plan_code === selectedPlanCode) || planList[0];
   const paymentFeatureReady = Boolean(paymentConfig?.enabled && paymentConfig?.configured);
@@ -447,6 +494,43 @@ export function AccountCenter() {
         throw new Error("intent payload invalid");
       }
       setLastIntentId(intentId);
+
+      const tokenAddress = String(txPayload.token_address || "").toLowerCase();
+      const amountUnits = BigInt(String(txPayload.amount_units || "0"));
+      if (!tokenAddress.startsWith("0x") || amountUnits <= 0n) {
+        throw new Error("intent token/amount invalid");
+      }
+
+      const allowanceHex = (await eth.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: buildAllowanceCalldata(payingWallet, txPayload.to),
+          },
+          "latest",
+        ],
+      })) as string;
+      const allowance = BigInt(String(allowanceHex || "0x0"));
+
+      if (allowance < amountUnits) {
+        setPaymentInfo("检测到授权不足，正在发起 USDC 授权...");
+        const approveHash = (await eth.request({
+          method: "eth_sendTransaction",
+          params: [
+            {
+              from: payingWallet,
+              to: tokenAddress,
+              data: buildApproveCalldata(txPayload.to, amountUnits),
+              value: "0x0",
+            },
+          ],
+        })) as string;
+        await waitForReceipt(String(approveHash || ""));
+        setPaymentInfo("USDC 授权成功，正在发起支付...");
+      } else {
+        setPaymentInfo("授权额度充足，正在发起支付...");
+      }
 
       const txHash = (await eth.request({
         method: "eth_sendTransaction",
