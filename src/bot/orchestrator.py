@@ -16,7 +16,6 @@ from src.bot.io_layer import BotIOLayer
 from src.bot.runtime_coordinator import StartupCoordinator
 from src.bot.services.city_command_service import CityCommandService
 from src.bot.services.deb_command_service import DebCommandService
-from src.bot.services.entitlement_service import BotEntitlementService
 
 
 def _project_root() -> str:
@@ -61,15 +60,15 @@ def start_bot() -> None:
     io_layer = BotIOLayer(bot=bot, db=db)
     city_analysis = CityAnalysisService(weather=weather)
     deb_analysis = DebAnalysisService(project_root=_project_root())
-    entitlement_service = BotEntitlementService(db=db)
-    guard = CommandGuard(io_layer=io_layer, entitlement_service=entitlement_service)
+    guard = CommandGuard(io_layer=io_layer)
     city_service = CityCommandService(analysis=city_analysis)
     deb_service = DebCommandService(analysis=deb_analysis)
     startup_coordinator = StartupCoordinator(
         bot=bot,
         config=config,
-        entitlement_enabled=entitlement_service.enabled,
-        protected_commands=sorted(entitlement_service.protected_commands),
+        command_access_mode="group_member_only",
+        protected_commands=["/city", "/deb"],
+        required_group_chat_id=str(os.getenv("TELEGRAM_CHAT_ID") or "").strip(),
     )
 
     _register_handlers(
@@ -84,9 +83,7 @@ def start_bot() -> None:
     started_count = sum(1 for loop in runtime_status.loops if loop.started)
 
     logger.info(
-        "🤖 Bot 启动中... entitlement_enabled={} protected_commands={} loops_started={}/{}",
-        entitlement_service.enabled,
-        ",".join(sorted(entitlement_service.protected_commands)),
+        "🤖 Bot 启动中... access=group-member-only protected_commands=/city,/deb loops_started={}/{}",
         started_count,
         len(runtime_status.loops),
     )

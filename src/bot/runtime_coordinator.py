@@ -44,8 +44,9 @@ class LoopStatus:
 class RuntimeStatus:
     started_at: str
     loops: List[LoopStatus]
-    entitlement_enabled: bool
+    command_access_mode: str
     protected_commands: List[str]
+    required_group_chat_id: str
 
     def loop_map(self) -> Dict[str, LoopStatus]:
         return {loop.key: loop for loop in self.loops}
@@ -58,18 +59,21 @@ class StartupCoordinator:
         self,
         bot: Any,
         config: Dict[str, Any],
-        entitlement_enabled: bool,
+        command_access_mode: str,
         protected_commands: List[str],
+        required_group_chat_id: str,
     ):
         self.bot = bot
         self.config = config
-        self.entitlement_enabled = entitlement_enabled
+        self.command_access_mode = command_access_mode
         self.protected_commands = protected_commands
+        self.required_group_chat_id = required_group_chat_id
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             loops=[],
-            entitlement_enabled=entitlement_enabled,
+            command_access_mode=command_access_mode,
             protected_commands=protected_commands,
+            required_group_chat_id=required_group_chat_id,
         )
 
     def get_runtime_status(self) -> RuntimeStatus:
@@ -84,8 +88,9 @@ class StartupCoordinator:
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
             loops=loops,
-            entitlement_enabled=self.entitlement_enabled,
+            command_access_mode=self.command_access_mode,
             protected_commands=self.protected_commands,
+            required_group_chat_id=self.required_group_chat_id,
         )
         return self._runtime_status
 
@@ -219,8 +224,9 @@ def render_runtime_status_html(status: RuntimeStatus) -> str:
         "🧭 <b>Bot 启动诊断</b>",
         f"启动时间: <code>{status.started_at}</code>",
         "",
-        f"Entitlement: <code>{'ON' if status.entitlement_enabled else 'OFF'}</code>",
+        f"命令准入: <code>{status.command_access_mode}</code>",
         f"受保护命令: <code>{', '.join(status.protected_commands) or '--'}</code>",
+        f"目标群组: <code>{status.required_group_chat_id or '--'}</code>",
         "",
         "后台循环:",
     ]

@@ -1,5 +1,6 @@
 import sqlite3
 import os
+import hashlib
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from loguru import logger
@@ -43,8 +44,19 @@ class DBManager:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS activity_fingerprints (
+                    telegram_id INTEGER NOT NULL,
+                    activity_date TEXT NOT NULL,
+                    fingerprint TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (telegram_id, activity_date, fingerprint)
+                )
+            """)
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
+            self._ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "users", "weekly_points_week", "TEXT")
             self._ensure_column(conn, "users", "supabase_user_id", "TEXT")
             self._ensure_column(conn, "users", "supabase_email", "TEXT")
             conn.commit()
@@ -115,16 +127,25 @@ class DBManager:
     ) -> Dict[str, Any]:
         """Award points for valid group activity with cooldown and daily cap."""
         now = datetime.now()
-        normalized = "".join((text or "").split())
+        normalized = "".join((text or "").split()).lower()
         if len(normalized) < min_text_length:
             return {"awarded": False, "reason": "too_short"}
+        fingerprint = hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
         today_str = now.strftime("%Y-%m-%d")
+        iso_year, iso_week, _ = now.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
+            # Keep dedupe table bounded.
+            stale_day = (now - timedelta(days=14)).strftime("%Y-%m-%d")
+            conn.execute(
+                "DELETE FROM activity_fingerprints WHERE activity_date < ?",
+                (stale_day,),
+            )
             cursor = conn.execute(
                 """
-                SELECT points, daily_points, daily_points_date, last_message_at
+                SELECT points, daily_points, daily_points_date, weekly_points, weekly_points_week, last_message_at
                 FROM users WHERE telegram_id = ?
                 """,
                 (telegram_id,),
@@ -132,6 +153,18 @@ class DBManager:
             row = cursor.fetchone()
             if not row:
                 return {"awarded": False, "reason": "user_missing"}
+
+            duplicated = conn.execute(
+                """
+                SELECT 1
+                FROM activity_fingerprints
+                WHERE telegram_id = ? AND activity_date = ? AND fingerprint = ?
+                LIMIT 1
+                """,
+                (telegram_id, today_str, fingerprint),
+            ).fetchone()
+            if duplicated:
+                return {"awarded": False, "reason": "duplicate_content"}
 
             last_message_at = row["last_message_at"]
             if last_message_at:
@@ -143,18 +176,49 @@ class DBManager:
             daily_points_date = row["daily_points_date"] or ""
             if daily_points_date != today_str:
                 daily_points = 0
+            # Guard against historical overflow values (legacy bug).
+            if daily_points > daily_cap:
+                daily_points = daily_cap
+
+            weekly_points = int(row["weekly_points"] or 0)
+            weekly_points_week = row["weekly_points_week"] or ""
+            if weekly_points_week != week_key:
+                weekly_points = 0
 
             if daily_points >= daily_cap:
                 conn.execute(
                     """
                     UPDATE users
-                    SET last_message_at = ?, daily_points = ?, daily_points_date = ?
+                    SET last_message_at = ?, daily_points = ?, daily_points_date = ?,
+                        weekly_points = ?, weekly_points_week = ?
                     WHERE telegram_id = ?
                     """,
-                    (now.isoformat(), daily_points, today_str, telegram_id),
+                    (
+                        now.isoformat(),
+                        daily_points,
+                        today_str,
+                        weekly_points,
+                        week_key,
+                        telegram_id,
+                    ),
                 )
                 conn.commit()
-                return {"awarded": False, "reason": "daily_cap", "daily_points": daily_points}
+                return {
+                    "awarded": False,
+                    "reason": "daily_cap",
+                    "daily_points": daily_points,
+                    "weekly_points": weekly_points,
+                }
+
+            remaining = max(0, daily_cap - daily_points)
+            points_added = min(max(0, points_to_add), remaining)
+            if points_added <= 0:
+                return {
+                    "awarded": False,
+                    "reason": "daily_cap",
+                    "daily_points": daily_points,
+                    "weekly_points": weekly_points,
+                }
 
             conn.execute("""
                 UPDATE users 
@@ -162,14 +226,35 @@ class DBManager:
                     points = points + ?,
                     daily_points = ?,
                     daily_points_date = ?,
+                    weekly_points = ?,
+                    weekly_points_week = ?,
                     last_message_at = ?
                 WHERE telegram_id = ?
-            """, (points_to_add, daily_points + points_to_add, today_str, now.isoformat(), telegram_id))
+            """, (
+                points_added,
+                daily_points + points_added,
+                today_str,
+                weekly_points + points_added,
+                week_key,
+                now.isoformat(),
+                telegram_id,
+            ))
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO activity_fingerprints
+                (telegram_id, activity_date, fingerprint)
+                VALUES (?, ?, ?)
+                """,
+                (telegram_id, today_str, fingerprint),
+            )
             conn.commit()
             return {
                 "awarded": True,
                 "reason": "ok",
-                "daily_points": daily_points + points_to_add,
+                "points_added": points_added,
+                "daily_points": daily_points + points_added,
+                "weekly_points": weekly_points + points_added,
+                "weekly_week": week_key,
             }
 
     def spend_points(self, telegram_id: int, amount: int) -> Dict[str, Any]:
@@ -220,4 +305,28 @@ class DBManager:
                 ORDER BY points DESC 
                 LIMIT ?
             """, (limit,))
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_weekly_leaderboard(self, limit: int = 10):
+        now = datetime.now()
+        iso_year, iso_week, _ = now.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(
+                """
+                SELECT
+                    username,
+                    points,
+                    message_count,
+                    CASE
+                        WHEN weekly_points_week = ? THEN COALESCE(weekly_points, 0)
+                        ELSE 0
+                    END AS weekly_points
+                FROM users
+                ORDER BY weekly_points DESC, points DESC, message_count DESC
+                LIMIT ?
+                """,
+                (week_key, limit),
+            )
             return [dict(row) for row in cursor.fetchall()]

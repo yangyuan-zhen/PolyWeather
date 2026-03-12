@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from loguru import logger
@@ -60,6 +61,7 @@ class BotIOLayer:
             "/id - 获取当前聊天的 Chat ID\n\n"
             "/diag - 查看 Bot 启动诊断\n\n"
             "/bind - 绑定 Supabase 账号（可选）\n\n"
+            "🔐 <i>/city 与 /deb 仅限官方群成员使用。</i>\n\n"
             "示例: <code>/city 伦敦</code>\n"
             f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
             f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
@@ -68,21 +70,34 @@ class BotIOLayer:
     def build_points_rank_text(self, user: Any) -> str:
         self.db.upsert_user(user.id, self.display_name(user))
         user_info = self.db.get_user(user.id)
+        now = datetime.now()
+        iso_year, iso_week, _ = now.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
 
-        leaderboard = self.db.get_leaderboard(limit=5)
-        rank_text = "🏆 <b>PolyWeather 活跃度排行榜</b>\n"
+        leaderboard = self.db.get_weekly_leaderboard(limit=5)
+        rank_text = f"🏆 <b>PolyWeather 周活跃度排行榜 ({week_key})</b>\n"
         rank_text += "────────────────────\n"
         for i, entry in enumerate(leaderboard):
             medal = ["🥇", "🥈", "🥉", "  ", "  "][i] if i < 5 else "  "
-            rank_text += f"{medal} {entry['username'][:12]}: <b>{entry['points']}</b> 点\n"
+            username = (entry.get("username") or "unknown")[:12]
+            weekly_points = int(entry.get("weekly_points") or 0)
+            rank_text += f"{medal} {username}: <b>{weekly_points}</b> 点\n"
 
         if user_info:
+            daily_points = int(user_info.get("daily_points") or 0)
+            if daily_points > MESSAGE_DAILY_CAP:
+                daily_points = MESSAGE_DAILY_CAP
+            weekly_points = int(user_info.get("weekly_points") or 0)
+            weekly_points_week = str(user_info.get("weekly_points_week") or "")
+            if weekly_points_week != week_key:
+                weekly_points = 0
             rank_text += "────────────────────\n"
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
                 f"┣ 积分: <code>{user_info['points']}</code>\n"
                 f"┣ 发言: <code>{user_info['message_count']}</code> 次\n"
-                f"┣ 今日发言积分: <code>{user_info.get('daily_points') or 0}/{MESSAGE_DAILY_CAP}</code>\n"
+                f"┣ 本周发言积分: <code>{weekly_points}</code>\n"
+                f"┣ 今日发言积分: <code>{daily_points}/{MESSAGE_DAILY_CAP}</code>\n"
                 f"┗ /city 消耗: <code>{CITY_QUERY_COST}</code> | /deb 消耗: <code>{DEB_QUERY_COST}</code>"
             )
         return rank_text
@@ -108,7 +123,8 @@ class BotIOLayer:
             min_text_length=MESSAGE_MIN_LENGTH,
         )
         if result.get("awarded"):
+            awarded = int(result.get("points_added") or MESSAGE_POINTS)
             logger.info(
-                f"message points awarded user={user.id} points=+{MESSAGE_POINTS} "
+                f"message points awarded user={user.id} points=+{awarded} "
                 f"daily_points={result.get('daily_points')}/{MESSAGE_DAILY_CAP}"
             )
