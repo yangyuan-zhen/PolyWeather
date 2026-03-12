@@ -181,6 +181,6 @@ docker compose logs -f polyweather | egrep "market not tradable|trade alert push
 
 ## 当前状态
 
-- 版本：`v1.4`
+- 版本：`v1.3`
 - 最后更新：`2026-03-12`
 - 状态：稳定运行（Web + Bot + 市场只读层）

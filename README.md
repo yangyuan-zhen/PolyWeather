@@ -182,6 +182,6 @@ docker compose logs -f polyweather | egrep "market not tradable|trade alert push
 
 ## Status
 
-- Version: `v1.4`
+- Version: `v1.3`
 - Last Updated: `2026-03-12`
 - Runtime: Stable (web + bot + market read-only layer in production)
