@@ -36,16 +36,19 @@ flowchart TD
     A --> O
 ```
 
-Current system health estimate: **84% stable / 16% debt**.
+Current system health estimate: **86% stable / 14% debt**.
 
 ---
 
-## 2. Recently Closed (2026-03-11)
+## 2. Recently Closed (2026-03-12)
 
 - Meteoblue API path fully removed from backend, frontend, config and docs.
 - Market top-bucket duplicate temperature issue fixed (backend dedupe + frontend guard).
 - Detail panel a11y conflict fixed (`aria-hidden` focus conflict resolved with `inert` + blur).
 - Vercel Speed Insights integrated for frontend performance telemetry.
+- Frontend BFF `ETag + Cache-Control` landed for cities/summary/history (`force_refresh` keeps `no-store`).
+- Mispricing radar now hard-skips non-tradable markets (closed/inactive/not accepting orders/past endDate).
+- AI analysis now includes peak-window hard constraints (before-window cannot claim "locked"/"confirmed floor").
 
 ---
 
@@ -89,4 +92,4 @@ Current system health estimate: **84% stable / 16% debt**.
 
 ---
 
-Last Updated: `2026-03-11`
+Last Updated: `2026-03-12`

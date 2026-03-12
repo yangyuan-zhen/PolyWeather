@@ -36,16 +36,19 @@ flowchart TD
     A --> O
 ```
 
-当前系统健康度估计：**84% 稳定 / 16% 技术债**。
+当前系统健康度估计：**86% 稳定 / 14% 技术债**。
 
 ---
 
-## 2. 最近已关闭项（2026-03-11）
+## 2. 最近已关闭项（2026-03-12）
 
 - Meteoblue API 全链路移除（后端/前端/配置/文档）。
 - 市场温度桶重复刷屏问题修复（后端去重 + 前端兜底）。
 - 详情面板可访问性告警修复（`aria-hidden` 焦点冲突改为 `inert + blur`）。
 - 前端已接入 Vercel Speed Insights。
+- 前端 BFF 增加 `ETag + Cache-Control`（cities/summary/history）与 `force_refresh=no-store` 语义。
+- 错价雷达增加“不可交易市场硬拦截”（closed/inactive/不接单/过 endDate）。
+- AI 分析增加峰值时段硬约束（before 状态禁止“已锁定/已确认底线”）。
 
 ---
 
@@ -89,4 +92,4 @@ flowchart TD
 
 ---
 
-最后更新：`2026-03-11`
+最后更新：`2026-03-12`

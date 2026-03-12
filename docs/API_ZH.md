@@ -1,4 +1,4 @@
-# PolyWeather API 文档（v1.2）
+# PolyWeather API 文档（v1.4）
 
 本文档描述当前后端真实可用接口（`web/app.py`）。  
 前端一般通过 Next.js BFF 路由代理访问这些接口。
@@ -12,7 +12,12 @@
 - 返回格式：`application/json`
 - 缓存策略：
   - 后端分析缓存：默认 5 分钟（Ankara 特殊口径 60 秒）
-  - 前端详情缓存：5 分钟 + revision 检查
+  - 前端详情缓存：5 分钟 + revision 检查 + 后台静默刷新
+  - 前端 BFF HTTP 缓存（Vercel 层）：
+    - `/api/cities`：`ETag` + `Cache-Control`（`s-maxage=300`）
+    - `/api/city/{name}/summary`：`ETag` + `Cache-Control`（`s-maxage=20`）
+    - `/api/history/{name}`：`ETag` + `Cache-Control`（`s-maxage=60`）
+    - `summary?force_refresh=true`：`Cache-Control: no-store`
   - 手动刷新：`force_refresh=true` 强制绕过缓存
 
 ---
@@ -128,6 +133,11 @@ flowchart TD
 - `risk.level`, `risk.warning`
 - `updated_at`
 
+缓存说明：
+
+- 通过前端 BFF 访问时，默认返回 `ETag` 与可缓存 `Cache-Control`。
+- 当 `force_refresh=true` 时，BFF 强制 `no-store`，用于人工排障与即时刷新。
+
 ### 4.4 `GET /api/city/{name}/detail`
 
 聚合视图接口，包含天气分析和市场只读层。
@@ -158,11 +168,16 @@ flowchart TD
 - `top_buckets`（前端展示前会再去重）
 - `signal_label`（`BUY YES` / `BUY NO` / `MONITOR`）
 - `websocket.asset_ids`, `websocket.condition_ids`（订阅标识，不涉及下单）
+- `primary_market.tradable`（是否可交易）
+- `primary_market.tradable_reason`（不可交易原因）
+- `primary_market.ended_at_utc`（UTC 结束时刻）
+- `primary_market.accepting_orders`（是否仍接收订单）
 
 注意：
 
 - 后端已做温度桶去重与方向优先（优先与主市场同方向的 `or higher`/`or lower` 桶）。
 - 前端还有二次去重兜底，避免重复温度桶刷屏。
+- 错价雷达推送前会二次校验交易状态，若市场已不可交易（`closed` / inactive / 不接单 / 过 `endDate`）会跳过。
 
 ### 4.5 `GET /api/history/{name}`
 
@@ -249,6 +264,28 @@ sequenceDiagram
 - 浏览器强刷（`Ctrl+F5`）
 - 检查是否命中前端 5 分钟 TTL
 
+### 7.4 为什么 VPS `:8000` 看不到 `ETag`？
+
+- `:8000` 是 FastAPI 后端直连口径，主要负责分析与数据聚合。
+- `ETag/304` 主要由前端 BFF 路由返回（Vercel 域名下的 `/api/*`）。
+- 验证缓存头请用前端域名，而不是后端直连 IP。
+
 ---
 
-最后更新：`2026-03-11`
+## 8. 验收脚本
+
+项目内置缓存验收脚本：
+
+```bash
+./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+```
+
+输出 `Result: PASS` 代表以下链路均正常：
+
+- `ETag` 返回
+- `If-None-Match -> 304`
+- `force_refresh=true -> no-store`
+
+---
+
+最后更新：`2026-03-12`

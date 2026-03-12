@@ -97,9 +97,23 @@ graph TD
 | 市场层         | Polymarket P0 只读发现 + 报价     |
 | 已移除         | Meteoblue（代码与文档已全部移除） |
 
-## 最近更新（2026-03-11）
+## 最近更新（2026-03-12）
 
 - 完整移除 Meteoblue API 及全部引用。
+- 前端 BFF 增加 `ETag + Cache-Control`：
+  - `/api/cities`
+  - `/api/city/{name}/summary`（`force_refresh=true` 仍保持 `no-store`）
+  - `/api/history/{name}`
+- 前端状态持久化优化：
+  - 记住上次选中城市（`localStorage`）
+  - 记住侧边栏风险分组折叠状态（`localStorage`）
+  - 详情命中缓存时做后台 revision 检查，静默更新陈旧数据
+- 错价雷达安全加固：
+  - 市场 `closed` / 不活跃 / 不接受下单 / 超过 `endDate` 时跳过推送
+  - `market_scan.primary_market` 透传可交易状态字段
+- AI 决策时段约束：
+  - 上下文显式注入峰值窗口状态（`before` / `in_window` / `past`）
+  - 峰值窗口前禁止“已锁定/已确认底线”结论
 - 修复市场“最热温度桶”重复温度刷屏问题（后端按温度去重 + 前端兜底去重）。
 - 修复详情面板可访问性告警（`aria-hidden` 焦点冲突），改为 `inert + blur`。
 - 集成 Vercel Speed Insights（`frontend/app/layout.tsx`）。
@@ -134,6 +148,20 @@ cd frontend
 npm run build
 ```
 
+## 运维验收
+
+### 验证前端缓存头（`ETag` / `304` / `force_refresh=no-store`）
+
+```bash
+./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+```
+
+### 观察错价雷达推送决策日志
+
+```bash
+docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
+```
+
 ## Telegram 命令
 
 | 命令           | 用途         |
@@ -153,6 +181,6 @@ npm run build
 
 ## 当前状态
 
-- 版本：`v1.3`
-- 最后更新：`2026-03-11`
+- 版本：`v1.4`
+- 最后更新：`2026-03-12`
 - 状态：稳定运行（Web + Bot + 市场只读层）

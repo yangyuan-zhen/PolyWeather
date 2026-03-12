@@ -97,9 +97,23 @@ graph TD
 | Market layer        | Polymarket P0 read-only discovery + quotes           |
 | Removed source      | Meteoblue (fully removed from code and docs)         |
 
-## Recent Changes (2026-03-11)
+## Recent Changes (2026-03-12)
 
 - Removed all Meteoblue API integration and references.
+- Added frontend BFF `ETag + Cache-Control` for:
+  - `/api/cities`
+  - `/api/city/{name}/summary` (`force_refresh=true` keeps `no-store`)
+  - `/api/history/{name}`
+- Added frontend state persistence:
+  - selected city in `localStorage`
+  - risk-group collapse state in sidebar `localStorage`
+  - background summary revision check to silently refresh stale detail cache
+- Mispricing radar safety hardening:
+  - skip non-tradable markets (`closed`, inactive, not accepting orders, or past `endDate`)
+  - propagate tradable state in `market_scan.primary_market`
+- AI decision guard:
+  - peak-window state (`before` / `in_window` / `past`) now explicitly injected into AI context
+  - before-peak state now forbids "locked/confirmed floor" style conclusions
 - Fixed market top-bucket rendering path by deduplicating repeated temperature buckets.
 - Added frontend fallback guard when market top buckets collapse to low-quality duplicates.
 - Fixed detail panel accessibility issue (`aria-hidden` focus conflict) using `inert` + active-element blur.
@@ -135,6 +149,20 @@ cd frontend
 npm run build
 ```
 
+## Operations Verification
+
+### Validate frontend cache headers (`ETag` / `304` / `force_refresh=no-store`)
+
+```bash
+./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
+```
+
+### Watch mispricing radar push decisions
+
+```bash
+docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
+```
+
 ## Command Surface (Telegram)
 
 | Command        | Purpose                       |
@@ -154,6 +182,6 @@ npm run build
 
 ## Status
 
-- Version: `v1.3`
-- Last Updated: `2026-03-11`
+- Version: `v1.4`
+- Last Updated: `2026-03-12`
 - Runtime: Stable (web + bot + market read-only layer in production)
