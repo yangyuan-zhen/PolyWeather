@@ -70,7 +70,7 @@ PAYMENT_CONTRACT_ABI = [
 ]
 
 DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "pro_monthly": {"plan_id": 101, "amount_usdc": "29", "duration_days": 30},
+    "pro_monthly": {"plan_id": 101, "amount_usdc": "5", "duration_days": 30},
     "pro_quarterly": {"plan_id": 102, "amount_usdc": "79", "duration_days": 90},
     "pro_yearly": {"plan_id": 103, "amount_usdc": "279", "duration_days": 365},
 }

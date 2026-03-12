@@ -71,6 +71,7 @@ class BotIOLayer:
         self.db.upsert_user(user.id, self.display_name(user))
         user_info = self.db.get_user(user.id)
         now = datetime.now()
+        today_str = now.strftime("%Y-%m-%d")
         iso_year, iso_week, _ = now.isocalendar()
         week_key = f"{iso_year}-W{iso_week:02d}"
 
@@ -85,12 +86,17 @@ class BotIOLayer:
 
         if user_info:
             daily_points = int(user_info.get("daily_points") or 0)
+            daily_points_date = str(user_info.get("daily_points_date") or "")
+            if daily_points_date != today_str:
+                daily_points = 0
             if daily_points > MESSAGE_DAILY_CAP:
                 daily_points = MESSAGE_DAILY_CAP
+
             weekly_points = int(user_info.get("weekly_points") or 0)
             weekly_points_week = str(user_info.get("weekly_points_week") or "")
             if weekly_points_week != week_key:
                 weekly_points = 0
+
             rank_text += "────────────────────\n"
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
