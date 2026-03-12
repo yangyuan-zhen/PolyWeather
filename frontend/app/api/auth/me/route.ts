@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
       const raw = await res.text();
       const response = NextResponse.json(
         { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: 502 },
+        { status: res.status },
       );
       return applyAuthResponseCookies(response, auth.response);
     }
@@ -38,4 +38,3 @@ export async function GET(req: NextRequest) {
     );
   }
 }
-

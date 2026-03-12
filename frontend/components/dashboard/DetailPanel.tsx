@@ -128,6 +128,7 @@ export function DetailPanel() {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
+  const isPro = store.proAccess.subscriptionActive;
   const panelRef = useRef<HTMLElement | null>(null);
   const isOverlayOpen =
     Boolean(store.futureModalDate) ||
@@ -201,26 +202,30 @@ export function DetailPanel() {
             <button
               type="button"
               className="history-btn"
-              title={t("detail.todayAnalysis")}
+              title={
+                isPro
+                  ? t("detail.todayAnalysis")
+                  : `${t("detail.todayAnalysis")} (Pro)`
+              }
               onClick={() => {
                 blurActiveElement();
                 void store.openTodayModal();
               }}
               disabled={!detail}
             >
-              {t("detail.todayAnalysis")}
+              {isPro ? t("detail.todayAnalysis") : `${t("detail.todayAnalysis")} · Pro`}
             </button>
             <button
               type="button"
               className="history-btn"
-              title={t("detail.history")}
+              title={isPro ? t("detail.history") : `${t("detail.history")} (Pro)`}
               onClick={() => {
                 blurActiveElement();
                 void store.openHistory();
               }}
               disabled={!detail}
             >
-              {t("detail.history")}
+              {isPro ? t("detail.history") : `${t("detail.history")} · Pro`}
             </button>
           </div>
         </div>

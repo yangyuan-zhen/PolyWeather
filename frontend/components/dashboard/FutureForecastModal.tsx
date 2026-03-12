@@ -18,6 +18,7 @@ import { CSSProperties } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   ModelForecast,
   ProbabilityDistribution,
@@ -438,6 +439,8 @@ export function FutureForecastModal() {
   const detail = store.selectedDetail;
   const marketScan = store.selectedMarketScan;
   const dateStr = store.futureModalDate;
+  const isPro = store.proAccess.subscriptionActive;
+  const isProLoading = store.proAccess.loading;
 
   if (!detail || !dateStr) return null;
 
@@ -568,6 +571,7 @@ export function FutureForecastModal() {
                 "future-refresh-btn",
                 store.loadingState.marketScan && "spinning",
               )}
+              disabled={!isPro || isProLoading}
               onClick={() => {
                 if (isToday) {
                   void store.openTodayModal(true);
@@ -575,7 +579,15 @@ export function FutureForecastModal() {
                 }
                 store.openFutureModal(dateStr, true);
               }}
-              title={locale === "en-US" ? "Refresh Data" : "刷新数据"}
+              title={
+                !isPro
+                  ? locale === "en-US"
+                    ? "Pro subscription required"
+                    : "需要 Pro 订阅"
+                  : locale === "en-US"
+                    ? "Refresh Data"
+                    : "刷新数据"
+              }
             >
               <svg
                 width="14"
@@ -605,7 +617,20 @@ export function FutureForecastModal() {
         </div>
 
         <div className="modal-body future-modal-body">
-          {isToday ? (
+          {isProLoading ? (
+            <div
+              style={{
+                color: "var(--text-muted)",
+                display: "flex",
+                justifyContent: "center",
+                padding: "28px 0",
+              }}
+            >
+              {t("dashboard.loading")}
+            </div>
+          ) : !isPro ? (
+            <ProFeaturePaywall feature={isToday ? "today" : "future"} />
+          ) : isToday ? (
             <div className="future-v2-layout">
               <aside className="future-v2-left">
                 <section className="future-v2-card future-v2-hero-card">

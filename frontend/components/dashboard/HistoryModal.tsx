@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore, useHistoryData } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { getHistorySummary } from "@/lib/dashboard-utils";
 
 function HistoryChart() {
@@ -128,6 +129,8 @@ export function HistoryModal() {
   const store = useDashboardStore();
   const { t } = useI18n();
   const { data, error, isLoading, isOpen } = useHistoryData();
+  const isPro = store.proAccess.subscriptionActive;
+  const isProLoading = store.proAccess.loading;
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
@@ -162,37 +165,60 @@ export function HistoryModal() {
           </button>
         </div>
         <div className="modal-body">
-          <div className="history-stats">
-            {isLoading ? (
-              <span style={{ color: "var(--text-muted)" }}>{t("history.loading")}</span>
-            ) : error ? (
-              <span style={{ color: "var(--accent-red)" }}>{t("history.error")}</span>
-            ) : !summary.recentData.length ? (
-              <span style={{ color: "var(--text-muted)" }}>{t("history.empty")}</span>
-            ) : (
-              <>
-                <div className="h-stat-card">
-                  <span className="label">{t("history.hitRate")}</span>
-                  <span className="val">
-                    {summary.hitRate != null ? `${summary.hitRate}%` : "--"}
+          {isProLoading ? (
+            <div
+              style={{
+                color: "var(--text-muted)",
+                display: "flex",
+                justifyContent: "center",
+                padding: "28px 0",
+              }}
+            >
+              {t("dashboard.loading")}
+            </div>
+          ) : !isPro ? (
+            <ProFeaturePaywall feature="history" />
+          ) : (
+            <>
+              <div className="history-stats">
+                {isLoading ? (
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {t("history.loading")}
                   </span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("history.mae")}</span>
-                  <span className="val">
-                    {summary.debMae != null ? `${summary.debMae}°` : "--"}
+                ) : error ? (
+                  <span style={{ color: "var(--accent-red)" }}>
+                    {t("history.error")}
                   </span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("history.sample")}</span>
-                  <span className="val">
-                    {t("history.sampleDays", { count: summary.settledCount })}
+                ) : !summary.recentData.length ? (
+                  <span style={{ color: "var(--text-muted)" }}>
+                    {t("history.empty")}
                   </span>
-                </div>
-              </>
-            )}
-          </div>
-          {!isLoading && !error && <HistoryChart />}
+                ) : (
+                  <>
+                    <div className="h-stat-card">
+                      <span className="label">{t("history.hitRate")}</span>
+                      <span className="val">
+                        {summary.hitRate != null ? `${summary.hitRate}%` : "--"}
+                      </span>
+                    </div>
+                    <div className="h-stat-card">
+                      <span className="label">{t("history.mae")}</span>
+                      <span className="val">
+                        {summary.debMae != null ? `${summary.debMae}°` : "--"}
+                      </span>
+                    </div>
+                    <div className="h-stat-card">
+                      <span className="label">{t("history.sample")}</span>
+                      <span className="val">
+                        {t("history.sampleDays", { count: summary.settledCount })}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+              {!isLoading && !error && <HistoryChart />}
+            </>
+          )}
         </div>
       </div>
     </div>

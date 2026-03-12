@@ -22,6 +22,7 @@ import {
   HistoryState,
   LoadingState,
   MarketScan,
+  ProAccessState,
 } from "@/lib/dashboard-types";
 
 interface DashboardStoreValue extends DashboardState {
@@ -39,6 +40,7 @@ interface DashboardStoreValue extends DashboardState {
   openTodayModal: (forceRefresh?: boolean) => Promise<void>;
   registerMapStopMotion: (stopMotion: () => void) => void;
   refreshAll: () => Promise<void>;
+  refreshProAccess: () => Promise<void>;
   refreshSelectedCity: () => Promise<void>;
   selectedMarketScan: MarketScan | null;
   selectedDetail: CityDetail | null;
@@ -65,6 +67,15 @@ function getInitialHistoryState(): HistoryState {
     error: null,
     isOpen: false,
     loading: false,
+  };
+}
+
+function getInitialProAccessState(): ProAccessState {
+  return {
+    loading: true,
+    authenticated: false,
+    subscriptionActive: false,
+    error: null,
   };
 }
 
@@ -205,6 +216,9 @@ export function DashboardStoreProvider({
     getInitialHistoryState,
   );
   const [isGuideOpen, setIsGuideOpen] = useState(false);
+  const [proAccess, setProAccess] = useState<ProAccessState>(
+    getInitialProAccessState,
+  );
 
   const mapStopMotionRef = useRef<() => void>(() => {});
   const hydratedSelectionRef = useRef(false);
@@ -369,8 +383,48 @@ export function DashboardStoreProvider({
     }
   };
 
+  const refreshProAccess = async () => {
+    setProAccess((current) => ({
+      ...current,
+      loading: true,
+      error: null,
+    }));
+    try {
+      const response = await fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = (await response.json()) as {
+        authenticated?: boolean;
+        subscription_active?: boolean | null;
+      };
+      setProAccess({
+        loading: false,
+        authenticated: Boolean(payload.authenticated),
+        subscriptionActive: payload.subscription_active === true,
+        error: null,
+      });
+    } catch (error) {
+      setProAccess({
+        loading: false,
+        authenticated: false,
+        subscriptionActive: false,
+        error: String(error),
+      });
+    }
+  };
+
   useEffect(() => {
     void loadCities();
+  }, []);
+
+  useEffect(() => {
+    void refreshProAccess();
   }, []);
 
   useEffect(() => {
@@ -514,6 +568,15 @@ export function DashboardStoreProvider({
 
   const openHistory = async () => {
     if (!selectedCity) return;
+    if (!proAccess.subscriptionActive) {
+      setHistoryState((current) => ({
+        ...current,
+        error: null,
+        isOpen: true,
+        loading: false,
+      }));
+      return;
+    }
     setHistoryState((current) => ({
       ...current,
       error: null,
@@ -558,10 +621,11 @@ export function DashboardStoreProvider({
       isGuideOpen,
       loadCities,
       loadingState,
+      proAccess,
       openFutureModal: (dateStr: string, forceRefresh = false) => {
         mapStopMotionRef.current();
         setFutureModalDate(dateStr);
-        if (!selectedCity) return;
+        if (!selectedCity || !proAccess.subscriptionActive) return;
         const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
         setLoadingState((current) => ({ ...current, marketScan: true }));
         void ensureCityMarketScan(
@@ -584,6 +648,13 @@ export function DashboardStoreProvider({
 
         mapStopMotionRef.current();
         const cachedDetail = cityDetailsByName[selectedCity];
+        if (cachedDetail?.local_date) {
+          setSelectedForecastDate(cachedDetail.local_date);
+          setFutureModalDate(cachedDetail.local_date);
+        }
+        if (!proAccess.subscriptionActive) {
+          return;
+        }
 
         // 乐观 UI: 有缓存则立刻秒开 modal，不阻塞显示
         if (cachedDetail?.local_date) {
@@ -633,6 +704,7 @@ export function DashboardStoreProvider({
         mapStopMotionRef.current = stopMotion;
       },
       refreshAll,
+      refreshProAccess,
       refreshSelectedCity,
       selectedMarketScan,
       selectedCity,
@@ -652,6 +724,7 @@ export function DashboardStoreProvider({
       isPanelOpen,
       isGuideOpen,
       loadingState,
+      proAccess,
       marketScanByCityName,
       selectedMarketScan,
       selectedCity,

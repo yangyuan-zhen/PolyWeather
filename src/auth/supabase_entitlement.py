@@ -134,15 +134,11 @@ class SupabaseEntitlementService:
             logger.warning(f"supabase auth user check failed: {exc}")
             return None
 
-    def has_active_subscription(self, user_id: str) -> bool:
-        if not self.require_subscription:
-            return True
+    def _query_active_subscription(self, user_id: str) -> bool:
         if not user_id:
             return False
         if not self.service_role_key:
-            logger.warning(
-                "POLYWEATHER_AUTH_REQUIRE_SUBSCRIPTION=true but SUPABASE_SERVICE_ROLE_KEY is missing",
-            )
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
             return False
 
         now_ts = time.time()
@@ -188,6 +184,14 @@ class SupabaseEntitlementService:
             logger.warning(f"supabase subscription query error user_id={user_id}: {exc}")
             return False
 
+    def has_active_subscription(
+        self,
+        user_id: str,
+        respect_requirement: bool = True,
+    ) -> bool:
+        if respect_requirement and not self.require_subscription:
+            return True
+        return self._query_active_subscription(user_id)
+
 
 SUPABASE_ENTITLEMENT = SupabaseEntitlementService()
-

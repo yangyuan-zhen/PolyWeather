@@ -159,6 +159,18 @@ def _parse_plan_catalog(raw: str) -> Dict[str, Dict[str, Any]]:
     return out or dict(DEFAULT_PLAN_CATALOG)
 
 
+def _parse_allowed_plan_codes(raw: str) -> List[str]:
+    text = str(raw or "").strip()
+    if not text:
+        return ["pro_monthly"]
+    out: List[str] = []
+    for part in text.split(","):
+        code = str(part or "").strip().lower()
+        if code and code not in out:
+            out.append(code)
+    return out or ["pro_monthly"]
+
+
 @dataclass
 class WalletBindingRecord:
     chain_id: int
@@ -224,6 +236,21 @@ class PaymentContractCheckoutService:
         self.plan_catalog = _parse_plan_catalog(
             os.getenv("POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON") or ""
         )
+        self.allowed_plan_codes = _parse_allowed_plan_codes(
+            os.getenv("POLYWEATHER_PAYMENT_ALLOWED_PLAN_CODES") or ""
+        )
+        filtered_catalog = {
+            code: row
+            for code, row in self.plan_catalog.items()
+            if code in self.allowed_plan_codes
+        }
+        if filtered_catalog:
+            self.plan_catalog = filtered_catalog
+        elif "pro_monthly" in self.plan_catalog:
+            self.plan_catalog = {"pro_monthly": self.plan_catalog["pro_monthly"]}
+        elif self.plan_catalog:
+            first_code = sorted(self.plan_catalog.keys())[0]
+            self.plan_catalog = {first_code: self.plan_catalog[first_code]}
         self.notify_telegram = _env_bool(
             "POLYWEATHER_PAYMENT_TELEGRAM_NOTIFY_ENABLED", True
         )

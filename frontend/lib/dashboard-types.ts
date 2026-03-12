@@ -314,6 +314,13 @@ export interface HistoryState {
   dataByCity: Record<string, HistoryPoint[]>;
 }
 
+export interface ProAccessState {
+  loading: boolean;
+  authenticated: boolean;
+  subscriptionActive: boolean;
+  error: string | null;
+}
+
 export interface DashboardState {
   cities: CityListItem[];
   cityDetailsByName: Record<string, CityDetail>;
@@ -323,4 +330,5 @@ export interface DashboardState {
   selectedForecastDate: string | null;
   loadingState: LoadingState;
   historyState: HistoryState;
+  proAccess: ProAccessState;
 }

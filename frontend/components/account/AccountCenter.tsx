@@ -20,10 +20,10 @@ import {
   LogIn,
   LogOut,
   Mail,
-  Wallet,
   RefreshCw,
   Shield,
   Sparkles,
+  Wallet,
   User as UserIcon,
   UserCheck,
 } from "lucide-react";
@@ -134,6 +134,14 @@ function shortAddress(address: string) {
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
 }
 
+function planDisplayName(planCode: string) {
+  const code = String(planCode || "").trim().toLowerCase();
+  if (code === "pro_monthly") return "Pro 月付";
+  if (code === "pro_quarterly") return "Pro 季付";
+  if (code === "pro_yearly") return "Pro 年付";
+  return planCode || "--";
+}
+
 function toPaddedHex(value: bigint) {
   return value.toString(16).padStart(64, "0");
 }
@@ -198,6 +206,31 @@ export function AccountCenter() {
 
   const supabaseReady = hasSupabasePublicEnv();
 
+  const buildAuthedHeaders = useCallback(
+    async (withJson = false): Promise<Record<string, string>> => {
+      const headers: Record<string, string> = {};
+      if (withJson) {
+        headers["Content-Type"] = "application/json";
+      }
+      if (!supabaseReady) {
+        return headers;
+      }
+      try {
+        const {
+          data: { session },
+        } = await getSupabaseBrowserClient().auth.getSession();
+        const accessToken = String(session?.access_token || "").trim();
+        if (accessToken) {
+          headers.Authorization = `Bearer ${accessToken}`;
+        }
+      } catch {
+        // no-op: backend proxy may still succeed via cookie-based session.
+      }
+      return headers;
+    },
+    [supabaseReady],
+  );
+
   const loadPaymentSnapshot = useCallback(async () => {
     if (!backend?.authenticated) {
       setPaymentConfig(null);
@@ -205,9 +238,16 @@ export function AccountCenter() {
       return;
     }
     try {
+      const authHeaders = await buildAuthedHeaders(false);
       const [configRes, walletsRes] = await Promise.all([
-        fetch("/api/payments/config", { cache: "no-store" }),
-        fetch("/api/payments/wallets", { cache: "no-store" }),
+        fetch("/api/payments/config", {
+          cache: "no-store",
+          headers: authHeaders,
+        }),
+        fetch("/api/payments/wallets", {
+          cache: "no-store",
+          headers: authHeaders,
+        }),
       ]);
       if (configRes.ok) {
         const configJson = (await configRes.json()) as PaymentConfig;
@@ -226,10 +266,13 @@ export function AccountCenter() {
           setSelectedWallet(wallets[0].address);
         }
       }
+      if (configRes.status === 401 || walletsRes.status === 401) {
+        setPaymentError("登录会话已过期，请重新登录后再进行钱包绑定或支付。");
+      }
     } catch {
       return;
     }
-  }, [backend?.authenticated, selectedPlanCode, selectedWallet]);
+  }, [backend?.authenticated, buildAuthedHeaders, selectedPlanCode, selectedWallet]);
 
   const loadSnapshot = useCallback(async () => {
     setErrorText("");
@@ -237,7 +280,11 @@ export function AccountCenter() {
       const userPromise = supabaseReady
         ? getSupabaseBrowserClient().auth.getUser()
         : Promise.resolve({ data: { user: null as User | null } });
-      const backendPromise = fetch("/api/auth/me", { cache: "no-store" });
+      const authHeaders = await buildAuthedHeaders(false);
+      const backendPromise = fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: authHeaders,
+      });
 
       const [userResult, backendResult] = await Promise.all([
         userPromise,
@@ -257,7 +304,7 @@ export function AccountCenter() {
     } catch (error) {
       setErrorText(String(error));
     }
-  }, [supabaseReady]);
+  }, [buildAuthedHeaders, supabaseReady]);
 
   useEffect(() => {
     let cancelled = false;
@@ -372,7 +419,12 @@ export function AccountCenter() {
   };
 
   const planList = paymentConfig?.plans || [];
-  const selectedPlan = planList.find((p) => p.plan_code === selectedPlanCode) || planList[0];
+  const monthlyPlanList = planList.filter(
+    (plan) => String(plan.plan_code || "").trim().toLowerCase() === "pro_monthly",
+  );
+  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
+  const selectedPlan =
+    effectivePlanList.find((p) => p.plan_code === selectedPlanCode) || effectivePlanList[0];
   const paymentFeatureReady = Boolean(paymentConfig?.enabled && paymentConfig?.configured);
 
   const connectAndBindWallet = async () => {
@@ -396,10 +448,14 @@ export function AccountCenter() {
       if (!address) {
         throw new Error("钱包账户为空");
       }
+      const authHeaders = await buildAuthedHeaders(true);
+      if (!authHeaders.Authorization) {
+        throw new Error("登录会话失效，请重新登录后再绑定钱包。");
+      }
       setWalletAddress(address);
       const challengeRes = await fetch("/api/payments/wallets/challenge", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ address }),
       });
       if (!challengeRes.ok) {
@@ -421,7 +477,7 @@ export function AccountCenter() {
       })) as string;
       const verifyRes = await fetch("/api/payments/wallets/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ address, nonce, signature }),
       });
       if (!verifyRes.ok) {
@@ -453,7 +509,9 @@ export function AccountCenter() {
       setPaymentError("未检测到 MetaMask。");
       return;
     }
-    const payingWallet = (selectedWallet || walletAddress || "").toLowerCase();
+    const payingWallet = String(
+      selectedWallet || walletAddress || boundWallets[0]?.address || "",
+    ).toLowerCase();
     if (!payingWallet) {
       setPaymentError("请先绑定钱包。");
       return;
@@ -461,6 +519,10 @@ export function AccountCenter() {
 
     setPaymentBusy(true);
     try {
+      const authHeaders = await buildAuthedHeaders(true);
+      if (!authHeaders.Authorization) {
+        throw new Error("登录会话失效，请重新登录后再支付。");
+      }
       const currentChainIdHex = String(
         (await eth.request({ method: "eth_chainId" })) || "",
       );
@@ -475,9 +537,9 @@ export function AccountCenter() {
 
       const createRes = await fetch("/api/payments/intents", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({
-          plan_code: selectedPlanCode || "pro_monthly",
+          plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "strict",
           allowed_wallet: payingWallet,
           metadata: { source: "account_center" },
@@ -548,7 +610,7 @@ export function AccountCenter() {
 
       const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({
           tx_hash: txHashNorm,
           from_address: payingWallet,
@@ -561,7 +623,7 @@ export function AccountCenter() {
 
       const confirmRes = await fetch(`/api/payments/intents/${intentId}/confirm`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: authHeaders,
         body: JSON.stringify({ tx_hash: txHashNorm }),
       });
       if (!confirmRes.ok) {
@@ -581,31 +643,32 @@ export function AccountCenter() {
 
   return (
     <div className="relative min-h-screen w-full overflow-hidden bg-[#0b0f1a] p-4 font-sans text-slate-200 md:p-8">
-      <div className="pointer-events-none absolute right-0 top-0 h-[500px] w-[500px] rounded-full bg-blue-600/10 blur-[120px]" />
-      <div className="pointer-events-none absolute bottom-0 left-0 h-[500px] w-[500px] rounded-full bg-indigo-600/10 blur-[120px]" />
+      <div className="pointer-events-none absolute -right-24 -top-20 h-[620px] w-[620px] rounded-full bg-blue-600/15 blur-[130px]" />
+      <div className="pointer-events-none absolute -bottom-24 -left-20 h-[620px] w-[620px] rounded-full bg-indigo-600/15 blur-[130px]" />
 
-      <div className="relative z-10 mx-auto max-w-5xl">
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col">
         <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div>
-            <h1 className="bg-gradient-to-r from-white to-slate-400 bg-clip-text text-2xl font-bold text-transparent">
-              账户中心
-            </h1>
-            <p className="mt-1 flex items-center gap-2 text-sm text-slate-500">
-              <Shield size={14} /> 管理您的身份、权限与 Bot 绑定
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-4">
             <Link
               href="/"
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition-all active:scale-95 hover:bg-white/10"
+              className="group rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 transition-all hover:bg-white/10 hover:text-white"
+              title="返回首页"
             >
-              <ChevronLeft size={16} /> 返回看板
+              <ChevronLeft size={20} className="transition-transform group-hover:-translate-x-0.5" />
             </Link>
+            <div>
+              <h1 className="text-2xl font-bold text-white">账户中心</h1>
+              <p className="text-sm text-slate-500">
+                积分体系 v4.3 · 管理身份、订阅与 Bot 绑定
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void onRefresh()}
               disabled={refreshing || loading}
-              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition-all active:scale-95 hover:bg-white/10 disabled:opacity-70"
+              className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition-all hover:bg-white/10 disabled:opacity-70"
             >
               {refreshing || loading ? (
                 <Loader2 size={16} className="animate-spin" />
@@ -618,14 +681,14 @@ export function AccountCenter() {
               <button
                 type="button"
                 onClick={() => void onSignOut()}
-                className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 transition-all active:scale-95 hover:bg-red-500/20"
+                className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 transition hover:bg-red-500/20"
               >
-                <LogOut size={16} /> 退出登录
+                <LogOut size={16} /> 退出
               </button>
             ) : (
               <Link
                 href="/auth/login?next=%2Faccount"
-                className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-300 transition-all active:scale-95 hover:bg-blue-500/20"
+                className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-300 transition hover:bg-blue-500/20"
               >
                 <LogIn size={16} /> 登录 / 注册
               </Link>
@@ -790,7 +853,7 @@ export function AccountCenter() {
                       选择套餐并支付
                     </p>
                     <div className="mb-3 space-y-2">
-                      {planList.map((plan) => (
+                      {effectivePlanList.map((plan) => (
                         <label
                           key={plan.plan_code}
                           className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
@@ -803,7 +866,7 @@ export function AccountCenter() {
                               checked={selectedPlanCode === plan.plan_code}
                               onChange={() => setSelectedPlanCode(plan.plan_code)}
                             />
-                            {plan.plan_code}
+                            {planDisplayName(plan.plan_code)}
                           </span>
                           <span className="text-cyan-200">
                             {plan.amount_usdc} USDC / {plan.duration_days} 天

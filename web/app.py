@@ -1082,8 +1082,10 @@ async def auth_me(request: Request):
     subscription_active = None
     if SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            if SUPABASE_ENTITLEMENT.require_subscription:
-                subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(user_id)
+            subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(
+                user_id,
+                respect_requirement=False,
+            )
         except Exception:
             subscription_active = None
 

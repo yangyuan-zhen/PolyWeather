@@ -36,7 +36,7 @@ export async function POST(
       const raw = await res.text();
       const response = NextResponse.json(
         { error: `Backend returned ${res.status}`, detail: raw.slice(0, 350) },
-        { status: 502 },
+        { status: res.status },
       );
       return applyAuthResponseCookies(response, auth.response);
     }
@@ -50,4 +50,3 @@ export async function POST(
     );
   }
 }
-
