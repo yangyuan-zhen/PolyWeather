@@ -37,6 +37,8 @@
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
 POLYWEATHER_AUTH_ENABLED=true
+# true: 强制登录；false: 游客可用（可选登录）
+POLYWEATHER_AUTH_REQUIRED=false
 POLYWEATHER_API_BASE_URL=http://<backend-host>:8000
 POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 ```
@@ -45,6 +47,8 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 
 ```env
 POLYWEATHER_AUTH_ENABLED=true
+# true: 后端 API 强制鉴权；false: 游客可访问，若带会话则自动识别用户
+POLYWEATHER_AUTH_REQUIRED=false
 POLYWEATHER_AUTH_REQUIRE_SUBSCRIPTION=false
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
@@ -63,13 +67,14 @@ POLYWEATHER_BOT_USE_SUPABASE_ENTITLEMENT=true
 
 ## 5. entitlement 策略
 
-- `POLYWEATHER_AUTH_ENABLED=true`：要求请求携带有效 Supabase 用户会话。
-- `POLYWEATHER_AUTH_REQUIRE_SUBSCRIPTION=true`：额外要求 `subscriptions` 表里存在有效 `active` 记录。
+- `POLYWEATHER_AUTH_ENABLED=true`：启用 Supabase 登录能力（Google/邮箱）。
+- `POLYWEATHER_AUTH_REQUIRED=true`：网站与后端 API 强制登录。
+- `POLYWEATHER_AUTH_REQUIRED=false`：游客可访问全部功能，用户可主动登录。
+- `POLYWEATHER_AUTH_REQUIRE_SUBSCRIPTION=true`：在强制鉴权模式下，额外要求 `subscriptions` 表里存在有效 `active` 记录。
 
 ## 6. 验证
 
 1. 访问 `/auth/login`，测试 Google 一键登录。
-2. 登录后访问首页，确认页面可用。
-3. 调用 `/api/cities`，确认返回 200。
-4. 退出登录后再次访问，确认被重定向到登录页。
-
+2. `POLYWEATHER_AUTH_REQUIRED=false` 时，未登录访问首页与 `/api/cities` 应返回 200。
+3. 登录后访问 `/api/auth/me`，应返回 `authenticated=true` 与 `user_id`。
+4. `POLYWEATHER_AUTH_REQUIRED=true` 时，未登录访问受保护接口应返回 401 或跳转登录页。

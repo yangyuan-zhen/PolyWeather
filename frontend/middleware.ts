@@ -5,10 +5,19 @@ import {
 } from "@/lib/supabase/server";
 
 const SESSION_COOKIE = "polyweather_entitlement";
+
+function readEnvBool(name: string, fallback: boolean) {
+  const raw = process.env[name];
+  if (raw == null) return fallback;
+  return String(raw).trim().toLowerCase() === "true";
+}
+
 const SUPABASE_AUTH_ENABLED =
-  String(process.env.POLYWEATHER_AUTH_ENABLED || "")
-    .trim()
-    .toLowerCase() === "true";
+  readEnvBool("POLYWEATHER_AUTH_ENABLED", false);
+const SUPABASE_AUTH_REQUIRED = readEnvBool(
+  "POLYWEATHER_AUTH_REQUIRED",
+  SUPABASE_AUTH_ENABLED,
+);
 
 function isStaticAsset(pathname: string) {
   return (
@@ -114,6 +123,17 @@ async function handleSupabaseAuthGate(request: NextRequest) {
   return NextResponse.redirect(loginUrl);
 }
 
+async function handleSupabaseOptionalSession(request: NextRequest) {
+  const response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  });
+  const supabase = createSupabaseMiddlewareClient(request, response);
+  await supabase.auth.getUser();
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (isStaticAsset(pathname)) {
@@ -121,7 +141,10 @@ export async function middleware(request: NextRequest) {
   }
 
   if (SUPABASE_AUTH_ENABLED && hasSupabaseServerEnv()) {
-    return handleSupabaseAuthGate(request);
+    if (SUPABASE_AUTH_REQUIRED) {
+      return handleSupabaseAuthGate(request);
+    }
+    return handleSupabaseOptionalSession(request);
   }
   return handleLegacyTokenGate(request);
 }

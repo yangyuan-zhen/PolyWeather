@@ -11,6 +11,7 @@ import {
   Copy,
   KeyRound,
   Loader2,
+  LogIn,
   LogOut,
   RefreshCw,
   ShieldCheck,
@@ -28,6 +29,7 @@ type AuthMeResponse = {
   user_id?: string | null;
   email?: string | null;
   entitlement_mode?: string | null;
+  auth_required?: boolean;
   subscription_required?: boolean;
   subscription_active?: boolean | null;
 };
@@ -130,6 +132,7 @@ export function AccountCenter() {
   };
 
   const userId = backend?.user_id || user?.id || "";
+  const isAuthenticated = Boolean(userId);
   const email = backend?.email || user?.email || "";
   const providerRaw = normalizeProvider(user);
   const provider = providerRaw ? providerRaw.toUpperCase() : t("account.na");
@@ -143,6 +146,8 @@ export function AccountCenter() {
 
   const modeLabel = useMemo(() => {
     const mode = String(backend?.entitlement_mode || "").trim().toLowerCase();
+    if (mode === "supabase_required") return t("account.mode.supabaseRequired");
+    if (mode === "supabase_optional") return t("account.mode.supabaseOptional");
     if (mode === "supabase") return t("account.mode.supabase");
     if (mode === "legacy_token") return t("account.mode.legacy");
     if (mode === "disabled") return t("account.mode.disabled");
@@ -192,10 +197,17 @@ export function AccountCenter() {
               {refreshing ? <Loader2 size={15} className={styles.spin} /> : <RefreshCw size={15} />}
               {t("account.refresh")}
             </button>
-            <button type="button" className={styles.primaryBtn} onClick={() => void onSignOut()}>
-              <LogOut size={15} />
-              {t("account.signOut")}
-            </button>
+            {isAuthenticated ? (
+              <button type="button" className={styles.primaryBtn} onClick={() => void onSignOut()}>
+                <LogOut size={15} />
+                {t("account.signOut")}
+              </button>
+            ) : (
+              <Link className={styles.primaryBtn} href="/auth/login?next=%2Faccount">
+                <LogIn size={15} />
+                {t("account.signIn")}
+              </Link>
+            )}
           </div>
         </header>
 
@@ -205,24 +217,33 @@ export function AccountCenter() {
             <h2>{displayName}</h2>
             <p>{email || t("account.na")}</p>
             <div className={styles.badges}>
-              <span className={styles.badge}>
-                <CheckCircle2 size={14} />
-                {t("account.authenticated")}
-              </span>
-              {backend?.subscription_active ? (
-                <span className={styles.badge}>
-                  <ShieldCheck size={14} />
-                  {t("account.subscriptionActive")}
-                </span>
-              ) : backend?.subscription_required ? (
-                <span className={styles.badgeWarn}>
-                  <KeyRound size={14} />
-                  {t("account.subscriptionRequired")}
-                </span>
+              {isAuthenticated ? (
+                <>
+                  <span className={styles.badge}>
+                    <CheckCircle2 size={14} />
+                    {t("account.authenticated")}
+                  </span>
+                  {backend?.subscription_active ? (
+                    <span className={styles.badge}>
+                      <ShieldCheck size={14} />
+                      {t("account.subscriptionActive")}
+                    </span>
+                  ) : backend?.subscription_required ? (
+                    <span className={styles.badgeWarn}>
+                      <KeyRound size={14} />
+                      {t("account.subscriptionRequired")}
+                    </span>
+                  ) : (
+                    <span className={styles.badgeGhost}>
+                      <ShieldCheck size={14} />
+                      {t("account.subscriptionUnknown")}
+                    </span>
+                  )}
+                </>
               ) : (
                 <span className={styles.badgeGhost}>
                   <ShieldCheck size={14} />
-                  {t("account.subscriptionUnknown")}
+                  {t("account.guest")}
                 </span>
               )}
             </div>
@@ -259,7 +280,9 @@ export function AccountCenter() {
                 <dd>
                   {backend?.authenticated
                     ? t("account.backend.ok")
-                    : t("account.backend.fail")}
+                    : backend?.auth_required
+                    ? t("account.backend.fail")
+                    : t("account.guest")}
                 </dd>
               </div>
               <div>
@@ -328,4 +351,3 @@ export function AccountCenter() {
     </main>
   );
 }
-

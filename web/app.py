@@ -91,6 +91,10 @@ def _env_bool(name: str, default: bool = False) -> bool:
 _ENTITLEMENT_GUARD_ENABLED = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
 _ENTITLEMENT_HEADER = "x-polyweather-entitlement"
 _ENTITLEMENT_TOKEN = (os.getenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN") or "").strip()
+_SUPABASE_AUTH_REQUIRED = _env_bool(
+    "POLYWEATHER_AUTH_REQUIRED",
+    SUPABASE_ENTITLEMENT.enabled,
+)
 
 
 def _legacy_service_token_valid(request: Request) -> bool:
@@ -100,9 +104,25 @@ def _legacy_service_token_valid(request: Request) -> bool:
     return bool(_ENTITLEMENT_TOKEN and token == _ENTITLEMENT_TOKEN)
 
 
+def _bind_optional_supabase_identity(request: Request) -> None:
+    if not SUPABASE_ENTITLEMENT.configured:
+        return
+    access_token = extract_bearer_token(request.headers.get("authorization"))
+    if not access_token:
+        return
+    identity = SUPABASE_ENTITLEMENT.get_identity(access_token)
+    if not identity:
+        return
+    request.state.auth_user_id = identity.user_id
+    request.state.auth_email = identity.email
+
+
 def _assert_entitlement(request: Request) -> None:
     if SUPABASE_ENTITLEMENT.enabled:
         if _legacy_service_token_valid(request):
+            return
+        if not _SUPABASE_AUTH_REQUIRED:
+            _bind_optional_supabase_identity(request)
             return
         if not SUPABASE_ENTITLEMENT.configured:
             raise HTTPException(
@@ -1003,28 +1023,36 @@ async def city_history(request: Request, name: str):
 @app.get("/api/auth/me")
 async def auth_me(request: Request):
     _assert_entitlement(request)
+    _bind_optional_supabase_identity(request)
+
     user_id = getattr(request.state, "auth_user_id", None)
     subscription_required = bool(
-        SUPABASE_ENTITLEMENT.enabled and SUPABASE_ENTITLEMENT.require_subscription
+        SUPABASE_ENTITLEMENT.enabled
+        and _SUPABASE_AUTH_REQUIRED
+        and SUPABASE_ENTITLEMENT.require_subscription
     )
     subscription_active = None
     if SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(user_id)
+            if SUPABASE_ENTITLEMENT.require_subscription:
+                subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(user_id)
         except Exception:
             subscription_active = None
 
     return {
-        "authenticated": True,
+        "authenticated": bool(user_id),
         "user_id": user_id,
         "email": getattr(request.state, "auth_email", None),
         "entitlement_mode": (
-            "supabase"
+            "supabase_required"
+            if SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED
+            else "supabase_optional"
             if SUPABASE_ENTITLEMENT.enabled
             else "legacy_token"
             if _ENTITLEMENT_GUARD_ENABLED
             else "disabled"
         ),
+        "auth_required": bool(SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED),
         "subscription_required": subscription_required,
         "subscription_active": subscription_active,
     }
