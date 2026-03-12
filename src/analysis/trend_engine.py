@@ -175,6 +175,7 @@ def analyze_weather_trend(
     recent_temps = metar.get("recent_temps", [])
     trend_desc = ""
     trend_direction = "unknown"
+    trend_display = ""
     if len(recent_temps) >= 2:
         temps_only = [t for _, t in recent_temps]
         latest_val = temps_only[0]
@@ -194,7 +195,7 @@ def analyze_weather_trend(
                 [f"{t}{temp_symbol}@{tm}" for tm, t in recent_temps[:3]]
             )
             if all_same:
-                trend_desc = f"📉 温度已停滞（{trend_display}），大概率到顶。"
+                trend_desc = f"📉 温度暂时停滞（{trend_display}）。"
                 trend_direction = "stagnant"
             elif all_rising and diff > 0:
                 trend_desc = f"📈 仍在升温（{trend_display}）。"
@@ -206,16 +207,28 @@ def analyze_weather_trend(
                 trend_desc = f"📊 温度波动中（{trend_display}）。"
                 trend_direction = "mixed"
         elif diff == 0:
-            trend_desc = f"📉 温度持平（最近两条都是 {latest_val}{temp_symbol}）。"
+            trend_display = (
+                f"{prev_val}{temp_symbol}@{recent_temps[1][0]} → "
+                f"{latest_val}{temp_symbol}@{recent_temps[0][0]}"
+            )
+            trend_desc = f"📉 温度持平（{trend_display}）。"
             trend_direction = "stagnant"
         elif diff > 0:
+            trend_display = (
+                f"{prev_val}{temp_symbol}@{recent_temps[1][0]} → "
+                f"{latest_val}{temp_symbol}@{recent_temps[0][0]}"
+            )
             trend_desc = f"📈 仍在升温（{prev_val} → {latest_val}{temp_symbol}）。"
             trend_direction = "rising"
         else:
+            trend_display = (
+                f"{prev_val}{temp_symbol}@{recent_temps[1][0]} → "
+                f"{latest_val}{temp_symbol}@{recent_temps[0][0]}"
+            )
             trend_desc = f"📉 已开始降温（{prev_val} → {latest_val}{temp_symbol}）。"
             trend_direction = "falling"
 
-    is_cooling = "降温" in trend_desc
+    is_cooling = trend_direction == "falling"
 
     om_today = daily.get("temperature_2m_max", [None])[0]
 
@@ -240,6 +253,28 @@ def analyze_weather_trend(
         peak_status = "in_window"
     else:
         peak_status = "before"
+
+    if trend_direction == "stagnant":
+        if peak_status == "before":
+            trend_desc = (
+                f"🕒 峰值窗口前温度暂时停滞（{trend_display or '近2-3报持平'}），"
+                "尚不能据此判定到顶。"
+            )
+        elif peak_status == "in_window":
+            trend_desc = (
+                f"⏱️ 峰值窗口内温度停滞（{trend_display or '近2-3报持平'}），"
+                "需继续观察后续是否再创新高。"
+            )
+        else:
+            trend_desc = (
+                f"📉 峰值窗口后温度停滞（{trend_display or '近2-3报持平'}），"
+                "存在到顶迹象。"
+            )
+    elif trend_direction == "falling" and peak_status == "before":
+        trend_desc = (
+            f"📉 峰值窗口前出现回落（{trend_display or '近2报回落'}），"
+            "暂不能单凭回落判定今日高温已锁定。"
+        )
 
     # === Ensemble ===
     ensemble = weather_data.get("ensemble", {})
@@ -461,6 +496,10 @@ def analyze_weather_trend(
             if len(peak_hours) > 1
             else peak_hours[0]
         )
+        ai_features.append(
+            f"🧭 峰值窗口判定: 当前 {local_hour:02d}:{local_minute:02d}，"
+            f"预报最热窗口 {window}，状态={peak_status}。"
+        )
         if local_hour <= last_peak_h:
             if last_peak_h < 6:
                 ai_features.append("⚠️ <b>提示</b>：预测最热在凌晨，后续气温可能一路走低。")
@@ -475,6 +514,7 @@ def analyze_weather_trend(
         remain_hrs = first_peak_h - local_hour_frac
         if local_hour_frac > last_peak_h:
             ai_features.append(f"⏱️ 状态: 预报峰值时段已过 ({window})。")
+            ai_features.append("✅ 判定约束: 峰值窗口已过，可结合回落幅度判断是否锁定。")
         elif first_peak_h <= local_hour_frac <= last_peak_h:
             remain_in_window = last_peak_h - local_hour_frac
             if remain_in_window < 1:
@@ -485,12 +525,15 @@ def analyze_weather_trend(
                 ai_features.append(
                     f"⏱️ 状态: 正处于预报最热窗口 ({window})内，距窗口结束约 {remain_in_window:.1f}h。"
                 )
+            ai_features.append("⚠️ 判定约束: 窗口内即使停滞，也需后续2报确认未再创新高。")
         elif remain_hrs < 1:
             ai_features.append(
                 f"⏱️ 状态: 距最热时段开始还有约 {int(remain_hrs * 60)} 分钟 ({window})，尚未进入峰值窗口。"
             )
+            ai_features.append("🚫 判定约束: 峰值窗口前禁止判定‘已锁定/已确认底线’。")
         else:
             ai_features.append(f"⏱️ 状态: 距最热时段开始还有约 {remain_hrs:.1f}h ({window})。")
+            ai_features.append("🚫 判定约束: 峰值窗口前禁止判定‘已锁定/已确认底线’。")
 
     # === AI fact features ===
     if cur_temp is not None:
