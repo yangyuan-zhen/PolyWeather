@@ -6,20 +6,24 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import type { LucideIcon } from "lucide-react";
 import {
+  BadgeCheck,
   Bot,
   CheckCircle2,
   ChevronLeft,
   Clock,
   Copy,
   Crown,
+  CreditCard,
   Fingerprint,
   Hash,
   Loader2,
   LogIn,
   LogOut,
   Mail,
+  Wallet,
   RefreshCw,
   Shield,
+  Sparkles,
   User as UserIcon,
   UserCheck,
 } from "lucide-react";
@@ -37,6 +41,56 @@ type AuthMeResponse = {
   subscription_required?: boolean;
   subscription_active?: boolean | null;
 };
+
+type PaymentPlan = {
+  plan_code: string;
+  plan_id: number;
+  amount_usdc: string;
+  duration_days: number;
+};
+
+type PaymentConfig = {
+  enabled?: boolean;
+  configured?: boolean;
+  chain_id?: number;
+  token_address?: string;
+  token_decimals?: number;
+  receiver_contract?: string;
+  confirmations?: number;
+  plans?: PaymentPlan[];
+};
+
+type BoundWallet = {
+  chain_id: number;
+  address: string;
+  status: string;
+  is_primary: boolean;
+  verified_at?: string | null;
+};
+
+type CreatedIntent = {
+  intent?: {
+    intent_id: string;
+    order_id_hex: string;
+    plan_code: string;
+    amount_usdc: string;
+    allowed_wallet?: string | null;
+  };
+  tx_payload?: {
+    chain_id: number;
+    to: string;
+    data: string;
+    value: string;
+  };
+};
+
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: any[] | object }) => Promise<any>;
+    };
+  }
+}
 
 type InfoItemProps = {
   icon: LucideIcon;
@@ -72,6 +126,12 @@ function normalizeProvider(user: User | null) {
   return "";
 }
 
+function shortAddress(address: string) {
+  const text = String(address || "");
+  if (!text.startsWith("0x") || text.length < 12) return text || "--";
+  return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
 function InfoItem({ icon: Icon, label, value, status = "default" }: InfoItemProps) {
   return (
     <div className="group flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4 transition-all hover:bg-white/10">
@@ -102,8 +162,51 @@ export function AccountCenter() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [boundWallets, setBoundWallets] = useState<BoundWallet[]>([]);
+  const [walletAddress, setWalletAddress] = useState("");
+  const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
+  const [selectedWallet, setSelectedWallet] = useState("");
+  const [paymentBusy, setPaymentBusy] = useState(false);
+  const [paymentInfo, setPaymentInfo] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const [lastIntentId, setLastIntentId] = useState("");
+  const [lastTxHash, setLastTxHash] = useState("");
 
   const supabaseReady = hasSupabasePublicEnv();
+
+  const loadPaymentSnapshot = useCallback(async () => {
+    if (!backend?.authenticated) {
+      setPaymentConfig(null);
+      setBoundWallets([]);
+      return;
+    }
+    try {
+      const [configRes, walletsRes] = await Promise.all([
+        fetch("/api/payments/config", { cache: "no-store" }),
+        fetch("/api/payments/wallets", { cache: "no-store" }),
+      ]);
+      if (configRes.ok) {
+        const configJson = (await configRes.json()) as PaymentConfig;
+        setPaymentConfig(configJson);
+        if (!selectedPlanCode && Array.isArray(configJson.plans) && configJson.plans.length) {
+          setSelectedPlanCode(configJson.plans[0].plan_code);
+        }
+      }
+      if (walletsRes.ok) {
+        const walletsJson = (await walletsRes.json()) as {
+          wallets?: BoundWallet[];
+        };
+        const wallets = Array.isArray(walletsJson.wallets) ? walletsJson.wallets : [];
+        setBoundWallets(wallets);
+        if (wallets.length && !selectedWallet) {
+          setSelectedWallet(wallets[0].address);
+        }
+      }
+    } catch {
+      return;
+    }
+  }, [backend?.authenticated, selectedPlanCode, selectedWallet]);
 
   const loadSnapshot = useCallback(async () => {
     setErrorText("");
@@ -146,9 +249,14 @@ export function AccountCenter() {
     };
   }, [loadSnapshot]);
 
+  useEffect(() => {
+    void loadPaymentSnapshot();
+  }, [loadPaymentSnapshot]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadSnapshot();
+    await loadPaymentSnapshot();
     setRefreshing(false);
   };
 
@@ -214,6 +322,177 @@ export function AccountCenter() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch {}
+  };
+
+  const planList = paymentConfig?.plans || [];
+  const selectedPlan = planList.find((p) => p.plan_code === selectedPlanCode) || planList[0];
+  const paymentFeatureReady = Boolean(paymentConfig?.enabled && paymentConfig?.configured);
+
+  const connectAndBindWallet = async () => {
+    setPaymentError("");
+    setPaymentInfo("");
+    if (!isAuthenticated) {
+      setPaymentError("请先登录后再绑定钱包。");
+      return;
+    }
+    const eth = window.ethereum;
+    if (!eth) {
+      setPaymentError("未检测到 MetaMask，请先安装扩展。");
+      return;
+    }
+    setPaymentBusy(true);
+    try {
+      const accounts = (await eth.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      const address = String(accounts?.[0] || "").toLowerCase();
+      if (!address) {
+        throw new Error("钱包账户为空");
+      }
+      setWalletAddress(address);
+      const challengeRes = await fetch("/api/payments/wallets/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address }),
+      });
+      if (!challengeRes.ok) {
+        const raw = (await challengeRes.text()).slice(0, 300);
+        throw new Error(`challenge failed: ${raw}`);
+      }
+      const challengeJson = (await challengeRes.json()) as {
+        nonce?: string;
+        message?: string;
+      };
+      const message = String(challengeJson.message || "");
+      const nonce = String(challengeJson.nonce || "");
+      if (!message || !nonce) {
+        throw new Error("challenge payload invalid");
+      }
+      const signature = (await eth.request({
+        method: "personal_sign",
+        params: [message, address],
+      })) as string;
+      const verifyRes = await fetch("/api/payments/wallets/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address, nonce, signature }),
+      });
+      if (!verifyRes.ok) {
+        const raw = (await verifyRes.text()).slice(0, 300);
+        throw new Error(`verify failed: ${raw}`);
+      }
+      setPaymentInfo(`钱包绑定成功: ${shortAddress(address)}`);
+      await loadPaymentSnapshot();
+    } catch (error) {
+      setPaymentError(String(error));
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
+  const createIntentAndPay = async () => {
+    setPaymentError("");
+    setPaymentInfo("");
+    if (!isAuthenticated) {
+      setPaymentError("请先登录后再支付。");
+      return;
+    }
+    if (!paymentConfig?.configured) {
+      setPaymentError("支付服务未配置完成。");
+      return;
+    }
+    const eth = window.ethereum;
+    if (!eth) {
+      setPaymentError("未检测到 MetaMask。");
+      return;
+    }
+    const payingWallet = (selectedWallet || walletAddress || "").toLowerCase();
+    if (!payingWallet) {
+      setPaymentError("请先绑定钱包。");
+      return;
+    }
+
+    setPaymentBusy(true);
+    try {
+      const currentChainIdHex = String(
+        (await eth.request({ method: "eth_chainId" })) || "",
+      );
+      const targetChainId = Number(paymentConfig.chain_id || 137);
+      const targetChainHex = `0x${targetChainId.toString(16)}`;
+      if (currentChainIdHex.toLowerCase() !== targetChainHex.toLowerCase()) {
+        await eth.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: targetChainHex }],
+        });
+      }
+
+      const createRes = await fetch("/api/payments/intents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plan_code: selectedPlanCode || "pro_monthly",
+          payment_mode: "strict",
+          allowed_wallet: payingWallet,
+          metadata: { source: "account_center" },
+        }),
+      });
+      if (!createRes.ok) {
+        const raw = (await createRes.text()).slice(0, 350);
+        throw new Error(`create intent failed: ${raw}`);
+      }
+      const created = (await createRes.json()) as CreatedIntent;
+      const intentId = String(created.intent?.intent_id || "");
+      const txPayload = created.tx_payload;
+      if (!intentId || !txPayload?.to || !txPayload?.data) {
+        throw new Error("intent payload invalid");
+      }
+      setLastIntentId(intentId);
+
+      const txHash = (await eth.request({
+        method: "eth_sendTransaction",
+        params: [
+          {
+            from: payingWallet,
+            to: txPayload.to,
+            data: txPayload.data,
+            value: txPayload.value || "0x0",
+          },
+        ],
+      })) as string;
+      const txHashNorm = String(txHash || "").toLowerCase();
+      setLastTxHash(txHashNorm);
+
+      const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tx_hash: txHashNorm,
+          from_address: payingWallet,
+        }),
+      });
+      if (!submitRes.ok) {
+        const raw = (await submitRes.text()).slice(0, 350);
+        throw new Error(`submit tx failed: ${raw}`);
+      }
+
+      const confirmRes = await fetch(`/api/payments/intents/${intentId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tx_hash: txHashNorm }),
+      });
+      if (!confirmRes.ok) {
+        const raw = (await confirmRes.text()).slice(0, 350);
+        setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待确认中。`);
+        throw new Error(`confirm pending: ${raw}`);
+      }
+      setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
+      await loadSnapshot();
+      await loadPaymentSnapshot();
+    } catch (error) {
+      setPaymentError(String(error));
+    } finally {
+      setPaymentBusy(false);
+    }
   };
 
   return (
@@ -347,6 +626,138 @@ export function AccountCenter() {
                 <InfoItem icon={LogIn} label="登录方式" value={provider} />
                 <InfoItem icon={Clock} label="最近登录" value={lastSignIn} />
               </div>
+            </section>
+          </div>
+
+          <div className="lg:col-span-12">
+            <section className="rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-600/10 to-cyan-600/10 p-8 backdrop-blur-sm">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="flex items-center gap-2 text-lg font-bold">
+                  <Wallet size={20} className="text-emerald-300" /> 钱包支付（P1 合约收款）
+                </h3>
+                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-slate-300">
+                  Chain #{paymentConfig?.chain_id || 137}
+                </span>
+              </div>
+
+              {!isAuthenticated ? (
+                <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+                  请先登录，再绑定钱包并完成支付。
+                </p>
+              ) : null}
+
+              {isAuthenticated && !paymentFeatureReady ? (
+                <p className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+                  支付服务未配置完成（需要后端开启 `POLYWEATHER_PAYMENT_*` 配置）。
+                </p>
+              ) : null}
+
+              {isAuthenticated && paymentFeatureReady ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <p className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+                        <BadgeCheck size={16} className="text-emerald-300" />
+                        已绑定钱包
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void connectAndBindWallet()}
+                        disabled={paymentBusy}
+                        className="rounded-lg border border-emerald-400/30 bg-emerald-500/20 px-3 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/30 disabled:opacity-60"
+                      >
+                        连接并绑定 MetaMask
+                      </button>
+                    </div>
+                    <div className="space-y-2">
+                      {boundWallets.length ? (
+                        boundWallets.map((wallet) => (
+                          <label
+                            key={wallet.address}
+                            className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200"
+                          >
+                            <span className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="payWallet"
+                                className="h-4 w-4"
+                                checked={selectedWallet === wallet.address}
+                                onChange={() => setSelectedWallet(wallet.address)}
+                              />
+                              {shortAddress(wallet.address)}
+                              {wallet.is_primary ? (
+                                <span className="rounded bg-blue-500/30 px-1.5 py-0.5 text-[10px] text-blue-100">
+                                  主
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="text-xs text-slate-400">{wallet.status}</span>
+                          </label>
+                        ))
+                      ) : (
+                        <p className="text-sm text-slate-400">暂无已绑定钱包。</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+                    <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-200">
+                      <CreditCard size={16} className="text-cyan-300" />
+                      选择套餐并支付
+                    </p>
+                    <div className="mb-3 space-y-2">
+                      {planList.map((plan) => (
+                        <label
+                          key={plan.plan_code}
+                          className="flex cursor-pointer items-center justify-between rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                        >
+                          <span className="flex items-center gap-2 text-slate-200">
+                            <input
+                              type="radio"
+                              name="payPlan"
+                              className="h-4 w-4"
+                              checked={selectedPlanCode === plan.plan_code}
+                              onChange={() => setSelectedPlanCode(plan.plan_code)}
+                            />
+                            {plan.plan_code}
+                          </span>
+                          <span className="text-cyan-200">
+                            {plan.amount_usdc} USDC / {plan.duration_days} 天
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void createIntentAndPay()}
+                      disabled={paymentBusy || !selectedPlan || !selectedWallet}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-60"
+                    >
+                      {paymentBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                      创建订单并支付
+                    </button>
+                    {lastIntentId ? (
+                      <p className="mt-2 text-xs text-slate-400">
+                        Intent: {lastIntentId}
+                      </p>
+                    ) : null}
+                    {lastTxHash ? (
+                      <p className="mt-1 text-xs text-slate-400">Tx: {shortAddress(lastTxHash)}</p>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {paymentInfo ? (
+                <p className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+                  {paymentInfo}
+                </p>
+              ) : null}
+              {paymentError ? (
+                <p className="mt-3 rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
+                  {paymentError}
+                </p>
+              ) : null}
             </section>
           </div>
 

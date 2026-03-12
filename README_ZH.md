@@ -94,6 +94,12 @@ flowchart TD
 5. 可观测性：
    - 前端集成 Vercel Speed Insights。
    - Bot 启动和后台循环状态可通过 `/diag` 查看。
+6. P1 合约支付链路（新增）：
+   - 新增支付接口：`/api/payments/config|wallets|intents/*`。
+   - 支持 MetaMask 钱包绑定（nonce + `personal_sign` 验签）。
+   - 支持合约订单支付：前端拿 `tx_payload` 调 `eth_sendTransaction`。
+   - 后端按 `OrderPaid(orderId,payer,planId,token,amount)` 事件验单并自动开通订阅。
+   - 交易确认后自动写入 `payments/subscriptions/entitlement_events` 并可推送 Telegram。
 
 ## 目录说明
 

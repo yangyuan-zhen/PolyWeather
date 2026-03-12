@@ -94,6 +94,12 @@ flowchart TD
 5. Observability:
    - Vercel Speed Insights integrated.
    - Telegram alert/watcher startup diagnostics exposed through `/diag`.
+6. P1 contract checkout (new):
+   - New payment APIs: `/api/payments/config|wallets|intents/*`.
+   - MetaMask wallet binding via nonce challenge + `personal_sign`.
+   - Frontend receives contract `tx_payload` and calls `eth_sendTransaction`.
+   - Backend validates `OrderPaid(orderId,payer,planId,token,amount)` onchain event and auto-grants entitlement.
+   - Confirmation writes `payments/subscriptions/entitlement_events` and can notify Telegram.
 
 ## Repository Layout
 

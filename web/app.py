@@ -23,6 +23,7 @@ if _file_dir not in sys.path:
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
 from loguru import logger
 
 from src.utils.config_loader import load_config
@@ -35,6 +36,7 @@ from src.auth.supabase_entitlement import (
     SUPABASE_ENTITLEMENT,
     extract_bearer_token,
 )
+from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError
 
 # ──────────────────────────────────────────────────────────
 #  Setup
@@ -155,6 +157,52 @@ def _assert_entitlement(request: Request) -> None:
 
     if not _legacy_service_token_valid(request):
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _require_supabase_identity(request: Request) -> Dict[str, str]:
+    if not SUPABASE_ENTITLEMENT.enabled:
+        raise HTTPException(
+            status_code=503,
+            detail="payment requires POLYWEATHER_AUTH_ENABLED=true",
+        )
+    if not SUPABASE_ENTITLEMENT.configured:
+        raise HTTPException(
+            status_code=503,
+            detail="payment requires SUPABASE_URL and SUPABASE_ANON_KEY",
+        )
+    token = extract_bearer_token(request.headers.get("authorization"))
+    if not token:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    identity = SUPABASE_ENTITLEMENT.get_identity(token)
+    if not identity:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    return {"user_id": identity.user_id, "email": identity.email}
+
+
+class WalletChallengeRequest(BaseModel):
+    address: str = Field(..., min_length=8)
+
+
+class WalletVerifyRequest(BaseModel):
+    address: str = Field(..., min_length=8)
+    nonce: str = Field(..., min_length=6)
+    signature: str = Field(..., min_length=20)
+
+
+class CreatePaymentIntentRequest(BaseModel):
+    plan_code: str = Field(default="pro_monthly", min_length=2)
+    payment_mode: str = Field(default="strict")
+    allowed_wallet: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SubmitPaymentTxRequest(BaseModel):
+    tx_hash: str = Field(..., min_length=10)
+    from_address: str = Field(..., min_length=8)
+
+
+class ConfirmPaymentTxRequest(BaseModel):
+    tx_hash: Optional[str] = None
 
 
 def _sf(v) -> Optional[float]:
@@ -1056,6 +1104,112 @@ async def auth_me(request: Request):
         "subscription_required": subscription_required,
         "subscription_active": subscription_active,
     }
+
+
+@app.get("/api/payments/config")
+async def payment_config(request: Request):
+    _assert_entitlement(request)
+    try:
+        return PAYMENT_CHECKOUT.get_config_payload()
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.get("/api/payments/wallets")
+async def payment_wallets(request: Request):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        wallets = PAYMENT_CHECKOUT.list_wallets(identity["user_id"])
+        return {
+            "wallets": [w.__dict__ for w in wallets],
+            "chain_id": PAYMENT_CHECKOUT.chain_id,
+        }
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.post("/api/payments/wallets/challenge")
+async def payment_wallet_challenge(request: Request, body: WalletChallengeRequest):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        challenge = PAYMENT_CHECKOUT.create_wallet_challenge(
+            user_id=identity["user_id"],
+            address=body.address,
+        )
+        return challenge
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.post("/api/payments/wallets/verify")
+async def payment_wallet_verify(request: Request, body: WalletVerifyRequest):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        bound = PAYMENT_CHECKOUT.verify_wallet_binding(
+            user_id=identity["user_id"],
+            address=body.address,
+            nonce=body.nonce,
+            signature=body.signature,
+        )
+        return {"wallet": bound.__dict__}
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.post("/api/payments/intents")
+async def payment_create_intent(request: Request, body: CreatePaymentIntentRequest):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        return PAYMENT_CHECKOUT.create_intent(
+            user_id=identity["user_id"],
+            plan_code=body.plan_code,
+            payment_mode=body.payment_mode,
+            allowed_wallet=body.allowed_wallet,
+            metadata=body.metadata,
+        )
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.post("/api/payments/intents/{intent_id}/submit")
+async def payment_submit_tx(
+    request: Request,
+    intent_id: str,
+    body: SubmitPaymentTxRequest,
+):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        return PAYMENT_CHECKOUT.submit_intent_tx(
+            user_id=identity["user_id"],
+            intent_id=intent_id,
+            tx_hash=body.tx_hash,
+            from_address=body.from_address,
+        )
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.post("/api/payments/intents/{intent_id}/confirm")
+async def payment_confirm_tx(
+    request: Request,
+    intent_id: str,
+    body: ConfirmPaymentTxRequest,
+):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        return PAYMENT_CHECKOUT.confirm_intent_tx(
+            user_id=identity["user_id"],
+            intent_id=intent_id,
+            tx_hash=body.tx_hash,
+        )
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
 @app.get("/api/city/{name}/summary")

@@ -1,4 +1,4 @@
-# Supabase + Google 登录接入说明（P0）
+# Supabase + Google 登录 + 合约支付接入说明（P1）
 
 ## 1. 目标
 
@@ -26,6 +26,10 @@
 - `subscriptions`
 - `payments`
 - `entitlement_events`
+- `user_wallets`
+- `wallet_link_challenges`
+- `payment_intents`
+- `payment_transactions`
 
 并建立 `auth.users -> profiles` 同步触发器。
 
@@ -56,6 +60,24 @@ SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_HTTP_TIMEOUT_SEC=8
 SUPABASE_AUTH_CACHE_TTL_SEC=30
 SUPABASE_SUB_CACHE_TTL_SEC=60
+
+# P1 合约支付（MetaMask + Polygon USDC）
+POLYWEATHER_PAYMENT_ENABLED=true
+POLYWEATHER_PAYMENT_CHAIN_ID=137
+POLYWEATHER_PAYMENT_RPC_URL=https://polygon-rpc.com
+POLYWEATHER_PAYMENT_RECEIVER_CONTRACT=0x<your_payment_contract>
+POLYWEATHER_PAYMENT_TOKEN_ADDRESS=0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174
+POLYWEATHER_PAYMENT_TOKEN_DECIMALS=6
+POLYWEATHER_PAYMENT_CONFIRMATIONS=2
+POLYWEATHER_PAYMENT_INTENT_TTL_SEC=1800
+POLYWEATHER_PAYMENT_WALLET_CHALLENGE_TTL_SEC=600
+POLYWEATHER_PAYMENT_HTTP_TIMEOUT_SEC=10
+POLYWEATHER_PAYMENT_POLL_INTERVAL_SEC=4
+POLYWEATHER_PAYMENT_MAX_WAIT_SEC=50
+POLYWEATHER_PAYMENT_TELEGRAM_NOTIFY_ENABLED=true
+# JSON 示例:
+# {"pro_monthly":{"plan_id":101,"amount_usdc":"29","duration_days":30}}
+POLYWEATHER_PAYMENT_PLAN_CATALOG_JSON=
 ```
 
 可选（Bot 也走 Supabase 订阅）：
@@ -78,3 +100,23 @@ POLYWEATHER_BOT_USE_SUPABASE_ENTITLEMENT=true
 2. `POLYWEATHER_AUTH_REQUIRED=false` 时，未登录访问首页与 `/api/cities` 应返回 200。
 3. 登录后访问 `/api/auth/me`，应返回 `authenticated=true` 与 `user_id`。
 4. `POLYWEATHER_AUTH_REQUIRED=true` 时，未登录访问受保护接口应返回 401 或跳转登录页。
+
+## 7. P1 支付链路验证
+
+1. 登录后访问 `GET /api/payments/config`，应看到 `enabled=true`、`configured=true`。
+2. 账户页点击“连接并绑定 MetaMask”，完成签名后 `GET /api/payments/wallets` 可看到地址。
+3. 点击“创建订单并支付”：
+   - `POST /api/payments/intents`
+   - MetaMask 发交易到 `POLYWEATHER_PAYMENT_RECEIVER_CONTRACT`
+   - `POST /api/payments/intents/{intent_id}/submit`
+   - `POST /api/payments/intents/{intent_id}/confirm`
+4. 确认后应自动写入：
+   - `payments`（`status=confirmed`）
+   - `subscriptions`（新增 `active` 记录）
+   - `entitlement_events`（`subscription_granted`）
+
+合约事件要求：
+
+- 合约需在 `pay(orderId, planId, amount, token)` 成功后发出  
+  `OrderPaid(bytes32 orderId, address payer, uint256 planId, address token, uint256 amount)`  
+  （字段顺序和类型需一致）。
