@@ -1,9 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRight,
+  ChevronLeft,
   Chrome,
   Cloud,
   CloudRain,
@@ -136,6 +138,15 @@ export function LoginClient({ nextPath }: LoginClientProps) {
       <div className="absolute bottom-[-10%] right-[-10%] h-[30vw] w-[30vw] rounded-full bg-indigo-500/20 blur-[100px]" />
 
       <div className="relative mx-4 w-full max-w-[420px] rounded-[2rem] border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur-xl">
+        <Link
+          href="/"
+          className="group absolute left-6 top-6 rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 transition-all hover:bg-white/10 hover:text-white active:scale-90"
+          title="返回首页"
+          aria-label="返回首页"
+        >
+          <ChevronLeft className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" />
+        </Link>
+
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-400 shadow-lg shadow-blue-500/20">
             <Cloud className="h-10 w-10 text-white" />
@@ -230,10 +241,6 @@ export function LoginClient({ nextPath }: LoginClientProps) {
             {isLogin ? "登录后将为您个性化定制首页数据" : "注册即代表同意我们的服务条款"}
           </p>
         </div>
-
-        <p className="mt-3 text-center text-[11px] text-slate-500">
-          登录后跳转到: <code>{nextPath}</code>
-        </p>
 
         {!supabaseReady ? (
           <p className="mt-3 text-center text-sm text-rose-300">
