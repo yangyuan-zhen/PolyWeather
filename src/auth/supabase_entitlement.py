@@ -41,6 +41,7 @@ def extract_bearer_token(auth_header: Optional[str]) -> str:
 class SupabaseIdentity:
     user_id: str
     email: str
+    points: int = 0
 
 
 class SupabaseEntitlementService:
@@ -120,9 +121,15 @@ class SupabaseEntitlementService:
             user_id = str(data.get("id") or "").strip()
             if not user_id:
                 return None
+            
+            # Extract points from user_metadata
+            metadata = data.get("user_metadata") or {}
+            points = int(metadata.get("points") or metadata.get("total_points") or 0)
+
             identity = SupabaseIdentity(
                 user_id=user_id,
                 email=str(data.get("email") or "").strip(),
+                points=points,
             )
             with self._identity_cache_lock:
                 self._identity_cache[access_token] = {
@@ -130,6 +137,9 @@ class SupabaseEntitlementService:
                     "ts": now_ts,
                 }
             return identity
+        except Exception as exc:
+            logger.warning(f"supabase auth user check failed: {exc}")
+            return None
         except Exception as exc:
             logger.warning(f"supabase auth user check failed: {exc}")
             return None

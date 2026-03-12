@@ -550,246 +550,180 @@ export function FutureForecastModal() {
         }
       }}
     >
-      <div className="modal-content large future-modal">
-        <div className="modal-header">
-          <h2
-            id="future-modal-title"
-            className="future-modal-title-with-actions"
-          >
-            <span>
-              {isToday
-                ? t("future.todayTitle", {
-                    city: detail.display_name.toUpperCase(),
-                  })
-                : t("future.dateTitle", {
-                    city: detail.display_name.toUpperCase(),
-                    date: dateStr,
-                  })}
-            </span>
-            <button
-              className={clsx(
-                "future-refresh-btn",
-                store.loadingState.marketScan && "spinning",
-              )}
-              disabled={!isPro || isProLoading}
-              onClick={() => {
-                if (isToday) {
-                  void store.openTodayModal(true);
-                  return;
-                }
-                store.openFutureModal(dateStr, true);
-              }}
-              title={
-                !isPro
-                  ? locale === "en-US"
-                    ? "Pro subscription required"
-                    : "需要 Pro 订阅"
-                  : locale === "en-US"
-                    ? "Refresh Data"
-                    : "刷新数据"
-              }
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-            </button>
-          </h2>
-          <button
-            type="button"
-            className="modal-close"
-            aria-label={
-              isToday ? t("future.closeTodayAria") : t("future.closeDateAria")
-            }
-            onClick={store.closeFutureModal}
-          >
-            ×
-          </button>
+      {isProLoading ? (
+        <div
+          className="modal-content large"
+          style={{ padding: "40px", textAlign: "center" }}
+        >
+          <div style={{ color: "var(--text-muted)" }}>
+            {t("dashboard.loading")}
+          </div>
         </div>
-
-        <div className="modal-body future-modal-body">
-          {isProLoading ? (
-            <div
-              style={{
-                color: "var(--text-muted)",
-                display: "flex",
-                justifyContent: "center",
-                padding: "28px 0",
-              }}
+      ) : !isPro ? (
+        <ProFeaturePaywall
+          feature={isToday ? "today" : "future"}
+          onClose={store.closeFutureModal}
+        />
+      ) : (
+        <div className="modal-content large future-modal">
+          <div className="modal-header">
+            <h2
+              id="future-modal-title"
+              className="future-modal-title-with-actions"
             >
-              {t("dashboard.loading")}
-            </div>
-          ) : !isPro ? (
-            <ProFeaturePaywall feature={isToday ? "today" : "future"} />
-          ) : isToday ? (
-            <div className="future-v2-layout">
-              <aside className="future-v2-left">
-                <section className="future-v2-card future-v2-hero-card">
-                  <h3 className="future-v2-hero-title">
-                    {locale === "en-US"
-                      ? "Current Conditions"
-                      : "实况与气象特征"}
-                  </h3>
-                  <div className="future-v2-hero-main">
-                    <div className="future-v2-hero-temp">{currentTempText}</div>
-                    <div className="future-v2-hero-divider" />
-                    <div className="future-v2-hero-weather">
-                      <span className="future-v2-hero-icon">
-                        <WeatherIcon
-                          emoji={weatherSummary.weatherIcon}
-                          size={42}
-                        />
-                      </span>
-                      <span>{weatherSummary.weatherText}</span>
-                    </div>
-                  </div>
-                  <div className="future-v2-hero-obs">
-                    @{detail.current?.obs_time || "--"}
-                  </div>
-                  <div className="future-v2-mini-grid">
-                    <div className="future-v2-mini-item">
-                      <span>
-                        {locale === "en-US" ? "High So Far" : "目前最高温"}
-                      </span>
-                      <strong>
-                        {topObservedTemp ?? "--"}
-                        {detail.temp_symbol}
-                      </strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>{locale === "en-US" ? "Sunrise" : "日出时间"}</span>
-                      <strong>{detail.forecast?.sunrise || "--"}</strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>{locale === "en-US" ? "Sunset" : "日落时间"}</span>
-                      <strong>{detail.forecast?.sunset || "--"}</strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>
-                        {locale === "en-US" ? "Sunshine" : "日照时长"}
-                      </span>
-                      <strong>
-                        {detail.forecast?.sunshine_hours != null
-                          ? `${detail.forecast.sunshine_hours}h`
-                          : "--"}
-                      </strong>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="future-v2-card">
-                  <h4 className="future-v2-card-title">
-                    {locale === "en-US" ? "Current Metrics" : "当前指标"}
-                  </h4>
-                  <div className="future-v2-mini-grid future-v2-mini-grid-tight">
-                    <div className="future-v2-mini-item">
-                      <span>{locale === "en-US" ? "Humidity" : "湿度"}</span>
-                      <strong>{humidityText}</strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>{locale === "en-US" ? "Dew Point" : "露点"}</span>
-                      <strong>{dewpointText}</strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>{locale === "en-US" ? "Wind" : "风速"}</span>
-                      <strong>{windText}</strong>
-                    </div>
-                    <div className="future-v2-mini-item">
-                      <span>
-                        {locale === "en-US" ? "Visibility" : "能见度"}
-                      </span>
-                      <strong>{visibilityText}</strong>
-                    </div>
-                  </div>
-                </section>
-
-                <section className="future-v2-card">
-                  <h4 className="future-v2-card-title">
-                    {locale === "en-US" ? "Market Alignment" : "市场对照"}
-                  </h4>
-                  <div className="future-v2-market-v3">
-                    {/* Loading Overlay */}
-                    {store.loadingState.marketScan && (
-                      <div className="market-layer-loading-overlay">
-                        <div
-                          className="loading-spinner"
-                          style={{
-                            marginBottom: "8px",
-                            width: "24px",
-                            height: "24px",
-                            borderWidth: "2px",
-                          }}
-                        />
-                        {locale === "en-US"
-                          ? "Crunching Polymarket Edges..."
-                          : "正在计算市场对手盘..."}
+              <span>
+                {isToday
+                  ? t("future.todayTitle", {
+                      city: detail.display_name.toUpperCase(),
+                    })
+                  : t("future.dateTitle", {
+                      city: detail.display_name.toUpperCase(),
+                      date: dateStr,
+                    })}
+              </span>
+              <button
+                className={clsx(
+                  "future-refresh-btn",
+                  store.loadingState.marketScan && "spinning",
+                )}
+                disabled={!isPro || isProLoading}
+                onClick={() => {
+                  if (isToday) {
+                    void store.openTodayModal(true);
+                    return;
+                  }
+                  store.openFutureModal(dateStr, true);
+                }}
+                title={
+                  !isPro
+                    ? locale === "en-US"
+                      ? "Pro subscription required"
+                      : "需要 Pro 订阅"
+                    : locale === "en-US"
+                      ? "Refresh Data"
+                      : "刷新数据"
+                }
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                  <path d="M3 3v5h5" />
+                </svg>
+              </button>
+            </h2>
+            <button
+              type="button"
+              className="modal-close"
+              aria-label={
+                isToday ? t("future.closeTodayAria") : t("future.closeDateAria")
+              }
+              onClick={store.closeFutureModal}
+            >
+              ×
+            </button>
+          </div>
+          <div className="modal-body future-modal-body">
+            {isToday ? (
+              <div className="future-v2-layout">
+                <aside className="future-v2-left">
+                  <section className="future-v2-card future-v2-hero-card">
+                    <h3 className="future-v2-hero-title">
+                      {locale === "en-US"
+                        ? "Current Conditions"
+                        : "实况与气象特征"}
+                    </h3>
+                    <div className="future-v2-hero-main">
+                      <div className="future-v2-hero-temp">
+                        {currentTempText}
                       </div>
-                    )}
-
-                    {/* Layer 1: Target & Edge */}
-                    <div className="market-layer-target">
-                      <div className="market-target-header">
-                        <span>
-                          {locale === "en-US"
-                            ? "Target Bucket:"
-                            : "结算温度区间："}
+                      <div className="future-v2-hero-divider" />
+                      <div className="future-v2-hero-weather">
+                        <span className="future-v2-hero-icon">
+                          <WeatherIcon
+                            emoji={weatherSummary.weatherIcon}
+                            size={42}
+                          />
                         </span>
-                        <strong className="market-target-bucket">
-                          {settlementBucketLabel}
-                        </strong>
+                        <span>{weatherSummary.weatherText}</span>
                       </div>
                     </div>
-
-                    {/* Layer 3: Context */}
-                    <div className="market-layer-context">
-                      <div className="market-sub-title">
-                        👀 {locale === "en-US" ? "Market Radar" : "情绪雷达"}
-                      </div>
-                      <div className="market-context-row">
+                    <div className="future-v2-hero-obs">
+                      @{detail.current?.obs_time || "--"}
+                    </div>
+                    <div className="future-v2-mini-grid">
+                      <div className="future-v2-mini-item">
                         <span>
-                          {locale === "en-US"
-                            ? "Top Volume Bucket:"
-                            : "市场当前押注最热:"}
+                          {locale === "en-US" ? "High So Far" : "目前最高温"}
                         </span>
                         <strong>
-                          {hottestBucketLabel}{" "}
-                          {hottestBucketProb !== "--"
-                            ? `(${hottestBucketProb})`
-                            : ""}
+                          {topObservedTemp ?? "--"}
+                          {detail.temp_symbol}
+                        </strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Sunrise" : "日出时间"}
+                        </span>
+                        <strong>{detail.forecast?.sunrise || "--"}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Sunset" : "日落时间"}
+                        </span>
+                        <strong>{detail.forecast?.sunset || "--"}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Sunshine" : "日照时长"}
+                        </span>
+                        <strong>
+                          {detail.forecast?.sunshine_hours != null
+                            ? `${detail.forecast.sunshine_hours}h`
+                            : "--"}
                         </strong>
                       </div>
                     </div>
-                  </div>
-                  <div className="future-v2-market-signal mt-3">
-                    {locale === "en-US" ? "Signal" : "信号"}:{" "}
-                    <strong>{marketSignal}</strong>
-                  </div>
-                </section>
-              </aside>
+                  </section>
 
-              <main className="future-v2-right">
-                <section className="future-modal-section future-v2-main-chart">
-                  <h3>
-                    {locale === "en-US"
-                      ? "Today's temperature forecast (obs + market)"
-                      : "今日气温预测（观测 + 市场）"}
-                  </h3>
-                  <DailyTemperatureChart dateStr={dateStr} />
-                </section>
+                  <section className="future-v2-card">
+                    <h4 className="future-v2-card-title">
+                      {locale === "en-US" ? "Current Metrics" : "当前指标"}
+                    </h4>
+                    <div className="future-v2-mini-grid future-v2-mini-grid-tight">
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Humidity" : "湿度"}</span>
+                        <strong>{humidityText}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Dew Point" : "露点"}</span>
+                        <strong>{dewpointText}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Wind" : "风速"}</span>
+                        <strong>{windText}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Visibility" : "能见度"}
+                        </span>
+                        <strong>{visibilityText}</strong>
+                      </div>
+                    </div>
+                  </section>
 
-                <div className="future-modal-grid">
-                  <section className="future-modal-section">
-                    <h3>{t("future.probability")}</h3>
-                    <div style={{ position: "relative", minHeight: "120px" }}>
+                  <section className="future-v2-card">
+                    <h4 className="future-v2-card-title">
+                      {locale === "en-US" ? "Market Alignment" : "市场对照"}
+                    </h4>
+                    <div className="future-v2-market-v3">
                       {/* Loading Overlay */}
                       {store.loadingState.marketScan && (
                         <div className="market-layer-loading-overlay">
@@ -804,16 +738,247 @@ export function FutureForecastModal() {
                           />
                           {locale === "en-US"
                             ? "Crunching Polymarket Edges..."
-                            : "正在同步市场挂单..."}
+                            : "正在计算市场对手盘..."}
                         </div>
                       )}
-                      <ProbabilityDistribution
+
+                      {/* Layer 1: Target & Edge */}
+                      <div className="market-layer-target">
+                        <div className="market-target-header">
+                          <span>
+                            {locale === "en-US"
+                              ? "Target Bucket:"
+                              : "结算温度区间："}
+                          </span>
+                          <strong className="market-target-bucket">
+                            {settlementBucketLabel}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Layer 3: Context */}
+                      <div className="market-layer-context">
+                        <div className="market-sub-title">
+                          👀 {locale === "en-US" ? "Market Radar" : "情绪雷达"}
+                        </div>
+                        <div className="market-context-row">
+                          <span>
+                            {locale === "en-US"
+                              ? "Top Volume Bucket:"
+                              : "市场当前押注最热:"}
+                          </span>
+                          <strong>
+                            {hottestBucketLabel}{" "}
+                            {hottestBucketProb !== "--"
+                              ? `(${hottestBucketProb})`
+                              : ""}
+                          </strong>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="future-v2-market-signal mt-3">
+                      {locale === "en-US" ? "Signal" : "信号"}:{" "}
+                      <strong>{marketSignal}</strong>
+                    </div>
+                  </section>
+                </aside>
+
+                <main className="future-v2-right">
+                  <section className="future-modal-section future-v2-main-chart">
+                    <h3>
+                      {locale === "en-US"
+                        ? "Today's temperature forecast (obs + market)"
+                        : "今日气温预测（观测 + 市场）"}
+                    </h3>
+                    <DailyTemperatureChart dateStr={dateStr} />
+                  </section>
+
+                  <div className="future-modal-grid">
+                    <section className="future-modal-section">
+                      <h3>{t("future.probability")}</h3>
+                      <div style={{ position: "relative", minHeight: "120px" }}>
+                        {/* Loading Overlay */}
+                        {store.loadingState.marketScan && (
+                          <div className="market-layer-loading-overlay">
+                            <div
+                              className="loading-spinner"
+                              style={{
+                                marginBottom: "8px",
+                                width: "24px",
+                                height: "24px",
+                                borderWidth: "2px",
+                              }}
+                            />
+                            {locale === "en-US"
+                              ? "Crunching Polymarket Edges..."
+                              : "正在同步市场挂单..."}
+                          </div>
+                        )}
+                        <ProbabilityDistribution
+                          detail={detail}
+                          targetDate={dateStr}
+                          hideTitle
+                          marketScan={marketScan}
+                        />
+                      </div>
+                    </section>
+                    <section className="future-modal-section">
+                      <h3>{t("future.models")}</h3>
+                      <ModelForecast
                         detail={detail}
                         targetDate={dateStr}
                         hideTitle
-                        marketScan={marketScan}
                       />
-                    </div>
+                    </section>
+                  </div>
+
+                  <div className="future-modal-grid">
+                    <section className="future-modal-section">
+                      <h3>{t("future.structureToday")}</h3>
+                      <div className="future-front-score">
+                        <div className="future-front-bar" style={barStyle}>
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              bottom: 0,
+                              left: "50%",
+                              width: "2px",
+                              background: "rgba(255, 255, 255, 0.2)",
+                              transform: "translateX(-50%)",
+                              zIndex: 1,
+                            }}
+                          />
+                        </div>
+                        <div className="future-front-meta">
+                          <span className="future-front-pill">
+                            {t("future.judgement")}: {view.front.label}
+                          </span>
+                          <span className="future-front-pill">
+                            {t("future.confidence")}:{" "}
+                            {t(`confidence.${view.front.confidence}`)}
+                          </span>
+                          <span className="future-front-pill">
+                            {t("future.maxPrecip")}:{" "}
+                            {Math.round(view.front.precipMax)}%
+                          </span>
+                        </div>
+                      </div>
+                      <div className="future-trend-grid">
+                        {view.front.metrics.slice(0, 6).map((metric) => (
+                          <div key={metric.label} className="future-trend-card">
+                            <div className="future-trend-label">
+                              {metric.label}
+                            </div>
+                            <div
+                              className={clsx(
+                                "future-trend-value",
+                                metric.tone === "warm" && "warm",
+                                metric.tone === "cold" && "cold",
+                              )}
+                            >
+                              {metric.value}
+                            </div>
+                            <div className="future-trend-note">
+                              {metric.note}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="future-modal-section">
+                      <h3>{t("future.ai")}</h3>
+                      <div className="future-text-block">
+                        {ai.summary ? (
+                          <div>{ai.summary}</div>
+                        ) : (
+                          <div>{t("future.noAi")}</div>
+                        )}
+                        {ai.bullets.length > 0 && (
+                          <div style={{ marginTop: "10px" }}>
+                            {ai.bullets.slice(0, 3).map((item) => (
+                              <div key={item}>{item}</div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ marginTop: "12px" }}>
+                          {nowcastRows.slice(0, 4).map(([label, value]) => (
+                            <div key={label}>
+                              <strong>{label}: </strong>
+                              {value}
+                            </div>
+                          ))}
+                        </div>
+                        {riskLines.length > 0 && (
+                          <div style={{ marginTop: "12px" }}>
+                            <strong>
+                              {locale === "en-US" ? "Risk" : "风险"}:{" "}
+                            </strong>
+                            {riskLines[0]}
+                          </div>
+                        )}
+                        {climateDrivers.length > 0 && (
+                          <div style={{ marginTop: "8px" }}>
+                            <strong>
+                              {locale === "en-US" ? "Climate" : "气候"}:{" "}
+                            </strong>
+                            {climateDrivers[0].text}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+                  </div>
+                </main>
+              </div>
+            ) : (
+              <>
+                <div className="history-stats">
+                  <div className="h-stat-card">
+                    <span className="label">{t("future.targetForecast")}</span>
+                    <span className="val">
+                      {view.forecastEntry?.max_temp ?? "--"}
+                      {detail.temp_symbol}
+                    </span>
+                  </div>
+                  <div className="h-stat-card">
+                    <span className="label">{t("future.deb")}</span>
+                    <span className="val">
+                      {view.deb ?? "--"}
+                      {detail.temp_symbol}
+                    </span>
+                  </div>
+                  <div className="h-stat-card">
+                    <span className="label">{t("future.mu")}</span>
+                    <span className="val">
+                      {view.mu != null
+                        ? `${view.mu.toFixed(1)}${detail.temp_symbol}`
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="h-stat-card">
+                    <span className="label">{t("future.score")}</span>
+                    <span className="val">
+                      {view.front.score > 0 ? "+" : ""}
+                      {view.front.score}
+                    </span>
+                  </div>
+                </div>
+
+                <section className="future-modal-section">
+                  <h3>{t("future.targetTempTrend")}</h3>
+                  <DailyTemperatureChart dateStr={dateStr} />
+                </section>
+
+                <div className="future-modal-grid">
+                  <section className="future-modal-section">
+                    <h3>{t("future.probability")}</h3>
+                    <ProbabilityDistribution
+                      detail={detail}
+                      targetDate={dateStr}
+                      hideTitle
+                      marketScan={marketScan}
+                    />
                   </section>
                   <section className="future-modal-section">
                     <h3>{t("future.models")}</h3>
@@ -824,166 +989,11 @@ export function FutureForecastModal() {
                     />
                   </section>
                 </div>
-
-                <div className="future-modal-grid">
-                  <section className="future-modal-section">
-                    <h3>{t("future.structureToday")}</h3>
-                    <div className="future-front-score">
-                      <div className="future-front-bar" style={barStyle}>
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            bottom: 0,
-                            left: "50%",
-                            width: "2px",
-                            background: "rgba(255, 255, 255, 0.2)",
-                            transform: "translateX(-50%)",
-                            zIndex: 1,
-                          }}
-                        />
-                      </div>
-                      <div className="future-front-meta">
-                        <span className="future-front-pill">
-                          {t("future.judgement")}: {view.front.label}
-                        </span>
-                        <span className="future-front-pill">
-                          {t("future.confidence")}:{" "}
-                          {t(`confidence.${view.front.confidence}`)}
-                        </span>
-                        <span className="future-front-pill">
-                          {t("future.maxPrecip")}:{" "}
-                          {Math.round(view.front.precipMax)}%
-                        </span>
-                      </div>
-                    </div>
-                    <div className="future-trend-grid">
-                      {view.front.metrics.slice(0, 6).map((metric) => (
-                        <div key={metric.label} className="future-trend-card">
-                          <div className="future-trend-label">
-                            {metric.label}
-                          </div>
-                          <div
-                            className={clsx(
-                              "future-trend-value",
-                              metric.tone === "warm" && "warm",
-                              metric.tone === "cold" && "cold",
-                            )}
-                          >
-                            {metric.value}
-                          </div>
-                          <div className="future-trend-note">{metric.note}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="future-modal-section">
-                    <h3>{t("future.ai")}</h3>
-                    <div className="future-text-block">
-                      {ai.summary ? (
-                        <div>{ai.summary}</div>
-                      ) : (
-                        <div>{t("future.noAi")}</div>
-                      )}
-                      {ai.bullets.length > 0 && (
-                        <div style={{ marginTop: "10px" }}>
-                          {ai.bullets.slice(0, 3).map((item) => (
-                            <div key={item}>{item}</div>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ marginTop: "12px" }}>
-                        {nowcastRows.slice(0, 4).map(([label, value]) => (
-                          <div key={label}>
-                            <strong>{label}: </strong>
-                            {value}
-                          </div>
-                        ))}
-                      </div>
-                      {riskLines.length > 0 && (
-                        <div style={{ marginTop: "12px" }}>
-                          <strong>
-                            {locale === "en-US" ? "Risk" : "风险"}:{" "}
-                          </strong>
-                          {riskLines[0]}
-                        </div>
-                      )}
-                      {climateDrivers.length > 0 && (
-                        <div style={{ marginTop: "8px" }}>
-                          <strong>
-                            {locale === "en-US" ? "Climate" : "气候"}:{" "}
-                          </strong>
-                          {climateDrivers[0].text}
-                        </div>
-                      )}
-                    </div>
-                  </section>
-                </div>
-              </main>
-            </div>
-          ) : (
-            <>
-              <div className="history-stats">
-                <div className="h-stat-card">
-                  <span className="label">{t("future.targetForecast")}</span>
-                  <span className="val">
-                    {view.forecastEntry?.max_temp ?? "--"}
-                    {detail.temp_symbol}
-                  </span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.deb")}</span>
-                  <span className="val">
-                    {view.deb ?? "--"}
-                    {detail.temp_symbol}
-                  </span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.mu")}</span>
-                  <span className="val">
-                    {view.mu != null
-                      ? `${view.mu.toFixed(1)}${detail.temp_symbol}`
-                      : "--"}
-                  </span>
-                </div>
-                <div className="h-stat-card">
-                  <span className="label">{t("future.score")}</span>
-                  <span className="val">
-                    {view.front.score > 0 ? "+" : ""}
-                    {view.front.score}
-                  </span>
-                </div>
-              </div>
-
-              <section className="future-modal-section">
-                <h3>{t("future.targetTempTrend")}</h3>
-                <DailyTemperatureChart dateStr={dateStr} />
-              </section>
-
-              <div className="future-modal-grid">
-                <section className="future-modal-section">
-                  <h3>{t("future.probability")}</h3>
-                  <ProbabilityDistribution
-                    detail={detail}
-                    targetDate={dateStr}
-                    hideTitle
-                    marketScan={marketScan}
-                  />
-                </section>
-                <section className="future-modal-section">
-                  <h3>{t("future.models")}</h3>
-                  <ModelForecast
-                    detail={detail}
-                    targetDate={dateStr}
-                    hideTitle
-                  />
-                </section>
-              </div>
-            </>
-          )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

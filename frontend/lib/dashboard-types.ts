@@ -318,6 +318,7 @@ export interface ProAccessState {
   loading: boolean;
   authenticated: boolean;
   subscriptionActive: boolean;
+  points: number;
   error: string | null;
 }
 

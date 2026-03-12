@@ -75,6 +75,7 @@ function getInitialProAccessState(): ProAccessState {
     loading: true,
     authenticated: false,
     subscriptionActive: false,
+    points: 0,
     error: null,
   };
 }
@@ -235,7 +236,10 @@ export function DashboardStoreProvider({
     ? cityDetailsByName[selectedCity] || null
     : null;
   const selectedMarketDate =
-    futureModalDate || selectedForecastDate || selectedDetail?.local_date || null;
+    futureModalDate ||
+    selectedForecastDate ||
+    selectedDetail?.local_date ||
+    null;
   const selectedMarketScanKey = selectedCity
     ? getMarketScanCacheKey(selectedCity, selectedMarketDate)
     : null;
@@ -402,11 +406,13 @@ export function DashboardStoreProvider({
       const payload = (await response.json()) as {
         authenticated?: boolean;
         subscription_active?: boolean | null;
+        points?: number;
       };
       setProAccess({
         loading: false,
         authenticated: Boolean(payload.authenticated),
         subscriptionActive: payload.subscription_active === true,
+        points: payload.points ?? 0,
         error: null,
       });
     } catch (error) {
@@ -414,6 +420,7 @@ export function DashboardStoreProvider({
         loading: false,
         authenticated: false,
         subscriptionActive: false,
+        points: 0,
         error: String(error),
       });
     }

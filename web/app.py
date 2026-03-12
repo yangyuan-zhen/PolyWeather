@@ -117,6 +117,7 @@ def _bind_optional_supabase_identity(request: Request) -> None:
         return
     request.state.auth_user_id = identity.user_id
     request.state.auth_email = identity.email
+    request.state.auth_points = identity.points
 
 
 def _assert_entitlement(request: Request) -> None:
@@ -1093,6 +1094,7 @@ async def auth_me(request: Request):
         "authenticated": bool(user_id),
         "user_id": user_id,
         "email": getattr(request.state, "auth_email", None),
+        "points": getattr(request.state, "auth_points", 0),
         "entitlement_mode": (
             "supabase_required"
             if SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED
