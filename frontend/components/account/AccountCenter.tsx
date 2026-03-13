@@ -110,14 +110,18 @@ type CreatedIntent = {
 
 declare global {
   interface Window {
-    ethereum?: {
-      request: (args: {
-        method: string;
-        params?: any[] | object;
-      }) => Promise<any>;
-    };
+    ethereum?: EvmProvider;
   }
 }
+
+type EvmProvider = {
+  request: (args: { method: string; params?: any[] | object }) => Promise<any>;
+  providers?: EvmProvider[];
+  isMetaMask?: boolean;
+  isRabby?: boolean;
+  isOkxWallet?: boolean;
+  isBitKeep?: boolean;
+};
 
 // --- Helpers ---
 
@@ -168,6 +172,30 @@ function shortAddress(address: string) {
   const text = String(address || "");
   if (!text.startsWith("0x") || text.length < 12) return text || "--";
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function getEvmProvider(): EvmProvider | null {
+  if (typeof window === "undefined") return null;
+  const root = window.ethereum;
+  if (!root) return null;
+  const candidates = Array.isArray(root.providers)
+    ? root.providers.filter(
+        (p): p is EvmProvider => !!p && typeof p.request === "function",
+      )
+    : [];
+  if (candidates.length) {
+    return candidates.find((p) => p.isMetaMask) || candidates[0];
+  }
+  return typeof root.request === "function" ? root : null;
+}
+
+function getEvmWalletLabel(provider: EvmProvider | null): string {
+  if (!provider) return "EVM 钱包";
+  if (provider.isMetaMask) return "MetaMask";
+  if (provider.isRabby) return "Rabby";
+  if (provider.isOkxWallet) return "OKX Wallet";
+  if (provider.isBitKeep) return "Bitget Wallet";
+  return "EVM 钱包";
 }
 
 function toPaddedHex(value: bigint) {
@@ -474,8 +502,8 @@ export function AccountCenter() {
     timeoutMs = 120000,
     pollMs = 3000,
   ) => {
-    const eth = window.ethereum;
-    if (!eth) throw new Error("MetaMask not found");
+    const eth = getEvmProvider();
+    if (!eth) throw new Error("No EVM wallet provider found");
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const receipt = (await eth.request({
@@ -491,6 +519,57 @@ export function AccountCenter() {
     throw new Error(`transaction confirmation timeout: ${txHash}`);
   };
 
+  const signBindMessage = async (
+    eth: EvmProvider,
+    address: string,
+    message: string,
+  ): Promise<string> => {
+    try {
+      return (await eth.request({
+        method: "personal_sign",
+        params: [message, address],
+      })) as string;
+    } catch {
+      // Some injected wallets still use the reversed param order.
+      return (await eth.request({
+        method: "personal_sign",
+        params: [address, message],
+      })) as string;
+    }
+  };
+
+  const ensureTargetChain = async (
+    eth: EvmProvider,
+    targetChainId: number,
+  ): Promise<void> => {
+    const currentChainIdHex = String(
+      (await eth.request({ method: "eth_chainId" })) || "",
+    );
+    const targetChainHex = `0x${targetChainId.toString(16)}`;
+    if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase()) return;
+    try {
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: targetChainHex }],
+      });
+    } catch (err: any) {
+      const code = Number(err?.code);
+      if (code !== 4902 || targetChainId !== 137) throw err;
+      await eth.request({
+        method: "wallet_addEthereumChain",
+        params: [
+          {
+            chainId: "0x89",
+            chainName: "Polygon Mainnet",
+            nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+            rpcUrls: ["https://polygon-rpc.com"],
+            blockExplorerUrls: ["https://polygonscan.com"],
+          },
+        ],
+      });
+    }
+  };
+
   const connectAndBindWallet = async () => {
     setPaymentError("");
     setPaymentInfo("");
@@ -498,11 +577,14 @@ export function AccountCenter() {
       setPaymentError("请先登录后再绑定钱包。");
       return;
     }
-    const eth = window.ethereum;
+    const eth = getEvmProvider();
     if (!eth) {
-      setPaymentError("未检测到 MetaMask，请先安装扩展。");
+      setPaymentError(
+        "未检测到浏览器钱包，请安装并启用 MetaMask / OKX Wallet / Rabby / Bitget 等 EVM 钱包扩展。",
+      );
       return;
     }
+    const walletLabel = getEvmWalletLabel(eth);
 
     setPaymentBusy(true);
     try {
@@ -535,10 +617,7 @@ export function AccountCenter() {
       const nonce = String(challengeJson.nonce || "");
       if (!message || !nonce) throw new Error("challenge payload invalid");
 
-      const signature = (await eth.request({
-        method: "personal_sign",
-        params: [message, address],
-      })) as string;
+      const signature = await signBindMessage(eth, address, message);
       const verifyRes = await fetch("/api/payments/wallets/verify", {
         method: "POST",
         headers: authHeaders,
@@ -549,7 +628,7 @@ export function AccountCenter() {
         throw new Error(`verify failed: ${raw}`);
       }
 
-      setPaymentInfo(`钱包绑定成功: ${shortAddress(address)}`);
+      setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}`);
       await loadPaymentSnapshot();
     } catch (error) {
       setPaymentError(String(error));
@@ -570,9 +649,11 @@ export function AccountCenter() {
       return;
     }
 
-    const eth = window.ethereum;
+    const eth = getEvmProvider();
     if (!eth) {
-      setPaymentError("未检测到 MetaMask。");
+      setPaymentError(
+        "未检测到浏览器钱包，请安装并启用 EVM 钱包扩展（MetaMask / OKX / Rabby 等）。",
+      );
       return;
     }
 
@@ -590,17 +671,8 @@ export function AccountCenter() {
       if (!authHeaders.Authorization)
         throw new Error("登录会话失效，请重新登录后再支付。");
 
-      const currentChainIdHex = String(
-        (await eth.request({ method: "eth_chainId" })) || "",
-      );
       const targetChainId = Number(paymentConfig.chain_id || 137);
-      const targetChainHex = `0x${targetChainId.toString(16)}`;
-      if (currentChainIdHex.toLowerCase() !== targetChainHex.toLowerCase()) {
-        await eth.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: targetChainHex }],
-        });
-      }
+      await ensureTargetChain(eth, targetChainId);
 
       const createRes = await fetch("/api/payments/intents", {
         method: "POST",
@@ -1061,7 +1133,7 @@ export function AccountCenter() {
               disabled={paymentBusy || !isAuthenticated}
               className="mt-6 w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2"
             >
-              <PlusIcon className="w-4 h-4" /> 绑定新钱包 (MetaMask)
+              <PlusIcon className="w-4 h-4" /> 绑定新钱包 (EVM)
             </button>
           </section>
         </div>
