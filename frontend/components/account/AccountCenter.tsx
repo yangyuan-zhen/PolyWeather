@@ -371,11 +371,14 @@ export function AccountCenter() {
     ? Math.max(backendPointsRaw, metadataPointsSafe)
     : metadataPointsSafe;
   const backendWeeklyPointsRaw = Number(backend?.weekly_points);
-  const metadataWeeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
+  const metadataWeeklyPointsRaw = Number(
+    user?.user_metadata?.weekly_points ?? 0,
+  );
   const weeklyPointsRaw = Number.isFinite(backendWeeklyPointsRaw)
     ? backendWeeklyPointsRaw
     : metadataWeeklyPointsRaw;
-  const weeklyRankRaw = backend?.weekly_rank ?? user?.user_metadata?.weekly_rank;
+  const weeklyRankRaw =
+    backend?.weekly_rank ?? user?.user_metadata?.weekly_rank;
   const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;
   const weeklyPoints = Number.isFinite(weeklyPointsRaw)
     ? Math.max(0, weeklyPointsRaw)
@@ -877,7 +880,7 @@ export function AccountCenter() {
                   Top 1
                 </span>
                 <span className="text-xs font-bold text-yellow-500">
-                  +500 pts & 7D Pro
+                  +500 积分 & 7天Pro
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
@@ -888,7 +891,7 @@ export function AccountCenter() {
                   Top 2-3
                 </span>
                 <span className="text-xs font-bold text-slate-300">
-                  +300 pts & 3D Pro
+                  +300 积分 & 3天Pro
                 </span>
               </div>
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
@@ -899,7 +902,7 @@ export function AccountCenter() {
                   Top 4-10
                 </span>
                 <span className="text-xs font-bold text-orange-400">
-                  +150 pts
+                  +150 积分
                 </span>
               </div>
             </div>
