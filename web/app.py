@@ -212,6 +212,14 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
             status_code=503,
             detail="payment requires SUPABASE_URL and SUPABASE_ANON_KEY",
         )
+
+    # Reuse identity already bound in _assert_entitlement/_bind_optional_supabase_identity
+    # to avoid requiring a second successful token parse in the same request flow.
+    state_user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
+    if state_user_id:
+        state_email = str(getattr(request.state, "auth_email", "") or "").strip()
+        return {"user_id": state_user_id, "email": state_email}
+
     token = extract_bearer_token(request.headers.get("authorization"))
     if token:
         identity = SUPABASE_ENTITLEMENT.get_identity(token)
