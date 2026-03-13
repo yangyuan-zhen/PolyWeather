@@ -162,6 +162,38 @@ const WALLETCONNECT_POLYGON_RPC_URL = String(
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
 
+function isWalletConnectResetError(error: unknown): boolean {
+  const source = error as any;
+  const message = String(
+    source?.shortMessage ||
+      source?.message ||
+      source?.reason ||
+      source?.data?.message ||
+      source?.cause?.message ||
+      source?.error?.message ||
+      (error instanceof Error ? error.message : "") ||
+      (typeof error === "string" ? error : ""),
+  ).toLowerCase();
+  return (
+    message.includes("connection request reset") ||
+    message.includes("pairing aborted") ||
+    message.includes("pairing attempt") ||
+    message.includes("unable to connect")
+  );
+}
+
+async function resetWalletConnectProvider(): Promise<void> {
+  if (walletConnectProviderCache?.disconnect) {
+    try {
+      await walletConnectProviderCache.disconnect();
+    } catch {
+      // ignore
+    }
+  }
+  walletConnectProviderCache = null;
+  walletConnectProviderChainId = null;
+}
+
 // --- Helpers ---
 
 type InfoRowProps = {
@@ -365,6 +397,15 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
     };
   }
 
+  if (isWalletConnectResetError(error)) {
+    return {
+      message:
+        "WalletConnect 连接已重置，请重新扫码连接；若仍失败，请先在钱包里断开旧连接后再试。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+
   const userRejected =
     code === 4001 ||
     /user rejected|user denied|rejected request|cancelled|canceled|拒绝|取消|签名请求已拒绝/.test(
@@ -518,7 +559,24 @@ export function AccountCenter() {
         .catch(() => [])) as string[];
       if (!Array.isArray(existingAccounts) || existingAccounts.length === 0) {
         if (typeof wcProvider.connect === "function") {
-          await wcProvider.connect({ chains: [targetChainId] });
+          try {
+            await wcProvider.connect({ chains: [targetChainId] });
+          } catch (err) {
+            if (!isWalletConnectResetError(err)) throw err;
+            await resetWalletConnectProvider();
+            const freshProvider = await getWalletConnectProvider(
+              targetChainId,
+              WALLETCONNECT_POLYGON_RPC_URL,
+            );
+            if (typeof freshProvider.connect === "function") {
+              await freshProvider.connect({ chains: [targetChainId] });
+            }
+            return {
+              provider: freshProvider,
+              label: "WalletConnect",
+              mode: "walletconnect",
+            };
+          }
         }
       }
       return {
