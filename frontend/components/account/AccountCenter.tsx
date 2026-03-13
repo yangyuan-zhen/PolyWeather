@@ -55,6 +55,9 @@ type AuthMeResponse = {
   auth_required?: boolean;
   subscription_required?: boolean;
   subscription_active?: boolean | null;
+  subscription_plan_code?: string | null;
+  subscription_starts_at?: string | null;
+  subscription_expires_at?: string | null;
 };
 
 type PaymentPlan = {
@@ -236,7 +239,8 @@ function buildBalanceOfCalldata(owner: string) {
 }
 
 function formatTokenUnits(amount: bigint, decimals: number) {
-  const safeDecimals = Number.isFinite(decimals) && decimals >= 0 ? Math.floor(decimals) : 6;
+  const safeDecimals =
+    Number.isFinite(decimals) && decimals >= 0 ? Math.floor(decimals) : 6;
   const base = 10n ** BigInt(safeDecimals);
   const whole = amount / base;
   const fraction = amount % base;
@@ -303,7 +307,9 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
   }
 
   const insufficientGas =
-    (code === -32000 && /insufficient funds/.test(lower) && /(gas|fee|native|pol|matic)/.test(lower)) ||
+    (code === -32000 &&
+      /insufficient funds/.test(lower) &&
+      /(gas|fee|native|pol|matic)/.test(lower)) ||
     /not enough pol|insufficient (pol|matic)|insufficient funds for gas|network fee|网络费|手续费/.test(
       lower,
     );
@@ -548,7 +554,15 @@ export function AccountCenter() {
   const initials = (displayName.slice(0, 2) || "PW").toUpperCase();
   const joinedAt = formatTime(user?.created_at, "zh-CN");
   const isSubscribed = Boolean(backend?.subscription_active);
-  const proExpiry = user?.user_metadata?.pro_expiry || "暂无 Pro 订阅";
+  const expiryRaw = String(
+    backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
+  ).trim();
+  const expiryFormatted = formatTime(expiryRaw, "zh-CN");
+  const proExpiry = isSubscribed
+    ? expiryFormatted !== "--"
+      ? expiryFormatted
+      : expiryRaw || "已开通（待同步）"
+    : "暂无 Pro 订阅";
 
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
@@ -609,7 +623,9 @@ export function AccountCenter() {
           : Number(paymentConfig?.token_decimals ?? 6),
       }));
     if (clean.length) return clean;
-    const fallbackAddress = String(paymentConfig?.token_address || "").toLowerCase();
+    const fallbackAddress = String(
+      paymentConfig?.token_address || "",
+    ).toLowerCase();
     if (!fallbackAddress.startsWith("0x")) return [];
     return [
       {
@@ -632,11 +648,14 @@ export function AccountCenter() {
       "",
   ).toLowerCase();
   const selectedPaymentToken =
-    availableTokenList.find((row) => row.address === resolvedSelectedTokenAddress) ||
-    availableTokenList[0];
+    availableTokenList.find(
+      (row) => row.address === resolvedSelectedTokenAddress,
+    ) || availableTokenList[0];
   const selectedTokenLabel =
     selectedPaymentToken?.symbol ||
-    (resolvedSelectedTokenAddress.startsWith("0x") ? shortAddress(resolvedSelectedTokenAddress) : "USDC");
+    (resolvedSelectedTokenAddress.startsWith("0x")
+      ? shortAddress(resolvedSelectedTokenAddress)
+      : "USDC");
   const paymentFeatureReady = Boolean(
     paymentConfig?.enabled && paymentConfig?.configured,
   );
@@ -1295,17 +1314,24 @@ export function AccountCenter() {
                 会员权限详情
               </h3>
               <InfoRow icon={ShieldCheck} label="鉴权模式" value="Supabase" />
-              <InfoRow icon={BarChart3} label="气象引擎" value="Premium AI" />
+              <InfoRow icon={BarChart3} label="气象引擎" value="DEB + 多模型" />
               <InfoRow
                 icon={Zap}
-                label="实时雷达"
+                label="今日内分析"
+                value={isSubscribed ? "深度版（含高温时段）" : "简版可见"}
+                isPrimary={isSubscribed}
+              />
+              <InfoRow
+                icon={Clock}
+                label="历史对账 + 未来日期分析"
                 value={isSubscribed ? "已开启" : "锁定"}
                 isPrimary={isSubscribed}
               />
               <InfoRow
-                icon={Sparkles}
-                label="平台广告"
-                value={isSubscribed ? "已移除" : "可见"}
+                icon={Bot}
+                label="全平台智能气象推送"
+                value={isSubscribed ? "已开启" : "锁定"}
+                isPrimary={isSubscribed}
               />
             </section>
             <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
@@ -1423,7 +1449,9 @@ export function AccountCenter() {
                               : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
                           }`}
                         >
-                          <div className="text-xs font-bold">{token.symbol}</div>
+                          <div className="text-xs font-bold">
+                            {token.symbol}
+                          </div>
                           <div className="text-[10px] opacity-80 truncate">
                             {token.name}
                           </div>

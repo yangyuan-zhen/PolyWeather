@@ -1155,14 +1155,25 @@ async def auth_me(request: Request):
         and SUPABASE_ENTITLEMENT.require_subscription
     )
     subscription_active = None
+    subscription_plan_code = None
+    subscription_starts_at = None
+    subscription_expires_at = None
     if SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            subscription_active = SUPABASE_ENTITLEMENT.has_active_subscription(
+            latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
                 user_id,
                 respect_requirement=False,
             )
+            subscription_active = bool(latest_subscription)
+            if isinstance(latest_subscription, dict):
+                subscription_plan_code = latest_subscription.get("plan_code")
+                subscription_starts_at = latest_subscription.get("starts_at")
+                subscription_expires_at = latest_subscription.get("expires_at")
         except Exception:
             subscription_active = None
+            subscription_plan_code = None
+            subscription_starts_at = None
+            subscription_expires_at = None
 
     points = _resolve_auth_points(request)
     weekly_profile = _resolve_weekly_profile(request)
@@ -1186,6 +1197,9 @@ async def auth_me(request: Request):
         "auth_required": bool(SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED),
         "subscription_required": subscription_required,
         "subscription_active": subscription_active,
+        "subscription_plan_code": subscription_plan_code,
+        "subscription_starts_at": subscription_starts_at,
+        "subscription_expires_at": subscription_expires_at,
     }
 
 

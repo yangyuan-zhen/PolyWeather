@@ -144,23 +144,29 @@ class SupabaseEntitlementService:
             logger.warning(f"supabase auth user check failed: {exc}")
             return None
 
-    def _query_active_subscription(self, user_id: str) -> bool:
+    def _query_latest_active_subscription(
+        self,
+        user_id: str,
+    ) -> Optional[Dict[str, object]]:
         if not user_id:
-            return False
+            return None
         if not self.service_role_key:
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
-            return False
+            return None
 
         now_ts = time.time()
         with self._sub_cache_lock:
             cached = self._sub_cache.get(user_id)
             if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
-                return bool(cached.get("active"))
+                row = cached.get("row")
+                if isinstance(row, dict):
+                    return row
+                return None
 
         try:
             now_iso = datetime.now(timezone.utc).isoformat()
             params = {
-                "select": "id,user_id,status,expires_at",
+                "select": "id,user_id,status,plan_code,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "expires_at": f"gt.{now_iso}",
@@ -179,20 +185,35 @@ class SupabaseEntitlementService:
                     user_id,
                     response.status_code,
                 )
-                active = False
+                row = None
             else:
                 data = response.json() if response.content else []
-                active = isinstance(data, list) and len(data) > 0
+                row = data[0] if isinstance(data, list) and data else None
+                if not isinstance(row, dict):
+                    row = None
 
             with self._sub_cache_lock:
                 self._sub_cache[user_id] = {
-                    "active": active,
+                    "active": bool(row),
+                    "row": row,
                     "ts": now_ts,
                 }
-            return active
+            return row
         except Exception as exc:
             logger.warning(f"supabase subscription query error user_id={user_id}: {exc}")
-            return False
+            return None
+
+    def _query_active_subscription(self, user_id: str) -> bool:
+        return self._query_latest_active_subscription(user_id) is not None
+
+    def get_latest_active_subscription(
+        self,
+        user_id: str,
+        respect_requirement: bool = True,
+    ) -> Optional[Dict[str, object]]:
+        if respect_requirement and not self.require_subscription:
+            return None
+        return self._query_latest_active_subscription(user_id)
 
     def has_active_subscription(
         self,
