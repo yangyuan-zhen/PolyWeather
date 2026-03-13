@@ -44,7 +44,7 @@ class BotIOLayer:
                 f"当前积分: <code>{balance}</code>\n"
                 f"需要积分: <code>{required}</code>\n"
                 f"还差积分: <code>{missing}</code>\n\n"
-                f"积分规则：每日签到（有效发言满 {MESSAGE_MIN_LENGTH} 字）获得 <b>{MESSAGE_POINTS}</b> 积分，"
+                f"积分规则：有效发言满 {MESSAGE_MIN_LENGTH} 字获得 <b>{MESSAGE_POINTS}</b> 积分，"
                 f"每日上限 {MESSAGE_DAILY_CAP} 分。"
             ),
             parse_mode="HTML",

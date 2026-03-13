@@ -134,11 +134,33 @@ declare global {
 type EvmProvider = {
   request: (args: { method: string; params?: any[] | object }) => Promise<any>;
   providers?: EvmProvider[];
+  connect?: (args?: any) => Promise<void>;
+  disconnect?: () => Promise<void>;
+  session?: unknown;
   isMetaMask?: boolean;
   isRabby?: boolean;
   isOkxWallet?: boolean;
   isBitKeep?: boolean;
 };
+
+type ProviderMode = "auto" | "walletconnect";
+
+type ProviderSelection = {
+  provider: EvmProvider;
+  label: string;
+  mode: ProviderMode;
+};
+
+const WALLETCONNECT_PROJECT_ID = String(
+  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
+).trim();
+const WALLETCONNECT_POLYGON_RPC_URL = String(
+  process.env.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL ||
+    "https://polygon-bor-rpc.publicnode.com",
+).trim();
+
+let walletConnectProviderCache: EvmProvider | null = null;
+let walletConnectProviderChainId: number | null = null;
 
 // --- Helpers ---
 
@@ -213,6 +235,61 @@ function getEvmWalletLabel(provider: EvmProvider | null): string {
   if (provider.isOkxWallet) return "OKX Wallet";
   if (provider.isBitKeep) return "Bitget Wallet";
   return "EVM 钱包";
+}
+
+async function getWalletConnectProvider(
+  chainId: number,
+  rpcUrl: string,
+): Promise<EvmProvider> {
+  if (!WALLETCONNECT_PROJECT_ID) {
+    throw new Error(
+      "WalletConnect 未配置：缺少 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID。",
+    );
+  }
+  if (
+    walletConnectProviderCache &&
+    walletConnectProviderChainId === chainId
+  ) {
+    return walletConnectProviderCache;
+  }
+  const { EthereumProvider } = await import(
+    "@walletconnect/ethereum-provider"
+  );
+  const rpcMap: Record<number, string> = {
+    [chainId]: rpcUrl || WALLETCONNECT_POLYGON_RPC_URL,
+  };
+  const origin =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://polyweather-pro.vercel.app";
+  const provider = (await EthereumProvider.init({
+    projectId: WALLETCONNECT_PROJECT_ID,
+    chains: [chainId],
+    optionalChains: [chainId],
+    showQrModal: true,
+    methods: [
+      "eth_sendTransaction",
+      "personal_sign",
+      "eth_signTypedData",
+      "eth_signTypedData_v4",
+      "eth_sign",
+      "eth_call",
+      "eth_chainId",
+      "eth_accounts",
+      "eth_requestAccounts",
+    ],
+    events: ["accountsChanged", "chainChanged", "disconnect"],
+    rpcMap,
+    metadata: {
+      name: "PolyWeather",
+      description: "PolyWeather Pro checkout",
+      url: origin,
+      icons: [`${origin}/favicon.ico`],
+    },
+  })) as unknown as EvmProvider;
+  walletConnectProviderCache = provider;
+  walletConnectProviderChainId = chainId;
+  return provider;
 }
 
 function toPaddedHex(value: bigint) {
@@ -366,6 +443,7 @@ export function AccountCenter() {
   const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
   const [selectedTokenAddress, setSelectedTokenAddress] = useState("");
   const [selectedWallet, setSelectedWallet] = useState("");
+  const [providerMode, setProviderMode] = useState<ProviderMode>("auto");
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState("");
   const [paymentError, setPaymentError] = useState("");
@@ -373,6 +451,7 @@ export function AccountCenter() {
   const [lastTxHash, setLastTxHash] = useState("");
 
   const supabaseReady = hasSupabasePublicEnv();
+  const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
 
   /**
    * Returns a valid access token, refreshing the session if the stored one
@@ -415,6 +494,45 @@ export function AccountCenter() {
       return headers;
     },
     [supabaseReady, getValidAccessToken],
+  );
+
+  const resolvePaymentProvider = useCallback(
+    async (mode: ProviderMode = "auto"): Promise<ProviderSelection> => {
+      const targetChainId = Number(paymentConfig?.chain_id || 137);
+      if (mode !== "walletconnect") {
+        const injected = getEvmProvider();
+        if (injected) {
+          return {
+            provider: injected,
+            label: getEvmWalletLabel(injected),
+            mode: "auto",
+          };
+        }
+      }
+      if (!walletConnectEnabled) {
+        throw new Error(
+          "未检测到浏览器扩展钱包，且 WalletConnect 未启用。请配置 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID 或安装 EVM 钱包扩展。",
+        );
+      }
+      const wcProvider = await getWalletConnectProvider(
+        targetChainId,
+        WALLETCONNECT_POLYGON_RPC_URL,
+      );
+      const existingAccounts = (await wcProvider
+        .request({ method: "eth_accounts" })
+        .catch(() => [])) as string[];
+      if (!Array.isArray(existingAccounts) || existingAccounts.length === 0) {
+        if (typeof wcProvider.connect === "function") {
+          await wcProvider.connect({ chains: [targetChainId] });
+        }
+      }
+      return {
+        provider: wcProvider,
+        label: "WalletConnect",
+        mode: "walletconnect",
+      };
+    },
+    [paymentConfig?.chain_id, walletConnectEnabled],
   );
 
   const loadPaymentSnapshot = useCallback(async () => {
@@ -533,6 +651,15 @@ export function AccountCenter() {
   };
 
   const onSignOut = async () => {
+    if (walletConnectProviderCache?.disconnect) {
+      try {
+        await walletConnectProviderCache.disconnect();
+      } catch {
+        // ignore
+      }
+      walletConnectProviderCache = null;
+      walletConnectProviderChainId = null;
+    }
     if (supabaseReady) {
       try {
         await getSupabaseBrowserClient().auth.signOut();
@@ -803,24 +930,20 @@ export function AccountCenter() {
     }
   };
 
-  const connectAndBindWallet = async () => {
+  const connectAndBindWallet = async (mode: ProviderMode = "auto") => {
     setPaymentError("");
     setPaymentInfo("");
     if (!isAuthenticated) {
       setPaymentError("请先登录后再绑定钱包。");
       return;
     }
-    const eth = getEvmProvider();
-    if (!eth) {
-      setPaymentError(
-        "未检测到浏览器钱包，请安装并启用 MetaMask / OKX Wallet / Rabby / Bitget 等 EVM 钱包扩展。",
-      );
-      return;
-    }
-    const walletLabel = getEvmWalletLabel(eth);
 
     setPaymentBusy(true);
     try {
+      const providerSelection = await resolvePaymentProvider(mode);
+      const eth = providerSelection.provider;
+      const walletLabel = providerSelection.label;
+
       // Ensure we have a valid token BEFORE opening the wallet modal.
       let accessToken: string;
       try {
@@ -883,6 +1006,7 @@ export function AccountCenter() {
       }
 
       setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}`);
+      setProviderMode(providerSelection.mode);
       await loadPaymentSnapshot();
     } catch (error) {
       setPaymentInfo("");
@@ -905,18 +1029,10 @@ export function AccountCenter() {
       return;
     }
 
-    const eth = getEvmProvider();
-    if (!eth) {
-      setPaymentError(
-        "未检测到浏览器钱包，请安装并启用 EVM 钱包扩展（MetaMask / OKX / Rabby 等）。",
-      );
-      return;
-    }
-
-    const payingWallet = String(
+    const fallbackWallet = String(
       selectedWallet || walletAddress || boundWallets[0]?.address || "",
     ).toLowerCase();
-    if (!payingWallet) {
+    if (!fallbackWallet) {
       setPaymentError("请先绑定钱包。");
       return;
     }
@@ -924,6 +1040,29 @@ export function AccountCenter() {
     setPaymentBusy(true);
     let approvedInThisRun = false;
     try {
+      const providerSelection = await resolvePaymentProvider(providerMode);
+      const eth = providerSelection.provider;
+      const activeAccounts = (await eth.request({
+        method: "eth_requestAccounts",
+      })) as string[];
+      const activeAddress = String(activeAccounts?.[0] || "").toLowerCase();
+      if (!activeAddress) throw new Error("钱包账户为空");
+
+      const boundAddrSet = new Set(
+        boundWallets.map((row) => String(row.address || "").toLowerCase()),
+      );
+      if (boundAddrSet.size > 0 && !boundAddrSet.has(activeAddress)) {
+        throw new Error(
+          `当前连接钱包 ${shortAddress(activeAddress)} 未绑定，请先绑定该地址后支付。`,
+        );
+      }
+      const payingWallet = boundAddrSet.has(activeAddress)
+        ? activeAddress
+        : fallbackWallet;
+
+      setSelectedWallet(payingWallet);
+      setProviderMode(providerSelection.mode);
+
       // Ensure we have a valid token BEFORE switching chain / sending tx.
       let accessToken: string;
       try {
@@ -1112,7 +1251,7 @@ export function AccountCenter() {
       return;
     }
     if (!hasPayingWallet) {
-      await connectAndBindWallet();
+      await connectAndBindWallet(providerMode);
       return;
     }
     await createIntentAndPay();
@@ -1489,13 +1628,36 @@ export function AccountCenter() {
               )}
             </div>
 
-            <button
-              onClick={() => void connectAndBindWallet()}
-              disabled={paymentBusy || !isAuthenticated}
-              className="mt-6 w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2"
-            >
-              <PlusIcon className="w-4 h-4" /> 绑定新钱包 (EVM)
-            </button>
+            <div className="mt-6 grid grid-cols-1 gap-2">
+              <button
+                onClick={() => {
+                  setProviderMode("auto");
+                  void connectAndBindWallet("auto");
+                }}
+                disabled={paymentBusy || !isAuthenticated}
+                className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <PlusIcon className="w-4 h-4" /> 绑定浏览器钱包（EVM扩展）
+              </button>
+              <button
+                onClick={() => {
+                  setProviderMode("walletconnect");
+                  void connectAndBindWallet("walletconnect");
+                }}
+                disabled={
+                  paymentBusy || !isAuthenticated || !walletConnectEnabled
+                }
+                className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                <CreditCard className="w-4 h-4" /> 扫码绑定（WalletConnect）
+              </button>
+              {!walletConnectEnabled && (
+                <p className="text-[11px] text-slate-500">
+                  未启用 WalletConnect：请配置
+                  <code className="mx-1">NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID</code>
+                </p>
+              )}
+            </div>
           </section>
         </div>
       </main>

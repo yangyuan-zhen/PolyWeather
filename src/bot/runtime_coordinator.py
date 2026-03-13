@@ -84,6 +84,7 @@ class StartupCoordinator:
             self._start_trade_alert_loop(),
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
+            self._start_weekly_reward_loop(),
         ]
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -121,7 +122,17 @@ class StartupCoordinator:
                 reason=validation_error,
                 details=details,
             )
-        thread = starter()
+        try:
+            thread = starter()
+        except Exception as exc:
+            return LoopStatus(
+                key=key,
+                label=label,
+                configured_enabled=True,
+                started=False,
+                reason=f"starter_error:{exc}",
+                details=details,
+            )
         started = thread is not None
         reason = "started" if started else "starter_returned_none"
         if started:
@@ -216,6 +227,43 @@ class StartupCoordinator:
             starter=lambda: import_module(
                 "src.onchain.polymarket_wallet_activity_watcher"
             ).start_polymarket_wallet_activity_loop(self.bot),
+        )
+
+    def _start_weekly_reward_loop(self) -> LoopStatus:
+        enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", True)
+        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+        settle_weekday = min(
+            7, max(1, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_WEEKDAY", 1))
+        )
+        settle_hour = min(23, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_HOUR", 0)))
+        settle_minute = min(
+            59, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_MINUTE", 5))
+        )
+        check_interval = max(
+            30, _env_int("POLYWEATHER_WEEKLY_REWARD_CHECK_INTERVAL_SEC", 300)
+        )
+        details = {
+            "timezone": str(
+                os.getenv("POLYWEATHER_WEEKLY_REWARD_TIMEZONE") or "Asia/Shanghai"
+            ).strip(),
+            "settle_weekday": settle_weekday,
+            "settle_time": f"{settle_hour:02d}:{settle_minute:02d}",
+            "check_interval_sec": check_interval,
+            "announce": _env_bool("POLYWEATHER_WEEKLY_REWARD_ANNOUNCE_ENABLED", True),
+        }
+        announce_enabled = bool(details["announce"])
+        validation_error = None
+        if announce_enabled and not chat_id:
+            validation_error = "missing_TELEGRAM_CHAT_ID"
+        return self._start_with_validation(
+            key="weekly_reward",
+            label="周榜奖励结算",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module("src.bot.weekly_reward_loop").start_weekly_reward_loop(
+                self.bot
+            ),
         )
 
 

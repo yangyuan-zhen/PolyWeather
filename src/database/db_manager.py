@@ -1,6 +1,7 @@
 import sqlite3
 import os
 import hashlib
+import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from loguru import logger
@@ -53,6 +54,38 @@ class DBManager:
                     PRIMARY KEY (telegram_id, activity_date, fingerprint)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS weekly_points_archive (
+                    telegram_id INTEGER NOT NULL,
+                    week_key TEXT NOT NULL,
+                    points INTEGER DEFAULT 0,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (telegram_id, week_key)
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS weekly_reward_runs (
+                    week_key TEXT PRIMARY KEY,
+                    settled_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    winners_count INTEGER DEFAULT 0,
+                    summary_json TEXT
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS weekly_reward_payouts (
+                    week_key TEXT NOT NULL,
+                    telegram_id INTEGER NOT NULL,
+                    rank INTEGER DEFAULT 0,
+                    username TEXT,
+                    points_bonus INTEGER DEFAULT 0,
+                    pro_days INTEGER DEFAULT 0,
+                    supabase_user_id TEXT,
+                    pro_granted INTEGER DEFAULT 0,
+                    pro_error TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (week_key, telegram_id)
+                )
+            """)
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
             self._ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
@@ -61,6 +94,35 @@ class DBManager:
             self._ensure_column(conn, "users", "supabase_email", "TEXT")
             conn.commit()
             logger.info(f"Database initialized successfully path={self.db_path}")
+
+    @staticmethod
+    def _safe_week_key(value: str) -> str:
+        text = str(value or "").strip()
+        if len(text) >= 8 and "-W" in text:
+            return text[:8]
+        return ""
+
+    def _upsert_weekly_archive(
+        self,
+        conn: sqlite3.Connection,
+        telegram_id: int,
+        week_key: str,
+        points: int,
+    ) -> None:
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return
+        pts = max(0, int(points or 0))
+        conn.execute(
+            """
+            INSERT INTO weekly_points_archive (telegram_id, week_key, points, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(telegram_id, week_key) DO UPDATE SET
+                points = excluded.points,
+                updated_at = excluded.updated_at
+            """,
+            (int(telegram_id), wk, pts, datetime.now().isoformat()),
+        )
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
         existing = {
@@ -211,6 +273,13 @@ class DBManager:
             weekly_points = int(row["weekly_points"] or 0)
             weekly_points_week = row["weekly_points_week"] or ""
             if weekly_points_week != week_key:
+                if weekly_points_week and weekly_points > 0:
+                    self._upsert_weekly_archive(
+                        conn,
+                        telegram_id=telegram_id,
+                        week_key=weekly_points_week,
+                        points=weekly_points,
+                    )
                 weekly_points = 0
 
             if daily_points >= daily_cap:
@@ -229,6 +298,12 @@ class DBManager:
                         week_key,
                         telegram_id,
                     ),
+                )
+                self._upsert_weekly_archive(
+                    conn,
+                    telegram_id=telegram_id,
+                    week_key=week_key,
+                    points=weekly_points,
                 )
                 conn.commit()
                 return {
@@ -274,6 +349,12 @@ class DBManager:
                 VALUES (?, ?, ?)
                 """,
                 (telegram_id, today_str, fingerprint),
+            )
+            self._upsert_weekly_archive(
+                conn,
+                telegram_id=telegram_id,
+                week_key=week_key,
+                points=weekly_points + points_added,
             )
             conn.commit()
             return {
@@ -432,3 +513,143 @@ class DBManager:
             "weekly_rank": weekly_rank,
             "total_ranked": len(rows),
         }
+
+    def get_weekly_reward_candidates(self, week_key: str, limit: int = 10):
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return []
+        top_n = max(1, int(limit or 10))
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM (
+                    SELECT
+                        u.telegram_id,
+                        u.username,
+                        lower(trim(COALESCE(u.supabase_user_id, ''))) AS supabase_user_id,
+                        COALESCE(u.supabase_email, '') AS supabase_email,
+                        COALESCE(u.points, 0) AS points,
+                        COALESCE(u.message_count, 0) AS message_count,
+                        COALESCE(a.points,
+                            CASE
+                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
+                                ELSE 0
+                            END
+                        ) AS weekly_points
+                    FROM users u
+                    LEFT JOIN weekly_points_archive a
+                        ON a.telegram_id = u.telegram_id
+                        AND a.week_key = ?
+                ) ranked
+                WHERE weekly_points > 0
+                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
+                LIMIT ?
+                """,
+                (wk, wk, top_n),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def is_weekly_reward_settled(self, week_key: str) -> bool:
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return False
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM weekly_reward_runs WHERE week_key = ? LIMIT 1",
+                (wk,),
+            ).fetchone()
+            return bool(row)
+
+    def mark_weekly_reward_settled(
+        self,
+        week_key: str,
+        winners_count: int,
+        summary: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return
+        summary_json = None
+        if isinstance(summary, dict):
+            try:
+                summary_json = json.dumps(summary, ensure_ascii=False)
+            except Exception:
+                summary_json = None
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO weekly_reward_runs (week_key, settled_at, winners_count, summary_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(week_key) DO UPDATE SET
+                    settled_at = excluded.settled_at,
+                    winners_count = excluded.winners_count,
+                    summary_json = excluded.summary_json
+                """,
+                (
+                    wk,
+                    datetime.now().isoformat(),
+                    max(0, int(winners_count or 0)),
+                    summary_json,
+                ),
+            )
+            conn.commit()
+
+    def apply_weekly_reward_payout(
+        self,
+        week_key: str,
+        telegram_id: int,
+        rank: int,
+        username: str,
+        points_bonus: int,
+        pro_days: int,
+        supabase_user_id: str = "",
+        pro_granted: bool = False,
+        pro_error: str = "",
+    ) -> bool:
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return False
+        bonus = max(0, int(points_bonus or 0))
+        with self._get_connection() as conn:
+            exists = conn.execute(
+                """
+                SELECT 1
+                FROM weekly_reward_payouts
+                WHERE week_key = ? AND telegram_id = ?
+                LIMIT 1
+                """,
+                (wk, int(telegram_id)),
+            ).fetchone()
+            if exists:
+                return False
+
+            if bonus > 0:
+                conn.execute(
+                    "UPDATE users SET points = COALESCE(points, 0) + ? WHERE telegram_id = ?",
+                    (bonus, int(telegram_id)),
+                )
+            conn.execute(
+                """
+                INSERT INTO weekly_reward_payouts (
+                    week_key, telegram_id, rank, username, points_bonus, pro_days,
+                    supabase_user_id, pro_granted, pro_error, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    wk,
+                    int(telegram_id),
+                    int(rank or 0),
+                    str(username or ""),
+                    bonus,
+                    max(0, int(pro_days or 0)),
+                    str(supabase_user_id or "").strip().lower(),
+                    1 if pro_granted else 0,
+                    str(pro_error or ""),
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+            return True
