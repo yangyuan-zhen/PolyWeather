@@ -194,17 +194,121 @@ class DBManager:
         telegram_id: int,
         supabase_user_id: str,
         supabase_email: str = "",
-    ) -> None:
+    ) -> Dict[str, Any]:
+        """
+        Strict one-to-one binding between Telegram account and Supabase account.
+
+        Rules:
+        - One telegram_id can only bind one supabase_user_id (no overwrite via /bind).
+        - One supabase_user_id can only bind one telegram_id.
+        - Rebind requires explicit unbind first.
+        """
+        normalized_uid = str(supabase_user_id or "").strip().lower()
+        normalized_email = str(supabase_email or "").strip()
+        if not normalized_uid:
+            return {"ok": False, "reason": "invalid_supabase_user_id"}
+
         with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+
+            # Ensure current telegram user row exists.
+            conn.execute(
+                """
+                INSERT INTO users (telegram_id, username)
+                VALUES (?, COALESCE((SELECT username FROM users WHERE telegram_id = ?), ''))
+                ON CONFLICT(telegram_id) DO NOTHING
+                """,
+                (telegram_id, telegram_id),
+            )
+
+            current_row = conn.execute(
+                """
+                SELECT telegram_id, supabase_user_id, supabase_email
+                FROM users
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (telegram_id,),
+            ).fetchone()
+            current_uid = str(
+                (current_row["supabase_user_id"] if current_row else "") or ""
+            ).strip().lower()
+
+            owner_row = conn.execute(
+                """
+                SELECT telegram_id
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+                LIMIT 1
+                """,
+                (normalized_uid,),
+            ).fetchone()
+            owner_telegram_id = int(owner_row["telegram_id"]) if owner_row else None
+
+            if current_uid and current_uid != normalized_uid:
+                return {
+                    "ok": False,
+                    "reason": "telegram_already_bound_other",
+                    "current_supabase_user_id": current_uid,
+                }
+
+            if owner_telegram_id is not None and owner_telegram_id != int(telegram_id):
+                return {
+                    "ok": False,
+                    "reason": "supabase_already_bound_other",
+                    "owner_telegram_id": owner_telegram_id,
+                }
+
+            if current_uid == normalized_uid:
+                # Keep idempotent bind behavior while allowing email refresh.
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET supabase_email = ?
+                    WHERE telegram_id = ?
+                    """,
+                    (normalized_email, telegram_id),
+                )
+                conn.commit()
+                return {"ok": True, "reason": "already_bound_same"}
+
             conn.execute(
                 """
                 UPDATE users
                 SET supabase_user_id = ?, supabase_email = ?
                 WHERE telegram_id = ?
                 """,
-                (supabase_user_id.strip(), supabase_email.strip(), telegram_id),
+                (normalized_uid, normalized_email, telegram_id),
             )
             conn.commit()
+            return {"ok": True, "reason": "bound"}
+
+    def unbind_supabase_identity(self, telegram_id: int) -> Dict[str, Any]:
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            current = conn.execute(
+                """
+                SELECT supabase_user_id
+                FROM users
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (telegram_id,),
+            ).fetchone()
+            current_uid = str((current["supabase_user_id"] if current else "") or "").strip()
+            if not current_uid:
+                return {"ok": True, "reason": "not_bound"}
+
+            conn.execute(
+                """
+                UPDATE users
+                SET supabase_user_id = '', supabase_email = ''
+                WHERE telegram_id = ?
+                """,
+                (telegram_id,),
+            )
+            conn.commit()
+            return {"ok": True, "reason": "unbound", "previous_supabase_user_id": current_uid}
 
     def add_message_activity(
         self,

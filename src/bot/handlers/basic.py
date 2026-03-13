@@ -40,6 +40,10 @@ class BasicCommandHandler:
         def _bind(message):
             self.handle_bind(message)
 
+        @self.bot.message_handler(commands=["unbind"])
+        def _unbind(message):
+            self.handle_unbind(message)
+
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
         try:
@@ -104,11 +108,55 @@ class BasicCommandHandler:
             supabase_email = str(parts[2] or "").strip() if len(parts) >= 3 else ""
             user = message.from_user
             self.io_layer.db.upsert_user(user.id, self.io_layer.display_name(user))
-            self.io_layer.db.bind_supabase_identity(
+            result = self.io_layer.db.bind_supabase_identity(
                 telegram_id=user.id,
                 supabase_user_id=supabase_user_id,
                 supabase_email=supabase_email,
             )
+            if not bool(result.get("ok")):
+                reason = str(result.get("reason") or "bind_failed")
+                if reason == "telegram_already_bound_other":
+                    current_uid = str(result.get("current_supabase_user_id") or "")
+                    self.bot.reply_to(
+                        message,
+                        (
+                            "❌ 当前 Telegram 已绑定其他网页账号。\n"
+                            f"当前绑定: <code>{current_uid}</code>\n\n"
+                            "请先执行 <code>/unbind</code> 再绑定新账号。"
+                        ),
+                        parse_mode="HTML",
+                    )
+                    trace.set_status("conflict", "telegram_already_bound_other")
+                    return
+                if reason == "supabase_already_bound_other":
+                    owner = str(result.get("owner_telegram_id") or "")
+                    self.bot.reply_to(
+                        message,
+                        (
+                            "❌ 该网页账号已绑定到其他 Telegram。\n"
+                            f"绑定中的 Telegram ID: <code>{owner}</code>\n\n"
+                            "如需迁移，请先在原 Telegram 账号执行 <code>/unbind</code>。"
+                        ),
+                        parse_mode="HTML",
+                    )
+                    trace.set_status("conflict", "supabase_already_bound_other")
+                    return
+                self.bot.reply_to(message, "❌ 绑定失败，请稍后重试。")
+                trace.set_status("error", reason)
+                return
+
+            if str(result.get("reason") or "") == "already_bound_same":
+                self.bot.reply_to(
+                    message,
+                    (
+                        "✅ 已是当前绑定账号，无需重复绑定。\n"
+                        f"supabase_user_id: <code>{supabase_user_id}</code>"
+                    ),
+                    parse_mode="HTML",
+                )
+                trace.set_status("ok", "already_bound_same")
+                return
+
             self.bot.reply_to(
                 message,
                 (
@@ -118,5 +166,26 @@ class BasicCommandHandler:
                 parse_mode="HTML",
             )
             trace.set_status("ok")
+        finally:
+            trace.emit()
+
+    def handle_unbind(self, message: Any) -> None:
+        trace = CommandTrace("/unbind", message)
+        try:
+            user = message.from_user
+            self.io_layer.db.upsert_user(user.id, self.io_layer.display_name(user))
+            result = self.io_layer.db.unbind_supabase_identity(user.id)
+            if str(result.get("reason") or "") == "not_bound":
+                self.bot.reply_to(
+                    message,
+                    "ℹ️ 当前 Telegram 尚未绑定网页账号。",
+                )
+                trace.set_status("ok", "not_bound")
+                return
+            self.bot.reply_to(
+                message,
+                "✅ 已解除当前 Telegram 与网页账号的绑定。",
+            )
+            trace.set_status("ok", "unbound")
         finally:
             trace.emit()

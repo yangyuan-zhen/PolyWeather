@@ -76,6 +76,10 @@ def _parse_addresses(raw: Optional[str]) -> List[str]:
     return out
 
 
+def _parse_address_set(raw: Optional[str]) -> set[str]:
+    return set(_parse_addresses(raw))
+
+
 def _parse_address_aliases(raw: Optional[str]) -> Dict[str, str]:
     """
     Parse wallet aliases from either:
@@ -512,6 +516,35 @@ def _build_message(
     return "\n".join(lines)
 
 
+def _filter_changes_by_position_value(
+    *,
+    wallet: str,
+    changes: List[Tuple[str, Dict[str, Any]]],
+    min_position_value_usd: float,
+    exempt_wallets: set[str],
+) -> List[Tuple[str, Dict[str, Any]]]:
+    if min_position_value_usd <= 0:
+        return changes
+    if wallet in exempt_wallets:
+        return changes
+
+    out: List[Tuple[str, Dict[str, Any]]] = []
+    for change_type, pos in changes:
+        value = _safe_float(pos.get("position_value"))
+        if value >= min_position_value_usd:
+            out.append((change_type, pos))
+        else:
+            logger.info(
+                "wallet activity skipped by position value floor user={} change={} value={:.2f} floor={:.2f} market={}",
+                wallet,
+                change_type,
+                value,
+                min_position_value_usd,
+                str(pos.get("title") or ""),
+            )
+    return out
+
+
 def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread]:
     enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
@@ -519,6 +552,9 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     user_aliases = _parse_address_aliases(
         os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
         or os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS_ALIASES")
+    )
+    exempt_wallets = _parse_address_set(
+        os.getenv("POLYMARKET_WALLET_ACTIVITY_MIN_VALUE_EXEMPT_USERS")
     )
 
     if not enabled:
@@ -558,6 +594,9 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         _env_int("POLYMARKET_WALLET_ACTIVITY_IMMEDIATE_COOLDOWN_SEC", 20),
     )
     max_changes = max(1, _env_int("POLYMARKET_WALLET_ACTIVITY_MAX_CHANGES_PER_MSG", 5))
+    min_position_value_usd = max(
+        0.0, _env_float("POLYMARKET_WALLET_ACTIVITY_MIN_POSITION_VALUE_USD", 0.0)
+    )
     notify_closed = _env_bool("POLYMARKET_WALLET_ACTIVITY_NOTIFY_CLOSED", False)
     bootstrap_alert = _env_bool("POLYMARKET_WALLET_ACTIVITY_BOOTSTRAP_ALERT", False)
     link_preview = _env_bool("POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW", True)
@@ -586,6 +625,8 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         logger.info(
             f"polymarket wallet activity watcher started users={len(users)} "
             f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
+            f"min_position_value_usd={min_position_value_usd} "
+            f"min_value_exempt_users={len(exempt_wallets)} "
             f"aliases={len(user_aliases)} link_preview={link_preview} "
             f"min_avg_price_delta={min_avg_price_delta} "
             f"immediate_on_size_delta={immediate_on_size_delta} "
@@ -713,6 +754,13 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                             debounce_sec=update_debounce_sec,
                             max_hold_sec=update_max_hold_sec,
                         )
+                    )
+
+                    outgoing = _filter_changes_by_position_value(
+                        wallet=user,
+                        changes=outgoing,
+                        min_position_value_usd=min_position_value_usd,
+                        exempt_wallets=exempt_wallets,
                     )
 
                     if outgoing:
