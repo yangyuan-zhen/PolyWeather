@@ -254,10 +254,6 @@ export function AccountCenter() {
       try {
         const client = getSupabaseBrowserClient();
         const {
-          data: { user },
-        } = await client.auth.getUser();
-        if (!user) return headers;
-        const {
           data: { session },
         } = await client.auth.getSession();
         const accessToken = String(session?.access_token || "").trim();
