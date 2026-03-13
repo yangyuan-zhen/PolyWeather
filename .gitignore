@@ -2,6 +2,9 @@
 .env
 
 # Data and Logs
+data/*.db
+data/*.db-*
+data/*.db.*
 data/*.json
 data/logs/
 data/historical/

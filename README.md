@@ -120,6 +120,28 @@ flowchart TD
 docker compose up -d --build
 ```
 
+## Runtime Data (Recommended for VPS)
+
+To avoid `git pull` conflicts and decouple code from runtime state, store SQLite and caches outside the repo:
+
+1. Set in `.env`:
+   - `POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`
+   - `POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db`
+2. Ensure host directory exists and has write permission for container user (`1000:1000`):
+
+```bash
+sudo mkdir -p /var/lib/polyweather
+sudo chown -R 1000:1000 /var/lib/polyweather
+sudo chmod 775 /var/lib/polyweather
+```
+
+3. Recreate services:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
 ### Frontend (local)
 
 ```bash

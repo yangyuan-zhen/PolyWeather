@@ -6,7 +6,11 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data # 挂载数据目录，确保历史数据持久化
+      # Persist runtime data outside git workspace.
+      # Host path defaults to /var/lib/polyweather and can be overridden by POLYWEATHER_RUNTIME_DATA_DIR.
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+      # Keep /app/data compatibility for existing cache/state defaults.
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
       - ./bot.log:/app/bot.log # 挂载日志文件
     user: "${UID:-1000}:${GID:-1000}"
 
@@ -18,7 +22,8 @@ services:
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
     ports:
       - "8000:8000"
     user: "${UID:-1000}:${GID:-1000}"

@@ -119,6 +119,28 @@ flowchart TD
 docker compose up -d --build
 ```
 
+## 运行数据目录（VPS 推荐）
+
+为避免 `git pull` 被数据库阻塞，并实现代码与运行态数据解耦，建议把 SQLite 和缓存放到仓库外目录：
+
+1. 在 `.env` 设置：
+   - `POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`
+   - `POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db`
+2. 确保宿主机目录存在且容器用户（`1000:1000`）可写：
+
+```bash
+sudo mkdir -p /var/lib/polyweather
+sudo chown -R 1000:1000 /var/lib/polyweather
+sudo chmod 775 /var/lib/polyweather
+```
+
+3. 重建服务：
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
 ### 前端本地运行
 
 ```bash
