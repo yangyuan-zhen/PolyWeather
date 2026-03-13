@@ -685,6 +685,21 @@
   color: #6ee7b7;
 }
 
+.txLink {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #93c5fd;
+  text-decoration: none;
+}
+
+.txLink:hover {
+  color: #bfdbfe;
+  text-decoration: underline;
+}
+
 .alertIconBox {
   display: flex;
   align-items: center;

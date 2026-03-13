@@ -217,6 +217,21 @@ function buildApproveCalldata(spender: string, amount: bigint) {
   return `0x095ea7b3${toPaddedAddress(spender)}${toPaddedHex(amount)}`;
 }
 
+function buildBalanceOfCalldata(owner: string) {
+  return `0x70a08231${toPaddedAddress(owner)}`;
+}
+
+function formatTokenUnits(amount: bigint, decimals: number) {
+  const safeDecimals = Number.isFinite(decimals) && decimals >= 0 ? Math.floor(decimals) : 6;
+  const base = 10n ** BigInt(safeDecimals);
+  const whole = amount / base;
+  const fraction = amount % base;
+  if (fraction === 0n) return whole.toString();
+  const rawFraction = fraction.toString().padStart(safeDecimals, "0");
+  const trimmed = rawFraction.replace(/0+$/, "");
+  return `${whole.toString()}.${trimmed}`;
+}
+
 type NormalizedPaymentError = {
   message: string;
   pending: boolean;
@@ -225,18 +240,30 @@ type NormalizedPaymentError = {
 
 function normalizePaymentError(error: unknown): NormalizedPaymentError {
   const source = error as any;
-  const code = Number(source?.code ?? source?.error?.code ?? NaN);
+  const code = Number(
+    source?.code ??
+      source?.error?.code ??
+      source?.data?.code ??
+      source?.cause?.code ??
+      NaN,
+  );
   const messageCandidates = [
     source?.shortMessage,
     source?.message,
     source?.reason,
     source?.data?.message,
+    source?.cause?.message,
     source?.error?.message,
     error instanceof Error ? error.message : "",
     typeof error === "string" ? error : "",
   ];
   const rawMessage = messageCandidates
-    .find((item) => typeof item === "string" && item.trim())
+    .find(
+      (item) =>
+        typeof item === "string" &&
+        item.trim() &&
+        item.trim().toLowerCase() !== "[object object]",
+    )
     ?.trim();
   const lower = String(rawMessage || "").toLowerCase();
 
@@ -250,7 +277,7 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
 
   const userRejected =
     code === 4001 ||
-    /user rejected|user denied|rejected request|cancelled|canceled|拒绝|取消/.test(
+    /user rejected|user denied|rejected request|cancelled|canceled|拒绝|取消|签名请求已拒绝/.test(
       lower,
     );
   if (userRejected) {
@@ -262,8 +289,10 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
   }
 
   const insufficientGas =
-    (code === -32000 && /insufficient funds|gas/.test(lower)) ||
-    /not enough pol|network fee|网络费|手续费/.test(lower);
+    (code === -32000 && /insufficient funds/.test(lower) && /(gas|fee|native|pol|matic)/.test(lower)) ||
+    /not enough pol|insufficient (pol|matic)|insufficient funds for gas|network fee|网络费|手续费/.test(
+      lower,
+    );
   if (insufficientGas) {
     return {
       message: "钱包 POL 不足，无法支付链上手续费，请先充值少量 POL 后重试。",
@@ -765,6 +794,7 @@ export function AccountCenter() {
   const createIntentAndPay = async () => {
     setPaymentError("");
     setPaymentInfo("");
+    setLastTxHash("");
     if (!isAuthenticated) {
       setPaymentError("请先登录后再支付。");
       return;
@@ -839,6 +869,26 @@ export function AccountCenter() {
       const amountUnits = BigInt(String(txPayload.amount_units || "0"));
       if (!tokenAddress.startsWith("0x") || amountUnits <= 0n)
         throw new Error("intent token/amount invalid");
+      const tokenDecimals = Number(paymentConfig?.token_decimals ?? 6);
+
+      const balanceHex = (await eth.request({
+        method: "eth_call",
+        params: [
+          {
+            to: tokenAddress,
+            data: buildBalanceOfCalldata(payingWallet),
+          },
+          "latest",
+        ],
+      })) as string;
+      const tokenBalance = BigInt(String(balanceHex || "0x0"));
+      if (tokenBalance < amountUnits) {
+        const need = formatTokenUnits(amountUnits, tokenDecimals);
+        const have = formatTokenUnits(tokenBalance, tokenDecimals);
+        throw new Error(
+          `支付代币余额不足：需要 ${need} USDC，当前 ${have} USDC。请确认你持有的是 Polygon 支付币种（当前合约为 USDC.e）。`,
+        );
+      }
 
       const allowanceHex = (await eth.request({
         method: "eth_call",
@@ -1211,6 +1261,8 @@ export function AccountCenter() {
                 }
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
+                txHash={lastTxHash || undefined}
+                chainId={paymentConfig?.chain_id || 137}
                 faqHref="/account"
               />
             </div>

@@ -100,6 +100,7 @@ flowchart TD
    - Frontend receives contract `tx_payload` and calls `eth_sendTransaction`.
    - Backend validates `OrderPaid(orderId,payer,planId,token,amount)` onchain event and auto-grants entitlement.
    - Confirmation writes `payments/subscriptions/entitlement_events` and can notify Telegram.
+   - PolygonScan verification guide: `docs/payments/POLYGONSCAN_VERIFY.md`.
 
 ## Repository Layout
 

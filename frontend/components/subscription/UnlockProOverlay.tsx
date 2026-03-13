@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Coins,
   Crown,
+  ExternalLink,
   Loader2,
   Lock,
   MessageSquare,
@@ -45,6 +46,8 @@ type UnlockProOverlayProps = {
   infoText?: string;
   faqHref?: string;
   telegramGroupUrl?: string;
+  txHash?: string;
+  chainId?: number;
 };
 
 const FEATURES = {
@@ -75,6 +78,8 @@ export function UnlockProOverlay({
   infoText,
   faqHref = "/account",
   telegramGroupUrl,
+  txHash,
+  chainId = 137,
 }: UnlockProOverlayProps) {
   const isEn = locale === "en-US";
   const canUsePoints = billing.pointsEnabled && billing.isEligible;
@@ -93,6 +98,10 @@ export function UnlockProOverlay({
   const progressPct = billing.pointsEnabled
     ? Math.min(100, Math.round((points / maxPointsForFullDiscount) * 100))
     : 0;
+  const txHref =
+    txHash && txHash.startsWith("0x")
+      ? `${chainId === 137 ? "https://polygonscan.com" : "https://etherscan.io"}/tx/${txHash}`
+      : "";
 
   return (
     <div className={s.modal}>
@@ -369,7 +378,15 @@ export function UnlockProOverlay({
           <div className={`${s.alertIconBox} ${s.alertIconInfo}`}>
             <CheckCircle2 size={10} />
           </div>
-          {infoText}
+          <div>
+            <div>{infoText}</div>
+            {txHref && (
+              <Link href={txHref} target="_blank" className={s.txLink}>
+                查看链上交易
+                <ExternalLink size={11} />
+              </Link>
+            )}
+          </div>
         </div>
       )}
     </div>
