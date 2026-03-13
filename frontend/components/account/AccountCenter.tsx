@@ -252,9 +252,14 @@ export function AccountCenter() {
       if (withJson) headers["Content-Type"] = "application/json";
       if (!supabaseReady) return headers;
       try {
+        const client = getSupabaseBrowserClient();
+        const {
+          data: { user },
+        } = await client.auth.getUser();
+        if (!user) return headers;
         const {
           data: { session },
-        } = await getSupabaseBrowserClient().auth.getSession();
+        } = await client.auth.getSession();
         const accessToken = String(session?.access_token || "").trim();
         if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
       } catch {
@@ -546,7 +551,8 @@ export function AccountCenter() {
       (await eth.request({ method: "eth_chainId" })) || "",
     );
     const targetChainHex = `0x${targetChainId.toString(16)}`;
-    if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase()) return;
+    if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase())
+      return;
     try {
       await eth.request({
         method: "wallet_switchEthereumChain",
@@ -595,8 +601,6 @@ export function AccountCenter() {
       if (!address) throw new Error("钱包账户为空");
 
       const authHeaders = await buildAuthedHeaders(true);
-      if (!authHeaders.Authorization)
-        throw new Error("登录会话失效，请重新登录后再绑定钱包。");
 
       setWalletAddress(address);
       const challengeRes = await fetch("/api/payments/wallets/challenge", {
@@ -668,8 +672,6 @@ export function AccountCenter() {
     setPaymentBusy(true);
     try {
       const authHeaders = await buildAuthedHeaders(true);
-      if (!authHeaders.Authorization)
-        throw new Error("登录会话失效，请重新登录后再支付。");
 
       const targetChainId = Number(paymentConfig.chain_id || 137);
       await ensureTargetChain(eth, targetChainId);
@@ -1077,7 +1079,7 @@ export function AccountCenter() {
                 <Bot size={22} /> Telegram Bot 绑定
               </h3>
               <p className="text-slate-400 text-sm mb-6">
-                将下方命令发送给到群聊，实现全平台气象推送与权限同步。
+                将下方命令发送给到群聊，实现全平台气象推送与权限同步。（https://t.me/+nMG7SjziUKYyZmM1）
               </p>
               <div className="flex gap-2">
                 <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
