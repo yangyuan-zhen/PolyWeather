@@ -16,12 +16,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const auth = await buildBackendRequestHeaders(req);
+    const proxiedHeaders = new Headers(auth.headers);
+    proxiedHeaders.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE}/api/payments/intents`, {
       method: "POST",
-      headers: {
-        ...auth.headers,
-        "Content-Type": "application/json",
-      },
+      headers: proxiedHeaders,
       body: JSON.stringify(body ?? {}),
       cache: "no-store",
     });
