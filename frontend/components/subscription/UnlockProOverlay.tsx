@@ -69,7 +69,7 @@ export function UnlockProOverlay({
     payLabel || (isEn ? "Subscribe & Activate" : "立即订阅并激活服务");
 
   return (
-    <div className="relative w-full max-w-[860px] overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1a2740] via-[#14233b] to-[#0f172a] p-6 md:p-10 shadow-[0_0_90px_-24px_rgba(59,130,246,0.35)]">
+    <div className="relative w-full max-w-[860px] max-h-[calc(100dvh-2.5rem)] overflow-x-hidden overflow-y-auto rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1a2740] via-[#14233b] to-[#0f172a] p-5 md:p-8 lg:p-10 shadow-[0_0_90px_-24px_rgba(59,130,246,0.35)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.2),transparent_40%),radial-gradient(circle_at_80%_100%,rgba(99,102,241,0.18),transparent_45%)]" />
       {onClose && (
         <button
@@ -82,26 +82,26 @@ export function UnlockProOverlay({
       )}
 
       <div className="relative z-10">
-        <div className="mx-auto mb-7 flex max-w-[580px] flex-col items-center text-center">
-          <div className="mb-5 flex h-16 w-16 rotate-12 items-center justify-center rounded-3xl bg-gradient-to-tr from-yellow-500 via-amber-400 to-orange-500 shadow-2xl shadow-yellow-500/25">
-            <Crown className="h-8 w-8 text-white drop-shadow-lg" />
+        <div className="mx-auto mb-5 flex max-w-[580px] flex-col items-center text-center md:mb-7">
+          <div className="mb-4 flex h-14 w-14 rotate-12 items-center justify-center rounded-3xl bg-gradient-to-tr from-yellow-500 via-amber-400 to-orange-500 shadow-2xl shadow-yellow-500/25 md:mb-5 md:h-16 md:w-16">
+            <Crown className="h-7 w-7 text-white drop-shadow-lg md:h-8 md:w-8" />
           </div>
-          <h2 className="text-4xl font-black tracking-tight text-white md:text-5xl">
+          <h2 className="text-3xl font-black leading-[1.06] tracking-tight text-white md:text-5xl">
             {title}
           </h2>
-          <p className="mt-2 max-w-[520px] text-sm leading-6 text-slate-300 md:text-base">
+          <p className="mt-2 max-w-[520px] text-sm leading-5 text-slate-300 md:text-base md:leading-6">
             {subtitle}
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 text-left md:grid-cols-2">
-          <div className="relative min-h-[208px] rounded-3xl border border-blue-500/45 bg-blue-600/10 p-6">
+          <div className="relative min-h-[188px] rounded-3xl border border-blue-500/45 bg-blue-600/10 p-5 md:min-h-[208px] md:p-6">
             <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 translate-x-1/3 -translate-y-1/3 rounded-full bg-blue-500/15 blur-2xl" />
             <div className="relative z-10">
               <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-blue-300">
                 STANDARD PRO
               </span>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-5xl font-black leading-none text-white">
+                <span className="text-[48px] font-black leading-none text-white md:text-5xl">
                   ${planPriceUsd.toFixed(2)}
                 </span>
                 <span className="text-sm font-semibold text-slate-400">
@@ -130,7 +130,7 @@ export function UnlockProOverlay({
 
           {billing.pointsEnabled && billing.isEligible ? (
             <div
-              className={`min-h-[208px] rounded-3xl border p-6 transition-all ${usePoints ? "border-indigo-500/55 bg-indigo-500/12 shadow-inner shadow-indigo-500/8" : "border-white/10 bg-white/6"}`}
+              className={`min-h-[188px] rounded-3xl border p-5 transition-all md:min-h-[208px] md:p-6 ${usePoints ? "border-indigo-500/55 bg-indigo-500/12 shadow-inner shadow-indigo-500/8" : "border-white/10 bg-white/6"}`}
             >
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -173,7 +173,7 @@ export function UnlockProOverlay({
               </p>
             </div>
           ) : (
-            <div className="group flex min-h-[208px] flex-col justify-between rounded-3xl border border-dashed border-white/20 bg-white/5 p-6 transition-all hover:border-blue-500/35">
+            <div className="group flex min-h-[188px] flex-col justify-between rounded-3xl border border-dashed border-white/20 bg-white/5 p-5 transition-all hover:border-blue-500/35 md:min-h-[208px] md:p-6">
               <div>
                 <div className="mb-3 flex items-center gap-2">
                   <div className="rounded-lg bg-slate-800 p-1.5 text-slate-500 transition-colors group-hover:text-blue-400">
@@ -223,13 +223,13 @@ export function UnlockProOverlay({
           )}
         </div>
 
-        <div className="mt-7 border-t border-white/10 pt-5">
-          <div className="flex items-end justify-between gap-4 px-1">
+        <div className="mt-6 border-t border-white/10 pt-4 md:mt-7 md:pt-5">
+          <div className="flex items-center justify-between gap-4 px-1">
             <span className="text-base font-medium text-slate-300">
               {isEn ? "Total Due" : "应付总计"}
             </span>
             <div className="text-right">
-              <span className="font-mono text-5xl font-black leading-none tracking-tight text-white">
+              <span className="font-mono text-4xl font-black leading-none tracking-tight text-white md:text-5xl">
                 ${billing.finalPrice.toFixed(2)}
               </span>
               <span className="ml-2 font-mono text-sm uppercase tracking-[0.12em] text-slate-500">
@@ -241,7 +241,7 @@ export function UnlockProOverlay({
           <button
             onClick={onPay}
             disabled={payBusy}
-            className="mt-5 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 py-4 text-lg font-black text-white shadow-2xl shadow-blue-600/30 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] disabled:opacity-70"
+            className="mt-4 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 py-3.5 text-lg font-black text-white shadow-2xl shadow-blue-600/30 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] disabled:opacity-70 md:mt-5 md:py-4"
           >
             {payBusy ? (
               <Loader2 size={20} className="animate-spin" />
@@ -257,7 +257,7 @@ export function UnlockProOverlay({
             )}
           </button>
 
-          <div className="mt-5 flex items-center justify-center gap-6 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600">
+          <div className="mt-4 flex items-center justify-center gap-5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600 md:mt-5 md:gap-6">
             <span className="flex items-center gap-1.5">
               <Lock size={12} /> Secure Payment
             </span>
