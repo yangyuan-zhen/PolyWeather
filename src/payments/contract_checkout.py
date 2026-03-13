@@ -1278,6 +1278,49 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(404, "payment intent not found")
         return self._serialize_intent(rows[0])
 
+    def list_pending_confirm_intents(self, limit: int = 20) -> List[Dict[str, Any]]:
+        """
+        List submitted intents that already have tx_hash and need background confirm.
+        """
+        self._ensure_enabled()
+        safe_limit = max(1, min(int(limit or 20), 200))
+        rows = self._rest(
+            "GET",
+            "payment_intents",
+            params={
+                "select": "id,user_id,tx_hash,status,updated_at,created_at,chain_id",
+                "status": "eq.submitted",
+                "tx_hash": "not.is.null",
+                "chain_id": f"eq.{self.chain_id}",
+                "order": "updated_at.asc",
+                "limit": str(safe_limit),
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(rows, list):
+            return []
+
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            intent_id = str(row.get("id") or "").strip()
+            user_id = str(row.get("user_id") or "").strip()
+            tx_hash = str(row.get("tx_hash") or "").strip().lower()
+            if not intent_id or not user_id or not tx_hash:
+                continue
+            out.append(
+                {
+                    "intent_id": intent_id,
+                    "user_id": user_id,
+                    "tx_hash": tx_hash,
+                    "status": str(row.get("status") or ""),
+                    "updated_at": row.get("updated_at"),
+                    "created_at": row.get("created_at"),
+                }
+            )
+        return out
+
     def submit_intent_tx(
         self,
         user_id: str,

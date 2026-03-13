@@ -1092,7 +1092,7 @@ def _build_telegram_messages_mispricing(
     if anchor_high_c is not None and anchor_settle is not None:
         if anchor_model:
             lines_zh.append(
-                f"基准：多模型最高温 {anchor_model} {anchor_high_c:.1f}C（结算参考 {anchor_settle}C）"
+                f"基准：多模型最高温 {anchor_model} {anchor_high_c:.1f}°C （结算参考 {anchor_settle}°C ）"
             )
         else:
             lines_zh.append(

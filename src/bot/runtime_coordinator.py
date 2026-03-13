@@ -87,6 +87,7 @@ class StartupCoordinator:
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
             self._start_weekly_reward_loop(),
+            self._start_payment_confirm_loop(),
         ]
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -270,6 +271,33 @@ class StartupCoordinator:
             starter=lambda: import_module("src.bot.weekly_reward_loop").start_weekly_reward_loop(
                 self.bot
             ),
+        )
+
+    def _start_payment_confirm_loop(self) -> LoopStatus:
+        enabled = _env_bool("POLYWEATHER_PAYMENT_CONFIRM_LOOP_ENABLED", True)
+        details = {
+            "interval_sec": max(
+                5, _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_INTERVAL_SEC", 20)
+            ),
+            "batch_size": max(
+                1, min(200, _env_int("POLYWEATHER_PAYMENT_CONFIRM_LOOP_BATCH_SIZE", 20))
+            ),
+            "payment_enabled": _env_bool("POLYWEATHER_PAYMENT_ENABLED", False),
+            "chain_id": _env_int("POLYWEATHER_PAYMENT_CHAIN_ID", 137),
+            "confirmations": max(1, _env_int("POLYWEATHER_PAYMENT_CONFIRMATIONS", 2)),
+        }
+        validation_error = None
+        if not bool(details["payment_enabled"]):
+            validation_error = "payment_service_disabled"
+        return self._start_with_validation(
+            key="payment_confirm",
+            label="支付自动补单",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module(
+                "src.payments.confirm_loop"
+            ).start_payment_confirm_loop(),
         )
 
 
