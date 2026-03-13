@@ -30,27 +30,29 @@ export async function buildBackendRequestHeaders(
   }
 
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
+  if (hasSupabaseServerEnv()) {
+    const passthroughResponse = new NextResponse(null, { status: 200 });
+    const supabase = createSupabaseRouteClient(request, passthroughResponse);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    const accessToken = session?.access_token || "";
+    if (accessToken) {
+      // Prefer server-side session token to avoid stale client bearer tokens.
+      headers.set("Authorization", `Bearer ${accessToken}`);
+      return { headers, response: passthroughResponse };
+    }
+    if (incomingAuth) {
+      headers.set("Authorization", `Bearer ${incomingAuth}`);
+    }
+    return { headers, response: passthroughResponse };
+  }
+
   if (incomingAuth) {
     headers.set("Authorization", `Bearer ${incomingAuth}`);
-    return { headers, response: null };
   }
-
-  if (!hasSupabaseServerEnv()) {
-    return { headers, response: null };
-  }
-
-  const passthroughResponse = new NextResponse(null, { status: 200 });
-  const supabase = createSupabaseRouteClient(request, passthroughResponse);
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-
-  const accessToken = session?.access_token || "";
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
-
-  return { headers, response: passthroughResponse };
+  return { headers, response: null };
 }
 
 export function applyAuthResponseCookies(
