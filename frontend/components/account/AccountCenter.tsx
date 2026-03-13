@@ -49,6 +49,8 @@ type AuthMeResponse = {
   user_id?: string | null;
   email?: string | null;
   points?: number;
+  weekly_points?: number;
+  weekly_rank?: number | string | null;
   entitlement_mode?: string | null;
   auth_required?: boolean;
   subscription_required?: boolean;
@@ -126,7 +128,12 @@ type InfoRowProps = {
   isPrimary?: boolean;
 };
 
-const InfoRow = ({ icon: Icon, label, value, isPrimary = false }: InfoRowProps) => (
+const InfoRow = ({
+  icon: Icon,
+  label,
+  value,
+  isPrimary = false,
+}: InfoRowProps) => (
   <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group">
     <div className="flex items-center gap-3">
       <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
@@ -363,8 +370,12 @@ export function AccountCenter() {
   const pointsRaw = Number.isFinite(backendPointsRaw)
     ? Math.max(backendPointsRaw, metadataPointsSafe)
     : metadataPointsSafe;
-  const weeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
-  const weeklyRankRaw = user?.user_metadata?.weekly_rank;
+  const backendWeeklyPointsRaw = Number(backend?.weekly_points);
+  const metadataWeeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
+  const weeklyPointsRaw = Number.isFinite(backendWeeklyPointsRaw)
+    ? backendWeeklyPointsRaw
+    : metadataWeeklyPointsRaw;
+  const weeklyRankRaw = backend?.weekly_rank ?? user?.user_metadata?.weekly_rank;
   const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;
   const weeklyPoints = Number.isFinite(weeklyPointsRaw)
     ? Math.max(0, weeklyPointsRaw)
@@ -421,7 +432,8 @@ export function AccountCenter() {
       : 0;
     const discountUnits = Math.floor(actualRedeem / pointsPerUsdc);
     const pointsUsed = discountUnits * pointsPerUsdc;
-    const canRedeem = pointsEnabled && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
+    const canRedeem =
+      pointsEnabled && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
     const applyDiscount = usePoints && canRedeem && pointsUsed > 0;
 
     return {
@@ -595,7 +607,8 @@ export function AccountCenter() {
           payment_mode: "strict",
           allowed_wallet: payingWallet,
           use_points: billing.canRedeem && usePoints,
-          points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
+          points_to_consume:
+            billing.canRedeem && usePoints ? billing.pointsUsed : 0,
           metadata: { source: "account_center" },
         }),
       });
@@ -749,9 +762,6 @@ export function AccountCenter() {
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               账户中心
             </h1>
-            <p className="text-slate-500 text-sm">
-              积分体系 v4.3 · 管理身份与订阅计划
-            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -969,7 +979,9 @@ export function AccountCenter() {
                 onPay={() => void handleOverlayCheckout()}
                 onClose={() => setShowOverlay(false)}
                 payBusy={paymentBusy}
-                payLabel={hasPayingWallet ? "立即订阅并激活服务" : "连接钱包并支付"}
+                payLabel={
+                  hasPayingWallet ? "立即订阅并激活服务" : "连接钱包并支付"
+                }
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
                 faqHref="/account"
@@ -990,7 +1002,7 @@ export function AccountCenter() {
                 <Bot size={22} /> Telegram Bot 绑定
               </h3>
               <p className="text-slate-400 text-sm mb-6">
-                将下方命令发送给 Bot，实现全平台气象推送与权限同步。
+                将下方命令发送给到群聊，实现全平台气象推送与权限同步。
               </p>
               <div className="flex gap-2">
                 <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">

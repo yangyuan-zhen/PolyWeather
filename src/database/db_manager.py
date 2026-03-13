@@ -392,3 +392,43 @@ class DBManager:
                 (week_key, limit),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_weekly_profile_by_supabase_user_id(self, supabase_user_id: str) -> Dict[str, Any]:
+        key = str(supabase_user_id or "").strip().lower()
+        if not key:
+            return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
+
+        now = datetime.now()
+        iso_year, iso_week, _ = now.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT
+                    telegram_id,
+                    lower(trim(COALESCE(supabase_user_id, ''))) AS supabase_key,
+                    COALESCE(points, 0) AS points,
+                    COALESCE(message_count, 0) AS message_count,
+                    CASE
+                        WHEN weekly_points_week = ? THEN COALESCE(weekly_points, 0)
+                        ELSE 0
+                    END AS weekly_points
+                FROM users
+                ORDER BY weekly_points DESC, points DESC, message_count DESC, telegram_id ASC
+                """,
+                (week_key,),
+            ).fetchall()
+
+        weekly_rank: Optional[int] = None
+        weekly_points = 0
+        for idx, row in enumerate(rows, start=1):
+            if str(row["supabase_key"] or "") == key:
+                weekly_rank = idx
+                weekly_points = int(row["weekly_points"] or 0)
+                break
+        return {
+            "weekly_points": max(0, int(weekly_points or 0)),
+            "weekly_rank": weekly_rank,
+            "total_ranked": len(rows),
+        }

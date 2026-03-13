@@ -144,6 +144,21 @@ def _resolve_auth_points(request: Request) -> int:
     return points
 
 
+def _resolve_weekly_profile(request: Request) -> Dict[str, Any]:
+    user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
+    if not user_id:
+        return {"weekly_points": 0, "weekly_rank": None}
+    try:
+        profile = _account_db.get_weekly_profile_by_supabase_user_id(user_id)
+        return {
+            "weekly_points": int(profile.get("weekly_points") or 0),
+            "weekly_rank": profile.get("weekly_rank"),
+        }
+    except Exception as exc:
+        logger.warning(f"auth weekly profile fallback failed user_id={user_id}: {exc}")
+        return {"weekly_points": 0, "weekly_rank": None}
+
+
 def _assert_entitlement(request: Request) -> None:
     if SUPABASE_ENTITLEMENT.enabled:
         if _legacy_service_token_valid(request):
@@ -1117,12 +1132,15 @@ async def auth_me(request: Request):
             subscription_active = None
 
     points = _resolve_auth_points(request)
+    weekly_profile = _resolve_weekly_profile(request)
 
     return {
         "authenticated": bool(user_id),
         "user_id": user_id,
         "email": getattr(request.state, "auth_email", None),
         "points": points,
+        "weekly_points": weekly_profile["weekly_points"],
+        "weekly_rank": weekly_profile["weekly_rank"],
         "entitlement_mode": (
             "supabase_required"
             if SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED
