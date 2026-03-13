@@ -14,8 +14,6 @@ import {
   getRiskBadgeLabel,
   getTemperatureChartData,
 } from "@/lib/dashboard-utils";
-import { ChevronRight, Crown } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale, t } = useI18n();
@@ -125,7 +123,6 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
 
 export function DetailPanel() {
   const store = useDashboardStore();
-  const router = useRouter();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
   const isPro = store.proAccess.subscriptionActive;
@@ -294,33 +291,9 @@ export function DetailPanel() {
               </div>
             </section>
 
-            <section className="detail-section relative overflow-hidden rounded-2xl">
+            <section className="detail-section rounded-2xl">
               <h3>{t("detail.todayMiniTrend")}</h3>
-              <div
-                className={clsx(
-                  "transition-all duration-500",
-                  !isPro &&
-                    "blur-md opacity-30 select-none pointer-events-none",
-                )}
-              >
-                <DetailMiniTemperatureChart detail={detail} />
-              </div>
-              {!isPro && (
-                <div className="absolute inset-x-0 bottom-0 top-[3rem] z-10 flex flex-col items-center justify-center p-4 bg-gradient-to-t from-[#0b0f1a] via-transparent to-transparent">
-                  <div className="bg-blue-600/90 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-lg shadow-blue-600/40 flex items-center gap-1.5 mb-2">
-                    <Crown size={10} fill="currentColor" /> Pro Feature
-                  </div>
-                  <p className="text-[10px] text-slate-400 text-center mb-3">
-                    解锁日内高精趋势图
-                  </p>
-                  <button
-                    onClick={() => router.push("/account")}
-                    className="text-[10px] font-bold text-blue-400 hover:text-blue-300 transition-colors flex items-center gap-1"
-                  >
-                    立即升级 <ChevronRight size={10} />
-                  </button>
-                </div>
-              )}
+              <DetailMiniTemperatureChart detail={detail} />
             </section>
 
             <ForecastTable />

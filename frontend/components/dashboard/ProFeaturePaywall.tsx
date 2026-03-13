@@ -18,6 +18,7 @@ export function ProFeaturePaywall({ feature, onClose }: ProFeaturePaywallProps) 
   const [usePoints, setUsePoints] = useState(true);
 
   const isEn = locale === "en-US";
+  const isAuthenticated = proAccess.authenticated;
   const pointsAvailable = Number(proAccess.points || 0);
 
   const PRO_PRICE_USD = 5;
@@ -45,17 +46,13 @@ export function ProFeaturePaywall({ feature, onClose }: ProFeaturePaywallProps) 
     };
   }, [pointsAvailable, usePoints]);
 
-  const payLabel = isEn
-    ? feature === "history"
-      ? "Unlock History in Account"
-      : feature === "future"
-        ? "Unlock Forecast in Account"
-        : "Unlock Intraday in Account"
-    : feature === "history"
-      ? "去账户中心解锁历史功能"
-      : feature === "future"
-        ? "去账户中心解锁未来分析"
-        : "去账户中心解锁今日日内";
+  const payLabel = isAuthenticated
+    ? isEn
+      ? "Open Pro in Account"
+      : "去账户中心开通 Pro"
+    : isEn
+      ? "Sign In to Unlock Pro"
+      : "先登录再开通 Pro";
 
   return (
     <div className="flex w-full flex-col items-center justify-center py-6 md:py-10 z-30 p-4">
@@ -67,7 +64,13 @@ export function ProFeaturePaywall({ feature, onClose }: ProFeaturePaywallProps) 
         onToggleUsePoints={() => setUsePoints((prev) => !prev)}
         billing={billing}
         onClose={onClose}
-        onPay={() => router.push("/account")}
+        onPay={() => {
+          if (!isAuthenticated) {
+            router.push("/auth/login?next=%2Faccount");
+            return;
+          }
+          router.push("/account");
+        }}
         payLabel={payLabel}
         faqHref="/account"
       />
