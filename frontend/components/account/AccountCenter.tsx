@@ -246,24 +246,47 @@ export function AccountCenter() {
 
   const supabaseReady = hasSupabasePublicEnv();
 
+  /**
+   * Returns a valid access token, refreshing the session if the stored one
+   * is missing or close to expiry. Throws if the user is not authenticated.
+   */
+  const getValidAccessToken = useCallback(async (): Promise<string> => {
+    if (!supabaseReady) throw new Error("Supabase 未配置，无法获取登录凭证。");
+    const client = getSupabaseBrowserClient();
+    // First try the cached session.
+    const {
+      data: { session: cached },
+    } = await client.auth.getSession();
+    const cachedToken = String(cached?.access_token || "").trim();
+    if (cachedToken) return cachedToken;
+    // Session missing or expired — force a refresh.
+    const {
+      data: { session: refreshed },
+      error,
+    } = await client.auth.refreshSession();
+    const refreshedToken = String(refreshed?.access_token || "").trim();
+    if (refreshedToken) return refreshedToken;
+    throw new Error(
+      error?.message
+        ? `登录会话已失效 (${error.message})，请退出后重新登录。`
+        : "登录会话已失效，请退出后重新登录。",
+    );
+  }, [supabaseReady]);
+
   const buildAuthedHeaders = useCallback(
     async (withJson = false): Promise<Record<string, string>> => {
       const headers: Record<string, string> = {};
       if (withJson) headers["Content-Type"] = "application/json";
       if (!supabaseReady) return headers;
       try {
-        const client = getSupabaseBrowserClient();
-        const {
-          data: { session },
-        } = await client.auth.getSession();
-        const accessToken = String(session?.access_token || "").trim();
-        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+        const token = await getValidAccessToken();
+        headers.Authorization = `Bearer ${token}`;
       } catch {
-        // no-op
+        // Non-authenticated page load — silently skip.
       }
       return headers;
     },
-    [supabaseReady],
+    [supabaseReady, getValidAccessToken],
   );
 
   const loadPaymentSnapshot = useCallback(async () => {
@@ -590,13 +613,25 @@ export function AccountCenter() {
 
     setPaymentBusy(true);
     try {
+      // Ensure we have a valid token BEFORE opening the wallet modal.
+      let accessToken: string;
+      try {
+        accessToken = await getValidAccessToken();
+      } catch (tokenErr) {
+        setPaymentError(String(tokenErr));
+        setPaymentBusy(false);
+        return;
+      }
+      const authHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      };
+
       const accounts = (await eth.request({
         method: "eth_requestAccounts",
       })) as string[];
       const address = String(accounts?.[0] || "").toLowerCase();
       if (!address) throw new Error("钱包账户为空");
-
-      const authHeaders = await buildAuthedHeaders(true);
 
       setWalletAddress(address);
       const challengeRes = await fetch("/api/payments/wallets/challenge", {
@@ -667,7 +702,19 @@ export function AccountCenter() {
 
     setPaymentBusy(true);
     try {
-      const authHeaders = await buildAuthedHeaders(true);
+      // Ensure we have a valid token BEFORE switching chain / sending tx.
+      let accessToken: string;
+      try {
+        accessToken = await getValidAccessToken();
+      } catch (tokenErr) {
+        setPaymentError(String(tokenErr));
+        setPaymentBusy(false);
+        return;
+      }
+      const authHeaders: Record<string, string> = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      };
 
       const targetChainId = Number(paymentConfig.chain_id || 137);
       await ensureTargetChain(eth, targetChainId);
