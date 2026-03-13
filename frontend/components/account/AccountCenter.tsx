@@ -217,6 +217,84 @@ function buildApproveCalldata(spender: string, amount: bigint) {
   return `0x095ea7b3${toPaddedAddress(spender)}${toPaddedHex(amount)}`;
 }
 
+type NormalizedPaymentError = {
+  message: string;
+  pending: boolean;
+  userRejected: boolean;
+};
+
+function normalizePaymentError(error: unknown): NormalizedPaymentError {
+  const source = error as any;
+  const code = Number(source?.code ?? source?.error?.code ?? NaN);
+  const messageCandidates = [
+    source?.shortMessage,
+    source?.message,
+    source?.reason,
+    source?.data?.message,
+    source?.error?.message,
+    error instanceof Error ? error.message : "",
+    typeof error === "string" ? error : "",
+  ];
+  const rawMessage = messageCandidates
+    .find((item) => typeof item === "string" && item.trim())
+    ?.trim();
+  const lower = String(rawMessage || "").toLowerCase();
+
+  if (lower.includes("confirm pending")) {
+    return {
+      message: "链上交易已提交，正在确认中，请稍后刷新查看状态。",
+      pending: true,
+      userRejected: false,
+    };
+  }
+
+  const userRejected =
+    code === 4001 ||
+    /user rejected|user denied|rejected request|cancelled|canceled|拒绝|取消/.test(
+      lower,
+    );
+  if (userRejected) {
+    return {
+      message: "你已取消钱包操作。",
+      pending: false,
+      userRejected: true,
+    };
+  }
+
+  const insufficientGas =
+    (code === -32000 && /insufficient funds|gas/.test(lower)) ||
+    /not enough pol|network fee|网络费|手续费/.test(lower);
+  if (insufficientGas) {
+    return {
+      message: "钱包 POL 不足，无法支付链上手续费，请先充值少量 POL 后重试。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+
+  if (rawMessage) {
+    return {
+      message: rawMessage,
+      pending: false,
+      userRejected: false,
+    };
+  }
+
+  try {
+    return {
+      message: JSON.stringify(error),
+      pending: false,
+      userRejected: false,
+    };
+  } catch {
+    return {
+      message: "发生未知错误，请稍后重试。",
+      pending: false,
+      userRejected: false,
+    };
+  }
+}
+
 // --- Main Component ---
 
 export function AccountCenter() {
@@ -618,7 +696,7 @@ export function AccountCenter() {
       try {
         accessToken = await getValidAccessToken();
       } catch (tokenErr) {
-        setPaymentError(String(tokenErr));
+        setPaymentError(normalizePaymentError(tokenErr).message);
         setPaymentBusy(false);
         return;
       }
@@ -677,7 +755,8 @@ export function AccountCenter() {
       setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}`);
       await loadPaymentSnapshot();
     } catch (error) {
-      setPaymentError(String(error));
+      setPaymentInfo("");
+      setPaymentError(normalizePaymentError(error).message);
     } finally {
       setPaymentBusy(false);
     }
@@ -712,13 +791,14 @@ export function AccountCenter() {
     }
 
     setPaymentBusy(true);
+    let approvedInThisRun = false;
     try {
       // Ensure we have a valid token BEFORE switching chain / sending tx.
       let accessToken: string;
       try {
         accessToken = await getValidAccessToken();
       } catch (tokenErr) {
-        setPaymentError(String(tokenErr));
+        setPaymentError(normalizePaymentError(tokenErr).message);
         setPaymentBusy(false);
         return;
       }
@@ -786,6 +866,7 @@ export function AccountCenter() {
           ],
         })) as string;
         await waitForReceipt(String(approveHash || ""));
+        approvedInThisRun = true;
         setPaymentInfo("USDC 授权成功，正在发起支付...");
       } else {
         setPaymentInfo("授权额度充足，正在发起支付...");
@@ -839,7 +920,22 @@ export function AccountCenter() {
       await loadSnapshot();
       await loadPaymentSnapshot();
     } catch (error) {
-      setPaymentError(String(error));
+      const normalized = normalizePaymentError(error);
+      if (normalized.pending) {
+        setPaymentError(normalized.message);
+      } else if (normalized.userRejected) {
+        setPaymentInfo(
+          approvedInThisRun
+            ? "USDC 授权已完成，本次支付已取消，可直接再次点击支付。"
+            : "",
+        );
+        setPaymentError(normalized.message);
+      } else {
+        setPaymentInfo(
+          approvedInThisRun ? "USDC 授权已完成，但支付未完成，请重试。" : "",
+        );
+        setPaymentError(normalized.message);
+      }
     } finally {
       setPaymentBusy(false);
     }

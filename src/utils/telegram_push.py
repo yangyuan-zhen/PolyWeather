@@ -1,10 +1,11 @@
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
 
@@ -56,6 +57,79 @@ def _norm_prob(v: Any) -> Optional[float]:
     if n > 1.0:
         n = n / 100.0
     return max(0.0, min(1.0, n))
+
+
+def _safe_float(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except Exception:
+        return None
+
+
+def _bucket_value(row: Dict[str, Any]) -> Optional[float]:
+    if not isinstance(row, dict):
+        return None
+    for key in ("value", "temp"):
+        n = _safe_float(row.get(key))
+        if n is not None:
+            return n
+    label = str(row.get("label") or "").strip()
+    m = re.search(r"(-?\d+(?:\.\d+)?)", label)
+    if not m:
+        return None
+    return _safe_float(m.group(1))
+
+
+def _bucket_bounds(row: Dict[str, Any]) -> Optional[Tuple[Optional[float], Optional[float]]]:
+    value = _bucket_value(row)
+    if value is None:
+        return None
+    label = str(row.get("label") or "").strip().lower()
+    is_upper_tail = any(key in label for key in ("+", "or higher", "or above", "and above"))
+    is_lower_tail = any(key in label for key in ("<=", "or lower", "or below", "and below"))
+    if is_upper_tail and not is_lower_tail:
+        return value, None
+    if is_lower_tail and not is_upper_tail:
+        return None, value
+    return value, value
+
+
+def _observed_settlement_floor(alert_payload: Dict[str, Any]) -> Optional[float]:
+    evidence = alert_payload.get("evidence") or {}
+    if not isinstance(evidence, dict):
+        evidence = {}
+    inputs = evidence.get("inputs") or {}
+    if not isinstance(inputs, dict):
+        inputs = {}
+
+    suppression = alert_payload.get("suppression") or {}
+    if not isinstance(suppression, dict):
+        suppression = {}
+
+    rules = alert_payload.get("rules") or {}
+    if not isinstance(rules, dict):
+        rules = {}
+    breakthrough = rules.get("forecast_breakthrough") or {}
+    if not isinstance(breakthrough, dict):
+        breakthrough = {}
+
+    floor_candidates: List[float] = []
+    for raw in (
+        inputs.get("wu_settle"),
+        suppression.get("max_so_far"),
+        inputs.get("current_temp"),
+        suppression.get("current_temp"),
+        breakthrough.get("current_temp"),
+    ):
+        n = _safe_float(raw)
+        if n is not None:
+            floor_candidates.append(n)
+
+    if not floor_candidates:
+        return None
+    return max(floor_candidates)
 
 
 def _optional_bool(value: Any) -> Optional[bool]:
@@ -253,6 +327,23 @@ def _market_price_cap_ok(
     if isinstance(forecast_bucket, dict):
         yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
         bucket_label = str(forecast_bucket.get("label") or "").strip() or None
+
+    observed_floor = _observed_settlement_floor(alert_payload)
+    bucket_bounds = _bucket_bounds(forecast_bucket) if isinstance(forecast_bucket, dict) else None
+    if observed_floor is not None and bucket_bounds is not None:
+        _lower, upper = bucket_bounds
+        if upper is not None and observed_floor > upper + 1e-9:
+            logger.info(
+                "trade alert skipped: mapped bucket invalidated by observed high city={} bucket={} observed_floor={} upper_bound={} anchor_model={} anchor_settle={}".format(
+                    alert_payload.get("city"),
+                    bucket_label or "--",
+                    round(observed_floor, 2),
+                    round(upper, 2),
+                    anchor_model,
+                    settle_ref,
+                )
+            )
+            return False
 
     if yes_buy is None or yes_buy <= 0.0:
         logger.info(
