@@ -1,13 +1,57 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
+import { LogIn, UserRound } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
 
 export function HeaderBar() {
   const store = useDashboardStore();
   const { locale, setLocale, t } = useI18n();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const supabaseReady = hasSupabasePublicEnv();
+
+  useEffect(() => {
+    let mounted = true;
+
+    if (!supabaseReady) {
+      setIsAuthenticated(false);
+      return;
+    }
+
+    const supabase = getSupabaseBrowserClient();
+
+    void supabase.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setIsAuthenticated(Boolean(data.session?.user?.id));
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!mounted) return;
+      setIsAuthenticated(Boolean(session?.user?.id));
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [supabaseReady]);
+
+  const accountHref = isAuthenticated
+    ? "/account"
+    : "/auth/login?next=%2Faccount";
+  const accountLabel = isAuthenticated ? t("header.account") : t("header.signIn");
+  const accountAria = isAuthenticated
+    ? t("header.accountAria")
+    : t("header.signInAria");
 
   return (
     <header className="header">
@@ -35,12 +79,13 @@ export function HeaderBar() {
         </div>
 
         <Link
-          href="/account"
+          href={accountHref}
           className="account-btn"
-          title={t("header.accountAria")}
-          aria-label={t("header.accountAria")}
+          title={accountAria}
+          aria-label={accountAria}
         >
-          {t("header.account")}
+          {isAuthenticated ? <UserRound size={14} /> : <LogIn size={14} />}
+          <span>{accountLabel}</span>
         </Link>
 
         <button

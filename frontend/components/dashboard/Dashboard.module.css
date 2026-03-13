@@ -1666,6 +1666,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 6px;
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid rgba(34, 211, 238, 0.34);

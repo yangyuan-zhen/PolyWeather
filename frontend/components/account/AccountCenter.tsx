@@ -27,13 +27,10 @@ import {
   Info,
   Wallet,
   Zap,
-  ArrowRight,
   Minus,
   ShieldCheck,
   BarChart3,
   Sparkles,
-  Lock,
-  X,
   ChevronRight,
   Loader2,
   CreditCard,
@@ -43,6 +40,7 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
 // --- Types ---
 
@@ -946,130 +944,28 @@ export function AccountCenter() {
           {/* Paywall Mask */}
           {!isSubscribed && showOverlay && (
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
-              <div className="w-full max-w-2xl bg-[#161b2a]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_-10px_rgba(79,70,229,0.3)] text-center relative">
-                {/* Close Button */}
-                <button
-                  onClick={() => setShowOverlay(false)}
-                  className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-all"
-                  title="稍后再说"
-                >
-                  <X size={20} />
-                </button>
-
-                <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-gradient-to-tr from-yellow-500 to-amber-400 rounded-3xl flex items-center justify-center shadow-2xl rotate-12">
-                  <Crown className="text-white w-10 h-10" fill="currentColor" />
-                </div>
-
-                <h2 className="text-3xl font-bold text-white mb-4 mt-4">
-                  开启 PolyWeather Pro
-                </h2>
-                <p className="text-slate-400 mb-10 max-w-md mx-auto">
-                  解锁 15
-                  天高精度趋势分析、实时雷达与闪电追踪。尊享全平台无广告体验。
-                </p>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left mb-10">
-                  {/* Plan Card */}
-                  <div className="p-6 bg-blue-600/10 border-2 border-blue-500/50 rounded-3xl relative">
-                    <div className="absolute -top-3 right-6 bg-blue-500 text-[10px] px-2 py-1 rounded font-bold text-white">
-                      月付套餐
-                    </div>
-                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">
-                      PRO PLAN
-                    </p>
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-3xl font-black text-white">
-                        ${billing.planAmount.toFixed(2)}
-                      </span>
-                      <span className="text-slate-500 text-sm">/ 月</span>
-                    </div>
-                  </div>
-
-                  {/* Points Card */}
-                  <div
-                    className={`p-6 rounded-3xl border transition-all ${usePoints && billing.canRedeem ? "bg-indigo-600/20 border-indigo-500/50" : "bg-white/5 border-white/10"}`}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
-                        积分抵扣
-                      </span>
-                      <button
-                        onClick={() => setUsePoints(!usePoints)}
-                        disabled={!billing.canRedeem}
-                        className={`w-10 h-5 rounded-full relative transition-all ${usePoints && billing.canRedeem ? "bg-indigo-500" : "bg-slate-700"} ${!billing.canRedeem ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
-                      >
-                        <div
-                          className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${usePoints && billing.canRedeem ? "right-1" : "left-1"}`}
-                        />
-                      </button>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span
-                        className={`text-2xl font-bold ${usePoints && billing.canRedeem ? "text-green-400" : "text-slate-500"}`}
-                      >
-                        -${billing.discountAmount.toFixed(2)}
-                      </span>
-                      <span className="text-slate-500 text-xs">OFF</span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-1 italic">
-                      {!billing.pointsEnabled
-                        ? "积分抵扣未开启"
-                        : !billing.canRedeem
-                          ? `积分不足 (当前 ${totalPoints}，至少 ${billing.pointsPerUsdc})`
-                          : usePoints
-                            ? `已自动消耗 ${billing.pointsUsed} 积分`
-                            : `最多抵扣 $${billing.maxDiscountUsdc.toFixed(2)}`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between px-2 text-sm">
-                    <span className="text-slate-400">应付总计:</span>
-                    <span className="text-3xl font-black text-white">
-                      ${billing.payAmount.toFixed(2)}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => void handleOverlayCheckout()}
-                    disabled={paymentBusy}
-                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-600/30 transition-all flex items-center justify-center gap-2 group active:scale-95 text-lg"
-                  >
-                    {paymentBusy ? (
-                      <Loader2 size={20} className="animate-spin" />
-                    ) : (
-                      <>
-                        连接钱包并支付{" "}
-                        <ArrowRight
-                          size={20}
-                          className="group-hover:translate-x-1 transition-transform"
-                        />
-                      </>
-                    )}
-                  </button>
-
-                  <div className="flex justify-center items-center gap-6 text-[10px] uppercase tracking-widest text-slate-500">
-                    <span className="flex items-center gap-1.5 font-medium">
-                      <Lock size={12} className="opacity-50" /> 安全加密支付
-                    </span>
-                    <span className="hover:text-white cursor-pointer transition-colors font-medium">
-                      常见问题 (FAQ)
-                    </span>
-                  </div>
-
-                  {paymentError && (
-                    <div className="mt-2 text-xs text-rose-400 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
-                      {paymentError}
-                    </div>
-                  )}
-                  {paymentInfo && (
-                    <div className="mt-2 text-xs text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
-                      {paymentInfo}
-                    </div>
-                  )}
-                </div>
-              </div>
+              <UnlockProOverlay
+                points={totalPoints}
+                planPriceUsd={billing.planAmount}
+                usePoints={usePoints}
+                onToggleUsePoints={() => setUsePoints((prev) => !prev)}
+                billing={{
+                  pointsEnabled: billing.pointsEnabled,
+                  isEligible: billing.canRedeem,
+                  pointsUsed: billing.pointsUsed,
+                  discountAmount: billing.discountAmount,
+                  finalPrice: billing.payAmount,
+                  maxDiscountUsd: billing.maxDiscountUsdc,
+                  pointsPerUsd: billing.pointsPerUsdc,
+                }}
+                onPay={() => void handleOverlayCheckout()}
+                onClose={() => setShowOverlay(false)}
+                payBusy={paymentBusy}
+                payLabel={hasPayingWallet ? "立即订阅并激活服务" : "连接钱包并支付"}
+                errorText={paymentError || undefined}
+                infoText={paymentInfo || undefined}
+                faqHref="/account"
+              />
             </div>
           )}
         </div>
