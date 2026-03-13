@@ -6,6 +6,9 @@
   max-height: calc(100dvh - 2.5rem);
   overflow-x: hidden;
   overflow-y: auto;
+  /* Hide scrollbar — all browsers */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE / Edge legacy */
   border-radius: 28px;
   border: 1px solid rgba(255, 255, 255, 0.07);
   background: linear-gradient(160deg, #111827 0%, #0d1525 40%, #090f1c 100%);
@@ -14,6 +17,11 @@
     0 32px 80px -12px rgba(0, 0, 0, 0.8),
     0 0 120px -40px rgba(79, 109, 230, 0.28);
   padding: 28px 24px 24px;
+}
+
+/* Chrome / Safari / WebKit */
+.modal::-webkit-scrollbar {
+  display: none;
 }
 
 @media (min-width: 768px) {

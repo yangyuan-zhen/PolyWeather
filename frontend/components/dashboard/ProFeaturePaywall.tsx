@@ -11,7 +11,10 @@ type ProFeaturePaywallProps = {
   onClose?: () => void;
 };
 
-export function ProFeaturePaywall({ feature, onClose }: ProFeaturePaywallProps) {
+export function ProFeaturePaywall({
+  feature,
+  onClose,
+}: ProFeaturePaywallProps) {
   const router = useRouter();
   const { locale } = useI18n();
   const { proAccess } = useDashboardStore();
@@ -73,6 +76,7 @@ export function ProFeaturePaywall({ feature, onClose }: ProFeaturePaywallProps) 
         }}
         payLabel={payLabel}
         faqHref="/account"
+        telegramGroupUrl="https://t.me/+nMG7SjziUKYyZmM1"
       />
     </div>
   );
