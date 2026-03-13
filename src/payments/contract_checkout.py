@@ -6,7 +6,7 @@ import secrets
 import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_FLOOR
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -196,6 +196,7 @@ class PaymentIntentRecord:
     allowed_wallet: Optional[str]
     expires_at: str
     tx_hash: Optional[str]
+    metadata: Dict[str, Any]
 
 
 class PaymentCheckoutError(Exception):
@@ -253,6 +254,11 @@ class PaymentContractCheckoutService:
             self.plan_catalog = {first_code: self.plan_catalog[first_code]}
         self.notify_telegram = _env_bool(
             "POLYWEATHER_PAYMENT_TELEGRAM_NOTIFY_ENABLED", True
+        )
+        self.points_enabled = _env_bool("POLYWEATHER_PAYMENT_POINTS_ENABLED", True)
+        self.points_per_usdc = max(1, _env_int("POLYWEATHER_PAYMENT_POINTS_PER_USDC", 500))
+        self.points_max_discount_usdc = max(
+            0, _env_int("POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC", 3)
         )
         self._w3_lock = threading.Lock()
         self._w3: Optional[Web3] = None
@@ -327,6 +333,245 @@ class PaymentContractCheckoutService:
         except Exception:
             return None
 
+    def _admin_auth_headers(self) -> Dict[str, str]:
+        return {
+            "apikey": self.supabase_service_role_key,
+            "Authorization": f"Bearer {self.supabase_service_role_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+
+    def _auth_admin_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        payload: Optional[Dict[str, Any]] = None,
+        allowed_status: Optional[List[int]] = None,
+    ) -> Any:
+        url = f"{self.supabase_url}/auth/v1{path}"
+        status_ok = allowed_status or [200]
+        try:
+            response = requests.request(
+                method=method.upper(),
+                url=url,
+                json=payload,
+                headers=self._admin_auth_headers(),
+                timeout=self.timeout_sec,
+            )
+        except Exception as exc:
+            raise PaymentCheckoutError(503, f"supabase auth request failed: {exc}") from exc
+        if response.status_code not in status_ok:
+            detail = response.text[:350] if response.text else response.reason
+            raise PaymentCheckoutError(
+                502,
+                (
+                    f"supabase auth {method.upper()} {path} failed: "
+                    f"{response.status_code} {detail}"
+                ),
+            )
+        if not response.content:
+            return None
+        try:
+            return response.json()
+        except Exception:
+            return None
+
+    def _extract_user_metadata(self, user_payload: Any) -> Dict[str, Any]:
+        if not isinstance(user_payload, dict):
+            return {}
+        if isinstance(user_payload.get("user_metadata"), dict):
+            return dict(user_payload.get("user_metadata") or {})
+        user_obj = user_payload.get("user")
+        if isinstance(user_obj, dict) and isinstance(user_obj.get("user_metadata"), dict):
+            return dict(user_obj.get("user_metadata") or {})
+        return {}
+
+    def _extract_points_from_metadata(self, metadata: Dict[str, Any]) -> int:
+        if not isinstance(metadata, dict):
+            return 0
+        for key in ("points", "total_points"):
+            raw = metadata.get(key)
+            if raw is None:
+                continue
+            try:
+                return max(0, int(raw))
+            except Exception:
+                continue
+        return 0
+
+    def _auth_admin_get_user(self, user_id: str) -> Dict[str, Any]:
+        user_id_text = str(user_id or "").strip()
+        if not user_id_text:
+            raise PaymentCheckoutError(400, "user_id required")
+        data = self._auth_admin_request(
+            "GET",
+            f"/admin/users/{user_id_text}",
+            allowed_status=[200],
+        )
+        if isinstance(data, dict):
+            user_obj = data.get("user")
+            if isinstance(user_obj, dict):
+                return user_obj
+            return data
+        return {}
+
+    def _auth_admin_update_user_metadata(
+        self,
+        user_id: str,
+        metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        user_id_text = str(user_id or "").strip()
+        if not user_id_text:
+            raise PaymentCheckoutError(400, "user_id required")
+        payload = {"user_metadata": metadata or {}}
+        data = self._auth_admin_request(
+            "PUT",
+            f"/admin/users/{user_id_text}",
+            payload=payload,
+            allowed_status=[200],
+        )
+        if isinstance(data, dict):
+            user_obj = data.get("user")
+            if isinstance(user_obj, dict):
+                return user_obj
+            return data
+        return {}
+
+    def _build_points_redemption(
+        self,
+        *,
+        user_id: str,
+        plan_amount_usdc: Decimal,
+        use_points: bool,
+        requested_points_to_consume: Optional[int],
+    ) -> Dict[str, Any]:
+        base = {
+            "enabled": bool(self.points_enabled),
+            "applied": False,
+            "points_per_usdc": int(self.points_per_usdc),
+            "max_discount_usdc": int(self.points_max_discount_usdc),
+            "points_balance_snapshot": 0,
+            "points_to_consume": 0,
+            "discount_usdc": "0",
+            "pay_amount_usdc": plan_amount_usdc,
+        }
+        if not self.points_enabled:
+            return base
+        if not use_points:
+            return base
+        if plan_amount_usdc <= 0:
+            return base
+        user_obj = self._auth_admin_get_user(user_id)
+        metadata = self._extract_user_metadata(user_obj)
+        balance = self._extract_points_from_metadata(metadata)
+        base["points_balance_snapshot"] = balance
+        if balance <= 0:
+            return base
+
+        max_discount_usdc = min(
+            Decimal(int(self.points_max_discount_usdc)),
+            plan_amount_usdc,
+        )
+        max_points_by_plan = int(
+            (max_discount_usdc * Decimal(int(self.points_per_usdc))).to_integral_value(
+                rounding=ROUND_FLOOR
+            )
+        )
+        if max_points_by_plan <= 0:
+            return base
+
+        desired_points = max_points_by_plan
+        if requested_points_to_consume is not None:
+            try:
+                desired_points = max(0, int(requested_points_to_consume))
+            except Exception:
+                desired_points = 0
+        candidate_points = min(balance, max_points_by_plan, desired_points)
+        if candidate_points <= 0:
+            return base
+
+        normalized_points = (candidate_points // int(self.points_per_usdc)) * int(
+            self.points_per_usdc
+        )
+        if normalized_points <= 0:
+            return base
+        discount_units = normalized_points // int(self.points_per_usdc)
+        discount_usdc = Decimal(discount_units)
+        pay_amount = plan_amount_usdc - discount_usdc
+        if pay_amount <= 0:
+            return base
+
+        base["applied"] = True
+        base["points_to_consume"] = int(normalized_points)
+        base["discount_usdc"] = _format_decimal(discount_usdc)
+        base["pay_amount_usdc"] = pay_amount
+        return base
+
+    def _consume_points_for_intent(
+        self,
+        user_id: str,
+        intent: PaymentIntentRecord,
+    ) -> Dict[str, Any]:
+        result = {
+            "enabled": bool(self.points_enabled),
+            "applied": False,
+            "points_per_usdc": int(self.points_per_usdc),
+            "points_redeemed": 0,
+            "points_before": 0,
+            "points_after": 0,
+            "discount_usdc": "0",
+        }
+        if not self.points_enabled:
+            return result
+
+        metadata = dict(intent.metadata or {})
+        redemption = metadata.get("points_redemption")
+        if not isinstance(redemption, dict):
+            return result
+        if not bool(redemption.get("applied")):
+            return result
+        if bool(redemption.get("consumed")):
+            result["applied"] = True
+            result["points_redeemed"] = int(redemption.get("consumed_points") or 0)
+            result["points_after"] = int(redemption.get("points_after") or 0)
+            result["discount_usdc"] = str(redemption.get("discount_usdc") or "0")
+            return result
+
+        planned_points = int(redemption.get("points_to_consume") or 0)
+        if planned_points <= 0:
+            return result
+
+        user_obj = self._auth_admin_get_user(user_id)
+        user_metadata = self._extract_user_metadata(user_obj)
+        points_before = self._extract_points_from_metadata(user_metadata)
+        if points_before <= 0:
+            return result
+
+        redeemable = min(points_before, planned_points)
+        redeemable = (redeemable // int(self.points_per_usdc)) * int(self.points_per_usdc)
+        if redeemable <= 0:
+            return result
+
+        points_after = points_before - redeemable
+        updated_metadata = dict(user_metadata or {})
+        if "points" in updated_metadata:
+            updated_metadata["points"] = points_after
+        if "total_points" in updated_metadata:
+            updated_metadata["total_points"] = points_after
+        if "points" not in updated_metadata and "total_points" not in updated_metadata:
+            updated_metadata["points"] = points_after
+            updated_metadata["total_points"] = points_after
+        self._auth_admin_update_user_metadata(user_id, updated_metadata)
+
+        discount_usdc = Decimal(redeemable // int(self.points_per_usdc))
+        result["applied"] = True
+        result["points_redeemed"] = int(redeemable)
+        result["points_before"] = int(points_before)
+        result["points_after"] = int(points_after)
+        result["discount_usdc"] = _format_decimal(discount_usdc)
+        return result
+
     def _get_web3(self) -> Web3:
         with self._w3_lock:
             if self._w3 is None:
@@ -355,6 +600,11 @@ class PaymentContractCheckoutService:
             "intent_ttl_sec": self.intent_ttl_sec,
             "event_name": "OrderPaid",
             "event_topic0": self._event_topic,
+            "points_redemption": {
+                "enabled": bool(self.points_enabled),
+                "points_per_usdc": int(self.points_per_usdc),
+                "max_discount_usdc": int(self.points_max_discount_usdc),
+            },
             "plans": [
                 {
                     "plan_code": plan_code,
@@ -386,6 +636,7 @@ class PaymentContractCheckoutService:
             allowed_wallet=_normalize_address(row.get("allowed_wallet") or "") or None,
             expires_at=str(row.get("expires_at")),
             tx_hash=str(row.get("tx_hash") or "") or None,
+            metadata=dict(row.get("metadata") or {}) if isinstance(row.get("metadata"), dict) else {},
         )
 
     def list_wallets(self, user_id: str) -> List[WalletBindingRecord]:
@@ -645,17 +896,17 @@ class PaymentContractCheckoutService:
         payment_mode: str = "strict",
         allowed_wallet: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        use_points: bool = False,
+        points_to_consume: Optional[int] = None,
     ) -> Dict[str, Any]:
         self._ensure_enabled()
         plan = self._select_plan(plan_code)
         mode = str(payment_mode or "strict").strip().lower()
         if mode not in {"strict", "flex"}:
             raise PaymentCheckoutError(400, "payment_mode must be strict or flex")
-
         bound_wallets = self.list_wallets(user_id)
         if not bound_wallets:
             raise PaymentCheckoutError(403, "bind wallet first")
-
         target_wallet = _normalize_address(allowed_wallet or "")
         if mode == "strict":
             if target_wallet:
@@ -668,8 +919,29 @@ class PaymentContractCheckoutService:
                 target_wallet = primary.address if primary else bound_wallets[0].address
         elif target_wallet:
             self._require_user_wallet(user_id, target_wallet)
-
-        amount_units = _decimal_to_units(plan["amount_usdc_decimal"], self.token_decimals)
+        plan_amount_usdc = plan["amount_usdc_decimal"]
+        redemption = self._build_points_redemption(
+            user_id=user_id,
+            plan_amount_usdc=plan_amount_usdc,
+            use_points=bool(use_points),
+            requested_points_to_consume=points_to_consume,
+        )
+        final_amount_usdc = redemption["pay_amount_usdc"]
+        amount_units = _decimal_to_units(final_amount_usdc, self.token_decimals)
+        if amount_units <= 0:
+            raise PaymentCheckoutError(400, "invalid final payment amount")
+        combined_metadata = dict(metadata or {})
+        combined_metadata["amount_before_discount_usdc"] = _format_decimal(plan_amount_usdc)
+        combined_metadata["amount_after_discount_usdc"] = _format_decimal(final_amount_usdc)
+        combined_metadata["points_redemption"] = {
+            "enabled": bool(redemption.get("enabled")),
+            "applied": bool(redemption.get("applied")),
+            "points_per_usdc": int(redemption.get("points_per_usdc") or self.points_per_usdc),
+            "max_discount_usdc": int(redemption.get("max_discount_usdc") or self.points_max_discount_usdc),
+            "points_balance_snapshot": int(redemption.get("points_balance_snapshot") or 0),
+            "points_to_consume": int(redemption.get("points_to_consume") or 0),
+            "discount_usdc": str(redemption.get("discount_usdc") or "0"),
+        }
         order_id_hex = "0x" + secrets.token_hex(32)
         now = _now_utc()
         expires_at = now + timedelta(seconds=self.intent_ttl_sec)
@@ -689,7 +961,7 @@ class PaymentContractCheckoutService:
                 "order_id_hex": order_id_hex,
                 "status": "created",
                 "expires_at": _to_iso(expires_at),
-                "metadata": metadata or {},
+                "metadata": combined_metadata,
                 "created_at": _to_iso(now),
                 "updated_at": _to_iso(now),
             },
@@ -706,9 +978,16 @@ class PaymentContractCheckoutService:
                 "plan_code": plan["plan_code"],
                 "plan_id": plan["plan_id"],
                 "duration_days": plan["duration_days"],
+                "amount_before_discount_usdc": _format_decimal(plan_amount_usdc),
+                "amount_after_discount_usdc": _format_decimal(final_amount_usdc),
+            },
+            "points_redemption": {
+                "applied": bool(redemption.get("applied")),
+                "points_to_consume": int(redemption.get("points_to_consume") or 0),
+                "discount_usdc": str(redemption.get("discount_usdc") or "0"),
+                "points_balance_snapshot": int(redemption.get("points_balance_snapshot") or 0),
             },
         }
-
     def get_intent(self, user_id: str, intent_id: str) -> PaymentIntentRecord:
         self._ensure_enabled()
         rows = self._rest(
@@ -717,7 +996,7 @@ class PaymentContractCheckoutService:
             params={
                 "select": (
                     "id,user_id,plan_code,plan_id,chain_id,token_address,receiver_address,"
-                    "amount_units,payment_mode,allowed_wallet,order_id_hex,status,expires_at,tx_hash"
+                    "amount_units,payment_mode,allowed_wallet,order_id_hex,status,expires_at,tx_hash,metadata"
                 ),
                 "id": f"eq.{intent_id}",
                 "user_id": f"eq.{user_id}",
@@ -992,24 +1271,20 @@ class PaymentContractCheckoutService:
             return {"intent": intent.__dict__, "already_confirmed": True}
         if intent.status in {"failed", "cancelled", "expired"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}")
-
         tx_hash_text = str(tx_hash or intent.tx_hash or "").strip().lower()
         if not tx_hash_text:
             raise PaymentCheckoutError(400, "tx_hash required")
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
             raise PaymentCheckoutError(400, "invalid tx_hash")
-
         w3 = self._get_web3()
         if not w3.is_connected():
             raise PaymentCheckoutError(503, "cannot connect payment rpc")
         if int(w3.eth.chain_id) != int(self.chain_id):
             raise PaymentCheckoutError(503, "payment rpc chain mismatch")
-
         try:
             tx = w3.eth.get_transaction(tx_hash_text)
         except Exception:
             raise PaymentCheckoutError(404, "tx not found on chain")
-
         tx_to = _normalize_address(tx.get("to"))
         tx_from = _normalize_address(tx.get("from"))
         if tx_to != intent.receiver_address:
@@ -1025,11 +1300,9 @@ class PaymentContractCheckoutService:
                 )
         else:
             self._require_user_wallet(user_id, tx_from)
-
         receipt = self._wait_receipt(tx_hash_text)
         if int(receipt.get("status") or 0) != 1:
             raise PaymentCheckoutError(400, "tx reverted")
-
         block_number = int(receipt.get("blockNumber") or 0)
         latest_block = int(w3.eth.block_number)
         confirmations = max(0, latest_block - block_number + 1) if block_number else 0
@@ -1037,15 +1310,22 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(
                 409, f"confirmations not enough: {confirmations}/{self.confirmations}"
             )
-
         event_match = self._extract_matching_event(receipt, intent)
         if not event_match:
             raise PaymentCheckoutError(
                 400,
                 "OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",
             )
-
+        points_result = self._consume_points_for_intent(user_id, intent)
         now_iso = _to_iso(_now_utc())
+        confirmed_metadata = dict(intent.metadata or {})
+        redemption_meta = confirmed_metadata.get("points_redemption")
+        if isinstance(redemption_meta, dict):
+            redemption_meta["consumed"] = bool(points_result.get("points_redeemed"))
+            redemption_meta["consumed_points"] = int(points_result.get("points_redeemed") or 0)
+            redemption_meta["points_after"] = points_result.get("points_after")
+            redemption_meta["consumed_at"] = now_iso
+            confirmed_metadata["points_redemption"] = redemption_meta
         self._rest(
             "PATCH",
             "payment_intents",
@@ -1054,6 +1334,7 @@ class PaymentContractCheckoutService:
                 "status": "confirmed",
                 "tx_hash": tx_hash_text,
                 "confirmed_at": now_iso,
+                "metadata": confirmed_metadata,
                 "updated_at": now_iso,
             },
             prefer="return=representation",
@@ -1078,12 +1359,12 @@ class PaymentContractCheckoutService:
             prefer="resolution=merge-duplicates,return=representation",
             allowed_status=[200, 201],
         )
-
         payload = {
             "tx_hash": tx_hash_text,
             "block_number": block_number,
             "confirmations": confirmations,
             "event": event_match,
+            "points_redemption": points_result,
         }
         plan = self._select_plan(intent.plan_code)
         payment_row = self._insert_payment_record(
@@ -1111,8 +1392,8 @@ class PaymentContractCheckoutService:
             "transaction": tx_rows[0] if isinstance(tx_rows, list) and tx_rows else None,
             "payment": payment_row,
             "subscription": subscription_row,
+            "points_redemption": points_result,
             "tx": payload,
         }
-
-
 PAYMENT_CHECKOUT = PaymentContractCheckoutService()
+

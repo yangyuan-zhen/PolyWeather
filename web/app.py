@@ -1,4 +1,4 @@
-﻿"""
+"""
 PolyWeather Web Map API
 ~~~~~~~~~~~~~~~~~~~~~~~
 FastAPI backend that reuses existing weather data collection and analysis modules.
@@ -194,6 +194,8 @@ class CreatePaymentIntentRequest(BaseModel):
     plan_code: str = Field(default="pro_monthly", min_length=2)
     payment_mode: str = Field(default="strict")
     allowed_wallet: Optional[str] = None
+    use_points: bool = False
+    points_to_consume: Optional[int] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -1173,6 +1175,8 @@ async def payment_create_intent(request: Request, body: CreatePaymentIntentReque
             plan_code=body.plan_code,
             payment_mode=body.payment_mode,
             allowed_wallet=body.allowed_wallet,
+            use_points=body.use_points,
+            points_to_consume=body.points_to_consume,
             metadata=body.metadata,
         )
     except PaymentCheckoutError as exc:

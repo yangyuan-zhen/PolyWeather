@@ -4,37 +4,46 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
-import type { LucideIcon } from "lucide-react";
 import {
-  ArrowRight,
-  BadgeCheck,
-  Bot,
-  CheckCircle2,
-  ChevronLeft,
-  Clock,
-  Coins,
-  Copy,
-  Crown,
-  CreditCard,
-  Fingerprint,
-  Hash,
-  Info,
-  Loader2,
-  Lock,
-  LogIn,
-  LogOut,
-  Mail,
-  RefreshCw,
-  Shield,
-  ShieldCheck,
-  Sparkles,
-  Trophy,
   User as UserIcon,
+  Shield,
+  Fingerprint,
+  Bot,
+  RefreshCw,
+  LogOut,
+  ChevronLeft,
+  Copy,
+  CheckCircle2,
   UserCheck,
+  Mail,
+  Hash,
+  LogIn,
+  Clock,
+  Crown,
+  ExternalLink,
+  Trophy,
+  Coins,
+  TrendingUp,
+  Info,
   Wallet,
+  Zap,
+  ArrowRight,
+  Minus,
+  ShieldCheck,
+  BarChart3,
+  Sparkles,
+  Lock,
   X,
+  ChevronRight,
+  Loader2,
+  CreditCard,
 } from "lucide-react";
-import { getSupabaseBrowserClient, hasSupabasePublicEnv } from "@/lib/supabase/client";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
+
+// --- Types ---
 
 type AuthMeResponse = {
   authenticated?: boolean;
@@ -53,6 +62,12 @@ type PaymentPlan = {
   duration_days: number;
 };
 
+type PointsRedemptionConfig = {
+  enabled?: boolean;
+  points_per_usdc?: number;
+  max_discount_usdc?: number;
+};
+
 type PaymentConfig = {
   enabled?: boolean;
   configured?: boolean;
@@ -61,6 +76,7 @@ type PaymentConfig = {
   token_decimals?: number;
   receiver_contract?: string;
   confirmations?: number;
+  points_redemption?: PointsRedemptionConfig;
   plans?: PaymentPlan[];
 };
 
@@ -93,17 +109,31 @@ type CreatedIntent = {
 declare global {
   interface Window {
     ethereum?: {
-      request: (args: { method: string; params?: any[] | object }) => Promise<any>;
+      request: (args: {
+        method: string;
+        params?: any[] | object;
+      }) => Promise<any>;
     };
   }
 }
 
-type InfoItemProps = {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  status?: "default" | "primary";
-};
+// --- Helpers ---
+
+const InfoRow = ({ icon: Icon, label, value, isPrimary = false }) => (
+  <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group">
+    <div className="flex items-center gap-3">
+      <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
+        {Icon && <Icon size={18} />}
+      </div>
+      <span className="text-slate-400 text-sm font-medium">{label}</span>
+    </div>
+    <span
+      className={`text-sm font-semibold font-mono ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
+    >
+      {value}
+    </span>
+  </div>
+);
 
 function formatTime(value: string | undefined | null, locale: string) {
   if (!value) return "--";
@@ -114,22 +144,10 @@ function formatTime(value: string | undefined | null, locale: string) {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
     }).format(dt);
   } catch {
     return "--";
   }
-}
-
-function normalizeProvider(user: User | null) {
-  const provider = String(user?.app_metadata?.provider || "").trim().toLowerCase();
-  if (provider) return provider;
-  const providers = user?.app_metadata?.providers;
-  if (Array.isArray(providers) && providers.length) {
-    return String(providers[0] || "").trim().toLowerCase();
-  }
-  return "";
 }
 
 function shortAddress(address: string) {
@@ -138,20 +156,15 @@ function shortAddress(address: string) {
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
 }
 
-function planDisplayName(planCode: string) {
-  const code = String(planCode || "").trim().toLowerCase();
-  if (code === "pro_monthly") return "Pro 月付";
-  if (code === "pro_quarterly") return "Pro 季付";
-  if (code === "pro_yearly") return "Pro 年付";
-  return planCode || "--";
-}
-
 function toPaddedHex(value: bigint) {
   return value.toString(16).padStart(64, "0");
 }
 
 function toPaddedAddress(address: string) {
-  return String(address || "").toLowerCase().replace(/^0x/, "").padStart(64, "0");
+  return String(address || "")
+    .toLowerCase()
+    .replace(/^0x/, "")
+    .padStart(64, "0");
 }
 
 function buildAllowanceCalldata(owner: string, spender: string) {
@@ -162,21 +175,7 @@ function buildApproveCalldata(spender: string, amount: bigint) {
   return `0x095ea7b3${toPaddedAddress(spender)}${toPaddedHex(amount)}`;
 }
 
-function InfoItem({ icon: Icon, label, value, status = "default" }: InfoItemProps) {
-  return (
-    <div className="group flex items-center justify-between rounded-2xl border border-white/5 bg-white/5 p-4 transition-all hover:bg-white/10">
-      <div className="flex items-center gap-3">
-        <div className="rounded-lg bg-slate-800 p-2 text-slate-400 transition-colors group-hover:text-blue-400">
-          <Icon size={18} />
-        </div>
-        <span className="text-sm font-medium text-slate-400">{label}</span>
-      </div>
-      <span className={`text-sm font-semibold ${status === "primary" ? "text-blue-400" : "text-slate-200"}`}>
-        {value}
-      </span>
-    </div>
-  );
-}
+// --- Main Component ---
 
 export function AccountCenter() {
   const router = useRouter();
@@ -190,7 +189,9 @@ export function AccountCenter() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
-  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(null);
+  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(
+    null,
+  );
   const [boundWallets, setBoundWallets] = useState<BoundWallet[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
   const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
@@ -203,19 +204,24 @@ export function AccountCenter() {
 
   const supabaseReady = hasSupabasePublicEnv();
 
-  const buildAuthedHeaders = useCallback(async (withJson = false): Promise<Record<string, string>> => {
-    const headers: Record<string, string> = {};
-    if (withJson) headers["Content-Type"] = "application/json";
-    if (!supabaseReady) return headers;
-    try {
-      const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
-      const accessToken = String(session?.access_token || "").trim();
-      if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
-    } catch {
-      // no-op
-    }
-    return headers;
-  }, [supabaseReady]);
+  const buildAuthedHeaders = useCallback(
+    async (withJson = false): Promise<Record<string, string>> => {
+      const headers: Record<string, string> = {};
+      if (withJson) headers["Content-Type"] = "application/json";
+      if (!supabaseReady) return headers;
+      try {
+        const {
+          data: { session },
+        } = await getSupabaseBrowserClient().auth.getSession();
+        const accessToken = String(session?.access_token || "").trim();
+        if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+      } catch {
+        // no-op
+      }
+      return headers;
+    },
+    [supabaseReady],
+  );
 
   const loadPaymentSnapshot = useCallback(async () => {
     if (!backend?.authenticated) {
@@ -226,8 +232,14 @@ export function AccountCenter() {
     try {
       const authHeaders = await buildAuthedHeaders(false);
       const [configRes, walletsRes] = await Promise.all([
-        fetch("/api/payments/config", { cache: "no-store", headers: authHeaders }),
-        fetch("/api/payments/wallets", { cache: "no-store", headers: authHeaders }),
+        fetch("/api/payments/config", {
+          cache: "no-store",
+          headers: authHeaders,
+        }),
+        fetch("/api/payments/wallets", {
+          cache: "no-store",
+          headers: authHeaders,
+        }),
       ]);
       if (configRes.ok) {
         const configJson = (await configRes.json()) as PaymentConfig;
@@ -237,18 +249,25 @@ export function AccountCenter() {
         }
       }
       if (walletsRes.ok) {
-        const walletsJson = (await walletsRes.json()) as { wallets?: BoundWallet[] };
-        const wallets = Array.isArray(walletsJson.wallets) ? walletsJson.wallets : [];
+        const walletsJson = (await walletsRes.json()) as {
+          wallets?: BoundWallet[];
+        };
+        const wallets = Array.isArray(walletsJson.wallets)
+          ? walletsJson.wallets
+          : [];
         setBoundWallets(wallets);
-        if (wallets.length && !selectedWallet) setSelectedWallet(wallets[0].address);
-      }
-      if (configRes.status === 401 || walletsRes.status === 401) {
-        setPaymentError("登录会话已过期，请重新登录后再进行钱包绑定或支付。");
+        if (wallets.length && !selectedWallet)
+          setSelectedWallet(wallets[0].address);
       }
     } catch {
       // ignore
     }
-  }, [backend?.authenticated, buildAuthedHeaders, selectedPlanCode, selectedWallet]);
+  }, [
+    backend?.authenticated,
+    buildAuthedHeaders,
+    selectedPlanCode,
+    selectedWallet,
+  ]);
 
   const loadSnapshot = useCallback(async () => {
     setErrorText("");
@@ -257,8 +276,14 @@ export function AccountCenter() {
         ? getSupabaseBrowserClient().auth.getUser()
         : Promise.resolve({ data: { user: null as User | null } });
       const authHeaders = await buildAuthedHeaders(false);
-      const backendPromise = fetch("/api/auth/me", { cache: "no-store", headers: authHeaders });
-      const [userResult, backendResult] = await Promise.all([userPromise, backendPromise]);
+      const backendPromise = fetch("/api/auth/me", {
+        cache: "no-store",
+        headers: authHeaders,
+      });
+      const [userResult, backendResult] = await Promise.all([
+        userPromise,
+        backendPromise,
+      ]);
       setUser(userResult.data?.user ?? null);
       if (!backendResult.ok) {
         const raw = (await backendResult.text()).slice(0, 260);
@@ -307,82 +332,127 @@ export function AccountCenter() {
     router.replace("/");
   };
 
+  // --- Derived State ---
   const userId = backend?.user_id || user?.id || "";
   const isAuthenticated = Boolean(userId);
   const email = backend?.email || user?.email || "";
-  const displayName = String(user?.user_metadata?.full_name || "").trim() || (email ? String(email).split("@")[0] : "") || "PolyWeather 用户";
+  const displayName =
+    String(user?.user_metadata?.full_name || "").trim() ||
+    (email ? String(email).split("@")[0] : "") ||
+    "PolyWeather 用户";
   const initials = (displayName.slice(0, 2) || "PW").toUpperCase();
-  const providerRaw = normalizeProvider(user);
-  const provider = providerRaw ? providerRaw.toUpperCase() : "--";
-  const locale = typeof navigator !== "undefined" ? navigator.language : "zh-CN";
-  const lastSignIn = formatTime(user?.last_sign_in_at, locale);
-  const joinedAt = formatTime(user?.created_at, locale);
-  const updatedAtLabel = formatTime(updatedAt, locale);
-
-  const modeLabel = useMemo(() => {
-    const mode = String(backend?.entitlement_mode || "").trim().toLowerCase();
-    if (mode === "supabase_required") return "Supabase 强制登录";
-    if (mode === "supabase_optional") return "Supabase 可选登录";
-    if (mode === "legacy_token") return "Legacy Token 鉴权";
-    if (mode === "disabled") return "未启用鉴权";
-    return "未知模式";
-  }, [backend?.entitlement_mode]);
-
-  const backendStatus = useMemo(() => {
-    if (backend?.authenticated) return "通过";
-    if (backend?.auth_required) return "未登录";
-    return "游客模式";
-  }, [backend?.authenticated, backend?.auth_required]);
-
-  const subscriptionRequirement = backend?.subscription_required ? "已启用订阅校验" : "当前未强制订阅";
-  const subscriptionResult = !backend?.subscription_required ? "当前未强制订阅" : backend?.subscription_active ? "有效订阅" : "无有效订阅";
+  const joinedAt = formatTime(user?.created_at, "zh-CN");
   const isSubscribed = Boolean(backend?.subscription_active);
+  const proExpiry = user?.user_metadata?.pro_expiry || "暂无 Pro 订阅";
 
-  const bindCommand = userId ? `/bind ${userId}${email ? ` ${email}` : ""}` : "/bind <supabase_user_id> <email>";
-
-  const copyBindCommand = async () => {
-    try {
-      await navigator.clipboard.writeText(bindCommand);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 2000);
-    } catch {
-      // ignore
-    }
-  };
-
-  const planList = paymentConfig?.plans || [];
-  const monthlyPlanList = planList.filter((plan) => String(plan.plan_code || "").trim().toLowerCase() === "pro_monthly");
-  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
-  const selectedPlan = effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) || effectivePlanList[0];
-  const paymentFeatureReady = Boolean(paymentConfig?.enabled && paymentConfig?.configured);
-  const hasPayingWallet = Boolean(String(selectedWallet || walletAddress || boundWallets[0]?.address || "").trim());
-
-  const pointsRaw = Number(user?.user_metadata?.points ?? user?.user_metadata?.total_points ?? 0);
+  // Points Logic
+  const pointsRaw = Number(
+    user?.user_metadata?.points ?? user?.user_metadata?.total_points ?? 0,
+  );
   const weeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
   const weeklyRankRaw = user?.user_metadata?.weekly_rank;
   const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;
-  const weeklyPoints = Number.isFinite(weeklyPointsRaw) ? Math.max(0, weeklyPointsRaw) : 0;
+  const weeklyPoints = Number.isFinite(weeklyPointsRaw)
+    ? Math.max(0, weeklyPointsRaw)
+    : 0;
   const weeklyRank = weeklyRankRaw == null ? "--" : String(weeklyRankRaw);
 
+  const planList = paymentConfig?.plans || [];
+  const monthlyPlanList = planList.filter(
+    (plan) =>
+      String(plan.plan_code || "")
+        .trim()
+        .toLowerCase() === "pro_monthly",
+  );
+  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
+  const selectedPlan =
+    effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) ||
+    effectivePlanList[0];
+  const paymentFeatureReady = Boolean(
+    paymentConfig?.enabled && paymentConfig?.configured,
+  );
+  const hasPayingWallet = Boolean(
+    String(
+      selectedWallet || walletAddress || boundWallets[0]?.address || "",
+    ).trim(),
+  );
+
   const billing = useMemo(() => {
-    const price = Number(selectedPlan?.amount_usdc || 5);
-    const pointsPerUsdc = 500;
-    const maxDiscount = 3;
-    const pointsUsed = Math.min(totalPoints, pointsPerUsdc * maxDiscount);
-    const discountAmount = usePoints ? Math.min(maxDiscount, pointsUsed / pointsPerUsdc) : 0;
-    return { price, pointsUsed, discountAmount, payAmount: Math.max(0, price - discountAmount) };
-  }, [selectedPlan?.amount_usdc, totalPoints, usePoints]);
+    const parsedPlanAmount = Number(selectedPlan?.amount_usdc ?? 5);
+    const planAmount =
+      Number.isFinite(parsedPlanAmount) && parsedPlanAmount > 0
+        ? parsedPlanAmount
+        : 5;
 
-  useEffect(() => {
-    if (isSubscribed) setShowOverlay(false);
-  }, [isSubscribed]);
+    const pointsCfg = paymentConfig?.points_redemption || {};
+    const pointsEnabled = pointsCfg.enabled !== false;
+    const pointsPerUsdcRaw = Number(pointsCfg.points_per_usdc ?? 500);
+    const pointsPerUsdc =
+      Number.isFinite(pointsPerUsdcRaw) && pointsPerUsdcRaw > 0
+        ? Math.floor(pointsPerUsdcRaw)
+        : 500;
 
-  const waitForReceipt = async (txHash: string, timeoutMs = 120000, pollMs = 3000) => {
+    const maxDiscountRaw = Number(pointsCfg.max_discount_usdc ?? 3);
+    const maxDiscountUsdc = Math.max(
+      0,
+      Math.min(
+        Math.floor(Number.isFinite(maxDiscountRaw) ? maxDiscountRaw : 3),
+        Math.floor(planAmount),
+      ),
+    );
+
+    const maxRedeemablePoints = pointsPerUsdc * maxDiscountUsdc;
+    const actualRedeem = pointsEnabled
+      ? Math.min(totalPoints, maxRedeemablePoints)
+      : 0;
+    const discountUnits = Math.floor(actualRedeem / pointsPerUsdc);
+    const pointsUsed = discountUnits * pointsPerUsdc;
+    const canRedeem = pointsEnabled && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
+    const applyDiscount = usePoints && canRedeem && pointsUsed > 0;
+
+    return {
+      planAmount,
+      pointsEnabled,
+      pointsPerUsdc,
+      maxDiscountUsdc,
+      pointsUsed,
+      discountAmount: discountUnits,
+      payAmount: planAmount - (applyDiscount ? discountUnits : 0),
+      canRedeem,
+    };
+  }, [
+    paymentConfig?.points_redemption,
+    selectedPlan?.amount_usdc,
+    totalPoints,
+    usePoints,
+  ]);
+
+  const bindCommand = userId
+    ? `/bind ${userId}${email ? ` ${email}` : ""}`
+    : "/bind <supabase_user_id> <email>";
+
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  // --- Payment Logic (preserved) ---
+
+  const waitForReceipt = async (
+    txHash: string,
+    timeoutMs = 120000,
+    pollMs = 3000,
+  ) => {
     const eth = window.ethereum;
     if (!eth) throw new Error("MetaMask not found");
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-      const receipt = (await eth.request({ method: "eth_getTransactionReceipt", params: [txHash] })) as { status?: string } | null;
+      const receipt = (await eth.request({
+        method: "eth_getTransactionReceipt",
+        params: [txHash],
+      })) as { status?: string } | null;
       if (receipt && receipt.status) {
         if (receipt.status === "0x1") return receipt;
         throw new Error(`transaction reverted: ${txHash}`);
@@ -407,12 +477,15 @@ export function AccountCenter() {
 
     setPaymentBusy(true);
     try {
-      const accounts = (await eth.request({ method: "eth_requestAccounts" })) as string[];
+      const accounts = (await eth.request({
+        method: "eth_requestAccounts",
+      })) as string[];
       const address = String(accounts?.[0] || "").toLowerCase();
       if (!address) throw new Error("钱包账户为空");
 
       const authHeaders = await buildAuthedHeaders(true);
-      if (!authHeaders.Authorization) throw new Error("登录会话失效，请重新登录后再绑定钱包。");
+      if (!authHeaders.Authorization)
+        throw new Error("登录会话失效，请重新登录后再绑定钱包。");
 
       setWalletAddress(address);
       const challengeRes = await fetch("/api/payments/wallets/challenge", {
@@ -425,12 +498,18 @@ export function AccountCenter() {
         throw new Error(`challenge failed: ${raw}`);
       }
 
-      const challengeJson = (await challengeRes.json()) as { nonce?: string; message?: string };
+      const challengeJson = (await challengeRes.json()) as {
+        nonce?: string;
+        message?: string;
+      };
       const message = String(challengeJson.message || "");
       const nonce = String(challengeJson.nonce || "");
       if (!message || !nonce) throw new Error("challenge payload invalid");
 
-      const signature = (await eth.request({ method: "personal_sign", params: [message, address] })) as string;
+      const signature = (await eth.request({
+        method: "personal_sign",
+        params: [message, address],
+      })) as string;
       const verifyRes = await fetch("/api/payments/wallets/verify", {
         method: "POST",
         headers: authHeaders,
@@ -468,7 +547,9 @@ export function AccountCenter() {
       return;
     }
 
-    const payingWallet = String(selectedWallet || walletAddress || boundWallets[0]?.address || "").toLowerCase();
+    const payingWallet = String(
+      selectedWallet || walletAddress || boundWallets[0]?.address || "",
+    ).toLowerCase();
     if (!payingWallet) {
       setPaymentError("请先绑定钱包。");
       return;
@@ -477,13 +558,19 @@ export function AccountCenter() {
     setPaymentBusy(true);
     try {
       const authHeaders = await buildAuthedHeaders(true);
-      if (!authHeaders.Authorization) throw new Error("登录会话失效，请重新登录后再支付。");
+      if (!authHeaders.Authorization)
+        throw new Error("登录会话失效，请重新登录后再支付。");
 
-      const currentChainIdHex = String((await eth.request({ method: "eth_chainId" })) || "");
+      const currentChainIdHex = String(
+        (await eth.request({ method: "eth_chainId" })) || "",
+      );
       const targetChainId = Number(paymentConfig.chain_id || 137);
       const targetChainHex = `0x${targetChainId.toString(16)}`;
       if (currentChainIdHex.toLowerCase() !== targetChainHex.toLowerCase()) {
-        await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: targetChainHex }] });
+        await eth.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: targetChainHex }],
+        });
       }
 
       const createRes = await fetch("/api/payments/intents", {
@@ -493,6 +580,8 @@ export function AccountCenter() {
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "strict",
           allowed_wallet: payingWallet,
+          use_points: billing.canRedeem && usePoints,
+          points_to_consume: billing.canRedeem && usePoints ? billing.pointsUsed : 0,
           metadata: { source: "account_center" },
         }),
       });
@@ -504,16 +593,24 @@ export function AccountCenter() {
       const created = (await createRes.json()) as CreatedIntent;
       const intentId = String(created.intent?.intent_id || "");
       const txPayload = created.tx_payload;
-      if (!intentId || !txPayload?.to || !txPayload?.data) throw new Error("intent payload invalid");
+      if (!intentId || !txPayload?.to || !txPayload?.data)
+        throw new Error("intent payload invalid");
       setLastIntentId(intentId);
 
       const tokenAddress = String(txPayload.token_address || "").toLowerCase();
       const amountUnits = BigInt(String(txPayload.amount_units || "0"));
-      if (!tokenAddress.startsWith("0x") || amountUnits <= 0n) throw new Error("intent token/amount invalid");
+      if (!tokenAddress.startsWith("0x") || amountUnits <= 0n)
+        throw new Error("intent token/amount invalid");
 
       const allowanceHex = (await eth.request({
         method: "eth_call",
-        params: [{ to: tokenAddress, data: buildAllowanceCalldata(payingWallet, txPayload.to) }, "latest"],
+        params: [
+          {
+            to: tokenAddress,
+            data: buildAllowanceCalldata(payingWallet, txPayload.to),
+          },
+          "latest",
+        ],
       })) as string;
       const allowance = BigInt(String(allowanceHex || "0x0"));
 
@@ -521,7 +618,14 @@ export function AccountCenter() {
         setPaymentInfo("检测到授权不足，正在发起 USDC 授权...");
         const approveHash = (await eth.request({
           method: "eth_sendTransaction",
-          params: [{ from: payingWallet, to: tokenAddress, data: buildApproveCalldata(txPayload.to, amountUnits), value: "0x0" }],
+          params: [
+            {
+              from: payingWallet,
+              to: tokenAddress,
+              data: buildApproveCalldata(txPayload.to, amountUnits),
+              value: "0x0",
+            },
+          ],
         })) as string;
         await waitForReceipt(String(approveHash || ""));
         setPaymentInfo("USDC 授权成功，正在发起支付...");
@@ -531,26 +635,42 @@ export function AccountCenter() {
 
       const txHash = (await eth.request({
         method: "eth_sendTransaction",
-        params: [{ from: payingWallet, to: txPayload.to, data: txPayload.data, value: txPayload.value || "0x0" }],
+        params: [
+          {
+            from: payingWallet,
+            to: txPayload.to,
+            data: txPayload.data,
+            value: txPayload.value || "0x0",
+          },
+        ],
       })) as string;
       const txHashNorm = String(txHash || "").toLowerCase();
       setLastTxHash(txHashNorm);
 
-      const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ tx_hash: txHashNorm, from_address: payingWallet }),
-      });
+      const submitRes = await fetch(
+        `/api/payments/intents/${intentId}/submit`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({
+            tx_hash: txHashNorm,
+            from_address: payingWallet,
+          }),
+        },
+      );
       if (!submitRes.ok) {
         const raw = (await submitRes.text()).slice(0, 350);
         throw new Error(`submit tx failed: ${raw}`);
       }
 
-      const confirmRes = await fetch(`/api/payments/intents/${intentId}/confirm`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ tx_hash: txHashNorm }),
-      });
+      const confirmRes = await fetch(
+        `/api/payments/intents/${intentId}/confirm`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ tx_hash: txHashNorm }),
+        },
+      );
       if (!confirmRes.ok) {
         const raw = (await confirmRes.text()).slice(0, 350);
         setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待确认中。`);
@@ -569,11 +689,7 @@ export function AccountCenter() {
 
   const handleOverlayCheckout = async () => {
     if (!isAuthenticated) {
-      router.push("/auth/login?next=%2Faccount");
-      return;
-    }
-    if (!paymentFeatureReady) {
-      setPaymentError("支付服务未配置完成，请稍后再试。");
+      setPaymentError("请先登录后再支付。");
       return;
     }
     if (!hasPayingWallet) {
@@ -583,314 +699,469 @@ export function AccountCenter() {
     await createIntentAndPay();
   };
 
+  // --- Render ---
+
+  if (loading && !refreshing) {
+    return (
+      <div className="flex h-screen w-full items-center justify-center bg-[#0b0f1a]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
+          <p className="text-slate-400 font-medium">加载账户信息中...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative min-h-screen w-full overflow-hidden bg-[#0b0f1a] p-4 font-sans text-slate-200 md:p-8">
-      <div className="pointer-events-none absolute -right-24 -top-20 h-[620px] w-[620px] rounded-full bg-blue-600/15 blur-[130px]" />
-      <div className="pointer-events-none absolute -bottom-24 -left-20 h-[620px] w-[620px] rounded-full bg-indigo-600/15 blur-[130px]" />
+    <div className="min-h-screen w-full bg-[#0b0f1a] text-slate-200 p-4 md:p-8 font-sans relative overflow-hidden flex flex-col items-center">
+      {/* Aurora Shadows */}
+      <div className="absolute top-0 right-0 w-[600px] h-[600px] bg-blue-600/10 rounded-full blur-[140px] pointer-events-none"></div>
+      <div className="absolute bottom-0 left-0 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[140px] pointer-events-none"></div>
 
-      <div className="relative z-10 mx-auto w-full max-w-6xl">
-        <header className="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="group rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 transition hover:bg-white/10 hover:text-white" title="返回首页">
-              <ChevronLeft size={20} className="transition-transform group-hover:-translate-x-0.5" />
-            </Link>
-            <div>
-              <h1 className="text-2xl font-bold text-white">账户中心</h1>
-              <p className="text-sm text-slate-500">积分体系 v4.3 · 管理身份、订阅与 Bot 绑定</p>
-            </div>
+      {/* Header */}
+      <header className="w-full max-w-6xl flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 z-20">
+        <div className="flex items-center gap-4">
+          <Link
+            href="/"
+            className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-slate-400 hover:text-white transition-all active:scale-90 group"
+            title="返回首页"
+          >
+            <ChevronLeft
+              size={20}
+              className="group-hover:-translate-x-0.5 transition-transform"
+            />
+          </Link>
+          <div>
+            <h1 className="text-2xl font-bold text-white flex items-center gap-2">
+              账户中心
+            </h1>
+            <p className="text-slate-500 text-sm">
+              积分体系 v4.3 · 管理身份与订阅计划
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isSubscribed && paymentFeatureReady ? (
-              <button type="button" onClick={() => setShowOverlay(true)} className="flex items-center gap-2 rounded-xl border border-yellow-500/30 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-400 transition hover:bg-yellow-500/20">
-                <Crown size={16} /> 升级 Pro
-              </button>
-            ) : null}
-            <button type="button" onClick={() => void onRefresh()} disabled={refreshing || loading} className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm transition hover:bg-white/10 disabled:opacity-70">
-              {refreshing || loading ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />} 刷新
+        </div>
+        <div className="flex items-center gap-2">
+          {!isSubscribed && !showOverlay && paymentFeatureReady && (
+            <button
+              onClick={() => setShowOverlay(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
+            >
+              <Crown size={16} /> 升级 Pro
             </button>
-            {isAuthenticated ? (
-              <button type="button" onClick={() => void onSignOut()} className="flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-400 transition hover:bg-red-500/20">
-                <LogOut size={16} /> 退出
-              </button>
+          )}
+          <button
+            type="button"
+            onClick={() => void onRefresh()}
+            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-sm transition-all disabled:opacity-50"
+            disabled={refreshing}
+          >
+            {refreshing ? (
+              <RefreshCw size={16} className="animate-spin" />
             ) : (
-              <Link href="/auth/login?next=%2Faccount" className="flex items-center gap-2 rounded-xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm text-blue-300 transition hover:bg-blue-500/20">
-                <LogIn size={16} /> 登录 / 注册
-              </Link>
-            )}
+              <RefreshCw size={16} />
+            )}{" "}
+            刷新
+          </button>
+          {isAuthenticated ? (
+            <button
+              onClick={() => void onSignOut()}
+              className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-xl text-sm transition-all"
+            >
+              <LogOut size={16} /> 退出
+            </button>
+          ) : (
+            <Link
+              href="/auth/login?next=%2Faccount"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl text-sm transition-all"
+            >
+              <LogIn size={16} /> 登录
+            </Link>
+          )}
+        </div>
+      </header>
+
+      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 z-10 relative">
+        {/* User Card */}
+        <div className="lg:col-span-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row items-center gap-8">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-400 flex items-center justify-center text-3xl font-bold text-white shadow-xl shadow-blue-500/30">
+              {initials}
+            </div>
+            <div
+              className={`absolute -bottom-2 -right-2 p-1.5 rounded-xl border-4 border-[#0b0f1a] ${isSubscribed ? "bg-yellow-500 text-black" : "bg-slate-700 text-slate-400"}`}
+            >
+              <Crown size={16} fill="currentColor" />
+            </div>
           </div>
-        </header>
-
-        {errorText ? <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-300">加载失败: {errorText}</div> : null}
-        {!supabaseReady ? <div className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY 未配置。</div> : null}
-
-        <main className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          <section className="relative overflow-hidden rounded-[2.5rem] border border-white/10 bg-gradient-to-br from-white/10 to-transparent p-8 shadow-2xl backdrop-blur-md lg:col-span-8">
-            <div className="absolute right-0 top-0 p-6"><span className="font-mono text-xs text-slate-500">最近同步: {updatedAtLabel}</span></div>
-            <div className="flex flex-col items-center gap-8 md:flex-row">
-              <div className="relative">
-                <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-gradient-to-tr from-blue-600 to-indigo-400 text-3xl font-bold text-white shadow-xl shadow-blue-500/30">{initials}</div>
-                <div className="absolute -bottom-2 -right-2 rounded-xl border-4 border-[#0b0f1a] bg-yellow-500 p-1.5 text-black"><Crown size={16} fill="currentColor" /></div>
+          <div className="flex-grow text-center md:text-left">
+            <div className="flex items-center justify-center md:justify-start gap-3 mb-1">
+              <h2 className="text-3xl font-bold text-white">{displayName}</h2>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${isSubscribed ? "bg-blue-500/20 border-blue-500/40 text-blue-400" : "bg-slate-700/50 border-white/10 text-slate-500"}`}
+              >
+                {isSubscribed ? "PRO MEMBER" : "FREE TIER"}
+              </span>
+            </div>
+            <p className="text-slate-500 font-mono text-sm mb-4">
+              {email || "游客用户"}
+            </p>
+            <div className="flex flex-wrap justify-center md:justify-start gap-4">
+              <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+                <Hash size={14} />{" "}
+                <span className="font-mono">
+                  {userId ? `${userId.substring(0, 12)}...` : "--"}
+                </span>
               </div>
-              <div className="flex-grow text-center md:text-left">
-                <div className="mb-2 flex flex-col items-center gap-3 md:flex-row md:justify-start">
-                  <h2 className="text-3xl font-bold text-white">{displayName}</h2>
-                  <span className={`rounded-full border px-2 py-0.5 text-[10px] font-black uppercase tracking-wider ${isSubscribed ? "border-blue-500/40 bg-blue-500/20 text-blue-300" : "border-white/10 bg-slate-700/40 text-slate-400"}`}>{isSubscribed ? "PRO MEMBER" : "FREE TIER"}</span>
-                  <span className="flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-400"><UserCheck size={12} /> {isAuthenticated ? "已登录" : "游客"}</span>
-                </div>
-                <p className="mb-3 font-mono text-sm text-slate-400">{email || "--"}</p>
-                <div className="flex flex-wrap items-center justify-center gap-4 text-xs text-slate-400 md:justify-start">
-                  <span className="flex items-center gap-1.5"><Hash size={14} /> {userId ? `${userId.slice(0, 12)}...` : "--"}</span>
-                  <span className="flex items-center gap-1.5"><Clock size={14} /> 加入时间: {joinedAt}</span>
-                </div>
-              </div>
-              <div className="flex flex-col gap-3">
-                <div className="min-w-[150px] rounded-2xl border border-white/5 bg-black/40 px-6 py-4 text-center"><p className="mb-1 text-[10px] uppercase tracking-widest text-slate-500">总积分</p><p className="flex items-center justify-center gap-2 text-xl font-bold text-white"><Coins size={16} className="text-yellow-500" /> {totalPoints.toLocaleString("en-US")}</p></div>
-                <div className="min-w-[150px] rounded-2xl border border-blue-500/25 bg-blue-500/10 px-6 py-4 text-center"><p className="mb-1 text-[10px] uppercase tracking-widest text-blue-300">周排行</p><p className="flex items-center justify-center gap-2 text-xl font-bold text-white"><Trophy size={16} className="text-amber-400" /> #{weeklyRank}</p><p className="mt-1 text-[11px] text-blue-200/80">本周积分: {weeklyPoints}</p></div>
+              <div className="flex items-center gap-1.5 text-slate-400 text-xs">
+                <Clock size={14} /> <span>加入时间: {joinedAt}</span>
               </div>
             </div>
-          </section>
-
-          <section className="flex flex-col justify-between rounded-[2.5rem] border border-indigo-500/30 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 p-6 shadow-xl lg:col-span-4">
-            <div>
-              <h3 className="mb-6 flex items-center gap-2 text-lg font-bold text-white"><Sparkles size={18} className="text-yellow-400" /> 周榜奖励</h3>
-              <div className="space-y-3 text-sm"><div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3"><span>Top 1</span><span className="text-xs font-bold text-yellow-400">+500 pts & 7D Pro</span></div><div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3"><span>Top 2-3</span><span className="text-xs font-bold text-slate-200">+300 pts & 3D Pro</span></div><div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-3"><span>Top 4-10</span><span className="text-xs font-bold text-orange-300">+150 pts</span></div></div>
+          </div>
+          <div className="flex flex-col gap-3">
+            <div className="px-6 py-4 bg-black/40 rounded-2xl border border-white/5 text-center min-w-[140px]">
+              <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
+                总积分 (荣誉)
+              </p>
+              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+                <Coins size={16} className="text-yellow-500" />{" "}
+                {totalPoints.toLocaleString()}
+              </p>
             </div>
-            <div className="mt-6 flex items-start gap-2 rounded-xl bg-black/25 p-3"><Info size={14} className="mt-0.5 shrink-0 text-slate-500" /><p className="text-[11px] text-slate-500">周榜每周一结算。发言积分永久累计，可用于订阅抵扣。</p></div>
-          </section>
+            <div className="px-6 py-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-center min-w-[140px]">
+              <p className="text-[10px] text-blue-400 uppercase tracking-widest mb-1 font-bold">
+                周排行 (竞技)
+              </p>
+              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+                <Trophy size={16} className="text-amber-400" /> #{weeklyRank}
+              </p>
+            </div>
+          </div>
+        </div>
 
-          <section className="space-y-3 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm lg:col-span-6">
-            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-blue-400"><Shield size={16} /> 会员与权限</h3>
-            <InfoItem icon={Shield} label="鉴权模式" value={modeLabel} status="primary" />
-            <InfoItem icon={UserIcon} label="后端状态" value={backendStatus} />
-            <InfoItem icon={Crown} label="订阅要求" value={subscriptionRequirement} />
-            <InfoItem icon={ShieldCheck} label="订阅结果" value={subscriptionResult} />
-          </section>
+        {/* Weekly Ranking Motivation */}
+        <div className="lg:col-span-4 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-[2.5rem] p-6 flex flex-col justify-between shadow-xl">
+          <div>
+            <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-6">
+              <Sparkles size={20} className="text-yellow-400" /> 周榜奖励
+            </h3>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <span className="text-sm flex items-center gap-2">
+                  <div className="w-5 h-5 bg-yellow-500 rounded text-black font-bold text-[10px] flex items-center justify-center">
+                    1
+                  </div>{" "}
+                  Top 1
+                </span>
+                <span className="text-xs font-bold text-yellow-500">
+                  +500 pts & 7D Pro
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <span className="text-sm flex items-center gap-2">
+                  <div className="w-5 h-5 bg-slate-300 rounded text-black font-bold text-[10px] flex items-center justify-center">
+                    2
+                  </div>{" "}
+                  Top 2-3
+                </span>
+                <span className="text-xs font-bold text-slate-300">
+                  +300 pts & 3D Pro
+                </span>
+              </div>
+              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                <span className="text-sm flex items-center gap-2">
+                  <div className="w-5 h-5 bg-orange-800 rounded text-white font-bold text-[10px] flex items-center justify-center">
+                    4
+                  </div>{" "}
+                  Top 4-10
+                </span>
+                <span className="text-xs font-bold text-orange-400">
+                  +150 pts
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
+            <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
+            <p className="text-[10px] text-slate-500 leading-normal italic">
+              积分规则：群内有效发言（自动防刷检测）。每周一零点结算并重置周积分榜。
+            </p>
+          </div>
+        </div>
 
-          <section className="space-y-3 rounded-3xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm lg:col-span-6">
-            <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-indigo-400"><Fingerprint size={16} /> 身份信息</h3>
-            <InfoItem icon={Mail} label="邮箱" value={email || "--"} />
-            <InfoItem icon={Hash} label="用户 ID" value={userId || "--"} />
-            <InfoItem icon={LogIn} label="登录方式" value={provider} />
-            <InfoItem icon={Clock} label="最近登录" value={lastSignIn} />
-          </section>
+        {/* Subscription Info & Paywall */}
+        <div className="lg:col-span-12 relative">
+          <div
+            className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${!isSubscribed && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
+          >
+            <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
+              <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
+                会员权限详情
+              </h3>
+              <InfoRow icon={ShieldCheck} label="鉴权模式" value="Supabase" />
+              <InfoRow icon={BarChart3} label="气象引擎" value="Premium AI" />
+              <InfoRow
+                icon={Zap}
+                label="实时雷达"
+                value={isSubscribed ? "已开启" : "锁定"}
+                isPrimary={isSubscribed}
+              />
+              <InfoRow
+                icon={Sparkles}
+                label="平台广告"
+                value={isSubscribed ? "已移除" : "可见"}
+              />
+            </section>
+            <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
+              <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-4">
+                身份状态
+              </h3>
+              <InfoRow icon={Mail} label="绑定邮箱" value={email || "--"} />
+              <InfoRow
+                icon={LogIn}
+                label="登录方式"
+                value={user?.app_metadata?.provider?.toUpperCase() || "GOOGLE"}
+              />
+              <InfoRow
+                icon={Clock}
+                label="续费日期"
+                value={proExpiry}
+                isPrimary
+              />
+              <InfoRow
+                icon={UserCheck}
+                label="鉴权结果"
+                value={backend?.authenticated ? "通过" : "受限"}
+              />
+            </section>
+          </div>
 
-          <section className="relative lg:col-span-12">
-            <div className={`grid grid-cols-1 gap-6 rounded-[2rem] border border-cyan-500/25 bg-gradient-to-r from-cyan-600/10 to-indigo-600/10 p-6 transition-all duration-500 md:grid-cols-2 ${!isSubscribed && showOverlay ? "pointer-events-none select-none blur-md grayscale-[0.3] opacity-30" : ""}`}>
-              <div className="rounded-2xl border border-cyan-400/20 bg-black/20 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-base font-bold text-cyan-200">
-                    <Wallet size={18} /> 已绑定钱包
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => void connectAndBindWallet()}
-                    disabled={paymentBusy || !isAuthenticated}
-                    className="rounded-xl border border-emerald-400/35 bg-emerald-500/10 px-3 py-1.5 text-sm text-emerald-300 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          {/* Paywall Mask */}
+          {!isSubscribed && showOverlay && (
+            <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
+              <div className="w-full max-w-2xl bg-[#161b2a]/90 backdrop-blur-2xl border border-white/10 rounded-[2.5rem] p-8 md:p-12 shadow-[0_0_80px_-10px_rgba(79,70,229,0.3)] text-center relative">
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowOverlay(false)}
+                  className="absolute top-6 right-6 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-500 hover:text-white transition-all"
+                  title="稍后再说"
+                >
+                  <X size={20} />
+                </button>
+
+                <div className="absolute -top-10 left-1/2 -translate-x-1/2 w-20 h-20 bg-gradient-to-tr from-yellow-500 to-amber-400 rounded-3xl flex items-center justify-center shadow-2xl rotate-12">
+                  <Crown className="text-white w-10 h-10" fill="currentColor" />
+                </div>
+
+                <h2 className="text-3xl font-bold text-white mb-4 mt-4">
+                  开启 PolyWeather Pro
+                </h2>
+                <p className="text-slate-400 mb-10 max-w-md mx-auto">
+                  解锁 15
+                  天高精度趋势分析、实时雷达与闪电追踪。尊享全平台无广告体验。
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left mb-10">
+                  {/* Plan Card */}
+                  <div className="p-6 bg-blue-600/10 border-2 border-blue-500/50 rounded-3xl relative">
+                    <div className="absolute -top-3 right-6 bg-blue-500 text-[10px] px-2 py-1 rounded font-bold text-white">
+                      月付套餐
+                    </div>
+                    <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-1">
+                      PRO PLAN
+                    </p>
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-3xl font-black text-white">
+                        ${billing.planAmount.toFixed(2)}
+                      </span>
+                      <span className="text-slate-500 text-sm">/ 月</span>
+                    </div>
+                  </div>
+
+                  {/* Points Card */}
+                  <div
+                    className={`p-6 rounded-3xl border transition-all ${usePoints && billing.canRedeem ? "bg-indigo-600/20 border-indigo-500/50" : "bg-white/5 border-white/10"}`}
                   >
-                    连接并绑定 MetaMask
-                  </button>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">
+                        积分抵扣
+                      </span>
+                      <button
+                        onClick={() => setUsePoints(!usePoints)}
+                        disabled={!billing.canRedeem}
+                        className={`w-10 h-5 rounded-full relative transition-all ${usePoints && billing.canRedeem ? "bg-indigo-500" : "bg-slate-700"} ${!billing.canRedeem ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
+                      >
+                        <div
+                          className={`absolute top-1 w-3 h-3 rounded-full bg-white transition-all ${usePoints && billing.canRedeem ? "right-1" : "left-1"}`}
+                        />
+                      </button>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span
+                        className={`text-2xl font-bold ${usePoints && billing.canRedeem ? "text-green-400" : "text-slate-500"}`}
+                      >
+                        -${billing.discountAmount.toFixed(2)}
+                      </span>
+                      <span className="text-slate-500 text-xs">OFF</span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-1 italic">
+                      {!billing.pointsEnabled
+                        ? "积分抵扣未开启"
+                        : !billing.canRedeem
+                          ? `积分不足 (当前 ${totalPoints}，至少 ${billing.pointsPerUsdc})`
+                          : usePoints
+                            ? `已自动消耗 ${billing.pointsUsed} 积分`
+                            : `最多抵扣 $${billing.maxDiscountUsdc.toFixed(2)}`}
+                    </p>
+                  </div>
                 </div>
 
-                {!isAuthenticated ? (
-                  <p className="text-sm text-slate-400">请先登录，再进行钱包绑定与支付。</p>
-                ) : boundWallets.length ? (
-                  <div className="space-y-2">
-                    {boundWallets.map((wallet) => {
-                      const active = String(selectedWallet || walletAddress).toLowerCase() === String(wallet.address || "").toLowerCase();
-                      return (
-                        <button
-                          type="button"
-                          key={`${wallet.chain_id}-${wallet.address}`}
-                          onClick={() => setSelectedWallet(wallet.address)}
-                          className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${active ? "border-cyan-400/50 bg-cyan-500/15 text-cyan-100" : "border-white/10 bg-white/5 text-slate-300 hover:bg-white/10"}`}
-                        >
-                          <span className="font-mono text-xs">{shortAddress(wallet.address)}</span>
-                          <span className="text-[11px] text-slate-400">
-                            Chain #{wallet.chain_id}
-                            {wallet.is_primary ? " · Primary" : ""}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-400">暂无已绑定钱包。</p>
-                )}
-              </div>
-
-              <div className="rounded-2xl border border-cyan-400/20 bg-black/20 p-5">
-                <div className="mb-4 flex items-center justify-between">
-                  <h3 className="flex items-center gap-2 text-base font-bold text-cyan-200">
-                    <CreditCard size={18} /> 选择套餐并支付
-                  </h3>
-                  <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
-                    Chain #{paymentConfig?.chain_id ?? 137}
-                  </span>
-                </div>
-
-                {paymentFeatureReady ? (
-                  <>
-                    <div className="space-y-2">
-                      {effectivePlanList.length ? (
-                        effectivePlanList.map((plan) => {
-                          const checked = (selectedPlan?.plan_code || "") === plan.plan_code;
-                          return (
-                            <button
-                              type="button"
-                              key={plan.plan_code}
-                              onClick={() => setSelectedPlanCode(plan.plan_code)}
-                              className={`flex w-full items-center justify-between rounded-xl border px-4 py-3 transition ${checked ? "border-cyan-400/50 bg-cyan-500/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className={`h-4 w-4 rounded-full border ${checked ? "border-cyan-300 bg-cyan-300 shadow-[0_0_0_3px_rgba(34,211,238,0.25)]" : "border-slate-500"}`} />
-                                <span className="font-medium text-slate-100">{planDisplayName(plan.plan_code)}</span>
-                              </div>
-                              <span className="text-sm text-cyan-100">{plan.amount_usdc} USDC / {plan.duration_days} 天</span>
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-300">
-                          套餐配置为空，请检查后端计划配置。
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="mt-4 rounded-xl border border-white/10 bg-white/5 p-3">
-                      <div className="mb-2 flex items-center justify-between text-sm">
-                        <span className="text-slate-400">积分抵扣</span>
-                        <button
-                          type="button"
-                          onClick={() => setUsePoints((v) => !v)}
-                          className={`h-5 w-10 rounded-full transition ${usePoints ? "bg-indigo-500" : "bg-slate-700"}`}
-                        >
-                          <span className={`mt-1 block h-3 w-3 rounded-full bg-white transition ${usePoints ? "translate-x-6" : "translate-x-1"}`} />
-                        </button>
-                      </div>
-                      <div className="flex items-center justify-between text-xs text-slate-400">
-                        <span>最多可抵扣 $3（500 分 = $1）</span>
-                        <span>消耗积分: {usePoints ? billing.pointsUsed : 0}</span>
-                      </div>
-                      <div className="mt-2 flex items-center justify-between">
-                        <span className="text-sm text-slate-300">应付金额</span>
-                        <span className="text-xl font-bold text-white">${billing.payAmount.toFixed(2)}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => void createIntentAndPay()}
-                      disabled={paymentBusy || !isAuthenticated || !hasPayingWallet || !selectedPlan}
-                      className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-600 to-indigo-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-cyan-900/40 transition hover:from-cyan-500 hover:to-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {paymentBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                      创建订单并支付
-                    </button>
-                  </>
-                ) : (
-                  <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
-                    支付功能暂未启用或未配置完成。
-                  </div>
-                )}
-
-                {paymentInfo ? <div className="mt-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200">{paymentInfo}</div> : null}
-                {paymentError ? <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{paymentError}</div> : null}
-                {lastIntentId ? <div className="mt-2 text-[11px] text-slate-500">Intent: {lastIntentId}</div> : null}
-                {lastTxHash ? <div className="mt-1 text-[11px] text-slate-500">Tx: {shortAddress(lastTxHash)}</div> : null}
-              </div>
-            </div>
-
-            {!isSubscribed && showOverlay ? (
-              <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
-                <div className="relative w-full max-w-2xl rounded-[2.5rem] border border-white/10 bg-[#161b2a]/90 p-8 text-center shadow-[0_0_90px_-10px_rgba(79,70,229,0.35)] backdrop-blur-2xl md:p-12">
-                  <button
-                    type="button"
-                    onClick={() => setShowOverlay(false)}
-                    className="absolute right-5 top-5 rounded-full bg-white/5 p-2 text-slate-500 transition hover:bg-white/10 hover:text-white"
-                    title="稍后再说"
-                  >
-                    <X size={18} />
-                  </button>
-
-                  <div className="absolute -top-10 left-1/2 flex h-20 w-20 -translate-x-1/2 items-center justify-center rounded-3xl bg-gradient-to-tr from-yellow-500 to-amber-400 text-white shadow-2xl rotate-12">
-                    <Crown size={38} />
-                  </div>
-
-                  <h2 className="mt-6 text-3xl font-bold text-white">开启 PolyWeather Pro</h2>
-                  <p className="mx-auto mt-3 max-w-lg text-slate-400">
-                    解锁今日日内分析、历史对账、未来日期分析等 Pro 功能。
-                  </p>
-
-                  <div className="mt-8 grid grid-cols-1 gap-3 text-left md:grid-cols-2">
-                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"><BadgeCheck size={16} className="text-cyan-300" /> 今日日内分析</div>
-                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"><BadgeCheck size={16} className="text-cyan-300" /> 历史对账</div>
-                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"><BadgeCheck size={16} className="text-cyan-300" /> 未来日期分析</div>
-                    <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-slate-200"><BadgeCheck size={16} className="text-cyan-300" /> 无广告体验</div>
-                  </div>
-
-                  <div className="mt-8 rounded-2xl border border-blue-500/30 bg-blue-500/10 p-4">
-                    <div className="flex items-center justify-between text-sm text-slate-300">
-                      <span>月付套餐</span>
-                      <span>USD {selectedPlan?.amount_usdc || "5"} / 30天</span>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-sm text-slate-300">
-                      <span>积分抵扣</span>
-                      <span>-USD {billing.discountAmount.toFixed(2)}</span>
-                    </div>
-                    <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-3">
-                      <span className="text-slate-300">应付总计</span>
-                      <span className="text-2xl font-black text-white">USD {billing.payAmount.toFixed(2)}</span>
-                    </div>
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between px-2 text-sm">
+                    <span className="text-slate-400">应付总计:</span>
+                    <span className="text-3xl font-black text-white">
+                      ${billing.payAmount.toFixed(2)}
+                    </span>
                   </div>
 
                   <button
-                    type="button"
                     onClick={() => void handleOverlayCheckout()}
                     disabled={paymentBusy}
-                    className="mt-6 flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-4 text-lg font-bold text-white shadow-xl shadow-blue-900/40 transition hover:from-blue-500 hover:to-indigo-500 disabled:opacity-70"
+                    className="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-2xl shadow-xl shadow-blue-600/30 transition-all flex items-center justify-center gap-2 group active:scale-95 text-lg"
                   >
-                    {paymentBusy ? <Loader2 size={18} className="animate-spin" /> : <ArrowRight size={18} />}
-                    {isAuthenticated ? "连接钱包并支付" : "登录后支付"}
+                    {paymentBusy ? (
+                      <Loader2 size={20} className="animate-spin" />
+                    ) : (
+                      <>
+                        连接钱包并支付{" "}
+                        <ArrowRight
+                          size={20}
+                          className="group-hover:translate-x-1 transition-transform"
+                        />
+                      </>
+                    )}
                   </button>
 
-                  <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
-                    <Lock size={12} /> 所有交易均在链上确认并加密传输
+                  <div className="flex justify-center items-center gap-6 text-[10px] uppercase tracking-widest text-slate-500">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <Lock size={12} className="opacity-50" /> 安全加密支付
+                    </span>
+                    <span className="hover:text-white cursor-pointer transition-colors font-medium">
+                      常见问题 (FAQ)
+                    </span>
                   </div>
+
+                  {paymentError && (
+                    <div className="mt-2 text-xs text-rose-400 bg-rose-500/10 p-2 rounded-lg border border-rose-500/20">
+                      {paymentError}
+                    </div>
+                  )}
+                  {paymentInfo && (
+                    <div className="mt-2 text-xs text-emerald-400 bg-emerald-500/10 p-2 rounded-lg border border-emerald-500/20">
+                      {paymentInfo}
+                    </div>
+                  )}
                 </div>
               </div>
-            ) : null}
-          </section>
+            </div>
+          )}
+        </div>
 
-          <section className="relative overflow-hidden rounded-[2rem] border border-blue-500/25 bg-gradient-to-r from-blue-600/10 to-indigo-600/10 p-6 lg:col-span-12">
-            <Bot size={150} className="pointer-events-none absolute -bottom-8 -right-8 text-white/5" />
+        {/* Telegram Bot Section */}
+        <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
+          <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
+            <Bot
+              size={140}
+              className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:rotate-0 transition-transform duration-1000"
+            />
             <div className="relative z-10">
-              <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-blue-300">
-                <Bot size={20} /> Bot 绑定
+              <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-blue-400">
+                <Bot size={22} /> Telegram Bot 绑定
               </h3>
-              <p className="mb-4 text-sm text-slate-300">
-                发送以下命令到 Telegram Bot，绑定网页身份并同步权限状态。
+              <p className="text-slate-400 text-sm mb-6">
+                将下方命令发送给 Bot，实现全平台气象推送与权限同步。
               </p>
-              <div className="flex flex-col gap-2 md:flex-row">
-                <code className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border border-white/10 bg-black/30 px-4 py-3 font-mono text-xs text-cyan-200">
+              <div className="flex gap-2">
+                <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
                   {bindCommand}
                 </code>
                 <button
-                  type="button"
-                  onClick={() => void copyBindCommand()}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500"
+                  onClick={() => handleCopy(bindCommand)}
+                  className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
+                  title="复制命令"
                 >
-                  {copied ? <CheckCircle2 size={18} /> : <Copy size={18} />}
-                  {copied ? "已复制" : "复制命令"}
+                  {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                 </button>
               </div>
             </div>
           </section>
-        </main>
 
-        <footer className="mt-12 text-center text-[10px] uppercase tracking-[0.25em] text-slate-600">
-          PolyWeather Global Meteorological Engine
-        </footer>
-      </div>
+          {/* Payment Details / Wallet Management */}
+          <section className="w-full md:w-96 bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between">
+            <div>
+              <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                <Wallet size={18} /> 支付管理
+              </h3>
+              {boundWallets.length ? (
+                <div className="space-y-3">
+                  {boundWallets.map((w) => (
+                    <div
+                      key={w.address}
+                      className={`p-3 rounded-xl border transition-all ${selectedWallet === w.address ? "bg-blue-500/10 border-blue-500/30 text-white" : "bg-white/5 border-white/5 text-slate-400"}`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-mono">
+                          {shortAddress(w.address)}
+                        </span>
+                        {w.is_primary && (
+                          <span className="text-[8px] bg-blue-500 px-1 rounded">
+                            Primary
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10px]">Polygon Chain</div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 italic">
+                  未绑定任何收件钱包
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={() => void connectAndBindWallet()}
+              disabled={paymentBusy || !isAuthenticated}
+              className="mt-6 w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2"
+            >
+              <PlusIcon className="w-4 h-4" /> 绑定新钱包 (MetaMask)
+            </button>
+          </section>
+        </div>
+      </main>
+
+      <footer className="mt-16 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-mono z-10 pb-8">
+        PolyWeather Global Meteorological Engine · Powered by AI
+      </footer>
     </div>
+  );
+}
+
+function PlusIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <line x1="12" y1="5" x2="12" y2="19"></line>
+      <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
   );
 }
