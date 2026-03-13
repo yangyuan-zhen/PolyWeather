@@ -71,6 +71,9 @@ export function UnlockProOverlay({
   return (
     <div className="relative w-full max-w-[860px] max-h-[calc(100dvh-2.5rem)] overflow-x-hidden overflow-y-auto rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1a2740] via-[#14233b] to-[#0f172a] p-5 md:p-8 lg:p-10 shadow-[0_0_90px_-24px_rgba(59,130,246,0.35)]">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(59,130,246,0.2),transparent_40%),radial-gradient(circle_at_80%_100%,rgba(99,102,241,0.18),transparent_45%)]" />
+      <div className="absolute left-4 top-4 rounded-full border border-cyan-400/30 bg-cyan-400/10 px-2 py-0.5 text-[10px] font-bold tracking-[0.08em] text-cyan-300">
+        UI v0313
+      </div>
       {onClose && (
         <button
           onClick={onClose}
@@ -94,21 +97,21 @@ export function UnlockProOverlay({
           </p>
         </div>
         <div className="grid grid-cols-1 gap-4 text-left md:grid-cols-2">
-          <div className="relative min-h-[188px] rounded-3xl border border-blue-500/45 bg-blue-600/10 p-5 md:min-h-[208px] md:p-6">
+          <div className="relative flex min-h-[172px] flex-col justify-between rounded-3xl border border-blue-500/45 bg-blue-600/10 p-5 md:min-h-[190px] md:p-6">
             <div className="pointer-events-none absolute right-0 top-0 h-24 w-24 translate-x-1/3 -translate-y-1/3 rounded-full bg-blue-500/15 blur-2xl" />
             <div className="relative z-10">
               <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-blue-300">
                 STANDARD PRO
               </span>
               <div className="mt-2 flex items-baseline gap-1">
-                <span className="text-[48px] font-black leading-none text-white md:text-5xl">
+                <span className="text-[42px] font-black leading-none text-white md:text-[46px]">
                   ${planPriceUsd.toFixed(2)}
                 </span>
                 <span className="text-sm font-semibold text-slate-400">
                   / {isEn ? "mo" : "月"}
                 </span>
               </div>
-              <ul className="mt-5 space-y-2">
+              <ul className="mt-4 space-y-2">
                 {(isEn
                   ? [
                       "15-day high precision trend",
@@ -130,7 +133,7 @@ export function UnlockProOverlay({
 
           {billing.pointsEnabled && billing.isEligible ? (
             <div
-              className={`min-h-[188px] rounded-3xl border p-5 transition-all md:min-h-[208px] md:p-6 ${usePoints ? "border-indigo-500/55 bg-indigo-500/12 shadow-inner shadow-indigo-500/8" : "border-white/10 bg-white/6"}`}
+              className={`flex min-h-[172px] flex-col justify-between rounded-3xl border p-5 transition-all md:min-h-[190px] md:p-6 ${usePoints ? "border-indigo-500/55 bg-indigo-500/12 shadow-inner shadow-indigo-500/8" : "border-white/10 bg-white/6"}`}
             >
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
@@ -154,7 +157,7 @@ export function UnlockProOverlay({
               </div>
               <div className="flex items-end gap-1">
                 <span
-                  className={`text-5xl font-black leading-none ${usePoints ? "text-emerald-400" : "text-slate-500"}`}
+                  className={`text-[42px] font-black leading-none md:text-[46px] ${usePoints ? "text-emerald-400" : "text-slate-500"}`}
                 >
                   -${billing.discountAmount.toFixed(2)}
                 </span>
@@ -162,7 +165,7 @@ export function UnlockProOverlay({
                   DISCOUNT
                 </span>
               </div>
-              <p className="mt-6 text-[12px] leading-6 text-slate-400">
+              <p className="mt-4 text-[12px] leading-6 text-slate-300">
                 {usePoints
                   ? isEn
                     ? `Using ${billing.pointsUsed} points from your account`
@@ -173,7 +176,7 @@ export function UnlockProOverlay({
               </p>
             </div>
           ) : (
-            <div className="group flex min-h-[188px] flex-col justify-between rounded-3xl border border-dashed border-white/20 bg-white/5 p-5 transition-all hover:border-blue-500/35 md:min-h-[208px] md:p-6">
+            <div className="group flex min-h-[172px] flex-col justify-between rounded-3xl border border-dashed border-white/20 bg-white/5 p-5 transition-all hover:border-blue-500/35 md:min-h-[190px] md:p-6">
               <div>
                 <div className="mb-3 flex items-center gap-2">
                   <div className="rounded-lg bg-slate-800 p-1.5 text-slate-500 transition-colors group-hover:text-blue-400">
@@ -189,10 +192,10 @@ export function UnlockProOverlay({
                         : "积分不足"}
                   </span>
                 </div>
-                <h4 className="mb-2 text-base font-bold text-white">
+                <h4 className="mb-2 text-lg font-bold text-white">
                   {isEn ? "Earn Credits in Community" : "活跃赚取抵扣"}
                 </h4>
-                <p className="text-[12px] leading-6 text-slate-300">
+                <p className="text-[13px] leading-6 text-slate-300">
                   {!billing.pointsEnabled
                     ? isEn
                       ? "Points redemption is currently unavailable for this plan."
@@ -224,15 +227,15 @@ export function UnlockProOverlay({
         </div>
 
         <div className="mt-6 border-t border-white/10 pt-4 md:mt-7 md:pt-5">
-          <div className="flex items-center justify-between gap-4 px-1">
+          <div className="flex flex-wrap items-end justify-between gap-3 px-1">
             <span className="text-base font-medium text-slate-300">
               {isEn ? "Total Due" : "应付总计"}
             </span>
             <div className="text-right">
-              <span className="font-mono text-4xl font-black leading-none tracking-tight text-white md:text-5xl">
+              <span className="font-mono text-3xl font-black leading-none tracking-tight text-white md:text-4xl">
                 ${billing.finalPrice.toFixed(2)}
               </span>
-              <span className="ml-2 font-mono text-sm uppercase tracking-[0.12em] text-slate-500">
+              <span className="ml-2 font-mono text-xs uppercase tracking-[0.12em] text-slate-500 md:text-sm">
                 USD
               </span>
             </div>
@@ -241,7 +244,7 @@ export function UnlockProOverlay({
           <button
             onClick={onPay}
             disabled={payBusy}
-            className="mt-4 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 py-3.5 text-lg font-black text-white shadow-2xl shadow-blue-600/30 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] disabled:opacity-70 md:mt-5 md:py-4"
+            className="mt-3 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 py-3.5 text-lg font-black text-white shadow-2xl shadow-blue-600/30 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] disabled:opacity-70 md:mt-4 md:py-4"
           >
             {payBusy ? (
               <Loader2 size={20} className="animate-spin" />
@@ -257,7 +260,7 @@ export function UnlockProOverlay({
             )}
           </button>
 
-          <div className="mt-4 flex items-center justify-center gap-5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-600 md:mt-5 md:gap-6">
+          <div className="mt-4 flex items-center justify-center gap-5 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-600 md:gap-6">
             <span className="flex items-center gap-1.5">
               <Lock size={12} /> Secure Payment
             </span>
