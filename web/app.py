@@ -95,6 +95,8 @@ def _env_bool(name: str, default: bool = False) -> bool:
 _ENTITLEMENT_GUARD_ENABLED = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
 _ENTITLEMENT_HEADER = "x-polyweather-entitlement"
 _ENTITLEMENT_TOKEN = (os.getenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN") or "").strip()
+_FORWARDED_SUPABASE_USER_ID_HEADER = "x-polyweather-auth-user-id"
+_FORWARDED_SUPABASE_EMAIL_HEADER = "x-polyweather-auth-email"
 _SUPABASE_AUTH_REQUIRED = _env_bool(
     "POLYWEATHER_AUTH_REQUIRED",
     SUPABASE_ENTITLEMENT.enabled,
@@ -211,12 +213,24 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
             detail="payment requires SUPABASE_URL and SUPABASE_ANON_KEY",
         )
     token = extract_bearer_token(request.headers.get("authorization"))
-    if not token:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    identity = SUPABASE_ENTITLEMENT.get_identity(token)
-    if not identity:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    return {"user_id": identity.user_id, "email": identity.email}
+    if token:
+        identity = SUPABASE_ENTITLEMENT.get_identity(token)
+        if identity:
+            return {"user_id": identity.user_id, "email": identity.email}
+
+    # Trusted fallback for server-to-server proxy calls:
+    # only when entitlement token is valid do we accept forwarded identity headers.
+    if _legacy_service_token_valid(request):
+        forwarded_user_id = str(
+            request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or ""
+        ).strip()
+        if forwarded_user_id:
+            forwarded_email = str(
+                request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or ""
+            ).strip()
+            return {"user_id": forwarded_user_id, "email": forwarded_email}
+
+    raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 class WalletChallengeRequest(BaseModel):

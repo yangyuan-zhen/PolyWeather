@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { createSupabaseRouteClient, hasSupabaseServerEnv } from "@/lib/supabase/server";
 
 export const BACKEND_ENTITLEMENT_HEADER = "x-polyweather-entitlement";
+export const FORWARDED_SUPABASE_USER_ID_HEADER = "x-polyweather-auth-user-id";
+export const FORWARDED_SUPABASE_EMAIL_HEADER = "x-polyweather-auth-email";
 
 type HeaderBuildResult = {
   headers: HeadersInit;
@@ -36,6 +38,18 @@ export async function buildBackendRequestHeaders(
     const {
       data: { session },
     } = await supabase.auth.getSession();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    const forwardedUserId = String(user?.id || session?.user?.id || "").trim();
+    const forwardedEmail = String(user?.email || session?.user?.email || "").trim();
+    if (forwardedUserId) {
+      headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, forwardedUserId);
+    }
+    if (forwardedEmail) {
+      headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, forwardedEmail);
+    }
 
     const accessToken = session?.access_token || "";
     if (accessToken) {
