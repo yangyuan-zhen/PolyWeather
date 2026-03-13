@@ -86,12 +86,40 @@ class DBManager:
                     PRIMARY KEY (week_key, telegram_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS supabase_bindings (
+                    supabase_user_id TEXT PRIMARY KEY,
+                    telegram_id INTEGER NOT NULL,
+                    supabase_email TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_supabase_bindings_telegram_id ON supabase_bindings(telegram_id)"
+            )
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
             self._ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "weekly_points_week", "TEXT")
             self._ensure_column(conn, "users", "supabase_user_id", "TEXT")
             self._ensure_column(conn, "users", "supabase_email", "TEXT")
+            # Migrate legacy one-to-one binding column into mapping table.
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO supabase_bindings (
+                    supabase_user_id, telegram_id, supabase_email, created_at, updated_at
+                )
+                SELECT
+                    lower(trim(COALESCE(supabase_user_id, ''))),
+                    telegram_id,
+                    COALESCE(supabase_email, ''),
+                    CURRENT_TIMESTAMP,
+                    CURRENT_TIMESTAMP
+                FROM users
+                WHERE trim(COALESCE(supabase_user_id, '')) <> ''
+                """
+            )
             conn.commit()
             logger.info(f"Database initialized successfully path={self.db_path}")
 
@@ -132,6 +160,47 @@ class DBManager:
         if column not in existing:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
+    def _find_telegram_id_by_supabase_user_id(
+        self,
+        conn: sqlite3.Connection,
+        supabase_user_id: str,
+    ) -> Optional[int]:
+        key = str(supabase_user_id or "").strip().lower()
+        if not key:
+            return None
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            """
+            SELECT telegram_id
+            FROM supabase_bindings
+            WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+            LIMIT 1
+            """,
+            (key,),
+        ).fetchone()
+        if row:
+            try:
+                return int(row["telegram_id"])
+            except Exception:
+                return None
+
+        # Legacy fallback before supabase_bindings migration.
+        row = conn.execute(
+            """
+            SELECT telegram_id
+            FROM users
+            WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+            LIMIT 1
+            """,
+            (key,),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            return int(row["telegram_id"])
+        except Exception:
+            return None
+
     def get_user(self, telegram_id: int) -> Optional[Dict[str, Any]]:
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
@@ -157,14 +226,17 @@ class DBManager:
             return None
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
+            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
+            if telegram_id is None:
+                return None
             row = conn.execute(
                 """
                 SELECT *
                 FROM users
-                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+                WHERE telegram_id = ?
                 LIMIT 1
                 """,
-                (key,),
+                (int(telegram_id),),
             ).fetchone()
             if row:
                 return dict(row)
@@ -196,12 +268,11 @@ class DBManager:
         supabase_email: str = "",
     ) -> Dict[str, Any]:
         """
-        Strict one-to-one binding between Telegram account and Supabase account.
+        Bind Supabase account to Telegram account.
 
         Rules:
-        - One telegram_id can only bind one supabase_user_id (no overwrite via /bind).
-        - One supabase_user_id can only bind one telegram_id.
-        - Rebind requires explicit unbind first.
+        - One supabase_user_id can only belong to one telegram_id.
+        - One telegram_id can bind multiple supabase_user_id (shared points/profile).
         """
         normalized_uid = str(supabase_user_id or "").strip().lower()
         normalized_email = str(supabase_email or "").strip()
@@ -237,7 +308,7 @@ class DBManager:
             owner_row = conn.execute(
                 """
                 SELECT telegram_id
-                FROM users
+                FROM supabase_bindings
                 WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
                 LIMIT 1
                 """,
@@ -245,19 +316,24 @@ class DBManager:
             ).fetchone()
             owner_telegram_id = int(owner_row["telegram_id"]) if owner_row else None
 
-            if current_uid and current_uid != normalized_uid:
-                return {
-                    "ok": False,
-                    "reason": "telegram_already_bound_other",
-                    "current_supabase_user_id": current_uid,
-                }
-
             if owner_telegram_id is not None and owner_telegram_id != int(telegram_id):
                 return {
                     "ok": False,
                     "reason": "supabase_already_bound_other",
                     "owner_telegram_id": owner_telegram_id,
                 }
+
+            conn.execute(
+                """
+                INSERT INTO supabase_bindings (supabase_user_id, telegram_id, supabase_email, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(supabase_user_id) DO UPDATE SET
+                    telegram_id = excluded.telegram_id,
+                    supabase_email = excluded.supabase_email,
+                    updated_at = excluded.updated_at
+                """,
+                (normalized_uid, int(telegram_id), normalized_email, datetime.now().isoformat()),
+            )
 
             if current_uid == normalized_uid:
                 # Keep idempotent bind behavior while allowing email refresh.
@@ -296,9 +372,25 @@ class DBManager:
                 (telegram_id,),
             ).fetchone()
             current_uid = str((current["supabase_user_id"] if current else "") or "").strip()
-            if not current_uid:
+            links = conn.execute(
+                """
+                SELECT supabase_user_id
+                FROM supabase_bindings
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (int(telegram_id),),
+            ).fetchone()
+            if not current_uid and not links:
                 return {"ok": True, "reason": "not_bound"}
 
+            conn.execute(
+                """
+                DELETE FROM supabase_bindings
+                WHERE telegram_id = ?
+                """,
+                (int(telegram_id),),
+            )
             conn.execute(
                 """
                 UPDATE users
@@ -505,14 +597,17 @@ class DBManager:
 
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
+            telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
+            if telegram_id is None:
+                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
             row = conn.execute(
                 """
                 SELECT telegram_id, points
                 FROM users
-                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+                WHERE telegram_id = ?
                 LIMIT 1
                 """,
-                (key,),
+                (int(telegram_id),),
             ).fetchone()
             if not row:
                 return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
@@ -588,11 +683,13 @@ class DBManager:
         week_key = f"{iso_year}-W{iso_week:02d}"
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
+            target_telegram_id = self._find_telegram_id_by_supabase_user_id(conn, key)
+            if target_telegram_id is None:
+                return {"weekly_points": 0, "weekly_rank": None, "total_ranked": 0}
             rows = conn.execute(
                 """
                 SELECT
                     telegram_id,
-                    lower(trim(COALESCE(supabase_user_id, ''))) AS supabase_key,
                     COALESCE(points, 0) AS points,
                     COALESCE(message_count, 0) AS message_count,
                     CASE
@@ -608,7 +705,7 @@ class DBManager:
         weekly_rank: Optional[int] = None
         weekly_points = 0
         for idx, row in enumerate(rows, start=1):
-            if str(row["supabase_key"] or "") == key:
+            if int(row["telegram_id"] or 0) == int(target_telegram_id):
                 weekly_rank = idx
                 weekly_points = int(row["weekly_points"] or 0)
                 break
