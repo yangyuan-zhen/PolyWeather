@@ -246,15 +246,10 @@ async function getWalletConnectProvider(
       "WalletConnect 未配置：缺少 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID。",
     );
   }
-  if (
-    walletConnectProviderCache &&
-    walletConnectProviderChainId === chainId
-  ) {
+  if (walletConnectProviderCache && walletConnectProviderChainId === chainId) {
     return walletConnectProviderCache;
   }
-  const { EthereumProvider } = await import(
-    "@walletconnect/ethereum-provider"
-  );
+  const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
   const rpcMap: Record<number, string> = {
     [chainId]: rpcUrl || WALLETCONNECT_POLYGON_RPC_URL,
   };
@@ -1543,7 +1538,7 @@ export function AccountCenter() {
                 <Bot size={22} /> Telegram Bot 绑定
               </h3>
               <p className="text-slate-400 text-sm mb-6">
-                将下方命令发送给到群聊，实现全平台气象推送与权限同步。（https://t.me/+nMG7SjziUKYyZmM1）
+                将下方命令发送给polyweather机器人，实现全平台气象推送与权限同步。
               </p>
               <div className="flex gap-2">
                 <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -1654,7 +1649,9 @@ export function AccountCenter() {
               {!walletConnectEnabled && (
                 <p className="text-[11px] text-slate-500">
                   未启用 WalletConnect：请配置
-                  <code className="mx-1">NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID</code>
+                  <code className="mx-1">
+                    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+                  </code>
                 </p>
               )}
             </div>
