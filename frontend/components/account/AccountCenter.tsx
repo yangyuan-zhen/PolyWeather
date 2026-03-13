@@ -48,6 +48,7 @@ type AuthMeResponse = {
   authenticated?: boolean;
   user_id?: string | null;
   email?: string | null;
+  points?: number;
   entitlement_mode?: string | null;
   auth_required?: boolean;
   subscription_required?: boolean;
@@ -352,9 +353,13 @@ export function AccountCenter() {
   const proExpiry = user?.user_metadata?.pro_expiry || "暂无 Pro 订阅";
 
   // Points Logic
-  const pointsRaw = Number(
+  const backendPointsRaw = Number(backend?.points);
+  const metadataPointsRaw = Number(
     user?.user_metadata?.points ?? user?.user_metadata?.total_points ?? 0,
   );
+  const pointsRaw = Number.isFinite(backendPointsRaw)
+    ? backendPointsRaw
+    : metadataPointsRaw;
   const weeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
   const weeklyRankRaw = user?.user_metadata?.weekly_rank;
   const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;

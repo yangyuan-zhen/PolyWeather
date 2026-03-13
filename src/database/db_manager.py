@@ -89,6 +89,34 @@ class DBManager:
                 return user
         return None
 
+    def get_user_by_supabase_user_id(self, supabase_user_id: str) -> Optional[Dict[str, Any]]:
+        key = str(supabase_user_id or "").strip().lower()
+        if not key:
+            return None
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT *
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+                LIMIT 1
+                """,
+                (key,),
+            ).fetchone()
+            if row:
+                return dict(row)
+        return None
+
+    def get_points_by_supabase_user_id(self, supabase_user_id: str) -> int:
+        user = self.get_user_by_supabase_user_id(supabase_user_id)
+        if not user:
+            return 0
+        try:
+            return max(0, int(user.get("points") or 0))
+        except Exception:
+            return 0
+
     def upsert_user(self, telegram_id: int, username: str):
         with self._get_connection() as conn:
             conn.execute("""
@@ -271,6 +299,40 @@ class DBManager:
             if not row:
                 return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
 
+            balance = int(row["points"] or 0)
+            if balance < amount:
+                return {"ok": False, "reason": "insufficient_points", "balance": balance, "required": amount}
+
+            new_balance = balance - amount
+            conn.execute(
+                "UPDATE users SET points = ? WHERE telegram_id = ?",
+                (new_balance, telegram_id),
+            )
+            conn.commit()
+            return {"ok": True, "balance": new_balance, "spent": amount}
+
+    def spend_points_by_supabase_user_id(self, supabase_user_id: str, amount: int) -> Dict[str, Any]:
+        key = str(supabase_user_id or "").strip().lower()
+        if not key:
+            return {"ok": False, "reason": "invalid_supabase_user_id", "balance": 0, "required": amount}
+        if amount <= 0:
+            return {"ok": True, "balance": self.get_points_by_supabase_user_id(key)}
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT telegram_id, points
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_user_id, ''))) = ?
+                LIMIT 1
+                """,
+                (key,),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "reason": "user_missing", "balance": 0, "required": amount}
+
+            telegram_id = int(row["telegram_id"])
             balance = int(row["points"] or 0)
             if balance < amount:
                 return {"ok": False, "reason": "insufficient_points", "balance": balance, "required": amount}

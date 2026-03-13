@@ -14,6 +14,8 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from web3 import Web3
 
+from src.database.db_manager import DBManager
+
 DEFAULT_POLYGON_CHAIN_ID = 137
 DEFAULT_USDC_E_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 
@@ -265,6 +267,7 @@ class PaymentContractCheckoutService:
         self._event_topic = Web3.keccak(
             text="OrderPaid(bytes32,address,uint256,address,uint256)"
         ).hex()
+        self._db = DBManager()
 
     @property
     def configured(self) -> bool:
@@ -400,6 +403,20 @@ class PaymentContractCheckoutService:
                 continue
         return 0
 
+    def _resolve_points_balance(self, user_id: str) -> Dict[str, Any]:
+        db_user = self._db.get_user_by_supabase_user_id(user_id)
+        if db_user is not None:
+            try:
+                balance = max(0, int(db_user.get("points") or 0))
+            except Exception:
+                balance = 0
+            return {"source": "bot_db", "balance": balance}
+
+        user_obj = self._auth_admin_get_user(user_id)
+        metadata = self._extract_user_metadata(user_obj)
+        balance = self._extract_points_from_metadata(metadata)
+        return {"source": "supabase_metadata", "balance": balance, "metadata": metadata}
+
     def _auth_admin_get_user(self, user_id: str) -> Dict[str, Any]:
         user_id_text = str(user_id or "").strip()
         if not user_id_text:
@@ -451,6 +468,7 @@ class PaymentContractCheckoutService:
             "applied": False,
             "points_per_usdc": int(self.points_per_usdc),
             "max_discount_usdc": int(self.points_max_discount_usdc),
+            "points_source": "supabase_metadata",
             "points_balance_snapshot": 0,
             "points_to_consume": 0,
             "discount_usdc": "0",
@@ -462,9 +480,9 @@ class PaymentContractCheckoutService:
             return base
         if plan_amount_usdc <= 0:
             return base
-        user_obj = self._auth_admin_get_user(user_id)
-        metadata = self._extract_user_metadata(user_obj)
-        balance = self._extract_points_from_metadata(metadata)
+        points_ctx = self._resolve_points_balance(user_id)
+        balance = int(points_ctx.get("balance") or 0)
+        base["points_source"] = str(points_ctx.get("source") or "supabase_metadata")
         base["points_balance_snapshot"] = balance
         if balance <= 0:
             return base
@@ -539,7 +557,28 @@ class PaymentContractCheckoutService:
             return result
 
         planned_points = int(redemption.get("points_to_consume") or 0)
+        points_source = str(redemption.get("points_source") or "").strip().lower()
         if planned_points <= 0:
+            return result
+
+        if points_source == "bot_db":
+            points_before = self._db.get_points_by_supabase_user_id(user_id)
+            if points_before <= 0:
+                return result
+            redeemable = min(points_before, planned_points)
+            redeemable = (redeemable // int(self.points_per_usdc)) * int(self.points_per_usdc)
+            if redeemable <= 0:
+                return result
+            spend_result = self._db.spend_points_by_supabase_user_id(user_id, redeemable)
+            if not bool(spend_result.get("ok")):
+                return result
+            points_after = int(spend_result.get("balance") or 0)
+            discount_usdc = Decimal(redeemable // int(self.points_per_usdc))
+            result["applied"] = True
+            result["points_redeemed"] = int(redeemable)
+            result["points_before"] = int(points_before)
+            result["points_after"] = int(points_after)
+            result["discount_usdc"] = _format_decimal(discount_usdc)
             return result
 
         user_obj = self._auth_admin_get_user(user_id)
@@ -938,6 +977,7 @@ class PaymentContractCheckoutService:
             "applied": bool(redemption.get("applied")),
             "points_per_usdc": int(redemption.get("points_per_usdc") or self.points_per_usdc),
             "max_discount_usdc": int(redemption.get("max_discount_usdc") or self.points_max_discount_usdc),
+            "points_source": str(redemption.get("points_source") or "supabase_metadata"),
             "points_balance_snapshot": int(redemption.get("points_balance_snapshot") or 0),
             "points_to_consume": int(redemption.get("points_to_consume") or 0),
             "discount_usdc": str(redemption.get("discount_usdc") or "0"),
@@ -983,6 +1023,7 @@ class PaymentContractCheckoutService:
             },
             "points_redemption": {
                 "applied": bool(redemption.get("applied")),
+                "points_source": str(redemption.get("points_source") or "supabase_metadata"),
                 "points_to_consume": int(redemption.get("points_to_consume") or 0),
                 "discount_usdc": str(redemption.get("discount_usdc") or "0"),
                 "points_balance_snapshot": int(redemption.get("points_balance_snapshot") or 0),

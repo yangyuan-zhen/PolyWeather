@@ -36,6 +36,7 @@ from src.auth.supabase_entitlement import (
     SUPABASE_ENTITLEMENT,
     extract_bearer_token,
 )
+from src.database.db_manager import DBManager
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError
 
 # ──────────────────────────────────────────────────────────
@@ -58,6 +59,7 @@ app.add_middleware(
 _config = load_config()
 _weather = WeatherDataCollector(_config)
 _market_layer = PolymarketReadOnlyLayer()
+_account_db = DBManager()
 
 from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
 
@@ -118,6 +120,28 @@ def _bind_optional_supabase_identity(request: Request) -> None:
     request.state.auth_user_id = identity.user_id
     request.state.auth_email = identity.email
     request.state.auth_points = identity.points
+
+
+def _resolve_auth_points(request: Request) -> int:
+    raw_points = getattr(request.state, "auth_points", 0)
+    try:
+        points = max(0, int(raw_points or 0))
+    except Exception:
+        points = 0
+    if points > 0:
+        return points
+
+    user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
+    if not user_id:
+        return points
+    try:
+        db_points = _account_db.get_points_by_supabase_user_id(user_id)
+        if db_points > points:
+            request.state.auth_points = db_points
+            return db_points
+    except Exception as exc:
+        logger.warning(f"auth points fallback failed user_id={user_id}: {exc}")
+    return points
 
 
 def _assert_entitlement(request: Request) -> None:
@@ -1092,11 +1116,13 @@ async def auth_me(request: Request):
         except Exception:
             subscription_active = None
 
+    points = _resolve_auth_points(request)
+
     return {
         "authenticated": bool(user_id),
         "user_id": user_id,
         "email": getattr(request.state, "auth_email", None),
-        "points": getattr(request.state, "auth_points", 0),
+        "points": points,
         "entitlement_mode": (
             "supabase_required"
             if SUPABASE_ENTITLEMENT.enabled and _SUPABASE_AUTH_REQUIRED
