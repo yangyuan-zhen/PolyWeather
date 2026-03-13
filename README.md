@@ -97,6 +97,7 @@ flowchart TD
 6. P1 contract checkout (new):
    - New payment APIs: `/api/payments/config|wallets|intents/*`.
    - MetaMask wallet binding via nonce challenge + `personal_sign`.
+   - Supports multi-token checkout on Polygon (USDC.e + Native USDC) via token whitelist config.
    - Frontend receives contract `tx_payload` and calls `eth_sendTransaction`.
    - Backend validates `OrderPaid(orderId,payer,planId,token,amount)` onchain event and auto-grants entitlement.
    - Confirmation writes `payments/subscriptions/entitlement_events` and can notify Telegram.

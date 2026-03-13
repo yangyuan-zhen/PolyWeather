@@ -8,7 +8,7 @@ interface IERC20 {
 contract PolyWeatherCheckout {
     address public owner;
     address public treasury;
-    address public immutable usdc;
+    mapping(address => bool) public allowedToken;
     mapping(bytes32 => bool) public paidOrder;
 
     event OrderPaid(
@@ -24,11 +24,11 @@ contract PolyWeatherCheckout {
         _;
     }
 
-    constructor(address _usdc, address _treasury) {
-        require(_usdc != address(0) && _treasury != address(0), "ZERO_ADDR");
+    constructor(address _token, address _treasury) {
+        require(_token != address(0) && _treasury != address(0), "ZERO_ADDR");
         owner = msg.sender;
-        usdc = _usdc;
         treasury = _treasury;
+        allowedToken[_token] = true;
     }
 
     function setTreasury(address _treasury) external onlyOwner {
@@ -36,14 +36,19 @@ contract PolyWeatherCheckout {
         treasury = _treasury;
     }
 
+    function setTokenAllowed(address token, bool allowed) external onlyOwner {
+        require(token != address(0), "ZERO_ADDR");
+        allowedToken[token] = allowed;
+    }
+
     function pay(bytes32 orderId, uint256 planId, uint256 amount, address token) external {
-        require(token == usdc, "TOKEN_NOT_ALLOWED");
+        require(allowedToken[token], "TOKEN_NOT_ALLOWED");
         require(amount > 0, "AMOUNT_ZERO");
         require(!paidOrder[orderId], "ORDER_PAID");
 
         paidOrder[orderId] = true;
-        require(IERC20(usdc).transferFrom(msg.sender, treasury, amount), "TRANSFER_FAILED");
+        require(IERC20(token).transferFrom(msg.sender, treasury, amount), "TRANSFER_FAILED");
 
-        emit OrderPaid(orderId, msg.sender, planId, usdc, amount);
+        emit OrderPaid(orderId, msg.sender, planId, token, amount);
     }
 }

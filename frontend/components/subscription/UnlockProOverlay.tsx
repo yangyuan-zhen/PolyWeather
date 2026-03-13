@@ -48,6 +48,7 @@ type UnlockProOverlayProps = {
   telegramGroupUrl?: string;
   txHash?: string;
   chainId?: number;
+  paymentTokenLabel?: string;
 };
 
 const FEATURES = {
@@ -80,6 +81,7 @@ export function UnlockProOverlay({
   telegramGroupUrl,
   txHash,
   chainId = 137,
+  paymentTokenLabel,
 }: UnlockProOverlayProps) {
   const isEn = locale === "en-US";
   const canUsePoints = billing.pointsEnabled && billing.isEligible;
@@ -320,6 +322,11 @@ export function UnlockProOverlay({
             <p className={s.summaryLabel}>
               {isEn ? "Total Due Today" : "今日应付"}
             </p>
+            {paymentTokenLabel && (
+              <p className={s.summaryOriginal}>
+                {isEn ? "Token" : "支付币种"}: {paymentTokenLabel}
+              </p>
+            )}
             {billing.discountAmount > 0 && usePoints && (
               <p className={s.summaryOriginal}>
                 ${planPriceUsd.toFixed(2)} USD

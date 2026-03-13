@@ -97,6 +97,7 @@ flowchart TD
 6. P1 合约支付链路（新增）：
    - 新增支付接口：`/api/payments/config|wallets|intents/*`。
    - 支持 MetaMask 钱包绑定（nonce + `personal_sign` 验签）。
+   - 支持 Polygon 双币种支付（USDC.e + Native USDC），后端按代币白名单路由。
    - 支持合约订单支付：前端拿 `tx_payload` 调 `eth_sendTransaction`。
    - 后端按 `OrderPaid(orderId,payer,planId,token,amount)` 事件验单并自动开通订阅。
    - 交易确认后自动写入 `payments/subscriptions/entitlement_events` 并可推送 Telegram。

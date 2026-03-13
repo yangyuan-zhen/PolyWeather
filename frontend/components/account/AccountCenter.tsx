@@ -64,6 +64,16 @@ type PaymentPlan = {
   duration_days: number;
 };
 
+type PaymentTokenOption = {
+  code: string;
+  symbol: string;
+  name: string;
+  address: string;
+  decimals: number;
+  receiver_contract?: string;
+  is_default?: boolean;
+};
+
 type PointsRedemptionConfig = {
   enabled?: boolean;
   points_per_usdc?: number;
@@ -76,6 +86,8 @@ type PaymentConfig = {
   chain_id?: number;
   token_address?: string;
   token_decimals?: number;
+  default_token_address?: string;
+  tokens?: PaymentTokenOption[];
   receiver_contract?: string;
   confirmations?: number;
   points_redemption?: PointsRedemptionConfig;
@@ -105,6 +117,8 @@ type CreatedIntent = {
     value: string;
     amount_units: string;
     token_address: string;
+    token_symbol?: string;
+    token_decimals?: number;
   };
 };
 
@@ -344,6 +358,7 @@ export function AccountCenter() {
   const [boundWallets, setBoundWallets] = useState<BoundWallet[]>([]);
   const [walletAddress, setWalletAddress] = useState("");
   const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
+  const [selectedTokenAddress, setSelectedTokenAddress] = useState("");
   const [selectedWallet, setSelectedWallet] = useState("");
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState("");
@@ -419,6 +434,23 @@ export function AccountCenter() {
         setPaymentConfig(configJson);
         if (!selectedPlanCode && configJson.plans?.length) {
           setSelectedPlanCode(configJson.plans[0].plan_code);
+        }
+        const tokenOptions = Array.isArray(configJson.tokens)
+          ? configJson.tokens.filter(
+              (row) =>
+                typeof row?.address === "string" &&
+                String(row.address).startsWith("0x"),
+            )
+          : [];
+        const defaultTokenAddress = String(
+          configJson.default_token_address ||
+            tokenOptions.find((row) => row.is_default)?.address ||
+            tokenOptions[0]?.address ||
+            configJson.token_address ||
+            "",
+        ).toLowerCase();
+        if (defaultTokenAddress) {
+          setSelectedTokenAddress((prev) => prev || defaultTokenAddress);
         }
       }
       if (walletsRes.ok) {
@@ -555,6 +587,56 @@ export function AccountCenter() {
   const selectedPlan =
     effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) ||
     effectivePlanList[0];
+  const availableTokenList: PaymentTokenOption[] = useMemo(() => {
+    const configured = Array.isArray(paymentConfig?.tokens)
+      ? paymentConfig?.tokens || []
+      : [];
+    const clean = configured
+      .filter(
+        (row) =>
+          row &&
+          typeof row.address === "string" &&
+          row.address.startsWith("0x"),
+      )
+      .map((row) => ({
+        ...row,
+        address: String(row.address).toLowerCase(),
+        symbol: String(row.symbol || "USDC"),
+        name: String(row.name || row.symbol || "USDC"),
+        code: String(row.code || "usdc"),
+        decimals: Number.isFinite(Number(row.decimals))
+          ? Number(row.decimals)
+          : Number(paymentConfig?.token_decimals ?? 6),
+      }));
+    if (clean.length) return clean;
+    const fallbackAddress = String(paymentConfig?.token_address || "").toLowerCase();
+    if (!fallbackAddress.startsWith("0x")) return [];
+    return [
+      {
+        code: "usdc",
+        symbol: "USDC",
+        name: "USDC",
+        address: fallbackAddress,
+        decimals: Number(paymentConfig?.token_decimals ?? 6),
+        receiver_contract: paymentConfig?.receiver_contract,
+        is_default: true,
+      },
+    ];
+  }, [paymentConfig]);
+  const resolvedSelectedTokenAddress = String(
+    selectedTokenAddress ||
+      paymentConfig?.default_token_address ||
+      availableTokenList.find((row) => row.is_default)?.address ||
+      availableTokenList[0]?.address ||
+      paymentConfig?.token_address ||
+      "",
+  ).toLowerCase();
+  const selectedPaymentToken =
+    availableTokenList.find((row) => row.address === resolvedSelectedTokenAddress) ||
+    availableTokenList[0];
+  const selectedTokenLabel =
+    selectedPaymentToken?.symbol ||
+    (resolvedSelectedTokenAddress.startsWith("0x") ? shortAddress(resolvedSelectedTokenAddress) : "USDC");
   const paymentFeatureReady = Boolean(
     paymentConfig?.enabled && paymentConfig?.configured,
   );
@@ -847,6 +929,7 @@ export function AccountCenter() {
           plan_code: selectedPlan?.plan_code || "pro_monthly",
           payment_mode: "strict",
           allowed_wallet: payingWallet,
+          token_address: resolvedSelectedTokenAddress || undefined,
           use_points: billing.canRedeem && usePoints,
           points_to_consume:
             billing.canRedeem && usePoints ? billing.pointsUsed : 0,
@@ -869,7 +952,18 @@ export function AccountCenter() {
       const amountUnits = BigInt(String(txPayload.amount_units || "0"));
       if (!tokenAddress.startsWith("0x") || amountUnits <= 0n)
         throw new Error("intent token/amount invalid");
-      const tokenDecimals = Number(paymentConfig?.token_decimals ?? 6);
+      const tokenSymbol = String(
+        txPayload.token_symbol ||
+          selectedPaymentToken?.symbol ||
+          selectedTokenLabel ||
+          "USDC",
+      );
+      const tokenDecimals = Number(
+        txPayload.token_decimals ??
+          selectedPaymentToken?.decimals ??
+          paymentConfig?.token_decimals ??
+          6,
+      );
 
       const balanceHex = (await eth.request({
         method: "eth_call",
@@ -886,7 +980,7 @@ export function AccountCenter() {
         const need = formatTokenUnits(amountUnits, tokenDecimals);
         const have = formatTokenUnits(tokenBalance, tokenDecimals);
         throw new Error(
-          `支付代币余额不足：需要 ${need} USDC，当前 ${have} USDC。请确认你持有的是 Polygon 支付币种（当前合约为 USDC.e）。`,
+          `支付代币余额不足：需要 ${need} ${tokenSymbol}，当前 ${have} ${tokenSymbol}。请确认你钱包里持有该支付币种。`,
         );
       }
 
@@ -903,7 +997,7 @@ export function AccountCenter() {
       const allowance = BigInt(String(allowanceHex || "0x0"));
 
       if (allowance < amountUnits) {
-        setPaymentInfo("检测到授权不足，正在发起 USDC 授权...");
+        setPaymentInfo(`检测到授权不足，正在发起 ${tokenSymbol} 授权...`);
         const approveHash = (await eth.request({
           method: "eth_sendTransaction",
           params: [
@@ -917,7 +1011,7 @@ export function AccountCenter() {
         })) as string;
         await waitForReceipt(String(approveHash || ""));
         approvedInThisRun = true;
-        setPaymentInfo("USDC 授权成功，正在发起支付...");
+        setPaymentInfo(`${tokenSymbol} 授权成功，正在发起支付...`);
       } else {
         setPaymentInfo("授权额度充足，正在发起支付...");
       }
@@ -976,13 +1070,15 @@ export function AccountCenter() {
       } else if (normalized.userRejected) {
         setPaymentInfo(
           approvedInThisRun
-            ? "USDC 授权已完成，本次支付已取消，可直接再次点击支付。"
+            ? `${selectedTokenLabel} 授权已完成，本次支付已取消，可直接再次点击支付。`
             : "",
         );
         setPaymentError(normalized.message);
       } else {
         setPaymentInfo(
-          approvedInThisRun ? "USDC 授权已完成，但支付未完成，请重试。" : "",
+          approvedInThisRun
+            ? `${selectedTokenLabel} 授权已完成，但支付未完成，请重试。`
+            : "",
         );
         setPaymentError(normalized.message);
       }
@@ -1263,6 +1359,7 @@ export function AccountCenter() {
                 infoText={paymentInfo || undefined}
                 txHash={lastTxHash || undefined}
                 chainId={paymentConfig?.chain_id || 137}
+                paymentTokenLabel={selectedTokenLabel}
                 faqHref="/account"
               />
             </div>
@@ -1304,6 +1401,38 @@ export function AccountCenter() {
               <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
                 <Wallet size={18} /> 支付管理
               </h3>
+              {availableTokenList.length > 0 && (
+                <div className="mb-5">
+                  <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
+                    支付币种
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableTokenList.map((token) => {
+                      const active =
+                        token.address ===
+                        (resolvedSelectedTokenAddress || token.address);
+                      return (
+                        <button
+                          type="button"
+                          key={token.address}
+                          onClick={() => setSelectedTokenAddress(token.address)}
+                          disabled={paymentBusy}
+                          className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                            active
+                              ? "bg-blue-500/15 border-blue-500/40 text-white"
+                              : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{token.symbol}</div>
+                          <div className="text-[10px] opacity-80 truncate">
+                            {token.name}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               {boundWallets.length ? (
                 <div className="space-y-3">
                   {boundWallets.map((w) => (

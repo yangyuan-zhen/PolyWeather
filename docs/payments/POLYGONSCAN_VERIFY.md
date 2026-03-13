@@ -12,9 +12,9 @@
 - 合约路径：`contracts/PolyWeatherCheckout.sol`
 - 合约名：`PolyWeatherCheckout`
 
-构造参数顺序：
+构造参数顺序（新版多代币合约）：
 
-1. `_usdc` = `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+1. `_token` = `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`（初始允许代币）
 2. `_treasury` = `0xe581D578EF101c80e3F32263e97E6eA28A0B170e`
 
 ## 2. 构造参数编码
@@ -23,7 +23,7 @@
 
 ```bash
 python scripts/encode_checkout_constructor.py \
-  --usdc 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 \
+  --token 0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174 \
   --treasury 0xe581D578EF101c80e3F32263e97E6eA28A0B170e
 ```
 
@@ -47,8 +47,15 @@ python scripts/encode_checkout_constructor.py \
 
 验证成功后确认：
 
-- `Read Contract` 有 `owner / treasury / usdc / paidOrder`
-- `Write Contract` 有 `pay / setTreasury`
+- `Read Contract` 有 `owner / treasury / allowedToken / paidOrder`
+- `Write Contract` 有 `pay / setTreasury / setTokenAllowed`
 - `Contract` 标签显示 `Contract Source Code Verified`
+
+## 5. 同时开启 USDC.e + Native USDC
+
+验证后在 `Write Contract` 调用：
+
+- `setTokenAllowed(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174, true)`  // USDC.e
+- `setTokenAllowed(0x3c499c542cef5e3811e1192ce70d8cc03d5c3359, true)`  // Native USDC
 
 > 说明：钱包风控中的“欺诈/不可信”提示来自钱包安全引擎（如 Blockaid），源码验证能显著降低误报频率，但不保证 100% 立刻消失，通常需一段时间同步信誉缓存。

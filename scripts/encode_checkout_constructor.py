@@ -12,12 +12,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Encode PolyWeatherCheckout constructor args for PolygonScan verification.",
     )
-    parser.add_argument("--usdc", required=True, help="USDC token address")
+    parser.add_argument(
+        "--token",
+        help="Initial allowed token address (e.g. USDC.e or Native USDC)",
+    )
+    parser.add_argument("--usdc", help="Backward-compatible alias of --token")
     parser.add_argument("--treasury", required=True, help="Treasury address")
     args = parser.parse_args()
 
-    if not Web3.is_address(args.usdc):
-        print("invalid --usdc address", file=sys.stderr)
+    token = args.token or args.usdc
+    if not token:
+        print("missing --token (or --usdc)", file=sys.stderr)
+        return 1
+    if not Web3.is_address(token):
+        print("invalid --token address", file=sys.stderr)
         return 1
     if not Web3.is_address(args.treasury):
         print("invalid --treasury address", file=sys.stderr)
@@ -25,7 +33,7 @@ def main() -> int:
 
     encoded = encode(
         ["address", "address"],
-        [Web3.to_checksum_address(args.usdc), Web3.to_checksum_address(args.treasury)],
+        [Web3.to_checksum_address(token), Web3.to_checksum_address(args.treasury)],
     ).hex()
     print(encoded)
     return 0

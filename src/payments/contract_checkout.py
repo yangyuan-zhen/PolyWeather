@@ -18,6 +18,7 @@ from src.database.db_manager import DBManager
 
 DEFAULT_POLYGON_CHAIN_ID = 137
 DEFAULT_USDC_E_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
+DEFAULT_NATIVE_USDC_ADDRESS = "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"
 
 PAYMENT_CONTRACT_ABI = [
     {
@@ -183,6 +184,17 @@ class WalletBindingRecord:
 
 
 @dataclass
+class PaymentTokenConfig:
+    code: str
+    symbol: str
+    name: str
+    address: str
+    decimals: int
+    receiver_contract: str
+    is_default: bool
+
+
+@dataclass
 class PaymentIntentRecord:
     intent_id: str
     order_id_hex: str
@@ -192,6 +204,8 @@ class PaymentIntentRecord:
     amount_units: int
     amount_usdc: str
     token_address: str
+    token_decimals: int
+    token_symbol: str
     receiver_address: str
     status: str
     payment_mode: str
@@ -218,11 +232,33 @@ class PaymentContractCheckoutService:
         self.chain_id = _env_int("POLYWEATHER_PAYMENT_CHAIN_ID", DEFAULT_POLYGON_CHAIN_ID)
         self.token_decimals = _env_int("POLYWEATHER_PAYMENT_TOKEN_DECIMALS", 6)
         self.rpc_url = str(os.getenv("POLYWEATHER_PAYMENT_RPC_URL") or "").strip()
-        self.receiver_contract = _normalize_address(
+        legacy_receiver_contract = _normalize_address(
             os.getenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT") or ""
         )
-        self.token_address = _normalize_address(
+        legacy_token_address = _normalize_address(
             os.getenv("POLYWEATHER_PAYMENT_TOKEN_ADDRESS") or DEFAULT_USDC_E_ADDRESS
+        )
+        self.supported_tokens = self._load_supported_tokens(
+            os.getenv("POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON") or "",
+            fallback_receiver_contract=legacy_receiver_contract,
+            fallback_token_address=legacy_token_address,
+            fallback_token_decimals=self.token_decimals,
+        )
+        self.default_token_address = next(
+            (
+                address
+                for address, token in self.supported_tokens.items()
+                if bool(token.is_default)
+            ),
+            "",
+        )
+        if not self.default_token_address and self.supported_tokens:
+            self.default_token_address = next(iter(self.supported_tokens.keys()))
+        default_token = self.supported_tokens.get(self.default_token_address)
+        self.token_address = default_token.address if default_token else ""
+        self.receiver_contract = default_token.receiver_contract if default_token else ""
+        self.token_decimals = (
+            int(default_token.decimals) if default_token else int(self.token_decimals)
         )
         self.intent_ttl_sec = max(300, _env_int("POLYWEATHER_PAYMENT_INTENT_TTL_SEC", 1800))
         self.challenge_ttl_sec = max(
@@ -271,12 +307,18 @@ class PaymentContractCheckoutService:
 
     @property
     def configured(self) -> bool:
+        has_valid_token_routes = bool(
+            self.supported_tokens
+            and all(
+                token.address and token.receiver_contract
+                for token in self.supported_tokens.values()
+            )
+        )
         return bool(
             self.supabase_url
             and self.supabase_service_role_key
             and self.rpc_url
-            and self.receiver_contract
-            and self.token_address
+            and has_valid_token_routes
         )
 
     def _ensure_enabled(self) -> None:
@@ -285,8 +327,161 @@ class PaymentContractCheckoutService:
         if not self.configured:
             raise PaymentCheckoutError(
                 503,
-                "payment feature not configured: require SUPABASE + RPC + contract + token",
+                (
+                    "payment feature not configured: require SUPABASE + RPC + "
+                    "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON"
+                ),
             )
+
+    def _default_token_meta(self, address: str) -> Dict[str, str]:
+        normalized = _normalize_address(address)
+        if normalized == _normalize_address(DEFAULT_NATIVE_USDC_ADDRESS):
+            return {"code": "usdc", "symbol": "USDC", "name": "Native USDC"}
+        if normalized == _normalize_address(DEFAULT_USDC_E_ADDRESS):
+            return {"code": "usdc_e", "symbol": "USDC.e", "name": "USDC.e (PoS)"}
+        return {"code": "usdc_token", "symbol": "USDC", "name": "USDC"}
+
+    def _to_token_config(
+        self,
+        row: Dict[str, Any],
+        fallback_receiver_contract: str,
+        fallback_token_decimals: int,
+    ) -> Optional[PaymentTokenConfig]:
+        if not isinstance(row, dict):
+            return None
+        address = _normalize_address(
+            row.get("address") or row.get("token_address") or row.get("contract")
+        )
+        if not address:
+            return None
+        receiver_contract = _normalize_address(
+            row.get("receiver_contract")
+            or row.get("checkout_contract")
+            or row.get("contract_address")
+            or fallback_receiver_contract
+        )
+        if not receiver_contract:
+            return None
+        default_meta = self._default_token_meta(address)
+        code = str(row.get("code") or default_meta["code"]).strip().lower()
+        symbol = str(row.get("symbol") or default_meta["symbol"]).strip()
+        name = str(row.get("name") or default_meta["name"]).strip()
+        if not code:
+            code = default_meta["code"]
+        if not symbol:
+            symbol = default_meta["symbol"]
+        if not name:
+            name = default_meta["name"]
+        try:
+            decimals = int(
+                row.get("decimals")
+                or row.get("token_decimals")
+                or fallback_token_decimals
+            )
+        except Exception:
+            decimals = int(fallback_token_decimals)
+        decimals = max(0, decimals)
+        is_default = bool(row.get("is_default"))
+        return PaymentTokenConfig(
+            code=code,
+            symbol=symbol,
+            name=name,
+            address=address,
+            decimals=decimals,
+            receiver_contract=receiver_contract,
+            is_default=is_default,
+        )
+
+    def _load_supported_tokens(
+        self,
+        raw: str,
+        *,
+        fallback_receiver_contract: str,
+        fallback_token_address: str,
+        fallback_token_decimals: int,
+    ) -> Dict[str, PaymentTokenConfig]:
+        parsed_rows: List[Dict[str, Any]] = []
+        text = str(raw or "").strip()
+        if text:
+            try:
+                parsed = json.loads(text)
+            except Exception:
+                parsed = None
+            if isinstance(parsed, list):
+                parsed_rows = [row for row in parsed if isinstance(row, dict)]
+            elif isinstance(parsed, dict):
+                if isinstance(parsed.get("tokens"), list):
+                    parsed_rows = [
+                        row for row in parsed.get("tokens") or [] if isinstance(row, dict)
+                    ]
+                else:
+                    for key, value in parsed.items():
+                        if isinstance(value, dict):
+                            row = dict(value)
+                            row.setdefault("code", str(key))
+                            parsed_rows.append(row)
+
+        out: Dict[str, PaymentTokenConfig] = {}
+        for row in parsed_rows:
+            token = self._to_token_config(
+                row,
+                fallback_receiver_contract=fallback_receiver_contract,
+                fallback_token_decimals=fallback_token_decimals,
+            )
+            if not token:
+                continue
+            out[token.address] = token
+
+        if out:
+            return out
+
+        fallback_address = _normalize_address(fallback_token_address)
+        if not (fallback_address and fallback_receiver_contract):
+            return {}
+        fallback_meta = self._default_token_meta(fallback_address)
+        fallback_token = PaymentTokenConfig(
+            code=fallback_meta["code"],
+            symbol=fallback_meta["symbol"],
+            name=fallback_meta["name"],
+            address=fallback_address,
+            decimals=max(0, int(fallback_token_decimals)),
+            receiver_contract=fallback_receiver_contract,
+            is_default=True,
+        )
+        return {fallback_token.address: fallback_token}
+
+    def _resolve_supported_token(
+        self,
+        token_address: Optional[str] = None,
+    ) -> PaymentTokenConfig:
+        normalized = _normalize_address(token_address or "")
+        if normalized:
+            token = self.supported_tokens.get(normalized)
+            if token:
+                return token
+            available = ", ".join(
+                f"{item.symbol}:{item.address}" for item in self.supported_tokens.values()
+            )
+            raise PaymentCheckoutError(
+                400,
+                f"token_address not supported: {normalized}. available={available}",
+            )
+        default_token = self.supported_tokens.get(self.default_token_address)
+        if default_token:
+            return default_token
+        raise PaymentCheckoutError(503, "no supported payment token configured")
+
+    def _token_decimals_for(self, token_address: str) -> int:
+        token = self.supported_tokens.get(_normalize_address(token_address))
+        if token:
+            return int(token.decimals)
+        return int(self.token_decimals)
+
+    def _token_symbol_for(self, token_address: str) -> str:
+        token = self.supported_tokens.get(_normalize_address(token_address))
+        if token and token.symbol:
+            return str(token.symbol)
+        return "USDC"
 
     def _service_headers(self, prefer: Optional[str] = None) -> Dict[str, str]:
         headers = {
@@ -620,14 +815,29 @@ class PaymentContractCheckoutService:
         assert self._w3 is not None
         return self._w3
 
-    def _get_contract(self):
+    def _get_contract(self, receiver_address: Optional[str] = None):
         w3 = self._get_web3()
+        contract_address = _normalize_address(receiver_address or self.receiver_contract)
+        if not contract_address:
+            contract_address = self.receiver_contract
         return w3.eth.contract(
-            address=Web3.to_checksum_address(self.receiver_contract),
+            address=Web3.to_checksum_address(contract_address),
             abi=PAYMENT_CONTRACT_ABI,
         )
 
     def get_config_payload(self) -> Dict[str, Any]:
+        tokens_payload = [
+            {
+                "code": token.code,
+                "symbol": token.symbol,
+                "name": token.name,
+                "address": token.address,
+                "decimals": int(token.decimals),
+                "receiver_contract": token.receiver_contract,
+                "is_default": bool(token.is_default or token.address == self.default_token_address),
+            }
+            for token in sorted(self.supported_tokens.values(), key=lambda row: row.code)
+        ]
         return {
             "enabled": self.enabled,
             "configured": self.configured,
@@ -635,6 +845,8 @@ class PaymentContractCheckoutService:
             "token_address": self.token_address,
             "token_decimals": self.token_decimals,
             "receiver_contract": self.receiver_contract,
+            "default_token_address": self.default_token_address or self.token_address,
+            "tokens": tokens_payload,
             "confirmations": self.confirmations,
             "intent_ttl_sec": self.intent_ttl_sec,
             "event_name": "OrderPaid",
@@ -656,8 +868,10 @@ class PaymentContractCheckoutService:
         }
 
     def _serialize_intent(self, row: Dict[str, Any]) -> PaymentIntentRecord:
+        token_address = _normalize_address(row.get("token_address") or self.token_address)
+        token_decimals = self._token_decimals_for(token_address)
         amount_units = int(_parse_decimal(row.get("amount_units"), Decimal("0")))
-        amount_display = _units_to_decimal(amount_units, self.token_decimals)
+        amount_display = _units_to_decimal(amount_units, token_decimals)
         return PaymentIntentRecord(
             intent_id=str(row.get("id")),
             order_id_hex=str(row.get("order_id_hex")),
@@ -666,7 +880,9 @@ class PaymentContractCheckoutService:
             chain_id=int(row.get("chain_id") or self.chain_id),
             amount_units=amount_units,
             amount_usdc=_format_decimal(amount_display),
-            token_address=_normalize_address(row.get("token_address") or self.token_address),
+            token_address=token_address,
+            token_decimals=token_decimals,
+            token_symbol=self._token_symbol_for(token_address),
             receiver_address=_normalize_address(
                 row.get("receiver_address") or self.receiver_contract
             ),
@@ -907,7 +1123,7 @@ class PaymentContractCheckoutService:
         }
 
     def _build_tx_payload(self, intent: PaymentIntentRecord) -> Dict[str, Any]:
-        contract = self._get_contract()
+        contract = self._get_contract(intent.receiver_address)
         tx_data = contract.encode_abi(
             "pay",
             args=[
@@ -926,6 +1142,8 @@ class PaymentContractCheckoutService:
             "amount_units": str(intent.amount_units),
             "amount_usdc": intent.amount_usdc,
             "token_address": Web3.to_checksum_address(intent.token_address),
+            "token_symbol": intent.token_symbol,
+            "token_decimals": int(intent.token_decimals),
         }
 
     def create_intent(
@@ -934,12 +1152,14 @@ class PaymentContractCheckoutService:
         plan_code: str,
         payment_mode: str = "strict",
         allowed_wallet: Optional[str] = None,
+        token_address: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
         use_points: bool = False,
         points_to_consume: Optional[int] = None,
     ) -> Dict[str, Any]:
         self._ensure_enabled()
         plan = self._select_plan(plan_code)
+        selected_token = self._resolve_supported_token(token_address)
         mode = str(payment_mode or "strict").strip().lower()
         if mode not in {"strict", "flex"}:
             raise PaymentCheckoutError(400, "payment_mode must be strict or flex")
@@ -966,10 +1186,12 @@ class PaymentContractCheckoutService:
             requested_points_to_consume=points_to_consume,
         )
         final_amount_usdc = redemption["pay_amount_usdc"]
-        amount_units = _decimal_to_units(final_amount_usdc, self.token_decimals)
+        amount_units = _decimal_to_units(final_amount_usdc, int(selected_token.decimals))
         if amount_units <= 0:
             raise PaymentCheckoutError(400, "invalid final payment amount")
         combined_metadata = dict(metadata or {})
+        combined_metadata["token_code"] = str(selected_token.code)
+        combined_metadata["token_symbol"] = str(selected_token.symbol)
         combined_metadata["amount_before_discount_usdc"] = _format_decimal(plan_amount_usdc)
         combined_metadata["amount_after_discount_usdc"] = _format_decimal(final_amount_usdc)
         combined_metadata["points_redemption"] = {
@@ -993,8 +1215,8 @@ class PaymentContractCheckoutService:
                 "plan_code": plan["plan_code"],
                 "plan_id": plan["plan_id"],
                 "chain_id": self.chain_id,
-                "token_address": self.token_address,
-                "receiver_address": self.receiver_contract,
+                "token_address": selected_token.address,
+                "receiver_address": selected_token.receiver_contract,
                 "amount_units": str(amount_units),
                 "payment_mode": mode,
                 "allowed_wallet": target_wallet or None,
@@ -1020,6 +1242,13 @@ class PaymentContractCheckoutService:
                 "duration_days": plan["duration_days"],
                 "amount_before_discount_usdc": _format_decimal(plan_amount_usdc),
                 "amount_after_discount_usdc": _format_decimal(final_amount_usdc),
+            },
+            "token": {
+                "code": selected_token.code,
+                "symbol": selected_token.symbol,
+                "name": selected_token.name,
+                "address": selected_token.address,
+                "decimals": int(selected_token.decimals),
             },
             "points_redemption": {
                 "applied": bool(redemption.get("applied")),
@@ -1148,7 +1377,7 @@ class PaymentContractCheckoutService:
     def _extract_matching_event(
         self, receipt: Any, intent: PaymentIntentRecord
     ) -> Optional[Dict[str, Any]]:
-        contract = self._get_contract()
+        contract = self._get_contract(intent.receiver_address)
         try:
             events = contract.events.OrderPaid().process_receipt(receipt)
         except Exception:
@@ -1188,9 +1417,12 @@ class PaymentContractCheckoutService:
         user_id: str,
         tx_hash: str,
         amount_units: int,
+        token_address: str,
         payload: Dict[str, Any],
     ) -> Dict[str, Any]:
-        amount_dec = _units_to_decimal(amount_units, self.token_decimals)
+        token_decimals = self._token_decimals_for(token_address)
+        amount_dec = _units_to_decimal(amount_units, token_decimals)
+        currency = self._token_symbol_for(token_address)
         rows = self._rest(
             "POST",
             "payments",
@@ -1198,7 +1430,7 @@ class PaymentContractCheckoutService:
             payload={
                 "user_id": user_id,
                 "amount": str(amount_dec),
-                "currency": "USDC",
+                "currency": currency,
                 "chain": "polygon",
                 "tx_hash": tx_hash,
                 "status": "confirmed",
@@ -1412,6 +1644,7 @@ class PaymentContractCheckoutService:
             user_id=user_id,
             tx_hash=tx_hash_text,
             amount_units=intent.amount_units,
+            token_address=intent.token_address,
             payload=payload,
         )
         subscription_row = self._grant_subscription(
