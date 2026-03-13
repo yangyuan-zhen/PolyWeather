@@ -21,6 +21,9 @@ import {
 } from "lucide-react";
 import s from "./UnlockProOverlay.module.css";
 
+const DEFAULT_FAQ_HREF = "/subscription-help";
+const DEFAULT_TELEGRAM_GROUP_URL = "https://t.me/+nMG7SjziUKYyZmM1";
+
 export type UnlockProBilling = {
   pointsEnabled: boolean;
   isEligible: boolean;
@@ -77,8 +80,8 @@ export function UnlockProOverlay({
   locale = "zh-CN",
   errorText,
   infoText,
-  faqHref = "/account",
-  telegramGroupUrl,
+  faqHref = DEFAULT_FAQ_HREF,
+  telegramGroupUrl = DEFAULT_TELEGRAM_GROUP_URL,
   txHash,
   chainId = 137,
   paymentTokenLabel,
@@ -100,6 +103,7 @@ export function UnlockProOverlay({
   const progressPct = billing.pointsEnabled
     ? Math.min(100, Math.round((points / maxPointsForFullDiscount) * 100))
     : 0;
+  const resolvedTelegramGroupUrl = String(telegramGroupUrl || "").trim();
   const txHref =
     txHash && txHash.startsWith("0x")
       ? `${chainId === 137 ? "https://polygonscan.com" : "https://etherscan.io"}/tx/${txHash}`
@@ -292,14 +296,16 @@ export function UnlockProOverlay({
             )}
 
             <div style={{ marginTop: "auto", paddingTop: 16 }}>
-              {telegramGroupUrl ? (
+              {resolvedTelegramGroupUrl ? (
                 <Link
-                  href={telegramGroupUrl}
+                  href={resolvedTelegramGroupUrl}
                   target="_blank"
                   className={s.unavailCta}
                 >
                   <MessageSquare size={12} />
-                  {isEn ? "Join Telegram to earn" : "加入电报群赚取积分"}
+                  {isEn
+                    ? "Join community to earn points"
+                    : "加入社群即可赚取积分"}
                   <ArrowRight size={11} />
                 </Link>
               ) : (

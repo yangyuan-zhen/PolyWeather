@@ -158,6 +158,11 @@ const WALLETCONNECT_POLYGON_RPC_URL = String(
   process.env.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL ||
     "https://polygon-bor-rpc.publicnode.com",
 ).trim();
+const TELEGRAM_GROUP_URL = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
+    "https://t.me/+nMG7SjziUKYyZmM1",
+).trim();
+const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
@@ -1578,7 +1583,8 @@ export function AccountCenter() {
                 txHash={lastTxHash || undefined}
                 chainId={paymentConfig?.chain_id || 137}
                 paymentTokenLabel={selectedTokenLabel}
-                faqHref="/account"
+                faqHref={SUBSCRIPTION_HELP_HREF}
+                telegramGroupUrl={TELEGRAM_GROUP_URL}
               />
             </div>
           )}

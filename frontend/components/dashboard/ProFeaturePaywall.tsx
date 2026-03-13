@@ -6,6 +6,12 @@ import { useI18n } from "@/hooks/useI18n";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
+const TELEGRAM_GROUP_URL = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
+    "https://t.me/+nMG7SjziUKYyZmM1",
+).trim();
+const SUBSCRIPTION_HELP_HREF = "/subscription-help";
+
 type ProFeaturePaywallProps = {
   feature: "today" | "history" | "future";
   onClose?: () => void;
@@ -75,8 +81,8 @@ export function ProFeaturePaywall({
           router.push("/account");
         }}
         payLabel={payLabel}
-        faqHref="/account"
-        telegramGroupUrl="https://t.me/+nMG7SjziUKYyZmM1"
+        faqHref={SUBSCRIPTION_HELP_HREF}
+        telegramGroupUrl={TELEGRAM_GROUP_URL}
       />
     </div>
   );
