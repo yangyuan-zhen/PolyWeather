@@ -151,6 +151,10 @@ type ProviderSelection = {
   mode: ProviderMode;
 };
 
+type ConnectBindOptions = {
+  openOverlayAfterBind?: boolean;
+};
+
 const WALLETCONNECT_PROJECT_ID = String(
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
 ).trim();
@@ -988,12 +992,15 @@ export function AccountCenter() {
     }
   };
 
-  const connectAndBindWallet = async (mode: ProviderMode = "auto") => {
+  const connectAndBindWallet = async (
+    mode: ProviderMode = "auto",
+    options: ConnectBindOptions = {},
+  ): Promise<boolean> => {
     setPaymentError("");
     setPaymentInfo("");
     if (!isAuthenticated) {
       setPaymentError("请先登录后再绑定钱包。");
-      return;
+      return false;
     }
 
     setPaymentBusy(true);
@@ -1009,7 +1016,7 @@ export function AccountCenter() {
       } catch (tokenErr) {
         setPaymentError(normalizePaymentError(tokenErr).message);
         setPaymentBusy(false);
-        return;
+        return false;
       }
       const authHeaders: Record<string, string> = {
         "Content-Type": "application/json",
@@ -1028,9 +1035,12 @@ export function AccountCenter() {
       if (existingWallet) {
         setWalletAddress(address);
         setSelectedWallet(address);
-        setPaymentInfo(`${walletLabel} 已绑定: ${shortAddress(address)}`);
+        setPaymentInfo(
+          `${walletLabel} 已绑定: ${shortAddress(address)}。现在可点击“立即订阅并激活服务”。`,
+        );
+        if (options.openOverlayAfterBind) setShowOverlay(true);
         setPaymentBusy(false);
-        return;
+        return true;
       }
 
       setWalletAddress(address);
@@ -1063,12 +1073,17 @@ export function AccountCenter() {
         throw new Error(`verify failed: ${raw}`);
       }
 
-      setPaymentInfo(`${walletLabel} 绑定成功: ${shortAddress(address)}`);
+      setPaymentInfo(
+        `${walletLabel} 绑定成功: ${shortAddress(address)}。现在可点击“立即订阅并激活服务”。`,
+      );
       setProviderMode(providerSelection.mode);
+      if (options.openOverlayAfterBind) setShowOverlay(true);
       await loadPaymentSnapshot();
+      return true;
     } catch (error) {
       setPaymentInfo("");
       setPaymentError(normalizePaymentError(error).message);
+      return false;
     } finally {
       setPaymentBusy(false);
     }
@@ -1272,8 +1287,19 @@ export function AccountCenter() {
       );
       if (!confirmRes.ok) {
         const raw = (await confirmRes.text()).slice(0, 350);
-        setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待确认中。`);
-        throw new Error(`confirm pending: ${raw}`);
+        const lowerRaw = raw.toLowerCase();
+        const maybePending =
+          (confirmRes.status === 404 &&
+            !lowerRaw.includes("payment intent not found")) ||
+          confirmRes.status === 408 ||
+          (confirmRes.status === 409 &&
+            (lowerRaw.includes("confirmations not enough") ||
+              lowerRaw.includes("tx indexed partially")));
+        if (maybePending) {
+          setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待确认中。`);
+          throw new Error(`confirm pending: ${raw}`);
+        }
+        throw new Error(`confirm failed: ${raw}`);
       }
 
       setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
@@ -1309,7 +1335,13 @@ export function AccountCenter() {
       return;
     }
     if (!hasPayingWallet) {
-      await connectAndBindWallet(providerMode);
+      setPaymentInfo("请先完成钱包绑定，正在拉起绑定流程...");
+      const bound = await connectAndBindWallet(providerMode, {
+        openOverlayAfterBind: true,
+      });
+      if (!bound) return;
+      setPaymentInfo("钱包已绑定，正在创建订单并发起支付...");
+      await createIntentAndPay();
       return;
     }
     await createIntentAndPay();

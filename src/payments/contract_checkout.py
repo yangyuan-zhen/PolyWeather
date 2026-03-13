@@ -1559,12 +1559,27 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(503, "cannot connect payment rpc")
         if int(w3.eth.chain_id) != int(self.chain_id):
             raise PaymentCheckoutError(503, "payment rpc chain mismatch")
+        # Wait for receipt first to avoid transient RPC lag on eth_getTransaction.
+        receipt = self._wait_receipt(tx_hash_text)
+        if int(receipt.get("status") or 0) != 1:
+            raise PaymentCheckoutError(400, "tx reverted")
+
         try:
             tx = w3.eth.get_transaction(tx_hash_text)
         except Exception:
-            raise PaymentCheckoutError(404, "tx not found on chain")
-        tx_to = _normalize_address(tx.get("to"))
-        tx_from = _normalize_address(tx.get("from"))
+            tx = None
+
+        tx_get = getattr(tx, "get", None)
+        tx_to_raw = tx_get("to") if callable(tx_get) else None
+        tx_from_raw = tx_get("from") if callable(tx_get) else None
+        tx_to = _normalize_address(
+            tx_to_raw or receipt.get("to")
+        )
+        tx_from = _normalize_address(
+            tx_from_raw or receipt.get("from")
+        )
+        if not tx_to or not tx_from:
+            raise PaymentCheckoutError(409, "tx indexed partially; retry confirm")
         if tx_to != intent.receiver_address:
             raise PaymentCheckoutError(
                 400,
@@ -1578,9 +1593,6 @@ class PaymentContractCheckoutService:
                 )
         else:
             self._require_user_wallet(user_id, tx_from)
-        receipt = self._wait_receipt(tx_hash_text)
-        if int(receipt.get("status") or 0) != 1:
-            raise PaymentCheckoutError(400, "tx reverted")
         block_number = int(receipt.get("blockNumber") or 0)
         latest_block = int(w3.eth.block_number)
         confirmations = max(0, latest_block - block_number + 1) if block_number else 0
@@ -1631,7 +1643,7 @@ class PaymentContractCheckoutService:
                 "block_number": block_number,
                 "status": "confirmed",
                 "raw_receipt": json.loads(Web3.to_json(receipt)),
-                "raw_tx": json.loads(Web3.to_json(tx)),
+                "raw_tx": json.loads(Web3.to_json(tx)) if tx is not None else None,
                 "updated_at": now_iso,
             },
             prefer="resolution=merge-duplicates,return=representation",
