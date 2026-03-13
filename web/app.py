@@ -228,7 +228,8 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
 
     # Trusted fallback for server-to-server proxy calls:
     # only when entitlement token is valid do we accept forwarded identity headers.
-    if _legacy_service_token_valid(request):
+    legacy_ok = _legacy_service_token_valid(request)
+    if legacy_ok:
         forwarded_user_id = str(
             request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or ""
         ).strip()
@@ -238,6 +239,15 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
             ).strip()
             return {"user_id": forwarded_user_id, "email": forwarded_email}
 
+    logger.warning(
+        "payment auth identity missing state_user={} auth_bearer={} legacy_ok={} forwarded_user={}",
+        bool(state_user_id),
+        bool(token),
+        bool(legacy_ok),
+        bool(
+            str(request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or "").strip()
+        ),
+    )
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
