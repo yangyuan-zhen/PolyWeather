@@ -357,9 +357,12 @@ export function AccountCenter() {
   const metadataPointsRaw = Number(
     user?.user_metadata?.points ?? user?.user_metadata?.total_points ?? 0,
   );
+  const metadataPointsSafe = Number.isFinite(metadataPointsRaw)
+    ? metadataPointsRaw
+    : 0;
   const pointsRaw = Number.isFinite(backendPointsRaw)
-    ? backendPointsRaw
-    : metadataPointsRaw;
+    ? Math.max(backendPointsRaw, metadataPointsSafe)
+    : metadataPointsSafe;
   const weeklyPointsRaw = Number(user?.user_metadata?.weekly_points ?? 0);
   const weeklyRankRaw = user?.user_metadata?.weekly_rank;
   const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;
