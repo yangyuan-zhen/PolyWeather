@@ -37,6 +37,7 @@ import {
   ChevronRight,
   Loader2,
   CreditCard,
+  type LucideIcon,
 } from "lucide-react";
 import {
   getSupabaseBrowserClient,
@@ -119,7 +120,14 @@ declare global {
 
 // --- Helpers ---
 
-const InfoRow = ({ icon: Icon, label, value, isPrimary = false }) => (
+type InfoRowProps = {
+  icon?: LucideIcon;
+  label: string;
+  value: string;
+  isPrimary?: boolean;
+};
+
+const InfoRow = ({ icon: Icon, label, value, isPrimary = false }: InfoRowProps) => (
   <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group">
     <div className="flex items-center gap-3">
       <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
