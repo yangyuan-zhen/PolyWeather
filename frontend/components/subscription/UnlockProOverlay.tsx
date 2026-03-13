@@ -48,10 +48,14 @@ type UnlockProOverlayProps = {
 };
 
 const FEATURES = {
-  "zh-CN": ["15天高精度趋势预报", "实时多源雷达图", "全平台智能气象推送"],
+  "zh-CN": [
+    "今日日内深度分析（含高温时段）",
+    "历史对账 + 未来日期分析",
+    "全平台智能气象推送",
+  ],
   "en-US": [
-    "15-day precision forecast",
-    "Real-time radar panel",
+    "Intraday deep analysis with peak-time window",
+    "Historical reconciliation + future-date analysis",
     "Cross-platform alerts",
   ],
 };
