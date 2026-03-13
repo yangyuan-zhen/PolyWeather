@@ -18,10 +18,10 @@ class DebCommandService:
         self.analysis = analysis
 
     def resolve_city(self, city_input: str) -> str:
-        return self.analysis.resolve_deb_city(city_input)
+        return self.analysis.resolve_city(city_input)
 
     def has_history(self, city_name: str) -> bool:
-        return self.analysis.has_deb_history(city_name)
+        return self.analysis.has_history(city_name)
 
     def build_report(self, city_name: str, deb_query_cost: int) -> DebReportResult:
         try:

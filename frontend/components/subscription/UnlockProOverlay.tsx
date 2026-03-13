@@ -82,8 +82,16 @@ export function UnlockProOverlay({
   const finalPayLabel =
     payLabel || (isEn ? "Subscribe & Activate" : "立即订阅并激活服务");
 
+  const maxDiscountUsdInt = Math.max(1, Math.floor(billing.maxDiscountUsd || 0));
+  const maxPointsForFullDiscount = Math.max(
+    billing.pointsPerUsd,
+    billing.pointsPerUsd * maxDiscountUsdInt,
+  );
+  const redeemableUsdNow = billing.pointsEnabled
+    ? Math.min(maxDiscountUsdInt, Math.floor(points / Math.max(1, billing.pointsPerUsd)))
+    : 0;
   const progressPct = billing.pointsEnabled
-    ? Math.min(100, Math.round((points / billing.pointsPerUsd) * 100))
+    ? Math.min(100, Math.round((points / maxPointsForFullDiscount) * 100))
     : 0;
 
   return (
@@ -202,6 +210,11 @@ export function UnlockProOverlay({
                   ? `Toggle to save up to $${billing.maxDiscountUsd.toFixed(2)}`
                   : `开启可最多抵扣 $${billing.maxDiscountUsd.toFixed(2)}`}
             </p>
+            <p className={s.pointsNote}>
+              {isEn
+                ? `Now redeemable: $${redeemableUsdNow.toFixed(0)} / $${maxDiscountUsdInt.toFixed(0)}`
+                : `当前可抵：${redeemableUsdNow.toFixed(0)}U / ${maxDiscountUsdInt.toFixed(0)}U`}
+            </p>
 
             <div className={s.pointsBalance}>
               <Sparkles size={11} />
@@ -242,17 +255,21 @@ export function UnlockProOverlay({
                   ? "Points redemption is unavailable for this plan."
                   : "当前套餐暂不支持积分抵扣。"
                 : isEn
-                  ? `Need ${billing.pointsPerUsd} pts minimum. You have: ${points}`
-                  : `至少需要 ${billing.pointsPerUsd} 积分，当前仅有 ${points}`}
+                  ? `Starts at ${billing.pointsPerUsd} pts, ${billing.pointsPerUsd} pts per $1, up to $${maxDiscountUsdInt}. You have: ${points}`
+                  : `满 ${billing.pointsPerUsd} 分起兑，每 ${billing.pointsPerUsd} 分抵 1U，最多抵 ${maxDiscountUsdInt}U。当前 ${points} 分`}
             </p>
 
             {billing.pointsEnabled && (
               <div className={s.progressWrap}>
                 <div className={s.progressHeader}>
                   <span>
-                    {points} / {billing.pointsPerUsd}
+                    {points} / {maxPointsForFullDiscount}
                   </span>
-                  <span>{progressPct}%</span>
+                  <span>
+                    {isEn
+                      ? `$${redeemableUsdNow.toFixed(0)} / $${maxDiscountUsdInt.toFixed(0)}`
+                      : `${redeemableUsdNow.toFixed(0)}U / ${maxDiscountUsdInt.toFixed(0)}U`}
+                  </span>
                 </div>
                 <div className={s.progressTrack}>
                   <div

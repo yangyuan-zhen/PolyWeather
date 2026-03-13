@@ -33,6 +33,10 @@ class DebAnalysisService:
         city_input_norm = city_input.strip().lower()
         return aliases.get(city_input_norm, city_input_norm)
 
+    # Backward-compatible alias used by older service wrappers.
+    def resolve_deb_city(self, city_input: str) -> str:
+        return self.resolve_city(city_input)
+
     def has_history(self, city_name: str) -> bool:
         _is_excluded_model_name, load_history, reconcile_recent_actual_highs = (
             self._load_deb_module_api()
@@ -41,6 +45,10 @@ class DebAnalysisService:
         data = load_history(self.history_file)
         city_data = data.get(city_name)
         return isinstance(city_data, dict) and bool(city_data)
+
+    # Backward-compatible alias used by older service wrappers.
+    def has_deb_history(self, city_name: str) -> bool:
+        return self.has_history(city_name)
 
     def build_deb_accuracy_report(self, city_name: str, deb_query_cost: int) -> str:
         _is_excluded_model_name, load_history, reconcile_recent_actual_highs = (
@@ -217,4 +225,3 @@ class DebAnalysisService:
         lines.append("")
         lines.append(f"💸 本次消耗 <code>{deb_query_cost}</code> 积分。")
         return "\n".join(lines)
-

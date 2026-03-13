@@ -633,6 +633,17 @@ export function AccountCenter() {
       const address = String(accounts?.[0] || "").toLowerCase();
       if (!address) throw new Error("钱包账户为空");
 
+      const existingWallet = boundWallets.find(
+        (w) => String(w.address || "").toLowerCase() === address,
+      );
+      if (existingWallet) {
+        setWalletAddress(address);
+        setSelectedWallet(address);
+        setPaymentInfo(`${walletLabel} 已绑定: ${shortAddress(address)}`);
+        setPaymentBusy(false);
+        return;
+      }
+
       setWalletAddress(address);
       const challengeRes = await fetch("/api/payments/wallets/challenge", {
         method: "POST",
