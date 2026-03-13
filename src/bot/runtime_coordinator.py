@@ -6,6 +6,8 @@ from datetime import datetime
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional
 
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -148,7 +150,7 @@ class StartupCoordinator:
 
     def _start_trade_alert_loop(self) -> LoopStatus:
         enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
-        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+        chat_ids = get_telegram_chat_ids_from_env()
         mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
         interval = (
             max(300, _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200))
@@ -160,8 +162,9 @@ class StartupCoordinator:
             "mode": "mispricing-only" if mispricing_only else "full",
             "interval_sec": interval,
             "cities_count": cities_count,
+            "chat_targets": len(chat_ids),
         }
-        validation_error = None if chat_id else "missing_TELEGRAM_CHAT_ID"
+        validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(
             key="trade_alert_push",
             label="错价雷达推送",
@@ -176,7 +179,7 @@ class StartupCoordinator:
 
     def _start_polygon_wallet_loop(self) -> LoopStatus:
         enabled = _env_bool("POLYGON_WALLET_WATCH_ENABLED", False)
-        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+        chat_ids = get_telegram_chat_ids_from_env()
         rpc_url = str(os.getenv("POLYGON_RPC_URL") or "").strip()
         wallets_count = _parse_csv_count(os.getenv("POLYGON_WALLET_WATCH_ADDRESSES"))
         poll = max(3, _env_int("POLYGON_WALLET_WATCH_INTERVAL_SEC", 8))
@@ -184,10 +187,11 @@ class StartupCoordinator:
             "poll_sec": poll,
             "wallets_count": wallets_count,
             "polymarket_only": _env_bool("POLYGON_WALLET_WATCH_POLYMARKET_ONLY", True),
+            "chat_targets": len(chat_ids),
         }
         validation_error = None
-        if not chat_id:
-            validation_error = "missing_TELEGRAM_CHAT_ID"
+        if not chat_ids:
+            validation_error = "missing_TELEGRAM_CHAT_IDS"
         elif not rpc_url:
             validation_error = "missing_POLYGON_RPC_URL"
         elif wallets_count == 0:
@@ -205,17 +209,18 @@ class StartupCoordinator:
 
     def _start_polymarket_wallet_activity_loop(self) -> LoopStatus:
         enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
-        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+        chat_ids = get_telegram_chat_ids_from_env()
         users_count = _parse_csv_count(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
         poll = max(5, _env_int("POLYMARKET_WALLET_ACTIVITY_INTERVAL_SEC", 20))
         details = {
             "poll_sec": poll,
             "users_count": users_count,
             "link_preview": _env_bool("POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW", True),
+            "chat_targets": len(chat_ids),
         }
         validation_error = None
-        if not chat_id:
-            validation_error = "missing_TELEGRAM_CHAT_ID"
+        if not chat_ids:
+            validation_error = "missing_TELEGRAM_CHAT_IDS"
         elif users_count == 0:
             validation_error = "missing_POLYMARKET_WALLET_ACTIVITY_USERS"
         return self._start_with_validation(
@@ -231,7 +236,7 @@ class StartupCoordinator:
 
     def _start_weekly_reward_loop(self) -> LoopStatus:
         enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", True)
-        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+        chat_ids = get_telegram_chat_ids_from_env()
         settle_weekday = min(
             7, max(1, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_WEEKDAY", 1))
         )
@@ -250,11 +255,12 @@ class StartupCoordinator:
             "settle_time": f"{settle_hour:02d}:{settle_minute:02d}",
             "check_interval_sec": check_interval,
             "announce": _env_bool("POLYWEATHER_WEEKLY_REWARD_ANNOUNCE_ENABLED", True),
+            "chat_targets": len(chat_ids),
         }
         announce_enabled = bool(details["announce"])
         validation_error = None
-        if announce_enabled and not chat_id:
-            validation_error = "missing_TELEGRAM_CHAT_ID"
+        if announce_enabled and not chat_ids:
+            validation_error = "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(
             key="weekly_reward",
             label="周榜奖励结算",

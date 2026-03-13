@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
 from src.data_collection.city_registry import CITY_REGISTRY
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
 SEVERITY_RANK = {
@@ -516,7 +517,7 @@ def build_trade_alert_for_city(
 
 def _maybe_send_alert(
     bot: Any,
-    chat_id: str,
+    chat_ids: List[str],
     city: str,
     alert_payload: Dict[str, Any],
     state: Dict[str, Any],
@@ -552,6 +553,9 @@ def _maybe_send_alert(
             return True
         return False
 
+    if not chat_ids:
+        return False
+
     signature = _alert_signature(alert_payload)
     trigger_key = _trigger_type_key(alert_payload)
     last_city_sig = last_city.get("signature")
@@ -568,7 +572,21 @@ def _maybe_send_alert(
     if last_sig_ts and now_ts - last_sig_ts < cooldown_sec:
         return False
 
-    bot.send_message(chat_id, message)
+    sent_count = 0
+    for chat_id in chat_ids:
+        try:
+            bot.send_message(chat_id, message)
+            sent_count += 1
+        except Exception as exc:
+            logger.warning(
+                "trade alert push failed city={} chat_id={} error={}",
+                city,
+                chat_id,
+                exc,
+            )
+    if sent_count <= 0:
+        return False
+
     last_by_city[city] = {
         "signature": signature,
         "trigger_key": trigger_key,
@@ -581,19 +599,19 @@ def _maybe_send_alert(
     logger.info(
         f"trade alert pushed city={city} severity={alert_payload.get('severity')} "
         f"trigger_count={alert_payload.get('trigger_count')} trigger_key={trigger_key} "
-        f"evidence={_evidence_brief(alert_payload)}"
+        f"evidence={_evidence_brief(alert_payload)} chat_targets={sent_count}"
     )
     return True
 
 
 def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[threading.Thread]:
     enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    chat_ids = get_telegram_chat_ids_from_env()
     if not enabled:
         logger.info("telegram alert push loop disabled")
         return None
-    if not chat_id:
-        logger.warning("telegram alert push loop skipped: TELEGRAM_CHAT_ID is not set")
+    if not chat_ids:
+        logger.warning("telegram alert push loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
     mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
@@ -616,7 +634,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
             logger.exception(f"failed to initialize telegram push state path={state_path}")
         logger.info(
             f"telegram alert push loop started mode={'mispricing-only' if mispricing_only else 'full'} "
-            f"cities={len(cities)} interval={interval_sec}s "
+            f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
             f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
             f"state_path={state_path}"
         )
@@ -630,7 +648,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                     alert_payload = build_trade_alert_for_city(city, config)
                     if _maybe_send_alert(
                         bot=bot,
-                        chat_id=chat_id,
+                        chat_ids=chat_ids,
                         city=city,
                         alert_payload=alert_payload,
                         state=state,

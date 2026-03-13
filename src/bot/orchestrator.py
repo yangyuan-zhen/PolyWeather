@@ -16,6 +16,7 @@ from src.bot.io_layer import BotIOLayer
 from src.bot.runtime_coordinator import StartupCoordinator
 from src.bot.services.city_command_service import CityCommandService
 from src.bot.services.deb_command_service import DebCommandService
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
 def _project_root() -> str:
@@ -68,7 +69,7 @@ def start_bot() -> None:
         config=config,
         command_access_mode="group_member_only",
         protected_commands=["/city", "/deb"],
-        required_group_chat_id=str(os.getenv("TELEGRAM_CHAT_ID") or "").strip(),
+        required_group_chat_id=",".join(get_telegram_chat_ids_from_env()),
     )
 
     _register_handlers(

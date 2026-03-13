@@ -1508,8 +1508,13 @@ class PaymentContractCheckoutService:
         if not self.notify_telegram:
             return
         token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-        chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
-        if not token or not chat_id:
+        if not token:
+            return
+        user = self._db.get_user_by_supabase_user_id(user_id)
+        if not isinstance(user, dict):
+            return
+        telegram_id = int(user.get("telegram_id") or 0)
+        if telegram_id <= 0:
             return
         short_hash = tx_hash[:10] + "..." + tx_hash[-8:] if len(tx_hash) > 20 else tx_hash
         text = (
@@ -1523,7 +1528,7 @@ class PaymentContractCheckoutService:
             requests.post(
                 f"https://api.telegram.org/bot{token}/sendMessage",
                 json={
-                    "chat_id": chat_id,
+                    "chat_id": str(telegram_id),
                     "text": text,
                     "disable_web_page_preview": True,
                 },

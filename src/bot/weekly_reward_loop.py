@@ -15,6 +15,7 @@ import requests
 from loguru import logger
 
 from src.database.db_manager import DBManager
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -213,19 +214,20 @@ def _runner(bot: Any) -> None:
     interval_sec = _env_int("POLYWEATHER_WEEKLY_REWARD_CHECK_INTERVAL_SEC", 300, 30)
     timeout_sec = _env_int("POLYWEATHER_WEEKLY_REWARD_HTTP_TIMEOUT_SEC", 10, 3)
     announce = _env_bool("POLYWEATHER_WEEKLY_REWARD_ANNOUNCE_ENABLED", True)
-    chat_id = str(os.getenv("TELEGRAM_CHAT_ID") or "").strip()
+    chat_ids = get_telegram_chat_ids_from_env()
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
     service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
 
     db = DBManager()
     logger.info(
-        "weekly reward loop started tz={} settle={} {:02d}:{:02d} interval={}s announce={}",
+        "weekly reward loop started tz={} settle={} {:02d}:{:02d} interval={}s announce={} chat_targets={}",
         tz_name,
         settle_weekday,
         settle_hour,
         settle_minute,
         interval_sec,
         announce,
+        len(chat_ids),
     )
 
     while True:
@@ -313,16 +315,22 @@ def _runner(bot: Any) -> None:
                 len(winners),
                 skipped,
             )
-            if announce and chat_id:
-                try:
-                    bot.send_message(
-                        chat_id,
-                        _render_settle_report(week_key=week_key, winners=winners, skipped=skipped),
-                        parse_mode="HTML",
-                        disable_web_page_preview=True,
-                    )
-                except Exception as exc:
-                    logger.warning(f"weekly reward announcement failed: {exc}")
+            if announce and chat_ids:
+                message = _render_settle_report(week_key=week_key, winners=winners, skipped=skipped)
+                for chat_id in chat_ids:
+                    try:
+                        bot.send_message(
+                            chat_id,
+                            message,
+                            parse_mode="HTML",
+                            disable_web_page_preview=True,
+                        )
+                    except Exception as exc:
+                        logger.warning(
+                            "weekly reward announcement failed chat_id={} error={}",
+                            chat_id,
+                            exc,
+                        )
         except Exception as exc:
             logger.warning(f"weekly reward cycle failed: {exc}")
         time.sleep(interval_sec)

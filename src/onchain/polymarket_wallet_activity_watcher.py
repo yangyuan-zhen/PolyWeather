@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from loguru import logger
 
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+
 
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
@@ -547,7 +549,7 @@ def _filter_changes_by_position_value(
 
 def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread]:
     enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    chat_ids = get_telegram_chat_ids_from_env()
     users = _parse_addresses(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
     user_aliases = _parse_address_aliases(
         os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
@@ -560,8 +562,8 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
     if not enabled:
         logger.info("polymarket wallet activity watcher disabled")
         return None
-    if not chat_id:
-        logger.warning("polymarket wallet activity watcher skipped: TELEGRAM_CHAT_ID is not set")
+    if not chat_ids:
+        logger.warning("polymarket wallet activity watcher skipped: TELEGRAM_CHAT_IDS is not set")
         return None
     if not users:
         logger.warning("polymarket wallet activity watcher skipped: POLYMARKET_WALLET_ACTIVITY_USERS is empty")
@@ -627,6 +629,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
             f"poll={poll_sec}s data_api={data_api_url} price_filter={min_price}-{max_price} "
             f"min_position_value_usd={min_position_value_usd} "
             f"min_value_exempt_users={len(exempt_wallets)} "
+            f"chat_targets={len(chat_ids)} "
             f"aliases={len(user_aliases)} link_preview={link_preview} "
             f"min_avg_price_delta={min_avg_price_delta} "
             f"immediate_on_size_delta={immediate_on_size_delta} "
@@ -770,13 +773,26 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                             max_changes=max_changes,
                             wallet_alias=user_aliases.get(user),
                         )
-                        bot.send_message(
-                            chat_id,
-                            msg,
-                            disable_web_page_preview=not link_preview,
-                        )
+                        sent_count = 0
+                        for chat_id in chat_ids:
+                            try:
+                                bot.send_message(
+                                    chat_id,
+                                    msg,
+                                    disable_web_page_preview=not link_preview,
+                                )
+                                sent_count += 1
+                            except Exception as exc:
+                                logger.warning(
+                                    "wallet activity push failed user={} chat_id={} error={}",
+                                    user,
+                                    chat_id,
+                                    exc,
+                                )
+                        if sent_count <= 0:
+                            continue
                         logger.info(
-                            f"wallet activity pushed user={user} changes={len(outgoing)}"
+                            f"wallet activity pushed user={user} changes={len(outgoing)} chat_targets={sent_count}"
                         )
 
                     users_state[user] = {

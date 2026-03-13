@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from loguru import logger
 from web3 import Web3
 
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+
 TRANSFER_TOPIC = "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 APPROVAL_TOPIC = "0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925"
 ERC20_ABI = [
@@ -372,7 +374,7 @@ def _build_message(
 
 def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
     enabled = _env_bool("POLYGON_WALLET_WATCH_ENABLED", False)
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    chat_ids = get_telegram_chat_ids_from_env()
     rpc_url = os.getenv("POLYGON_RPC_URL")
     watch_set = _parse_addresses(os.getenv("POLYGON_WALLET_WATCH_ADDRESSES"))
     polymarket_only = _env_bool("POLYGON_WALLET_WATCH_POLYMARKET_ONLY", True)
@@ -381,8 +383,8 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
     if not enabled:
         logger.info("polygon wallet watcher disabled")
         return None
-    if not chat_id:
-        logger.warning("polygon wallet watcher skipped: TELEGRAM_CHAT_ID is not set")
+    if not chat_ids:
+        logger.warning("polygon wallet watcher skipped: TELEGRAM_CHAT_IDS is not set")
         return None
     if not rpc_url:
         logger.warning("polygon wallet watcher skipped: POLYGON_RPC_URL is not set")
@@ -426,7 +428,8 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
         logger.info(
             f"polygon wallet watcher started wallets={len(watch_set)} "
             f"polymarket_only={polymarket_only} pm_contracts={len(pm_contracts)} "
-            f"poll={poll_sec}s confirmations={confirmations} state_path={state_path}"
+            f"poll={poll_sec}s confirmations={confirmations} chat_targets={len(chat_ids)} "
+            f"state_path={state_path}"
         )
 
         while True:
@@ -503,11 +506,28 @@ def start_polygon_wallet_watch_loop(bot: Any) -> Optional[threading.Thread]:
                             approval_lines=approval_lines,
                             tx_to_label=tx_to_label,
                         )
-                        bot.send_message(chat_id, message, disable_web_page_preview=True)
+                        sent_count = 0
+                        for chat_id in chat_ids:
+                            try:
+                                bot.send_message(
+                                    chat_id,
+                                    message,
+                                    disable_web_page_preview=True,
+                                )
+                                sent_count += 1
+                            except Exception as exc:
+                                logger.warning(
+                                    "polygon wallet alert push failed wallet={} chat_id={} error={}",
+                                    matched_wallet,
+                                    chat_id,
+                                    exc,
+                                )
+                        if sent_count <= 0:
+                            continue
                         state.setdefault("seen_tx", {})[tx_hash] = cycle_ts
                         logger.info(
                             f"polygon wallet alert pushed wallet={matched_wallet} "
-                            f"tx={tx_hash} block={block_num} polymarket={pm_hit}"
+                            f"tx={tx_hash} block={block_num} polymarket={pm_hit} chat_targets={sent_count}"
                         )
 
                     state["last_scanned_block"] = block_num
