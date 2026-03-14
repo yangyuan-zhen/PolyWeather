@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -40,7 +41,17 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
-import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
+
+const UnlockProOverlay = dynamic(
+  () =>
+    import("@/components/subscription/UnlockProOverlay").then(
+      (module) => module.UnlockProOverlay,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
 
 // --- Types ---
 
@@ -612,16 +623,20 @@ export function AccountCenter() {
       return;
     }
     try {
-      const authHeaders = await buildAuthedHeaders(false);
+      const authHeadersPromise = buildAuthedHeaders(false);
       const [configRes, walletsRes] = await Promise.all([
-        fetch("/api/payments/config", {
-          cache: "no-store",
-          headers: authHeaders,
-        }),
-        fetch("/api/payments/wallets", {
-          cache: "no-store",
-          headers: authHeaders,
-        }),
+        authHeadersPromise.then((headers) =>
+          fetch("/api/payments/config", {
+            cache: "no-store",
+            headers,
+          }),
+        ),
+        authHeadersPromise.then((headers) =>
+          fetch("/api/payments/wallets", {
+            cache: "no-store",
+            headers,
+          }),
+        ),
       ]);
       if (configRes.ok) {
         const configJson = (await configRes.json()) as PaymentConfig;
@@ -674,11 +689,13 @@ export function AccountCenter() {
       const userPromise = supabaseReady
         ? getSupabaseBrowserClient().auth.getUser()
         : Promise.resolve({ data: { user: null as User | null } });
-      const authHeaders = await buildAuthedHeaders(false);
-      const backendPromise = fetch("/api/auth/me", {
-        cache: "no-store",
-        headers: authHeaders,
-      });
+      const authHeadersPromise = buildAuthedHeaders(false);
+      const backendPromise = authHeadersPromise.then((headers) =>
+        fetch("/api/auth/me", {
+          cache: "no-store",
+          headers,
+        }),
+      );
       const [userResult, backendResult] = await Promise.all([
         userPromise,
         backendPromise,

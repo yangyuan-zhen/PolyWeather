@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import dynamic from "next/dynamic";
 import styles from "./Dashboard.module.css";
 import {
   DashboardStoreProvider,
@@ -9,11 +10,47 @@ import {
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
 import { DetailPanel } from "@/components/dashboard/DetailPanel";
-import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
-import { GuideModal } from "@/components/dashboard/GuideModal";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
-import { HistoryModal } from "@/components/dashboard/HistoryModal";
-import { MapCanvas } from "@/components/dashboard/MapCanvas";
+
+const MapCanvas = dynamic(
+  () =>
+    import("@/components/dashboard/MapCanvas").then((module) => module.MapCanvas),
+  {
+    ssr: false,
+    loading: () => <div className="map" aria-hidden="true" />,
+  },
+);
+
+const GuideModal = dynamic(
+  () =>
+    import("@/components/dashboard/GuideModal").then((module) => module.GuideModal),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const HistoryModal = dynamic(
+  () =>
+    import("@/components/dashboard/HistoryModal").then(
+      (module) => module.HistoryModal,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
+const FutureForecastModal = dynamic(
+  () =>
+    import("@/components/dashboard/FutureForecastModal").then(
+      (module) => module.FutureForecastModal,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
 
 function DashboardScreen() {
   const store = useDashboardStore();
@@ -57,9 +94,9 @@ function DashboardScreen() {
       <HeaderBar />
       <CitySidebar />
       <DetailPanel />
-      <GuideModal />
-      <HistoryModal />
-      <FutureForecastModal />
+      {store.isGuideOpen && <GuideModal />}
+      {store.historyState.isOpen && <HistoryModal />}
+      {store.futureModalDate && <FutureForecastModal />}
       {showLoading && (
         <div className="loading-overlay">
           <div className="loading-spinner" />
