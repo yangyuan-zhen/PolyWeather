@@ -14,15 +14,31 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
+## Product Status (2026-03)
+
+- Subscription live: `Pro Monthly 5 USDC`.
+- Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
+- Onchain checkout live: Polygon contract checkout (USDC / USDC.e).
+- Auto-reconciliation live: event listener + periodic confirm loop.
+
+## Open-Core Boundary (Important)
+
+This repository follows an **Open-Core** strategy:
+
+- Public in repo: weather aggregation, core analysis, dashboard, bot baseline, standard payment flow.
+- Private in production: commercial risk rules, operational thresholds, pricing strategy details, internal reconciliation policies, and growth operations tooling.
+
+See: [Open-Core & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
+
 ## Core Capabilities
 
-- Aggregates real-time observations and forecasts for 20 monitored cities.
+- Aggregates observations and forecasts for 20 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
-- Produces settlement-oriented probability buckets (`mu` + bucket distribution).
-- Maps weather model view to Polymarket read-only quotes for mispricing scan.
-- Serves the same analysis core to web dashboard and Telegram bot.
+- Generates settlement-oriented probability buckets (`mu` + bucket distribution).
+- Maps weather view to Polymarket quotes for mispricing scan.
+- Reuses one analysis core across web dashboard and Telegram bot.
 
-## Architecture (Current)
+## Reference Architecture
 
 ```mermaid
 flowchart LR
@@ -35,34 +51,11 @@ flowchart LR
     WX --> METAR["Aviation Weather (METAR)"]
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
-    WX --> NWS["weather.gov (US cities)"]
 
-    API --> ANALYSIS["DEB + Trend + Probability + Market Scan"]
-    ANALYSIS --> PM["Polymarket Read-only Layer"]
+    API --> ANA["DEB + Trend + Probability + Market Scan"]
+    ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
+    ANA --> PM["Polymarket Read-only Layer"]
 ```
-
-## Bot Runtime Layout
-
-```mermaid
-flowchart TD
-    E["bot_listener.py"] --> O["src/bot/orchestrator.py"]
-    O --> H["src/bot/handlers/*"]
-    O --> S["src/bot/services/*"]
-    O --> A["src/bot/analysis/*"]
-    O --> G["src/bot/command_guard.py"]
-    O --> R["src/bot/runtime_coordinator.py"]
-```
-
-## Source Policy
-
-| Domain | Current Policy |
-| :-- | :-- |
-| Primary observation | Aviation Weather / METAR |
-| Ankara enhancement | MGM + nearby stations, lead station fixed to `17130` |
-| Forecast baseline | Open-Meteo + multi-model (ECMWF/GFS/ICON/GEM/JMA) |
-| US official context | weather.gov |
-| Market layer | Polymarket P0 read-only discovery + quotes |
-| Removed source | Meteoblue (fully removed from runtime and docs) |
 
 ## Monitored Cities (20)
 
@@ -71,74 +64,11 @@ flowchart TD
 - Americas: Toronto, New York, Chicago, Dallas, Miami, Atlanta, Seattle, Buenos Aires, Sao Paulo
 - South Asia: Lucknow
 
-## Major Updates (2026-03-12)
-
-1. Bot architecture refactor completed:
-   - `bot_listener.py` is now a thin entrypoint.
-   - Core runtime moved to orchestrator + handlers/services/analysis layers.
-   - Startup loops managed by `StartupCoordinator`, with `/diag` diagnostics.
-2. Mispricing radar hardened:
-   - Anchor changed from single Open-Meteo settlement to multi-model highest-high anchor.
-   - Skip non-tradable markets (`closed`, inactive, not accepting orders, or past end time).
-   - Future-date scan supported via `target_date` in detail aggregate endpoint.
-3. Wallet activity watcher upgraded:
-   - Wallet aliases (`POLYMARKET_WALLET_ACTIVITY_USER_ALIASES`) supported.
-   - Telegram link preview toggle (`POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW`) supported.
-   - Debounce + immediate delta push controls reduce noisy spam bursts.
-4. Frontend P0+P1 cache and UX improvements:
-   - BFF `ETag + 304` on `/api/cities`, `/api/city/{name}/summary`, `/api/history/{name}`.
-   - `force_refresh=true` on summary keeps `Cache-Control: no-store`.
-   - `sessionStorage` city-detail cache + background summary revision probe.
-   - `localStorage` persistence for selected city and risk-group collapse state.
-   - Detail panel accessibility fix (`inert` + active-element blur).
-5. Observability:
-   - Vercel Speed Insights integrated.
-   - Telegram alert/watcher startup diagnostics exposed through `/diag`.
-6. P1 contract checkout (new):
-   - New payment APIs: `/api/payments/config|wallets|intents/*`.
-   - MetaMask wallet binding via nonce challenge + `personal_sign`.
-   - Supports multi-token checkout on Polygon (USDC.e + Native USDC) via token whitelist config.
-   - Frontend receives contract `tx_payload` and calls `eth_sendTransaction`.
-   - Backend validates `OrderPaid(orderId,payer,planId,token,amount)` onchain event and auto-grants entitlement.
-   - Confirmation writes `payments/subscriptions/entitlement_events` and can notify Telegram.
-   - PolygonScan verification guide: `docs/payments/POLYGONSCAN_VERIFY.md`.
-
-## Repository Layout
-
-- Frontend: `frontend/`
-- Backend API: `web/app.py`, `src/`
-- Telegram bot runtime: `bot_listener.py`, `src/bot/*`
-- Wallet watchers: `src/onchain/*`
-- Ops scripts: `scripts/`
-- Docs: `docs/`
-
 ## Quick Start
 
 ### Backend + Bot (Docker)
 
 ```bash
-docker compose up -d --build
-```
-
-## Runtime Data (Recommended for VPS)
-
-To avoid `git pull` conflicts and decouple code from runtime state, store SQLite and caches outside the repo:
-
-1. Set in `.env`:
-   - `POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`
-   - `POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db`
-2. Ensure host directory exists and has write permission for container user (`1000:1000`):
-
-```bash
-sudo mkdir -p /var/lib/polyweather
-sudo chown -R 1000:1000 /var/lib/polyweather
-sudo chmod 775 /var/lib/polyweather
-```
-
-3. Recreate services:
-
-```bash
-docker compose down
 docker compose up -d --build
 ```
 
@@ -150,40 +80,36 @@ npm install
 npm run dev
 ```
 
-### Frontend production build
+## Runtime Data (Recommended on VPS)
 
-```bash
-cd frontend
-npm run build
+Use external runtime storage to avoid SQLite/git conflicts:
+
+```env
+POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
+POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 ```
 
 ## Ops Verification
 
-### Validate frontend cache headers (`ETag` / `304` / `force_refresh=no-store`)
+### Frontend cache headers
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-### Watch mispricing radar decisions
+### Payment auto-reconciliation logs
 
 ```bash
-docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
+docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-### Watch wallet activity watcher startup and pushes
+### Wallet activity logs
 
 ```bash
-docker compose logs -f polyweather | egrep "wallet activity watcher started|wallet activity pushed|wallet activity cycle failed"
+docker compose logs -f polyweather | egrep "polymarket wallet activity watcher started|wallet activity pushed"
 ```
 
-### Check bot startup diagnosis in Telegram
-
-```text
-/diag
-```
-
-## Telegram Command Surface
+## Telegram Commands
 
 | Command | Purpose |
 | :-- | :-- |
@@ -191,20 +117,22 @@ docker compose logs -f polyweather | egrep "wallet activity watcher started|wall
 | `/deb <name>` | DEB historical reconciliation |
 | `/top` | User leaderboard |
 | `/id` | Show current chat ID |
-| `/diag` | Bot startup diagnostics and loop status |
+| `/diag` | Startup diagnostics |
 | `/help` | Help and usage |
 
 ## Documentation Index
 
-- Chinese overview: `README_ZH.md`
-- Chinese API guide: `docs/API_ZH.md`
-- Commercial roadmap: `docs/COMMERCIALIZATION.md`
-- Tech debt (EN): `docs/TECH_DEBT.md`
-- Tech debt (ZH): `docs/TECH_DEBT_ZH.md`
-- Frontend delivery report: `FRONTEND_REDESIGN_REPORT.md`
+- Chinese overview: [README_ZH.md](README_ZH.md)
+- Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
+- Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
+- Open-Core policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
+- Tech debt (EN): [docs/TECH_DEBT.md](docs/TECH_DEBT.md)
+- Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
+- Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
+- Frontend report: [FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 
-## Status
+## Version
 
-- Version: `v1.3`
-- Test status: `31 passed` (`.\\venv\\Scripts\\python.exe -m pytest -q`)
-- Last Updated: `2026-03-12`
+- Version: `v1.4`
+- Last Updated: `2026-03-14`

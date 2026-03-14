@@ -14,15 +14,31 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
+## 当前产品状态（2026-03）
+
+- 已上线订阅制：`Pro 月付 5 USDC`。
+- 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
+- 已上线链上支付：Polygon 合约支付（USDC / USDC.e）。
+- 已上线自动补单：事件监听 + 周期确认双链路。
+
+## 开源边界（重要）
+
+本项目采用 **Open-Core** 策略：
+
+- 仓库公开部分：天气聚合、基础分析、前端看板、Bot 基础能力、支付标准流程示例。
+- 生产私有部分：商业风控规则、运营阈值、收费策略细节、付费用户运营脚本、内部对账与审计策略。
+
+详细见：[Open-Core 与商用边界](docs/OPEN_CORE_POLICY.md)
+
 ## 核心能力
 
-- 聚合 20 个监控城市的实时实测与预报数据。
-- 通过 DEB（Dynamic Error Balancing）融合多模型最高温。
-- 输出结算导向的概率分布（`mu` + 温度桶）。
-- 将模型观点映射到 Polymarket 只读市场，做错价扫描。
-- Web 仪表盘与 Telegram 机器人复用同一套分析内核。
+- 聚合 20 个监控城市的实测与预报数据。
+- DEB（Dynamic Error Balancing）融合多模型最高温。
+- 输出结算导向概率分布（`mu` + 温度桶）。
+- 将模型观点映射到 Polymarket 行情，做错价扫描。
+- Web 仪表盘与 Telegram Bot 复用同一分析内核。
 
-## 当前架构
+## 参考架构
 
 ```mermaid
 flowchart LR
@@ -35,34 +51,11 @@ flowchart LR
     WX --> METAR["Aviation Weather（METAR）"]
     WX --> MGM["MGM（土耳其站网）"]
     WX --> OM["Open-Meteo"]
-    WX --> NWS["weather.gov（美国城市）"]
 
-    API --> ANALYSIS["DEB + 趋势 + 概率 + 市场扫描"]
-    ANALYSIS --> PM["Polymarket 只读层"]
+    API --> ANA["DEB + 趋势 + 概率 + 市场扫描"]
+    ANA --> PAY["支付状态（Intent + Event + Confirm Loop）"]
+    ANA --> PM["Polymarket 只读层"]
 ```
-
-## Bot 运行分层
-
-```mermaid
-flowchart TD
-    E["bot_listener.py"] --> O["src/bot/orchestrator.py"]
-    O --> H["src/bot/handlers/*"]
-    O --> S["src/bot/services/*"]
-    O --> A["src/bot/analysis/*"]
-    O --> G["src/bot/command_guard.py"]
-    O --> R["src/bot/runtime_coordinator.py"]
-```
-
-## 数据源口径
-
-| 领域 | 当前口径 |
-| :-- | :-- |
-| 主观测源 | Aviation Weather / METAR |
-| Ankara 增强 | MGM + 周边站，领先站固定 `17130` |
-| 预报基线 | Open-Meteo + 多模型（ECMWF/GFS/ICON/GEM/JMA） |
-| 美国官方语义层 | weather.gov |
-| 市场层 | Polymarket P0 只读发现 + 报价 |
-| 已移除 | Meteoblue（代码与文档已彻底移除） |
 
 ## 监控城市（20）
 
@@ -71,73 +64,11 @@ flowchart TD
 - 美洲：Toronto、New York、Chicago、Dallas、Miami、Atlanta、Seattle、Buenos Aires、Sao Paulo
 - 南亚：Lucknow
 
-## 本轮主要更新（2026-03-12）
-
-1. Bot 分层改造完成：
-   - `bot_listener.py` 变为极薄入口。
-   - 运行时迁移到 orchestrator + handlers/services/analysis 分层。
-   - 启动循环由 `StartupCoordinator` 统一编排，并通过 `/diag` 暴露诊断。
-2. 错价雷达口径升级：
-   - 锚点从“单一 Open-Meteo 结算”改为“多模型最高温锚点”。
-   - 不可交易市场硬拦截（`closed` / inactive / 不接单 / 过结束时间）。
-   - 未来日期分析支持 `target_date`（聚合详情接口）。
-3. 钱包异动监听升级：
-   - 支持钱包昵称映射（`POLYMARKET_WALLET_ACTIVITY_USER_ALIASES`）。
-   - 支持 Telegram 链接预览开关（`POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW`）。
-   - 增加 debounce + 立即推送控制，减少连续下单刷屏。
-4. 前端 P0+P1 缓存与体验优化：
-   - BFF 在 `/api/cities`、`/api/city/{name}/summary`、`/api/history/{name}` 返回 `ETag + 304`。
-   - `summary?force_refresh=true` 保持 `Cache-Control: no-store`。
-   - `sessionStorage` 详情缓存 + 后台 revision 静默探测。
-   - `localStorage` 持久化“选中城市”和“风险分组折叠状态”。
-   - 详情面板可访问性修复（`inert + active-element blur`）。
-5. 可观测性：
-   - 前端集成 Vercel Speed Insights。
-   - Bot 启动和后台循环状态可通过 `/diag` 查看。
-6. P1 合约支付链路（新增）：
-   - 新增支付接口：`/api/payments/config|wallets|intents/*`。
-   - 支持 MetaMask 钱包绑定（nonce + `personal_sign` 验签）。
-   - 支持 Polygon 双币种支付（USDC.e + Native USDC），后端按代币白名单路由。
-   - 支持合约订单支付：前端拿 `tx_payload` 调 `eth_sendTransaction`。
-   - 后端按 `OrderPaid(orderId,payer,planId,token,amount)` 事件验单并自动开通订阅。
-   - 交易确认后自动写入 `payments/subscriptions/entitlement_events` 并可推送 Telegram。
-
-## 目录说明
-
-- 前端：`frontend/`
-- 后端 API：`web/app.py`、`src/`
-- Telegram 机器人：`bot_listener.py`、`src/bot/*`
-- 钱包监听：`src/onchain/*`
-- 运维脚本：`scripts/`
-- 文档：`docs/`
-
 ## 快速启动
 
 ### 后端 + Bot（Docker）
 
 ```bash
-docker compose up -d --build
-```
-
-## 运行数据目录（VPS 推荐）
-
-为避免 `git pull` 被数据库阻塞，并实现代码与运行态数据解耦，建议把 SQLite 和缓存放到仓库外目录：
-
-1. 在 `.env` 设置：
-   - `POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`
-   - `POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db`
-2. 确保宿主机目录存在且容器用户（`1000:1000`）可写：
-
-```bash
-sudo mkdir -p /var/lib/polyweather
-sudo chown -R 1000:1000 /var/lib/polyweather
-sudo chmod 775 /var/lib/polyweather
-```
-
-3. 重建服务：
-
-```bash
-docker compose down
 docker compose up -d --build
 ```
 
@@ -149,61 +80,59 @@ npm install
 npm run dev
 ```
 
-### 前端生产构建
+## 运行数据目录（VPS 推荐）
 
-```bash
-cd frontend
-npm run build
+建议将运行态数据放到仓库外（避免 `git pull` 被 SQLite 卡住）：
+
+```env
+POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
+POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 ```
 
 ## 运维验收
 
-### 校验前端缓存头（`ETag` / `304` / `force_refresh=no-store`）
+### 前端缓存头
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
 ```
 
-### 观察错价雷达决策日志
+### 支付自动补单日志
 
 ```bash
-docker compose logs -f polyweather | egrep "market not tradable|trade alert pushed|mispricing cap"
+docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-### 观察钱包异动监听日志
+### 钱包异动监听日志
 
 ```bash
-docker compose logs -f polyweather | egrep "wallet activity watcher started|wallet activity pushed|wallet activity cycle failed"
+docker compose logs -f polyweather | egrep "polymarket wallet activity watcher started|wallet activity pushed"
 ```
 
-### Telegram 启动诊断
-
-```text
-/diag
-```
-
-## Telegram 指令面
+## Telegram 指令
 
 | 指令 | 用途 |
 | :-- | :-- |
 | `/city <name>` | 城市实时分析 |
 | `/deb <name>` | DEB 历史对账 |
 | `/top` | 用户积分排行 |
-| `/id` | 查看当前聊天 Chat ID |
-| `/diag` | Bot 启动诊断与后台循环状态 |
+| `/id` | 查看聊天 Chat ID |
+| `/diag` | Bot 启动诊断 |
 | `/help` | 帮助与用法 |
 
 ## 文档索引
 
-- 英文总览：`README.md`
-- API 文档（中文）：`docs/API_ZH.md`
-- 商业化路线：`docs/COMMERCIALIZATION.md`
-- 技术债（英文）：`docs/TECH_DEBT.md`
-- 技术债（中文）：`docs/TECH_DEBT_ZH.md`
-- 前端交付报告：`FRONTEND_REDESIGN_REPORT.md`
+- 英文总览：[README.md](README.md)
+- API 文档（中文）：[docs/API_ZH.md](docs/API_ZH.md)
+- 商业化说明：[docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
+- Open-Core 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
+- 技术债（中文）：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
+- 技术债（英文）：[docs/TECH_DEBT.md](docs/TECH_DEBT.md)
+- 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
+- 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 
-## 当前状态
+## 当前版本
 
-- 版本：`v1.3`
-- 测试状态：`31 passed`（`.\\venv\\Scripts\\python.exe -m pytest -q`）
-- 最后更新：`2026-03-12`
+- 版本：`v1.4`
+- 最后更新：`2026-03-14`

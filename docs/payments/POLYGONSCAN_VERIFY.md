@@ -1,25 +1,23 @@
-# PolyWeatherCheckout PolygonScan 验证
+# PolyWeatherCheckout PolygonScan 验证（v1.4）
 
-目标合约地址：`0xD8101B3cA351fD7a9c00d2eBF226f6461Af33F10`  
-链：Polygon Mainnet (`chainId=137`)
+最后更新：`2026-03-14`
 
-## 1. 准备参数
+## 1. 目标
 
-- 编译器版本：`v0.8.24+commit.e11b9ed9`
-- 优化器：`Enabled`
-- Runs：`200`
-- 许可证：`MIT`
-- 合约路径：`contracts/PolyWeatherCheckout.sol`
-- 合约名：`PolyWeatherCheckout`
+对生产收款合约完成源码验证，降低钱包风控误报并提升用户信任。
 
-构造参数顺序（新版多代币合约）：
+## 2. 当前部署参数（示例）
 
-1. `_token` = `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`（初始允许代币）
-2. `_treasury` = `0xe581D578EF101c80e3F32263e97E6eA28A0B170e`
+- 链：Polygon Mainnet（`chainId=137`）
+- 合约：`PolyWeatherCheckout`
+- 编译器：`v0.8.24+commit.e11b9ed9`
+- 优化器：`Enabled`，`runs=200`
 
-## 2. 构造参数编码
+> 实际地址以线上配置为准：`POLYWEATHER_PAYMENT_RECEIVER_CONTRACT`。
 
-可直接用本仓库脚本：
+## 3. 构造参数编码
+
+使用仓库脚本生成构造参数：
 
 ```bash
 python scripts/encode_checkout_constructor.py \
@@ -27,35 +25,30 @@ python scripts/encode_checkout_constructor.py \
   --treasury 0xe581D578EF101c80e3F32263e97E6eA28A0B170e
 ```
 
-输出应为：
+将输出填入 PolygonScan 的 `Constructor Arguments ABI-encoded`。
 
-```text
-0000000000000000000000002791bca1f2de4661ed88a30c99a7a9449aa84174000000000000000000000000e581d578ef101c80e3f32263e97e6ea28a0b170e
-```
+## 4. PolygonScan 操作步骤
 
-把这串填到 PolygonScan 的 `Constructor Arguments ABI-encoded`。
-
-## 3. PolygonScan 页面操作
-
-1. 打开合约页面 -> `Contract` -> `Verify and Publish`.
+1. 打开合约页 -> `Contract` -> `Verify and Publish`。
 2. 选择 `Solidity (Single file)`。
-3. 粘贴 `contracts/PolyWeatherCheckout.sol` 全部源码。
-4. 按上面参数填写编译器和优化器。
-5. 粘贴编码后的构造参数，提交验证。
+3. 粘贴 `contracts/PolyWeatherCheckout.sol` 源码。
+4. 填写编译器/优化器参数。
+5. 粘贴构造参数并提交。
 
-## 4. 验证后检查
+## 5. 验证后检查
 
-验证成功后确认：
+- `Read Contract`：可见 `owner / treasury / allowedToken / paidOrder`
+- `Write Contract`：可见 `pay / setTreasury / setTokenAllowed`
+- 标签显示 `Contract Source Code Verified`
 
-- `Read Contract` 有 `owner / treasury / allowedToken / paidOrder`
-- `Write Contract` 有 `pay / setTreasury / setTokenAllowed`
-- `Contract` 标签显示 `Contract Source Code Verified`
+## 6. 双币种开启（USDC + USDC.e）
 
-## 5. 同时开启 USDC.e + Native USDC
+验证后可通过 `setTokenAllowed` 开启两种代币：
 
-验证后在 `Write Contract` 调用：
+- USDC.e: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
+- Native USDC: `0x3c499c542cef5e3811e1192ce70d8cc03d5c3359`
 
-- `setTokenAllowed(0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174, true)`  // USDC.e
-- `setTokenAllowed(0x3c499c542cef5e3811e1192ce70d8cc03d5c3359, true)`  // Native USDC
+## 7. 说明
 
-> 说明：钱包风控中的“欺诈/不可信”提示来自钱包安全引擎（如 Blockaid），源码验证能显著降低误报频率，但不保证 100% 立刻消失，通常需一段时间同步信誉缓存。
+- 源码验证能显著降低“欺诈/不可信”误报，但钱包风险缓存更新存在延迟。
+- 生产商用环境可使用私有升级版合约；公开仓库保留标准实现与验证流程。

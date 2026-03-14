@@ -1,118 +1,66 @@
-# Commercialization Roadmap
+# 商业化说明（Production）
 
-Target: make PolyWeather a sustainable paid weather-intelligence product.
+最后更新：`2026-03-14`
 
----
+## 1. 定位
 
-## 1. Product Positioning
+PolyWeather 是面向温度结算场景的气象决策层，不是通用天气应用。
 
-PolyWeather is not a generic weather app. It is a settlement decision layer for temperature markets:
+核心价值：
 
-- observation-first (METAR/MGM),
-- settlement-aware modeling (DEB + mu/buckets),
-- market mapping (Polymarket read-only) for actionable mispricing checks.
+- 观测优先（METAR/MGM）
+- 结算导向（DEB + 概率桶）
+- 市场映射（行情对照 + 错价雷达）
 
----
+## 2. 当前收费能力状态
 
-## 2. Current Monetization Readiness (2026-03-12)
-
-| Capability | Status | Notes |
+| 能力 | 状态 | 备注 |
 | :-- | :-- | :-- |
-| Frontend entitlement gate | Implemented | Next middleware supports token gate + session cookie |
-| Backend entitlement guard | Implemented | `POLYWEATHER_REQUIRE_ENTITLEMENT` + backend token header |
-| Bot command entitlement pre-hook | Implemented | `/city` and `/deb` can be protected (`POLYWEATHER_BOT_REQUIRE_ENTITLEMENT`) |
-| Payment event ingestion | Not implemented | No automated USDC payment reconciliation yet |
-| Subscriber persistence | Not implemented | Still missing managed subscriber DB |
-| Self-serve billing UI | Not implemented | No user billing center yet |
+| 登录注册（Google + 邮箱） | 已上线 | Supabase 鉴权 |
+| 订阅套餐（Pro 月付） | 已上线 | `5 USDC / 30天` |
+| 积分抵扣 | 已上线 | `500分=1U`，最多 `3U` |
+| 合约支付 | 已上线 | Polygon，USDC + USDC.e |
+| 支付自动确认 | 已上线 | Event Loop + Confirm Loop |
+| 钱包绑定 | 已上线 | 浏览器钱包 + WalletConnect |
+| 私有频道推送 | 已上线 | 可拆分业务频道 |
 
----
+## 3. 权限模型（当前）
 
-## 3. Access Model
+- 游客：可查看基础看板与简版信息。
+- 登录用户：账户中心、钱包绑定、积分同步。
+- Pro 用户：
+  - 今日日内深度分析（含高温时段）
+  - 历史对账 + 未来日期分析
+  - 全平台智能气象推送
 
-```mermaid
-flowchart LR
-    U["User"] --> FE["Frontend (Vercel)"]
-    FE --> MW["Entitlement Middleware"]
-    MW --> BFF["BFF /api/*"]
-    BFF --> API["FastAPI"]
-    API --> G["Backend Entitlement Guard"]
+## 4. 收费与积分规则（默认）
 
-    P["Payment Source (USDC / Wallet)"] --> S["Subscriber State (to build)"]
-    S --> MW
-    S --> API
-```
+- 套餐：`pro_monthly`（5 USDC / 30 天）
+- 抵扣：500 积分抵 1 USDC，最高抵 3 USDC
+- 实付下限：2 USDC（当积分满额时）
 
-### Do we need login/register to start charging?
+> 说明：具体运营策略可按阶段调整，生产参数建议放私有仓库。
 
-Short answer: **no for phase 1, yes for scale**.
+## 5. 建议的开源边界
 
-- Phase 1 can run with token/wallet-based entitlement and manual ops.
-- For scale (self-serve renewals, refunds, support, analytics), account identity and subscriber DB become mandatory.
+请按 Open-Core 执行：
 
----
+- 开源：基础能力与通用支付流程。
+- 私有：商业风控、营销策略、关键运营参数、内部审计策略。
 
-## 4. Packaging and Pricing (Draft)
+详见：[Open-Core 与商用边界](OPEN_CORE_POLICY.md)
 
-| Tier | Price | Value |
-| :-- | :-- | :-- |
-| Telegram Signal Channel | $1 / month | Low-noise proactive signal stream |
-| Web Dashboard | $5 / month | Full model context + historical reconciliation |
-| VIP Bundle | $5.5 / month | Dashboard + signal stream |
+## 6. 上线检查清单（收费前）
 
-Payment direction:
+1. 支付链路：创建 intent、提交 tx、确认入账、订阅开通全链路可回放。
+2. 权限链路：前端/后端/Bot 对 Pro 权限判定一致。
+3. 审计能力：支付日志、订阅变更、异常重试可追溯。
+4. 通知策略：支付成功私发、群内通知降噪。
+5. 安全边界：敏感配置不进仓库。
 
-- Settlement/network: Polygon USDC
-- Rollout: manual confirmation first, then automated entitlement sync
+## 7. 后续路线
 
----
-
-## 5. Execution Phases
-
-### Phase 1: Manual Paid Beta
-
-- Keep user set small and quality-focused.
-- Manual payment confirmation + manual entitlement issue.
-- Weekly accuracy report as trust anchor.
-
-### Phase 2: Payment Automation
-
-- Ingest payment events (wallet/tx).
-- Auto-issue and auto-expire entitlement.
-- Full parity across frontend middleware, backend API, and bot command guard.
-
-### Phase 3: Growth and B2B
-
-- Self-serve billing and subscriber console.
-- Retention analytics and feature usage telemetry.
-- Optional B2B/API package.
-
----
-
-## 6. P0/P1 Commercial Engineering Backlog
-
-### P0 (before public paid launch)
-
-1. Subscriber store (managed PostgreSQL/Supabase) with entitlement expiry.
-2. Payment event pipeline (idempotent ingest + reconciliation + retry).
-3. Unified entitlement policy matrix (frontend/backend/bot).
-4. Ops audit trail for alerts and entitlement changes.
-
-### P1 (after initial paid users)
-
-1. Billing/entitlement admin console.
-2. User-level support tooling (manual override, extension, refund notes).
-3. Conversion and retention dashboards.
-4. Churn diagnostics linked to alert quality and latency.
-
----
-
-## 7. Commercial Risk Controls
-
-- Revenue leakage: deny by default when entitlement token/state is missing.
-- Signal quality drift: publish monthly transparent accuracy summary.
-- Support load: keep alert evidence standardized in push payloads.
-- Compliance/ops: preserve immutable entitlement and push logs.
-
----
-
-Last Updated: `2026-03-12`
+- 支持更多链和稳定币。
+- 引入退款与工单后台。
+- 建立周/月留存与付费转化看板。
+- 打通渠道分销与邀请码返利系统。

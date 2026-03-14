@@ -1,6 +1,6 @@
 # PolyWeather Frontend
 
-This directory contains the production web frontend.
+Production frontend for PolyWeather Pro.
 
 Production URL:
 - https://polyweather-pro.vercel.app/
@@ -8,23 +8,16 @@ Production URL:
 ## Stack
 
 - Next.js App Router
-- React (dashboard component architecture)
-- Tailwind CSS
-- Leaflet (map)
-- Chart.js
-- Typed dashboard store + typed data client
+- React + Tailwind
+- Leaflet + Chart.js
+- Supabase Auth
+- WalletConnect + browser EVM wallets
 
 ## Runtime Model
 
-- Vercel hosts UI + BFF route handlers.
-- FastAPI on VPS provides weather/analysis APIs.
-- Browser never calls backend directly in normal flow.
-
-Request path:
-
-1. Browser -> `https://polyweather-pro.vercel.app`
-2. Frontend -> Next route handlers (`/api/*`)
-3. Route handlers -> FastAPI (`POLYWEATHER_API_BASE_URL`)
+1. Browser -> Next app (`frontend`)
+2. Next Route Handlers (`/api/*`) -> FastAPI backend
+3. FastAPI -> analysis/payment services
 
 ## Local Development
 
@@ -35,23 +28,33 @@ npm install
 npm run dev
 ```
 
-Default local URL:
-- http://localhost:3000
-
 ## Required Environment Variables
 
 ```env
 POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
-```
-
-Optional entitlement variables:
-
-```env
-POLYWEATHER_DASHBOARD_ACCESS_TOKEN=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+POLYWEATHER_AUTH_ENABLED=true
+POLYWEATHER_AUTH_REQUIRED=false
 POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 ```
 
+WalletConnect:
+
+```env
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
+```
+
+Overlay links:
+
+```env
+NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
+```
+
 ## Route Handlers
+
+Weather:
 
 - `GET /api/cities`
 - `GET /api/city/[name]`
@@ -59,52 +62,32 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 - `GET /api/city/[name]/detail`
 - `GET /api/history/[name]`
 
-Cache behavior:
+Auth:
 
-- `cities` / `summary` / `history` return `ETag` + `Cache-Control`.
-- `summary?force_refresh=true` returns `Cache-Control: no-store`.
-- `city/[name]` and `city/[name]/detail` are dynamic pass-through (no shared HTTP cache).
+- `GET /api/auth/me`
 
-## Frontend State & Local Cache
+Payments:
 
-- `sessionStorage`:
-  - city detail cache bundle (TTL 5 minutes)
-- `localStorage`:
-  - selected city
-  - sidebar risk-group collapse state
-- in-flight request de-duplication for city detail/summary/history/market scan
+- `GET /api/payments/config`
+- `GET /api/payments/wallets`
+- `POST /api/payments/wallets/challenge`
+- `POST /api/payments/wallets/verify`
+- `POST /api/payments/intents`
+- `GET /api/payments/intents/[intentId]`
+- `POST /api/payments/intents/[intentId]/submit`
+- `POST /api/payments/intents/[intentId]/confirm`
 
-## Entitlement
+## Cache Behavior
 
-- `frontend/middleware.ts` enforces dashboard/API access when `POLYWEATHER_DASHBOARD_ACCESS_TOKEN` is set.
-- BFF forwards backend entitlement token via `x-polyweather-entitlement` header when configured.
+- `cities` / `summary` / `history`: `ETag + Cache-Control`
+- `summary?force_refresh=true`: `no-store`
+- payment routes: `no-store`
 
-## UI Notes
+## Open-Core Note
 
-- Left sidebar supports risk-group collapsible sections.
-- City rows keep local time and peak-time hints visible.
-- Future-date modal requests market scan with `target_date`.
-- Detail panel accessibility uses `inert` + blur when hidden.
+This frontend repo includes general product UI and standard payment UX.
+Commercial strategy tuning, private ops workflows, and sensitive production parameters are intentionally outside the public docs scope.
 
-## Icons & Manifest
+See root policy: `docs/OPEN_CORE_POLICY.md`
 
-- `frontend/app/favicon.ico`
-- `frontend/app/favicon-16x16.png`
-- `frontend/app/favicon-32x32.png`
-- `frontend/app/apple-touch-icon.png`
-- `frontend/app/site.webmanifest`
-
-## Vercel Deployment
-
-1. Import repo into Vercel
-2. Set Root Directory = `frontend`
-3. Set env vars
-4. Deploy
-
-## Verification
-
-```bash
-./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
-```
-
-Last updated: `2026-03-12`
+Last updated: `2026-03-14`

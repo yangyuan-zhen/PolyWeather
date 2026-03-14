@@ -1,94 +1,73 @@
-# Technical Debt Backlog
+# Technical Debt Backlog (v1.4)
 
-Purpose: keep engineering debt explicit while shipping production features.
+Last Updated: `2026-03-14`
 
----
+Focus after paid launch: payment reliability, entitlement parity, and auditability.
 
-## 1. Debt Snapshot
+## 1. Snapshot
 
-Current estimate: **90% stable / 10% debt**.
+Current estimate: **93% stable / 7% debt**.
 
 ```mermaid
 flowchart TD
     A["Tech Debt"]
 
-    subgraph PI["Payment Infra"]
-        PI1["Payment event ingestion"]
-        PI2["Subscriber persistence"]
-        PI3["Entitlement parity"]
+    subgraph P["Payments & Subscriptions"]
+        P1["Automatic replay for failed confirmations"]
+        P2["Refund and support workflow"]
+        P3["Multi-chain settlement reconciliation"]
     end
 
-    subgraph Q["Quality"]
-        Q1["Replay harness"]
-        Q2["Mixed integration tests"]
+    subgraph E["Entitlement & Ops"]
+        E1["Frontend/backend/bot entitlement regression matrix"]
+        E2["Points vs subscription conflict policy"]
     end
 
     subgraph O["Observability"]
-        O1["Alert evidence schema"]
-        O2["Ops dashboards"]
+        O1["Layered metrics for payment failures"]
+        O2["Business operations dashboards"]
     end
 
-    A --> PI
-    A --> Q
+    A --> P
+    A --> E
     A --> O
 ```
 
----
+## 2. Recently Closed
 
-## 2. Recently Closed (2026-03-12)
+- P1 checkout flow live (intent -> submit -> confirm).
+- Automatic reconciliation live (event loop + confirm loop).
+- Wallet binding supports extension wallets + WalletConnect.
+- Account center entitlement rendering is wired end-to-end.
+- Wallet activity watcher supports dedicated channel routing.
 
-- Bot entry refactor completed:
-  - `bot_listener.py` simplified to thin entrypoint.
-  - Runtime split into orchestrator/handlers/services/analysis/guard/coordinator layers.
-- Startup diagnostics landed:
-  - `/diag` command
-  - loop-level startup status reporting (trade alerts, polygon watcher, polymarket watcher)
-- Multi-model anchor migration completed for mispricing radar (replaced single Open-Meteo anchor).
-- Non-tradable market hard-skip guard completed (closed/inactive/not accepting orders/past end time).
-- Wallet activity watcher upgraded with alias parsing, link preview switch, and anti-spam debounce/immediate controls.
-- Frontend BFF HTTP caching (`ETag`/`304`) completed for cities/summary/history.
-- Meteoblue fully removed from runtime paths and docs.
-
----
-
-## 3. Active High-Priority Debt
+## 3. High-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Payment event ingestion pipeline | Cannot automate paid access reliably | Build idempotent onchain payment ingest + reconciliation worker |
-| Subscriber persistence model | Manual entitlement ops do not scale | Add managed PostgreSQL/Supabase subscriber state |
-| Entitlement parity matrix | Access leaks/false denies across channels | Unify policy across frontend middleware, backend API, and bot guard |
-| Alert evidence contract | Harder to debug false positives quickly | Standardize machine-readable evidence schema for each push |
+| Automatic replay strategy for transient tx failures | Manual intervention still needed in some edge cases | Standardize tx replay + fallback paths |
+| Refund/support workflow | Commercial loop incomplete | Add refund state machine + support tooling |
+| Subscription audit visualization | Slower incident triage | Build timeline view for entitlement events |
+| Multi-email same-Telegram binding policy | Points ownership confusion | Add primary-account binding and migration utilities |
 
----
-
-## 4. Active Medium-Priority Debt
+## 4. Medium-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Replay simulation harness | Edge-case regressions hard to reproduce | Deterministic replay from stored weather + market snapshots |
-| End-to-end integration coverage | Runtime regressions can slip | Add integration tests for `/api/city/{name}/detail` + push decisions |
-| Config sprawl | Tuning is error-prone | Consolidate env knobs into structured config groups |
-| Naming and data contracts | Boundary confusion persists | Normalize model/market field naming and compatibility aliases |
+| Points transparency | User confusion | Expose points breakdown by source |
+| Payment error copy consistency | Conversion impact | Build error-code to UX-copy mapping table |
+| Config sprawl | Ops mistakes | Consolidate payment/push configs into grouped schemas |
 
----
-
-## 5. Active Low-Priority Debt
+## 5. Low-Priority Debt
 
 | Item | Impact | Suggested Work |
 | :-- | :-- | :-- |
-| Cold-start variance | First request latency jitter | Add prewarm strategy for top city routes |
-| Local state files | Harder multi-instance scaling | Continue migration to managed storage |
-
----
+| Offline cache support | Non-core | Evaluate SW + IndexedDB |
+| Cold-start variance | First-load jitter | Add route prewarming for hot cities |
 
 ## 6. Next Milestones
 
-1. Land subscriber DB + entitlement expiry model.
-2. Ship payment ingest + automatic entitlement sync.
-3. Add replay harness for weather/market mixed scenarios.
-4. Publish alert evidence schema and operator tooling.
-
----
-
-Last Updated: `2026-03-12`
+1. Ship automatic replay and alert stratification for payment anomalies.
+2. Launch minimal refund/support admin flow.
+3. Add business dashboards for payments, renewals, and retention.
+4. Complete entitlement parity regression suite.
