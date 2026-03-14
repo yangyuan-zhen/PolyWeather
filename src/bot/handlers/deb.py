@@ -55,24 +55,8 @@ class DebCommandHandler:
         self.guard = guard
         self.deb_service = deb_service
         self.io_layer = io_layer
-        self._handled_message_keys: set[tuple[Any, Any]] = set()
-
-    def _mark_handled_once(self, message: Any) -> bool:
-        chat_id = getattr(getattr(message, "chat", None), "id", None)
-        message_id = getattr(message, "message_id", None)
-        key = (chat_id, message_id)
-        if key in self._handled_message_keys:
-            return False
-        self._handled_message_keys.add(key)
-        if len(self._handled_message_keys) > 4096:
-            self._handled_message_keys.clear()
-        return True
 
     def register(self) -> None:
-        @self.bot.message_handler(commands=["deb"])
-        def _deb_command(message):
-            self.handle(message)
-
         @self.bot.message_handler(
             func=lambda message: _is_deb_command_text(getattr(message, "text", None)),
             content_types=["text"],
@@ -80,16 +64,7 @@ class DebCommandHandler:
         def _deb_func(message):
             self.handle(message)
 
-        @self.bot.message_handler(
-            regexp=r"^[/／⁄∕╱⧸]\s*deb(@[A-Za-z0-9_]+)?(\s|$)",
-            content_types=["text"],
-        )
-        def _deb_regex(message):
-            self.handle(message)
-
     def handle(self, message: Any) -> None:
-        if not self._mark_handled_once(message):
-            return
         if not _is_deb_command_text(getattr(message, "text", None)):
             return
         trace = CommandTrace("/deb", message)
