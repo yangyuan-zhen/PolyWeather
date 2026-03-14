@@ -11,6 +11,11 @@ from src.bot.services.city_command_service import CityCommandService
 from src.bot.settings import CITY_QUERY_COST
 
 
+def _is_city_command_text(text: str | None) -> bool:
+    head = str(text or "").strip().split(maxsplit=1)[0].lower()
+    return head == "/city" or head.startswith("/city@")
+
+
 class CityCommandHandler:
     def __init__(
         self,
@@ -25,7 +30,10 @@ class CityCommandHandler:
         self.io_layer = io_layer
 
     def register(self) -> None:
-        @self.bot.message_handler(commands=["city"])
+        @self.bot.message_handler(
+            func=lambda message: _is_city_command_text(getattr(message, "text", None)),
+            content_types=["text"],
+        )
         def _city(message):
             self.handle(message)
 

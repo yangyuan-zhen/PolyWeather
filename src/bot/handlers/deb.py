@@ -11,6 +11,11 @@ from src.bot.services.deb_command_service import DebCommandService
 from src.bot.settings import DEB_QUERY_COST
 
 
+def _is_deb_command_text(text: str | None) -> bool:
+    head = str(text or "").strip().split(maxsplit=1)[0].lower()
+    return head == "/deb" or head.startswith("/deb@")
+
+
 class DebCommandHandler:
     def __init__(
         self,
@@ -25,7 +30,10 @@ class DebCommandHandler:
         self.io_layer = io_layer
 
     def register(self) -> None:
-        @self.bot.message_handler(commands=["deb"])
+        @self.bot.message_handler(
+            func=lambda message: _is_deb_command_text(getattr(message, "text", None)),
+            content_types=["text"],
+        )
         def _deb(message):
             self.handle(message)
 
