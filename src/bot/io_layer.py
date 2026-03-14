@@ -76,7 +76,8 @@ class BotIOLayer:
             return src, self.query_topic_map[src]
         if self.query_topic_chat_id:
             return self.query_topic_chat_id, self.query_topic_id
-        return src or None, self.query_topic_id
+        # No mapping/fixed topic configured: reply directly to source chat without topic.
+        return src or None, 0
 
     def send_query_message(
         self,
