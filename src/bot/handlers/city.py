@@ -74,6 +74,13 @@ class CityCommandHandler:
             self.handle(message)
 
         @self.bot.message_handler(
+            func=lambda message: _is_city_command_text(getattr(message, "text", None)),
+            content_types=["text"],
+        )
+        def _city_func(message):
+            self.handle(message)
+
+        @self.bot.message_handler(
             regexp=r"^[/／⁄∕╱⧸]\s*city(@[A-Za-z0-9_]+)?(\s|$)",
             content_types=["text"],
         )

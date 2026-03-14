@@ -74,6 +74,13 @@ class DebCommandHandler:
             self.handle(message)
 
         @self.bot.message_handler(
+            func=lambda message: _is_deb_command_text(getattr(message, "text", None)),
+            content_types=["text"],
+        )
+        def _deb_func(message):
+            self.handle(message)
+
+        @self.bot.message_handler(
             regexp=r"^[/／⁄∕╱⧸]\s*deb(@[A-Za-z0-9_]+)?(\s|$)",
             content_types=["text"],
         )
