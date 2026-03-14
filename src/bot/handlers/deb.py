@@ -40,7 +40,12 @@ def _normalized_command_head(text: str | None) -> str:
 
 def _is_deb_command_text(text: str | None) -> bool:
     head = _normalized_command_head(text)
-    return head == "/deb" or head.startswith("/deb@")
+    return (
+        head == "/deb"
+        or head.startswith("/deb@")
+        or head == "/pwdeb"
+        or head.startswith("/pwdeb@")
+    )
 
 
 class DebCommandHandler:

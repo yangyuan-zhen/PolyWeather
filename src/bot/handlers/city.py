@@ -40,7 +40,12 @@ def _normalized_command_head(text: str | None) -> str:
 
 def _is_city_command_text(text: str | None) -> bool:
     head = _normalized_command_head(text)
-    return head == "/city" or head.startswith("/city@")
+    return (
+        head == "/city"
+        or head.startswith("/city@")
+        or head == "/pwcity"
+        or head.startswith("/pwcity@")
+    )
 
 
 class CityCommandHandler:

@@ -8,6 +8,51 @@ from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
 
 
+def _normalized_command_head(text: str | None) -> str:
+    raw = str(text or "")
+    for marker in (
+        "\ufeff",
+        "\u200b",
+        "\u200c",
+        "\u200d",
+        "\u200e",
+        "\u200f",
+        "\u2060",
+        "\u2066",
+        "\u2067",
+        "\u2068",
+        "\u2069",
+        "\u202a",
+        "\u202b",
+        "\u202c",
+        "\u202d",
+        "\u202e",
+    ):
+        raw = raw.replace(marker, "")
+    raw = raw.strip()
+    if raw[:1] in {"／", "⁄", "∕", "╱", "⧸"}:
+        raw = "/" + raw[1:]
+    return raw.split(maxsplit=1)[0].lower() if raw else ""
+
+
+def _is_command_head(head: str, name: str) -> bool:
+    base = f"/{name}"
+    return head == base or head.startswith(f"{base}@")
+
+
+def _is_basic_command_text(text: str | None) -> bool:
+    head = _normalized_command_head(text)
+    return (
+        _is_command_head(head, "start")
+        or _is_command_head(head, "help")
+        or _is_command_head(head, "id")
+        or _is_command_head(head, "top")
+        or _is_command_head(head, "diag")
+        or _is_command_head(head, "bind")
+        or _is_command_head(head, "unbind")
+    )
+
+
 class BasicCommandHandler:
     def __init__(
         self,
@@ -20,29 +65,30 @@ class BasicCommandHandler:
         self.runtime_status_provider = runtime_status_provider
 
     def register(self) -> None:
-        @self.bot.message_handler(commands=["start", "help"])
-        def _start_help(message):
-            self.handle_start_help(message)
-
-        @self.bot.message_handler(commands=["id"])
-        def _id(message):
-            self.handle_id(message)
-
-        @self.bot.message_handler(commands=["top"])
-        def _top(message):
-            self.handle_top(message)
-
-        @self.bot.message_handler(commands=["diag"])
-        def _diag(message):
-            self.handle_diag(message)
-
-        @self.bot.message_handler(commands=["bind"])
-        def _bind(message):
-            self.handle_bind(message)
-
-        @self.bot.message_handler(commands=["unbind"])
-        def _unbind(message):
-            self.handle_unbind(message)
+        @self.bot.message_handler(
+            content_types=["text"],
+            func=lambda message: _is_basic_command_text(getattr(message, "text", None)),
+        )
+        def _basic(message):
+            head = _normalized_command_head(getattr(message, "text", None))
+            if _is_command_head(head, "start") or _is_command_head(head, "help"):
+                self.handle_start_help(message)
+                return
+            if _is_command_head(head, "id"):
+                self.handle_id(message)
+                return
+            if _is_command_head(head, "top"):
+                self.handle_top(message)
+                return
+            if _is_command_head(head, "diag"):
+                self.handle_diag(message)
+                return
+            if _is_command_head(head, "bind"):
+                self.handle_bind(message)
+                return
+            if _is_command_head(head, "unbind"):
+                self.handle_unbind(message)
+                return
 
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)

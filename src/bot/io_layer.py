@@ -145,15 +145,15 @@ class BotIOLayer:
         return (
             "🚀 <b>PolyWeather 天气查询机器人</b>\n\n"
             "可用指令:\n"
-            f"/city [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
-            f"/deb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
+            f"/city [城市名] 或 /pwcity [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
+            f"/deb [城市名] 或 /pwdeb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
             "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
             "/diag - 查看 Bot 启动诊断\n\n"
             "/bind - 绑定 Supabase 账号（可选）\n"
             "/unbind - 解除当前 Telegram 与网页账号绑定\n\n"
             "🔐 <i>/city 与 /deb 仅限官方群成员使用。</i>\n\n"
-            "示例: <code>/city 伦敦</code>\n"
+            "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
             f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
             f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
         )
