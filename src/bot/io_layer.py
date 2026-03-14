@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from datetime import datetime
-from typing import Any
+from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
 
@@ -23,6 +23,9 @@ class BotIOLayer:
     def __init__(self, bot: Any, db: DBManager):
         self.bot = bot
         self.db = db
+        self.query_topic_map = self._parse_topic_map(
+            os.getenv("TELEGRAM_QUERY_TOPIC_MAP")
+        )
         self.query_topic_chat_id = str(
             os.getenv("TELEGRAM_QUERY_TOPIC_CHAT_ID") or ""
         ).strip()
@@ -42,6 +45,39 @@ class BotIOLayer:
         except Exception:
             return default
 
+    @staticmethod
+    def _parse_topic_map(raw: Optional[str]) -> Dict[str, int]:
+        """
+        Parse TELEGRAM_QUERY_TOPIC_MAP:
+        - "-1003586303099:25513,-1003539418691:25514"
+        - Supports comma/semicolon/newline separators.
+        """
+        out: Dict[str, int] = {}
+        if not raw:
+            return out
+        normalized = str(raw).replace("\r", ",").replace("\n", ",").replace(";", ",")
+        for part in normalized.split(","):
+            row = part.strip()
+            if not row or ":" not in row:
+                continue
+            chat_id, topic_raw = row.split(":", 1)
+            chat_id = str(chat_id or "").strip()
+            topic_id = BotIOLayer._safe_int(topic_raw, default=0)
+            if chat_id and topic_id > 0:
+                out[chat_id] = topic_id
+        return out
+
+    def _resolve_query_target(
+        self,
+        source_chat_id: Any,
+    ) -> Tuple[Optional[str], int]:
+        src = str(source_chat_id).strip() if source_chat_id is not None else ""
+        if src and src in self.query_topic_map:
+            return src, self.query_topic_map[src]
+        if self.query_topic_chat_id:
+            return self.query_topic_chat_id, self.query_topic_id
+        return src or None, self.query_topic_id
+
     def send_query_message(
         self,
         message: Any,
@@ -51,7 +87,7 @@ class BotIOLayer:
     ) -> None:
         chat = getattr(message, "chat", None)
         fallback_chat_id = getattr(chat, "id", None)
-        target_chat_id = self.query_topic_chat_id or fallback_chat_id
+        target_chat_id, target_topic_id = self._resolve_query_target(fallback_chat_id)
         if target_chat_id is None:
             self.bot.send_message(message.chat.id, text, parse_mode=parse_mode)
             return
@@ -59,17 +95,18 @@ class BotIOLayer:
         kwargs = {}
         if parse_mode:
             kwargs["parse_mode"] = parse_mode
-        if self.query_topic_id > 0:
-            kwargs["message_thread_id"] = self.query_topic_id
+        if target_topic_id > 0:
+            kwargs["message_thread_id"] = target_topic_id
 
         try:
             self.bot.send_message(target_chat_id, text, **kwargs)
             return
         except Exception as exc:
             logger.warning(
-                "query topic send failed chat_id={} topic_id={} error={}",
+                "query topic send failed chat_id={} topic_id={} source_chat_id={} error={}",
                 target_chat_id,
-                self.query_topic_id,
+                target_topic_id,
+                fallback_chat_id,
                 exc,
             )
 
