@@ -42,6 +42,13 @@ def _normalize_address(address: Any) -> str:
     return Web3.to_checksum_address(text).lower()
 
 
+def _checksum_address(address: Any) -> str:
+    text = str(address or "").strip()
+    if not text or not Web3.is_address(text):
+        return ""
+    return Web3.to_checksum_address(text)
+
+
 def _to_hex(value: Any) -> str:
     try:
         return str(Web3.to_hex(value or b"")).lower()
@@ -195,13 +202,12 @@ def _runner() -> None:
     max_events = _env_int("POLYWEATHER_PAYMENT_EVENT_LOOP_MAX_EVENTS_PER_CYCLE", 200, 10)
     state_path = _state_file()
 
-    receiver_contracts = sorted(
-        {
-            _normalize_address(token.receiver_contract)
-            for token in PAYMENT_CHECKOUT.supported_tokens.values()
-            if _normalize_address(token.receiver_contract)
-        }
-    )
+    receiver_contract_set: set[str] = set()
+    for token in PAYMENT_CHECKOUT.supported_tokens.values():
+        checksum_addr = _checksum_address(token.receiver_contract)
+        if checksum_addr:
+            receiver_contract_set.add(checksum_addr)
+    receiver_contracts = sorted(receiver_contract_set)
     if not receiver_contracts:
         logger.warning("payment event loop skipped: no receiver contract configured")
         return
