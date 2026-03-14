@@ -18,15 +18,22 @@ def _normalized_command_head(text: str | None) -> str:
         "\u200b",
         "\u200c",
         "\u200d",
+        "\u200e",
+        "\u200f",
         "\u2060",
         "\u2066",
         "\u2067",
         "\u2068",
         "\u2069",
+        "\u202a",
+        "\u202b",
+        "\u202c",
+        "\u202d",
+        "\u202e",
     ):
         raw = raw.replace(marker, "")
     raw = raw.strip()
-    if raw.startswith("／"):
+    if raw[:1] in {"／", "⁄", "∕", "╱", "⧸"}:
         raw = "/" + raw[1:]
     return raw.split(maxsplit=1)[0].lower() if raw else ""
 

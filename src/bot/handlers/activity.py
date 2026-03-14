@@ -23,14 +23,21 @@ class ActivityHandler:
             "\u200b",
             "\u200c",
             "\u200d",
+            "\u200e",
+            "\u200f",
             "\u2060",
             "\u2066",
             "\u2067",
             "\u2068",
             "\u2069",
+            "\u202a",
+            "\u202b",
+            "\u202c",
+            "\u202d",
+            "\u202e",
         ):
             normalized = normalized.replace(marker, "")
         normalized = normalized.lstrip()
-        if normalized.startswith("/") or normalized.startswith("／"):
+        if normalized[:1] in {"/", "／", "⁄", "∕", "╱", "⧸"}:
             return
         self.io_layer.track_group_text_activity(message)
