@@ -6,7 +6,10 @@ from datetime import datetime
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional
 
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import (
+    get_polymarket_wallet_activity_chat_ids_from_env,
+    get_telegram_chat_ids_from_env,
+)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -87,6 +90,7 @@ class StartupCoordinator:
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
             self._start_weekly_reward_loop(),
+            self._start_payment_event_loop(),
             self._start_payment_confirm_loop(),
         ]
         self._runtime_status = RuntimeStatus(
@@ -210,7 +214,7 @@ class StartupCoordinator:
 
     def _start_polymarket_wallet_activity_loop(self) -> LoopStatus:
         enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
-        chat_ids = get_telegram_chat_ids_from_env()
+        chat_ids = get_polymarket_wallet_activity_chat_ids_from_env()
         users_count = _parse_csv_count(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
         poll = max(5, _env_int("POLYMARKET_WALLET_ACTIVITY_INTERVAL_SEC", 20))
         details = {
@@ -221,7 +225,9 @@ class StartupCoordinator:
         }
         validation_error = None
         if not chat_ids:
-            validation_error = "missing_TELEGRAM_CHAT_IDS"
+            validation_error = (
+                "missing_POLYMARKET_WALLET_ACTIVITY_CHAT_IDS_or_TELEGRAM_CHAT_IDS"
+            )
         elif users_count == 0:
             validation_error = "missing_POLYMARKET_WALLET_ACTIVITY_USERS"
         return self._start_with_validation(
@@ -298,6 +304,43 @@ class StartupCoordinator:
             starter=lambda: import_module(
                 "src.payments.confirm_loop"
             ).start_payment_confirm_loop(),
+        )
+
+    def _start_payment_event_loop(self) -> LoopStatus:
+        enabled = _env_bool("POLYWEATHER_PAYMENT_EVENT_LOOP_ENABLED", True)
+        details = {
+            "interval_sec": max(
+                5, _env_int("POLYWEATHER_PAYMENT_EVENT_LOOP_INTERVAL_SEC", 20)
+            ),
+            "lookback_blocks": max(
+                500,
+                _env_int(
+                    "POLYWEATHER_PAYMENT_EVENT_LOOP_START_LOOKBACK_BLOCKS",
+                    5000,
+                ),
+            ),
+            "step_blocks": min(
+                49999,
+                max(100, _env_int("POLYWEATHER_PAYMENT_EVENT_LOOP_STEP_BLOCKS", 2000)),
+            ),
+            "max_events": max(
+                10, _env_int("POLYWEATHER_PAYMENT_EVENT_LOOP_MAX_EVENTS_PER_CYCLE", 200)
+            ),
+            "payment_enabled": _env_bool("POLYWEATHER_PAYMENT_ENABLED", False),
+            "chain_id": _env_int("POLYWEATHER_PAYMENT_CHAIN_ID", 137),
+        }
+        validation_error = None
+        if not bool(details["payment_enabled"]):
+            validation_error = "payment_service_disabled"
+        return self._start_with_validation(
+            key="payment_event",
+            label="支付事件监听",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module(
+                "src.payments.event_loop"
+            ).start_payment_event_loop(),
         )
 
 

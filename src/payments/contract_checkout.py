@@ -103,6 +103,21 @@ def _normalize_address(address: Any) -> str:
     return Web3.to_checksum_address(text).lower()
 
 
+def _normalize_order_id_hex(order_id_hex: Any) -> str:
+    text = str(order_id_hex or "").strip().lower()
+    if not text:
+        return ""
+    if not text.startswith("0x"):
+        text = f"0x{text}"
+    if len(text) != 66:
+        return ""
+    try:
+        int(text[2:], 16)
+    except Exception:
+        return ""
+    return text
+
+
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -1317,6 +1332,66 @@ class PaymentContractCheckoutService:
                     "status": str(row.get("status") or ""),
                     "updated_at": row.get("updated_at"),
                     "created_at": row.get("created_at"),
+                }
+            )
+        return out
+
+    def list_open_intents_by_order_id(
+        self,
+        order_id_hex: str,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find intents by on-chain order id for event-driven reconciliation.
+        Includes created/submitted intents; confirmed intents are returned too for idempotent skip.
+        """
+        self._ensure_enabled()
+        normalized_order = _normalize_order_id_hex(order_id_hex)
+        if not normalized_order:
+            return []
+        safe_limit = max(1, min(int(limit or 10), 50))
+        rows = self._rest(
+            "GET",
+            "payment_intents",
+            params={
+                "select": (
+                    "id,user_id,status,tx_hash,order_id_hex,plan_id,token_address,"
+                    "amount_units,payment_mode,allowed_wallet,chain_id,created_at,updated_at"
+                ),
+                "order_id_hex": f"eq.{normalized_order}",
+                "chain_id": f"eq.{self.chain_id}",
+                "status": "in.(created,submitted,confirmed)",
+                "order": "created_at.desc",
+                "limit": str(safe_limit),
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(rows, list):
+            return []
+
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            intent_id = str(row.get("id") or "").strip()
+            user_id = str(row.get("user_id") or "").strip()
+            status = str(row.get("status") or "").strip().lower()
+            if not intent_id or not user_id or not status:
+                continue
+            out.append(
+                {
+                    "intent_id": intent_id,
+                    "user_id": user_id,
+                    "status": status,
+                    "tx_hash": str(row.get("tx_hash") or "").strip().lower(),
+                    "order_id_hex": str(row.get("order_id_hex") or "").strip().lower(),
+                    "plan_id": int(row.get("plan_id") or 0),
+                    "token_address": _normalize_address(row.get("token_address")),
+                    "amount_units": int(row.get("amount_units") or 0),
+                    "payment_mode": str(row.get("payment_mode") or "").strip().lower(),
+                    "allowed_wallet": _normalize_address(row.get("allowed_wallet")),
+                    "created_at": row.get("created_at"),
+                    "updated_at": row.get("updated_at"),
                 }
             )
         return out

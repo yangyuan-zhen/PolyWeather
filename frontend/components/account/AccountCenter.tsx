@@ -125,6 +125,14 @@ type CreatedIntent = {
   };
 };
 
+type IntentStatusResponse = {
+  intent?: {
+    intent_id?: string;
+    status?: string;
+    tx_hash?: string | null;
+  };
+};
+
 declare global {
   interface Window {
     ethereum?: EvmProvider;
@@ -398,7 +406,7 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
     ?.trim();
   const lower = String(rawMessage || "").toLowerCase();
 
-  if (lower.includes("confirm pending")) {
+  if (lower.includes("confirm pending") || lower.includes("payment pending timeout")) {
     return {
       message: "链上交易已提交，正在确认中，请稍后刷新查看状态。",
       pending: true,
@@ -940,6 +948,55 @@ export function AccountCenter() {
     throw new Error(`transaction confirmation timeout: ${txHash}`);
   };
 
+  const pollIntentUntilConfirmed = useCallback(
+    async (
+      intentId: string,
+      authHeaders: Record<string, string>,
+      txHashHint = "",
+      timeoutMs = 180000,
+      pollMs = 5000,
+    ) => {
+      const startedAt = Date.now();
+      const shortTx = shortAddress(txHashHint);
+      while (Date.now() - startedAt < timeoutMs) {
+        const statusRes = await fetch(`/api/payments/intents/${intentId}`, {
+          method: "GET",
+          headers: authHeaders,
+          cache: "no-store",
+        });
+        if (!statusRes.ok) {
+          if (statusRes.status >= 500 || statusRes.status === 429) {
+            await new Promise((resolve) => setTimeout(resolve, pollMs));
+            continue;
+          }
+          const raw = (await statusRes.text()).slice(0, 260);
+          throw new Error(`query intent failed: ${raw}`);
+        }
+
+        const statusJson = (await statusRes.json()) as IntentStatusResponse;
+        const intent = statusJson.intent || {};
+        const status = String(intent.status || "").toLowerCase();
+        const txHash = String(intent.tx_hash || txHashHint || "").toLowerCase();
+        if (status === "confirmed") {
+          setPaymentError("");
+          setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHash)}`);
+          await loadSnapshot();
+          await loadPaymentSnapshot();
+          return;
+        }
+        if (status === "failed" || status === "cancelled" || status === "expired") {
+          throw new Error(`payment ${status}`);
+        }
+        setPaymentInfo(
+          `交易已提交: ${shortTx}，正在链上确认（状态: ${status || "submitted"}）...`,
+        );
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+      }
+      throw new Error("payment pending timeout");
+    },
+    [loadPaymentSnapshot, loadSnapshot],
+  );
+
   const signBindMessage = async (
     eth: EvmProvider,
     address: string,
@@ -1296,8 +1353,11 @@ export function AccountCenter() {
             (lowerRaw.includes("confirmations not enough") ||
               lowerRaw.includes("tx indexed partially")));
         if (maybePending) {
-          setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待确认中。`);
-          throw new Error(`confirm pending: ${raw}`);
+          setPaymentInfo(
+            `交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`,
+          );
+          await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
+          return;
         }
         throw new Error(`confirm failed: ${raw}`);
       }

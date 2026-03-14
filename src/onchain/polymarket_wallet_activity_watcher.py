@@ -9,7 +9,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from loguru import logger
 
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import (
+    get_polymarket_wallet_activity_chat_ids_from_env,
+)
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -577,7 +579,7 @@ def _filter_changes_by_position_value(
 
 def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread]:
     enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
-    chat_ids = get_telegram_chat_ids_from_env()
+    chat_ids = get_polymarket_wallet_activity_chat_ids_from_env()
     users = _parse_addresses(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
     user_aliases = _parse_address_aliases(
         os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
@@ -591,7 +593,10 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
         logger.info("polymarket wallet activity watcher disabled")
         return None
     if not chat_ids:
-        logger.warning("polymarket wallet activity watcher skipped: TELEGRAM_CHAT_IDS is not set")
+        logger.warning(
+            "polymarket wallet activity watcher skipped: "
+            "POLYMARKET_WALLET_ACTIVITY_CHAT_IDS/CHAT_ID and TELEGRAM_CHAT_IDS/CHAT_ID are empty"
+        )
         return None
     if not users:
         logger.warning("polymarket wallet activity watcher skipped: POLYMARKET_WALLET_ACTIVITY_USERS is empty")

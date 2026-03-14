@@ -1275,6 +1275,20 @@ async def payment_create_intent(request: Request, body: CreatePaymentIntentReque
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@app.get("/api/payments/intents/{intent_id}")
+async def payment_get_intent(request: Request, intent_id: str):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        intent = PAYMENT_CHECKOUT.get_intent(
+            user_id=identity["user_id"],
+            intent_id=intent_id,
+        )
+        return {"intent": intent.__dict__}
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @app.post("/api/payments/intents/{intent_id}/submit")
 async def payment_submit_tx(
     request: Request,
