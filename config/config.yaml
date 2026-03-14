@@ -64,6 +64,11 @@ cities:
     country: "Japan"
     latitude: 35.5523
     longitude: 139.7798
+  - id: "tel_aviv"
+    city: "Tel Aviv"
+    country: "Israel"
+    latitude: 32.0114
+    longitude: 34.8867
 # Logging
 logging:
   level: "INFO"

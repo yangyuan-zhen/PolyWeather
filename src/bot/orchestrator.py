@@ -36,8 +36,18 @@ def _register_handlers(
         io_layer=io_layer,
         runtime_status_provider=startup_coordinator.get_runtime_status,
     ).register()
-    CityCommandHandler(bot=bot, guard=guard, city_service=city_service).register()
-    DebCommandHandler(bot=bot, guard=guard, deb_service=deb_service).register()
+    CityCommandHandler(
+        bot=bot,
+        guard=guard,
+        city_service=city_service,
+        io_layer=io_layer,
+    ).register()
+    DebCommandHandler(
+        bot=bot,
+        guard=guard,
+        deb_service=deb_service,
+        io_layer=io_layer,
+    ).register()
     ActivityHandler(bot=bot, io_layer=io_layer).register()
 
 

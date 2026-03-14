@@ -580,6 +580,16 @@ def _filter_changes_by_position_value(
 def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread]:
     enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
     chat_ids = get_polymarket_wallet_activity_chat_ids_from_env()
+    topic_chat_id = str(
+        os.getenv("POLYMARKET_WALLET_ACTIVITY_TOPIC_CHAT_ID") or ""
+    ).strip()
+    topic_thread_id = max(
+        0,
+        _env_int("POLYMARKET_WALLET_ACTIVITY_TOPIC_ID", 0),
+    )
+    if topic_chat_id and topic_chat_id not in chat_ids:
+        # Mirror wallet activity push to a forum topic without replacing existing channels.
+        chat_ids = [*chat_ids, topic_chat_id]
     users = _parse_addresses(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
     user_aliases = _parse_address_aliases(
         os.getenv("POLYMARKET_WALLET_ACTIVITY_USER_ALIASES")
@@ -670,6 +680,7 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
             f"min_position_value_usd={min_position_value_usd} "
             f"min_value_exempt_users={len(exempt_wallets)} "
             f"chat_targets={len(chat_ids)} "
+            f"topic_chat_id={topic_chat_id or '-'} topic_id={topic_thread_id} "
             f"aliases={len(user_aliases)} link_preview={link_preview} "
             f"min_avg_price_delta={min_avg_price_delta} "
             f"immediate_on_size_delta={immediate_on_size_delta} "
@@ -841,10 +852,19 @@ def start_polymarket_wallet_activity_loop(bot: Any) -> Optional[threading.Thread
                         sent_count = 0
                         for chat_id in chat_ids:
                             try:
+                                send_kwargs = {
+                                    "disable_web_page_preview": not link_preview,
+                                }
+                                if (
+                                    topic_thread_id > 0
+                                    and topic_chat_id
+                                    and str(chat_id).strip() == topic_chat_id
+                                ):
+                                    send_kwargs["message_thread_id"] = topic_thread_id
                                 bot.send_message(
                                     chat_id,
                                     msg,
-                                    disable_web_page_preview=not link_preview,
+                                    **send_kwargs,
                                 )
                                 sent_count += 1
                             except Exception as exc:

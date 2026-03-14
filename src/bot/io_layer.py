@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from typing import Any
 
@@ -22,10 +23,61 @@ class BotIOLayer:
     def __init__(self, bot: Any, db: DBManager):
         self.bot = bot
         self.db = db
+        self.query_topic_chat_id = str(
+            os.getenv("TELEGRAM_QUERY_TOPIC_CHAT_ID") or ""
+        ).strip()
+        self.query_topic_id = self._safe_int(
+            os.getenv("TELEGRAM_QUERY_TOPIC_ID"),
+            default=0,
+        )
 
     @staticmethod
     def display_name(user: Any) -> str:
         return user.username or user.first_name or f"User_{user.id}"
+
+    @staticmethod
+    def _safe_int(raw: Any, default: int = 0) -> int:
+        try:
+            return int(raw)
+        except Exception:
+            return default
+
+    def send_query_message(
+        self,
+        message: Any,
+        text: str,
+        *,
+        parse_mode: str | None = None,
+    ) -> None:
+        chat = getattr(message, "chat", None)
+        fallback_chat_id = getattr(chat, "id", None)
+        target_chat_id = self.query_topic_chat_id or fallback_chat_id
+        if target_chat_id is None:
+            self.bot.send_message(message.chat.id, text, parse_mode=parse_mode)
+            return
+
+        kwargs = {}
+        if parse_mode:
+            kwargs["parse_mode"] = parse_mode
+        if self.query_topic_id > 0:
+            kwargs["message_thread_id"] = self.query_topic_id
+
+        try:
+            self.bot.send_message(target_chat_id, text, **kwargs)
+            return
+        except Exception as exc:
+            logger.warning(
+                "query topic send failed chat_id={} topic_id={} error={}",
+                target_chat_id,
+                self.query_topic_id,
+                exc,
+            )
+
+        # Fallback: drop topic and send to source chat.
+        if fallback_chat_id is not None:
+            fallback_kwargs = dict(kwargs)
+            fallback_kwargs.pop("message_thread_id", None)
+            self.bot.send_message(fallback_chat_id, text, **fallback_kwargs)
 
     def ensure_query_points(self, message: Any, cost: int, label: str) -> bool:
         user = message.from_user
@@ -37,7 +89,7 @@ class BotIOLayer:
         balance = int(result.get("balance") or 0)
         required = int(result.get("required") or cost)
         missing = max(0, required - balance)
-        self.bot.reply_to(
+        self.send_query_message(
             message,
             (
                 f"❌ 积分不足，无法执行 <b>{label}</b>\n"
