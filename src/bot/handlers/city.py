@@ -11,8 +11,28 @@ from src.bot.services.city_command_service import CityCommandService
 from src.bot.settings import CITY_QUERY_COST
 
 
+def _normalized_command_head(text: str | None) -> str:
+    raw = str(text or "")
+    for marker in (
+        "\ufeff",
+        "\u200b",
+        "\u200c",
+        "\u200d",
+        "\u2060",
+        "\u2066",
+        "\u2067",
+        "\u2068",
+        "\u2069",
+    ):
+        raw = raw.replace(marker, "")
+    raw = raw.strip()
+    if raw.startswith("／"):
+        raw = "/" + raw[1:]
+    return raw.split(maxsplit=1)[0].lower() if raw else ""
+
+
 def _is_city_command_text(text: str | None) -> bool:
-    head = str(text or "").strip().split(maxsplit=1)[0].lower()
+    head = _normalized_command_head(text)
     return head == "/city" or head.startswith("/city@")
 
 
