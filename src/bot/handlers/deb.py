@@ -4,48 +4,20 @@ from typing import Any
 
 from loguru import logger
 
+from src.bot.command_parser import extract_command_name
+from src.bot.command_parser import split_command_and_args
 from src.bot.command_guard import CommandGuard
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.services.deb_command_service import DebCommandService
 from src.bot.settings import DEB_QUERY_COST
 
-
-def _normalized_command_head(text: str | None) -> str:
-    raw = str(text or "")
-    for marker in (
-        "\ufeff",
-        "\u200b",
-        "\u200c",
-        "\u200d",
-        "\u200e",
-        "\u200f",
-        "\u2060",
-        "\u2066",
-        "\u2067",
-        "\u2068",
-        "\u2069",
-        "\u202a",
-        "\u202b",
-        "\u202c",
-        "\u202d",
-        "\u202e",
-    ):
-        raw = raw.replace(marker, "")
-    raw = raw.strip()
-    if raw[:1] in {"／", "⁄", "∕", "╱", "⧸"}:
-        raw = "/" + raw[1:]
-    return raw.split(maxsplit=1)[0].lower() if raw else ""
-
-
-def _is_deb_command_text(text: str | None) -> bool:
-    head = _normalized_command_head(text)
-    return (
-        head == "/deb"
-        or head.startswith("/deb@")
-        or head == "/pwdeb"
-        or head.startswith("/pwdeb@")
+def _is_deb_command(message: Any) -> bool:
+    command = extract_command_name(
+        getattr(message, "text", None),
+        getattr(message, "entities", None),
     )
+    return command in {"deb", "pwdeb"}
 
 
 class DebCommandHandler:
@@ -62,20 +34,28 @@ class DebCommandHandler:
         self.io_layer = io_layer
 
     def register(self) -> None:
+        @self.bot.message_handler(commands=["deb", "pwdeb"])
+        def _deb_command(message):
+            self.handle(message)
+
         @self.bot.message_handler(
-            func=lambda message: _is_deb_command_text(getattr(message, "text", None)),
+            func=lambda message: _is_deb_command(message),
             content_types=["text"],
         )
-        def _deb_func(message):
+        def _deb_text(message):
             self.handle(message)
 
     def handle(self, message: Any) -> None:
-        if not _is_deb_command_text(getattr(message, "text", None)):
+        if getattr(message, "_pw_deb_handled", False):
             return
+        if not _is_deb_command(message):
+            return
+        setattr(message, "_pw_deb_handled", True)
+        setattr(message, "_pw_command_handled", True)
         trace = CommandTrace("/deb", message)
         try:
-            parts = (message.text or "").split(maxsplit=1)
-            if len(parts) < 2:
+            _, args = split_command_and_args(getattr(message, "text", None))
+            if not args:
                 trace.set_status("bad_request", "missing_city")
                 self.io_layer.send_query_message(
                     message,
@@ -84,7 +64,7 @@ class DebCommandHandler:
                 )
                 return
 
-            city_input = parts[1].strip().lower()
+            city_input = args.strip().lower()
             city_name = self.deb_service.resolve_city(city_input)
             if not self.deb_service.has_history(city_name):
                 trace.set_status("bad_request", "history_missing")

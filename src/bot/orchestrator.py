@@ -98,4 +98,4 @@ def start_bot() -> None:
         started_count,
         len(runtime_status.loops),
     )
-    bot.infinity_polling()
+    bot.infinity_polling(allowed_updates=["message"])

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from loguru import logger
+
+from src.bot.command_parser import extract_command_name
+from src.bot.command_parser import looks_like_slash_command
 from src.bot.io_layer import BotIOLayer
 
 
@@ -17,27 +21,19 @@ class ActivityHandler:
 
     def handle(self, message: Any) -> None:
         text = str(getattr(message, "text", "") or "")
-        normalized = text
-        for marker in (
-            "\ufeff",
-            "\u200b",
-            "\u200c",
-            "\u200d",
-            "\u200e",
-            "\u200f",
-            "\u2060",
-            "\u2066",
-            "\u2067",
-            "\u2068",
-            "\u2069",
-            "\u202a",
-            "\u202b",
-            "\u202c",
-            "\u202d",
-            "\u202e",
-        ):
-            normalized = normalized.replace(marker, "")
-        normalized = normalized.lstrip()
-        if normalized[:1] in {"/", "／", "⁄", "∕", "╱", "⧸"}:
+        if looks_like_slash_command(text):
+            if not getattr(message, "_pw_command_handled", False):
+                command = extract_command_name(
+                    getattr(message, "text", None),
+                    getattr(message, "entities", None),
+                )
+                logger.warning(
+                    "command fell through handlers chat_id={} thread_id={} user_id={} command={} text={!r}",
+                    getattr(getattr(message, "chat", None), "id", None),
+                    getattr(message, "message_thread_id", None),
+                    getattr(getattr(message, "from_user", None), "id", None),
+                    command or "-",
+                    text,
+                )
             return
         self.io_layer.track_group_text_activity(message)

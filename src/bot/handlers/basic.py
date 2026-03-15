@@ -3,54 +3,12 @@ from __future__ import annotations
 from typing import Any
 from typing import Callable
 
+from src.bot.command_parser import extract_command_name
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
 
-
-def _normalized_command_head(text: str | None) -> str:
-    raw = str(text or "")
-    for marker in (
-        "\ufeff",
-        "\u200b",
-        "\u200c",
-        "\u200d",
-        "\u200e",
-        "\u200f",
-        "\u2060",
-        "\u2066",
-        "\u2067",
-        "\u2068",
-        "\u2069",
-        "\u202a",
-        "\u202b",
-        "\u202c",
-        "\u202d",
-        "\u202e",
-    ):
-        raw = raw.replace(marker, "")
-    raw = raw.strip()
-    if raw[:1] in {"／", "⁄", "∕", "╱", "⧸"}:
-        raw = "/" + raw[1:]
-    return raw.split(maxsplit=1)[0].lower() if raw else ""
-
-
-def _is_command_head(head: str, name: str) -> bool:
-    base = f"/{name}"
-    return head == base or head.startswith(f"{base}@")
-
-
-def _is_basic_command_text(text: str | None) -> bool:
-    head = _normalized_command_head(text)
-    return (
-        _is_command_head(head, "start")
-        or _is_command_head(head, "help")
-        or _is_command_head(head, "id")
-        or _is_command_head(head, "top")
-        or _is_command_head(head, "diag")
-        or _is_command_head(head, "bind")
-        or _is_command_head(head, "unbind")
-    )
+_BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
 
 
 class BasicCommandHandler:
@@ -65,30 +23,70 @@ class BasicCommandHandler:
         self.runtime_status_provider = runtime_status_provider
 
     def register(self) -> None:
+        @self.bot.message_handler(commands=["start", "help"])
+        def _start_help(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["id"])
+        def _id(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["top"])
+        def _top(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["diag"])
+        def _diag(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["bind"])
+        def _bind(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["unbind"])
+        def _unbind(message):
+            self._dispatch(message)
+
         @self.bot.message_handler(
             content_types=["text"],
-            func=lambda message: _is_basic_command_text(getattr(message, "text", None)),
+            func=lambda message: extract_command_name(
+                getattr(message, "text", None),
+                getattr(message, "entities", None),
+            )
+            in _BASIC_COMMANDS,
         )
-        def _basic(message):
-            head = _normalized_command_head(getattr(message, "text", None))
-            if _is_command_head(head, "start") or _is_command_head(head, "help"):
-                self.handle_start_help(message)
-                return
-            if _is_command_head(head, "id"):
-                self.handle_id(message)
-                return
-            if _is_command_head(head, "top"):
-                self.handle_top(message)
-                return
-            if _is_command_head(head, "diag"):
-                self.handle_diag(message)
-                return
-            if _is_command_head(head, "bind"):
-                self.handle_bind(message)
-                return
-            if _is_command_head(head, "unbind"):
-                self.handle_unbind(message)
-                return
+        def _basic_text(message):
+            self._dispatch(message)
+
+    def _dispatch(self, message: Any) -> None:
+        command = extract_command_name(
+            getattr(message, "text", None),
+            getattr(message, "entities", None),
+        )
+        if command not in _BASIC_COMMANDS:
+            return
+        if getattr(message, "_pw_basic_handled", False):
+            return
+        setattr(message, "_pw_basic_handled", True)
+        setattr(message, "_pw_command_handled", True)
+        if command in {"start", "help"}:
+            self.handle_start_help(message)
+            return
+        if command == "id":
+            self.handle_id(message)
+            return
+        if command == "top":
+            self.handle_top(message)
+            return
+        if command == "diag":
+            self.handle_diag(message)
+            return
+        if command == "bind":
+            self.handle_bind(message)
+            return
+        if command == "unbind":
+            self.handle_unbind(message)
+            return
 
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
