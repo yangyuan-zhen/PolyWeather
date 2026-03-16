@@ -40,3 +40,55 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function DELETE(req: NextRequest) {
+  if (!API_BASE) {
+    return NextResponse.json(
+      { error: "POLYWEATHER_API_BASE_URL is not configured" },
+      { status: 500 },
+    );
+  }
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = (await req.json()) as Record<string, unknown>;
+  } catch {
+    payload = {};
+  }
+  try {
+    const auth = await buildBackendRequestHeaders(req);
+    const res = await fetch(`${API_BASE}/api/payments/wallets`, {
+      method: "DELETE",
+      headers: {
+        ...auth.headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      cache: "no-store",
+    });
+    const raw = await res.text();
+    if (!res.ok) {
+      const response = NextResponse.json(
+        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 350) },
+        { status: res.status },
+      );
+      return applyAuthResponseCookies(response, auth.response);
+    }
+    let data: unknown = { ok: true };
+    if (raw) {
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        data = { ok: true, raw };
+      }
+    }
+    const response = NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store" },
+    });
+    return applyAuthResponseCookies(response, auth.response);
+  } catch (error) {
+    return NextResponse.json(
+      { error: "Failed to unbind wallet", detail: String(error) },
+      { status: 500 },
+    );
+  }
+}
+

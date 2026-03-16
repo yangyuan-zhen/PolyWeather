@@ -261,6 +261,10 @@ class WalletVerifyRequest(BaseModel):
     signature: str = Field(..., min_length=20)
 
 
+class WalletUnbindRequest(BaseModel):
+    address: str = Field(..., min_length=8)
+
+
 class CreatePaymentIntentRequest(BaseModel):
     plan_code: str = Field(default="pro_monthly", min_length=2)
     payment_mode: str = Field(default="strict")
@@ -1222,6 +1226,19 @@ async def payment_wallets(request: Request):
             "wallets": [w.__dict__ for w in wallets],
             "chain_id": PAYMENT_CHECKOUT.chain_id,
         }
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
+@app.delete("/api/payments/wallets")
+async def payment_wallet_unbind(request: Request, body: WalletUnbindRequest):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        return PAYMENT_CHECKOUT.unbind_wallet(
+            user_id=identity["user_id"],
+            address=body.address,
+        )
     except PaymentCheckoutError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 

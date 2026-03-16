@@ -1119,6 +1119,86 @@ class PaymentContractCheckoutService:
             verified_at=now_iso,
         )
 
+    def unbind_wallet(self, user_id: str, address: str) -> Dict[str, Any]:
+        self._ensure_enabled()
+        normalized = _normalize_address(address)
+        if not normalized:
+            raise PaymentCheckoutError(400, "invalid wallet address")
+
+        # Must be an active wallet owned by current user.
+        self._require_user_wallet(user_id, normalized)
+
+        now_iso = _to_iso(_now_utc())
+        self._rest(
+            "PATCH",
+            "user_wallets",
+            params={
+                "user_id": f"eq.{user_id}",
+                "chain_id": f"eq.{self.chain_id}",
+                "address": f"eq.{normalized}",
+            },
+            payload={
+                "status": "revoked",
+                "is_primary": False,
+                "updated_at": now_iso,
+            },
+            prefer="return=representation",
+            allowed_status=[200],
+        )
+
+        # Ensure there is still an active primary wallet after unbind.
+        active_primary_rows = self._rest(
+            "GET",
+            "user_wallets",
+            params={
+                "select": "id,address",
+                "user_id": f"eq.{user_id}",
+                "chain_id": f"eq.{self.chain_id}",
+                "status": "eq.active",
+                "is_primary": "eq.true",
+                "limit": "1",
+            },
+            allowed_status=[200],
+        )
+
+        new_primary = ""
+        if isinstance(active_primary_rows, list) and active_primary_rows:
+            new_primary = _normalize_address(active_primary_rows[0].get("address") or "")
+        else:
+            active_wallet_rows = self._rest(
+                "GET",
+                "user_wallets",
+                params={
+                    "select": "id,address",
+                    "user_id": f"eq.{user_id}",
+                    "chain_id": f"eq.{self.chain_id}",
+                    "status": "eq.active",
+                    "order": "verified_at.desc,updated_at.desc",
+                    "limit": "1",
+                },
+                allowed_status=[200],
+            )
+            if isinstance(active_wallet_rows, list) and active_wallet_rows:
+                candidate = active_wallet_rows[0]
+                candidate_id = candidate.get("id")
+                candidate_addr = _normalize_address(candidate.get("address") or "")
+                if candidate_id and candidate_addr:
+                    self._rest(
+                        "PATCH",
+                        "user_wallets",
+                        params={"id": f"eq.{candidate_id}"},
+                        payload={"is_primary": True, "updated_at": now_iso},
+                        prefer="return=representation",
+                        allowed_status=[200],
+                    )
+                    new_primary = candidate_addr
+
+        return {
+            "address": normalized,
+            "unbound": True,
+            "new_primary": new_primary or None,
+        }
+
     def _select_plan(self, plan_code: str) -> Dict[str, Any]:
         code = str(plan_code or "").strip().lower() or "pro_monthly"
         row = self.plan_catalog.get(code)

@@ -41,6 +41,7 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { useI18n } from "@/hooks/useI18n";
 
 const UnlockProOverlay = dynamic(
   () =>
@@ -489,6 +490,94 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
 
 export function AccountCenter() {
   const router = useRouter();
+  const { locale } = useI18n();
+  const isEn = locale === "en-US";
+  const copy = useMemo(
+    () => ({
+      backHome: isEn ? "Back to Home" : "返回首页",
+      accountCenter: isEn ? "Account Center" : "账户中心",
+      loadingAccount: isEn ? "Loading account info..." : "加载账户信息中...",
+      refresh: isEn ? "Refresh" : "刷新",
+      signOut: isEn ? "Sign Out" : "退出",
+      signIn: isEn ? "Sign In" : "登录",
+      upgradePro: isEn ? "Upgrade Pro" : "升级 Pro",
+      guestUser: isEn ? "Guest User" : "游客用户",
+      joinedAt: isEn ? "Joined" : "加入时间",
+      totalPoints: isEn ? "Total Points" : "总积分 (荣誉)",
+      weeklyRank: isEn ? "Weekly Rank" : "周排行 (竞技)",
+      weeklyRewards: isEn ? "Weekly Rewards" : "周榜奖励",
+      membershipDetails: isEn ? "Membership Details" : "会员权限详情",
+      identityStatus: isEn ? "Identity Status" : "身份状态",
+      authMode: isEn ? "Auth Mode" : "鉴权模式",
+      weatherEngine: isEn ? "Weather Engine" : "气象引擎",
+      intradayAnalysis: isEn ? "Intraday Analysis" : "今日内分析",
+      historyFuture:
+        isEn ? "Historical + Future-date Analysis" : "历史对账 + 未来日期分析",
+      smartPush:
+        isEn ? "Cross-platform Smart Weather Push" : "全平台智能气象推送",
+      deepMode:
+        isEn ? "Deep mode (incl. high-temp window)" : "深度版（含高温时段）",
+      compactVisible: isEn ? "Compact visible" : "简版可见",
+      enabled: isEn ? "Enabled" : "已开启",
+      locked: isEn ? "Locked" : "锁定",
+      boundEmail: isEn ? "Bound Email" : "绑定邮箱",
+      loginMethod: isEn ? "Sign-in Method" : "登录方式",
+      renewalDate: isEn ? "Renewal Date" : "续费日期",
+      authResult: isEn ? "Auth Result" : "鉴权结果",
+      passed: isEn ? "Passed" : "通过",
+      restricted: isEn ? "Restricted" : "受限",
+      telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
+      telegramHint: isEn
+        ? "Send the command below to the polyweather bot to sync notifications and access."
+        : "将下方命令发送给polyweather机器人，实现全平台气象推送与权限同步。",
+      copyCommand: isEn ? "Copy command" : "复制命令",
+      paymentMgmt: isEn ? "Payment Management" : "支付管理",
+      paymentToken: isEn ? "Payment Token" : "支付币种",
+      primary: "Primary",
+      polygonChain: "Polygon Chain",
+      noWallet: isEn ? "No payout wallet bound yet." : "未绑定任何收件钱包",
+      bindExt:
+        isEn ? "Bind Browser Wallet (EVM Extension)" : "绑定浏览器钱包（EVM扩展）",
+      bindQr: isEn ? "Bind via QR (WalletConnect)" : "扫码绑定（WalletConnect）",
+      walletConnectMissing: isEn
+        ? "WalletConnect disabled: please configure"
+        : "未启用 WalletConnect：请配置",
+      unbind: isEn ? "Unbind" : "解绑",
+      unbindConfirm: isEn
+        ? "Unbind wallet {address}? You can bind it again later."
+        : "确认解绑钱包 {address}？后续可重新绑定。",
+      unbindDone: isEn ? "Wallet unbound." : "钱包已解绑。",
+      unbindDonePrimary: isEn
+        ? "Wallet unbound. New primary: {address}"
+        : "钱包已解绑，新的主钱包：{address}",
+      unbindFailed: isEn ? "Failed to unbind wallet" : "解绑钱包失败",
+      payNow: isEn ? "Subscribe & Activate" : "立即订阅并激活服务",
+      connectAndPay: isEn ? "Connect Wallet & Pay" : "连接钱包并支付",
+      loginBeforeBind: isEn
+        ? "Please sign in before binding wallet."
+        : "请先登录后再绑定钱包。",
+      loginBeforePay: isEn
+        ? "Please sign in before payment."
+        : "请先登录后再支付。",
+      bindFirstBeforePay: isEn
+        ? "Please bind a wallet first."
+        : "请先绑定钱包。",
+      payNotReady: isEn
+        ? "Payment service is not fully configured."
+        : "支付服务未配置完成。",
+      openBindFlow: isEn
+        ? "Please bind a wallet first. Opening bind flow..."
+        : "请先完成钱包绑定，正在拉起绑定流程...",
+      walletBoundCreatingOrder: isEn
+        ? "Wallet bound. Creating order and sending payment..."
+        : "钱包已绑定，正在创建订单并发起支付...",
+      proMember: "PRO MEMBER",
+      freeTier: "FREE TIER",
+      proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
+      noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
+    }),
+    [isEn],
+  );
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -522,7 +611,12 @@ export function AccountCenter() {
    * is missing or close to expiry. Throws if the user is not authenticated.
    */
   const getValidAccessToken = useCallback(async (): Promise<string> => {
-    if (!supabaseReady) throw new Error("Supabase 未配置，无法获取登录凭证。");
+    if (!supabaseReady)
+      throw new Error(
+        isEn
+          ? "Supabase is not configured. Unable to get auth token."
+          : "Supabase 未配置，无法获取登录凭证。",
+      );
     const client = getSupabaseBrowserClient();
     // First try the cached session.
     const {
@@ -539,10 +633,14 @@ export function AccountCenter() {
     if (refreshedToken) return refreshedToken;
     throw new Error(
       error?.message
-        ? `登录会话已失效 (${error.message})，请退出后重新登录。`
-        : "登录会话已失效，请退出后重新登录。",
+        ? isEn
+          ? `Session expired (${error.message}). Please sign out and sign in again.`
+          : `登录会话已失效 (${error.message})，请退出后重新登录。`
+        : isEn
+          ? "Session expired. Please sign out and sign in again."
+          : "登录会话已失效，请退出后重新登录。",
     );
-  }, [supabaseReady]);
+  }, [isEn, supabaseReady]);
 
   const buildAuthedHeaders = useCallback(
     async (withJson = false): Promise<Record<string, string>> => {
@@ -764,19 +862,19 @@ export function AccountCenter() {
   const displayName =
     String(user?.user_metadata?.full_name || "").trim() ||
     (email ? String(email).split("@")[0] : "") ||
-    "PolyWeather 用户";
+    copy.guestUser;
   const initials = (displayName.slice(0, 2) || "PW").toUpperCase();
-  const joinedAt = formatTime(user?.created_at, "zh-CN");
+  const joinedAt = formatTime(user?.created_at, locale);
   const isSubscribed = Boolean(backend?.subscription_active);
   const expiryRaw = String(
     backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
   ).trim();
-  const expiryFormatted = formatTime(expiryRaw, "zh-CN");
+  const expiryFormatted = formatTime(expiryRaw, locale);
   const proExpiry = isSubscribed
     ? expiryFormatted !== "--"
       ? expiryFormatted
-      : expiryRaw || "已开通（待同步）"
-    : "暂无 Pro 订阅";
+      : expiryRaw || copy.proPendingSync
+    : copy.noProSubscription;
 
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
@@ -1073,7 +1171,7 @@ export function AccountCenter() {
     setPaymentError("");
     setPaymentInfo("");
     if (!isAuthenticated) {
-      setPaymentError("请先登录后再绑定钱包。");
+      setPaymentError(copy.loginBeforeBind);
       return false;
     }
 
@@ -1101,7 +1199,7 @@ export function AccountCenter() {
         method: "eth_requestAccounts",
       })) as string[];
       const address = String(accounts?.[0] || "").toLowerCase();
-      if (!address) throw new Error("钱包账户为空");
+      if (!address) throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
 
       const existingWallet = boundWallets.find(
         (w) => String(w.address || "").toLowerCase() === address,
@@ -1163,16 +1261,77 @@ export function AccountCenter() {
     }
   };
 
+  const handleUnbindWallet = async (address: string) => {
+    const target = String(address || "").toLowerCase();
+    if (!target) return;
+    if (!isAuthenticated) {
+      setPaymentError(copy.loginBeforeBind);
+      return;
+    }
+    const confirmed = window.confirm(
+      copy.unbindConfirm.replace("{address}", shortAddress(target)),
+    );
+    if (!confirmed) return;
+
+    setPaymentBusy(true);
+    setPaymentError("");
+    setPaymentInfo("");
+    try {
+      const headers = await buildAuthedHeaders(true);
+      const res = await fetch("/api/payments/wallets", {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify({ address: target }),
+      });
+      const raw = await res.text();
+      if (!res.ok) {
+        let detail = raw;
+        try {
+          const parsed = JSON.parse(raw);
+          detail = String(parsed?.detail || parsed?.error || raw);
+        } catch {
+          // ignore
+        }
+        throw new Error(detail || `HTTP ${res.status}`);
+      }
+
+      let data: Record<string, unknown> = {};
+      try {
+        data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+      } catch {
+        data = {};
+      }
+      const newPrimary = String(data?.new_primary || "").toLowerCase();
+      if (selectedWallet === target) {
+        setSelectedWallet(newPrimary || "");
+      }
+      if (walletAddress === target) {
+        setWalletAddress(newPrimary || "");
+      }
+      await loadPaymentSnapshot();
+      setPaymentInfo(
+        newPrimary
+          ? copy.unbindDonePrimary.replace("{address}", shortAddress(newPrimary))
+          : copy.unbindDone,
+      );
+    } catch (error) {
+      const message = normalizePaymentError(error).message;
+      setPaymentError(`${copy.unbindFailed}: ${message}`);
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
   const createIntentAndPay = async () => {
     setPaymentError("");
     setPaymentInfo("");
     setLastTxHash("");
     if (!isAuthenticated) {
-      setPaymentError("请先登录后再支付。");
+      setPaymentError(copy.loginBeforePay);
       return;
     }
     if (!paymentConfig?.configured) {
-      setPaymentError("支付服务未配置完成。");
+      setPaymentError(copy.payNotReady);
       return;
     }
 
@@ -1180,7 +1339,7 @@ export function AccountCenter() {
       selectedWallet || walletAddress || boundWallets[0]?.address || "",
     ).toLowerCase();
     if (!fallbackWallet) {
-      setPaymentError("请先绑定钱包。");
+      setPaymentError(copy.bindFirstBeforePay);
       return;
     }
 
@@ -1193,7 +1352,7 @@ export function AccountCenter() {
         method: "eth_requestAccounts",
       })) as string[];
       const activeAddress = String(activeAccounts?.[0] || "").toLowerCase();
-      if (!activeAddress) throw new Error("钱包账户为空");
+      if (!activeAddress) throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
 
       const boundAddrSet = new Set(
         boundWallets.map((row) => String(row.address || "").toLowerCase()),
@@ -1408,16 +1567,16 @@ export function AccountCenter() {
 
   const handleOverlayCheckout = async () => {
     if (!isAuthenticated) {
-      setPaymentError("请先登录后再支付。");
+      setPaymentError(copy.loginBeforePay);
       return;
     }
     if (!hasPayingWallet) {
-      setPaymentInfo("请先完成钱包绑定，正在拉起绑定流程...");
+      setPaymentInfo(copy.openBindFlow);
       const bound = await connectAndBindWallet(providerMode, {
         openOverlayAfterBind: true,
       });
       if (!bound) return;
-      setPaymentInfo("钱包已绑定，正在创建订单并发起支付...");
+      setPaymentInfo(copy.walletBoundCreatingOrder);
       await createIntentAndPay();
       return;
     }
@@ -1431,7 +1590,7 @@ export function AccountCenter() {
       <div className="flex h-screen w-full items-center justify-center bg-[#0b0f1a]">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-12 w-12 animate-spin text-blue-500" />
-          <p className="text-slate-400 font-medium">加载账户信息中...</p>
+          <p className="text-slate-400 font-medium">{copy.loadingAccount}</p>
         </div>
       </div>
     );
@@ -1449,7 +1608,8 @@ export function AccountCenter() {
           <Link
             href="/"
             className="p-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-slate-400 hover:text-white transition-all active:scale-90 group"
-            title="返回首页"
+            title={copy.backHome}
+            aria-label={copy.backHome}
           >
             <ChevronLeft
               size={20}
@@ -1458,7 +1618,7 @@ export function AccountCenter() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-              账户中心
+              {copy.accountCenter}
             </h1>
           </div>
         </div>
@@ -1468,7 +1628,7 @@ export function AccountCenter() {
               onClick={() => setShowOverlay(true)}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
             >
-              <Crown size={16} /> 升级 Pro
+              <Crown size={16} /> {copy.upgradePro}
             </button>
           )}
           <button
@@ -1482,21 +1642,21 @@ export function AccountCenter() {
             ) : (
               <RefreshCw size={16} />
             )}{" "}
-            刷新
+            {copy.refresh}
           </button>
           {isAuthenticated ? (
             <button
               onClick={() => void onSignOut()}
               className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400 rounded-xl text-sm transition-all"
             >
-              <LogOut size={16} /> 退出
+              <LogOut size={16} /> {copy.signOut}
             </button>
           ) : (
             <Link
               href="/auth/login?next=%2Faccount"
               className="flex items-center gap-2 px-4 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 text-blue-400 rounded-xl text-sm transition-all"
             >
-              <LogIn size={16} /> 登录
+              <LogIn size={16} /> {copy.signIn}
             </Link>
           )}
         </div>
@@ -1521,11 +1681,11 @@ export function AccountCenter() {
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${isSubscribed ? "bg-blue-500/20 border-blue-500/40 text-blue-400" : "bg-slate-700/50 border-white/10 text-slate-500"}`}
               >
-                {isSubscribed ? "PRO MEMBER" : "FREE TIER"}
+                {isSubscribed ? copy.proMember : copy.freeTier}
               </span>
             </div>
             <p className="text-slate-500 font-mono text-sm mb-4">
-              {email || "游客用户"}
+              {email || copy.guestUser}
             </p>
             <div className="flex flex-wrap justify-center md:justify-start gap-4">
               <div className="flex items-center gap-1.5 text-slate-400 text-xs">
@@ -1535,14 +1695,17 @@ export function AccountCenter() {
                 </span>
               </div>
               <div className="flex items-center gap-1.5 text-slate-400 text-xs">
-                <Clock size={14} /> <span>加入时间: {joinedAt}</span>
+                <Clock size={14} />{" "}
+                <span>
+                  {copy.joinedAt}: {joinedAt}
+                </span>
               </div>
             </div>
           </div>
           <div className="flex flex-col gap-3">
             <div className="px-6 py-4 bg-black/40 rounded-2xl border border-white/5 text-center min-w-[140px]">
               <p className="text-[10px] text-slate-500 uppercase tracking-widest mb-1">
-                总积分 (荣誉)
+                {copy.totalPoints}
               </p>
               <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
                 <Coins size={16} className="text-yellow-500" />{" "}
@@ -1551,7 +1714,7 @@ export function AccountCenter() {
             </div>
             <div className="px-6 py-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-center min-w-[140px]">
               <p className="text-[10px] text-blue-400 uppercase tracking-widest mb-1 font-bold">
-                周排行 (竞技)
+                {copy.weeklyRank}
               </p>
               <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
                 <Trophy size={16} className="text-amber-400" /> #{weeklyRank}
@@ -1564,7 +1727,8 @@ export function AccountCenter() {
         <div className="lg:col-span-4 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-[2.5rem] p-6 flex flex-col justify-between shadow-xl">
           <div>
             <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-6">
-              <Sparkles size={20} className="text-yellow-400" /> 周榜奖励
+              <Sparkles size={20} className="text-yellow-400" />{" "}
+              {copy.weeklyRewards}
             </h3>
             <div className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
@@ -1617,49 +1781,49 @@ export function AccountCenter() {
           >
             <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
               <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
-                会员权限详情
+                {copy.membershipDetails}
               </h3>
-              <InfoRow icon={ShieldCheck} label="鉴权模式" value="Supabase" />
-              <InfoRow icon={BarChart3} label="气象引擎" value="DEB + 多模型" />
+              <InfoRow icon={ShieldCheck} label={copy.authMode} value="Supabase" />
+              <InfoRow icon={BarChart3} label={copy.weatherEngine} value="DEB + 多模型" />
               <InfoRow
                 icon={Zap}
-                label="今日内分析"
-                value={isSubscribed ? "深度版（含高温时段）" : "简版可见"}
+                label={copy.intradayAnalysis}
+                value={isSubscribed ? copy.deepMode : copy.compactVisible}
                 isPrimary={isSubscribed}
               />
               <InfoRow
                 icon={Clock}
-                label="历史对账 + 未来日期分析"
-                value={isSubscribed ? "已开启" : "锁定"}
+                label={copy.historyFuture}
+                value={isSubscribed ? copy.enabled : copy.locked}
                 isPrimary={isSubscribed}
               />
               <InfoRow
                 icon={Bot}
-                label="全平台智能气象推送"
-                value={isSubscribed ? "已开启" : "锁定"}
+                label={copy.smartPush}
+                value={isSubscribed ? copy.enabled : copy.locked}
                 isPrimary={isSubscribed}
               />
             </section>
             <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
               <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-4">
-                身份状态
+                {copy.identityStatus}
               </h3>
-              <InfoRow icon={Mail} label="绑定邮箱" value={email || "--"} />
+              <InfoRow icon={Mail} label={copy.boundEmail} value={email || "--"} />
               <InfoRow
                 icon={LogIn}
-                label="登录方式"
+                label={copy.loginMethod}
                 value={user?.app_metadata?.provider?.toUpperCase() || "GOOGLE"}
               />
               <InfoRow
                 icon={Clock}
-                label="续费日期"
+                label={copy.renewalDate}
                 value={proExpiry}
                 isPrimary
               />
               <InfoRow
                 icon={UserCheck}
-                label="鉴权结果"
-                value={backend?.authenticated ? "通过" : "受限"}
+                label={copy.authResult}
+                value={backend?.authenticated ? copy.passed : copy.restricted}
               />
             </section>
           </div>
@@ -1685,7 +1849,7 @@ export function AccountCenter() {
                 onClose={() => setShowOverlay(false)}
                 payBusy={paymentBusy}
                 payLabel={
-                  hasPayingWallet ? "立即订阅并激活服务" : "连接钱包并支付"
+                  hasPayingWallet ? copy.payNow : copy.connectAndPay
                 }
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
@@ -1708,10 +1872,10 @@ export function AccountCenter() {
             />
             <div className="relative z-10">
               <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-blue-400">
-                <Bot size={22} /> Telegram Bot 绑定
+                <Bot size={22} /> {copy.telegramBind}
               </h3>
               <p className="text-slate-400 text-sm mb-6">
-                将下方命令发送给polyweather机器人，实现全平台气象推送与权限同步。
+                {copy.telegramHint}
               </p>
               <div className="flex gap-2">
                 <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
@@ -1720,7 +1884,8 @@ export function AccountCenter() {
                 <button
                   onClick={() => handleCopy(bindCommand)}
                   className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
-                  title="复制命令"
+                  title={copy.copyCommand}
+                  aria-label={copy.copyCommand}
                 >
                   {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                 </button>
@@ -1732,12 +1897,12 @@ export function AccountCenter() {
           <section className="w-full md:w-96 bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between">
             <div>
               <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Wallet size={18} /> 支付管理
+                <Wallet size={18} /> {copy.paymentMgmt}
               </h3>
               {availableTokenList.length > 0 && (
                 <div className="mb-5">
                   <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
-                    支付币种
+                    {copy.paymentToken}
                   </p>
                   <div className="grid grid-cols-2 gap-2">
                     {availableTokenList.map((token) => {
@@ -1781,17 +1946,28 @@ export function AccountCenter() {
                         </span>
                         {w.is_primary && (
                           <span className="text-[8px] bg-blue-500 px-1 rounded">
-                            Primary
+                            {copy.primary}
                           </span>
                         )}
                       </div>
-                      <div className="text-[10px]">Polygon Chain</div>
+                      <div className="text-[10px]">{copy.polygonChain}</div>
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => void handleUnbindWallet(w.address)}
+                          disabled={paymentBusy}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          <Minus size={12} />
+                          {copy.unbind}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               ) : (
                 <p className="text-xs text-slate-500 italic">
-                  未绑定任何收件钱包
+                  {copy.noWallet}
                 </p>
               )}
             </div>
@@ -1805,7 +1981,7 @@ export function AccountCenter() {
                 disabled={paymentBusy || !isAuthenticated}
                 className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                <PlusIcon className="w-4 h-4" /> 绑定浏览器钱包（EVM扩展）
+                <PlusIcon className="w-4 h-4" /> {copy.bindExt}
               </button>
               <button
                 onClick={() => {
@@ -1817,11 +1993,11 @@ export function AccountCenter() {
                 }
                 className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                <CreditCard className="w-4 h-4" /> 扫码绑定（WalletConnect）
+                <CreditCard className="w-4 h-4" /> {copy.bindQr}
               </button>
               {!walletConnectEnabled && (
                 <p className="text-[11px] text-slate-500">
-                  未启用 WalletConnect：请配置
+                  {copy.walletConnectMissing}
                   <code className="mx-1">
                     NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
                   </code>

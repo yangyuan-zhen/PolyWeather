@@ -17,6 +17,7 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import { useI18n } from "@/hooks/useI18n";
 
 type Mode = "login" | "signup";
 
@@ -26,6 +27,7 @@ type LoginClientProps = {
 
 export function LoginClient({ nextPath }: LoginClientProps) {
   const router = useRouter();
+  const { locale } = useI18n();
   const [mode, setMode] = useState<Mode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -34,6 +36,42 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const [infoText, setInfoText] = useState("");
 
   const supabaseReady = hasSupabasePublicEnv();
+  const isEn = locale === "en-US";
+  const copy = {
+    backHome: isEn ? "Back to Home" : "返回首页",
+    subtitle: isEn
+      ? "Explore weather details from every corner of the world"
+      : "探索世界每一个角落的气象细节",
+    googleOneClick: isEn
+      ? "Continue with Google"
+      : "使用 Google 账号一键登录",
+    orEmail: isEn ? "Or continue with email" : "或使用邮箱",
+    login: isEn ? "Sign In" : "登录",
+    signup: isEn ? "Sign Up" : "注册",
+    passwordLoginPlaceholder: isEn ? "Enter password" : "输入密码",
+    passwordSignupPlaceholder: isEn
+      ? "Set at least 6 characters"
+      : "设置至少 6 位密码",
+    loginSubmit: isEn ? "Start your weather journey" : "开启天气之旅",
+    signupSubmit: isEn ? "Create account now" : "立即创建账号",
+    loginHint: isEn
+      ? "After signing in, your homepage will be personalized."
+      : "登录后将为您个性化定制首页数据",
+    signupHint: isEn
+      ? "By signing up, you agree to our Terms of Service."
+      : "注册即代表同意我们的服务条款",
+    realtime: isEn ? "Realtime data" : "实时数据",
+    highPrecision: isEn ? "High-precision forecast" : "高精度预测",
+    supabaseMissing: isEn
+      ? "Supabase is not configured. Sign-in is unavailable."
+      : "Supabase 未配置，无法使用登录",
+    needEmailPassword: isEn
+      ? "Please enter email and password."
+      : "请输入邮箱和密码",
+    signupCheckEmail: isEn
+      ? "Sign-up successful. Please verify your email before signing in."
+      : "注册成功，请检查邮箱并完成验证后登录。",
+  } as const;
 
   useEffect(() => {
     if (!supabaseReady) return;
@@ -53,7 +91,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     setErrorText("");
     setInfoText("");
     if (!supabaseReady) {
-      setErrorText("Supabase 未配置，无法使用登录");
+      setErrorText(copy.supabaseMissing);
       return;
     }
 
@@ -82,11 +120,11 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     setErrorText("");
     setInfoText("");
     if (!supabaseReady) {
-      setErrorText("Supabase 未配置，无法使用登录");
+      setErrorText(copy.supabaseMissing);
       return;
     }
     if (!email.trim() || !password.trim()) {
-      setErrorText("请输入邮箱和密码");
+      setErrorText(copy.needEmailPassword);
       return;
     }
 
@@ -124,7 +162,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
         router.replace(nextPath);
         return;
       }
-      setInfoText("注册成功，请检查邮箱并完成验证后登录。");
+      setInfoText(copy.signupCheckEmail);
     } finally {
       setLoading(false);
     }
@@ -141,18 +179,17 @@ export function LoginClient({ nextPath }: LoginClientProps) {
         <Link
           href="/"
           className="group absolute left-6 top-6 rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 transition-all hover:bg-white/10 hover:text-white active:scale-90"
-          title="返回首页"
-          aria-label="返回首页"
+          title={copy.backHome}
+          aria-label={copy.backHome}
         >
           <ChevronLeft className="h-5 w-5 transition-transform group-hover:-translate-x-0.5" />
         </Link>
-
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-400 shadow-lg shadow-blue-500/20">
             <Cloud className="h-10 w-10 text-white" />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-white">PolyWeather</h1>
-          <p className="mt-2 text-sm text-slate-400">探索世界每一个角落的气象细节</p>
+          <p className="mt-2 text-sm text-slate-400">{copy.subtitle}</p>
         </div>
 
         <button
@@ -162,13 +199,13 @@ export function LoginClient({ nextPath }: LoginClientProps) {
           className="mb-6 flex w-full items-center justify-center rounded-xl bg-white px-4 py-3.5 font-semibold text-slate-900 shadow-lg transition-all duration-200 hover:bg-slate-100 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
         >
           <Chrome className="mr-3 h-5 w-5" />
-          使用 Google 账号一键登录
+          {copy.googleOneClick}
         </button>
 
         <div className="my-6 flex items-center">
           <div className="h-[1px] flex-grow bg-white/10" />
           <span className="px-4 text-xs font-medium uppercase tracking-widest text-slate-500">
-            或使用邮箱
+            {copy.orEmail}
           </span>
           <div className="h-[1px] flex-grow bg-white/10" />
         </div>
@@ -183,7 +220,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            登录
+            {copy.login}
           </button>
           <button
             type="button"
@@ -194,7 +231,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
-            注册
+            {copy.signup}
           </button>
         </div>
 
@@ -218,7 +255,11 @@ export function LoginClient({ nextPath }: LoginClientProps) {
               minLength={6}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={isLogin ? "输入密码" : "设置至少 6 位密码"}
+              placeholder={
+                isLogin
+                  ? copy.passwordLoginPlaceholder
+                  : copy.passwordSignupPlaceholder
+              }
               className="w-full rounded-xl border border-white/10 bg-white/5 py-3.5 pl-12 pr-4 text-white placeholder:text-slate-600 transition-all focus:border-blue-500/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
             />
           </div>
@@ -228,7 +269,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
             disabled={loading}
             className="group mt-8 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 py-3.5 font-bold text-white shadow-xl shadow-blue-600/20 transition-all hover:from-blue-500 hover:to-indigo-500 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            {isLogin ? "开启天气之旅" : "立即创建账号"}
+            {isLogin ? copy.loginSubmit : copy.signupSubmit}
             <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-1" />
           </button>
         </form>
@@ -238,23 +279,21 @@ export function LoginClient({ nextPath }: LoginClientProps) {
 
         <div className="mt-8 text-center">
           <p className="text-xs text-slate-500">
-            {isLogin ? "登录后将为您个性化定制首页数据" : "注册即代表同意我们的服务条款"}
+            {isLogin ? copy.loginHint : copy.signupHint}
           </p>
         </div>
 
         {!supabaseReady ? (
-          <p className="mt-3 text-center text-sm text-rose-300">
-            Supabase 未配置，无法使用登录
-          </p>
+          <p className="mt-3 text-center text-sm text-rose-300">{copy.supabaseMissing}</p>
         ) : null}
       </div>
 
       <div className="absolute bottom-8 flex items-center gap-4 text-sm text-slate-600">
         <span className="flex items-center">
-          <Sun className="mr-1 h-4 w-4" /> 实时数据
+          <Sun className="mr-1 h-4 w-4" /> {copy.realtime}
         </span>
         <span className="flex items-center">
-          <CloudRain className="mr-1 h-4 w-4" /> 高精度预测
+          <CloudRain className="mr-1 h-4 w-4" /> {copy.highPrecision}
         </span>
       </div>
     </div>
