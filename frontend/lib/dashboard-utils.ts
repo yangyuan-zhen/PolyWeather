@@ -501,14 +501,96 @@ export function computeFrontTrendSignal(
       precipMax: 0,
       score: 0,
       summary: isEnglish(locale)
-        ? "Insufficient 48h structured data. Keep baseline monitoring."
-        : "未来 48 小时结构化数据不足，暂时只保留基础监控。",
+        ? "Insufficient intraday structured data. Keep baseline monitoring."
+        : "当日日内结构化数据不足，暂时只保留基础监控。",
       weatherGovPeriods: [] as ReturnType<typeof getForecastTextForDate>,
     };
   }
 
-  const first = slice[0];
-  const last = slice[slice.length - 1];
+  const normalizeHm = (value: unknown): string | null => {
+    const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  };
+  const hmToMinutes = (value: string | null) => {
+    if (!value) return null;
+    const [hourPart, minutePart] = value.split(":");
+    const hour = Number.parseInt(hourPart || "", 10);
+    const minute = Number.parseInt(minutePart || "", 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return hour * 60 + minute;
+  };
+  const pointMinutes = (point: { label?: string }) =>
+    hmToMinutes(normalizeHm(point.label));
+
+  const isTargetToday = dateStr === detail.local_date;
+  const currentHm = normalizeHm(detail.local_time);
+  const sunsetHm = normalizeHm(detail.forecast?.sunset);
+  const currentMinutes = hmToMinutes(currentHm);
+  const sunsetMinutes = hmToMinutes(sunsetHm);
+  const canUseSunsetWindow =
+    isTargetToday &&
+    currentMinutes !== null &&
+    sunsetMinutes !== null &&
+    sunsetMinutes > currentMinutes;
+
+  const futureSlice =
+    isTargetToday && currentMinutes !== null
+      ? slice.filter((point) => {
+          const minutes = pointMinutes(point);
+          return minutes === null ? true : minutes >= currentMinutes;
+        })
+      : slice;
+  const untilSunsetSlice =
+    canUseSunsetWindow && sunsetMinutes !== null
+      ? futureSlice.filter((point) => {
+          const minutes = pointMinutes(point);
+          return minutes === null ? false : minutes <= sunsetMinutes;
+        })
+      : futureSlice;
+  const workingSlice =
+    untilSunsetSlice.length >= 2
+      ? untilSunsetSlice
+      : futureSlice.length >= 2
+        ? futureSlice
+        : slice;
+  const usingSunsetWindow = canUseSunsetWindow && untilSunsetSlice.length >= 2;
+  const first = workingSlice[0] || slice[0];
+  const last = workingSlice[workingSlice.length - 1] || slice[slice.length - 1];
+  const effectiveHours = Math.max(1, workingSlice.length);
+  const windowLabel = `${first?.label || "--"}-${last?.label || "--"}`;
+  const windowText = isEnglish(locale)
+    ? usingSunsetWindow
+      ? `today ${windowLabel} (~${effectiveHours}h, now -> sunset)`
+      : isTargetToday
+        ? `today ${windowLabel} (~${effectiveHours}h)`
+        : `daily ${windowLabel} (~${effectiveHours}h)`
+    : usingSunsetWindow
+      ? `今日 ${windowLabel}（约 ${effectiveHours} 小时，当前至日落）`
+      : isTargetToday
+        ? `今日 ${windowLabel}（约 ${effectiveHours} 小时）`
+        : `当日日内 ${windowLabel}（约 ${effectiveHours} 小时）`;
   const firstTemp = Number.isFinite(Number(first.temp)) ? Number(first.temp) : currentTemp;
   const lastTemp = Number.isFinite(Number(last.temp)) ? Number(last.temp) : firstTemp;
   const tempDelta =
@@ -604,8 +686,8 @@ export function computeFrontTrendSignal(
       {
         label: isEnglish(locale) ? "Temperature delta" : "温度变化",
         note: isEnglish(locale)
-          ? "Open-Meteo upcoming hourly temperature change"
-          : "Open-Meteo 未来小时温度变化",
+          ? `Official Open-Meteo hourly data; window: ${windowText}`
+          : `官方 Open-Meteo 小时数据；计算窗口：${windowText}`,
         tone: tempDelta >= 0.8 ? "warm" : tempDelta <= -0.8 ? "cold" : "",
         value: formatDelta(tempDelta, detail.temp_symbol),
       },
@@ -628,8 +710,8 @@ export function computeFrontTrendSignal(
       {
         label: isEnglish(locale) ? "Wind-direction evolution" : "风向演变",
         note: isEnglish(locale)
-          ? "Focus on switch to southerly or northerly flow"
-          : "关注是否转南风或转北风",
+          ? "Warming-favor: S/SW; cooling-favor: N/NW"
+          : "增温有利：南/西南风；降温有利：北/西北风",
         value: `${bucketLabel(firstBucket, locale)} -> ${bucketLabel(lastBucket, locale)}`,
       },
       {
@@ -657,15 +739,15 @@ export function computeFrontTrendSignal(
     summary:
       label === warmLabel
         ? isEnglish(locale)
-          ? "Southerly flow strengthens with rising dew point and temperature. Next 6-48h leans warm advection."
-          : "风向更偏南 / 西南，露点与温度整体抬升，未来 6-48 小时偏向暖平流。"
+          ? `Southerly flow strengthens with rising dew point and temperature. ${windowText} leans warm advection.`
+          : `风向更偏南 / 西南，露点与温度整体抬升，${windowText}偏向暖平流。`
         : label === coldLabel
           ? isEnglish(locale)
-            ? "Temperature declines with pressure rebound and/or northerly shift. Next 6-48h leans cold-front suppression."
-            : "温度下滑、气压回升或风向转北，未来 6-48 小时更像冷锋或冷平流压制。"
+            ? `Temperature declines with pressure rebound and/or northerly shift. ${windowText} leans cold-front suppression.`
+            : `温度下滑、气压回升或风向转北，${windowText}更像冷锋或冷平流压制。`
             : isEnglish(locale)
-              ? "Structured trend layer mainly uses weather.gov and Open-Meteo for 6-48h warm/cold flow judgement."
-              : "结构化来源以 weather.gov 和 Open-Meteo 为主，用于判断未来 6-48 小时冷暖平流趋势。",
+              ? `Structured trend uses weather.gov + Open-Meteo, with core judgement focused on ${windowText}.`
+              : `结构化来源以 weather.gov 和 Open-Meteo 为主，核心判断窗口为${windowText}。`,
     weatherGovPeriods,
   };
 }
