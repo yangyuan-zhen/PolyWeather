@@ -24,13 +24,9 @@ import {
   ProbabilityDistribution,
 } from "@/components/dashboard/PanelSections";
 import {
-  getClimateDrivers,
   getFutureModalView,
-  getSettlementRiskNarrative,
-  getShortTermNowcastLines,
   getTemperatureChartData,
   getWeatherSummary,
-  parseAiAnalysis,
 } from "@/lib/dashboard-utils";
 
 function normalizeMarketValue(value?: number | null) {
@@ -250,7 +246,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         fill: false,
         label:
           todayChartData.observationLabel ||
-          (locale === "en-US" ? "METAR Observation" : "METAR 实况"),
+          (locale === "en-US" ? "Observation" : "观测实况"),
         order: 0,
         pointHoverRadius: 7,
         pointRadius: 5,
@@ -448,10 +444,6 @@ export function FutureForecastModal() {
 
   const isToday = dateStr === detail.local_date;
   const view = getFutureModalView(detail, dateStr, locale);
-  const nowcastRows = getShortTermNowcastLines(detail, dateStr, locale);
-  const riskLines = getSettlementRiskNarrative(detail, locale);
-  const climateDrivers = getClimateDrivers(detail, locale);
-  const ai = parseAiAnalysis(detail.ai_analysis);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
     "--score-position": scorePosition,
@@ -889,47 +881,6 @@ export function FutureForecastModal() {
                       </div>
                     </section>
 
-                    <section className="future-modal-section">
-                      <h3>{t("future.ai")}</h3>
-                      <div className="future-text-block">
-                        {ai.summary ? (
-                          <div>{ai.summary}</div>
-                        ) : (
-                          <div>{t("future.noAi")}</div>
-                        )}
-                        {ai.bullets.length > 0 && (
-                          <div style={{ marginTop: "10px" }}>
-                            {ai.bullets.slice(0, 3).map((item) => (
-                              <div key={item}>{item}</div>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ marginTop: "12px" }}>
-                          {nowcastRows.slice(0, 4).map(([label, value]) => (
-                            <div key={label}>
-                              <strong>{label}: </strong>
-                              {value}
-                            </div>
-                          ))}
-                        </div>
-                        {riskLines.length > 0 && (
-                          <div style={{ marginTop: "12px" }}>
-                            <strong>
-                              {locale === "en-US" ? "Risk" : "风险"}:{" "}
-                            </strong>
-                            {riskLines[0]}
-                          </div>
-                        )}
-                        {climateDrivers.length > 0 && (
-                          <div style={{ marginTop: "8px" }}>
-                            <strong>
-                              {locale === "en-US" ? "Climate" : "气候"}:{" "}
-                            </strong>
-                            {climateDrivers[0].text}
-                          </div>
-                        )}
-                      </div>
-                    </section>
                   </div>
                 </main>
               </div>

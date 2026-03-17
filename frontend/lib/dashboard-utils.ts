@@ -31,9 +31,17 @@ function isEnglish(locale: Locale) {
 }
 
 function getObservationSourceCode(detail: CityDetail): string {
-  return String(detail.current?.settlement_source || "metar")
+  const source = String(detail.current?.settlement_source || "")
     .trim()
     .toLowerCase();
+  if (source) return source;
+
+  const city = String(detail.name || detail.display_name || "")
+    .trim()
+    .toLowerCase();
+  if (city === "hong kong") return "hko";
+  if (city === "taipei") return "cwa";
+  return "metar";
 }
 
 function getObservationSourceTag(detail: CityDetail): string {
@@ -233,7 +241,11 @@ export function getTemperatureChartData(
   const settlementSource =
     observationCode === "hko" || observationCode === "cwa";
   const observationSource = settlementSource
-    ? detail.settlement_today_obs || []
+    ? detail.settlement_today_obs?.length
+      ? detail.settlement_today_obs
+      : detail.current?.obs_time && detail.current?.temp != null
+        ? [{ time: detail.current.obs_time, temp: detail.current.temp }]
+        : []
     : detail.metar_today_obs?.length
       ? detail.metar_today_obs
       : detail.trend?.recent || [];
