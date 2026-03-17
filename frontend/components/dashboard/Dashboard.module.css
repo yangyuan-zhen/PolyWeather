@@ -1543,6 +1543,17 @@
   overflow-y: auto;
 }
 
+/* Keep scroll behavior but hide visual scrollbar in today's/future analysis modal */
+.root :global(.modal-content.large.future-modal .modal-body) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.root :global(.modal-content.large.future-modal .modal-body::-webkit-scrollbar) {
+  width: 0;
+  height: 0;
+}
+
 .root :global(.history-modal .modal-body) {
   padding: 24px 28px 28px;
 }
