@@ -1334,7 +1334,9 @@ export function AccountCenter() {
     setPaymentError("");
     setPaymentInfo("");
     try {
-      const headers = await buildAuthedHeaders(true, true);
+      // Do not hard-fail on client-side token refresh here.
+      // The same-origin API route can still authenticate via server-side Supabase session cookies.
+      const headers = await buildAuthedHeaders(true, false);
       const res = await fetch("/api/payments/wallets", {
         method: "DELETE",
         headers,
