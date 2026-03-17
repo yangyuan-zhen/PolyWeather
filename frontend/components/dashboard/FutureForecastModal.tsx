@@ -829,125 +829,126 @@ export function FutureForecastModal() {
                     </section>
                   </div>
 
-                  <div className="future-modal-grid">
-                    <section className="future-modal-section">
-                      <h3>{t("future.structureToday")}</h3>
-                      <div className="future-front-score">
-                        <div className="future-front-bar" style={barStyle}>
+                  <section className="future-modal-section">
+                    <h3>{t("future.structureToday")}</h3>
+                    <div className="future-front-score">
+                      <div className="future-front-bar" style={barStyle}>
+                        <div
+                          style={{
+                            position: "absolute",
+                            top: 0,
+                            bottom: 0,
+                            left: "50%",
+                            width: "2px",
+                            background: "rgba(255, 255, 255, 0.2)",
+                            transform: "translateX(-50%)",
+                            zIndex: 1,
+                          }}
+                        />
+                      </div>
+                      <div className="future-front-meta">
+                        <span className="future-front-pill">
+                          {t("future.judgement")}: {view.front.label}
+                        </span>
+                        <span className="future-front-pill">
+                          {t("future.confidence")}:{" "}
+                          {t(`confidence.${view.front.confidence}`)}
+                        </span>
+                        <span className="future-front-pill">
+                          {t("future.maxPrecip")}:{" "}
+                          {Math.round(view.front.precipMax)}%
+                        </span>
+                      </div>
+                    </div>
+                    <div className="future-trend-grid">
+                      {view.front.metrics.slice(0, 6).map((metric) => (
+                        <div key={metric.label} className="future-trend-card">
+                          <div className="future-trend-label">{metric.label}</div>
                           <div
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              bottom: 0,
-                              left: "50%",
-                              width: "2px",
-                              background: "rgba(255, 255, 255, 0.2)",
-                              transform: "translateX(-50%)",
-                              zIndex: 1,
-                            }}
-                          />
-                        </div>
-                        <div className="future-front-meta">
-                          <span className="future-front-pill">
-                            {t("future.judgement")}: {view.front.label}
-                          </span>
-                          <span className="future-front-pill">
-                            {t("future.confidence")}:{" "}
-                            {t(`confidence.${view.front.confidence}`)}
-                          </span>
-                          <span className="future-front-pill">
-                            {t("future.maxPrecip")}:{" "}
-                            {Math.round(view.front.precipMax)}%
-                          </span>
-                        </div>
-                      </div>
-                      <div className="future-trend-grid">
-                        {view.front.metrics.slice(0, 6).map((metric) => (
-                          <div key={metric.label} className="future-trend-card">
-                            <div className="future-trend-label">
-                              {metric.label}
-                            </div>
-                            <div
-                              className={clsx(
-                                "future-trend-value",
-                                metric.tone === "warm" && "warm",
-                                metric.tone === "cold" && "cold",
-                              )}
-                            >
-                              {metric.value}
-                            </div>
-                            <div className="future-trend-note">
-                              {metric.note}
-                            </div>
+                            className={clsx(
+                              "future-trend-value",
+                              metric.tone === "warm" && "warm",
+                              metric.tone === "cold" && "cold",
+                            )}
+                          >
+                            {metric.value}
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
+                          <div className="future-trend-note">{metric.note}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
 
-                  <div className="future-modal-grid">
-                    <section className="future-modal-section">
-                      <h3>
-                        {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
-                      </h3>
-                      <div className="risk-info">
-                        {!risk.airport ? (
-                          <span style={{ color: "var(--text-muted)" }}>
-                            {t("section.noRiskProfile")}
-                          </span>
-                        ) : (
-                          <>
-                            <div className="risk-row">
-                              <span className="risk-label">
-                                {t("section.airport")}
-                              </span>
-                              <span>
-                                {risk.airport}
-                                {risk.icao ? ` (${risk.icao})` : ""}
-                              </span>
-                            </div>
-                            <div className="risk-row">
-                              <span className="risk-label">
-                                {t("section.distance")}
-                              </span>
-                              <span>{risk.distance_km ?? "--"}km</span>
-                            </div>
-                            {risk.warning ? (
+                  <section className="future-modal-section">
+                    <h3>
+                      {locale === "en-US"
+                        ? "City Risk Profile & Airport Narrative"
+                        : "城市风险档案与机场报文解读"}
+                    </h3>
+                    <div className="future-modal-grid">
+                      <div>
+                        <h4 className="future-v2-card-title">
+                          {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
+                        </h4>
+                        <div className="risk-info" style={{ marginTop: "10px" }}>
+                          {!risk.airport ? (
+                            <span style={{ color: "var(--text-muted)" }}>
+                              {t("section.noRiskProfile")}
+                            </span>
+                          ) : (
+                            <>
                               <div className="risk-row">
                                 <span className="risk-label">
-                                  {t("section.note")}
+                                  {t("section.airport")}
                                 </span>
-                                <span>{risk.warning}</span>
+                                <span>
+                                  {risk.airport}
+                                  {risk.icao ? ` (${risk.icao})` : ""}
+                                </span>
                               </div>
-                            ) : null}
-                          </>
-                        )}
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {t("section.distance")}
+                                </span>
+                                <span>{risk.distance_km ?? "--"}km</span>
+                              </div>
+                              {risk.warning ? (
+                                <div className="risk-row">
+                                  <span className="risk-label">
+                                    {t("section.note")}
+                                  </span>
+                                  <span>{risk.warning}</span>
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </section>
-                    <section className="future-modal-section">
-                      <h3>{t("future.ai")}</h3>
-                      <div className="ai-box">
-                        {!ai.summary && ai.bullets.length === 0 ? (
-                          <span className="ai-placeholder">
-                            {t("future.noAi")}
-                          </span>
-                        ) : (
-                          <>
-                            {ai.summary ? (
-                              <div className="ai-summary">{ai.summary}</div>
-                            ) : null}
-                            {ai.bullets.length > 0 ? (
-                              <ul className="ai-list">
-                                {ai.bullets.map((item) => (
-                                  <li key={item}>{item}</li>
-                                ))}
-                              </ul>
-                            ) : null}
-                          </>
-                        )}
+                      <div>
+                        <h4 className="future-v2-card-title">{t("future.ai")}</h4>
+                        <div className="ai-box" style={{ marginTop: "10px" }}>
+                          {!ai.summary && ai.bullets.length === 0 ? (
+                            <span className="ai-placeholder">
+                              {t("future.noAi")}
+                            </span>
+                          ) : (
+                            <>
+                              {ai.summary ? (
+                                <div className="ai-summary">{ai.summary}</div>
+                              ) : null}
+                              {ai.bullets.length > 0 ? (
+                                <ul className="ai-list">
+                                  {ai.bullets.map((item) => (
+                                    <li key={item}>{item}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </section>
-                  </div>
+                    </div>
+                  </section>
                 </main>
               </div>
             ) : (
