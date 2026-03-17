@@ -677,7 +677,19 @@ export function AccountCenter() {
         headers.Authorization = `Bearer ${token}`;
       } catch (error) {
         if (requireAuth) throw error;
-        // Non-authenticated page load — silently skip.
+        // Best-effort fallback: use current cached session token (if any)
+        // even when refresh failed, so same-origin API routes can still auth.
+        try {
+          const {
+            data: { session },
+          } = await getSupabaseBrowserClient().auth.getSession();
+          const fallbackToken = String(session?.access_token || "").trim();
+          if (fallbackToken) {
+            headers.Authorization = `Bearer ${fallbackToken}`;
+          }
+        } catch {
+          // Non-authenticated page load — silently skip.
+        }
       }
       return headers;
     },
