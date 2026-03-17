@@ -14,7 +14,7 @@ const GUIDE_CARDS = {
       title: "结算概率引擎",
     },
     {
-      body: "Polymarket 结算逻辑以机场 METAR 为主。系统优先使用 Aviation Weather API 的机场报文与原始 METAR，并区分观测时间与接收时间，避免把发布延迟误认为温度变化。",
+      body: "结算源按城市市场定义：米兰(LIMC)、华沙(EPWA)使用机场 METAR；香港市场使用香港天文台(HKO)；台北市场使用交通部中央气象署(CWA)。系统仍会保留 METAR/MGM 作为临近结构参考，并区分观测时间与接收时间。",
       title: "结算点与主观测源",
     },
     {
@@ -40,7 +40,7 @@ const GUIDE_CARDS = {
       title: "Settlement Probability Engine",
     },
     {
-      body: "Polymarket settlement follows airport METAR observations. The system prioritizes Aviation Weather API raw METAR and distinguishes observation time from receipt time to avoid misreading publication delay as temperature change.",
+      body: "Settlement source follows market rule by city: Milan (LIMC) and Warsaw (EPWA) settle on airport METAR, Hong Kong settles on HKO, and Taipei settles on CWA. METAR/MGM are still kept for intraday structure tracking with observation time vs receipt time separated.",
       title: "Settlement Source Logic",
     },
     {

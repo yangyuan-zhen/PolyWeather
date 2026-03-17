@@ -158,6 +158,7 @@ export function HeroSummary() {
   const { weatherIcon, weatherText } = getWeatherSummary(data, locale);
   const metaItems = getHeroMetaItems(data, locale);
   const current = data.current || {};
+  const settlementSource = String(current.settlement_source || "metar").toUpperCase();
   const isMax =
     current.max_so_far != null &&
     current.temp != null &&
@@ -196,7 +197,9 @@ export function HeroSummary() {
         </div>
         <div className="hero-item">
           <span className="label">
-            {locale === "en-US" ? "WU Settlement Ref" : "WU 结算参考"}
+            {locale === "en-US"
+              ? `${settlementSource} Settlement Ref`
+              : `${settlementSource} 结算参考`}
           </span>
           <span className="value highlight">
             {current.wu_settlement != null

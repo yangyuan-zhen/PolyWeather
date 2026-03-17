@@ -16,7 +16,15 @@ from src.analysis.deb_algorithm import (
     _is_excluded_model_name,
 )
 from src.analysis.settlement_rounding import wu_round
+from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
+
+SETTLEMENT_SOURCE_LABELS = {
+    "metar": "METAR",
+    "hko": "HKO",
+    "cwa": "CWA",
+    "mgm": "MGM",
+}
 
 
 def _sf(v):
@@ -27,6 +35,17 @@ def _sf(v):
         return float(v)
     except Exception:
         return None
+
+
+def _resolve_settlement_source_label(city_name: Optional[str]) -> str:
+    if not city_name:
+        return "METAR"
+    city_key = str(city_name).strip().lower()
+    city_meta = CITY_REGISTRY.get(city_key, {})
+    source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+    if not source:
+        source = "metar"
+    return SETTLEMENT_SOURCE_LABELS.get(source, source.upper())
 
 
 def analyze_weather_trend(
@@ -60,18 +79,38 @@ def analyze_weather_trend(
     mu = None
     sorted_probs = []
     _deb_to_save = None
+    settlement_source_label = _resolve_settlement_source_label(city_name)
 
     metar = weather_data.get("metar", {})
     open_meteo = weather_data.get("open-meteo", {})
     mgm = weather_data.get("mgm") or {}
+    settlement_current = weather_data.get("settlement_current") or {}
+    if not isinstance(settlement_current, dict):
+        settlement_current = {}
+    settlement_now = settlement_current.get("current") or {}
+    if not isinstance(settlement_now, dict):
+        settlement_now = {}
     nws = weather_data.get("nws", {})
 
     empty_result = ("", "", {})
-    if not metar and not mgm:
+    if not metar and not mgm and not settlement_now:
         return empty_result
 
-    max_so_far = _sf(metar.get("current", {}).get("max_temp_so_far")) if metar else _sf(mgm.get("current", {}).get("mgm_max_temp"))
-    cur_temp = _sf(metar.get("current", {}).get("temp")) if metar else _sf(mgm.get("current", {}).get("temp"))
+    max_so_far = _sf(settlement_now.get("max_temp_so_far"))
+    if max_so_far is None:
+        max_so_far = (
+            _sf(metar.get("current", {}).get("max_temp_so_far"))
+            if metar
+            else _sf(mgm.get("current", {}).get("mgm_max_temp"))
+        )
+    cur_temp = _sf(settlement_now.get("temp"))
+    if cur_temp is None:
+        cur_temp = (
+            _sf(metar.get("current", {}).get("temp"))
+            if metar
+            else _sf(mgm.get("current", {}).get("temp"))
+        )
+    primary_current = settlement_now if settlement_now else (metar.get("current", {}) if metar else {})
 
     daily = open_meteo.get("daily", {})
     hourly = open_meteo.get("hourly", {})
@@ -100,7 +139,7 @@ def analyze_weather_trend(
         sorted(forecast_highs)[len(forecast_highs) // 2] if forecast_highs else None
     )
 
-    wind_speed = metar.get("current", {}).get("wind_speed_kt", 0)
+    wind_speed = primary_current.get("wind_speed_kt", 0)
 
     # === Local time/date (do not trust cached Open-Meteo local_time for date key) ===
     utc_offset = _sf(open_meteo.get("utc_offset"))
@@ -140,12 +179,16 @@ def analyze_weather_trend(
             local_hour = fallback_now.hour
             local_minute = fallback_now.minute
 
-    # Use METAR observation date in city local time when available (reliable for actual_high date key).
-    metar_obs_time_raw = str(metar.get("observation_time") or "").strip()
-    if metar_obs_time_raw and utc_offset is not None:
+    # Use settlement/METAR observation date in city local time when available (reliable for actual_high date key).
+    obs_time_raw = str(settlement_current.get("observation_time") or "").strip()
+    if not obs_time_raw:
+        obs_time_raw = str(metar.get("observation_time") or "").strip()
+    if obs_time_raw and utc_offset is not None:
         try:
-            metar_obs_dt = datetime.fromisoformat(metar_obs_time_raw.replace("Z", "+00:00"))
-            local_date_str = metar_obs_dt.astimezone(
+            obs_dt = datetime.fromisoformat(obs_time_raw.replace("Z", "+00:00"))
+            if obs_dt.tzinfo is None:
+                obs_dt = obs_dt.replace(tzinfo=timezone.utc)
+            local_date_str = obs_dt.astimezone(
                 timezone(timedelta(seconds=int(utc_offset)))
             ).strftime("%Y-%m-%d")
         except Exception:
@@ -387,7 +430,10 @@ def analyze_weather_trend(
 
     if is_dead_market:
         settled_wu = wu_round(max_so_far) if max_so_far is not None else 0
-        dead_msg = f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} (死盘确认)"
+        dead_msg = (
+            f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} "
+            f"({settlement_source_label} 死盘确认)"
+        )
         insights.append(dead_msg)
         ai_features.append("🎲 状态: 确认死盘，结算已无悬念。")
         if max_so_far is not None:
@@ -474,13 +520,13 @@ def analyze_weather_trend(
         if dist_to_boundary <= 0.3:
             if fractional < 0.5:
                 msg = (
-                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → WU 结算 "
+                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
                     f"<b>{settled}{temp_symbol}</b>，但只差 <b>{0.5 - fractional:.1f}°</b> "
                     f"就会进位到 {settled + 1}{temp_symbol}！"
                 )
             else:
                 msg = (
-                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → WU 结算 "
+                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
                     f"<b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 "
                     f"<b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
                 )
@@ -538,30 +584,31 @@ def analyze_weather_trend(
         ai_features.append(f"🌡️ 当前实测温度: {cur_temp}{temp_symbol}。")
     if max_so_far is not None:
         ai_features.append(
-            f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} (WU结算={wu_round(max_so_far)}{temp_symbol})。"
+            f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} "
+            f"({settlement_source_label}结算={wu_round(max_so_far)}{temp_symbol})。"
         )
     if city_name:
         _profile = get_city_risk_profile(city_name)
         if _profile and _profile.get("metar_rounding"):
             ai_features.append(f"⚠️ METAR特性: {_profile['metar_rounding']}")
     if wind_speed:
-        wind_dir = metar.get("current", {}).get("wind_dir", "未知")
+        wind_dir = primary_current.get("wind_dir", "未知")
         ai_features.append(f"🌬️ 当下风况: 约 {wind_speed}kt (方向 {wind_dir}°)。")
-    humidity = metar.get("current", {}).get("humidity")
+    humidity = primary_current.get("humidity")
     if humidity and humidity > 80:
         ai_features.append(f"💦 湿度极高 ({humidity}%)。")
 
-    clouds = metar.get("current", {}).get("clouds", [])
+    clouds = primary_current.get("clouds", [])
     if clouds:
         cover = clouds[-1].get("cover", "")
         c_desc = {"OVC": "全阴", "BKN": "多云", "SCT": "散云", "FEW": "少云"}.get(cover, cover)
         ai_features.append(f"☁️ 天空状况: {c_desc}。")
 
-    wx_desc = metar.get("current", {}).get("wx_desc")
+    wx_desc = primary_current.get("wx_desc")
     if wx_desc:
         ai_features.append(f"🌧️ 天气现象: {wx_desc}。")
 
-    max_temp_time_str = metar.get("current", {}).get("max_temp_time", "")
+    max_temp_time_str = primary_current.get("max_temp_time", "")
     if max_so_far is not None and max_temp_time_str:
         try:
             max_h = int(max_temp_time_str.split(":")[0])

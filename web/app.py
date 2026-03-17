@@ -72,9 +72,17 @@ CITIES: Dict[str, Dict[str, Any]] = {
         "lat": info["lat"],
         "lon": info["lon"],
         "f": info["use_fahrenheit"],
-        "tz": info["tz_offset"]
+        "tz": info["tz_offset"],
+        "settlement_source": str(info.get("settlement_source") or "metar").strip().lower() or "metar",
     }
     for cid, info in CITY_REGISTRY.items()
+}
+
+SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
+    "metar": "METAR",
+    "hko": "HKO",
+    "cwa": "CWA",
+    "mgm": "MGM",
 }
 
 # ──────────────────────────────────────────────────────────
@@ -322,6 +330,11 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     info = CITIES[city]
     lat, lon, is_f = info["lat"], info["lon"], info["f"]
     sym = "°F" if is_f else "°C"
+    settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+    settlement_source_label = SETTLEMENT_SOURCE_LABELS.get(
+        settlement_source,
+        settlement_source.upper(),
+    )
 
     # ── 1. Fetch raw data ──
     raw = _weather.fetch_all_sources(
@@ -333,6 +346,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
     mgm = raw.get("mgm") or {}
+    settlement_current = raw.get("settlement_current") or {}
     ens_raw = raw.get("ensemble", {})
     mm = raw.get("multi_model", {})
     if not isinstance(om, dict):
@@ -341,37 +355,54 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         metar = {}
     if not isinstance(mgm, dict):
         mgm = {}
+    if not isinstance(settlement_current, dict):
+        settlement_current = {}
     if not isinstance(ens_raw, dict):
         ens_raw = {}
     if not isinstance(mm, dict):
         mm = {}
     risk = CITY_RISK_PROFILES.get(city, {})
 
-    # ── 2. Current conditions (METAR primary, MGM fallback) ──
+    # ── 2. Current conditions (city-specific settlement source first, then METAR/MGM fallback) ──
     mc = metar.get("current", {}) if metar else {}
     mg_cur = mgm.get("current", {}) if mgm else {}
+    sc_cur = settlement_current.get("current", {}) if settlement_current else {}
+    use_settlement_current = settlement_source in {"hko", "cwa"} and bool(sc_cur)
+    primary_current = sc_cur if use_settlement_current else mc
     city_lower = city.lower()
 
-    cur_temp = _sf(mc.get("temp"))
+    cur_temp = _sf(primary_current.get("temp"))
+    if cur_temp is None:
+        cur_temp = _sf(mc.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
 
-    max_so_far = _sf(mc.get("max_temp_so_far"))
+    max_so_far = _sf(primary_current.get("max_temp_so_far"))
+    if max_so_far is None:
+        max_so_far = _sf(mc.get("max_temp_so_far"))
     if max_so_far is None:
         max_so_far = _sf(mg_cur.get("mgm_max_temp"))
 
-    max_temp_time = mc.get("max_temp_time")
+    max_temp_time = primary_current.get("max_temp_time")
+    if not max_temp_time and not use_settlement_current:
+        max_temp_time = mc.get("max_temp_time")
     if not max_temp_time:
         max_temp_time = mg_cur.get("time", "")
         if " " in max_temp_time:
             max_temp_time = max_temp_time.split(" ")[1][:5]
+    if max_temp_time == "":
+        max_temp_time = None
 
     wu_settle = wu_round(max_so_far) if max_so_far is not None else None
 
     # Observation time → local
     obs_time_str = ""
     metar_age_min = None
-    obs_t = metar.get("observation_time", "") if metar else ""
+    obs_t = ""
+    if use_settlement_current:
+        obs_t = str(settlement_current.get("observation_time") or "").strip()
+    if not obs_t:
+        obs_t = metar.get("observation_time", "") if metar else ""
     # 优先从 API 获取偏移；若缺失则尝试 NWS 动态偏移；最后回退静态配置
     utc_offset = om.get("utc_offset")
     if utc_offset is None:
@@ -389,14 +420,16 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         utc_offset = info.get("tz", 0)
     if obs_t and "T" in obs_t:
         try:
-            dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
+            dt = datetime.fromisoformat(str(obs_t).replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
             local_dt = dt.astimezone(timezone(timedelta(seconds=utc_offset)))
             obs_time_str = local_dt.strftime("%H:%M")
             metar_age_min = int(
-                (datetime.now(timezone.utc) - dt).total_seconds() / 60
+                (datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60
             )
         except Exception:
-            obs_time_str = obs_t[:16]
+            obs_time_str = str(obs_t)[:16]
 
     # ── 3. Local time parsing ──
     local_time_full = om.get("current", {}).get("local_time", "")
@@ -831,21 +864,23 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "max_so_far": max_so_far,
             "max_temp_time": max_temp_time,
             "wu_settlement": wu_settle,
+            "settlement_source": settlement_source,
+            "settlement_source_label": settlement_source_label,
             "obs_time": obs_time_str,
             "obs_age_min": metar_age_min,
             "report_time": metar.get("report_time") if metar else None,
             "receipt_time": metar.get("receipt_time") if metar else None,
             "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
-            "wind_speed_kt": _sf(mc.get("wind_speed_kt")),
-            "wind_dir": _sf(mc.get("wind_dir")),
-            "humidity": _sf(mc.get("humidity")),
+            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
+            "wind_dir": _sf(primary_current.get("wind_dir")),
+            "humidity": _sf(primary_current.get("humidity")),
             "cloud_desc": cloud_desc,
             "clouds_raw": [
                 {"cover": c.get("cover"), "base": c.get("base")} for c in clouds
             ],
-            "visibility_mi": _sf(mc.get("visibility_mi")),
-            "wx_desc": mc.get("wx_desc"),
-            "raw_metar": mc.get("raw_metar"),
+            "visibility_mi": _sf(primary_current.get("visibility_mi")),
+            "wx_desc": primary_current.get("wx_desc"),
+            "raw_metar": primary_current.get("raw_metar"),
         },
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
@@ -912,6 +947,11 @@ async def list_cities(request: Request):
                     "icao": risk.get("icao", ""),
                     "temp_unit": "fahrenheit" if info["f"] else "celsius",
                     "is_major": CITY_REGISTRY.get(name, {}).get("is_major", True),
+                    "settlement_source": info.get("settlement_source", "metar"),
+                    "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(
+                        str(info.get("settlement_source") or "metar").strip().lower() or "metar",
+                        str(info.get("settlement_source") or "metar").strip().upper() or "METAR",
+                    ),
                 }
             )
         return {"cities": out}
@@ -951,6 +991,8 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "current": {
             "temp": data.get("current", {}).get("temp"),
             "obs_time": data.get("current", {}).get("obs_time"),
+            "settlement_source": data.get("current", {}).get("settlement_source"),
+            "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
         },
         "deb": {
             "prediction": data.get("deb", {}).get("prediction"),
@@ -1071,6 +1113,8 @@ def _build_city_detail_payload(
             "local_date": data.get("local_date"),
             "temp_symbol": data.get("temp_symbol"),
             "current_temp": data.get("current", {}).get("temp"),
+            "settlement_source": data.get("current", {}).get("settlement_source"),
+            "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
             "deb_prediction": data.get("deb", {}).get("prediction"),
             "risk_level": data.get("risk", {}).get("level"),
             "risk_warning": data.get("risk", {}).get("warning"),

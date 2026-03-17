@@ -11,6 +11,8 @@ export interface CityListItem {
   icao: string;
   temp_unit: "celsius" | "fahrenheit";
   is_major?: boolean;
+  settlement_source?: string;
+  settlement_source_label?: string;
 }
 
 export interface ProbabilityBucket {
@@ -46,6 +48,8 @@ export interface CurrentConditions {
   max_so_far: number | null;
   max_temp_time: string | null;
   wu_settlement: number | null;
+  settlement_source?: string | null;
+  settlement_source_label?: string | null;
   obs_time: string | null;
   obs_age_min: number | null;
   wind_speed_kt: number | null;

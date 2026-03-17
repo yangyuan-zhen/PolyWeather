@@ -29,6 +29,19 @@ def _sf(value: Any) -> Optional[float]:
         return None
 
 
+def _resolve_settlement_source(city_meta: Dict[str, Any]) -> Tuple[str, str]:
+    source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+    if not source:
+        source = "metar"
+    source_label_map = {
+        "metar": "METAR",
+        "hko": "HKO",
+        "cwa": "CWA",
+        "mgm": "MGM",
+    }
+    return source, source_label_map.get(source, source.upper())
+
+
 def resolve_city_name(city_input: str) -> Tuple[Optional[str], List[str]]:
     city_input_norm = city_input.strip().lower()
     supported = list(CITY_REGISTRY.keys())
@@ -312,7 +325,15 @@ def build_city_query_report(
     open_meteo = weather_data.get("open-meteo", {}) or {}
     metar = weather_data.get("metar", {}) or {}
     mgm = weather_data.get("mgm") or {}
+    settlement_current = weather_data.get("settlement_current") or {}
+    if not isinstance(settlement_current, dict):
+        settlement_current = {}
+    sc_current = settlement_current.get("current") or {}
+    if not isinstance(sc_current, dict):
+        sc_current = {}
     city_meta = CITY_REGISTRY.get(city_name.lower(), {})
+    settlement_source, settlement_source_label = _resolve_settlement_source(city_meta)
+    use_settlement_current = settlement_source in {"hko", "cwa"} and bool(sc_current)
     fallback_utc_offset = int(city_meta.get("tz_offset", 0))
     nws_periods = ((weather_data.get("nws") or {}).get("forecast_periods") or [])
     if nws_periods:
@@ -333,6 +354,7 @@ def build_city_query_report(
     risk_emoji = risk_profile.get("risk_level", "⚠️") if risk_profile else "⚠️"
 
     msg_lines = [f"📍 <b>{city_name.title()}</b> ({time_str}) {risk_emoji}"]
+    msg_lines.append(f"🧾 结算源: <b>{settlement_source_label}</b>")
     if risk_profile:
         bias = risk_profile.get("bias", "±0.0")
         msg_lines.append(
@@ -346,6 +368,7 @@ def build_city_query_report(
     nws_high = _sf((weather_data.get("nws") or {}).get("today_high"))
     mgm_high = _sf((mgm.get("today_high") if isinstance(mgm, dict) else None))
     metar_max_so_far = _sf((metar.get("current") or {}).get("max_temp_so_far"))
+    settlement_max_so_far = _sf(sc_current.get("max_temp_so_far")) if use_settlement_current else None
 
     today_t = _sf(max_temps[0]) if max_temps else None
     fallback_source = None
@@ -356,7 +379,10 @@ def build_city_query_report(
                 today_t = candidate
                 fallback_source = source_name
                 break
-    if today_t is None and metar_max_so_far is not None:
+    if today_t is None and settlement_max_so_far is not None:
+        today_t = settlement_max_so_far
+        metar_only_fallback = True
+    elif today_t is None and metar_max_so_far is not None:
         today_t = metar_max_so_far
         metar_only_fallback = True
 
@@ -379,7 +405,10 @@ def build_city_query_report(
     if metar_only_fallback:
         if not sources:
             sources = ["Model unavailable"]
-        comp_parts.append(f"METAR实测回退: {metar_max_so_far:.1f}{temp_symbol}")
+        source_name = settlement_source_label if use_settlement_current else "METAR"
+        fallback_val = settlement_max_so_far if settlement_max_so_far is not None else metar_max_so_far
+        if fallback_val is not None:
+            comp_parts.append(f"{source_name}实测回退: {fallback_val:.1f}{temp_symbol}")
     if not sources:
         sources = ["N/A"]
 
@@ -411,16 +440,38 @@ def build_city_query_report(
 
     metar_current = metar.get("current", {}) if isinstance(metar, dict) else {}
     mgm_current = mgm.get("current", {}) if isinstance(mgm, dict) else {}
-    cur_temp = _sf(metar_current.get("temp"))
+    primary_current = sc_current if use_settlement_current else metar_current
+    cur_temp = _sf(primary_current.get("temp"))
+    if cur_temp is None:
+        cur_temp = _sf(metar_current.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mgm_current.get("temp"))
-    max_p = _sf(metar_current.get("max_temp_so_far"))
-    max_p_time = metar_current.get("max_temp_time")
+    max_p = _sf(primary_current.get("max_temp_so_far"))
+    if max_p is None:
+        max_p = _sf(metar_current.get("max_temp_so_far"))
+    max_p_time = primary_current.get("max_temp_time")
+    if not max_p_time and not use_settlement_current:
+        max_p_time = metar_current.get("max_temp_time")
     obs_t_str = "N/A"
     metar_age_min = None
-    main_source = "METAR" if metar else "MGM"
+    main_source = settlement_source_label if use_settlement_current else ("METAR" if metar else "MGM")
 
-    if metar and metar.get("observation_time"):
+    settlement_obs_time = str(settlement_current.get("observation_time") or "").strip() if use_settlement_current else ""
+    if settlement_obs_time:
+        obs_t = settlement_obs_time
+        try:
+            dt = datetime.fromisoformat(obs_t.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            utc_offset = open_meteo.get("utc_offset")
+            if utc_offset is None:
+                utc_offset = fallback_utc_offset
+            local_dt = dt.astimezone(timezone(timedelta(seconds=int(utc_offset))))
+            obs_t_str = local_dt.strftime("%H:%M")
+            metar_age_min = int((datetime.now(timezone.utc) - dt.astimezone(timezone.utc)).total_seconds() / 60)
+        except Exception:
+            obs_t_str = obs_t[:16]
+    elif metar and metar.get("observation_time"):
         obs_t = str(metar.get("observation_time"))
         try:
             if "T" in obs_t:
@@ -459,17 +510,24 @@ def build_city_query_report(
         max_str = f" (最高: {max_p}{temp_symbol}"
         if max_p_time:
             max_str += f" @{max_p_time}"
-        max_str += f" → WU {settled_val}{temp_symbol})"
+        max_str += f" → {settlement_source_label} {settled_val}{temp_symbol})"
 
-    metar_clouds = metar_current.get("clouds", []) if isinstance(metar_current, dict) else []
+    metar_clouds = primary_current.get("clouds", []) if isinstance(primary_current, dict) else []
     mgm_cloud = mgm_current.get("cloud_cover") if isinstance(mgm_current, dict) else None
-    wx_summary = _build_wx_summary(metar_current, metar_clouds, mgm_cloud)
+    wx_summary = _build_wx_summary(primary_current, metar_clouds, mgm_cloud)
     wx_display = f" {wx_summary}" if wx_summary else ""
     msg_lines.append(
         f"\n✈️ <b>实测 ({main_source}): {cur_temp}{temp_symbol}</b>{max_str} |{wx_display} | {obs_t_str}{age_tag}"
     )
 
-    if metar:
+    if use_settlement_current:
+        wind = primary_current.get("wind_speed_kt")
+        wind_dir = primary_current.get("wind_dir")
+        humidity = primary_current.get("humidity")
+        msg_lines.append(
+            f"   [{settlement_source_label}] 🌪 {wind or 0}kt ({wind_dir or 0}°) | 💧 湿度: {humidity or 'N/A'}%"
+        )
+    elif metar:
         wind = metar_current.get("wind_speed_kt")
         wind_dir = metar_current.get("wind_dir")
         vis = metar_current.get("visibility_mi")
