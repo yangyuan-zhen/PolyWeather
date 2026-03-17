@@ -186,6 +186,9 @@ const TELEGRAM_GROUP_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
     "https://t.me/+nMG7SjziUKYyZmM1",
 ).trim();
+const TELEGRAM_BOT_URL = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
+).trim();
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 let walletConnectProviderCache: EvmProvider | null = null;
@@ -530,6 +533,10 @@ export function AccountCenter() {
       telegramHint: isEn
         ? "Send the command below to the polyweather bot to sync notifications and access."
         : "将下方命令发送给polyweather机器人，实现全平台气象推送与权限同步。",
+      telegramBotLink: isEn
+        ? "Open Bot (@WeatherQuant_bot)"
+        : "打开机器人 (@WeatherQuant_bot)",
+      telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
       copyCommand: isEn ? "Copy command" : "复制命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
@@ -1972,6 +1979,30 @@ export function AccountCenter() {
               <p className="text-slate-400 text-sm mb-6">
                 {copy.telegramHint}
               </p>
+              <div className="mb-4 flex flex-wrap gap-2">
+                {TELEGRAM_BOT_URL ? (
+                  <Link
+                    href={TELEGRAM_BOT_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
+                  >
+                    {copy.telegramBotLink}
+                    <ExternalLink size={12} />
+                  </Link>
+                ) : null}
+                {TELEGRAM_GROUP_URL ? (
+                  <Link
+                    href={TELEGRAM_GROUP_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
+                  >
+                    {copy.telegramGroupLink}
+                    <ExternalLink size={12} />
+                  </Link>
+                ) : null}
+              </div>
               <div className="flex gap-2">
                 <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
                   {bindCommand}

@@ -152,6 +152,8 @@ class BotIOLayer:
             "/diag - 查看 Bot 启动诊断\n\n"
             "/bind - 绑定 Supabase 账号（可选）\n"
             "/unbind - 解除当前 Telegram 与网页账号绑定\n\n"
+            "🔗 机器人: <a href=\"https://t.me/WeatherQuant_bot\">@WeatherQuant_bot</a>\n"
+            "👥 社群: <a href=\"https://t.me/+nMG7SjziUKYyZmM1\">加入 Telegram 群组</a>\n\n"
             "🔐 <i>/city 与 /deb 仅限官方群成员使用。</i>\n\n"
             "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
             f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
