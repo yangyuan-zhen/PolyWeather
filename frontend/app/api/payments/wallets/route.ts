@@ -56,12 +56,10 @@ export async function DELETE(req: NextRequest) {
   try {
     const auth = await buildBackendRequestHeaders(req);
     const proxiedHeaders = new Headers(auth.headers);
+    proxiedHeaders.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE}/api/payments/wallets`, {
       method: "DELETE",
-      headers: {
-        ...proxiedHeaders,
-        "Content-Type": "application/json",
-      },
+      headers: proxiedHeaders,
       body: JSON.stringify(payload),
       cache: "no-store",
     });
