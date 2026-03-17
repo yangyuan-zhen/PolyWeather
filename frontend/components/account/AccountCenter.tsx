@@ -646,6 +646,13 @@ export function AccountCenter() {
     } = await client.auth.refreshSession();
     const refreshedToken = String(refreshed?.access_token || "").trim();
     if (refreshedToken) return refreshedToken;
+    if (
+      cachedToken &&
+      Number.isFinite(expiresAtSec) &&
+      expiresAtSec > nowSec
+    ) {
+      return cachedToken;
+    }
     throw new Error(
       error?.message
         ? isEn

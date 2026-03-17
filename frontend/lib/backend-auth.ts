@@ -51,14 +51,14 @@ export async function buildBackendRequestHeaders(
       headers.set(FORWARDED_SUPABASE_EMAIL_HEADER, forwardedEmail);
     }
 
-    const accessToken = session?.access_token || "";
-    if (accessToken) {
-      // Prefer server-side session token to avoid stale client bearer tokens.
-      headers.set("Authorization", `Bearer ${accessToken}`);
-      return { headers, response: passthroughResponse };
-    }
     if (incomingAuth) {
       headers.set("Authorization", `Bearer ${incomingAuth}`);
+      return { headers, response: passthroughResponse };
+    }
+    const accessToken = session?.access_token || "";
+    if (accessToken) {
+      // Fallback to cookie-backed session when request does not carry bearer.
+      headers.set("Authorization", `Bearer ${accessToken}`);
     }
     return { headers, response: passthroughResponse };
   }

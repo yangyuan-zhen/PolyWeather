@@ -94,6 +94,12 @@ async function handleSupabaseAuthGate(request: NextRequest) {
   if (isPublicPage(pathname)) {
     return NextResponse.next();
   }
+  if (pathname.startsWith("/api/")) {
+    const authHeader = String(request.headers.get("authorization") || "").trim();
+    if (/^bearer\s+\S+/i.test(authHeader)) {
+      return NextResponse.next();
+    }
+  }
 
   const response = NextResponse.next({
     request: {
