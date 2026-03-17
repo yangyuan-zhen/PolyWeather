@@ -1140,19 +1140,48 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const risk = detail.risk || {};
   const current = detail.current || {};
   const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
+  const sourceCode = getObservationSourceCode(detail);
+  const isOfficialSource = sourceCode === "hko" || sourceCode === "cwa";
+
+  const sourceDisplay = (() => {
+    if (sourceCode === "hko") {
+      return isEnglish(locale)
+        ? "Hong Kong Observatory (HKO)"
+        : "香港天文台 (HKO)";
+    }
+    if (sourceCode === "cwa") {
+      return isEnglish(locale)
+        ? "Central Weather Administration (CWA)"
+        : "交通部中央气象署 (CWA)";
+    }
+    const tag = getObservationSourceTag(detail);
+    if (sourceCode === "mgm") {
+      return isEnglish(locale) ? `MGM (${tag})` : `MGM (${tag})`;
+    }
+    if (risk.airport && risk.icao) return `${risk.airport} (${risk.icao})`;
+    if (risk.airport) return String(risk.airport);
+    return isEnglish(locale) ? "No profile" : "暂无档案";
+  })();
 
   return [
     {
-      label: isEnglish(locale) ? "Settlement airport" : "结算机场",
-      value:
-        risk.airport && risk.icao
-          ? `${risk.airport} (${risk.icao})`
-          : isEnglish(locale)
-            ? "No profile"
-            : "暂无档案",
+      label: isOfficialSource
+        ? isEnglish(locale)
+          ? "Settlement source"
+          : "结算源"
+        : isEnglish(locale)
+          ? "Settlement airport"
+          : "结算机场",
+      value: sourceDisplay,
     },
     {
-      label: isEnglish(locale) ? "Station distance" : "站点距离",
+      label: isOfficialSource
+        ? isEnglish(locale)
+          ? "Reference distance"
+          : "参考距离"
+        : isEnglish(locale)
+          ? "Station distance"
+          : "站点距离",
       value:
         risk.distance_km != null && Number.isFinite(Number(risk.distance_km))
           ? `${risk.distance_km} km`
@@ -1186,6 +1215,14 @@ export function getSettlementRiskNarrative(
   locale: Locale = "zh-CN",
 ) {
   const risk = detail.risk || {};
+  const sourceCode = getObservationSourceCode(detail);
+  const stationTerm = sourceCode === "hko" || sourceCode === "cwa"
+    ? isEnglish(locale)
+      ? "settlement reference station"
+      : "结算参考站"
+    : isEnglish(locale)
+      ? "settlement airport"
+      : "结算机场";
   const lines: string[] = [];
 
   if (risk.warning) {
@@ -1200,20 +1237,20 @@ export function getSettlementRiskNarrative(
     if (risk.distance_km >= 60) {
       lines.push(
         isEnglish(locale)
-          ? "Settlement airport is far from urban core; market feel and settlement value may diverge significantly."
-          : "结算机场与城市核心区域距离偏大，盘面温度与结算值可能出现明显背离。",
+          ? `The ${stationTerm} is far from urban core; market feel and settlement value may diverge significantly.`
+          : `${stationTerm}与城市核心区域距离偏大，盘面温度与结算值可能出现明显背离。`,
       );
     } else if (risk.distance_km >= 25) {
       lines.push(
         isEnglish(locale)
-          ? "Settlement airport has material distance from downtown; peak/overnight rhythm should prioritize airport station."
-          : "结算机场与城区存在可感知距离，午后峰值和夜间降温节奏需要优先看机场站。",
+          ? `The ${stationTerm} has material distance from downtown; peak/overnight rhythm should prioritize the settlement station.`
+          : `${stationTerm}与城区存在可感知距离，午后峰值和夜间降温节奏需要优先看结算站。`,
       );
     } else {
       lines.push(
         isEnglish(locale)
-          ? "Settlement airport is close enough; city feel and settlement temperature are usually more synchronized."
-          : "结算机场距离较近，城市体感与结算温度通常更同步。",
+          ? `The ${stationTerm} is close enough; city feel and settlement temperature are usually more synchronized.`
+          : `${stationTerm}距离较近，城市体感与结算温度通常更同步。`,
       );
     }
   }

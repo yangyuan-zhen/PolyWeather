@@ -534,6 +534,28 @@ export function FutureForecastModal() {
   );
   const ai = parseAiAnalysis(detail.ai_analysis);
   const risk = detail.risk || {};
+  const settlementSourceCode = String(
+    detail.current?.settlement_source || "",
+  ).toLowerCase();
+  const isOfficialSettlementSource =
+    settlementSourceCode === "hko" || settlementSourceCode === "cwa";
+  const settlementProfileLabel = isOfficialSettlementSource
+    ? locale === "en-US"
+      ? "Settlement source"
+      : "结算源"
+    : t("section.airport");
+  const settlementProfileValue =
+    settlementSourceCode === "hko"
+      ? locale === "en-US"
+        ? "Hong Kong Observatory (HKO)"
+        : "香港天文台 (HKO)"
+      : settlementSourceCode === "cwa"
+        ? locale === "en-US"
+          ? "Central Weather Administration (CWA)"
+          : "交通部中央气象署 (CWA)"
+        : risk.airport
+          ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
+          : "--";
 
   return (
     <div
@@ -899,12 +921,9 @@ export function FutureForecastModal() {
                             <>
                               <div className="risk-row">
                                 <span className="risk-label">
-                                  {t("section.airport")}
+                                  {settlementProfileLabel}
                                 </span>
-                                <span>
-                                  {risk.airport}
-                                  {risk.icao ? ` (${risk.icao})` : ""}
-                                </span>
+                                <span>{settlementProfileValue}</span>
                               </div>
                               <div className="risk-row">
                                 <span className="risk-label">
