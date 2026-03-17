@@ -551,6 +551,9 @@ export function AccountCenter() {
         ? "Wallet unbound. New primary: {address}"
         : "钱包已解绑，新的主钱包：{address}",
       unbindFailed: isEn ? "Failed to unbind wallet" : "解绑钱包失败",
+      authExpired: isEn
+        ? "Session expired. Please sign out and sign in again."
+        : "登录会话已失效，请退出后重新登录。",
       payNow: isEn ? "Subscribe & Activate" : "立即订阅并激活服务",
       connectAndPay: isEn ? "Connect Wallet & Pay" : "连接钱包并支付",
       loginBeforeBind: isEn
@@ -623,7 +626,19 @@ export function AccountCenter() {
       data: { session: cached },
     } = await client.auth.getSession();
     const cachedToken = String(cached?.access_token || "").trim();
-    if (cachedToken) return cachedToken;
+    const expiresAtSec = Number(cached?.expires_at || 0);
+    const nowSec = Math.floor(Date.now() / 1000);
+    const refreshLeadSec = 90;
+    if (
+      cachedToken &&
+      Number.isFinite(expiresAtSec) &&
+      expiresAtSec > nowSec + refreshLeadSec
+    ) {
+      return cachedToken;
+    }
+    if (cachedToken && (!Number.isFinite(expiresAtSec) || expiresAtSec <= 0)) {
+      return cachedToken;
+    }
     // Session missing or expired — force a refresh.
     const {
       data: { session: refreshed },
@@ -643,14 +658,18 @@ export function AccountCenter() {
   }, [isEn, supabaseReady]);
 
   const buildAuthedHeaders = useCallback(
-    async (withJson = false): Promise<Record<string, string>> => {
+    async (
+      withJson = false,
+      requireAuth = false,
+    ): Promise<Record<string, string>> => {
       const headers: Record<string, string> = {};
       if (withJson) headers["Content-Type"] = "application/json";
       if (!supabaseReady) return headers;
       try {
         const token = await getValidAccessToken();
         headers.Authorization = `Bearer ${token}`;
-      } catch {
+      } catch (error) {
+        if (requireAuth) throw error;
         // Non-authenticated page load — silently skip.
       }
       return headers;
@@ -1308,7 +1327,7 @@ export function AccountCenter() {
     setPaymentError("");
     setPaymentInfo("");
     try {
-      const headers = await buildAuthedHeaders(true);
+      const headers = await buildAuthedHeaders(true, true);
       const res = await fetch("/api/payments/wallets", {
         method: "DELETE",
         headers,
@@ -1320,6 +1339,14 @@ export function AccountCenter() {
         try {
           const parsed = JSON.parse(raw);
           detail = String(parsed?.detail || parsed?.error || raw);
+          if (detail.trim().startsWith("{")) {
+            try {
+              const nested = JSON.parse(detail);
+              detail = String(nested?.detail || nested?.error || detail);
+            } catch {
+              // ignore nested parse failure
+            }
+          }
         } catch {
           // ignore
         }
@@ -1354,6 +1381,15 @@ export function AccountCenter() {
       );
     } catch (error) {
       const message = normalizePaymentError(error).message;
+      const lower = String(message || "").toLowerCase();
+      if (
+        lower.includes("unauthorized") ||
+        lower.includes("session required") ||
+        lower.includes("401")
+      ) {
+        setPaymentError(`${copy.unbindFailed}: ${copy.authExpired}`);
+        return;
+      }
       setPaymentError(`${copy.unbindFailed}: ${message}`);
     } finally {
       setPaymentBusy(false);
