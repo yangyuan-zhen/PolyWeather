@@ -1740,6 +1740,74 @@ class WeatherDataCollector:
         if not points:
             return None
 
+        tz_offset_sec = int(city_meta.get("tz_offset") or 0)
+        city_tz = timezone(timedelta(seconds=tz_offset_sec))
+        city_now = datetime.now(city_tz)
+
+        month_map = {
+            "jan": 1,
+            "january": 1,
+            "feb": 2,
+            "february": 2,
+            "mar": 3,
+            "march": 3,
+            "apr": 4,
+            "april": 4,
+            "may": 5,
+            "jun": 6,
+            "june": 6,
+            "jul": 7,
+            "july": 7,
+            "aug": 8,
+            "august": 8,
+            "sep": 9,
+            "sept": 9,
+            "september": 9,
+            "oct": 10,
+            "october": 10,
+            "nov": 11,
+            "november": 11,
+            "dec": 12,
+            "december": 12,
+        }
+
+        def _parse_rp5_day_to_date_key(day_label: str) -> Optional[str]:
+            text = str(day_label or "").strip()
+            if not text:
+                return None
+            low = text.lower()
+            today_local = city_now.date()
+            if low.startswith("today"):
+                return today_local.isoformat()
+            if low.startswith("tomorrow"):
+                return (today_local + timedelta(days=1)).isoformat()
+
+            match = re.search(r"\b([A-Za-z]+)\s+(\d{1,2})\b", text)
+            if not match:
+                return None
+            month_token = match.group(1).strip().lower().rstrip(".")
+            day_token = int(match.group(2))
+            month = month_map.get(month_token)
+            if month is None:
+                return None
+
+            # RP5 day label omits year; choose the closest year around "now".
+            candidates: List[datetime] = []
+            for y in [today_local.year - 1, today_local.year, today_local.year + 1]:
+                try:
+                    candidates.append(datetime(y, month, day_token, tzinfo=city_tz))
+                except ValueError:
+                    continue
+            if not candidates:
+                return None
+            chosen = min(
+                candidates,
+                key=lambda d: abs((d.date() - today_local).days),
+            )
+            return chosen.date().isoformat()
+
+        by_date: Dict[str, float] = {}
+        ordered_date_keys: List[str] = []
         by_label: Dict[str, float] = {}
         ordered_labels: List[str] = []
         for row in points:
@@ -1755,23 +1823,49 @@ class WeatherDataCollector:
                 temp_c_val = float(temp_c)
             except Exception:
                 continue
+
+            date_key = _parse_rp5_day_to_date_key(label)
+            if date_key:
+                if date_key not in by_date:
+                    by_date[date_key] = temp_c_val
+                    ordered_date_keys.append(date_key)
+                elif temp_c_val > by_date[date_key]:
+                    by_date[date_key] = temp_c_val
+
+            # Legacy label aggregation fallback (for non-English day labels etc.).
             if label not in by_label:
                 by_label[label] = temp_c_val
                 ordered_labels.append(label)
             elif temp_c_val > by_label[label]:
                 by_label[label] = temp_c_val
 
-        if not ordered_labels:
+        if not ordered_labels and not ordered_date_keys:
             return None
 
+        mapped_count = 0
+        mapped_labels: List[str] = []
         mapped_values: List[float] = [by_label[k] for k in ordered_labels]
-        mapped_count = min(len(dates), len(mapped_values))
-        for idx in range(mapped_count):
-            date_key = dates[idx]
-            value_c = mapped_values[idx]
-            value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
-            day_bucket = daily_forecasts.setdefault(date_key, {})
-            day_bucket["RP5"] = round(value, 1)
+
+        # Preferred path: map by actual calendar date, avoids day-shift bugs near midnight.
+        if dates and by_date:
+            for date_key in dates:
+                value_c = by_date.get(date_key)
+                if value_c is None:
+                    continue
+                value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
+                day_bucket = daily_forecasts.setdefault(date_key, {})
+                day_bucket["RP5"] = round(value, 1)
+                mapped_count += 1
+                mapped_labels.append(date_key)
+        elif dates:
+            mapped_count = min(len(dates), len(mapped_values))
+            for idx in range(mapped_count):
+                date_key = dates[idx]
+                value_c = mapped_values[idx]
+                value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
+                day_bucket = daily_forecasts.setdefault(date_key, {})
+                day_bucket["RP5"] = round(value, 1)
+                mapped_labels.append(ordered_labels[idx])
 
         if not dates and mapped_values:
             # Fallback: if Open-Meteo dates missing unexpectedly, create today bucket.
@@ -1779,6 +1873,16 @@ class WeatherDataCollector:
             value_c = mapped_values[0]
             value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
             daily_forecasts.setdefault(today_key, {})["RP5"] = round(value, 1)
+            mapped_count = 1
+            mapped_labels.append(today_key)
+
+        if dates and mapped_count == 0:
+            logger.info(
+                "RP5 no date-overlap city={} rp5_dates={} om_dates={}",
+                city_name,
+                ordered_date_keys[:6],
+                dates[:6],
+            )
 
         logger.info(
             "RP5 merged city={} mapped_days={} url={}",
@@ -1791,7 +1895,7 @@ class WeatherDataCollector:
             "url": payload.get("url"),
             "resolved_url": payload.get("resolved_url"),
             "summary": payload.get("summary"),
-            "mapped_labels": ordered_labels[:mapped_count] if dates else ordered_labels[:1],
+            "mapped_labels": mapped_labels[:mapped_count] if dates else mapped_labels[:1],
         }
 
     def fetch_multi_model(

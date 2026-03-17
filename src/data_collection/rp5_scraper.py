@@ -39,6 +39,7 @@ RP5_CITY_URL_OVERRIDES: Dict[str, str] = {
     "sao paulo": "https://rp5.am/Weather_in_Sao_Paulo",
     "hong kong": "https://rp5.am/Weather_in_Hong_Kong_%28airport%29",
     "singapore": "https://rp5.am/Weather_in_Singapore_%28airport%29",
+    "shanghai": "https://rp5.am/Weather_in_Shanghai_Pudong_(airport)",
     "madrid": "https://rp5.am/Weather_in_Madrid,_Barajas_(airport)",
 }
 
