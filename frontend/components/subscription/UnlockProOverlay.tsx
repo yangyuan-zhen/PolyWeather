@@ -56,12 +56,12 @@ type UnlockProOverlayProps = {
 
 const FEATURES = {
   "zh-CN": [
-    "今日日内深度分析（含高温时段）",
+    "今日日内机场报文规则分析（含高温时段）",
     "历史对账 + 未来日期分析",
     "全平台智能气象推送",
   ],
   "en-US": [
-    "Intraday deep analysis with peak-time window",
+    "Intraday METAR rule-based analysis with peak-time window",
     "Historical reconciliation + future-date analysis",
     "Cross-platform alerts",
   ],

@@ -287,6 +287,10 @@ export interface CityDetail {
     time?: string;
     temp?: number | null;
   }>;
+  settlement_today_obs?: Array<{
+    time?: string;
+    temp?: number | null;
+  }>;
   trend?: TrendInfo;
   peak?: PeakInfo;
   ai_analysis?: string | AiAnalysisStructured | null;
@@ -300,7 +304,9 @@ export interface HistoryPoint {
   date: string;
   actual: number | null;
   deb: number | null;
+  mu?: number | null;
   mgm?: number | null;
+  forecasts?: Record<string, number | null>;
 }
 
 export interface LoadingState {

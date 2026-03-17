@@ -248,7 +248,9 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         borderWidth: 0,
         data: todayChartData.datasets.metarPoints,
         fill: false,
-        label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
+        label:
+          todayChartData.observationLabel ||
+          (locale === "en-US" ? "METAR Observation" : "METAR 实况"),
         order: 0,
         pointHoverRadius: 7,
         pointRadius: 5,

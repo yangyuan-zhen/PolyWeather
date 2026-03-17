@@ -60,7 +60,9 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
             borderWidth: 0,
             data: chartData.datasets.metarPoints,
             fill: false,
-            label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
+            label:
+              chartData.observationLabel ||
+              (locale === "en-US" ? "METAR Observation" : "METAR 实况"),
             pointHoverRadius: 6,
             pointRadius: 3.8,
             showLine: false,

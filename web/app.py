@@ -36,6 +36,7 @@ from src.auth.supabase_entitlement import (
     SUPABASE_ENTITLEMENT,
     extract_bearer_token,
 )
+from src.analysis.metar_narrator import describe_metar_report
 from src.database.db_manager import DBManager
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError
 
@@ -431,6 +432,29 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         except Exception:
             obs_time_str = str(obs_t)[:16]
 
+    settlement_today_obs = []
+    if use_settlement_current:
+        if obs_time_str and cur_temp is not None:
+            settlement_today_obs.append({"time": obs_time_str, "temp": cur_temp})
+        if (
+            max_temp_time
+            and max_so_far is not None
+            and str(max_temp_time) != str(obs_time_str)
+        ):
+            settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
+
+    metar_today_obs_payload = (
+        []
+        if use_settlement_current
+        else [
+            {"time": t, "temp": v}
+            for t, v in (metar.get("today_obs", []) if metar else [])
+        ]
+    )
+    metar_recent_obs_payload = (
+        [] if use_settlement_current else (metar.get("recent_obs", []) if metar else [])
+    )
+
     # ── 3. Local time parsing ──
     local_time_full = om.get("current", {}).get("local_time", "")
     local_hour, local_minute = 12, 0
@@ -610,13 +634,12 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     # This single call replaces the duplicate probability engine, dead market
     # detection, forecast bust grading, and AI context building.
     from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze, calculate_prob_distribution
-    from src.analysis.ai_analyzer import get_ai_analysis
 
     probabilities = []
     mu = None
     ai_text = ""
     try:
-        _, ai_context, sd = _trend_analyze(raw, sym, city)
+        _, _ai_context, sd = _trend_analyze(raw, sym, city)
 
         # Use structured data from shared engine
         mu = sd.get("mu")
@@ -631,17 +654,23 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             deb_val = sd["deb_prediction"]
             deb_weights = sd.get("deb_weights", "")
 
-        # Append multi-model divergence for AI
-        if current_forecasts and ai_context:
-            mm_str = " | ".join(
-                [f"{k}:{v}{sym}" for k, v in current_forecasts.items() if v]
-            )
-            ai_context += f"\n模型分歧: {mm_str}"
-
-        if ai_context:
-            ai_text = get_ai_analysis(ai_context, city, sym)
     except Exception as e:
-        logger.warning(f"Analysis/AI skipped for {city}: {e}")
+        logger.warning(f"Structured analysis skipped for {city}: {e}")
+
+    ai_text = describe_metar_report(
+        raw_metar=str(primary_current.get("raw_metar") or mc.get("raw_metar") or ""),
+        temp_symbol=sym,
+        fallback={
+            "icao": metar.get("icao"),
+            "station_name": metar.get("station_name"),
+            "temp": cur_temp,
+            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
+            "wind_dir": _sf(primary_current.get("wind_dir")),
+            "altimeter": _sf(primary_current.get("altimeter")),
+            "wx_desc": primary_current.get("wx_desc"),
+            "clouds": primary_current.get("clouds", []) or mc.get("clouds", []),
+        },
+    )
 
     # ── 12. Hourly data (today only, for chart) ──
     today_hourly: Dict[str, list] = {"times": [], "temps": [], "radiation": []}
@@ -911,11 +940,9 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         },
         "hourly": today_hourly,
         "hourly_next_48h": next_48h_hourly,
-        "metar_today_obs": [
-            {"time": t, "temp": v}
-            for t, v in (metar.get("today_obs", []) if metar else [])
-        ],
-        "metar_recent_obs": metar.get("recent_obs", []) if metar else [],
+        "metar_today_obs": metar_today_obs_payload,
+        "metar_recent_obs": metar_recent_obs_payload,
+        "settlement_today_obs": settlement_today_obs,
         "ai_analysis": ai_text,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -1138,6 +1165,7 @@ def _build_city_detail_payload(
         "timeseries": {
             "metar_recent_obs": data.get("metar_recent_obs") or [],
             "metar_today_obs": data.get("metar_today_obs") or [],
+            "settlement_today_obs": data.get("settlement_today_obs") or [],
             "hourly": data.get("hourly") or {},
             "mgm_hourly": (data.get("mgm") or {}).get("hourly", []),
             "forecast_daily": (data.get("forecast") or {}).get("daily", []),
@@ -1170,7 +1198,12 @@ async def city_history(request: Request, name: str):
     data = load_history(history_file)
     
     if name not in data:
-        return {"history": []}
+        source = str(CITIES.get(name, {}).get("settlement_source") or "metar").strip().lower()
+        return {
+            "history": [],
+            "settlement_source": source,
+            "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+        }
         
     city_data = data[name]
     out = []
@@ -1178,7 +1211,15 @@ async def city_history(request: Request, name: str):
         act = rec.get("actual_high")
         deb = rec.get("deb_prediction")
         mu = rec.get("mu")
-        mgm = rec.get("forecasts", {}).get("MGM")
+        forecasts_raw = rec.get("forecasts", {}) or {}
+        forecasts = {}
+        if isinstance(forecasts_raw, dict):
+            for model_name, model_value in forecasts_raw.items():
+                if _is_excluded_model_name(str(model_name)):
+                    continue
+                fv = _sf(model_value)
+                forecasts[str(model_name)] = fv if fv is not None else None
+        mgm = forecasts.get("MGM")
         
         # Only return items where we have at least an actual or a prediction
         out.append({
@@ -1187,8 +1228,14 @@ async def city_history(request: Request, name: str):
             "deb": float(deb) if deb is not None else None,
             "mu": float(mu) if mu is not None else None,
             "mgm": float(mgm) if mgm is not None else None,
+            "forecasts": forecasts,
         })
-    return {"history": out}
+    source = str(CITIES.get(name, {}).get("settlement_source") or "metar").strip().lower()
+    return {
+        "history": out,
+        "settlement_source": source,
+        "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+    }
 
 
 @app.get("/api/auth/me")

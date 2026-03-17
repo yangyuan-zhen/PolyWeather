@@ -343,6 +343,7 @@ export interface CityDetail {
   timeseries: {
     metar_recent_obs: any[];
     metar_today_obs: any[];
+    settlement_today_obs?: any[];
     hourly: any;
     mgm_hourly: any[];
     forecast_daily: any[];

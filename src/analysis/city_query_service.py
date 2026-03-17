@@ -3,8 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from loguru import logger
-
+from src.analysis.metar_narrator import describe_metar_report
 from src.analysis.trend_engine import analyze_weather_trend
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
@@ -543,33 +542,29 @@ def build_city_query_report(
                 f"   [MGM] 🌬️ {dir_str}{wind_dir}° ({wind_speed_ms} m/s) | 💧 降水: {mgm_current.get('rain_24h') or 0}mm"
             )
 
-    feature_str, ai_context, _structured = analyze_weather_trend(weather_data, temp_symbol, city_name)
+    feature_str, _ai_context, _structured = analyze_weather_trend(weather_data, temp_symbol, city_name)
     if feature_str:
         msg_lines.append("\n💡 <b>分析</b>:")
         for line in feature_str.split("\n"):
             if line.strip():
                 msg_lines.append(f"- {line.strip()}")
-
-        try:
-            from src.analysis.ai_analyzer import get_ai_analysis
-
-            mm = weather_data.get("multi_model", {}) or {}
-            if not isinstance(mm, dict):
-                mm = {}
-            if mm.get("forecasts"):
-                mm_parts = [
-                    f"{k}:{v}{temp_symbol}"
-                    for k, v in (mm.get("forecasts") or {}).items()
-                    if v is not None
-                ]
-                if mm_parts:
-                    ai_context += f"\n模型分歧: {' | '.join(mm_parts)}"
-
-            ai_result = get_ai_analysis(ai_context, city_name, temp_symbol)
-            if ai_result:
-                msg_lines.append(f"\n{ai_result}")
-        except Exception as exc:
-            logger.error(f"调用 Groq AI 分析失败: {exc}")
+    metar_narrative = describe_metar_report(
+        raw_metar=str(primary_current.get("raw_metar") or metar_current.get("raw_metar") or ""),
+        temp_symbol=temp_symbol,
+        fallback={
+            "icao": metar.get("icao"),
+            "station_name": metar.get("station_name"),
+            "temp": cur_temp,
+            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
+            "wind_dir": _sf(primary_current.get("wind_dir")),
+            "altimeter": _sf(primary_current.get("altimeter")),
+            "wx_desc": primary_current.get("wx_desc"),
+            "clouds": primary_current.get("clouds", []),
+        },
+    )
+    if metar_narrative:
+        msg_lines.append("\n🛰️ <b>机场报文解读</b>:")
+        msg_lines.append(metar_narrative)
 
     msg_lines.append(f"\n💸 本次消耗 <b>{city_query_cost}</b> 积分。")
     return "\n".join(msg_lines)

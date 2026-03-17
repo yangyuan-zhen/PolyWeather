@@ -7,6 +7,10 @@ import threading
 from typing import Optional, Dict, List, Any
 from datetime import datetime, timedelta, timezone
 from loguru import logger
+from src.data_collection.rp5_scraper import (
+    build_rp5_city_url_candidates,
+    scrape_rp5_forecast,
+)
 
 
 class WeatherDataCollector:
@@ -67,6 +71,13 @@ class WeatherDataCollector:
         self.open_meteo_multi_model_cache_ttl_sec = int(
             os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_TTL_SEC", "900")
         )
+        self.multi_model_cache_version = str(
+            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v2")
+        ).strip() or "v2"
+        self.rp5_multi_model_enabled = str(
+            os.getenv("RP5_MULTI_MODEL_ENABLED", "true")
+        ).strip().lower() in {"1", "true", "yes", "on"}
+        self.rp5_timeout_sec = max(5, int(os.getenv("RP5_HTTP_TIMEOUT_SEC", "20")))
         self._open_meteo_cache: Dict[str, Dict] = {}
         self._ensemble_cache: Dict[str, Dict] = {}
         self._multi_model_cache: Dict[str, Dict] = {}
@@ -1685,10 +1696,109 @@ class WeatherDataCollector:
                     return fallback
             return None
 
+    def _merge_rp5_into_daily_forecasts(
+        self,
+        city: str,
+        dates: List[str],
+        daily_forecasts: Dict[str, Dict[str, float]],
+        use_fahrenheit: bool,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Scrape RP5 public forecast page and merge as an extra model line ("RP5").
+        """
+        if not self.rp5_multi_model_enabled:
+            return None
+        city_key = str(city or "").strip().lower()
+        if not city_key:
+            return None
+
+        city_meta = self.CITY_REGISTRY.get(city_key, {})
+        city_name = str(city_meta.get("name") or city).strip()
+        candidates = build_rp5_city_url_candidates(city_name=city_name, city_key=city_key)
+        if not candidates:
+            return None
+
+        payload: Dict[str, Any] = {}
+        points: List[Dict[str, Any]] = []
+        for url in candidates:
+            try:
+                probe = scrape_rp5_forecast(
+                    url=url,
+                    timeout_sec=self.rp5_timeout_sec,
+                    city_hint=city_name,
+                    max_hops=3,
+                )
+            except Exception as exc:
+                logger.debug(f"RP5 scrape failed city={city_name} url={url}: {exc}")
+                continue
+            p = probe.get("points")
+            if isinstance(p, list) and p:
+                payload = probe
+                points = p
+                break
+
+        if not points:
+            return None
+
+        by_label: Dict[str, float] = {}
+        ordered_labels: List[str] = []
+        for row in points:
+            if not isinstance(row, dict):
+                continue
+            label = str(row.get("day_label") or "").strip()
+            if not label:
+                continue
+            temp_c = row.get("temp_c")
+            if temp_c is None:
+                continue
+            try:
+                temp_c_val = float(temp_c)
+            except Exception:
+                continue
+            if label not in by_label:
+                by_label[label] = temp_c_val
+                ordered_labels.append(label)
+            elif temp_c_val > by_label[label]:
+                by_label[label] = temp_c_val
+
+        if not ordered_labels:
+            return None
+
+        mapped_values: List[float] = [by_label[k] for k in ordered_labels]
+        mapped_count = min(len(dates), len(mapped_values))
+        for idx in range(mapped_count):
+            date_key = dates[idx]
+            value_c = mapped_values[idx]
+            value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
+            day_bucket = daily_forecasts.setdefault(date_key, {})
+            day_bucket["RP5"] = round(value, 1)
+
+        if not dates and mapped_values:
+            # Fallback: if Open-Meteo dates missing unexpectedly, create today bucket.
+            today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            value_c = mapped_values[0]
+            value = value_c * 9 / 5 + 32 if use_fahrenheit else value_c
+            daily_forecasts.setdefault(today_key, {})["RP5"] = round(value, 1)
+
+        logger.info(
+            "RP5 merged city={} mapped_days={} url={}",
+            city_name,
+            mapped_count if dates else 1,
+            payload.get("resolved_url") or payload.get("url") or "",
+        )
+        return {
+            "source": "rp5_html",
+            "url": payload.get("url"),
+            "resolved_url": payload.get("resolved_url"),
+            "summary": payload.get("summary"),
+            "mapped_labels": ordered_labels[:mapped_count] if dates else ordered_labels[:1],
+        }
+
     def fetch_multi_model(
         self,
         lat: float,
         lon: float,
+        city: str = "",
         use_fahrenheit: bool = False,
     ) -> Optional[Dict]:
         """
@@ -1704,9 +1814,10 @@ class WeatherDataCollector:
 
         返回 3 天的预报数据，支持今日+明日共识分析
         """
+        cache_city = str(city or "").strip().lower()
         cache_key = (
-            f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
-            f"{'f' if use_fahrenheit else 'c'}"
+            f"{round(float(lat), 4)}:{round(float(lon), 4)}:{cache_city}:"
+            f"{'f' if use_fahrenheit else 'c'}:{self.multi_model_cache_version}"
         )
         self._maybe_reload_open_meteo_disk_cache()
         now_ts = time.time()
@@ -1777,6 +1888,13 @@ class WeatherDataCollector:
                 if day_data:
                     daily_forecasts[date_str] = day_data
 
+            rp5_meta = self._merge_rp5_into_daily_forecasts(
+                city=city,
+                dates=dates,
+                daily_forecasts=daily_forecasts,
+                use_fahrenheit=use_fahrenheit,
+            )
+
             if not daily_forecasts:
                 logger.warning("Multi-model: 无有效模型数据")
                 return None
@@ -1795,6 +1913,7 @@ class WeatherDataCollector:
                 "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
                 "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
                 "dates": dates,
+                "rp5": rp5_meta or {},
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
             }
             with self._multi_model_cache_lock:
@@ -2034,7 +2153,10 @@ class WeatherDataCollector:
             unit = "f" if use_fahrenheit else "c"
             open_meteo_key = f"{base}:14:{unit}"
             ensemble_key = f"{base}:{unit}"
-            multi_model_key = ensemble_key
+            cache_city = str(city or "").strip().lower()
+            multi_model_key = (
+                f"{base}:{cache_city}:{unit}:{self.multi_model_cache_version}"
+            )
 
             with self._open_meteo_cache_lock:
                 self._open_meteo_cache.pop(open_meteo_key, None)
@@ -2180,7 +2302,7 @@ class WeatherDataCollector:
 
                 # 多模型预报 (所有城市通用，用于共识评分)
                 mm_data = self.fetch_multi_model(
-                    lat, lon, use_fahrenheit=use_fahrenheit
+                    lat, lon, city=city, use_fahrenheit=use_fahrenheit
                 )
                 if mm_data:
                     results["multi_model"] = mm_data
@@ -2228,7 +2350,7 @@ class WeatherDataCollector:
                 if ens_data:
                     results["ensemble"] = ens_data
                 mm_data = self.fetch_multi_model(
-                    lat, lon, use_fahrenheit=use_fahrenheit
+                    lat, lon, city=city, use_fahrenheit=use_fahrenheit
                 )
                 if mm_data:
                     results["multi_model"] = mm_data

@@ -19,6 +19,10 @@ function HistoryChart() {
   const hasMgm =
     store.selectedCity === "ankara" &&
     summary.mgms.some((value) => value != null);
+  const hasBestBaseline =
+    Boolean(summary.bestModelName) &&
+    summary.bestModelName !== "MGM" &&
+    summary.bestModelSeries.some((value) => value != null);
 
   const canvasRef = useChart(() => {
     const datasets: NonNullable<
@@ -56,6 +60,23 @@ function HistoryChart() {
         borderWidth: 2,
         data: summary.mgms,
         label: locale === "en-US" ? "MGM Official Forecast" : "MGM 官方预报",
+        pointHoverRadius: 6,
+        pointRadius: 4,
+        tension: 0.2,
+      });
+    }
+
+    if (hasBestBaseline) {
+      datasets.push({
+        backgroundColor: "transparent",
+        borderColor: "#60a5fa",
+        borderDash: [4, 3],
+        borderWidth: 2,
+        data: summary.bestModelSeries,
+        label:
+          locale === "en-US"
+            ? `Best Baseline (${summary.bestModelName})`
+            : `最佳单模型 (${summary.bestModelName})`,
         pointHoverRadius: 6,
         pointRadius: 4,
         tension: 0.2,
@@ -114,7 +135,7 @@ function HistoryChart() {
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [hasMgm, summary, locale]);
+  }, [hasBestBaseline, hasMgm, summary, locale]);
 
   if (!summary.recentData.length) return null;
 
@@ -195,15 +216,35 @@ export function HistoryModal() {
               ) : (
                 <>
                   <div className="h-stat-card">
-                    <span className="label">{t("history.hitRate")}</span>
+                    <span className="label">{t("history.debHitRate")}</span>
                     <span className="val">
                       {summary.hitRate != null ? `${summary.hitRate}%` : "--"}
                     </span>
                   </div>
                   <div className="h-stat-card">
-                    <span className="label">{t("history.mae")}</span>
+                    <span className="label">{t("history.debMae")}</span>
                     <span className="val">
                       {summary.debMae != null ? `${summary.debMae}°` : "--"}
+                    </span>
+                  </div>
+                  <div className="h-stat-card">
+                    <span className="label">{t("history.bestModelMae")}</span>
+                    <span className="val">
+                      {summary.bestModelMae != null
+                        ? `${summary.bestModelMae}°${
+                            summary.bestModelName
+                              ? ` (${summary.bestModelName})`
+                              : ""
+                          }`
+                        : "--"}
+                    </span>
+                  </div>
+                  <div className="h-stat-card">
+                    <span className="label">{t("history.debVsBest")}</span>
+                    <span className="val">
+                      {summary.debWinRateVsBest != null
+                        ? `${summary.debWinRateVsBest}% (${summary.debWinDaysVsBest}/${summary.debVsBestComparableDays})`
+                        : "--"}
                     </span>
                   </div>
                   <div className="h-stat-card">

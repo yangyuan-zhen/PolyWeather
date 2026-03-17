@@ -30,6 +30,24 @@ function isEnglish(locale: Locale) {
   return locale === "en-US";
 }
 
+function getObservationSourceCode(detail: CityDetail): string {
+  return String(detail.current?.settlement_source || "metar")
+    .trim()
+    .toLowerCase();
+}
+
+function getObservationSourceTag(detail: CityDetail): string {
+  const label = String(detail.current?.settlement_source_label || "")
+    .trim()
+    .toUpperCase();
+  if (label) return label;
+  const code = getObservationSourceCode(detail);
+  if (code === "hko") return "HKO";
+  if (code === "cwa") return "CWA";
+  if (code === "mgm") return "MGM";
+  return "METAR";
+}
+
 function normalizeCloudSummary(
   cloudDesc: string | null | undefined,
   locale: Locale,
@@ -119,6 +137,7 @@ export function getWeatherSummary(detail: CityDetail, locale: Locale = "zh-CN") 
 export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   const current = detail.current || {};
   const parts: string[] = [];
+  const sourceTag = getObservationSourceTag(detail);
 
   if (current.obs_time) {
     const ageText =
@@ -127,7 +146,7 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
           ? ` (${current.obs_age_min} min ago)`
           : `（${current.obs_age_min} 分钟前）`
         : "";
-    parts.push(`✈️ METAR ${current.obs_time}${ageText}`);
+    parts.push(`✈️ ${sourceTag} ${current.obs_time}${ageText}`);
   }
 
   if (current.wx_desc) {
@@ -209,12 +228,18 @@ export function getTemperatureChartData(
     currentIndex < 0 || index >= currentIndex ? temp : null,
   );
 
-  const metarPoints = new Array(times.length).fill(null);
-  const metarSource = detail.metar_today_obs?.length
-    ? detail.metar_today_obs
-    : detail.trend?.recent || [];
+  const observationTag = getObservationSourceTag(detail);
+  const observationCode = getObservationSourceCode(detail);
+  const settlementSource =
+    observationCode === "hko" || observationCode === "cwa";
+  const observationSource = settlementSource
+    ? detail.settlement_today_obs || []
+    : detail.metar_today_obs?.length
+      ? detail.metar_today_obs
+      : detail.trend?.recent || [];
 
-  metarSource.forEach((item) => {
+  const metarPoints = new Array(times.length).fill(null);
+  observationSource.forEach((item) => {
     const parts = String(item.time || "").split(":");
     let hour = Number.parseInt(parts[0], 10);
     const minute = Number.parseInt(parts[1] || "0", 10);
@@ -286,13 +311,17 @@ export function getTemperatureChartData(
         : "已使用 MGM 小时预报替代 DEB 曲线",
     );
   }
-  if (detail.trend?.recent?.length) {
-    const recentText = [...detail.trend.recent]
+  if ((detail.trend?.recent?.length || 0) > 0 || observationSource.length > 0) {
+    const recentData =
+      observationSource.length > 0
+        ? [...observationSource]
+        : [...(detail.trend?.recent || [])];
+    const recentText = recentData
       .slice(0, 4)
       .reverse()
       .map((item) => `${item.temp}${detail.temp_symbol}@${item.time}`)
       .join(" -> ");
-    legendParts.push(`METAR: ${recentText}`);
+    legendParts.push(`${observationTag}: ${recentText}`);
   }
 
   return {
@@ -306,6 +335,9 @@ export function getTemperatureChartData(
       offset,
       temps,
     },
+    observationLabel: isEnglish(locale)
+      ? `${observationTag} Observation`
+      : `${observationTag} 实况`,
     legendText: legendParts.join(" | "),
     max,
     min,
@@ -973,6 +1005,13 @@ export function getHistorySummary(
   history: HistoryPoint[],
   cityLocalDate?: string | null,
 ) {
+  const toFinite = (value: unknown): number | null => {
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : null;
+  };
+  const isExcludedModel = (name: string) =>
+    String(name || "").toLowerCase().includes("meteoblue");
+
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
   cutoff.setDate(cutoff.getDate() - 14);
@@ -992,14 +1031,64 @@ export function getHistorySummary(
 
   let hits = 0;
   const debErrors: number[] = [];
+  const modelErrors: Record<string, number[]> = {};
+
   settledData.forEach((row) => {
-    if (row.actual != null && row.deb != null) {
-      debErrors.push(Math.abs(row.actual - row.deb));
-      if (wuRound(row.actual) === wuRound(row.deb)) {
+    const actual = toFinite(row.actual);
+    const deb = toFinite(row.deb);
+    if (actual != null && deb != null) {
+      debErrors.push(Math.abs(actual - deb));
+      if (wuRound(actual) === wuRound(deb)) {
         hits += 1;
       }
     }
+
+    const forecasts = row.forecasts || {};
+    Object.entries(forecasts).forEach(([modelName, modelValue]) => {
+      if (isExcludedModel(modelName)) return;
+      const mv = toFinite(modelValue);
+      if (actual == null || mv == null) return;
+      if (!modelErrors[modelName]) {
+        modelErrors[modelName] = [];
+      }
+      modelErrors[modelName].push(Math.abs(actual - mv));
+    });
   });
+
+  const modelMaeList = Object.entries(modelErrors)
+    .map(([name, errors]) => ({
+      mae:
+        errors.length > 0
+          ? errors.reduce((sum, value) => sum + value, 0) / errors.length
+          : Number.POSITIVE_INFINITY,
+      model: name,
+      sampleCount: errors.length,
+    }))
+    .filter((row) => Number.isFinite(row.mae) && row.sampleCount > 0)
+    .sort((a, b) => a.mae - b.mae);
+
+  const primaryModelMaeList = modelMaeList.filter((row) => row.sampleCount >= 2);
+  const bestModel = (primaryModelMaeList[0] || modelMaeList[0]) ?? null;
+  const bestModelName = bestModel?.model || null;
+  const bestModelMae = bestModel ? Number(bestModel.mae.toFixed(1)) : null;
+  const bestModelSeries = recentData.map((row) =>
+    bestModelName ? toFinite(row.forecasts?.[bestModelName]) : null,
+  );
+
+  let debWinDaysVsBest = 0;
+  let debVsBestComparableDays = 0;
+  if (bestModelName) {
+    settledData.forEach((row) => {
+      const actual = toFinite(row.actual);
+      const deb = toFinite(row.deb);
+      const bestModelVal = toFinite(row.forecasts?.[bestModelName]);
+      if (actual == null || deb == null || bestModelVal == null) return;
+      debVsBestComparableDays += 1;
+      if (Math.abs(deb - actual) <= Math.abs(bestModelVal - actual)) {
+        debWinDaysVsBest += 1;
+      }
+    });
+  }
 
   return {
     dates: recentData.map((row) => row.date),
@@ -1011,6 +1100,20 @@ export function getHistorySummary(
         )
       : null,
     debs: recentData.map((row) => row.deb),
+    bestModelName,
+    bestModelMae,
+    bestModelSeries,
+    modelMaeRanks: modelMaeList.map((row) => ({
+      model: row.model,
+      mae: Number(row.mae.toFixed(1)),
+      sampleCount: row.sampleCount,
+    })),
+    debWinDaysVsBest,
+    debVsBestComparableDays,
+    debWinRateVsBest:
+      debVsBestComparableDays > 0
+        ? Number(((debWinDaysVsBest / debVsBestComparableDays) * 100).toFixed(0))
+        : null,
     hitRate: debErrors.length
       ? Number(((hits / debErrors.length) * 100).toFixed(0))
       : null,

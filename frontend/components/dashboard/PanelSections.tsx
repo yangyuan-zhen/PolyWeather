@@ -287,7 +287,9 @@ export function TemperatureChart() {
       borderWidth: 0,
       data: chartData.datasets.metarPoints,
       fill: false,
-      label: locale === "en-US" ? "METAR Observation" : "METAR 实测",
+      label:
+        chartData.observationLabel ||
+        (locale === "en-US" ? "METAR Observation" : "METAR 实况"),
       order: 0,
       pointHoverRadius: 7,
       pointRadius: 5,
