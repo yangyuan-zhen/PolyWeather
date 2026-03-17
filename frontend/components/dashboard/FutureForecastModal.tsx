@@ -25,6 +25,7 @@ import {
 } from "@/components/dashboard/PanelSections";
 import {
   getFutureModalView,
+  parseAiAnalysis,
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
@@ -531,6 +532,8 @@ export function FutureForecastModal() {
     detail.current?.raw_metar,
     detail.current?.visibility_mi,
   );
+  const ai = parseAiAnalysis(detail.ai_analysis);
+  const risk = detail.risk || {};
 
   return (
     <div
@@ -880,7 +883,70 @@ export function FutureForecastModal() {
                         ))}
                       </div>
                     </section>
+                  </div>
 
+                  <div className="future-modal-grid">
+                    <section className="future-modal-section">
+                      <h3>
+                        {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
+                      </h3>
+                      <div className="risk-info">
+                        {!risk.airport ? (
+                          <span style={{ color: "var(--text-muted)" }}>
+                            {t("section.noRiskProfile")}
+                          </span>
+                        ) : (
+                          <>
+                            <div className="risk-row">
+                              <span className="risk-label">
+                                {t("section.airport")}
+                              </span>
+                              <span>
+                                {risk.airport}
+                                {risk.icao ? ` (${risk.icao})` : ""}
+                              </span>
+                            </div>
+                            <div className="risk-row">
+                              <span className="risk-label">
+                                {t("section.distance")}
+                              </span>
+                              <span>{risk.distance_km ?? "--"}km</span>
+                            </div>
+                            {risk.warning ? (
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {t("section.note")}
+                                </span>
+                                <span>{risk.warning}</span>
+                              </div>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    </section>
+                    <section className="future-modal-section">
+                      <h3>{t("future.ai")}</h3>
+                      <div className="ai-box">
+                        {!ai.summary && ai.bullets.length === 0 ? (
+                          <span className="ai-placeholder">
+                            {t("future.noAi")}
+                          </span>
+                        ) : (
+                          <>
+                            {ai.summary ? (
+                              <div className="ai-summary">{ai.summary}</div>
+                            ) : null}
+                            {ai.bullets.length > 0 ? (
+                              <ul className="ai-list">
+                                {ai.bullets.map((item) => (
+                                  <li key={item}>{item}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
+                    </section>
                   </div>
                 </main>
               </div>
