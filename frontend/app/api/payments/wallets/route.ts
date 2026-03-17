@@ -55,10 +55,11 @@ export async function DELETE(req: NextRequest) {
   }
   try {
     const auth = await buildBackendRequestHeaders(req);
+    const proxiedHeaders = new Headers(auth.headers);
     const res = await fetch(`${API_BASE}/api/payments/wallets`, {
       method: "DELETE",
       headers: {
-        ...auth.headers,
+        ...proxiedHeaders,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
@@ -67,7 +68,21 @@ export async function DELETE(req: NextRequest) {
     const raw = await res.text();
     if (!res.ok) {
       const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 350) },
+        {
+          error: `Backend returned ${res.status}`,
+          detail: raw.slice(0, 350),
+          proxy_debug: {
+            incoming_has_authorization: Boolean(
+              String(req.headers.get("authorization") || "").trim(),
+            ),
+            has_authorization: proxiedHeaders.has("authorization"),
+            has_entitlement: proxiedHeaders.has("x-polyweather-entitlement"),
+            has_forwarded_user_id: proxiedHeaders.has(
+              "x-polyweather-auth-user-id",
+            ),
+            has_forwarded_email: proxiedHeaders.has("x-polyweather-auth-email"),
+          },
+        },
         { status: res.status },
       );
       return applyAuthResponseCookies(response, auth.response);
