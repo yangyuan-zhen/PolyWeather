@@ -918,6 +918,7 @@ class PaymentContractCheckoutService:
                 "select": "chain_id,address,status,is_primary,verified_at",
                 "user_id": f"eq.{user_id}",
                 "chain_id": f"eq.{self.chain_id}",
+                "status": "eq.active",
                 "order": "is_primary.desc,verified_at.desc",
             },
             allowed_status=[200],

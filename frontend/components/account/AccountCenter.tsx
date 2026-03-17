@@ -764,12 +764,42 @@ export function AccountCenter() {
         const walletsJson = (await walletsRes.json()) as {
           wallets?: BoundWallet[];
         };
-        const wallets = Array.isArray(walletsJson.wallets)
-          ? walletsJson.wallets
-          : [];
+        const wallets = (
+          Array.isArray(walletsJson.wallets) ? walletsJson.wallets : []
+        )
+          .filter((row) => {
+            const status = String(row?.status || "active").toLowerCase();
+            const address = String(row?.address || "");
+            return status === "active" && address.startsWith("0x");
+          })
+          .map((row) => ({
+            ...row,
+            address: String(row.address || "").toLowerCase(),
+          }));
         setBoundWallets(wallets);
-        if (wallets.length && !selectedWallet)
-          setSelectedWallet(wallets[0].address);
+        if (wallets.length) {
+          const currentSelected = String(selectedWallet || "").toLowerCase();
+          const hasCurrent = wallets.some(
+            (row) => String(row.address || "").toLowerCase() === currentSelected,
+          );
+          const fallback =
+            wallets.find((row) => Boolean(row.is_primary))?.address ||
+            wallets[0].address;
+          if (!currentSelected || !hasCurrent) {
+            setSelectedWallet(fallback);
+          }
+          const currentWalletAddress = String(walletAddress || "").toLowerCase();
+          const hasWalletAddress = wallets.some(
+            (row) =>
+              String(row.address || "").toLowerCase() === currentWalletAddress,
+          );
+          if (!currentWalletAddress || !hasWalletAddress) {
+            setWalletAddress(fallback);
+          }
+        } else {
+          setSelectedWallet("");
+          setWalletAddress("");
+        }
       }
     } catch {
       // ignore
@@ -779,6 +809,7 @@ export function AccountCenter() {
     buildAuthedHeaders,
     selectedPlanCode,
     selectedWallet,
+    walletAddress,
   ]);
 
   const loadSnapshot = useCallback(async () => {
@@ -1302,12 +1333,19 @@ export function AccountCenter() {
         data = {};
       }
       const newPrimary = String(data?.new_primary || "").toLowerCase();
-      if (selectedWallet === target) {
+      const selectedWalletNorm = String(selectedWallet || "").toLowerCase();
+      const walletAddressNorm = String(walletAddress || "").toLowerCase();
+      if (selectedWalletNorm === target) {
         setSelectedWallet(newPrimary || "");
       }
-      if (walletAddress === target) {
+      if (walletAddressNorm === target) {
         setWalletAddress(newPrimary || "");
       }
+      setBoundWallets((prev) =>
+        prev.filter(
+          (row) => String(row.address || "").toLowerCase() !== String(target),
+        ),
+      );
       await loadPaymentSnapshot();
       setPaymentInfo(
         newPrimary
@@ -1899,6 +1937,16 @@ export function AccountCenter() {
               <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
                 <Wallet size={18} /> {copy.paymentMgmt}
               </h3>
+              {paymentError ? (
+                <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                  {paymentError}
+                </div>
+              ) : null}
+              {!paymentError && paymentInfo ? (
+                <div className="mb-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
+                  {paymentInfo}
+                </div>
+              ) : null}
               {availableTokenList.length > 0 && (
                 <div className="mb-5">
                   <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
