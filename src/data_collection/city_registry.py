@@ -342,6 +342,21 @@ CITY_REGISTRY = {
         "distance_km": 10.0,
         "warning": "平原地形下辐射冷却显著，清晨与夜间温度回落可能偏快。",
     },
+    "madrid": {
+        "name": "Madrid",
+        "lat": 40.4722,
+        "lon": -3.5608,
+        "icao": "LEMD",
+        "settlement_source": "metar",
+        "tz_offset": 3600,
+        "use_fahrenheit": False,
+        "is_major": True,
+        "risk_level": "medium",
+        "risk_emoji": "🟡",
+        "airport_name": "阿道弗·苏亚雷斯马德里-巴拉哈斯机场",
+        "distance_km": 13.0,
+        "warning": "机场位于东北侧开阔区，午后混合层增强时与核心城区体感温度可能出现偏差。",
+    },
 }
 
 ALIASES = {
@@ -358,6 +373,7 @@ ALIASES = {
     "ba": "buenos aires", "wel": "wellington",
     "luc": "lucknow", "sp": "sao paulo", "mun": "munich",
     "mil": "milan", "mxp": "milan", "waw": "warsaw", "war": "warsaw",
+    "mad": "madrid", "madrid": "madrid", "lemd": "madrid",
     
     # Chinese names
     "安卡拉": "ankara",
@@ -388,4 +404,6 @@ ALIASES = {
     "米蘭": "milan",
     "华沙": "warsaw",
     "華沙": "warsaw",
+    "马德里": "madrid",
+    "馬德里": "madrid",
 }

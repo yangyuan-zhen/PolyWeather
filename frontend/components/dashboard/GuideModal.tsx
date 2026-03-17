@@ -14,7 +14,7 @@ const GUIDE_CARDS = {
       title: "结算概率引擎",
     },
     {
-      body: "结算源按城市市场定义：米兰(LIMC)、华沙(EPWA)使用机场 METAR；香港市场使用香港天文台(HKO)；台北市场使用交通部中央气象署(CWA)。系统仍会保留 METAR/MGM 作为临近结构参考，并区分观测时间与接收时间。",
+      body: "结算源按城市市场定义：米兰(LIMC)、华沙(EPWA)、马德里(LEMD)使用机场 METAR；香港市场使用香港天文台(HKO)；台北市场使用交通部中央气象署(CWA)。系统仍会保留 METAR/MGM 作为临近结构参考，并区分观测时间与接收时间。",
       title: "结算点与主观测源",
     },
     {
@@ -40,7 +40,7 @@ const GUIDE_CARDS = {
       title: "Settlement Probability Engine",
     },
     {
-      body: "Settlement source follows market rule by city: Milan (LIMC) and Warsaw (EPWA) settle on airport METAR, Hong Kong settles on HKO, and Taipei settles on CWA. METAR/MGM are still kept for intraday structure tracking with observation time vs receipt time separated.",
+      body: "Settlement source follows market rule by city: Milan (LIMC), Warsaw (EPWA), and Madrid (LEMD) settle on airport METAR, Hong Kong settles on HKO, and Taipei settles on CWA. METAR/MGM are still kept for intraday structure tracking with observation time vs receipt time separated.",
       title: "Settlement Source Logic",
     },
     {
