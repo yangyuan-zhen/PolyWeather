@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PolyWeather Extension Settings</title>
+    <link rel="stylesheet" href="./options.css" />
+  </head>
+  <body>
+    <main class="wrap">
+      <h1>PolyWeather 侧边栏设置</h1>
+
+      <label class="field">
+        <span>Site Base URL</span>
+        <input id="siteBaseInput" type="text" placeholder="https://polyweather-pro.vercel.app" />
+      </label>
+
+      <label class="field">
+        <span>API Base URL</span>
+        <input id="apiBaseInput" type="text" placeholder="https://polyweather-pro.vercel.app" />
+      </label>
+
+      <label class="field">
+        <span>Bearer Token（可选）</span>
+        <textarea
+          id="tokenInput"
+          rows="3"
+          placeholder="公开模式留空即可；仅当后端返回 401 时再填写。"
+        ></textarea>
+      </label>
+
+      <div class="actions">
+        <button id="saveBtn">保存</button>
+        <button id="testBtn" class="ghost">测试 /api/cities</button>
+      </div>
+
+      <pre id="resultBox" class="result"></pre>
+    </main>
+
+    <script src="./options.js"></script>
+  </body>
+  </html>

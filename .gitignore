@@ -37,3 +37,7 @@ frontend/.vercel/
 .npm-cache/
 .env.local
 .vercel/
+
+# Browser extension build artifacts
+/extension.zip
+/extension-*.zip

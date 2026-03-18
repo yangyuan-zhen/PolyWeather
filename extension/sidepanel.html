@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PolyWeather Panel</title>
+    <link rel="stylesheet" href="./sidepanel.css" />
+  </head>
+  <body>
+    <main class="panel">
+      <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <div id="loadingText" class="loading-text">正在加载温度数据...</div>
+      </div>
+      <header class="topbar">
+        <div id="riskBadge" class="risk-badge medium">中风险</div>
+        <div class="city-picker-wrap">
+          <label for="citySelect">城市</label>
+          <select id="citySelect"></select>
+        </div>
+        <button id="refreshBtn" class="refresh-btn" title="刷新数据" aria-label="刷新数据">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
+        </button>
+      </header>
+
+      <section class="section">
+        <h3>城市档案</h3>
+        <div class="grid2">
+          <article class="mini-card">
+            <span class="mini-label" id="settlementLabel">结算站点</span>
+            <strong id="settlementValue">--</strong>
+          </article>
+          <article class="mini-card">
+            <span class="mini-label">站点距离</span>
+            <strong id="distanceValue">--</strong>
+          </article>
+          <article class="mini-card">
+            <span class="mini-label">观测更新</span>
+            <strong id="obsTimeValue">--</strong>
+          </article>
+          <article class="mini-card">
+            <span class="mini-label">周边站点</span>
+            <strong id="nearbyValue">--</strong>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h3>今日日内走势（简版）</h3>
+        <div class="chart-wrap">
+          <canvas id="trendCanvas" width="560" height="220"></canvas>
+          <div id="chartTooltip" class="chart-tooltip hidden"></div>
+        </div>
+        <div id="chartLegend" class="legend-text">--</div>
+      </section>
+
+      <section class="section">
+        <h3>多日预报</h3>
+        <div id="forecastRow" class="forecast-row"></div>
+      </section>
+
+      <section class="section">
+        <button id="openFullBtn" class="btn btn-open-full">打开完整网站分析</button>
+      </section>
+
+      <section id="errorBox" class="error hidden"></section>
+    </main>
+
+    <script src="./sidepanel.js"></script>
+  </body>
+  </html>
