@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { I18nProvider } from "@/hooks/useI18n";
-import { AccountCenter } from "@/components/account/AccountCenter";
+import { AccountEntry } from "@/components/account/AccountEntry";
 
 export const metadata: Metadata = {
   title: "PolyWeather | Account Center",
@@ -10,8 +10,7 @@ export const metadata: Metadata = {
 export default function AccountPage() {
   return (
     <I18nProvider>
-      <AccountCenter />
+      <AccountEntry />
     </I18nProvider>
   );
 }
-

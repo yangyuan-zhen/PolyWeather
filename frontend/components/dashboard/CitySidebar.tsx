@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -57,18 +57,19 @@ export function CitySidebar() {
     Record<RiskGroupKey, boolean>
   >(DEFAULT_EXPANDED_GROUPS);
 
-  const sortedCities = useMemo(() => [...store.cities].sort((a, b) => {
-    const aSelected = a.name === selectedCity;
-    const bSelected = b.name === selectedCity;
-    if (aSelected !== bSelected) return aSelected ? -1 : 1;
-    const aGroup = toRiskGroup(a.risk_level);
-    const bGroup = toRiskGroup(b.risk_level);
-    return (
-      (riskOrder[aGroup] ?? 3) -
-      (riskOrder[bGroup] ?? 3) ||
-      a.display_name.localeCompare(b.display_name)
-    );
-  }), [store.cities, selectedCity]);
+  const sortedCities = useMemo(
+    () =>
+      [...store.cities].sort((a, b) => {
+        const aGroup = toRiskGroup(a.risk_level);
+        const bGroup = toRiskGroup(b.risk_level);
+        return (
+          (riskOrder[aGroup] ?? 3) -
+            (riskOrder[bGroup] ?? 3) ||
+          a.display_name.localeCompare(b.display_name)
+        );
+      }),
+    [store.cities],
+  );
 
   const groupedCities = useMemo(() => {
     const groups: Record<RiskGroupKey, CityListItem[]> = {
@@ -170,7 +171,11 @@ export function CitySidebar() {
                       key={city.name}
                       type="button"
                       className={clsx("city-item", isActive && "active")}
-                      onClick={() => void store.selectCity(city.name)}
+                      onClick={() =>
+                        startTransition(() => {
+                          void store.selectCity(city.name);
+                        })
+                      }
                     >
                       <div className="city-item-main">
                         <span className={clsx("risk-dot", city.risk_level)} />

@@ -1,27 +1,36 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Chart, ChartConfiguration, ChartType } from "chart.js/auto";
+import type { Chart as ChartInstance, ChartConfiguration, ChartType } from "chart.js";
 
 export function useChart<TType extends ChartType>(
   createConfig: () => ChartConfiguration<TType>,
   dependencies: React.DependencyList,
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const chartRef = useRef<Chart<TType> | null>(null);
+  const chartRef = useRef<ChartInstance<TType> | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    let disposed = false;
 
-    const config = createConfig();
-    if (chartRef.current) {
-      chartRef.current.destroy();
-      chartRef.current = null;
-    }
+    const setupChart = async () => {
+      const { Chart } = await import("chart.js/auto");
+      if (disposed) return;
 
-    chartRef.current = new Chart(canvas, config);
+      const config = createConfig();
+      if (chartRef.current) {
+        chartRef.current.destroy();
+        chartRef.current = null;
+      }
+
+      chartRef.current = new Chart(canvas, config);
+    };
+
+    void setupChart();
     return () => {
+      disposed = true;
       chartRef.current?.destroy();
       chartRef.current = null;
     };

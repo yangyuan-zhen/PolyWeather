@@ -1,6 +1,6 @@
 "use client";
 
-import { ChartConfiguration } from "chart.js/auto";
+import type { ChartConfiguration } from "chart.js";
 import { useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore, useHistoryData } from "@/hooks/useDashboardStore";

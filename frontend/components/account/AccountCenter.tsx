@@ -612,9 +612,41 @@ export function AccountCenter() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
+  const [showSecondarySections, setShowSecondarySections] = useState(false);
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
+
+  useEffect(() => {
+    let canceled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+    const win = typeof window !== "undefined" ? (window as any) : null;
+
+    const reveal = () => {
+      if (!canceled) {
+        setShowSecondarySections(true);
+      }
+    };
+
+    if (win && typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(reveal, { timeout: 320 });
+    } else if (typeof window !== "undefined") {
+      timeoutId = window.setTimeout(reveal, 140);
+    } else {
+      setShowSecondarySections(true);
+    }
+
+    return () => {
+      canceled = true;
+      if (win && idleId != null && typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null && typeof window !== "undefined") {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
 
   /**
    * Returns a valid access token, refreshing the session if the stored one
@@ -1826,55 +1858,66 @@ export function AccountCenter() {
         </div>
 
         {/* Weekly Ranking Motivation */}
-        <div className="lg:col-span-4 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-[2.5rem] p-6 flex flex-col justify-between shadow-xl">
-          <div>
-            <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-6">
-              <Sparkles size={20} className="text-yellow-400" />{" "}
-              {copy.weeklyRewards}
-            </h3>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                <span className="text-sm flex items-center gap-2">
-                  <div className="w-5 h-5 bg-yellow-500 rounded text-black font-bold text-[10px] flex items-center justify-center">
-                    1
-                  </div>{" "}
-                  Top 1
-                </span>
-                <span className="text-xs font-bold text-yellow-500">
-                  +500 积分 & 7天Pro
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                <span className="text-sm flex items-center gap-2">
-                  <div className="w-5 h-5 bg-slate-300 rounded text-black font-bold text-[10px] flex items-center justify-center">
-                    2
-                  </div>{" "}
-                  Top 2-3
-                </span>
-                <span className="text-xs font-bold text-slate-300">
-                  +300 积分 & 3天Pro
-                </span>
-              </div>
-              <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
-                <span className="text-sm flex items-center gap-2">
-                  <div className="w-5 h-5 bg-orange-800 rounded text-white font-bold text-[10px] flex items-center justify-center">
-                    4
-                  </div>{" "}
-                  Top 4-10
-                </span>
-                <span className="text-xs font-bold text-orange-400">
-                  +150 积分
-                </span>
+        {showSecondarySections ? (
+          <div className="lg:col-span-4 bg-gradient-to-br from-indigo-600/20 to-purple-600/20 border border-indigo-500/30 rounded-[2.5rem] p-6 flex flex-col justify-between shadow-xl">
+            <div>
+              <h3 className="text-lg font-bold flex items-center gap-2 text-white mb-6">
+                <Sparkles size={20} className="text-yellow-400" />{" "}
+                {copy.weeklyRewards}
+              </h3>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                  <span className="text-sm flex items-center gap-2">
+                    <div className="w-5 h-5 bg-yellow-500 rounded text-black font-bold text-[10px] flex items-center justify-center">
+                      1
+                    </div>{" "}
+                    Top 1
+                  </span>
+                  <span className="text-xs font-bold text-yellow-500">
+                    +500 积分 & 7天Pro
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                  <span className="text-sm flex items-center gap-2">
+                    <div className="w-5 h-5 bg-slate-300 rounded text-black font-bold text-[10px] flex items-center justify-center">
+                      2
+                    </div>{" "}
+                    Top 2-3
+                  </span>
+                  <span className="text-xs font-bold text-slate-300">
+                    +300 积分 & 3天Pro
+                  </span>
+                </div>
+                <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
+                  <span className="text-sm flex items-center gap-2">
+                    <div className="w-5 h-5 bg-orange-800 rounded text-white font-bold text-[10px] flex items-center justify-center">
+                      4
+                    </div>{" "}
+                    Top 4-10
+                  </span>
+                  <span className="text-xs font-bold text-orange-400">
+                    +150 积分
+                  </span>
+                </div>
               </div>
             </div>
+            <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
+              <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
+              <p className="text-[10px] text-slate-500 leading-normal italic">
+                积分规则：群内有效发言（自动防刷检测）。每周一零点结算并重置周积分榜。
+              </p>
+            </div>
           </div>
-          <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
-            <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
-            <p className="text-[10px] text-slate-500 leading-normal italic">
-              积分规则：群内有效发言（自动防刷检测）。每周一零点结算并重置周积分榜。
-            </p>
+        ) : (
+          <div className="lg:col-span-4 rounded-[2.5rem] border border-white/10 bg-white/5 p-6">
+            <div className="h-6 w-40 animate-pulse rounded bg-slate-800/80" />
+            <div className="mt-4 space-y-2">
+              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
+              <div className="h-12 animate-pulse rounded-xl bg-slate-800/60" />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Subscription Info & Paywall */}
         <div className="lg:col-span-12 relative">
@@ -1966,6 +2009,7 @@ export function AccountCenter() {
         </div>
 
         {/* Telegram Bot Section */}
+        {showSecondarySections ? (
         <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
           <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
             <Bot
@@ -2142,6 +2186,12 @@ export function AccountCenter() {
             </div>
           </section>
         </div>
+        ) : (
+          <div className="lg:col-span-12 grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="md:col-span-2 h-48 animate-pulse rounded-[2rem] border border-white/10 bg-white/5" />
+            <div className="h-48 animate-pulse rounded-[2rem] border border-white/10 bg-white/5" />
+          </div>
+        )}
       </main>
 
       <footer className="mt-16 text-center text-slate-600 text-[10px] uppercase tracking-[0.3em] font-mono z-10 pb-8">

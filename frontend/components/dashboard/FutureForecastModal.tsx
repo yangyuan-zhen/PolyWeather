@@ -12,9 +12,9 @@ import {
   Wind,
 } from "lucide-react";
 
-import { ChartConfiguration } from "chart.js/auto";
+import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
-import { CSSProperties } from "react";
+import { CSSProperties, useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -186,8 +186,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
   const detail = store.selectedDetail;
   const view = detail ? getFutureModalView(detail, dateStr, locale) : null;
   const isToday = detail ? dateStr === detail.local_date : false;
-  const todayChartData =
-    detail && isToday ? getTemperatureChartData(detail, locale) : null;
+  const todayChartData = useMemo(
+    () => (detail && isToday ? getTemperatureChartData(detail, locale) : null),
+    [detail, isToday, locale],
+  );
 
   const canvasRef = useChart(() => {
     if (!detail || !view) {

@@ -1,8 +1,8 @@
 "use client";
 
-import { ChartConfiguration } from "chart.js/auto";
+import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ForecastTable } from "@/components/dashboard/PanelSections";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
@@ -17,7 +17,10 @@ import {
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale, t } = useI18n();
-  const chartData = getTemperatureChartData(detail, locale);
+  const chartData = useMemo(
+    () => getTemperatureChartData(detail, locale),
+    [detail, locale],
+  );
 
   const canvasRef = useChart(() => {
     if (!chartData) {
@@ -129,6 +132,7 @@ export function DetailPanel() {
   const detail = store.selectedDetail;
   const isPro = store.proAccess.subscriptionActive;
   const panelRef = useRef<HTMLElement | null>(null);
+  const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
     Boolean(store.futureModalDate) ||
     store.historyState.isOpen ||
@@ -139,7 +143,10 @@ export function DetailPanel() {
     Boolean(detail) &&
     !store.loadingState.cityDetail &&
     !isOverlayOpen;
-  const profileStats = detail ? getCityProfileStats(detail, locale) : [];
+  const profileStats = useMemo(
+    () => (detail ? getCityProfileStats(detail, locale) : []),
+    [detail, locale],
+  );
   const scenery = getCityScenery(detail?.name);
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -169,6 +176,42 @@ export function DetailPanel() {
 
     panel.removeAttribute("inert");
   }, [isVisible]);
+
+  useEffect(() => {
+    if (!isVisible || !detail) {
+      setHeavyContentReady(false);
+      return;
+    }
+
+    let canceled = false;
+    let timeoutId: number | null = null;
+    let idleId: number | null = null;
+    const win = typeof window !== "undefined" ? (window as any) : null;
+
+    const markReady = () => {
+      if (!canceled) {
+        setHeavyContentReady(true);
+      }
+    };
+
+    if (win && typeof win.requestIdleCallback === "function") {
+      idleId = win.requestIdleCallback(markReady, { timeout: 180 });
+    } else if (typeof window !== "undefined") {
+      timeoutId = window.setTimeout(markReady, 80);
+    } else {
+      setHeavyContentReady(true);
+    }
+
+    return () => {
+      canceled = true;
+      if (win && idleId != null && typeof win.cancelIdleCallback === "function") {
+        win.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null && typeof window !== "undefined") {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [detail, isVisible]);
 
   return (
     <aside
@@ -295,10 +338,14 @@ export function DetailPanel() {
 
             <section className="detail-section rounded-2xl">
               <h3>{t("detail.todayMiniTrend")}</h3>
-              <DetailMiniTemperatureChart detail={detail} />
+              {heavyContentReady ? (
+                <DetailMiniTemperatureChart detail={detail} />
+              ) : (
+                <div className="detail-mini-meta">{t("detail.loading")}</div>
+              )}
             </section>
 
-            <ForecastTable />
+            {heavyContentReady ? <ForecastTable /> : null}
           </>
         )}
       </div>

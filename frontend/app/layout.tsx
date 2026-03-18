@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { WebVitalsReporter } from "@/components/observability/WebVitalsReporter";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,10 +26,6 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="dark">
       <head>
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -38,6 +35,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen font-sans antialiased">
         {children}
+        <WebVitalsReporter />
         <Analytics />
         <SpeedInsights />
       </body>

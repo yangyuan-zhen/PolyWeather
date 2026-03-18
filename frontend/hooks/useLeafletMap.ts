@@ -216,59 +216,73 @@ export function useLeafletMap({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !cities.length) return;
+    let canceled = false;
+    const frameId =
+      typeof window !== "undefined"
+        ? window.requestAnimationFrame(() => {
+            if (canceled) return;
 
-    const currentMarkers = markersRef.current;
-    const nextMarkers: typeof currentMarkers = {};
-    const nextLastData: typeof lastCityDataRef.current = {};
+            const currentMarkers = markersRef.current;
+            const nextMarkers: typeof currentMarkers = {};
+            const nextLastData: typeof lastCityDataRef.current = {};
 
-    cities.forEach((city) => {
-      const detail = cityDetailsByName[city.name];
-      const summary = citySummariesByName[city.name];
-      const snapshot = detail || summary;
-      const existing = currentMarkers[city.name];
+            cities.forEach((city) => {
+              const detail = cityDetailsByName[city.name];
+              const summary = citySummariesByName[city.name];
+              const snapshot = detail || summary;
+              const existing = currentMarkers[city.name];
 
-      const currentTemp = snapshot?.current?.temp;
-      const currentRisk = city.risk_level;
-      const lastData = lastCityDataRef.current[city.name];
-      const dataChanged =
-        !lastData ||
-        lastData.temp !== currentTemp ||
-        lastData.risk !== currentRisk;
+              const currentTemp = snapshot?.current?.temp;
+              const currentRisk = city.risk_level;
+              const lastData = lastCityDataRef.current[city.name];
+              const dataChanged =
+                !lastData ||
+                lastData.temp !== currentTemp ||
+                lastData.risk !== currentRisk;
 
-      if (existing) {
-        if (dataChanged) {
-          existing.marker.setIcon(createMarkerIcon(city, snapshot));
-        }
-        nextMarkers[city.name] = { city, marker: existing.marker };
-        nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
-        return;
+              if (existing) {
+                if (dataChanged) {
+                  existing.marker.setIcon(createMarkerIcon(city, snapshot));
+                }
+                nextMarkers[city.name] = { city, marker: existing.marker };
+                nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+                return;
+              }
+
+              // Create new marker
+              const marker = L.marker([city.lat, city.lon], {
+                icon: createMarkerIcon(city, snapshot),
+              }).addTo(map);
+
+              marker.on("click", () => {
+                map.stop();
+                // Reset lastMovedCity so we can re-fly if needed
+                lastMovedCityRef.current = null;
+                onSelectCityRef.current(city.name);
+              });
+
+              nextMarkers[city.name] = { city, marker };
+              nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+            });
+
+            // Cleanup removed markers
+            Object.entries(currentMarkers).forEach(([name, entry]) => {
+              if (!nextMarkers[name]) {
+                map.removeLayer(entry.marker);
+              }
+            });
+
+            markersRef.current = nextMarkers;
+            lastCityDataRef.current = nextLastData;
+          })
+        : null;
+
+    return () => {
+      canceled = true;
+      if (frameId != null && typeof window !== "undefined") {
+        window.cancelAnimationFrame(frameId);
       }
-
-      // Create new marker
-      const marker = L.marker([city.lat, city.lon], {
-        icon: createMarkerIcon(city, snapshot),
-      }).addTo(map);
-
-      marker.on("click", () => {
-        map.stop();
-        // Reset lastMovedCity so we can re-fly if needed
-        lastMovedCityRef.current = null;
-        onSelectCityRef.current(city.name);
-      });
-
-      nextMarkers[city.name] = { city, marker };
-      nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
-    });
-
-    // Cleanup removed markers
-    Object.entries(currentMarkers).forEach(([name, entry]) => {
-      if (!nextMarkers[name]) {
-        map.removeLayer(entry.marker);
-      }
-    });
-
-    markersRef.current = nextMarkers;
-    lastCityDataRef.current = nextLastData;
+    };
   }, [cities, cityDetailsByName, citySummariesByName]);
 
   useEffect(() => {

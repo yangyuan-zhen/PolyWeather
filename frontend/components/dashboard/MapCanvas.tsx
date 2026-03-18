@@ -1,5 +1,7 @@
 "use client";
 
+import "leaflet/dist/leaflet.css";
+
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useLeafletMap } from "@/hooks/useLeafletMap";
 

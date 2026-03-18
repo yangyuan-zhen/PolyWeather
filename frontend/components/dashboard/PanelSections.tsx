@@ -1,7 +1,8 @@
 "use client";
 
-import { ChartConfiguration } from "chart.js/auto";
+import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
+import { startTransition, useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useCityData, useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -230,7 +231,10 @@ export function HeroSummary() {
 export function TemperatureChart() {
   const { data } = useCityData();
   const { locale, t } = useI18n();
-  const chartData = data ? getTemperatureChartData(data, locale) : null;
+  const chartData = useMemo(
+    () => (data ? getTemperatureChartData(data, locale) : null),
+    [data, locale],
+  );
 
   const canvasRef = useChart(() => {
     if (!data || !chartData) {
@@ -403,7 +407,7 @@ export function ProbabilityDistribution({
   const marketNoText = toPercent(marketNoPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
   const marketTopBuckets = isToday ? getMarketTopBuckets(marketScan) : [];
-  const sortedMarketTopBuckets = (() => {
+  const sortedMarketTopBuckets = useMemo(() => {
     const sorted = [...marketTopBuckets].sort(
       (a, b) => Number(b.probability || 0) - Number(a.probability || 0),
     );
@@ -417,7 +421,7 @@ export function ProbabilityDistribution({
       if (deduped.length >= 4) break;
     }
     return deduped;
-  })();
+  }, [marketTopBuckets]);
   const useMarketTopBuckets =
     marketScan?.available && sortedMarketTopBuckets.length >= 2;
   const topMarketBucketText = toPercent(sortedMarketTopBuckets[0]?.probability);
@@ -729,7 +733,9 @@ export function ForecastTable() {
                   isSelected && "selected",
                 )}
                 onClick={() => {
-                  store.openFutureModal(day.date);
+                  startTransition(() => {
+                    store.openFutureModal(day.date);
+                  });
                 }}
               >
                 <div className="f-date">
