@@ -2118,7 +2118,7 @@ class WeatherDataCollector:
 
         # Turkish cities: keep MGM model fallback alive when Open-Meteo is rate-limited.
         turkish_provinces = {
-            "ankara": ("17130", "Ankara"),  # MGM center station
+            "ankara": ("17128", "Ankara"),  # MGM airport station
             "istanbul": ("17060", "Istanbul"),
         }
 
@@ -2147,7 +2147,7 @@ class WeatherDataCollector:
 
                 # 对土耳其城市，额外获取 MGM 官方数据与周边测站
                 turkish_provinces = {
-                    "ankara": ("17130", "Ankara"),  # use one MGM station consistently
+                    "ankara": ("17128", "Ankara"),  # use airport station consistently
                     "istanbul": ("17060", "Istanbul"),
                 }
                 if city_lower in turkish_provinces:

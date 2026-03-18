@@ -203,7 +203,7 @@ def _pick_leading_station(city: str, nearby: List[Dict[str, Any]]) -> Optional[D
         for row in nearby:
             name = str(row.get("name") or "").lower()
             sid = str(row.get("istNo") or "").strip()
-            if sid == "17130" or "center" in name or "bölge" in name or "etimesgut" in name:
+            if sid == "17128" or "airport" in name or "17128" in name:
                 priority_rows.append(row)
         if priority_rows:
             return max(priority_rows, key=_temp)
@@ -218,9 +218,9 @@ def _pick_ankara_center_station(nearby: List[Dict[str, Any]]) -> Optional[Dict[s
     for row in nearby:
         name = str(row.get("name") or "").strip().lower()
         sid = str(row.get("istNo") or "").strip()
-        if sid == "17130":
+        if sid == "17128":
             return row
-        if name in {"ankara (bölge/center)", "ankara (bolge/center)"}:
+        if name in {"airport (mgm/17128)", "ankara airport", "ankara esenboğa airport"}:
             return row
     return None
 
@@ -1359,5 +1359,4 @@ def build_trading_alerts(
         "evidence": evidence,
         "telegram": telegram,
     }
-
 
