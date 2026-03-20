@@ -9,7 +9,6 @@ import os
 # Ensure project root is in path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
 from unittest.mock import patch
 from src.analysis.trend_engine import analyze_weather_trend, _sf
 

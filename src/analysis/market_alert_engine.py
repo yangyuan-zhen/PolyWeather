@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
+from src.analysis.settlement_rounding import apply_city_settlement
 
 
 def _sf(v: Any) -> Optional[float]:
@@ -652,6 +652,7 @@ def _pick_bucket_for_forecast(
 
 def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
     scan = city_weather.get("market_scan") or {}
+    city = str(city_weather.get("name") or "").strip().lower()
     if not isinstance(scan, dict):
         return {"available": False}
     if not scan.get("available"):

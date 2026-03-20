@@ -33,6 +33,7 @@ Thumbs.db
 frontend/node_modules/
 frontend/.next/
 frontend/.vercel/
+frontend/*.tsbuildinfo
 
 .npm-cache/
 .env.local

@@ -14,8 +14,9 @@ def test_startup_coordinator_respects_disable_flags(monkeypatch):
     coordinator = StartupCoordinator(
         bot=DummyBot(),
         config={},
-        entitlement_enabled=False,
+        command_access_mode="group_member",
         protected_commands=["/city", "/deb"],
+        required_group_chat_id="-1001234567890",
     )
     runtime = coordinator.start_all()
     loop_map = runtime.loop_map()
@@ -30,13 +31,13 @@ def test_startup_coordinator_respects_disable_flags(monkeypatch):
 def test_render_runtime_status_html_contains_key_fields():
     runtime = RuntimeStatus(
         started_at="2026-03-12 00:00:00 UTC",
-        entitlement_enabled=True,
+        command_access_mode="group_member",
         protected_commands=["/city", "/deb"],
+        required_group_chat_id="-1001234567890",
         loops=[],
     )
     html = render_runtime_status_html(runtime)
 
     assert "Bot 启动诊断" in html
-    assert "Entitlement" in html
+    assert "命令准入" in html
     assert "/city, /deb" in html
-

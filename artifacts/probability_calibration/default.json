@@ -1,0 +1,161 @@
+{
+  "version": "emos-20260320123829",
+  "trained_at": "2026-03-20T12:38:29.985991+00:00",
+  "global": {
+    "mu": {
+      "intercept": -1.57406048,
+      "raw_mu_coef": 2.80583627,
+      "deb_coef": -0.06819634,
+      "ens_median_coef": -1.81560215,
+      "max_so_far_gap_coef": 0.0
+    },
+    "sigma": {
+      "intercept": 0.67509915,
+      "raw_sigma_coef": 0.14431833,
+      "spread_coef": 0.14431833,
+      "peak_flag_coef": 0.0,
+      "max_so_far_gap_coef": 0.0
+    }
+  },
+  "blending": {
+    "alpha_mu": 0.0,
+    "alpha_sigma": 1.0
+  },
+  "cities": {
+    "ankara": {
+      "samples": 7,
+      "mu_bias": 0.566273,
+      "sigma_scale": 2.0,
+      "confidence": 0.875
+    },
+    "london": {
+      "samples": 6,
+      "mu_bias": 0.489961,
+      "sigma_scale": 2.0,
+      "confidence": 0.75
+    },
+    "new york": {
+      "samples": 4,
+      "mu_bias": 1.852451,
+      "sigma_scale": 0.830444,
+      "confidence": 0.5
+    },
+    "paris": {
+      "samples": 7,
+      "mu_bias": 0.308599,
+      "sigma_scale": 2.0,
+      "confidence": 0.875
+    },
+    "seoul": {
+      "samples": 6,
+      "mu_bias": -1.486024,
+      "sigma_scale": 1.569585,
+      "confidence": 0.75
+    },
+    "toronto": {
+      "samples": 5,
+      "mu_bias": -0.734395,
+      "sigma_scale": 1.656751,
+      "confidence": 0.625
+    },
+    "buenos aires": {
+      "samples": 5,
+      "mu_bias": -1.753334,
+      "sigma_scale": 1.831739,
+      "confidence": 0.625
+    },
+    "wellington": {
+      "samples": 6,
+      "mu_bias": 0.350757,
+      "sigma_scale": 1.377974,
+      "confidence": 0.75
+    },
+    "chicago": {
+      "samples": 4,
+      "mu_bias": 3.01062,
+      "sigma_scale": 0.825575,
+      "confidence": 0.5
+    },
+    "sao paulo": {
+      "samples": 5,
+      "mu_bias": 1.632457,
+      "sigma_scale": 2.0,
+      "confidence": 0.625
+    },
+    "dallas": {
+      "samples": 4,
+      "mu_bias": 3.77714,
+      "sigma_scale": 0.796874,
+      "confidence": 0.5
+    },
+    "miami": {
+      "samples": 5,
+      "mu_bias": -4.868741,
+      "sigma_scale": 2.0,
+      "confidence": 0.625
+    },
+    "atlanta": {
+      "samples": 5,
+      "mu_bias": -7.648823,
+      "sigma_scale": 2.0,
+      "confidence": 0.625
+    },
+    "seattle": {
+      "samples": 4,
+      "mu_bias": 4.058619,
+      "sigma_scale": 2.0,
+      "confidence": 0.5
+    },
+    "lucknow": {
+      "samples": 4,
+      "mu_bias": 3.257609,
+      "sigma_scale": 2.0,
+      "confidence": 0.5
+    },
+    "munich": {
+      "samples": 6,
+      "mu_bias": -0.780811,
+      "sigma_scale": 2.0,
+      "confidence": 0.75
+    },
+    "hong kong": {
+      "samples": 3,
+      "mu_bias": -0.492675,
+      "sigma_scale": 2.0,
+      "confidence": 0.375
+    },
+    "taipei": {
+      "samples": 3,
+      "mu_bias": 1.462462,
+      "sigma_scale": 1.132834,
+      "confidence": 0.375
+    },
+    "milan": {
+      "samples": 3,
+      "mu_bias": -2.729203,
+      "sigma_scale": 2.0,
+      "confidence": 0.375
+    },
+    "warsaw": {
+      "samples": 3,
+      "mu_bias": 0.349319,
+      "sigma_scale": 1.337949,
+      "confidence": 0.375
+    }
+  },
+  "metrics": {
+    "sample_count": 105,
+    "mean_crps": 2.744961,
+    "legacy_mean_crps": 2.793938,
+    "legacy_mean_mae": 2.721143,
+    "legacy_bucket_hit_rate": 0.695238,
+    "selected_mean_crps": 2.747094,
+    "selected_mean_mae": 2.721143,
+    "selected_bucket_hit_rate": 0.704762,
+    "selected_score": 3.609685,
+    "legacy_score": 3.675576,
+    "filled_actual_from_history": 2,
+    "settlement_history_city_count": 30
+  },
+  "source": "artifacts\\probability_calibration\\default.json"
+}

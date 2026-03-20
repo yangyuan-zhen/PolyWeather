@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import requests
-from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
+from src.analysis.settlement_rounding import apply_city_settlement
 
 # Cross-platform file locking
 import sys
@@ -36,6 +36,15 @@ else:
 # Simple memory cache to avoid blasting the disk if queried 10 times a minute
 _history_cache = {}
 _history_mtime = 0
+
+
+def _sf(value):
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except Exception:
+        return None
 
 
 def _is_excluded_model_name(model_name: str) -> bool:
@@ -217,8 +226,16 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
 
 
 def update_daily_record(
-    city_name, date_str, forecasts, actual_high, deb_prediction=None,
-    mu=None, probabilities=None
+    city_name,
+    date_str,
+    forecasts,
+    actual_high,
+    deb_prediction=None,
+    mu=None,
+    probabilities=None,
+    probability_features=None,
+    shadow_probabilities=None,
+    calibration_summary=None,
 ):
     """
     保存/更新某城市某天的各个模型预报与最终实测值
@@ -253,6 +270,36 @@ def update_daily_record(
             {"v": p["value"], "p": p["probability"]}
             for p in probabilities[:4]
         ]
+    compact_features = None
+    if isinstance(probability_features, dict) and probability_features:
+        compact_features = {
+            "raw_mu": _sf(probability_features.get("raw_mu")),
+            "raw_sigma": _sf(probability_features.get("raw_sigma")),
+            "deb_prediction": _sf(probability_features.get("deb_prediction")),
+            "ens_median": _sf(probability_features.get("ens_median")),
+            "ensemble_spread": _sf(probability_features.get("ensemble_spread")),
+            "max_so_far": _sf(probability_features.get("max_so_far")),
+            "max_so_far_gap": _sf(probability_features.get("max_so_far_gap")),
+            "peak_status": probability_features.get("peak_status"),
+        }
+    compact_shadow_probs = None
+    if shadow_probabilities is not None:
+        compact_shadow_probs = [
+            {"v": p["value"], "p": p["probability"]}
+            for p in shadow_probabilities[:4]
+        ]
+    compact_calibration = None
+    if isinstance(calibration_summary, dict) and calibration_summary:
+        compact_calibration = {
+            "mode": calibration_summary.get("mode"),
+            "engine": calibration_summary.get("engine"),
+            "version": calibration_summary.get("calibration_version"),
+            "source": calibration_summary.get("calibration_source"),
+            "raw_mu": _sf(calibration_summary.get("raw_mu")),
+            "raw_sigma": _sf(calibration_summary.get("raw_sigma")),
+            "calibrated_mu": _sf(calibration_summary.get("calibrated_mu")),
+            "calibrated_sigma": _sf(calibration_summary.get("calibrated_sigma")),
+        }
 
     # 避免无意义的频繁磁盘写入
     existing = data[city_name][date_str]
@@ -260,6 +307,7 @@ def update_daily_record(
     old_deb = existing.get("deb_prediction")
     old_mu = existing.get("mu")
     old_probs = existing.get("prob_snapshot")
+    old_shadow_probs = existing.get("shadow_prob_snapshot")
     next_mu = round(mu, 2) if mu is not None else None
     if (
         old_actual == actual_high
@@ -267,6 +315,18 @@ def update_daily_record(
         and (deb_prediction is None or old_deb == deb_prediction)
         and (mu is None or old_mu == next_mu)
         and (compact_probs is None or old_probs == compact_probs)
+        and (
+            compact_shadow_probs is None
+            or old_shadow_probs == compact_shadow_probs
+        )
+        and (
+            compact_features is None
+            or existing.get("probability_features") == compact_features
+        )
+        and (
+            compact_calibration is None
+            or existing.get("probability_calibration") == compact_calibration
+        )
     ):
         return
 
@@ -285,6 +345,12 @@ def update_daily_record(
         existing["mu"] = next_mu
     if probabilities is not None:
         existing["prob_snapshot"] = compact_probs
+    if compact_features is not None:
+        existing["probability_features"] = compact_features
+    if shadow_probabilities is not None:
+        existing["shadow_prob_snapshot"] = compact_shadow_probs
+    if compact_calibration is not None:
+        existing["probability_calibration"] = compact_calibration
 
     # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
     cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")

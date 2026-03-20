@@ -15,7 +15,11 @@ from src.analysis.deb_algorithm import (
     update_daily_record,
     _is_excluded_model_name,
 )
-from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
+from src.analysis.probability_calibration import (
+    apply_probability_calibration,
+    build_probability_features,
+)
+from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
 
@@ -431,7 +435,19 @@ def analyze_weather_trend(
 
     # === Probability Engine ===
     probabilities: List[Dict[str, Any]] = []
+    shadow_probabilities: List[Dict[str, Any]] = []
     forecast_miss_deg = 0.0
+    probability_features = None
+    calibration_summary = {
+        "mode": "legacy",
+        "engine": "legacy",
+        "raw_mu": None,
+        "raw_sigma": sigma,
+        "calibrated_mu": None,
+        "calibrated_sigma": None,
+        "calibration_version": None,
+        "calibration_source": None,
+    }
 
     if is_dead_market:
         settled_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else 0
@@ -491,6 +507,43 @@ def analyze_weather_trend(
         mu = probs_result.get("mu", mu)
         probabilities = probs_result.get("probabilities", [])
         sorted_probs = probs_result.get("sorted_probs", [])
+
+        probability_features = build_probability_features(
+            city_name=city_name or "",
+            raw_mu=mu,
+            raw_sigma=sigma,
+            deb_prediction=deb_prediction,
+            ens_data=ens_data,
+            current_forecasts=current_forecasts,
+            max_so_far=max_so_far,
+            peak_status=peak_status,
+            local_hour_frac=local_hour_frac,
+        )
+        calibration_result = apply_probability_calibration(
+            city_name=city_name or "",
+            temp_symbol=temp_symbol,
+            raw_mu=mu,
+            raw_sigma=sigma,
+            max_so_far=max_so_far,
+            legacy_distribution=probabilities,
+            features=probability_features,
+        )
+        calibration_summary = {
+            "mode": calibration_result.get("mode", "legacy"),
+            "engine": calibration_result.get("engine", "legacy"),
+            "raw_mu": calibration_result.get("raw_mu"),
+            "raw_sigma": calibration_result.get("raw_sigma"),
+            "calibrated_mu": calibration_result.get("calibrated_mu"),
+            "calibrated_sigma": calibration_result.get("calibrated_sigma"),
+            "calibration_version": calibration_result.get("calibration_version"),
+            "calibration_source": calibration_result.get("calibration_source"),
+        }
+        shadow_probabilities = calibration_result.get("shadow_distribution") or []
+        if calibration_result.get("engine") == "emos":
+            mu = calibration_result.get("calibrated_mu", mu)
+            sigma = calibration_result.get("calibrated_sigma", sigma)
+            probabilities = calibration_result.get("distribution") or probabilities
+            sorted_probs = calibration_result.get("selected_sorted_probs") or sorted_probs
 
         if sorted_probs:
             prob_parts = [
@@ -650,6 +703,7 @@ def analyze_weather_trend(
     # === Save daily record (with μ + prob snapshot) ===
     try:
         _prob_list = None
+        _shadow_prob_list = None
         if sorted_probs:
             _prob_list = [
                 {"value": int(t), "probability": round(p, 3)}
@@ -657,6 +711,12 @@ def analyze_weather_trend(
             ]
         elif is_dead_market and max_so_far is not None:
             _prob_list = [{"value": apply_city_settlement(city_name, max_so_far), "probability": 1.0}]
+        if shadow_probabilities:
+            _shadow_prob_list = [
+                {"value": int(row.get("value")), "probability": round(float(row.get("probability") or 0.0), 3)}
+                for row in shadow_probabilities[:4]
+                if row.get("value") is not None
+            ]
 
         update_daily_record(
             city_name,
@@ -666,6 +726,9 @@ def analyze_weather_trend(
             deb_prediction=_deb_to_save,
             mu=mu,
             probabilities=_prob_list,
+            probability_features=probability_features,
+            shadow_probabilities=_shadow_prob_list,
+            calibration_summary=calibration_summary,
         )
     except Exception:
         pass
@@ -679,6 +742,15 @@ def analyze_weather_trend(
     structured = {
         "mu": mu,
         "probabilities": probabilities,
+        "shadow_probabilities": shadow_probabilities,
+        "probability_engine": calibration_summary["engine"],
+        "probability_calibration_mode": calibration_summary["mode"],
+        "probability_calibration_version": calibration_summary["calibration_version"],
+        "probability_calibration_source": calibration_summary["calibration_source"],
+        "probability_raw_mu": calibration_summary["raw_mu"],
+        "probability_raw_sigma": calibration_summary["raw_sigma"],
+        "probability_calibrated_mu": calibration_summary["calibrated_mu"],
+        "probability_calibrated_sigma": calibration_summary["calibrated_sigma"],
         "trend_info": {
             "direction": trend_direction if 'trend_direction' in dir() else "unknown",
             "recent": recent_list,
@@ -711,7 +783,7 @@ def calculate_prob_distribution(
 
     def _norm_cdf(x, m, s):
         # 0.5 * (1 + erf( (x-m)/(s*sqrt(2)) ))
-        return 0.5 * (1 + math.erf((x - m) / (sigma * math.sqrt(2))))
+        return 0.5 * (1 + math.erf((x - m) / (s * math.sqrt(2))))
 
     min_possible_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else -999
     probs = {}

@@ -33,8 +33,9 @@ def test_basic_handler_diag_returns_html():
     runtime = RuntimeStatus(
         started_at="2026-03-12 00:00:00 UTC",
         loops=[],
-        entitlement_enabled=False,
+        command_access_mode="group_member",
         protected_commands=["/city", "/deb"],
+        required_group_chat_id="-1001234567890",
     )
     bot = DummyBot()
     io_layer = SimpleNamespace(
@@ -52,4 +53,3 @@ def test_basic_handler_diag_returns_html():
     assert len(bot.replies) == 1
     assert bot.replies[0]["parse_mode"] == "HTML"
     assert "Bot 启动诊断" in bot.replies[0]["text"]
-
