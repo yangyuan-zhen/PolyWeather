@@ -14,12 +14,16 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-03）
+## 当前产品状态（2026-03-20）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
 - 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
 - 已上线链上支付：Polygon 合约支付（USDC / USDC.e）。
 - 已上线自动补单：事件监听 + 周期确认双链路。
+- 已上线支付运行态与审计接口：`/api/payments/runtime`。
+- 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
+- 运行态状态与缓存已支持 SQLite 渐进迁移：`file / dual / sqlite`。
+- 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
 
 ## 开源边界（重要）
 
@@ -32,11 +36,12 @@
 
 ## 核心能力
 
-- 聚合 20 个监控城市的实测与预报数据。
+- 聚合 30 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 输出结算导向概率分布（`mu` + 温度桶）。
 - 将模型观点映射到 Polymarket 行情，做错价扫描。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
+- 支付链路具备事件重放、SQLite 审计事件与 RPC 容灾能力。
 
 ## 参考架构
 
@@ -55,14 +60,17 @@ flowchart LR
     API --> ANA["DEB + 趋势 + 概率 + 市场扫描"]
     ANA --> PAY["支付状态（Intent + Event + Confirm Loop）"]
     ANA --> PM["Polymarket 只读层"]
+    API --> OBS["healthz / system status / metrics"]
+    ANA --> STATE["SQLite runtime state + dual fallback"]
 ```
 
-## 监控城市（20）
+## 监控城市（30）
 
-- 欧洲/中东：Ankara、London、Paris、Munich
-- 亚太：Seoul、Hong Kong、Shanghai、Singapore、Tokyo、Wellington
+- 欧洲/中东：Ankara、London、Paris、Munich、Tel Aviv、Milan、Warsaw、Madrid
+- 亚太：Seoul、Hong Kong、Taipei、Shanghai、Singapore、Tokyo、Wellington
 - 美洲：Toronto、New York、Chicago、Dallas、Miami、Atlanta、Seattle、Buenos Aires、Sao Paulo
 - 南亚：Lucknow
+- 中国扩展：Chengdu、Chongqing、Shenzhen、Beijing、Wuhan
 
 ## 快速启动
 
@@ -87,9 +95,18 @@ npm run dev
 ```env
 POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
 POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
+POLYWEATHER_STATE_STORAGE_MODE=dual
 ```
 
 ## 运维验收
+
+### 健康与系统状态
+
+```bash
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/api/system/status
+curl http://127.0.0.1:8000/metrics
+```
 
 ### 前端缓存头
 
@@ -101,6 +118,12 @@ POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 
 ```bash
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
+```
+
+### 支付运行态
+
+```bash
+curl http://127.0.0.1:8000/api/payments/runtime
 ```
 
 ### 钱包异动监听日志
@@ -129,9 +152,14 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - 前端部署（Vercel）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
+- EMOS 训练报告：[docs/EMOS_TRAINING_REPORT_ZH.md](docs/EMOS_TRAINING_REPORT_ZH.md)
+- 概率快照归档：[docs/PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md](docs/PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md)
 - 技术债（中文镜像）：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - 技术债（主文档）：[docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
+- 支付审计说明：[docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
+- 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
+- 深度评估报告：[docs/deep-research-report.md](docs/deep-research-report.md)
 - 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
@@ -139,4 +167,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## 当前版本
 
 - 版本：`v1.4.0`
-- 最后更新：`2026-03-14`
+- 文档最后更新：`2026-03-20`

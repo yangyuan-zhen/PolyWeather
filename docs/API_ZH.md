@@ -1,8 +1,8 @@
 # PolyWeather API 文档（v1.4.0）
 
-最后更新：`2026-03-14`
+最后更新：`2026-03-20`
 
-本文档描述当前对外可用 API 口径（`web/app.py` + `frontend/app/api/*`）。
+本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
 ## 1. 基础信息
 
@@ -15,10 +15,11 @@
 ```mermaid
 flowchart LR
     FE["Browser / Dashboard"] --> BFF["Next.js Route Handlers (/api/*)"]
-    BFF --> API["FastAPI (/web/app.py)"]
+    BFF --> API["FastAPI (/web/app.py + /web/routes.py)"]
     API --> WX["Weather Collector"]
     API --> ANA["DEB + Trend + Probability + Market Scan"]
     API --> PAY["Payment Intent + Event + Confirm Loops"]
+    API --> OBS["healthz / system status / metrics"]
 ```
 
 ## 3. 天气分析接口
@@ -60,11 +61,12 @@ flowchart LR
 - `points`, `weekly_points`, `weekly_rank`
 - `subscription_active`, `subscription_plan_code`, `subscription_expires_at`
 
-## 5. 支付接口（P1）
+## 5. 支付接口
 
 | 接口 | 方法 | 用途 |
 | :-- | :-- | :-- |
 | `/api/payments/config` | GET | 支付配置、代币列表、套餐、积分抵扣规则 |
+| `/api/payments/runtime` | GET | 支付运行态、RPC 状态、event loop 状态、最近审计事件 |
 | `/api/payments/wallets` | GET | 当前用户已绑定钱包 |
 | `/api/payments/wallets/challenge` | POST | 获取绑定签名 challenge |
 | `/api/payments/wallets/verify` | POST | 提交签名并绑定钱包 |
@@ -83,13 +85,35 @@ flowchart LR
 4. `POST /confirm`
 5. 若 pending，轮询 `GET /intents/{id}` 直到 `confirmed`
 
-## 6. 缓存策略（当前）
+## 6. 运维与观测接口
+
+| 接口 | 方法 | 用途 |
+| :-- | :-- | :-- |
+| `/healthz` | GET | 基础健康检查 |
+| `/api/system/status` | GET | 系统状态、功能开关、rollout 状态、轻量指标摘要 |
+| `/metrics` | GET | Prometheus 风格指标导出 |
+
+`/api/system/status` 当前会包含：
+
+- `features.state_storage_mode`
+- `probability.decision`
+- `probability.ready_for_primary`
+- `metrics`
+
+`/metrics` 当前会导出：
+
+- `polyweather_http_requests_total`
+- `polyweather_http_request_duration_ms_*`
+- `polyweather_source_requests_total`
+- `polyweather_source_request_duration_ms_*`
+
+## 7. 缓存策略（当前）
 
 - `cities` / `summary` / `history`：BFF 支持 `ETag + 304`
 - `summary?force_refresh=true`：`Cache-Control: no-store`
 - 详情接口与支付接口：`no-store`
 
-## 7. 调试示例
+## 8. 调试示例
 
 ### 查询未来日期 market_scan
 
@@ -103,13 +127,25 @@ curl -s "http://127.0.0.1:8000/api/city/ankara/detail?force_refresh=true&target_
 curl -s http://127.0.0.1:8000/api/payments/config | python3 -m json.tool
 ```
 
+### 查看支付运行态
+
+```bash
+curl -s http://127.0.0.1:8000/api/payments/runtime | python3 -m json.tool
+```
+
+### 查看系统状态
+
+```bash
+curl -s http://127.0.0.1:8000/api/system/status | python3 -m json.tool
+```
+
 ### 观察支付自动补单
 
 ```bash
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-## 8. 开源口径说明
+## 9. 开源口径说明
 
 对外公开文档仅覆盖通用 API 契约。生产商业策略参数不在公开文档披露。
 
