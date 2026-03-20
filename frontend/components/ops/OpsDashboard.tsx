@@ -19,12 +19,16 @@ type ProbabilityRollout = {
 
 type SystemStatusPayload = {
   state_storage_mode?: string;
-  sqlite?: { ok?: boolean; path?: string };
+  db?: { ok?: boolean; db_path?: string };
   features?: Record<string, unknown>;
   metrics?: Record<string, unknown>;
   probability?: {
-    mode?: string;
-    rollout?: ProbabilityRollout;
+    engine_mode?: string;
+    rollout?: {
+      decision?: ProbabilityRollout;
+      evaluation_report_exists?: boolean;
+      shadow_report_exists?: boolean;
+    };
   };
   integrations?: Record<string, unknown>;
 };
@@ -184,12 +188,14 @@ export function OpsDashboard() {
     void loadLeaderboard();
   }, [loadLeaderboard, loadUsers]);
 
+  const rolloutDecision = status?.probability?.rollout?.decision;
+
   const rolloutVariant = useMemo(() => {
-    const decision = status?.probability?.rollout?.decision;
+    const decision = rolloutDecision?.decision;
     if (decision === "promote") return "success" as const;
     if (decision === "observe") return "warning" as const;
     return "danger" as const;
-  }, [status?.probability?.rollout?.decision]);
+  }, [rolloutDecision?.decision]);
 
   const submitGrant = useCallback(async () => {
     setGrantLoading(true);
@@ -238,11 +244,11 @@ export function OpsDashboard() {
               <Badge variant={health?.status === "ok" ? "success" : "danger"}>
                 Health {health?.status || "unknown"}
               </Badge>
-              <Badge variant={status?.sqlite?.ok ? "success" : "danger"}>
-                SQLite {status?.sqlite?.ok ? "ok" : "error"}
+              <Badge variant={status?.db?.ok ? "success" : "danger"}>
+                SQLite {status?.db?.ok ? "ok" : "error"}
               </Badge>
               <Badge variant={rolloutVariant}>
-                EMOS {status?.probability?.rollout?.decision || "hold"}
+                EMOS {rolloutDecision?.decision || "hold"}
               </Badge>
             </div>
             <div>
@@ -294,10 +300,10 @@ export function OpsDashboard() {
               <CardDescription>SQLite 是否正常，以及 rollout 当前状态。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2 text-sm text-slate-300">
-              <div className="flex justify-between gap-3"><span>SQLite</span><span>{status?.sqlite?.ok ? "ok" : "error"}</span></div>
-              <div className="flex justify-between gap-3"><span>EMOS 模式</span><span>{status?.probability?.mode || "-"}</span></div>
-              <div className="flex justify-between gap-3"><span>上线门禁</span><span>{status?.probability?.rollout?.decision || "-"}</span></div>
-              <div className="flex justify-between gap-3"><span>ready_for_primary</span><span>{status?.probability?.rollout?.ready_for_primary ? "true" : "false"}</span></div>
+              <div className="flex justify-between gap-3"><span>SQLite</span><span>{status?.db?.ok ? "ok" : "error"}</span></div>
+              <div className="flex justify-between gap-3"><span>EMOS 模式</span><span>{status?.probability?.engine_mode || "-"}</span></div>
+              <div className="flex justify-between gap-3"><span>上线门禁</span><span>{rolloutDecision?.decision || "-"}</span></div>
+              <div className="flex justify-between gap-3"><span>ready_for_primary</span><span>{rolloutDecision?.ready_for_primary ? "true" : "false"}</span></div>
             </CardContent>
           </Card>
 
@@ -340,16 +346,16 @@ export function OpsDashboard() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-slate-300">
               <div className="flex flex-wrap gap-2">
-                <Badge variant={rolloutVariant}>{status?.probability?.rollout?.decision || "hold"}</Badge>
-                <Badge variant={status?.probability?.rollout?.ready_for_primary ? "success" : "warning"}>
-                  ready={status?.probability?.rollout?.ready_for_primary ? "true" : "false"}
+                <Badge variant={rolloutVariant}>{rolloutDecision?.decision || "hold"}</Badge>
+                <Badge variant={rolloutDecision?.ready_for_primary ? "success" : "warning"}>
+                  ready={rolloutDecision?.ready_for_primary ? "true" : "false"}
                 </Badge>
               </div>
               <div>
                 <div className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-slate-500">阻塞原因</div>
                 <ul className="space-y-2">
-                  {(status?.probability?.rollout?.blocking_reasons || []).length ? (
-                    (status?.probability?.rollout?.blocking_reasons || []).map((reason) => (
+                  {(rolloutDecision?.blocking_reasons || []).length ? (
+                    (rolloutDecision?.blocking_reasons || []).map((reason) => (
                       <li key={reason} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
                         {reason}
                       </li>
