@@ -1,4 +1,4 @@
-# PolyWeather API 文档（v1.4）
+# PolyWeather API 文档（v1.4.0）
 
 最后更新：`2026-03-14`
 

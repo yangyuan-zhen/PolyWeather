@@ -131,8 +131,10 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - 技术债（主文档）：[docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
+- 发布流程：[RELEASE.md](RELEASE.md)
+- 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
 ## 当前版本
 
-- 版本：`v1.4`
+- 版本：`v1.4.0`
 - 最后更新：`2026-03-14`

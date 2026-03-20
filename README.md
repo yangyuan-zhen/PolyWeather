@@ -131,8 +131,10 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - Frontend report: [FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
+- Release process: [RELEASE.md](RELEASE.md)
+- Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Version
 
-- Version: `v1.4`
+- Version: `v1.4.0`
 - Last Updated: `2026-03-14`

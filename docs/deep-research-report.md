@@ -3,7 +3,7 @@
 ## 执行摘要
 
 PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类结算预测市场（如 Polymarket 的温度结算合约）**的“生产级气象情报系统”，核心在于把多源天气观测/预报转化为**结算导向的概率桶（μ + bucket distribution）**，并进一步映射到市场报价完成**错价扫描**；同时提供 Web 仪表盘与 Telegram Bot 两套交互入口，并包含 Polygon 链上 USDC/USDC.e 支付、自动补单与订阅/积分体系。项目 README 明确其“Open-Core”边界：仓库公开天气聚合、基础分析、看板、Bot、标准支付流程；生产私有部分包含商业风控、阈值与运营工具等。
-从工程实现看，当前版本（README 标注 `v1.4`，最后更新 `2026-03-14`）已经落地关键业务闭环：多源天气采集（Open-Meteo、AviationWeather METAR、土耳其 MGM、香港 HKO、台湾 CWA、美国 NWS 等）、DEB 动态融合、趋势/概率引擎、Polymarket 只读行情层、前端缓存策略（ETag/304、force_refresh no-store）、以及支付事件监听与确认循环。
+从工程实现看，当前版本（README 标注 `v1.4.0`，最后更新 `2026-03-14`）已经落地关键业务闭环：多源天气采集（Open-Meteo、AviationWeather METAR、土耳其 MGM、香港 HKO、台湾 CWA、美国 NWS 等）、DEB 动态融合、趋势/概率引擎、Polymarket 只读行情层、前端缓存策略（ETag/304、force_refresh no-store）、以及支付事件监听与确认循环。
 但它也暴露出典型的“从快速迭代走向稳态生产”的结构性问题：核心模块（如 `src/data_collection/weather_sources.py`、`web/app.py`）体量巨大、职责耦合；配置/依赖/可复现性仍偏脚本化；测试覆盖存在但 CI/CD 缺失；多处自定义缓存与状态文件并发一致性风险；以及对第三方 API（Open-Meteo、AviationWeather、Supabase、Polymarket）在**配额、变更、SLA、合规**方面需要更系统的治理。
 本报告给出的改进方向按收益/风险/工作量分级，优先建议聚焦三条主线：
 第一，**模块化与工程化**：将采集/分析/市场层/支付/鉴权拆成清晰边界，补齐 CI、测试、类型与规范化配置；第二，**可观测性与可靠性**：统一缓存与状态管理、增加限流与退避策略、建立指标与告警；第三，**模型与评测体系**：围绕“结算命中率 + 偏差（MAE/RMSE）+ 概率校准（Brier/CRPS）+ 错价信号有效性（Edge/PnL 模拟）”建立基准与回归测试，并可在合规前提下评估引入更先进的气象后处理（如 EMOS）或外部 AI 预报（GraphCast/FourCastNet/Pangu-Weather 的商业许可限制需特别注意）。
