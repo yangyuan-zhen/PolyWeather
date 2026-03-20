@@ -151,6 +151,11 @@ _SUPABASE_AUTH_REQUIRED = _env_bool(
     "POLYWEATHER_AUTH_REQUIRED",
     SUPABASE_ENTITLEMENT.enabled,
 )
+_OPS_ADMIN_EMAILS = {
+    item.strip().lower()
+    for item in str(os.getenv("POLYWEATHER_OPS_ADMIN_EMAILS") or "").split(",")
+    if item.strip()
+}
 
 
 def _legacy_service_token_valid(request: Request) -> bool:
@@ -287,6 +292,19 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
     raise HTTPException(status_code=401, detail="Unauthorized")
 
 
+def _require_ops_admin(request: Request) -> Dict[str, str]:
+    identity = _require_supabase_identity(request)
+    if not _OPS_ADMIN_EMAILS:
+        raise HTTPException(
+            status_code=503,
+            detail="ops admin is not configured; set POLYWEATHER_OPS_ADMIN_EMAILS",
+        )
+    email = str(identity.get("email") or "").strip().lower()
+    if not email or email not in _OPS_ADMIN_EMAILS:
+        raise HTTPException(status_code=403, detail="ops admin required")
+    return identity
+
+
 class WalletChallengeRequest(BaseModel):
     address: str = Field(..., min_length=8)
 
@@ -318,6 +336,11 @@ class SubmitPaymentTxRequest(BaseModel):
 
 class ConfirmPaymentTxRequest(BaseModel):
     tx_hash: Optional[str] = None
+
+
+class GrantPointsRequest(BaseModel):
+    email: str = Field(..., min_length=3)
+    points: int = Field(..., gt=0, le=100000)
 
 
 def _sf(v) -> Optional[float]:

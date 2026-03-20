@@ -345,6 +345,67 @@ class DBManager:
                 return dict(row)
         return None
 
+    def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
+        text = str(query or "").strip()
+        safe_limit = max(1, min(int(limit or 20), 100))
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            if not text:
+                rows = conn.execute(
+                    """
+                    SELECT
+                        telegram_id,
+                        username,
+                        points,
+                        daily_points,
+                        daily_points_date,
+                        weekly_points,
+                        weekly_points_week,
+                        message_count,
+                        supabase_user_id,
+                        supabase_email,
+                        created_at,
+                        last_message_at
+                    FROM users
+                    ORDER BY points DESC, message_count DESC, telegram_id ASC
+                    LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
+                return [dict(row) for row in rows]
+
+            rows = conn.execute(
+                """
+                SELECT
+                    telegram_id,
+                    username,
+                    points,
+                    daily_points,
+                    daily_points_date,
+                    weekly_points,
+                    weekly_points_week,
+                    message_count,
+                    supabase_user_id,
+                    supabase_email,
+                    created_at,
+                    last_message_at
+                FROM users
+                WHERE
+                    CAST(telegram_id AS TEXT) = ?
+                    OR lower(trim(COALESCE(username, ''))) LIKE ?
+                    OR lower(trim(COALESCE(supabase_email, ''))) LIKE ?
+                ORDER BY points DESC, message_count DESC, telegram_id ASC
+                LIMIT ?
+                """,
+                (
+                    text,
+                    f"%{text.lower()}%",
+                    f"%{text.lower()}%",
+                    safe_limit,
+                ),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
     def get_points_by_supabase_user_id(self, supabase_user_id: str) -> int:
         user = self.get_user_by_supabase_user_id(supabase_user_id)
         if not user:

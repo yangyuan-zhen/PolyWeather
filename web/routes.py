@@ -25,6 +25,7 @@ from web.core import (
     SUPABASE_ENTITLEMENT,
     ConfirmPaymentTxRequest,
     CreatePaymentIntentRequest,
+    GrantPointsRequest,
     SubmitPaymentTxRequest,
     WalletChallengeRequest,
     WalletUnbindRequest,
@@ -33,6 +34,7 @@ from web.core import (
     _SUPABASE_AUTH_REQUIRED,
     _assert_entitlement,
     _bind_optional_supabase_identity,
+    _require_ops_admin,
     build_health_payload,
     build_system_status_payload,
     _require_supabase_identity,
@@ -223,6 +225,43 @@ async def auth_me(request: Request):
         "subscription_starts_at": subscription_starts_at,
         "subscription_expires_at": subscription_expires_at,
     }
+
+
+@router.get("/api/ops/users")
+async def ops_search_users(request: Request, q: str = "", limit: int = 20):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    users = db.search_users(q, limit=limit)
+    return {"users": users}
+
+
+@router.get("/api/ops/leaderboard/weekly")
+async def ops_weekly_leaderboard(request: Request, limit: int = 20):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    return {"leaderboard": db.get_weekly_leaderboard(limit=limit)}
+
+
+@router.post("/api/ops/users/grant-points")
+async def ops_grant_points(request: Request, body: GrantPointsRequest):
+    _assert_entitlement(request)
+    admin = _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    result = db.grant_points_by_supabase_email(body.email, body.points)
+    result["operator_email"] = admin.get("email")
+    if not result.get("ok"):
+        reason = str(result.get("reason") or "grant_points_failed")
+        status_code = 404 if reason == "user_not_found" else 400
+        raise HTTPException(status_code=status_code, detail=result)
+    return result
 
 
 @router.get("/api/payments/config")
