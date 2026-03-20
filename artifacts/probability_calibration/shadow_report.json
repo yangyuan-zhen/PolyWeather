@@ -1,439 +1,439 @@
 {
-  "generated_at": "2026-03-20T12:57:49.026408Z",
+  "generated_at": "2026-03-20T13:03:15.168560Z",
   "summary": {
     "samples": 103,
     "legacy_mean_mae": 1.839223,
-    "shadow_mean_mae": 1.839223,
+    "shadow_mean_mae": 1.851931,
     "legacy_bucket_hit_rate": 0.669903,
-    "shadow_bucket_hit_rate": 0.699029,
+    "shadow_bucket_hit_rate": 0.679612,
     "legacy_bucket_brier": 0.462814,
-    "shadow_bucket_brier": 0.852666,
-    "delta_mae": 0.0,
-    "delta_bucket_hit_rate": 0.029126,
-    "delta_bucket_brier": 0.389852
+    "shadow_bucket_brier": 0.756649,
+    "delta_mae": 0.012708,
+    "delta_bucket_hit_rate": 0.009709,
+    "delta_bucket_brier": 0.293835
   },
   "by_city": {
     "ankara": {
       "samples": 7,
       "legacy_mean_mae": 1.984286,
-      "shadow_mean_mae": 1.984286,
+      "shadow_mean_mae": 1.977721,
       "legacy_bucket_hit_rate": 0.714286,
       "shadow_bucket_hit_rate": 0.714286,
       "legacy_bucket_brier": 0.484311,
-      "shadow_bucket_brier": 0.866985,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.793303,
+      "delta_mae": -0.006565,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.382674
+      "delta_bucket_brier": 0.308992
     },
     "atlanta": {
       "samples": 4,
       "legacy_mean_mae": 4.265,
-      "shadow_mean_mae": 4.265,
+      "shadow_mean_mae": 4.558028,
       "legacy_bucket_hit_rate": 0.75,
-      "shadow_bucket_hit_rate": 0.75,
+      "shadow_bucket_hit_rate": 0.5,
       "legacy_bucket_brier": 0.257274,
-      "shadow_bucket_brier": 0.898147,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.640873
+      "shadow_bucket_brier": 0.858699,
+      "delta_mae": 0.293028,
+      "delta_bucket_hit_rate": -0.25,
+      "delta_bucket_brier": 0.601425
     },
     "buenos aires": {
       "samples": 5,
       "legacy_mean_mae": 4.168,
-      "shadow_mean_mae": 4.168,
+      "shadow_mean_mae": 4.086663,
       "legacy_bucket_hit_rate": 0.6,
       "shadow_bucket_hit_rate": 0.6,
       "legacy_bucket_brier": 0.501444,
-      "shadow_bucket_brier": 0.902177,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.820713,
+      "delta_mae": -0.081337,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.400733
+      "delta_bucket_brier": 0.319269
     },
     "chicago": {
       "samples": 4,
       "legacy_mean_mae": 0.0,
-      "shadow_mean_mae": 0.0,
+      "shadow_mean_mae": 0.075265,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.0,
-      "shadow_bucket_brier": 0.775841,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.746156,
+      "delta_mae": 0.075265,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.775841
+      "delta_bucket_brier": 0.746156
     },
     "dallas": {
       "samples": 4,
       "legacy_mean_mae": 0.0,
-      "shadow_mean_mae": 0.0,
+      "shadow_mean_mae": 0.114807,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.0,
-      "shadow_bucket_brier": 0.777109,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.778678,
+      "delta_mae": 0.114807,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.777109
+      "delta_bucket_brier": 0.778678
     },
     "hong kong": {
       "samples": 3,
       "legacy_mean_mae": 0.1,
-      "shadow_mean_mae": 0.1,
+      "shadow_mean_mae": 0.174879,
       "legacy_bucket_hit_rate": 0.333333,
       "shadow_bucket_hit_rate": 0.666667,
       "legacy_bucket_brier": 0.882203,
-      "shadow_bucket_brier": 0.769924,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.463809,
+      "delta_mae": 0.074879,
       "delta_bucket_hit_rate": 0.333334,
-      "delta_bucket_brier": -0.112279
+      "delta_bucket_brier": -0.418394
     },
     "london": {
       "samples": 6,
       "legacy_mean_mae": 2.451667,
-      "shadow_mean_mae": 2.451667,
+      "shadow_mean_mae": 2.327304,
       "legacy_bucket_hit_rate": 0.166667,
-      "shadow_bucket_hit_rate": 0.166667,
+      "shadow_bucket_hit_rate": 0.333333,
       "legacy_bucket_brier": 0.988538,
-      "shadow_bucket_brier": 0.930277,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": -0.058261
+      "shadow_bucket_brier": 0.879058,
+      "delta_mae": -0.124363,
+      "delta_bucket_hit_rate": 0.166666,
+      "delta_bucket_brier": -0.10948
     },
     "lucknow": {
       "samples": 4,
       "legacy_mean_mae": 1.6025,
-      "shadow_mean_mae": 1.6025,
+      "shadow_mean_mae": 1.682697,
       "legacy_bucket_hit_rate": 0.5,
       "shadow_bucket_hit_rate": 0.5,
       "legacy_bucket_brier": 0.836804,
-      "shadow_bucket_brier": 0.874793,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.832969,
+      "delta_mae": 0.080197,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.037989
+      "delta_bucket_brier": -0.003835
     },
     "madrid": {
       "samples": 2,
       "legacy_mean_mae": 7.33,
-      "shadow_mean_mae": 7.33,
+      "shadow_mean_mae": 7.141649,
       "legacy_bucket_hit_rate": 0.0,
       "shadow_bucket_hit_rate": 0.0,
       "legacy_bucket_brier": 1.148213,
-      "shadow_bucket_brier": 1.095556,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 1.131778,
+      "delta_mae": -0.188351,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": -0.052657
+      "delta_bucket_brier": -0.016435
     },
     "miami": {
       "samples": 4,
       "legacy_mean_mae": 2.76,
-      "shadow_mean_mae": 2.76,
+      "shadow_mean_mae": 3.001559,
       "legacy_bucket_hit_rate": 0.75,
-      "shadow_bucket_hit_rate": 0.75,
+      "shadow_bucket_hit_rate": 0.25,
       "legacy_bucket_brier": 0.295651,
-      "shadow_bucket_brier": 0.871341,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.57569
+      "shadow_bucket_brier": 0.773896,
+      "delta_mae": 0.241559,
+      "delta_bucket_hit_rate": -0.5,
+      "delta_bucket_brier": 0.478245
     },
     "milan": {
       "samples": 3,
       "legacy_mean_mae": 4.06,
-      "shadow_mean_mae": 4.06,
+      "shadow_mean_mae": 3.942288,
       "legacy_bucket_hit_rate": 0.666667,
       "shadow_bucket_hit_rate": 0.666667,
       "legacy_bucket_brier": 0.587548,
-      "shadow_bucket_brier": 0.894664,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.761128,
+      "delta_mae": -0.117712,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.307116
+      "delta_bucket_brier": 0.17358
     },
     "munich": {
       "samples": 6,
       "legacy_mean_mae": 3.143333,
-      "shadow_mean_mae": 3.143333,
+      "shadow_mean_mae": 3.126482,
       "legacy_bucket_hit_rate": 0.5,
       "shadow_bucket_hit_rate": 0.5,
       "legacy_bucket_brier": 0.531206,
-      "shadow_bucket_brier": 0.889555,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.756931,
+      "delta_mae": -0.016851,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.358349
+      "delta_bucket_brier": 0.225725
     },
     "new york": {
       "samples": 4,
       "legacy_mean_mae": 1.3725,
-      "shadow_mean_mae": 1.3725,
+      "shadow_mean_mae": 1.369301,
       "legacy_bucket_hit_rate": 0.75,
       "shadow_bucket_hit_rate": 0.75,
       "legacy_bucket_brier": 0.410198,
-      "shadow_bucket_brier": 0.858466,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.856962,
+      "delta_mae": -0.003199,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.448268
+      "delta_bucket_brier": 0.446764
     },
     "paris": {
       "samples": 7,
       "legacy_mean_mae": 2.518571,
-      "shadow_mean_mae": 2.518571,
+      "shadow_mean_mae": 2.48437,
       "legacy_bucket_hit_rate": 0.571429,
       "shadow_bucket_hit_rate": 0.571429,
       "legacy_bucket_brier": 0.630706,
-      "shadow_bucket_brier": 0.919741,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.859044,
+      "delta_mae": -0.034201,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.289035
+      "delta_bucket_brier": 0.228338
     },
     "sao paulo": {
       "samples": 5,
       "legacy_mean_mae": 2.628,
-      "shadow_mean_mae": 2.628,
+      "shadow_mean_mae": 2.689909,
       "legacy_bucket_hit_rate": 0.6,
       "shadow_bucket_hit_rate": 0.6,
       "legacy_bucket_brier": 0.505595,
-      "shadow_bucket_brier": 0.910825,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.869029,
+      "delta_mae": 0.061909,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.40523
+      "delta_bucket_brier": 0.363434
     },
     "seattle": {
       "samples": 4,
       "legacy_mean_mae": 0.0,
-      "shadow_mean_mae": 0.0,
+      "shadow_mean_mae": 0.11262,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.0,
-      "shadow_bucket_brier": 0.818312,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.692003,
+      "delta_mae": 0.11262,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.818312
+      "delta_bucket_brier": 0.692003
     },
     "seoul": {
       "samples": 6,
       "legacy_mean_mae": 0.2,
-      "shadow_mean_mae": 0.2,
+      "shadow_mean_mae": 0.246659,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.22618,
-      "shadow_bucket_brier": 0.793326,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.58261,
+      "delta_mae": 0.046659,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.567146
+      "delta_bucket_brier": 0.35643
     },
     "shanghai": {
       "samples": 2,
       "legacy_mean_mae": 0.15,
-      "shadow_mean_mae": 0.15,
+      "shadow_mean_mae": 0.204362,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.1156,
-      "shadow_bucket_brier": 0.714946,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.500523,
+      "delta_mae": 0.054362,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.599346
+      "delta_bucket_brier": 0.384923
     },
     "singapore": {
       "samples": 2,
       "legacy_mean_mae": 0.15,
-      "shadow_mean_mae": 0.15,
+      "shadow_mean_mae": 0.070547,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.306527,
-      "shadow_bucket_brier": 0.723037,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.546477,
+      "delta_mae": -0.079453,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.41651
+      "delta_bucket_brier": 0.23995
     },
     "taipei": {
       "samples": 3,
       "legacy_mean_mae": 0.1,
-      "shadow_mean_mae": 0.1,
+      "shadow_mean_mae": 0.084784,
       "legacy_bucket_hit_rate": 0.333333,
       "shadow_bucket_hit_rate": 0.666667,
       "legacy_bucket_brier": 0.884594,
-      "shadow_bucket_brier": 0.749607,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.633789,
+      "delta_mae": -0.015216,
       "delta_bucket_hit_rate": 0.333334,
-      "delta_bucket_brier": -0.134987
+      "delta_bucket_brier": -0.250805
     },
     "tel aviv": {
       "samples": 2,
       "legacy_mean_mae": 0.3,
-      "shadow_mean_mae": 0.3,
+      "shadow_mean_mae": 0.196589,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.257895,
-      "shadow_bucket_brier": 0.753429,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.693539,
+      "delta_mae": -0.103411,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.495534
+      "delta_bucket_brier": 0.435644
     },
     "tokyo": {
       "samples": 2,
       "legacy_mean_mae": 0.25,
-      "shadow_mean_mae": 0.25,
+      "shadow_mean_mae": 0.100782,
       "legacy_bucket_hit_rate": 0.5,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.284759,
-      "shadow_bucket_brier": 0.753103,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.691981,
+      "delta_mae": -0.149218,
       "delta_bucket_hit_rate": 0.5,
-      "delta_bucket_brier": 0.468344
+      "delta_bucket_brier": 0.407222
     },
     "toronto": {
       "samples": 5,
       "legacy_mean_mae": 2.532,
-      "shadow_mean_mae": 2.532,
+      "shadow_mean_mae": 2.535078,
       "legacy_bucket_hit_rate": 0.6,
       "shadow_bucket_hit_rate": 0.6,
       "legacy_bucket_brier": 0.502694,
-      "shadow_bucket_brier": 0.921825,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.947846,
+      "delta_mae": 0.003078,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.419131
+      "delta_bucket_brier": 0.445152
     },
     "warsaw": {
       "samples": 3,
       "legacy_mean_mae": 2.056667,
-      "shadow_mean_mae": 2.056667,
+      "shadow_mean_mae": 1.942917,
       "legacy_bucket_hit_rate": 0.333333,
       "shadow_bucket_hit_rate": 0.333333,
       "legacy_bucket_brier": 0.86425,
-      "shadow_bucket_brier": 0.859525,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.734939,
+      "delta_mae": -0.11375,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": -0.004725
+      "delta_bucket_brier": -0.129311
     },
     "wellington": {
       "samples": 6,
       "legacy_mean_mae": 0.2,
-      "shadow_mean_mae": 0.2,
+      "shadow_mean_mae": 0.205623,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.126496,
-      "shadow_bucket_brier": 0.761186,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.466977,
+      "delta_mae": 0.005623,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.63469
+      "delta_bucket_brier": 0.340481
     }
   },
   "by_date": {
     "2026-03-07": {
       "samples": 13,
       "legacy_mean_mae": 0.096154,
-      "shadow_mean_mae": 0.096154,
+      "shadow_mean_mae": 0.204611,
       "legacy_bucket_hit_rate": 0.923077,
-      "shadow_bucket_hit_rate": 0.923077,
+      "shadow_bucket_hit_rate": 0.846154,
       "legacy_bucket_brier": 0.131914,
-      "shadow_bucket_brier": 0.806489,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.674575
+      "shadow_bucket_brier": 0.656071,
+      "delta_mae": 0.108457,
+      "delta_bucket_hit_rate": -0.076923,
+      "delta_bucket_brier": 0.524157
     },
     "2026-03-08": {
       "samples": 16,
       "legacy_mean_mae": 0.189375,
-      "shadow_mean_mae": 0.189375,
+      "shadow_mean_mae": 0.318263,
       "legacy_bucket_hit_rate": 0.9375,
       "shadow_bucket_hit_rate": 0.9375,
       "legacy_bucket_brier": 0.093386,
-      "shadow_bucket_brier": 0.821968,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.686836,
+      "delta_mae": 0.128888,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.728582
+      "delta_bucket_brier": 0.59345
     },
     "2026-03-09": {
       "samples": 16,
       "legacy_mean_mae": 0.026875,
-      "shadow_mean_mae": 0.026875,
+      "shadow_mean_mae": 0.167204,
       "legacy_bucket_hit_rate": 1.0,
-      "shadow_bucket_hit_rate": 1.0,
+      "shadow_bucket_hit_rate": 0.875,
       "legacy_bucket_brier": 0.034156,
-      "shadow_bucket_brier": 0.806424,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.772268
+      "shadow_bucket_brier": 0.620235,
+      "delta_mae": 0.140329,
+      "delta_bucket_hit_rate": -0.125,
+      "delta_bucket_brier": 0.586079
     },
     "2026-03-10": {
       "samples": 6,
       "legacy_mean_mae": 3.346667,
-      "shadow_mean_mae": 3.346667,
+      "shadow_mean_mae": 3.295706,
       "legacy_bucket_hit_rate": 0.333333,
       "shadow_bucket_hit_rate": 0.333333,
       "legacy_bucket_brier": 1.004838,
-      "shadow_bucket_brier": 0.925151,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 1.025975,
+      "delta_mae": -0.050961,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": -0.079687
+      "delta_bucket_brier": 0.021137
     },
     "2026-03-11": {
       "samples": 1,
       "legacy_mean_mae": 12.27,
-      "shadow_mean_mae": 12.27,
+      "shadow_mean_mae": 12.106368,
       "legacy_bucket_hit_rate": 0.0,
       "shadow_bucket_hit_rate": 0.0,
       "legacy_bucket_brier": 1.101949,
-      "shadow_bucket_brier": 1.034069,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 1.143139,
+      "delta_mae": -0.163632,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": -0.06788
+      "delta_bucket_brier": 0.04119
     },
     "2026-03-12": {
       "samples": 2,
       "legacy_mean_mae": 3.05,
-      "shadow_mean_mae": 3.05,
+      "shadow_mean_mae": 3.027162,
       "legacy_bucket_hit_rate": 0.5,
       "shadow_bucket_hit_rate": 0.5,
       "legacy_bucket_brier": 0.674081,
-      "shadow_bucket_brier": 0.909299,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.94215,
+      "delta_mae": -0.022838,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.235218
+      "delta_bucket_brier": 0.268069
     },
     "2026-03-13": {
       "samples": 1,
       "legacy_mean_mae": 0.3,
-      "shadow_mean_mae": 0.3,
+      "shadow_mean_mae": 0.329081,
       "legacy_bucket_hit_rate": 1.0,
       "shadow_bucket_hit_rate": 1.0,
       "legacy_bucket_brier": 0.407401,
-      "shadow_bucket_brier": 0.809944,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.704589,
+      "delta_mae": 0.029081,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.402543
+      "delta_bucket_brier": 0.297188
     },
     "2026-03-17": {
       "samples": 4,
       "legacy_mean_mae": 0.15,
-      "shadow_mean_mae": 0.15,
+      "shadow_mean_mae": 0.176549,
       "legacy_bucket_hit_rate": 0.75,
       "shadow_bucket_hit_rate": 0.75,
       "legacy_bucket_brier": 0.601543,
-      "shadow_bucket_brier": 0.790146,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.654372,
+      "delta_mae": 0.026549,
       "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.188603
+      "delta_bucket_brier": 0.052829
     },
     "2026-03-18": {
       "samples": 25,
       "legacy_mean_mae": 2.5476,
-      "shadow_mean_mae": 2.5476,
+      "shadow_mean_mae": 2.476214,
       "legacy_bucket_hit_rate": 0.52,
-      "shadow_bucket_hit_rate": 0.52,
+      "shadow_bucket_hit_rate": 0.56,
       "legacy_bucket_brier": 0.657516,
-      "shadow_bucket_brier": 0.856047,
-      "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.198531
+      "shadow_bucket_brier": 0.735089,
+      "delta_mae": -0.071386,
+      "delta_bucket_hit_rate": 0.04,
+      "delta_bucket_brier": 0.077573
     },
     "2026-03-19": {
       "samples": 19,
       "legacy_mean_mae": 4.299474,
-      "shadow_mean_mae": 4.299474,
+      "shadow_mean_mae": 4.181363,
       "legacy_bucket_hit_rate": 0.315789,
       "shadow_bucket_hit_rate": 0.473684,
       "legacy_bucket_brier": 0.85177,
-      "shadow_bucket_brier": 0.921616,
-      "delta_mae": 0.0,
+      "shadow_bucket_brier": 0.926854,
+      "delta_mae": -0.118111,
       "delta_bucket_hit_rate": 0.157895,
-      "delta_bucket_brier": 0.069846
+      "delta_bucket_brier": 0.075084
     }
   },
   "recent_observations": [
@@ -443,10 +443,10 @@
       "actual_high": 18.0,
       "actual_bucket": 18,
       "legacy_mu": 18.3,
-      "shadow_mu": 18.3,
+      "shadow_mu": 18.273,
       "legacy_top_bucket": 18,
       "shadow_top_bucket": 18,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -455,10 +455,10 @@
       "actual_high": 7.0,
       "actual_bucket": 7,
       "legacy_mu": 12.03,
-      "shadow_mu": 12.03,
+      "shadow_mu": 11.887,
       "legacy_top_bucket": 12,
       "shadow_top_bucket": 12,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -467,10 +467,10 @@
       "actual_high": -2.0,
       "actual_bucket": -2,
       "legacy_mu": 5.67,
-      "shadow_mu": 5.67,
+      "shadow_mu": 5.487,
       "legacy_top_bucket": 6,
-      "shadow_top_bucket": 6,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 5,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -479,10 +479,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 16.5,
-      "shadow_mu": 16.5,
+      "shadow_mu": 16.171,
       "legacy_top_bucket": 17,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -491,10 +491,10 @@
       "actual_high": 21.0,
       "actual_bucket": 21,
       "legacy_mu": 21.3,
-      "shadow_mu": 21.3,
+      "shadow_mu": 21.158,
       "legacy_top_bucket": 21,
       "shadow_top_bucket": 21,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -503,10 +503,10 @@
       "actual_high": 21.4,
       "actual_bucket": 21,
       "legacy_mu": 21.7,
-      "shadow_mu": 21.7,
+      "shadow_mu": 21.601,
       "legacy_top_bucket": 22,
       "shadow_top_bucket": 21,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -515,10 +515,10 @@
       "actual_high": 32.0,
       "actual_bucket": 32,
       "legacy_mu": 32.3,
-      "shadow_mu": 32.3,
+      "shadow_mu": 32.116,
       "legacy_top_bucket": 32,
       "shadow_top_bucket": 32,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -527,10 +527,10 @@
       "actual_high": 12.0,
       "actual_bucket": 12,
       "legacy_mu": 12.3,
-      "shadow_mu": 12.3,
+      "shadow_mu": 12.279,
       "legacy_top_bucket": 12,
       "shadow_top_bucket": 12,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -539,10 +539,10 @@
       "actual_high": 10.0,
       "actual_bucket": 10,
       "legacy_mu": 10.3,
-      "shadow_mu": 10.3,
+      "shadow_mu": 10.498,
       "legacy_top_bucket": 10,
       "shadow_top_bucket": 10,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -551,10 +551,10 @@
       "actual_high": 21.0,
       "actual_bucket": 21,
       "legacy_mu": 26.5,
-      "shadow_mu": 26.5,
+      "shadow_mu": 26.372,
       "legacy_top_bucket": 26,
       "shadow_top_bucket": 26,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -563,10 +563,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 16.06,
-      "shadow_mu": 16.06,
+      "shadow_mu": 15.91,
       "legacy_top_bucket": 16,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -575,10 +575,10 @@
       "actual_high": 5.0,
       "actual_bucket": 5,
       "legacy_mu": 11.62,
-      "shadow_mu": 11.62,
+      "shadow_mu": 11.451,
       "legacy_top_bucket": 12,
-      "shadow_top_bucket": 12,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 11,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -587,10 +587,10 @@
       "actual_high": 5.0,
       "actual_bucket": 5,
       "legacy_mu": 16.58,
-      "shadow_mu": 16.58,
+      "shadow_mu": 16.346,
       "legacy_top_bucket": 17,
-      "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 16,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -599,10 +599,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 18.23,
-      "shadow_mu": 18.23,
+      "shadow_mu": 18.028,
       "legacy_top_bucket": 18,
       "shadow_top_bucket": 18,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -611,10 +611,10 @@
       "actual_high": 30.0,
       "actual_bucket": 30,
       "legacy_mu": 35.3,
-      "shadow_mu": 35.3,
+      "shadow_mu": 35.222,
       "legacy_top_bucket": 35,
       "shadow_top_bucket": 35,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -623,10 +623,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 15.71,
-      "shadow_mu": 15.71,
+      "shadow_mu": 15.58,
       "legacy_top_bucket": 16,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -635,10 +635,10 @@
       "actual_high": 27.3,
       "actual_bucket": 27,
       "legacy_mu": 27.6,
-      "shadow_mu": 27.6,
+      "shadow_mu": 27.65,
       "legacy_top_bucket": 28,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -647,10 +647,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 27.39,
-      "shadow_mu": 27.39,
+      "shadow_mu": 27.105,
       "legacy_top_bucket": 27,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -659,10 +659,10 @@
       "actual_high": 11.0,
       "actual_bucket": 11,
       "legacy_mu": 11.0,
-      "shadow_mu": 11.0,
+      "shadow_mu": 10.989,
       "legacy_top_bucket": 11,
       "shadow_top_bucket": 11,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -671,10 +671,10 @@
       "actual_high": 21.0,
       "actual_bucket": 21,
       "legacy_mu": 21.0,
-      "shadow_mu": 21.0,
+      "shadow_mu": 21.031,
       "legacy_top_bucket": 21,
       "shadow_top_bucket": 21,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -683,10 +683,10 @@
       "actual_high": 13.0,
       "actual_bucket": 13,
       "legacy_mu": 13.84,
-      "shadow_mu": 13.84,
+      "shadow_mu": 13.682,
       "legacy_top_bucket": 14,
       "shadow_top_bucket": 14,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -695,10 +695,10 @@
       "actual_high": -6.0,
       "actual_bucket": -6,
       "legacy_mu": -1.01,
-      "shadow_mu": -1.01,
+      "shadow_mu": -1.101,
       "legacy_top_bucket": -1,
       "shadow_top_bucket": -1,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -707,10 +707,10 @@
       "actual_high": 17.0,
       "actual_bucket": 17,
       "legacy_mu": 17.0,
-      "shadow_mu": 17.0,
+      "shadow_mu": 16.969,
       "legacy_top_bucket": 17,
       "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -719,10 +719,10 @@
       "actual_high": 30.0,
       "actual_bucket": 30,
       "legacy_mu": 30.3,
-      "shadow_mu": 30.3,
+      "shadow_mu": 30.235,
       "legacy_top_bucket": 30,
       "shadow_top_bucket": 30,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -731,10 +731,10 @@
       "actual_high": 29.0,
       "actual_bucket": 29,
       "legacy_mu": 29.0,
-      "shadow_mu": 29.0,
+      "shadow_mu": 28.978,
       "legacy_top_bucket": 29,
       "shadow_top_bucket": 28,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -743,10 +743,10 @@
       "actual_high": 32.0,
       "actual_bucket": 32,
       "legacy_mu": 32.0,
-      "shadow_mu": 32.0,
+      "shadow_mu": 31.975,
       "legacy_top_bucket": 32,
       "shadow_top_bucket": 32,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -755,10 +755,10 @@
       "actual_high": 13.0,
       "actual_bucket": 13,
       "legacy_mu": 13.0,
-      "shadow_mu": 13.0,
+      "shadow_mu": 12.87,
       "legacy_top_bucket": 13,
       "shadow_top_bucket": 13,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -767,10 +767,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 8.0,
-      "shadow_mu": 8.0,
+      "shadow_mu": 7.891,
       "legacy_top_bucket": 8,
       "shadow_top_bucket": 8,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -779,10 +779,10 @@
       "actual_high": 55.9,
       "actual_bucket": 56,
       "legacy_mu": 55.9,
-      "shadow_mu": 55.9,
+      "shadow_mu": 55.705,
       "legacy_top_bucket": 56,
       "shadow_top_bucket": 56,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -791,10 +791,10 @@
       "actual_high": 22.0,
       "actual_bucket": 22,
       "legacy_mu": 29.64,
-      "shadow_mu": 29.64,
+      "shadow_mu": 29.517,
       "legacy_top_bucket": 30,
       "shadow_top_bucket": 30,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -803,10 +803,10 @@
       "actual_high": 14.0,
       "actual_bucket": 14,
       "legacy_mu": 14.47,
-      "shadow_mu": 14.47,
+      "shadow_mu": 14.319,
       "legacy_top_bucket": 14,
       "shadow_top_bucket": 14,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -815,10 +815,10 @@
       "actual_high": 32.0,
       "actual_bucket": 32,
       "legacy_mu": 36.94,
-      "shadow_mu": 36.94,
+      "shadow_mu": 36.759,
       "legacy_top_bucket": 37,
       "shadow_top_bucket": 37,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -827,10 +827,10 @@
       "actual_high": 10.0,
       "actual_bucket": 10,
       "legacy_mu": 10.66,
-      "shadow_mu": 10.66,
+      "shadow_mu": 10.516,
       "legacy_top_bucket": 11,
       "shadow_top_bucket": 11,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -839,10 +839,10 @@
       "actual_high": 14.0,
       "actual_bucket": 14,
       "legacy_mu": 14.3,
-      "shadow_mu": 14.3,
+      "shadow_mu": 14.162,
       "legacy_top_bucket": 14,
       "shadow_top_bucket": 14,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -851,10 +851,10 @@
       "actual_high": 59.0,
       "actual_bucket": 59,
       "legacy_mu": 70.04,
-      "shadow_mu": 70.04,
+      "shadow_mu": 69.507,
       "legacy_top_bucket": 70,
       "shadow_top_bucket": 70,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -863,10 +863,10 @@
       "actual_high": 14.0,
       "actual_bucket": 14,
       "legacy_mu": 18.43,
-      "shadow_mu": 18.43,
+      "shadow_mu": 18.255,
       "legacy_top_bucket": 18,
       "shadow_top_bucket": 18,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -875,10 +875,10 @@
       "actual_high": 34.0,
       "actual_bucket": 34,
       "legacy_mu": 35.11,
-      "shadow_mu": 35.11,
+      "shadow_mu": 35.025,
       "legacy_top_bucket": 35,
       "shadow_top_bucket": 35,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -887,10 +887,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 16.56,
-      "shadow_mu": 16.56,
+      "shadow_mu": 16.414,
       "legacy_top_bucket": 17,
-      "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 16,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -899,10 +899,10 @@
       "actual_high": 27.8,
       "actual_bucket": 27,
       "legacy_mu": 27.8,
-      "shadow_mu": 27.8,
+      "shadow_mu": 27.878,
       "legacy_top_bucket": 28,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -911,10 +911,10 @@
       "actual_high": 73.9,
       "actual_bucket": 74,
       "legacy_mu": 73.9,
-      "shadow_mu": 73.9,
+      "shadow_mu": 73.578,
       "legacy_top_bucket": 74,
       "shadow_top_bucket": 74,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -923,10 +923,10 @@
       "actual_high": 46.0,
       "actual_bucket": 46,
       "legacy_mu": 46.0,
-      "shadow_mu": 46.0,
+      "shadow_mu": 45.992,
       "legacy_top_bucket": 46,
       "shadow_top_bucket": 46,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -935,10 +935,10 @@
       "actual_high": 17.0,
       "actual_bucket": 17,
       "legacy_mu": 26.15,
-      "shadow_mu": 26.15,
+      "shadow_mu": 25.927,
       "legacy_top_bucket": 26,
       "shadow_top_bucket": 26,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -947,10 +947,10 @@
       "actual_high": 37.0,
       "actual_bucket": 37,
       "legacy_mu": 54.06,
-      "shadow_mu": 54.06,
+      "shadow_mu": 53.706,
       "legacy_top_bucket": 54,
       "shadow_top_bucket": 54,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -959,10 +959,10 @@
       "actual_high": 15.0,
       "actual_bucket": 15,
       "legacy_mu": 15.2,
-      "shadow_mu": 15.2,
+      "shadow_mu": 15.032,
       "legacy_top_bucket": 15,
       "shadow_top_bucket": 15,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -971,10 +971,10 @@
       "actual_high": 11.0,
       "actual_bucket": 11,
       "legacy_mu": 11.3,
-      "shadow_mu": 11.3,
+      "shadow_mu": 11.259,
       "legacy_top_bucket": 11,
       "shadow_top_bucket": 11,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -983,10 +983,10 @@
       "actual_high": 26.7,
       "actual_bucket": 26,
       "legacy_mu": 26.7,
-      "shadow_mu": 26.7,
+      "shadow_mu": 26.669,
       "legacy_top_bucket": 27,
       "shadow_top_bucket": 26,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -995,10 +995,10 @@
       "actual_high": 17.0,
       "actual_bucket": 17,
       "legacy_mu": 17.3,
-      "shadow_mu": 17.3,
+      "shadow_mu": 17.319,
       "legacy_top_bucket": 17,
       "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1007,10 +1007,10 @@
       "actual_high": 24.0,
       "actual_bucket": 24,
       "legacy_mu": 24.0,
-      "shadow_mu": 24.0,
+      "shadow_mu": 23.903,
       "legacy_top_bucket": 24,
       "shadow_top_bucket": 23,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1019,10 +1019,10 @@
       "actual_high": 11.0,
       "actual_bucket": 11,
       "legacy_mu": 11.3,
-      "shadow_mu": 11.3,
+      "shadow_mu": 11.329,
       "legacy_top_bucket": 11,
       "shadow_top_bucket": 11,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1031,10 +1031,10 @@
       "actual_high": 21.0,
       "actual_bucket": 21,
       "legacy_mu": 21.3,
-      "shadow_mu": 21.3,
+      "shadow_mu": 21.396,
       "legacy_top_bucket": 21,
       "shadow_top_bucket": 21,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1043,10 +1043,10 @@
       "actual_high": 7.0,
       "actual_bucket": 7,
       "legacy_mu": 12.8,
-      "shadow_mu": 12.8,
+      "shadow_mu": 12.658,
       "legacy_top_bucket": 13,
       "shadow_top_bucket": 13,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1055,10 +1055,10 @@
       "actual_high": 1.0,
       "actual_bucket": 1,
       "legacy_mu": 13.27,
-      "shadow_mu": 13.27,
+      "shadow_mu": 13.106,
       "legacy_top_bucket": 13,
       "shadow_top_bucket": 13,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1067,10 +1067,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 16.3,
-      "shadow_mu": 16.3,
+      "shadow_mu": 16.228,
       "legacy_top_bucket": 16,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1079,10 +1079,10 @@
       "actual_high": 7.0,
       "actual_bucket": 7,
       "legacy_mu": 7.3,
-      "shadow_mu": 7.3,
+      "shadow_mu": 7.362,
       "legacy_top_bucket": 7,
       "shadow_top_bucket": 7,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1091,10 +1091,10 @@
       "actual_high": 12.0,
       "actual_bucket": 12,
       "legacy_mu": 15.3,
-      "shadow_mu": 15.3,
+      "shadow_mu": 15.175,
       "legacy_top_bucket": 15,
       "shadow_top_bucket": 15,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1103,10 +1103,10 @@
       "actual_high": 4.0,
       "actual_bucket": 4,
       "legacy_mu": 15.58,
-      "shadow_mu": 15.58,
+      "shadow_mu": 15.4,
       "legacy_top_bucket": 16,
-      "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 15,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1115,10 +1115,10 @@
       "actual_high": 10.0,
       "actual_bucket": 10,
       "legacy_mu": 13.18,
-      "shadow_mu": 13.18,
+      "shadow_mu": 13.058,
       "legacy_top_bucket": 13,
       "shadow_top_bucket": 13,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1127,10 +1127,10 @@
       "actual_high": 11.0,
       "actual_bucket": 11,
       "legacy_mu": 9.58,
-      "shadow_mu": 9.58,
+      "shadow_mu": 9.45,
       "legacy_top_bucket": 10,
-      "shadow_top_bucket": 10,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 9,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1139,10 +1139,10 @@
       "actual_high": 18.0,
       "actual_bucket": 18,
       "legacy_mu": 18.0,
-      "shadow_mu": 18.0,
+      "shadow_mu": 17.94,
       "legacy_top_bucket": 18,
       "shadow_top_bucket": 18,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1151,10 +1151,10 @@
       "actual_high": 19.0,
       "actual_bucket": 19,
       "legacy_mu": 19.0,
-      "shadow_mu": 19.0,
+      "shadow_mu": 18.951,
       "legacy_top_bucket": 19,
       "shadow_top_bucket": 19,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1163,10 +1163,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 8.0,
-      "shadow_mu": 8.0,
+      "shadow_mu": 7.995,
       "legacy_top_bucket": 8,
       "shadow_top_bucket": 8,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1175,10 +1175,10 @@
       "actual_high": 45.0,
       "actual_bucket": 45,
       "legacy_mu": 45.0,
-      "shadow_mu": 45.0,
+      "shadow_mu": 44.84,
       "legacy_top_bucket": 45,
       "shadow_top_bucket": 45,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1187,10 +1187,10 @@
       "actual_high": 22.0,
       "actual_bucket": 22,
       "legacy_mu": 22.0,
-      "shadow_mu": 22.0,
+      "shadow_mu": 21.746,
       "legacy_top_bucket": 22,
       "shadow_top_bucket": 22,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1199,10 +1199,10 @@
       "actual_high": 18.0,
       "actual_bucket": 18,
       "legacy_mu": 18.0,
-      "shadow_mu": 18.0,
+      "shadow_mu": 17.922,
       "legacy_top_bucket": 18,
       "shadow_top_bucket": 18,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1211,10 +1211,10 @@
       "actual_high": 71.1,
       "actual_bucket": 71,
       "legacy_mu": 71.1,
-      "shadow_mu": 71.1,
+      "shadow_mu": 71.203,
       "legacy_top_bucket": 71,
       "shadow_top_bucket": 71,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1223,10 +1223,10 @@
       "actual_high": 15.0,
       "actual_bucket": 15,
       "legacy_mu": 15.0,
-      "shadow_mu": 15.0,
+      "shadow_mu": 14.882,
       "legacy_top_bucket": 15,
       "shadow_top_bucket": 15,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1235,10 +1235,10 @@
       "actual_high": 84.0,
       "actual_bucket": 84,
       "legacy_mu": 84.0,
-      "shadow_mu": 84.0,
+      "shadow_mu": 83.451,
       "legacy_top_bucket": 84,
-      "shadow_top_bucket": 84,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 83,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1247,10 +1247,10 @@
       "actual_high": 34.0,
       "actual_bucket": 34,
       "legacy_mu": 34.0,
-      "shadow_mu": 34.0,
+      "shadow_mu": 33.816,
       "legacy_top_bucket": 34,
       "shadow_top_bucket": 34,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1259,10 +1259,10 @@
       "actual_high": 15.0,
       "actual_bucket": 15,
       "legacy_mu": 15.13,
-      "shadow_mu": 15.13,
+      "shadow_mu": 14.987,
       "legacy_top_bucket": 15,
       "shadow_top_bucket": 15,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1271,10 +1271,10 @@
       "actual_high": 84.0,
       "actual_bucket": 84,
       "legacy_mu": 84.0,
-      "shadow_mu": 84.0,
+      "shadow_mu": 83.964,
       "legacy_top_bucket": 84,
       "shadow_top_bucket": 84,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1283,10 +1283,10 @@
       "actual_high": 72.0,
       "actual_bucket": 72,
       "legacy_mu": 72.0,
-      "shadow_mu": 72.0,
+      "shadow_mu": 71.829,
       "legacy_top_bucket": 72,
       "shadow_top_bucket": 72,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1295,10 +1295,10 @@
       "actual_high": 27.0,
       "actual_bucket": 27,
       "legacy_mu": 27.3,
-      "shadow_mu": 27.3,
+      "shadow_mu": 27.165,
       "legacy_top_bucket": 27,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1307,10 +1307,10 @@
       "actual_high": 77.0,
       "actual_bucket": 77,
       "legacy_mu": 77.0,
-      "shadow_mu": 77.0,
+      "shadow_mu": 76.347,
       "legacy_top_bucket": 77,
-      "shadow_top_bucket": 77,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 76,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1319,10 +1319,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 8.0,
-      "shadow_mu": 8.0,
+      "shadow_mu": 7.924,
       "legacy_top_bucket": 8,
       "shadow_top_bucket": 8,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1331,10 +1331,10 @@
       "actual_high": 19.0,
       "actual_bucket": 19,
       "legacy_mu": 19.3,
-      "shadow_mu": 19.3,
+      "shadow_mu": 19.244,
       "legacy_top_bucket": 19,
       "shadow_top_bucket": 19,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1343,10 +1343,10 @@
       "actual_high": 13.0,
       "actual_bucket": 13,
       "legacy_mu": 13.0,
-      "shadow_mu": 13.0,
+      "shadow_mu": 12.912,
       "legacy_top_bucket": 13,
       "shadow_top_bucket": 13,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1355,10 +1355,10 @@
       "actual_high": 4.0,
       "actual_bucket": 4,
       "legacy_mu": 4.3,
-      "shadow_mu": 4.3,
+      "shadow_mu": 4.177,
       "legacy_top_bucket": 4,
       "shadow_top_bucket": 4,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1367,10 +1367,10 @@
       "actual_high": 53.1,
       "actual_bucket": 53,
       "legacy_mu": 53.1,
-      "shadow_mu": 53.1,
+      "shadow_mu": 53.122,
       "legacy_top_bucket": 53,
       "shadow_top_bucket": 53,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1379,10 +1379,10 @@
       "actual_high": 28.0,
       "actual_bucket": 28,
       "legacy_mu": 28.0,
-      "shadow_mu": 28.0,
+      "shadow_mu": 27.864,
       "legacy_top_bucket": 28,
       "shadow_top_bucket": 28,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1391,10 +1391,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 16.0,
-      "shadow_mu": 16.0,
+      "shadow_mu": 15.854,
       "legacy_top_bucket": 16,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1403,10 +1403,10 @@
       "actual_high": 68.0,
       "actual_bucket": 68,
       "legacy_mu": 68.0,
-      "shadow_mu": 68.0,
+      "shadow_mu": 67.777,
       "legacy_top_bucket": 68,
       "shadow_top_bucket": 68,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1415,10 +1415,10 @@
       "actual_high": 14.0,
       "actual_bucket": 14,
       "legacy_mu": 14.0,
-      "shadow_mu": 14.0,
+      "shadow_mu": 13.81,
       "legacy_top_bucket": 14,
       "shadow_top_bucket": 14,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1427,10 +1427,10 @@
       "actual_high": 84.0,
       "actual_bucket": 84,
       "legacy_mu": 84.0,
-      "shadow_mu": 84.0,
+      "shadow_mu": 83.563,
       "legacy_top_bucket": 84,
       "shadow_top_bucket": 84,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1439,10 +1439,10 @@
       "actual_high": 32.0,
       "actual_bucket": 32,
       "legacy_mu": 32.0,
-      "shadow_mu": 32.0,
+      "shadow_mu": 31.701,
       "legacy_top_bucket": 32,
       "shadow_top_bucket": 32,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1451,10 +1451,10 @@
       "actual_high": 9.0,
       "actual_bucket": 9,
       "legacy_mu": 11.43,
-      "shadow_mu": 11.43,
+      "shadow_mu": 11.335,
       "legacy_top_bucket": 11,
       "shadow_top_bucket": 11,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1463,10 +1463,10 @@
       "actual_high": 75.0,
       "actual_bucket": 75,
       "legacy_mu": 75.0,
-      "shadow_mu": 75.0,
+      "shadow_mu": 75.041,
       "legacy_top_bucket": 75,
       "shadow_top_bucket": 75,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1475,10 +1475,10 @@
       "actual_high": 62.1,
       "actual_bucket": 62,
       "legacy_mu": 62.1,
-      "shadow_mu": 62.1,
+      "shadow_mu": 62.035,
       "legacy_top_bucket": 62,
       "shadow_top_bucket": 62,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1487,10 +1487,10 @@
       "actual_high": 27.0,
       "actual_bucket": 27,
       "legacy_mu": 27.0,
-      "shadow_mu": 27.0,
+      "shadow_mu": 26.817,
       "legacy_top_bucket": 27,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1499,10 +1499,10 @@
       "actual_high": 69.1,
       "actual_bucket": 69,
       "legacy_mu": 69.1,
-      "shadow_mu": 69.1,
+      "shadow_mu": 68.643,
       "legacy_top_bucket": 69,
       "shadow_top_bucket": 69,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1511,10 +1511,10 @@
       "actual_high": 8.0,
       "actual_bucket": 8,
       "legacy_mu": 8.0,
-      "shadow_mu": 8.0,
+      "shadow_mu": 7.952,
       "legacy_top_bucket": 8,
       "shadow_top_bucket": 8,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1523,10 +1523,10 @@
       "actual_high": 17.0,
       "actual_bucket": 17,
       "legacy_mu": 17.0,
-      "shadow_mu": 17.0,
+      "shadow_mu": 16.847,
       "legacy_top_bucket": 17,
       "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1535,10 +1535,10 @@
       "actual_high": 54.0,
       "actual_bucket": 54,
       "legacy_mu": 54.0,
-      "shadow_mu": 54.0,
+      "shadow_mu": 53.926,
       "legacy_top_bucket": 54,
       "shadow_top_bucket": 54,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1547,10 +1547,10 @@
       "actual_high": 27.0,
       "actual_bucket": 27,
       "legacy_mu": 27.0,
-      "shadow_mu": 27.0,
+      "shadow_mu": 26.831,
       "legacy_top_bucket": 27,
       "shadow_top_bucket": 27,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1559,10 +1559,10 @@
       "actual_high": 17.0,
       "actual_bucket": 17,
       "legacy_mu": 17.0,
-      "shadow_mu": 17.0,
+      "shadow_mu": 16.896,
       "legacy_top_bucket": 17,
       "shadow_top_bucket": 17,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1571,10 +1571,10 @@
       "actual_high": 46.9,
       "actual_bucket": 47,
       "legacy_mu": 47.45,
-      "shadow_mu": 47.45,
+      "shadow_mu": 47.292,
       "legacy_top_bucket": 47,
       "shadow_top_bucket": 47,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1583,10 +1583,10 @@
       "actual_high": 16.0,
       "actual_bucket": 16,
       "legacy_mu": 16.0,
-      "shadow_mu": 16.0,
+      "shadow_mu": 15.916,
       "legacy_top_bucket": 16,
       "shadow_top_bucket": 16,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1595,10 +1595,10 @@
       "actual_high": 82.0,
       "actual_bucket": 82,
       "legacy_mu": 82.0,
-      "shadow_mu": 82.0,
+      "shadow_mu": 81.486,
       "legacy_top_bucket": 82,
-      "shadow_top_bucket": 82,
-      "calibration_version": "emos-20260320123829",
+      "shadow_top_bucket": 81,
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1607,10 +1607,10 @@
       "actual_high": 9.0,
       "actual_bucket": 9,
       "legacy_mu": 9.7,
-      "shadow_mu": 9.7,
+      "shadow_mu": 9.565,
       "legacy_top_bucket": 10,
       "shadow_top_bucket": 10,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1619,10 +1619,10 @@
       "actual_high": 75.0,
       "actual_bucket": 75,
       "legacy_mu": 75.0,
-      "shadow_mu": 75.0,
+      "shadow_mu": 74.939,
       "legacy_top_bucket": 75,
       "shadow_top_bucket": 75,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     },
     {
@@ -1631,10 +1631,10 @@
       "actual_high": 64.9,
       "actual_bucket": 65,
       "legacy_mu": 64.9,
-      "shadow_mu": 64.9,
+      "shadow_mu": 64.843,
       "legacy_top_bucket": 65,
       "shadow_top_bucket": 65,
-      "calibration_version": "emos-20260320123829",
+      "calibration_version": "emos-20260320130109",
       "calibration_mode": "emos_shadow"
     }
   ]

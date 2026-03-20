@@ -226,12 +226,59 @@ def _top_bucket_value(distribution: Optional[List[Dict[str, Any]]]) -> Optional[
     return int(value) if value is not None else None
 
 
-def _composite_score(mean_crps: float, mean_mae: float, bucket_hit_rate: float) -> float:
-    return mean_crps + 0.1 * mean_mae + 2.0 * (1.0 - bucket_hit_rate)
+def _bucket_brier_score(
+    distribution: Optional[List[Dict[str, Any]]],
+    city_name: str,
+    actual_high: float,
+) -> float:
+    actual_bucket = apply_city_settlement(city_name, actual_high)
+    hit_prob = 0.0
+    total = 0.0
+    for row in distribution or []:
+        if not isinstance(row, dict):
+            continue
+        value = row.get("value")
+        try:
+            prob = float(row.get("probability") or 0.0)
+        except Exception:
+            prob = 0.0
+        if value == actual_bucket:
+            hit_prob = prob
+        else:
+            total += prob * prob
+    total += (1.0 - hit_prob) ** 2
+    return total
+
+
+def _composite_score(
+    mean_crps: float,
+    mean_mae: float,
+    bucket_hit_rate: float,
+    bucket_brier: float,
+) -> float:
+    return mean_crps + 0.1 * mean_mae + 1.5 * (1.0 - bucket_hit_rate) + 0.75 * bucket_brier
 
 
 def _blend_value(raw_value: float, calibrated_value: float, alpha: float) -> float:
     return (1.0 - alpha) * raw_value + alpha * calibrated_value
+
+
+def _clamp_sigma(
+    raw_sigma: float,
+    calibrated_sigma: float,
+    constraints: Optional[Dict[str, Any]],
+) -> float:
+    constraints = constraints or {}
+    min_ratio = max(0.25, _coalesce_float(constraints.get("min_ratio"), 0.85))
+    max_ratio = max(min_ratio, _coalesce_float(constraints.get("max_ratio"), 1.35))
+    absolute_min = max(0.1, _coalesce_float(constraints.get("absolute_min"), 0.25))
+    absolute_max = max(
+        absolute_min,
+        _coalesce_float(constraints.get("absolute_max"), raw_sigma * max_ratio),
+    )
+    sigma_floor = max(absolute_min, raw_sigma * min_ratio)
+    sigma_cap = min(absolute_max, raw_sigma * max_ratio)
+    return min(max(calibrated_sigma, sigma_floor), sigma_cap)
 
 
 def apply_probability_calibration(
@@ -280,6 +327,7 @@ def apply_probability_calibration(
     global_params = calibration.get("global", {}) or {}
     city_params = (calibration.get("cities", {}) or {}).get(city_key, {}) or {}
     blending_cfg = calibration.get("blending", {}) or {}
+    sigma_constraints = calibration.get("sigma_constraints", {}) or {}
 
     mu_cfg = global_params.get("mu", {}) or {}
     sigma_cfg = global_params.get("sigma", {}) or {}
@@ -330,6 +378,7 @@ def apply_probability_calibration(
     blend_alpha_sigma = max(0.0, min(1.0, _coalesce_float(blending_cfg.get("alpha_sigma"), 1.0)))
     calibrated_mu = _blend_value(raw_mu, calibrated_mu, blend_alpha_mu)
     calibrated_sigma = max(0.1, _blend_value(raw_sigma, calibrated_sigma, blend_alpha_sigma))
+    calibrated_sigma = _clamp_sigma(raw_sigma, calibrated_sigma, sigma_constraints)
     calibrated_distribution, calibrated_sorted = _bucket_probabilities(
         calibrated_mu,
         calibrated_sigma,
@@ -472,6 +521,7 @@ def fit_calibration(
     legacy_crps_values = []
     legacy_mae_values = []
     legacy_bucket_hits = []
+    legacy_bucket_briers = []
     candidate_predictions = []
     for idx, sample in enumerate(normalized_samples):
         city = sample["city"]
@@ -496,6 +546,15 @@ def fit_calibration(
             == apply_city_settlement(city, actual_high)
             else 0.0
         )
+        legacy_distribution, _ = _bucket_probabilities(
+            legacy_mu,
+            legacy_sigma,
+            max_so_far=None,
+            city_name=city,
+        )
+        legacy_bucket_briers.append(
+            _bucket_brier_score(legacy_distribution, city, actual_high)
+        )
 
         calibrated_mu = mu_predictions[idx] + city_mu_bias
         sigma_log = float(np.dot(sigma_coeffs, np.array(sigma_rows[idx], dtype=float)))
@@ -514,11 +573,24 @@ def fit_calibration(
     legacy_mean_crps = _mean(legacy_crps_values) or 0.0
     legacy_mean_mae = _mean(legacy_mae_values) or 0.0
     legacy_bucket_hit_rate = _mean(legacy_bucket_hits) or 0.0
+    legacy_bucket_brier = _mean(legacy_bucket_briers) or 0.0
+    sigma_constraints = {
+        "min_ratio": 0.85,
+        "max_ratio": 1.35,
+        "absolute_min": 0.25,
+        "absolute_max": 3.0,
+    }
     legacy_score = _composite_score(
         legacy_mean_crps,
         legacy_mean_mae,
         legacy_bucket_hit_rate,
+        legacy_bucket_brier,
     )
+    guardrails = {
+        "max_mae_increase": 0.02,
+        "max_bucket_hit_drop": 0.01,
+        "max_bucket_brier_increase": 0.05,
+    }
 
     best_alpha_mu = 0.0
     best_alpha_sigma = 0.0
@@ -527,6 +599,7 @@ def fit_calibration(
         "mean_crps": legacy_mean_crps,
         "mean_mae": legacy_mean_mae,
         "bucket_hit_rate": legacy_bucket_hit_rate,
+        "bucket_brier": legacy_bucket_brier,
     }
     alpha_grid = [step / 20.0 for step in range(21)]
     for alpha_mu in alpha_grid:
@@ -534,11 +607,16 @@ def fit_calibration(
             crps_values = []
             mae_values = []
             bucket_hits = []
+            bucket_briers = []
             for row in candidate_predictions:
                 mu_hat = _blend_value(row["raw_mu"], row["calibrated_mu"], alpha_mu)
-                sigma_hat = max(
-                    0.1,
-                    _blend_value(row["raw_sigma"], row["calibrated_sigma"], alpha_sigma),
+                sigma_hat = _clamp_sigma(
+                    row["raw_sigma"],
+                    max(
+                        0.1,
+                        _blend_value(row["raw_sigma"], row["calibrated_sigma"], alpha_sigma),
+                    ),
+                    sigma_constraints,
                 )
                 actual_high = row["actual_high"]
                 city = row["city"]
@@ -553,11 +631,21 @@ def fit_calibration(
                 predicted_bucket = _top_bucket_value(distribution)
                 actual_bucket = apply_city_settlement(city, actual_high)
                 bucket_hits.append(1.0 if predicted_bucket == actual_bucket else 0.0)
+                bucket_briers.append(
+                    _bucket_brier_score(distribution, city, actual_high)
+                )
 
             mean_crps = _mean(crps_values) or 0.0
             mean_mae = _mean(mae_values) or 0.0
             bucket_hit_rate = _mean(bucket_hits) or 0.0
-            score = _composite_score(mean_crps, mean_mae, bucket_hit_rate)
+            bucket_brier = _mean(bucket_briers) or 0.0
+            if mean_mae > legacy_mean_mae + guardrails["max_mae_increase"]:
+                continue
+            if bucket_hit_rate + guardrails["max_bucket_hit_drop"] < legacy_bucket_hit_rate:
+                continue
+            if bucket_brier > legacy_bucket_brier + guardrails["max_bucket_brier_increase"]:
+                continue
+            score = _composite_score(mean_crps, mean_mae, bucket_hit_rate, bucket_brier)
             if score + 1e-9 < best_score:
                 best_score = score
                 best_alpha_mu = alpha_mu
@@ -566,6 +654,7 @@ def fit_calibration(
                     "mean_crps": mean_crps,
                     "mean_mae": mean_mae,
                     "bucket_hit_rate": bucket_hit_rate,
+                    "bucket_brier": bucket_brier,
                 }
 
     return {
@@ -587,6 +676,8 @@ def fit_calibration(
                 "max_so_far_gap_coef": round(float(sigma_coeffs[4]), 8),
             },
         },
+        "sigma_constraints": sigma_constraints,
+        "selection_guardrails": guardrails,
         "blending": {
             "alpha_mu": round(best_alpha_mu, 6),
             "alpha_sigma": round(best_alpha_sigma, 6),
@@ -598,9 +689,11 @@ def fit_calibration(
             "legacy_mean_crps": round(legacy_mean_crps, 6),
             "legacy_mean_mae": round(legacy_mean_mae, 6),
             "legacy_bucket_hit_rate": round(legacy_bucket_hit_rate, 6),
+            "legacy_bucket_brier": round(legacy_bucket_brier, 6),
             "selected_mean_crps": round(best_metrics["mean_crps"], 6),
             "selected_mean_mae": round(best_metrics["mean_mae"], 6),
             "selected_bucket_hit_rate": round(best_metrics["bucket_hit_rate"], 6),
+            "selected_bucket_brier": round(best_metrics["bucket_brier"], 6),
             "selected_score": round(best_score, 6),
             "legacy_score": round(legacy_score, 6),
         },
@@ -629,6 +722,17 @@ def default_calibration_payload(
                 "peak_flag_coef": 0.0,
                 "max_so_far_gap_coef": 0.0,
             },
+        },
+        "sigma_constraints": {
+            "min_ratio": 0.85,
+            "max_ratio": 1.35,
+            "absolute_min": 0.25,
+            "absolute_max": 3.0,
+        },
+        "selection_guardrails": {
+            "max_mae_increase": 0.02,
+            "max_bucket_hit_drop": 0.01,
+            "max_bucket_brier_increase": 0.05,
         },
         "blending": {
             "alpha_mu": 1.0,

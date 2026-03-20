@@ -1,6 +1,6 @@
 {
-  "version": "emos-20260320123829",
-  "trained_at": "2026-03-20T12:38:29.985991+00:00",
+  "version": "emos-20260320130245",
+  "trained_at": "2026-03-20T13:02:45.903772+00:00",
   "global": {
     "mu": {
       "intercept": -1.57406048,
@@ -17,9 +17,20 @@
       "max_so_far_gap_coef": 0.0
     }
   },
+  "sigma_constraints": {
+    "min_ratio": 0.85,
+    "max_ratio": 1.35,
+    "absolute_min": 0.25,
+    "absolute_max": 3.0
+  },
+  "selection_guardrails": {
+    "max_mae_increase": 0.02,
+    "max_bucket_hit_drop": 0.01,
+    "max_bucket_brier_increase": 0.05
+  },
   "blending": {
     "alpha_mu": 0.0,
-    "alpha_sigma": 1.0
+    "alpha_sigma": 0.0
   },
   "cities": {
     "ankara": {
@@ -145,15 +156,17 @@
   },
   "metrics": {
     "sample_count": 105,
-    "mean_crps": 2.744961,
+    "mean_crps": 2.923823,
     "legacy_mean_crps": 2.793938,
     "legacy_mean_mae": 2.721143,
     "legacy_bucket_hit_rate": 0.695238,
-    "selected_mean_crps": 2.747094,
+    "legacy_bucket_brier": 0.775463,
+    "selected_mean_crps": 2.700275,
     "selected_mean_mae": 2.721143,
-    "selected_bucket_hit_rate": 0.704762,
-    "selected_score": 3.609685,
-    "legacy_score": 3.675576,
+    "selected_bucket_hit_rate": 0.695238,
+    "selected_bucket_brier": 0.765459,
+    "selected_score": 4.003626,
+    "legacy_score": 4.104792,
     "filled_actual_from_history": 2,
     "settlement_history_city_count": 30
   },

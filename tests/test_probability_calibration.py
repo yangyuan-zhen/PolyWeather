@@ -31,10 +31,17 @@ def _write_calibration(tmp_path: Path):
                 "max_so_far_gap_coef": 0.0,
             },
         },
+        "sigma_constraints": {
+            "min_ratio": 0.85,
+            "max_ratio": 1.2,
+            "absolute_min": 0.25,
+            "absolute_max": 2.0,
+        },
         "cities": {
             "ankara": {
                 "mu_bias": 0.5,
-                "sigma_scale": 1.0,
+                "sigma_scale": 2.0,
+                "confidence": 1.0,
             }
         },
         "metrics": {"sample_count": 10, "mean_crps": 0.4},
@@ -76,6 +83,7 @@ def test_shadow_mode_keeps_legacy_distribution(tmp_path):
     assert result["distribution"] == legacy_distribution
     assert result["shadow_distribution"]
     assert result["calibrated_mu"] == 10.5
+    assert result["calibrated_sigma"] == 1.2
 
 
 def test_primary_mode_switches_to_calibrated_distribution(tmp_path):
@@ -107,6 +115,7 @@ def test_primary_mode_switches_to_calibrated_distribution(tmp_path):
     assert result["mode"] == ENGINE_MODE_EMOS_PRIMARY
     assert result["engine"] == "emos"
     assert result["calibrated_mu"] == 10.5
+    assert result["calibrated_sigma"] == 1.2
     assert result["distribution"]
     assert result["distribution"][0]["value"] >= 10
 
