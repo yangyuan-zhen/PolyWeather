@@ -76,10 +76,13 @@ class MgmSourceMixin:
                         or "Ankara Bölge",
                     }
 
-            # 2. 每日预报（尝试两个可能的 API 路径）
+            # 2. 每日预报
+            # 2026-03: /api/tahminler/gunluk now returns 403 consistently, while
+            # /web/tahminler/gunluk is reachable but may legitimately return [] for
+            # station-level forecast. Keep the reachable endpoint only and fall
+            # back to hourly/current data when station forecast is unavailable.
             forecast_urls = [
                 f"{base_url}/tahminler/gunluk?istno={istno}",
-                f"https://servis.mgm.gov.tr/api/tahminler/gunluk?istno={istno}",
             ]
             for forecast_url in forecast_urls:
                 try:
@@ -107,6 +110,10 @@ class MgmSourceMixin:
                                     target_date = (datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d")
                                     results["daily_forecasts"][target_date] = d_high
                             break
+                        logger.debug(
+                            f"MGM daily forecast unavailable for istno={istno}: "
+                            f"{forecast_url} returned empty payload"
+                        )
                     else:
                         logger.debug(
                             f"MGM forecast URL {forecast_url} returned {daily_resp.status_code}"
