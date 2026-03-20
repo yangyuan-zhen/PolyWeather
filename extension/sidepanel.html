@@ -15,7 +15,7 @@
       <header class="topbar">
         <div id="riskBadge" class="risk-badge medium">中风险</div>
         <div class="city-picker-wrap">
-          <label for="citySelect">城市</label>
+          <label id="cityLabel" for="citySelect">城市</label>
           <select id="citySelect"></select>
         </div>
         <button id="refreshBtn" class="refresh-btn" title="刷新数据" aria-label="刷新数据">
@@ -27,29 +27,29 @@
       </header>
 
       <section class="section">
-        <h3>城市档案</h3>
+        <h3 id="profileTitle">城市档案</h3>
         <div class="grid2">
           <article class="mini-card">
             <span class="mini-label" id="settlementLabel">结算站点</span>
             <strong id="settlementValue">--</strong>
           </article>
           <article class="mini-card">
-            <span class="mini-label">站点距离</span>
+            <span id="distanceLabel" class="mini-label">站点距离</span>
             <strong id="distanceValue">--</strong>
           </article>
           <article class="mini-card">
-            <span class="mini-label">观测更新</span>
+            <span id="obsTimeLabel" class="mini-label">观测更新</span>
             <strong id="obsTimeValue">--</strong>
           </article>
           <article class="mini-card">
-            <span class="mini-label">周边站点</span>
+            <span id="nearbyLabel" class="mini-label">周边站点</span>
             <strong id="nearbyValue">--</strong>
           </article>
         </div>
       </section>
 
       <section class="section">
-        <h3>今日日内走势（简版）</h3>
+        <h3 id="trendTitle">今日日内走势（简版）</h3>
         <div class="chart-wrap">
           <canvas id="trendCanvas" width="560" height="220"></canvas>
           <div id="chartTooltip" class="chart-tooltip hidden"></div>
@@ -58,7 +58,7 @@
       </section>
 
       <section class="section">
-        <h3>多日预报</h3>
+        <h3 id="forecastTitle">多日预报</h3>
         <div id="forecastRow" class="forecast-row"></div>
       </section>
 

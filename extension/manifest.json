@@ -2,13 +2,24 @@
   "manifest_version": 3,
   "name": "PolyWeather Side Panel",
   "description": "PolyWeather 右侧城市卡片（浏览器侧边栏）",
-  "version": "0.1.0",
+  "version": "0.1.1",
+  "icons": {
+    "16": "icon-16.png",
+    "32": "icon-32.png",
+    "48": "icon-48.png",
+    "128": "icon-128.png"
+  },
   "permissions": ["sidePanel", "storage", "tabs"],
   "host_permissions": ["https://*/*", "http://*/*"],
   "background": {
     "service_worker": "background.js"
   },
   "action": {
+    "default_icon": {
+      "16": "icon-16.png",
+      "32": "icon-32.png",
+      "48": "icon-48.png"
+    },
     "default_title": "Open PolyWeather"
   },
   "side_panel": {

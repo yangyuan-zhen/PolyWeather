@@ -5,6 +5,79 @@ const DEFAULT_CONFIG = {
   siteBase: "https://polyweather-pro.vercel.app"
 };
 const CACHE_VERSION = "v1";
+const locale = String(navigator.language || "en").toLowerCase().startsWith("zh")
+  ? "zh"
+  : "en";
+const I18N = {
+  zh: {
+    loadingWeather: "正在加载温度数据...",
+    loadingWeatherRefresh: "正在刷新最新温度数据...",
+    loadingCities: "正在加载城市列表...",
+    riskLow: "低风险",
+    riskMedium: "中风险",
+    riskHigh: "高风险",
+    settlementSource: "结算源",
+    settlementAirport: "结算机场",
+    hko: "香港天文台 (HKO)",
+    cwa: "交通部中央气象署 (CWA)",
+    city: "城市",
+    refresh: "刷新数据",
+    cityProfile: "城市档案",
+    distance: "站点距离",
+    obsUpdate: "观测更新",
+    nearbyStations: "周边站点",
+    intradayTrend: "今日日内走势（简版）",
+    forecast: "多日预报",
+    openFull: "打开完整网站分析",
+    noTrendData: "暂无趋势数据",
+    noForecast: "暂无多日预报",
+    noContinuousObs: "暂无连续观测",
+    nearbyMonitoringSuffix: "个参与监控",
+    today: "今天",
+    debSeries: "DEB",
+    loadCityDetailFailed: "加载城市详情失败",
+    refreshFailed: "刷新温度数据失败",
+    initFailed: "初始化失败",
+    publicReadHint: "当前插件是公开读模式，Token 可留空。请检查后端是否仍开启了接口鉴权。",
+    publicModeHint: "公开模式只需配置 API Base；Token 可留空。"
+  },
+  en: {
+    loadingWeather: "Loading weather data...",
+    loadingWeatherRefresh: "Refreshing latest weather data...",
+    loadingCities: "Loading city list...",
+    riskLow: "Low Risk",
+    riskMedium: "Medium Risk",
+    riskHigh: "High Risk",
+    settlementSource: "Settlement Source",
+    settlementAirport: "Settlement Airport",
+    hko: "Hong Kong Observatory (HKO)",
+    cwa: "Central Weather Administration (CWA)",
+    city: "City",
+    refresh: "Refresh data",
+    cityProfile: "City Profile",
+    distance: "Station Distance",
+    obsUpdate: "Observation Update",
+    nearbyStations: "Nearby Stations",
+    intradayTrend: "Today's Intraday Trend",
+    forecast: "Forecast",
+    openFull: "Open Full Site Analysis",
+    noTrendData: "No trend data available",
+    noForecast: "No multi-day forecast",
+    noContinuousObs: "No continuous observations",
+    nearbyMonitoringSuffix: " stations monitored",
+    today: "Today",
+    debSeries: "DEB",
+    loadCityDetailFailed: "Failed to load city detail",
+    refreshFailed: "Failed to refresh weather data",
+    initFailed: "Initialization failed",
+    publicReadHint: "The extension is in public read mode. Token can be empty. Check whether the backend still requires auth.",
+    publicModeHint: "In public mode only API Base is required; Token can be empty."
+  }
+};
+
+function t(key) {
+  return I18N[locale][key] || I18N.zh[key] || key;
+}
 
 let state = {
   config: { ...DEFAULT_CONFIG },
@@ -35,7 +108,14 @@ const els = {
   errorBox: document.getElementById("errorBox"),
   openFullBtn: document.getElementById("openFullBtn"),
   loadingOverlay: document.getElementById("loadingOverlay"),
-  loadingText: document.getElementById("loadingText")
+  loadingText: document.getElementById("loadingText"),
+  cityLabel: document.getElementById("cityLabel"),
+  profileTitle: document.getElementById("profileTitle"),
+  distanceLabel: document.getElementById("distanceLabel"),
+  obsTimeLabel: document.getElementById("obsTimeLabel"),
+  nearbyLabel: document.getElementById("nearbyLabel"),
+  trendTitle: document.getElementById("trendTitle"),
+  forecastTitle: document.getElementById("forecastTitle")
 };
 
 function normalizeBase(url) {
@@ -183,7 +263,7 @@ function clearError() {
   els.errorBox.classList.add("hidden");
 }
 
-function setLoading(loading, text = "正在加载温度数据...") {
+function setLoading(loading, text = t("loadingWeather")) {
   if (!els.loadingOverlay) return;
   if (loading) {
     state.loadingCount += 1;
@@ -279,29 +359,29 @@ function setRefreshing(isRefreshing) {
 
 function riskText(level) {
   const low = String(level || "medium").toLowerCase();
-  if (low === "low") return "低风险";
-  if (low === "high") return "高风险";
-  return "中风险";
+  if (low === "low") return t("riskLow");
+  if (low === "high") return t("riskHigh");
+  return t("riskMedium");
 }
 
 function getSettlementSourceDisplay(detail) {
   const source = String(detail?.current?.settlement_source || "").toLowerCase();
   if (source === "hko") {
     return {
-      label: "结算源",
-      value: "香港天文台 (HKO)"
+      label: t("settlementSource"),
+      value: t("hko")
     };
   }
   if (source === "cwa") {
     return {
-      label: "结算源",
-      value: "交通部中央气象署 (CWA)"
+      label: t("settlementSource"),
+      value: t("cwa")
     };
   }
   const airport = detail?.risk?.airport || "--";
   const icao = detail?.risk?.icao ? ` (${detail.risk.icao})` : "";
   return {
-    label: "结算机场",
+    label: t("settlementAirport"),
     value: `${airport}${icao}`
   };
 }
@@ -313,7 +393,7 @@ function formatTemp(v, symbol) {
 }
 
 function formatForecastDate(day, index) {
-  if (index === 0) return "今天";
+  if (index === 0) return t("today");
   const str = String(day || "");
   const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return str || "--";
@@ -500,7 +580,7 @@ function drawTrendChart(detail) {
     setChartHover([], tempSymbol);
     ctx.fillStyle = "#8ba0be";
     ctx.font = "14px Inter, sans-serif";
-    ctx.fillText("暂无趋势数据", 18, 40);
+    ctx.fillText(t("noTrendData"), 18, 40);
     return;
   }
 
@@ -555,7 +635,7 @@ function drawTrendChart(detail) {
     trend.forEach((p, idx) => {
       const x = canUseMinuteAxis ? xFromMinute(p.m) : xFromIndex(idx, trend.length);
       const y = yFromValue(p.v);
-      hoverPoints.push({ x, y, time: p.t, value: p.v, series: "DEB" });
+      hoverPoints.push({ x, y, time: p.t, value: p.v, series: t("debSeries") });
       if (idx === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
@@ -630,7 +710,7 @@ function renderForecast(detail) {
     els.forecastRow.appendChild(card);
   }
   if (!daily.length) {
-    els.forecastRow.textContent = "暂无多日预报";
+    els.forecastRow.textContent = t("noForecast");
   }
 }
 
@@ -646,7 +726,9 @@ function renderDetail(detail) {
     : "--";
   els.obsTimeValue.textContent = detail?.current?.obs_time || "--";
   const nearby = Array.isArray(detail?.mgm_nearby) ? detail.mgm_nearby.length : 0;
-  els.nearbyValue.textContent = `${nearby} 个参与监控`;
+  els.nearbyValue.textContent = locale === "zh"
+    ? `${nearby} ${t("nearbyMonitoringSuffix")}`
+    : `${nearby}${t("nearbyMonitoringSuffix")}`;
 
   drawTrendChart(detail);
   renderForecast(detail);
@@ -658,7 +740,7 @@ function renderDetail(detail) {
     const last = obs[obs.length - 1];
     els.chartLegend.textContent = `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time}`;
   } else {
-    els.chartLegend.textContent = `${sourceTag}: 暂无连续观测`;
+    els.chartLegend.textContent = `${sourceTag}: ${t("noContinuousObs")}`;
   }
 }
 
@@ -703,6 +785,25 @@ function normalizeAggregateDetail(payload) {
   };
 }
 
+function applyStaticTranslations() {
+  document.documentElement.lang = locale === "zh" ? "zh-CN" : "en";
+  if (els.cityLabel) els.cityLabel.textContent = t("city");
+  if (els.profileTitle) els.profileTitle.textContent = t("cityProfile");
+  if (els.distanceLabel) els.distanceLabel.textContent = t("distance");
+  if (els.obsTimeLabel) els.obsTimeLabel.textContent = t("obsUpdate");
+  if (els.nearbyLabel) els.nearbyLabel.textContent = t("nearbyStations");
+  if (els.trendTitle) els.trendTitle.textContent = t("intradayTrend");
+  if (els.forecastTitle) els.forecastTitle.textContent = t("forecast");
+  if (els.openFullBtn) els.openFullBtn.textContent = t("openFull");
+  if (els.refreshBtn) {
+    els.refreshBtn.title = t("refresh");
+    els.refreshBtn.setAttribute("aria-label", t("refresh"));
+  }
+  if (els.loadingText && state.loadingCount === 0) {
+    els.loadingText.textContent = t("loadingWeather");
+  }
+}
+
 async function loadDetail(cityName, options = {}) {
   const { forceRefresh = false } = options;
   const targetCity = String(cityName || "");
@@ -714,7 +815,7 @@ async function loadDetail(cityName, options = {}) {
     return { fromCache: true };
   }
 
-  setLoading(true, forceRefresh ? "正在刷新最新温度数据..." : "正在加载温度数据...");
+  setLoading(true, forceRefresh ? t("loadingWeatherRefresh") : t("loadingWeather"));
   try {
     const encoded = encodeURIComponent(targetCity);
     const suffix = forceRefresh ? "?force_refresh=1" : "";
@@ -762,7 +863,7 @@ async function loadCities(options = {}) {
     return { fromCache: true };
   }
 
-  setLoading(true, "正在加载城市列表...");
+  setLoading(true, t("loadingCities"));
   try {
     const list = await apiGet("/api/cities");
     const cities = Array.isArray(list)
@@ -856,7 +957,7 @@ function bindEvents() {
     try {
       await setSelectedCity(value, { persist: true, reloadDetail: true });
     } catch (err) {
-      showError(`加载城市详情失败: ${err.message}`);
+      showError(`${t("loadCityDetailFailed")}: ${err.message}`);
     }
   });
 
@@ -869,7 +970,7 @@ function bindEvents() {
       try {
         await loadDetail(city, { forceRefresh: true });
       } catch (err) {
-        showError(`刷新温度数据失败: ${err.message}`);
+        showError(`${t("refreshFailed")}: ${err.message}`);
       } finally {
         setRefreshing(false);
       }
@@ -887,6 +988,7 @@ function bindEvents() {
 
 async function boot() {
   bindEvents();
+  applyStaticTranslations();
   clearError();
   try {
     state.config = await getConfig();
@@ -897,11 +999,11 @@ async function boot() {
     const msg = String(err?.message || err || "");
     if (msg.includes("HTTP 401")) {
       showError(
-        `初始化失败: ${msg}\n当前插件是公开读模式，Token 可留空。请检查后端是否仍开启了接口鉴权。`
+        `${t("initFailed")}: ${msg}\n${t("publicReadHint")}`
       );
       return;
     }
-    showError(`初始化失败: ${msg}\n公开模式只需配置 API Base；Token 可留空。`);
+    showError(`${t("initFailed")}: ${msg}\n${t("publicModeHint")}`);
   }
 }
 
