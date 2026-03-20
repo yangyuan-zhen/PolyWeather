@@ -5,10 +5,18 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.database.runtime_state import (
+    ProbabilitySnapshotRepository,
+    STATE_STORAGE_DUAL,
+    STATE_STORAGE_SQLITE,
+    get_state_storage_mode,
+)
+
 DEDUP_SCAN_LINES = 200
 MU_THRESHOLD = 0.2
 SIGMA_THRESHOLD = 0.15
 MAX_SO_FAR_THRESHOLD = 0.2
+_snapshot_repo = ProbabilitySnapshotRepository()
 
 
 def _sf(value: Any) -> Optional[float]:
@@ -79,7 +87,15 @@ def _load_recent_rows(path: str, max_lines: int = DEDUP_SCAN_LINES) -> List[Dict
 
 
 def _should_skip_append(path: str, payload: Dict[str, Any]) -> bool:
-    recent_rows = _load_recent_rows(path)
+    mode = get_state_storage_mode()
+    if mode == STATE_STORAGE_SQLITE:
+        recent_rows = _snapshot_repo.load_recent_rows(
+            str(payload.get("city") or ""),
+            str(payload.get("date") or ""),
+            DEDUP_SCAN_LINES,
+        )
+    else:
+        recent_rows = _load_recent_rows(path)
     city = payload.get("city")
     date_str = payload.get("date")
     if not city or not date_str:
@@ -183,5 +199,10 @@ def append_probability_snapshot(
     if _should_skip_append(path, payload):
         return
 
-    with open(path, "a", encoding="utf-8") as fh:
-        fh.write(json.dumps(payload, ensure_ascii=False) + "\n")
+    mode = get_state_storage_mode()
+    if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+        _snapshot_repo.append_snapshot(payload)
+
+    if mode != STATE_STORAGE_SQLITE:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(payload, ensure_ascii=False) + "\n")

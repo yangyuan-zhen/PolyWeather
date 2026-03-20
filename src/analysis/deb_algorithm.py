@@ -3,6 +3,13 @@ import json
 from datetime import datetime, timedelta
 import requests
 from src.analysis.settlement_rounding import apply_city_settlement
+from loguru import logger
+from src.database.runtime_state import (
+    DailyRecordRepository,
+    STATE_STORAGE_DUAL,
+    STATE_STORAGE_SQLITE,
+    get_state_storage_mode,
+)
 
 # Cross-platform file locking
 import sys
@@ -36,6 +43,7 @@ else:
 # Simple memory cache to avoid blasting the disk if queried 10 times a minute
 _history_cache = {}
 _history_mtime = 0
+_daily_record_repo = DailyRecordRepository()
 
 
 def _sf(value):
@@ -54,7 +62,24 @@ def _is_excluded_model_name(model_name: str) -> bool:
 
 def load_history(filepath):
     global _history_cache, _history_mtime
+    mode = get_state_storage_mode()
+
+    if mode == STATE_STORAGE_SQLITE:
+        try:
+            data = _daily_record_repo.load_all()
+            _history_cache = data
+            return data
+        except Exception as e:
+            logger.error(f"Error loading daily records from sqlite, fallback to file: {e}")
+
     if not os.path.exists(filepath):
+        if mode == STATE_STORAGE_DUAL:
+            try:
+                data = _daily_record_repo.load_all()
+                _history_cache = data
+                return data
+            except Exception:
+                return {}
         return {}
 
     try:
@@ -80,6 +105,18 @@ def load_history(filepath):
 def save_history(filepath, data):
     global _history_cache, _history_mtime
     _history_cache = data
+    mode = get_state_storage_mode()
+
+    if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+        try:
+            _daily_record_repo.replace_all(data)
+        except Exception as e:
+            logger.error(f"Error saving daily records to sqlite: {e}")
+            if mode == STATE_STORAGE_SQLITE:
+                return
+
+    if mode == STATE_STORAGE_SQLITE:
+        return
     try:
         with open(filepath, "w", encoding="utf-8") as f:
             _lock_ex(f)
@@ -251,6 +288,7 @@ def update_daily_record(
     )
     history_file = os.path.join(project_root, "data", "daily_records.json")
 
+    mode = get_state_storage_mode()
     data = load_history(history_file)
     if city_name not in data:
         data[city_name] = {}
@@ -359,7 +397,18 @@ def update_daily_record(
         for d in old_dates:
             del data[city][d]
 
-    save_history(history_file, data)
+    if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+        try:
+            _daily_record_repo.upsert_record(city_name, date_str, existing)
+            cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+            _daily_record_repo.delete_older_than(cutoff)
+        except Exception as e:
+            logger.error(f"Error upserting daily record to sqlite city={city_name} date={date_str}: {e}")
+            if mode == STATE_STORAGE_SQLITE:
+                raise
+
+    if mode != STATE_STORAGE_SQLITE:
+        save_history(history_file, data)
 
 
 def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):

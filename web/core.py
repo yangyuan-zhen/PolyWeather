@@ -3,6 +3,9 @@ PolyWeather Web Core Context
 """
 
 import os
+import sqlite3
+import time
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -16,7 +19,19 @@ from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES  # noqa: F401
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT, extract_bearer_token
+from src.utils.metrics import (
+    build_metrics_summary,
+    counter_inc,
+    gauge_set,
+    histogram_observe,
+)
+from src.analysis.probability_calibration import (
+    DEFAULT_CALIBRATION_FILE,
+    resolve_probability_engine_mode,
+)
+from src.analysis.probability_rollout import build_rollout_report
 from src.database.db_manager import DBManager
+from src.database.runtime_state import get_state_storage_mode
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError  # noqa: F401
 from src.data_collection.city_registry import CITY_REGISTRY
 
@@ -65,6 +80,59 @@ SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
 _cache: Dict[str, Dict] = {}
 CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_PROBABILITY_EVALUATION_REPORT = os.path.join(
+    _PROJECT_ROOT,
+    "artifacts",
+    "probability_calibration",
+    "evaluation_report.json",
+)
+
+
+@app.middleware("http")
+async def _metrics_middleware(request: Request, call_next):
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = (time.perf_counter() - started) * 1000.0
+        counter_inc(
+            "polyweather_http_requests_total",
+            method=request.method,
+            path=request.url.path,
+            status="500",
+        )
+        histogram_observe(
+            "polyweather_http_request_duration_ms",
+            duration_ms,
+            method=request.method,
+            path=request.url.path,
+            status="500",
+        )
+        raise
+
+    duration_ms = (time.perf_counter() - started) * 1000.0
+    status_code = str(response.status_code)
+    counter_inc(
+        "polyweather_http_requests_total",
+        method=request.method,
+        path=request.url.path,
+        status=status_code,
+    )
+    histogram_observe(
+        "polyweather_http_request_duration_ms",
+        duration_ms,
+        method=request.method,
+        path=request.url.path,
+        status=status_code,
+    )
+    return response
+_PROBABILITY_SHADOW_REPORT = os.path.join(
+    _PROJECT_ROOT,
+    "artifacts",
+    "probability_calibration",
+    "shadow_report.json",
+)
 
 
 def _env_bool(name: str, default: bool = False) -> bool:
@@ -264,3 +332,97 @@ def _sf(v) -> Optional[float]:
 def _is_excluded_model_name(model_name: str) -> bool:
     normalized = str(model_name or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
     return "meteoblue" in normalized
+
+
+def _sqlite_health() -> Dict[str, Any]:
+    try:
+        with sqlite3.connect(_account_db.db_path) as conn:
+            conn.execute("SELECT 1").fetchone()
+        return {"ok": True, "db_path": _account_db.db_path}
+    except Exception as exc:
+        return {"ok": False, "db_path": _account_db.db_path, "error": str(exc)}
+
+
+def _cache_summary() -> Dict[str, Any]:
+    gauge_set("polyweather_api_cache_entries", len(_cache))
+    gauge_set(
+        "polyweather_open_meteo_forecast_cache_entries",
+        len(getattr(_weather, "_open_meteo_cache", {}) or {}),
+    )
+    gauge_set(
+        "polyweather_open_meteo_ensemble_cache_entries",
+        len(getattr(_weather, "_ensemble_cache", {}) or {}),
+    )
+    gauge_set(
+        "polyweather_open_meteo_multi_model_cache_entries",
+        len(getattr(_weather, "_multi_model_cache", {}) or {}),
+    )
+    return {
+        "api_cache_entries": len(_cache),
+        "open_meteo_forecast_entries": len(getattr(_weather, "_open_meteo_cache", {}) or {}),
+        "open_meteo_ensemble_entries": len(getattr(_weather, "_ensemble_cache", {}) or {}),
+        "open_meteo_multi_model_entries": len(getattr(_weather, "_multi_model_cache", {}) or {}),
+    }
+
+
+def _feature_flags_summary() -> Dict[str, Any]:
+    return {
+        "auth_enabled": bool(SUPABASE_ENTITLEMENT.enabled),
+        "auth_required": bool(_SUPABASE_AUTH_REQUIRED),
+        "entitlement_guard_enabled": bool(_ENTITLEMENT_GUARD_ENABLED),
+        "payment_enabled": bool(getattr(PAYMENT_CHECKOUT, "enabled", False)),
+        "state_storage_mode": get_state_storage_mode(),
+    }
+
+
+def _integration_summary() -> Dict[str, Any]:
+    weather_cfg = _config.get("weather", {}) if isinstance(_config, dict) else {}
+    return {
+        "supabase_configured": bool(SUPABASE_ENTITLEMENT.configured),
+        "meteoblue_configured": bool(os.getenv("METEOBLUE_API_KEY")),
+        "telegram_bot_configured": bool((_config.get("telegram", {}) or {}).get("bot_token")),
+        "walletconnect_configured": bool(os.getenv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID")),
+        "weather_sources": {
+            "openweather": bool(weather_cfg.get("openweather_api_key")),
+            "wunderground": bool(weather_cfg.get("wunderground_api_key")),
+            "visualcrossing": bool(weather_cfg.get("visualcrossing_api_key")),
+        },
+    }
+
+
+def _probability_summary() -> Dict[str, Any]:
+    rollout = build_rollout_report(
+        _PROBABILITY_EVALUATION_REPORT,
+        _PROBABILITY_SHADOW_REPORT,
+    )
+    return {
+        "engine_mode": resolve_probability_engine_mode(),
+        "calibration_file": os.getenv("POLYWEATHER_PROBABILITY_CALIBRATION_FILE")
+        or DEFAULT_CALIBRATION_FILE,
+        "rollout": rollout,
+    }
+
+
+def build_health_payload() -> Dict[str, Any]:
+    db = _sqlite_health()
+    return {
+        "status": "ok" if db.get("ok") else "degraded",
+        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "db": db,
+        "state_storage_mode": get_state_storage_mode(),
+        "cities_count": len(CITIES),
+    }
+
+
+def build_system_status_payload() -> Dict[str, Any]:
+    return {
+        "status": build_health_payload()["status"],
+        "time_utc": datetime.now(timezone.utc).isoformat(),
+        "db": _sqlite_health(),
+        "features": _feature_flags_summary(),
+        "integrations": _integration_summary(),
+        "cache": _cache_summary(),
+        "metrics": build_metrics_summary(),
+        "probability": _probability_summary(),
+        "cities_count": len(CITIES),
+    }

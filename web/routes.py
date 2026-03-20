@@ -4,10 +4,12 @@ import os
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import PlainTextResponse
 from loguru import logger
 
 from src.analysis.deb_algorithm import load_history
 from src.data_collection.city_registry import ALIASES
+from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
     _analyze,
     _build_city_detail_payload,
@@ -31,6 +33,8 @@ from web.core import (
     _SUPABASE_AUTH_REQUIRED,
     _assert_entitlement,
     _bind_optional_supabase_identity,
+    build_health_payload,
+    build_system_status_payload,
     _require_supabase_identity,
     _resolve_auth_points,
     _resolve_weekly_profile,
@@ -47,6 +51,27 @@ def _normalize_city_or_404(name: str) -> str:
     if city not in CITIES:
         raise HTTPException(404, detail=f"Unknown city: {city}")
     return city
+
+
+@router.get("/healthz")
+async def healthz():
+    payload = build_health_payload()
+    if payload.get("status") != "ok":
+        raise HTTPException(status_code=503, detail=payload)
+    return payload
+
+
+@router.get("/api/system/status")
+async def system_status():
+    return build_system_status_payload()
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics():
+    return PlainTextResponse(
+        export_prometheus_metrics(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 @router.get("/api/cities")

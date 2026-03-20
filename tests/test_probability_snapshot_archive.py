@@ -1,7 +1,13 @@
 import json
 from pathlib import Path
+import pytest
 
 from src.analysis.probability_snapshot_archive import append_probability_snapshot
+
+
+@pytest.fixture(autouse=True)
+def _force_file_mode(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_STATE_STORAGE_MODE", "file")
 
 
 def test_append_probability_snapshot_writes_jsonl(tmp_path: Path):

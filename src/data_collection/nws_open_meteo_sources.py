@@ -6,6 +6,8 @@ from typing import Dict, Optional
 
 from loguru import logger
 
+from src.utils.metrics import record_source_call
+
 
 class NwsOpenMeteoSourceMixin:
     def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
@@ -13,6 +15,7 @@ class NwsOpenMeteoSourceMixin:
         从 NWS (美国国家气象局) 获取高精度预报
         仅适用于美国城市，全球 VPS 均可访问
         """
+        started = time.perf_counter()
         try:
             # 1. 获取网格点
             points_url = f"https://api.weather.gov/points/{lat},{lon}"
@@ -28,6 +31,7 @@ class NwsOpenMeteoSourceMixin:
             forecast_url = properties.get("forecast")
             hourly_url = properties.get("forecastHourly")
             if not forecast_url:
+                record_source_call("nws", "forecast", "empty", (time.perf_counter() - started) * 1000.0)
                 return None
 
             # 2. 获取预报
@@ -39,6 +43,7 @@ class NwsOpenMeteoSourceMixin:
 
             periods = forecast_data.get("properties", {}).get("periods", [])
             if not periods:
+                record_source_call("nws", "forecast", "empty", (time.perf_counter() - started) * 1000.0)
                 return None
 
             hourly_periods = []
@@ -89,7 +94,7 @@ class NwsOpenMeteoSourceMixin:
                         today_high = p.get("temperature")
                         break
 
-            return {
+            result = {
                 "source": "nws",
                 "today_high": today_high,
                 "unit": "fahrenheit",
@@ -124,8 +129,11 @@ class NwsOpenMeteoSourceMixin:
                 ],
                 "active_alerts": active_alerts,
             }
+            record_source_call("nws", "forecast", "success", (time.perf_counter() - started) * 1000.0)
+            return result
         except Exception as e:
             logger.warning(f"NWS 请求失败: {e}")
+            record_source_call("nws", "forecast", "error", (time.perf_counter() - started) * 1000.0)
             return None
 
     def fetch_from_open_meteo(
@@ -144,6 +152,7 @@ class NwsOpenMeteoSourceMixin:
             forecast_days: Number of forecast days to fetch (default 14 to cover all market dates)
             use_fahrenheit: Whether to return temperatures in Fahrenheit (for US markets)
         """
+        started = time.perf_counter()
         cache_key = (
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
             f"{forecast_days}:{'f' if use_fahrenheit else 'c'}"
@@ -156,9 +165,11 @@ class NwsOpenMeteoSourceMixin:
                 remaining = int(self._open_meteo_rate_limit_until - now_ts)
                 logger.debug(f"Open-Meteo 冷却期中，跳过请求，还需 {remaining}s")
                 with self._open_meteo_cache_lock:
-                    stale = self._open_meteo_cache.get(cache_key)
-                    if stale and isinstance(stale.get("data"), dict):
-                        return dict(stale["data"])
+                        stale = self._open_meteo_cache.get(cache_key)
+                        if stale and isinstance(stale.get("data"), dict):
+                            record_source_call("open_meteo", "forecast", "stale_cache", (time.perf_counter() - started) * 1000.0)
+                            return dict(stale["data"])
+                record_source_call("open_meteo", "forecast", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
         with self._open_meteo_cache_lock:
             cached = self._open_meteo_cache.get(cache_key)
@@ -168,6 +179,7 @@ class NwsOpenMeteoSourceMixin:
             ):
                 cached_data = cached.get("data")
                 if isinstance(cached_data, dict):
+                    record_source_call("open_meteo", "forecast", "cache_hit", (time.perf_counter() - started) * 1000.0)
                     return dict(cached_data)
         try:
             url = "https://api.open-meteo.com/v1/forecast"
@@ -259,6 +271,7 @@ class NwsOpenMeteoSourceMixin:
                     "data": dict(result),
                 }
             self._flush_open_meteo_disk_cache()
+            record_source_call("open_meteo", "forecast", "success", (time.perf_counter() - started) * 1000.0)
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -287,7 +300,9 @@ class NwsOpenMeteoSourceMixin:
                 if stale and isinstance(stale.get("data"), dict):
                     fallback = dict(stale["data"])
                     fallback["stale_cache"] = True
+                    record_source_call("open_meteo", "forecast", "stale_cache", (time.perf_counter() - started) * 1000.0)
                     return fallback
+            record_source_call("open_meteo", "forecast", "error", (time.perf_counter() - started) * 1000.0)
             return None
 
     def fetch_ensemble(
@@ -300,6 +315,7 @@ class NwsOpenMeteoSourceMixin:
         从 Open-Meteo Ensemble API 获取 51 成员集合预报
         用于计算预报不确定性范围（散度）
         """
+        started = time.perf_counter()
         cache_key = (
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:"
             f"{'f' if use_fahrenheit else 'c'}"
@@ -314,7 +330,9 @@ class NwsOpenMeteoSourceMixin:
                 with self._ensemble_cache_lock:
                     stale = self._ensemble_cache.get(cache_key)
                     if stale and isinstance(stale.get("data"), dict):
+                        record_source_call("open_meteo", "ensemble", "stale_cache", (time.perf_counter() - started) * 1000.0)
                         return dict(stale["data"])
+                record_source_call("open_meteo", "ensemble", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
                 
         with self._ensemble_cache_lock:
@@ -326,6 +344,7 @@ class NwsOpenMeteoSourceMixin:
             ):
                 cached_data = cached.get("data")
                 if isinstance(cached_data, dict):
+                    record_source_call("open_meteo", "ensemble", "cache_hit", (time.perf_counter() - started) * 1000.0)
                     return dict(cached_data)
         try:
             url = "https://ensemble-api.open-meteo.com/v1/ensemble"
@@ -371,6 +390,7 @@ class NwsOpenMeteoSourceMixin:
 
             if len(today_highs) < 3:
                 logger.warning(f"Ensemble 数据不足: 仅获取 {len(today_highs)} 个成员")
+                record_source_call("open_meteo", "ensemble", "empty", (time.perf_counter() - started) * 1000.0)
                 return None
 
             today_highs.sort()
@@ -400,6 +420,7 @@ class NwsOpenMeteoSourceMixin:
                     "data": dict(result),
                 }
             self._flush_open_meteo_disk_cache()
+            record_source_call("open_meteo", "ensemble", "success", (time.perf_counter() - started) * 1000.0)
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -425,7 +446,9 @@ class NwsOpenMeteoSourceMixin:
                 if stale and isinstance(stale.get("data"), dict):
                     fallback = dict(stale["data"])
                     fallback["stale_cache"] = True
+                    record_source_call("open_meteo", "ensemble", "stale_cache", (time.perf_counter() - started) * 1000.0)
                     return fallback
+            record_source_call("open_meteo", "ensemble", "error", (time.perf_counter() - started) * 1000.0)
             return None
 
     def fetch_multi_model(
@@ -448,6 +471,7 @@ class NwsOpenMeteoSourceMixin:
 
         返回 3 天的预报数据，支持今日+明日共识分析
         """
+        started = time.perf_counter()
         cache_city = str(city or "").strip().lower()
         cache_key = (
             f"{round(float(lat), 4)}:{round(float(lon), 4)}:{cache_city}:"
@@ -463,7 +487,9 @@ class NwsOpenMeteoSourceMixin:
                 with self._multi_model_cache_lock:
                     stale = self._multi_model_cache.get(cache_key)
                     if stale and isinstance(stale.get("data"), dict):
+                        record_source_call("open_meteo", "multi_model", "stale_cache", (time.perf_counter() - started) * 1000.0)
                         return dict(stale["data"])
+                record_source_call("open_meteo", "multi_model", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
 
         with self._multi_model_cache_lock:
@@ -475,6 +501,7 @@ class NwsOpenMeteoSourceMixin:
             ):
                 cached_data = cached.get("data")
                 if isinstance(cached_data, dict):
+                    record_source_call("open_meteo", "multi_model", "cache_hit", (time.perf_counter() - started) * 1000.0)
                     return dict(cached_data)
         try:
             url = "https://api.open-meteo.com/v1/forecast"
@@ -524,6 +551,7 @@ class NwsOpenMeteoSourceMixin:
 
             if not daily_forecasts:
                 logger.warning("Multi-model: 无有效模型数据")
+                record_source_call("open_meteo", "multi_model", "empty", (time.perf_counter() - started) * 1000.0)
                 return None
 
             # 今天的预报 (向后兼容)
@@ -548,6 +576,7 @@ class NwsOpenMeteoSourceMixin:
                     "data": dict(result),
                 }
             self._flush_open_meteo_disk_cache()
+            record_source_call("open_meteo", "multi_model", "success", (time.perf_counter() - started) * 1000.0)
             return result
         except Exception as e:
             status_code = getattr(getattr(e, "response", None), "status_code", None)
@@ -573,6 +602,8 @@ class NwsOpenMeteoSourceMixin:
                 if stale and isinstance(stale.get("data"), dict):
                     fallback = dict(stale["data"])
                     fallback["stale_cache"] = True
+                    record_source_call("open_meteo", "multi_model", "stale_cache", (time.perf_counter() - started) * 1000.0)
                     return fallback
+            record_source_call("open_meteo", "multi_model", "error", (time.perf_counter() - started) * 1000.0)
             return None
 

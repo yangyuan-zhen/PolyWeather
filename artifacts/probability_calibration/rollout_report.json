@@ -1,0 +1,72 @@
+{
+  "evaluation_report_path": "E:\\web\\PolyWeather\\artifacts\\probability_calibration\\evaluation_report.json",
+  "shadow_report_path": "E:\\web\\PolyWeather\\artifacts\\probability_calibration\\shadow_report.json",
+  "evaluation_report_exists": true,
+  "shadow_report_exists": true,
+  "decision": {
+    "decision": "hold",
+    "ready_for_primary": false,
+    "summary": "当前指标不足以切换 emos_primary，应继续保持 shadow。",
+    "thresholds": {
+      "evaluation_min_samples": 80,
+      "shadow_min_samples": 50,
+      "max_delta_mae": 0.05,
+      "min_delta_crps": -0.02,
+      "min_delta_bucket_hit_rate": 0.0,
+      "max_delta_bucket_brier_promote": 0.02,
+      "max_delta_bucket_brier_observe": 0.15
+    },
+    "evaluation": {
+      "sample_count": 105,
+      "delta_crps": -0.093663,
+      "delta_mae": 0.0,
+      "delta_bucket_hit_rate": 0.0
+    },
+    "shadow": {
+      "sample_count": 103,
+      "delta_mae": 0.012708,
+      "delta_bucket_hit_rate": 0.009709,
+      "delta_bucket_brier": 0.293835
+    },
+    "blocking_reasons": [
+      "shadow bucket brier 退化超限：delta=0.293835"
+    ],
+    "worst_shadow_regressions": [
+      {
+        "city": "dallas",
+        "samples": 4,
+        "delta_mae": 0.114807,
+        "delta_bucket_hit_rate": 0.0,
+        "delta_bucket_brier": 0.778678
+      },
+      {
+        "city": "chicago",
+        "samples": 4,
+        "delta_mae": 0.075265,
+        "delta_bucket_hit_rate": 0.0,
+        "delta_bucket_brier": 0.746156
+      },
+      {
+        "city": "seattle",
+        "samples": 4,
+        "delta_mae": 0.11262,
+        "delta_bucket_hit_rate": 0.0,
+        "delta_bucket_brier": 0.692003
+      },
+      {
+        "city": "atlanta",
+        "samples": 4,
+        "delta_mae": 0.293028,
+        "delta_bucket_hit_rate": -0.25,
+        "delta_bucket_brier": 0.601425
+      },
+      {
+        "city": "miami",
+        "samples": 4,
+        "delta_mae": 0.241559,
+        "delta_bucket_hit_rate": -0.5,
+        "delta_bucket_brier": 0.478245
+      }
+    ]
+  }
+}

@@ -5,12 +5,15 @@ from typing import Dict, Optional
 
 from loguru import logger
 
+from src.utils.metrics import record_source_call
+
 
 class MgmSourceMixin:
     def fetch_from_mgm(self, istno: str) -> Optional[Dict]:
         """
         从土耳其气象局 (MGM) 获取实时数据和预测 (由用户提供其内部 API)
         """
+        started = datetime.now()
         base_url = "https://servis.mgm.gov.tr/web"
         # 必须带 Origin，否则会被反爬拦截
         headers = {
@@ -202,9 +205,21 @@ class MgmSourceMixin:
                         f"hourly points={len(hourly_rows)}, horizon={horizon_hours:.1f}h"
                     )
 
+            record_source_call(
+                "mgm",
+                "station",
+                "success" if "current" in results else "empty",
+                (datetime.now() - started).total_seconds() * 1000.0,
+            )
             return results if "current" in results else None
         except Exception as e:
             logger.error(f"MGM API 请求失败 ({istno}): {e}")
+            record_source_call(
+                "mgm",
+                "station",
+                "error",
+                (datetime.now() - started).total_seconds() * 1000.0,
+            )
             return None
 
     def fetch_mgm_nearby_stations(self, province: str, root_ist_no: str = None) -> list:
@@ -212,6 +227,7 @@ class MgmSourceMixin:
         获取一个土耳其省份内所有气象站的当前温度及经纬度
         使用多线程辅助抓取，因为直接通过 il={province} 往往只返回 1 个站。
         """
+        started = datetime.now()
         base_url = "https://servis.mgm.gov.tr/web"
         headers = {
             "Origin": "https://www.mgm.gov.tr",
@@ -243,6 +259,12 @@ class MgmSourceMixin:
 
             if not province_ist_nos:
                 logger.warning(f"MGM 找不到省份 {province} 的站点元数据")
+                record_source_call(
+                    "mgm",
+                    "nearby",
+                    "empty",
+                    (datetime.now() - started).total_seconds() * 1000.0,
+                )
                 return []
 
             # 同时确保我们关心的几个核心站一定在里面
@@ -318,8 +340,20 @@ class MgmSourceMixin:
                 })
 
             logger.info(f"📍 MGM 周边测站: 成功并发抓取 {len(results)} 个 {province} 站点的实时气温")
+            record_source_call(
+                "mgm",
+                "nearby",
+                "success" if results else "empty",
+                (datetime.now() - started).total_seconds() * 1000.0,
+            )
             return results
         except Exception as e:
             logger.error(f"Failed to fetch MGM nearby stations for {province}: {e}")
+            record_source_call(
+                "mgm",
+                "nearby",
+                "error",
+                (datetime.now() - started).total_seconds() * 1000.0,
+            )
             return []
 

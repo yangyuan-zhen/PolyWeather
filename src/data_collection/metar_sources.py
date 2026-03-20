@@ -8,6 +8,8 @@ from typing import Dict, List, Optional
 import requests
 from loguru import logger
 
+from src.utils.metrics import record_source_call
+
 
 class MetarSourceMixin:
     def get_icao_code(self, city: str) -> Optional[str]:
@@ -24,9 +26,11 @@ class MetarSourceMixin:
         self, city: str, use_fahrenheit: bool = False, utc_offset: int = 0
     ) -> Optional[Dict]:
         """从 NOAA Aviation Weather Center 获取 METAR 航空气象数据。"""
+        started = time.perf_counter()
         icao = self.get_icao_code(city)
         if not icao:
             logger.warning(f"未找到城市 {city} 对应的 ICAO 代码")
+            record_source_call("metar", "current", "missing_icao", (time.perf_counter() - started) * 1000.0)
             return None
 
         cache_key = f"{icao}:{utc_offset}:{use_fahrenheit}"
@@ -35,6 +39,7 @@ class MetarSourceMixin:
             cached = self._metar_cache.get(cache_key)
             if cached and now_ts - cached["t"] < self.metar_cache_ttl_sec:
                 logger.debug(f"METAR cache hit {icao} age={int(now_ts - cached['t'])}s")
+                record_source_call("metar", "current", "cache_hit", (time.perf_counter() - started) * 1000.0)
                 return cached["d"]
 
         try:
@@ -201,6 +206,7 @@ class MetarSourceMixin:
             )
             with self._metar_cache_lock:
                 self._metar_cache[cache_key] = {"d": result, "t": now_ts}
+            record_source_call("metar", "current", "success", (time.perf_counter() - started) * 1000.0)
             return result
 
         except requests.exceptions.RequestException as exc:
@@ -209,10 +215,13 @@ class MetarSourceMixin:
                 stale = self._metar_cache.get(cache_key)
                 if stale:
                     logger.warning(f"METAR {icao} 请求失败，使用缓存回退")
+                    record_source_call("metar", "current", "stale_cache", (time.perf_counter() - started) * 1000.0)
                     return stale["d"]
+            record_source_call("metar", "current", "error", (time.perf_counter() - started) * 1000.0)
             return None
         except (KeyError, IndexError, TypeError) as exc:
             logger.error(f"METAR 数据解析失败 ({icao}): {exc}")
+            record_source_call("metar", "current", "parse_error", (time.perf_counter() - started) * 1000.0)
             return None
 
     def fetch_metar_nearby_cluster(self, icaos: List[str], use_fahrenheit: bool = False) -> list:

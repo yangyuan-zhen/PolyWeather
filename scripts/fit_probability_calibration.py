@@ -14,6 +14,11 @@ from src.analysis.probability_calibration import (  # noqa: E402
     fit_calibration,
 )
 from src.analysis.deb_algorithm import load_history  # noqa: E402
+from src.database.runtime_state import (  # noqa: E402
+    ProbabilitySnapshotRepository,
+    STATE_STORAGE_SQLITE,
+    get_state_storage_mode,
+)
 
 
 def _sf(value):
@@ -41,6 +46,8 @@ def _load_history_with_fallback(path):
 
 
 def _load_snapshot_rows(path):
+    if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+        return ProbabilitySnapshotRepository().load_all_rows()
     rows = []
     if not path or not os.path.exists(path):
         return rows
