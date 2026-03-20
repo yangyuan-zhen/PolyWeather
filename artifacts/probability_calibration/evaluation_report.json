@@ -8,239 +8,239 @@
       "bucket_hit_rate": 0.695238
     },
     "emos": {
-      "mean_crps": 2.650216,
-      "mean_mae": 2.722829,
-      "bucket_hit_rate": 0.666667
+      "mean_crps": 2.700275,
+      "mean_mae": 2.721143,
+      "bucket_hit_rate": 0.695238
     },
     "delta": {
-      "crps": -0.143722,
-      "mae": 0.001686,
-      "bucket_hit_rate": -0.028571
+      "crps": -0.093663,
+      "mae": 0.0,
+      "bucket_hit_rate": 0.0
     }
   },
   "by_city": {
     "ankara": {
       "samples": 7,
       "legacy_mean_crps": 2.023242,
-      "emos_mean_crps": 2.015458,
+      "emos_mean_crps": 2.023242,
       "legacy_mean_mae": 1.984286,
-      "emos_mean_mae": 1.977721,
+      "emos_mean_mae": 1.984286,
       "legacy_bucket_hit_rate": 0.714286,
       "emos_bucket_hit_rate": 0.714286
     },
     "atlanta": {
       "samples": 5,
       "legacy_mean_crps": 12.792034,
-      "emos_mean_crps": 12.526108,
+      "emos_mean_crps": 12.694543,
       "legacy_mean_mae": 12.806,
-      "emos_mean_mae": 12.919677,
+      "emos_mean_mae": 12.806,
       "legacy_bucket_hit_rate": 0.6,
-      "emos_bucket_hit_rate": 0.4
+      "emos_bucket_hit_rate": 0.6
     },
     "buenos aires": {
       "samples": 5,
       "legacy_mean_crps": 3.846144,
-      "emos_mean_crps": 3.743967,
+      "emos_mean_crps": 3.846144,
       "legacy_mean_mae": 4.168,
-      "emos_mean_mae": 4.086663,
+      "emos_mean_mae": 4.168,
       "legacy_bucket_hit_rate": 0.6,
       "emos_bucket_hit_rate": 0.6
     },
     "chicago": {
       "samples": 4,
       "legacy_mean_crps": 1.346667,
-      "emos_mean_crps": 0.603128,
+      "emos_mean_crps": 0.601765,
       "legacy_mean_mae": 0.0,
-      "emos_mean_mae": 0.075265,
+      "emos_mean_mae": 0.0,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "dallas": {
       "samples": 4,
       "legacy_mean_crps": 1.256111,
-      "emos_mean_crps": 0.65514,
+      "emos_mean_crps": 0.651425,
       "legacy_mean_mae": 0.0,
-      "emos_mean_mae": 0.114807,
+      "emos_mean_mae": 0.0,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "hong kong": {
       "samples": 3,
       "legacy_mean_crps": 0.261027,
-      "emos_mean_crps": 0.269856,
+      "emos_mean_crps": 0.261027,
       "legacy_mean_mae": 0.1,
-      "emos_mean_mae": 0.174879,
+      "emos_mean_mae": 0.1,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 0.666667
     },
     "london": {
       "samples": 6,
       "legacy_mean_crps": 2.079624,
-      "emos_mean_crps": 2.005311,
+      "emos_mean_crps": 2.079624,
       "legacy_mean_mae": 2.451667,
-      "emos_mean_mae": 2.327304,
+      "emos_mean_mae": 2.451667,
       "legacy_bucket_hit_rate": 0.166667,
-      "emos_bucket_hit_rate": 0.333333
+      "emos_bucket_hit_rate": 0.166667
     },
     "lucknow": {
       "samples": 4,
       "legacy_mean_crps": 1.468528,
-      "emos_mean_crps": 1.443159,
+      "emos_mean_crps": 1.468528,
       "legacy_mean_mae": 1.6025,
-      "emos_mean_mae": 1.682697,
+      "emos_mean_mae": 1.6025,
       "legacy_bucket_hit_rate": 0.5,
       "emos_bucket_hit_rate": 0.5
     },
     "madrid": {
       "samples": 2,
       "legacy_mean_crps": 6.27726,
-      "emos_mean_crps": 6.090563,
+      "emos_mean_crps": 6.27726,
       "legacy_mean_mae": 7.33,
-      "emos_mean_mae": 7.141649,
+      "emos_mean_mae": 7.33,
       "legacy_bucket_hit_rate": 0.0,
       "emos_bucket_hit_rate": 0.0
     },
     "miami": {
       "samples": 5,
       "legacy_mean_crps": 11.665378,
-      "emos_mean_crps": 11.493094,
+      "emos_mean_crps": 11.665378,
       "legacy_mean_mae": 12.07,
-      "emos_mean_mae": 12.157623,
+      "emos_mean_mae": 12.07,
       "legacy_bucket_hit_rate": 0.6,
-      "emos_bucket_hit_rate": 0.2
+      "emos_bucket_hit_rate": 0.6
     },
     "milan": {
       "samples": 3,
       "legacy_mean_crps": 4.401392,
-      "emos_mean_crps": 3.837715,
+      "emos_mean_crps": 3.928883,
       "legacy_mean_mae": 4.06,
-      "emos_mean_mae": 3.942288,
+      "emos_mean_mae": 4.06,
       "legacy_bucket_hit_rate": 0.666667,
       "emos_bucket_hit_rate": 0.666667
     },
     "munich": {
       "samples": 6,
       "legacy_mean_crps": 2.988583,
-      "emos_mean_crps": 2.918299,
+      "emos_mean_crps": 2.988583,
       "legacy_mean_mae": 3.143333,
-      "emos_mean_mae": 3.126482,
+      "emos_mean_mae": 3.143333,
       "legacy_bucket_hit_rate": 0.5,
       "emos_bucket_hit_rate": 0.5
     },
     "new york": {
       "samples": 4,
       "legacy_mean_crps": 1.861101,
-      "emos_mean_crps": 1.363203,
+      "emos_mean_crps": 1.409393,
       "legacy_mean_mae": 1.3725,
-      "emos_mean_mae": 1.369301,
+      "emos_mean_mae": 1.3725,
       "legacy_bucket_hit_rate": 0.75,
       "emos_bucket_hit_rate": 0.75
     },
     "paris": {
       "samples": 7,
       "legacy_mean_crps": 2.430082,
-      "emos_mean_crps": 2.365416,
+      "emos_mean_crps": 2.430082,
       "legacy_mean_mae": 2.518571,
-      "emos_mean_mae": 2.48437,
+      "emos_mean_mae": 2.518571,
       "legacy_bucket_hit_rate": 0.571429,
       "emos_bucket_hit_rate": 0.571429
     },
     "sao paulo": {
       "samples": 5,
       "legacy_mean_crps": 2.454756,
-      "emos_mean_crps": 2.410624,
+      "emos_mean_crps": 2.454756,
       "legacy_mean_mae": 2.628,
-      "emos_mean_mae": 2.689909,
+      "emos_mean_mae": 2.628,
       "legacy_bucket_hit_rate": 0.6,
       "emos_bucket_hit_rate": 0.6
     },
     "seattle": {
       "samples": 4,
       "legacy_mean_crps": 0.531656,
-      "emos_mean_crps": 0.457257,
+      "emos_mean_crps": 0.452784,
       "legacy_mean_mae": 0.0,
-      "emos_mean_mae": 0.11262,
+      "emos_mean_mae": 0.0,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "seoul": {
       "samples": 6,
       "legacy_mean_crps": 0.328088,
-      "emos_mean_crps": 0.332722,
+      "emos_mean_crps": 0.328088,
       "legacy_mean_mae": 0.2,
-      "emos_mean_mae": 0.246659,
+      "emos_mean_mae": 0.2,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "shanghai": {
       "samples": 2,
       "legacy_mean_crps": 0.250034,
-      "emos_mean_crps": 0.249952,
+      "emos_mean_crps": 0.250034,
       "legacy_mean_mae": 0.15,
-      "emos_mean_mae": 0.204362,
+      "emos_mean_mae": 0.15,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "singapore": {
       "samples": 2,
       "legacy_mean_crps": 0.281993,
-      "emos_mean_crps": 0.270875,
+      "emos_mean_crps": 0.281993,
       "legacy_mean_mae": 0.15,
-      "emos_mean_mae": 0.070547,
+      "emos_mean_mae": 0.15,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "taipei": {
       "samples": 3,
       "legacy_mean_crps": 0.356996,
-      "emos_mean_crps": 0.351432,
+      "emos_mean_crps": 0.356996,
       "legacy_mean_mae": 0.1,
-      "emos_mean_mae": 0.084784,
+      "emos_mean_mae": 0.1,
       "legacy_bucket_hit_rate": 1.0,
-      "emos_bucket_hit_rate": 0.666667
+      "emos_bucket_hit_rate": 1.0
     },
     "tel aviv": {
       "samples": 2,
       "legacy_mean_crps": 0.446758,
-      "emos_mean_crps": 0.434936,
+      "emos_mean_crps": 0.446758,
       "legacy_mean_mae": 0.3,
-      "emos_mean_mae": 0.196589,
+      "emos_mean_mae": 0.3,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     },
     "tokyo": {
       "samples": 2,
       "legacy_mean_crps": 0.450128,
-      "emos_mean_crps": 0.429389,
+      "emos_mean_crps": 0.450128,
       "legacy_mean_mae": 0.25,
-      "emos_mean_mae": 0.100782,
+      "emos_mean_mae": 0.25,
       "legacy_bucket_hit_rate": 0.5,
       "emos_bucket_hit_rate": 1.0
     },
     "toronto": {
       "samples": 5,
       "legacy_mean_crps": 2.647861,
-      "emos_mean_crps": 2.512236,
+      "emos_mean_crps": 2.566068,
       "legacy_mean_mae": 2.532,
-      "emos_mean_mae": 2.535078,
+      "emos_mean_mae": 2.532,
       "legacy_bucket_hit_rate": 0.6,
       "emos_bucket_hit_rate": 0.6
     },
     "warsaw": {
       "samples": 3,
       "legacy_mean_crps": 1.618875,
-      "emos_mean_crps": 1.545129,
+      "emos_mean_crps": 1.618875,
       "legacy_mean_mae": 2.056667,
-      "emos_mean_mae": 1.942917,
+      "emos_mean_mae": 2.056667,
       "legacy_bucket_hit_rate": 0.333333,
       "emos_bucket_hit_rate": 0.333333
     },
     "wellington": {
       "samples": 6,
       "legacy_mean_crps": 0.266349,
-      "emos_mean_crps": 0.264506,
+      "emos_mean_crps": 0.266349,
       "legacy_mean_mae": 0.2,
-      "emos_mean_mae": 0.205623,
+      "emos_mean_mae": 0.2,
       "legacy_bucket_hit_rate": 1.0,
       "emos_bucket_hit_rate": 1.0
     }

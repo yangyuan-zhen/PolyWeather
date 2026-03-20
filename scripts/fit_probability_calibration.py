@@ -33,17 +33,136 @@ def _load_json_if_exists(path):
     return data if isinstance(data, dict) else {}
 
 
-def _extract_samples(history, settlement_history=None):
+def _load_history_with_fallback(path):
+    data = load_history(path)
+    if data:
+        return data
+    return _load_json_if_exists(path)
+
+
+def _load_snapshot_rows(path):
+    rows = []
+    if not path or not os.path.exists(path):
+        return rows
+    with open(path, "r", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            if isinstance(row, dict):
+                rows.append(row)
+    return rows
+
+
+def _actual_high_for(history, settlement_history, city, date_str):
+    city_rows = (history or {}).get(city) or {}
+    record = city_rows.get(date_str) or {}
+    actual_high = _sf(record.get("actual_high")) if isinstance(record, dict) else None
+    filled = False
+    if actual_high is None:
+        actual_high = _sf(((settlement_history.get(city) or {}).get(date_str) or {}).get("max_temp"))
+        filled = actual_high is not None
+    return actual_high, filled
+
+
+def _extract_snapshot_samples(history, snapshot_rows, settlement_history=None):
     samples = []
     filled_actual_from_history = 0
     today = datetime.utcnow().strftime("%Y-%m-%d")
     settlement_history = settlement_history or {}
+
+    for row in snapshot_rows or []:
+        city = str(row.get("city") or "").strip().lower()
+        date_str = str(row.get("date") or "").strip()
+        if not city or not date_str or date_str == today:
+            continue
+
+        actual_high, filled = _actual_high_for(history, settlement_history, city, date_str)
+        if actual_high is None:
+            continue
+        if filled:
+            filled_actual_from_history += 1
+
+        raw_mu = _sf(row.get("raw_mu"))
+        raw_sigma = _sf(row.get("raw_sigma"))
+        deb_prediction = _sf(row.get("deb_prediction"))
+        ensemble = row.get("ensemble") or {}
+        if not isinstance(ensemble, dict):
+            ensemble = {}
+        ens_median = _sf(ensemble.get("median"))
+        ensemble_spread = None
+        ens_p10 = _sf(ensemble.get("p10"))
+        ens_p90 = _sf(ensemble.get("p90"))
+        if ens_p10 is not None and ens_p90 is not None and ens_p90 >= ens_p10:
+            ensemble_spread = max(0.1, (ens_p90 - ens_p10) / 2.56)
+        multi_model = row.get("multi_model") or {}
+        if not isinstance(multi_model, dict):
+            multi_model = {}
+        forecast_values = [val for val in (_sf(v) for v in multi_model.values()) if val is not None]
+        forecast_values.sort()
+        if ensemble_spread is None:
+            if len(forecast_values) >= 2:
+                ensemble_spread = max(0.6, (forecast_values[-1] - forecast_values[0]) / 2.0)
+            elif raw_sigma is not None:
+                ensemble_spread = raw_sigma
+            else:
+                ensemble_spread = 1.0
+        if raw_sigma is None:
+            raw_sigma = ensemble_spread
+
+        peak_status = str(row.get("peak_status") or "before").strip().lower()
+        peak_flag = 0.0
+        if peak_status == "in_window":
+            peak_flag = 0.5
+        elif peak_status == "past":
+            peak_flag = 1.0
+
+        max_so_far = _sf(row.get("max_so_far"))
+        max_so_far_gap = None
+        if deb_prediction is not None and max_so_far is not None:
+            max_so_far_gap = deb_prediction - max_so_far
+
+        if raw_mu is None:
+            continue
+
+        samples.append(
+            {
+                "city": city,
+                "date": date_str,
+                "timestamp": row.get("timestamp"),
+                "actual_high": actual_high,
+                "raw_mu": raw_mu,
+                "raw_sigma": raw_sigma or 1.0,
+                "deb_prediction": deb_prediction,
+                "ens_median": ens_median if ens_median is not None else raw_mu,
+                "ensemble_spread": ensemble_spread,
+                "max_so_far_gap": max_so_far_gap,
+                "peak_flag": peak_flag,
+                "sample_source": "snapshot",
+            }
+        )
+
+    return samples, filled_actual_from_history
+
+
+def _extract_daily_record_samples(history, settlement_history=None, excluded_keys=None):
+    samples = []
+    filled_actual_from_history = 0
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    settlement_history = settlement_history or {}
+    excluded_keys = excluded_keys or set()
     for city, city_rows in (history or {}).items():
         if not isinstance(city_rows, dict):
             continue
         city_settlement = settlement_history.get(city) or {}
         for date_str, record in city_rows.items():
             if date_str == today or not isinstance(record, dict):
+                continue
+            if (city, date_str) in excluded_keys:
                 continue
             actual_high = _sf(record.get("actual_high"))
             if actual_high is None:
@@ -99,9 +218,28 @@ def _extract_samples(history, settlement_history=None):
                     "ensemble_spread": ensemble_spread,
                     "max_so_far_gap": max_so_far_gap,
                     "peak_flag": peak_flag,
+                    "sample_source": "daily_record",
                 }
             )
     return samples, filled_actual_from_history
+
+
+def _extract_samples(history, settlement_history=None, snapshot_rows=None):
+    snapshot_samples, snapshot_filled = _extract_snapshot_samples(
+        history,
+        snapshot_rows or [],
+        settlement_history=settlement_history,
+    )
+    excluded_keys = {
+        (sample["city"], sample["date"])
+        for sample in snapshot_samples
+    }
+    daily_samples, daily_filled = _extract_daily_record_samples(
+        history,
+        settlement_history=settlement_history,
+        excluded_keys=excluded_keys,
+    )
+    return snapshot_samples + daily_samples, snapshot_filled + daily_filled
 
 
 def main():
@@ -127,17 +265,24 @@ def main():
         help="Optional daily settlement history JSON built from historical CSV files.",
     )
     parser.add_argument(
+        "--snapshot-file",
+        default=os.path.join(PROJECT_ROOT, "data", "probability_training_snapshots.jsonl"),
+        help="Optional JSONL file with archived probability snapshots.",
+    )
+    parser.add_argument(
         "--version",
         default=None,
         help="Optional explicit calibration version.",
     )
     args = parser.parse_args()
 
-    history = load_history(args.history_file)
+    history = _load_history_with_fallback(args.history_file)
     settlement_history = _load_json_if_exists(args.settlement_history)
+    snapshot_rows = _load_snapshot_rows(args.snapshot_file)
     samples, filled_actual_from_history = _extract_samples(
         history,
         settlement_history=settlement_history,
+        snapshot_rows=snapshot_rows,
     )
     calibration = fit_calibration(samples, version=args.version)
     if not samples:

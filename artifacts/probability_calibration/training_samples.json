@@ -1,5 +1,7 @@
 {
   "sample_count": 105,
+  "snapshot_sample_count": 0,
+  "daily_record_sample_count": 105,
   "filled_actual_from_history": 2,
   "samples": [
     {
@@ -12,7 +14,8 @@
       "ens_median": 5.9,
       "ensemble_spread": 1.5499999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -24,7 +27,8 @@
       "ens_median": 7.6,
       "ensemble_spread": 1.75,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -36,7 +40,8 @@
       "ens_median": 7.9,
       "ensemble_spread": 1.5499999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -48,7 +53,8 @@
       "ens_median": 10.0,
       "ensemble_spread": 0.8500000000000005,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -60,7 +66,8 @@
       "ens_median": 13.9,
       "ensemble_spread": 1.75,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -72,7 +79,8 @@
       "ens_median": 15.8,
       "ensemble_spread": 1.2000000000000002,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "ankara",
@@ -84,7 +92,8 @@
       "ens_median": 10.1,
       "ensemble_spread": 2.05,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -96,7 +105,8 @@
       "ens_median": 10.1,
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -108,7 +118,8 @@
       "ens_median": 11.4,
       "ensemble_spread": 2.1500000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -120,7 +131,8 @@
       "ens_median": 15.4,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -132,7 +144,8 @@
       "ens_median": 13.3,
       "ensemble_spread": 0.9500000000000002,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -144,7 +157,8 @@
       "ens_median": 16.8,
       "ensemble_spread": 1.299999999999999,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "london",
@@ -156,7 +170,8 @@
       "ens_median": 15.8,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "new york",
@@ -168,7 +183,8 @@
       "ens_median": 46.7,
       "ensemble_spread": 9.7,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "new york",
@@ -180,7 +196,8 @@
       "ens_median": 67.2,
       "ensemble_spread": 2.1499999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "new york",
@@ -192,7 +209,8 @@
       "ens_median": 66.6,
       "ensemble_spread": 4.149999999999999,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "new york",
@@ -204,7 +222,8 @@
       "ens_median": 37.0,
       "ensemble_spread": 2.25,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -216,7 +235,8 @@
       "ens_median": 16.7,
       "ensemble_spread": 0.7000000000000011,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -228,7 +248,8 @@
       "ens_median": 16.2,
       "ensemble_spread": 1.5999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -240,7 +261,8 @@
       "ens_median": 17.4,
       "ensemble_spread": 0.6999999999999993,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -252,7 +274,8 @@
       "ens_median": 15.3,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -264,7 +287,8 @@
       "ens_median": 13.1,
       "ensemble_spread": 0.8499999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -276,7 +300,8 @@
       "ens_median": 14.8,
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "paris",
@@ -288,7 +313,8 @@
       "ens_median": 16.3,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -300,7 +326,8 @@
       "ens_median": 4.0,
       "ensemble_spread": 0.7999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -312,7 +339,8 @@
       "ens_median": 6.3,
       "ensemble_spread": 1.4,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -324,7 +352,8 @@
       "ens_median": 4.9,
       "ensemble_spread": 1.35,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -336,7 +365,8 @@
       "ens_median": 9.1,
       "ensemble_spread": 1.7999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -348,7 +378,8 @@
       "ens_median": 7.4,
       "ensemble_spread": 0.7999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seoul",
@@ -360,7 +391,8 @@
       "ens_median": 6.3,
       "ensemble_spread": 1.7999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "toronto",
@@ -372,7 +404,8 @@
       "ens_median": 16.9,
       "ensemble_spread": 2.8500000000000005,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "toronto",
@@ -384,7 +417,8 @@
       "ens_median": 12.3,
       "ensemble_spread": 2.0,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "toronto",
@@ -396,7 +430,8 @@
       "ens_median": 17.6,
       "ensemble_spread": 4.75,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "toronto",
@@ -408,7 +443,8 @@
       "ens_median": -1.1,
       "ensemble_spread": 0.8,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "toronto",
@@ -420,7 +456,8 @@
       "ens_median": 6.3,
       "ensemble_spread": 2.1500000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "buenos aires",
@@ -432,7 +469,8 @@
       "ens_median": 26.0,
       "ensemble_spread": 1.3999999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "buenos aires",
@@ -444,7 +482,8 @@
       "ens_median": 26.4,
       "ensemble_spread": 1.200000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "buenos aires",
@@ -456,7 +495,8 @@
       "ens_median": 26.2,
       "ensemble_spread": 1.5999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "buenos aires",
@@ -468,7 +508,8 @@
       "ens_median": 26.0,
       "ensemble_spread": 2.0,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "buenos aires",
@@ -480,7 +521,8 @@
       "ens_median": 27.9,
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -492,7 +534,8 @@
       "ens_median": 18.4,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -504,7 +547,8 @@
       "ens_median": 17.2,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -516,7 +560,8 @@
       "ens_median": 15.7,
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -528,7 +573,8 @@
       "ens_median": 18.7,
       "ensemble_spread": 1.049999999999999,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -540,7 +586,8 @@
       "ens_median": 19.1,
       "ensemble_spread": 0.9500000000000011,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "wellington",
@@ -552,7 +599,8 @@
       "ens_median": 17.1,
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "chicago",
@@ -564,7 +612,8 @@
       "ens_median": 62.8,
       "ensemble_spread": 1.3000000000000007,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "chicago",
@@ -576,7 +625,8 @@
       "ens_median": 60.1,
       "ensemble_spread": 5.600000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "chicago",
@@ -588,7 +638,8 @@
       "ens_median": 70.8,
       "ensemble_spread": 10.799999999999997,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "chicago",
@@ -600,7 +651,8 @@
       "ens_median": 44.2,
       "ensemble_spread": 5.350000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "sao paulo",
@@ -612,7 +664,8 @@
       "ens_median": 27.4,
       "ensemble_spread": 1.5,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "sao paulo",
@@ -624,7 +677,8 @@
       "ens_median": 28.0,
       "ensemble_spread": 2.1999999999999993,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "sao paulo",
@@ -636,7 +690,8 @@
       "ens_median": 23.5,
       "ensemble_spread": 1.4000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "sao paulo",
@@ -648,7 +703,8 @@
       "ens_median": 29.4,
       "ensemble_spread": 2.450000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "sao paulo",
@@ -660,7 +716,8 @@
       "ens_median": 26.5,
       "ensemble_spread": 1.200000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "dallas",
@@ -672,7 +729,8 @@
       "ens_median": 72.7,
       "ensemble_spread": 2.1499999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "dallas",
@@ -684,7 +742,8 @@
       "ens_median": 71.5,
       "ensemble_spread": 6.200000000000003,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "dallas",
@@ -696,7 +755,8 @@
       "ens_median": 81.0,
       "ensemble_spread": 3.8500000000000014,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "dallas",
@@ -708,7 +768,8 @@
       "ens_median": 74.4,
       "ensemble_spread": 9.299999999999997,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "miami",
@@ -720,7 +781,8 @@
       "ens_median": 81.6,
       "ensemble_spread": 1.3999999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "miami",
@@ -732,7 +794,8 @@
       "ens_median": 82.7,
       "ensemble_spread": 1.5500000000000043,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "miami",
@@ -744,7 +807,8 @@
       "ens_median": 83.9,
       "ensemble_spread": 1.5499999999999972,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "miami",
@@ -756,7 +820,8 @@
       "ens_median": 70.4,
       "ensemble_spread": 2.8999999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "miami",
@@ -768,7 +833,8 @@
       "ens_median": 74.0,
       "ensemble_spread": 2.5500000000000043,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "atlanta",
@@ -780,7 +846,8 @@
       "ens_median": 79.7,
       "ensemble_spread": 4.600000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "atlanta",
@@ -792,7 +859,8 @@
       "ens_median": 67.7,
       "ensemble_spread": 5.899999999999999,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "atlanta",
@@ -804,7 +872,8 @@
       "ens_median": 77.4,
       "ensemble_spread": 2.6000000000000014,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "atlanta",
@@ -816,7 +885,8 @@
       "ens_median": 52.2,
       "ensemble_spread": 4.0,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "atlanta",
@@ -828,7 +898,8 @@
       "ens_median": 65.9,
       "ensemble_spread": 1.5500000000000007,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seattle",
@@ -840,7 +911,8 @@
       "ens_median": 52.8,
       "ensemble_spread": 1.3999999999999986,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seattle",
@@ -852,7 +924,8 @@
       "ens_median": 50.9,
       "ensemble_spread": 4.350000000000001,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seattle",
@@ -864,7 +937,8 @@
       "ens_median": 45.1,
       "ensemble_spread": 2.0,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "seattle",
@@ -876,7 +950,8 @@
       "ens_median": 55.9,
       "ensemble_spread": 1.3500000000000014,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "lucknow",
@@ -888,7 +963,8 @@
       "ens_median": 33.9,
       "ensemble_spread": 1.8500000000000014,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "lucknow",
@@ -900,7 +976,8 @@
       "ens_median": 34.6,
       "ensemble_spread": 2.0,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "lucknow",
@@ -912,7 +989,8 @@
       "ens_median": 34.6,
       "ensemble_spread": 1.3000000000000007,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "lucknow",
@@ -924,7 +1002,8 @@
       "ens_median": 34.7,
       "ensemble_spread": 1.75,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -936,7 +1015,8 @@
       "ens_median": 15.1,
       "ensemble_spread": 1.6000000000000005,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -948,7 +1028,8 @@
       "ens_median": 14.3,
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -960,7 +1041,8 @@
       "ens_median": 14.5,
       "ensemble_spread": 0.8999999999999995,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -972,7 +1054,8 @@
       "ens_median": 15.7,
       "ensemble_spread": 1.2999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -984,7 +1067,8 @@
       "ens_median": 10.6,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "munich",
@@ -996,7 +1080,8 @@
       "ens_median": 11.8,
       "ensemble_spread": 1.3000000000000007,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "hong kong",
@@ -1008,7 +1093,8 @@
       "ens_median": 23.1,
       "ensemble_spread": 1.9000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "hong kong",
@@ -1020,7 +1106,8 @@
       "ens_median": 24.9,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "hong kong",
@@ -1032,7 +1119,8 @@
       "ens_median": 25.0,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "taipei",
@@ -1044,7 +1132,8 @@
       "ens_median": 25.4,
       "ensemble_spread": 2.25,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "taipei",
@@ -1056,7 +1145,8 @@
       "ens_median": 27.5,
       "ensemble_spread": 1.0500000000000007,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "taipei",
@@ -1068,7 +1158,8 @@
       "ens_median": 21.3,
       "ensemble_spread": 1.1500000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "milan",
@@ -1080,7 +1171,8 @@
       "ens_median": 15.1,
       "ensemble_spread": 9.1,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "milan",
@@ -1092,7 +1184,8 @@
       "ens_median": 13.8,
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "milan",
@@ -1104,7 +1197,8 @@
       "ens_median": 17.0,
       "ensemble_spread": 1.25,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "warsaw",
@@ -1116,7 +1210,8 @@
       "ens_median": 10.5,
       "ensemble_spread": 0.6499999999999995,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "warsaw",
@@ -1128,7 +1223,8 @@
       "ens_median": 14.2,
       "ensemble_spread": 1.4000000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "warsaw",
@@ -1140,7 +1236,8 @@
       "ens_median": 12.3,
       "ensemble_spread": 1.5999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "singapore",
@@ -1152,7 +1249,8 @@
       "ens_median": 30.1,
       "ensemble_spread": 0.9500000000000011,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "singapore",
@@ -1164,7 +1262,8 @@
       "ens_median": 32.1,
       "ensemble_spread": 1.3499999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "shanghai",
@@ -1176,7 +1275,8 @@
       "ens_median": 13.0,
       "ensemble_spread": 1.1500000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "shanghai",
@@ -1188,7 +1288,8 @@
       "ens_median": 11.2,
       "ensemble_spread": 0.7999999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "tokyo",
@@ -1200,7 +1301,8 @@
       "ens_median": 15.8,
       "ensemble_spread": 1.5499999999999998,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "tokyo",
@@ -1212,7 +1314,8 @@
       "ens_median": 18.5,
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "tel aviv",
@@ -1224,7 +1327,8 @@
       "ens_median": 28.9,
       "ensemble_spread": 2.1500000000000004,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "tel aviv",
@@ -1236,7 +1340,8 @@
       "ens_median": 21.1,
       "ensemble_spread": 1.5,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "madrid",
@@ -1248,7 +1353,8 @@
       "ens_median": 18.7,
       "ensemble_spread": 1.8499999999999996,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     },
     {
       "city": "madrid",
@@ -1260,7 +1366,8 @@
       "ens_median": 18.8,
       "ensemble_spread": 1.8999999999999995,
       "max_so_far_gap": null,
-      "peak_flag": 0.0
+      "peak_flag": 0.0,
+      "sample_source": "daily_record"
     }
   ]
 }

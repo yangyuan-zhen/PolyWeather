@@ -19,6 +19,7 @@ from src.analysis.probability_calibration import (
     apply_probability_calibration,
     build_probability_features,
 )
+from src.analysis.probability_snapshot_archive import append_probability_snapshot
 from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
@@ -727,6 +728,26 @@ def analyze_weather_trend(
             mu=mu,
             probabilities=_prob_list,
             probability_features=probability_features,
+            shadow_probabilities=_shadow_prob_list,
+            calibration_summary=calibration_summary,
+        )
+    except Exception:
+        pass
+
+    try:
+        append_probability_snapshot(
+            city_name=city_name or "",
+            local_date=local_date_str,
+            observation_time=obs_time_raw or local_time_full or None,
+            temp_symbol=temp_symbol,
+            raw_mu=calibration_summary.get("raw_mu"),
+            raw_sigma=calibration_summary.get("raw_sigma"),
+            deb_prediction=_deb_to_save,
+            ens_data=ens_data,
+            current_forecasts=current_forecasts,
+            max_so_far=max_so_far,
+            peak_status=peak_status,
+            probabilities=_prob_list,
             shadow_probabilities=_shadow_prob_list,
             calibration_summary=calibration_summary,
         )
