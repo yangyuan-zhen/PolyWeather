@@ -3,10 +3,10 @@
 ## 执行摘要
 
 PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类结算预测市场（如 Polymarket 的温度结算合约）**的“生产级气象情报系统”，核心在于把多源天气观测/预报转化为**结算导向的概率桶（μ + bucket distribution）**，并进一步映射到市场报价完成**错价扫描**；同时提供 Web 仪表盘与 Telegram Bot 两套交互入口，并包含 Polygon 链上 USDC/USDC.e 支付、自动补单与订阅/积分体系。项目 README 明确其“Open-Core”边界：仓库公开天气聚合、基础分析、看板、Bot、标准支付流程；生产私有部分包含商业风控、阈值与运营工具等。
-从工程实现看，当前版本（README 标注 `v1.4.0`，最后更新 `2026-03-14`）已经落地关键业务闭环：多源天气采集（Open-Meteo、AviationWeather METAR、土耳其 MGM、香港 HKO、台湾 CWA、美国 NWS 等）、DEB 动态融合、趋势/概率引擎、Polymarket 只读行情层、前端缓存策略（ETag/304、force_refresh no-store）、以及支付事件监听与确认循环。
-但它也暴露出典型的“从快速迭代走向稳态生产”的结构性问题：核心模块（如 `src/data_collection/weather_sources.py`、`web/app.py`）体量巨大、职责耦合；配置/依赖/可复现性仍偏脚本化；测试覆盖存在但 CI/CD 缺失；多处自定义缓存与状态文件并发一致性风险；以及对第三方 API（Open-Meteo、AviationWeather、Supabase、Polymarket）在**配额、变更、SLA、合规**方面需要更系统的治理。
-本报告给出的改进方向按收益/风险/工作量分级，优先建议聚焦三条主线：
-第一，**模块化与工程化**：将采集/分析/市场层/支付/鉴权拆成清晰边界，补齐 CI、测试、类型与规范化配置；第二，**可观测性与可靠性**：统一缓存与状态管理、增加限流与退避策略、建立指标与告警；第三，**模型与评测体系**：围绕“结算命中率 + 偏差（MAE/RMSE）+ 概率校准（Brier/CRPS）+ 错价信号有效性（Edge/PnL 模拟）”建立基准与回归测试，并可在合规前提下评估引入更先进的气象后处理（如 EMOS）或外部 AI 预报（GraphCast/FourCastNet/Pangu-Weather 的商业许可限制需特别注意）。
+从工程实现看，截至 `2026-03-20`，项目已经完成一轮明确的工程化收口：多源天气采集仍保持现有业务能力，同时已完成采集层与 Web API 大文件拆分、CI 质量门禁、配置分级（`.env.example` / `.env.secrets.example` / 中文部署文档）、EMOS/CRPS 校准链路、运行态状态与缓存向 SQLite 的渐进迁移，以及基础可观测性接口（`/healthz`、`/api/system/status`、`/metrics`）。
+这意味着报告里最初最突出的“工程地基缺失”问题，已经有一部分被关闭：`src/data_collection/weather_sources.py` 与 `web/app.py` 不再是原来的超大单文件；GitHub Actions 已覆盖 Python、前端和 Docker build；配置与密钥治理已成体系；运行态状态不再只能依赖 JSON/JSONL 文件；EMOS 也不再只是概念，而是进入了可训练、可评估、可 shadow、可门禁判断的阶段。
+但项目仍处在“从可用走向稳态”的中段，而不是终局。当前真正的高优先级问题已收敛为三类：第一，**SQLite 迁移仍处于推荐的 dual 过渡模式**，线上真正切主读路径前仍需跑一段时间验证；第二，**可观测性只完成了轻量级指标层**，还没有形成完整的外部监控、阈值告警与趋势面板；第三，**EMOS 仍未达到生产切换标准**，当前门禁结论明确为 `hold`，阻塞原因是 shadow bucket brier 明显退化。
+因此，当前阶段最正确的策略已经不是继续做“大范围基础重构”，而是围绕**迁移验收、可观测性补全、EMOS 上线门禁稳定化**这三条线持续收口。短中期内更高 ROI 的方向依然不是引入新的大模型，而是把现有“采集→后处理→市场映射→支付/订阅”的链路做成**状态一致、指标可见、发布可控、回退明确**的生产平台。
 ## 项目概览
 
 PolyWeather 的目标与范围在 README/README_ZH 中定义得较清楚：为温度结算市场提供气象情报（多源采集→融合→概率→对照市场报价），并提供“官方看板（Vercel 前端）+ VPS 后端 + Telegram Bot”。
@@ -30,13 +30,15 @@ DEB（Dynamic Error Balancing）基于过去 N 天模型误差（MAE）倒数加
 | 层级 | 目录/文件 | 角色定位 | 关键说明 |
 | ------------- | ------------------------------------------------------------------------ | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 运行时组件 | `frontend/` | Next.js 前端（Vercel） | 前端重构报告提到 App Router、Route Handlers（BFF）、缓存策略、支付与账户中心等。 |
-| 运行时组件 | `web/app.py` | FastAPI 后端 API | 作为前端 BFF 与 Telegram Bot 的共同 API。 |
+| 运行时组件 | `web/app.py` + `web/core.py` + `web/routes.py` + `web/analysis_service.py` | FastAPI 后端 API | 已从单文件入口拆为启动入口、核心上下文、路由层、分析服务层。 |
 | 运行时组件 | `bot_listener.py` + `src/bot/*` | Telegram Bot | 入口 `bot_listener.py` 调 `start_bot()`，并由 `StartupCoordinator` 启动多个后台 loop。 |
-| Python 域模块 | `src/data_collection/*` | 天气采集 + 城市注册 + 市场读取 | `WeatherDataCollector`、`CITY_REGISTRY`、`PolymarketReadOnlyLayer` 等。 |
+| Python 域模块 | `src/data_collection/*` | 天气采集 + 城市注册 + 市场读取 | 采集层已拆为 `weather_sources.py` 编排层 + `open_meteo_cache.py`、`settlement_sources.py`、`metar_sources.py`、`mgm_sources.py`、`nws_open_meteo_sources.py`。 |
 | Python 域模块 | `src/analysis/*` | DEB/趋势/概率/结算口径 | `deb_algorithm.py`、`trend_engine.py`、`settlement_rounding.py`。 |
+| Python 域模块 | `src/analysis/probability_calibration.py` + `src/analysis/probability_rollout.py` | 概率校准与上线门禁 | 已支持 `legacy / emos_shadow / emos_primary`，并可产出 rollout 判断。 |
 | Python 域模块 | `src/payments/*` + `contracts/*` | 支付合约 + 事件监听/补单 | Solidity 合约 + Python 侧事件扫描与确认循环。 |
 | Python 域模块 | `src/auth/*`、`docs/SUPABASE_SETUP_ZH.md`、`scripts/supabase/schema.sql` | Supabase 鉴权/订阅/积分 | 使用 `/auth/v1/user` 校验 JWT、`/rest/v1/subscriptions` 查订阅（服务端角色 key 必须保密）。 |
-| 工程与运维 | `docker-compose.yml`、`Dockerfile`、`update.sh`、`scripts/*` | 部署/验证脚本 | Compose 启两个容器（bot 与 web），脚本校验 ETag/缓存、更新重启等。 |
+| Python 域模块 | `src/database/runtime_state.py` | 运行态状态与缓存仓储 | 已接入 `daily_records`、`telegram_alert_state`、`probability_training_snapshots`、`open_meteo` 持久缓存。 |
+| 工程与运维 | `docker-compose.yml`、`Dockerfile`、`.github/workflows/ci.yml`、`scripts/*` | 部署/验证脚本 | 现已具备 CI 门禁、迁移脚本、状态校验脚本、配置校验脚本与 rollout 报告脚本。 |
 
 ### 参考架构与关键工作流
 
@@ -55,8 +57,8 @@ flowchart TB
  subgraph Data
  WX[WeatherDataCollector]
  CITY[CITY_REGISTRY]
- HIST[daily_records.json<br/>DEB history]
- CACHE[open_meteo_cache.json<br/>disk cache]
+ HIST[(SQLite runtime state<br/>daily_records / cache / snapshots)]
+ JSON[Legacy JSON files<br/>dual-mode fallback]
  end
 
  subgraph ExternalAPIs
@@ -99,7 +101,8 @@ flowchart TB
  CF --> RPC
  RPC --> SOL
 
- WX --> CACHE
+ WX --> HIST
+ WX --> JSON
  FAST --> HIST
  WX --> CITY
 ```
@@ -118,13 +121,13 @@ flowchart TB
 **概率引擎**：`trend_engine.py` 以集合预报的 p10/p90 推 σ（并考虑历史 MAE floor、风向/云量/压强的 shock_score、以及峰值窗口 time-decay），再用正态近似把连续分布映射为 WU 整数“温度桶概率”。
 **推理流水线（在线）**：
 Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引擎输出结构化结果（μ、概率桶、趋势、死盘/窗口判定、DEB 预测、市场扫描）→ 前端渲染或 bot 消息格式化。
-**检查点（checkpoints）**：传统 ML checkpoint 不适用；但项目存在两类“业务状态 checkpoint”：
-`daily_records.json`（DEB 历史与评测快照）与 `open_meteo_cache.json`（Open-Meteo 预报磁盘缓存）。
+**检查点（checkpoints）**：传统 ML checkpoint 不适用；但项目现已形成两类“业务状态 checkpoint”：
+（a）SQLite 运行态存储（推荐主路径）；（b）legacy JSON/JSONL 文件（迁移期回退路径）。当前设计是 `POLYWEATHER_STATE_STORAGE_MODE=file|dual|sqlite`，建议先以 `dual` 运行，再切到 `sqlite`。
 ### 测试、CI/CD 与运维验证
 
 **测试**：仓库存在 `tests/test_trend_engine.py`，覆盖 μ 计算、死盘判定、预报崩盘提示、趋势方向等核心逻辑（通过 patch 隔离外部依赖）。
-**CI/CD**：从仓库检索结果看，未发现公开的 GitHub Actions 工作流（`.github/workflows` 搜索为空），需要补齐自动化质量门禁。
-**运维验收**：提供 `scripts/validate_frontend_cache.sh` 校验 `/api/cities`、`/api/city/<city>/summary`、`/api/history/<city>` 的 ETag/Cache-Control，并对 `force_refresh` 期望 `no-store`。
+**CI/CD**：已补齐 GitHub Actions 工作流，至少覆盖 Python lint/test、前端 build、Docker build 三条门禁；当前缺口不再是“有没有 CI”，而是“是否已在 GitHub 分支保护中强制执行”。
+**运维验收**：除 `scripts/validate_frontend_cache.sh` 外，现已新增配置校验、运行态迁移/核验、EMOS rollout 判断等脚本，并提供 `/healthz`、`/api/system/status`、`/metrics` 作为基础观测入口。
 **部署/更新**：Compose 用于启动服务；另有 `update.sh` 通过 `pkill` + `nohup` 重启 bot 与 web。
 ## 优势与薄弱点
 
@@ -136,12 +139,14 @@ Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引
 **支付侧有“事件监听 + 确认补单”的双通路**：支付链路天然存在“交易 pending / RPC 延迟 / 日志索引不完整”等问题，项目通过 event loop 与 confirm loop 双机制提升最终一致性。
 ### 薄弱点与风险
 
-**核心文件过大导致可维护性下降**：`WeatherDataCollector` 集“多源采集 + 缓存 + 限流 + 解析 + 部分业务逻辑（城市/单位/回退策略）”于一体，规模继续增长会显著提高回归风险与重构成本。 同类问题往往也会出现在“单文件 FastAPI 应用”形态（`web/app.py`）。
-**可复现性仍偏“脚本+隐式约定”**：
-虽然给了 Docker/Compose 快速启动，但缺少一份稳定的 `.env.example` / 配置 schema（哪些变量必需、默认值、敏感级别、环境分层），导致他人复现时容易踩坑；此外 `update.sh` 以 `pkill` 强杀进程方式更新，存在误杀与状态丢失风险，建议迁移到 systemd/容器滚动更新/健康检查。
-**测试存在但依赖与 CI 缺失**：有 pytest 单测文件，但 `requirements.txt` 未体现 dev 依赖与一键运行指令，且缺少 CI 自动运行，容易出现“本地能跑、线上漂移”。
+**核心文件过大问题已明显缓解，但边界仍需继续稳定**：`WeatherDataCollector` 与 `web/app.py` 的超大文件问题已完成第一阶段拆分；当前风险已从“文件过大”转为“跨模块兼容与边界稳定性”，例如旧调用路径、兼容导出、跨层 helper 仍需持续清理。
+**可复现性已从“缺模板”进入“模板与生产对齐”的阶段**：`.env.example`、`.env.secrets.example`、中文配置文档、前端部署文档、运行时配置校验器都已存在；当前风险主要在于线上历史 `.env` 与新模板并存、旧变量命名残留、以及密钥轮换与分层是否真正落实。
+**CI 已建立，但组织级质量门禁未必完全收口**：CI 现已覆盖 Python、前端与 Docker build。当前问题不再是“缺 CI”，而是是否把这些 status check 绑定到 `main` 保护策略，以及是否逐步引入更严格的 pre-merge 审查。
+**运行态状态/缓存迁移仍处于过渡期**：`daily_records`、`telegram_alert_state`、`probability_training_snapshots`、`open_meteo` 缓存已经支持 SQLite，并有迁移/校验脚本；但在正式切到 `sqlite` 主读路径前，仍需经历一段 dual 双写验证期。这是当前最需要谨慎处理的工程性风险之一。
 **第三方服务合规与稳定性风险**：
 项目强依赖外部 API（Open-Meteo、AviationWeather、NWS、HKO、CWA、Polymarket、Supabase）。其中 AviationWeather Data API 有明确速率限制；Polymarket 官方说明 Gamma/Data/CLOB 三套 API 分属不同域，CLOB 交易端点需鉴权且策略可能变化；Supabase 明确强调 `service_role`/secret keys 绝不可暴露。若缺乏集中治理（重试/退避/熔断/降级/配额监控/密钥轮换），稳定性与合规不可控。
+**可观测性已起步，但仍不构成完整监控体系**：项目现在已有 `/healthz`、`/api/system/status`、`/metrics`，并为 HTTP 与关键第三方源增加了轻量指标；但仍缺少 Prometheus/Grafana 级别的外部抓取、告警阈值、趋势面板和运行日报。这部分现在属于“已开始，不算完成”。
+**EMOS 已完成工程接入，但未完成生产发布**：EMOS/CRPS 校准、shadow 观测、rollout report、上线门禁都已实现；当前真实门禁结果为 `hold`，阻塞原因是 shadow bucket brier 明显退化。因此概率引擎标准化并非未做，而是“工程完成、发布未通过”。
 **许可证/商业使用的潜在冲突点**：仓库自身是 MIT，但如果未来尝试引入外部 AI 预报模型，需要非常谨慎：GraphCast 仓库代码 Apache-2.0，但权重使用 CC BY-NC-SA 4.0（非商业），Pangu-Weather 权重同样 BY-NC-SA 且明确禁止商业用途；不加区分地把这些模型用于付费产品会留下法律风险。
 ## 对标分析
 
@@ -164,17 +169,15 @@ Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引
 **对标结论**：PolyWeather 与这类“全球 AI 预报模型”不在同一层级：PolyWeather 是“面向结算市场的产品化情报系统”，其价值核心是**将预测转成可交易/可结算的决策信息**。短中期内更高 ROI 的方向不是“自训大模型”，而是把现有“采集+后处理+市场映射”的链路做成**可复现、可观测、可评测、可扩展**的工程平台；在许可合规前提下，再评估引入外部模型推理作为额外信号源。
 ## 优先级改进建议
 
-下表给出“高/中/低”优先级的具体改进清单，包含工作量估计、主要风险与可执行步骤（假设“无特定部署约束/性能指标约束”）。
+下表按截至 `2026-03-20` 的真实状态重排优先级。已完成项不再继续列为“待做”，只保留当前仍需推进的事项。
 | 优先级 | 改进项 | 预估工作量 | 主要收益 | 主要风险 | 可执行步骤（建议顺序） |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------- | -------------------: | ------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 高 | **拆分 `WeatherDataCollector` 为可插拔 Provider 架构**（OpenMeteoProvider / MetarProvider / NwsProvider / SettlementProvider 等） | 1–2 周 | 降低耦合、提高可测性，便于加入新城市/新源；减少回归面 | 重构期间线上行为漂移 | 1) 定义统一接口（输入：city/lat/lon/date；输出：标准 schema）→ 2) 把缓存/限流抽为中间层（decorator）→ 3) 用现有测试补齐 provider 单测 → 4) 灰度开启（仅部分城市走新链路） |
-| 高 | **拆分 `web/app.py`：路由层/服务层/DTO/依赖注入** | 1–2 周 | API 可维护性、鉴权/限流/缓存策略更清晰；更易做 OpenAPI 文档与版本化 | 改路由可能影响前端 | 1) 抽出 `services/analysis_service.py`、`services/market_service.py`、`services/payment_service.py` → 2) 引入 Pydantic models 作为响应 schema → 3) 保持 URL 不变，先做内部重构 |
-| 高 | **建立 CI（Python + Frontend）与质量门禁**：lint/format/typecheck/test/docker build | 3–5 天 | 防回归、提高贡献效率；让 `v1.4` 之后迭代更稳 | 初期会暴露大量历史问题 | 1) Python：ruff + mypy + pytest；Node：eslint + typecheck + build → 2) GitHub Actions 两条 pipeline → 3) 给出“允许失败→逐步收紧”的迁移策略 |
-| 高 | **补齐可复现配置与密钥分级**：`.env.example` + 配置文档 + 敏感项隔离 | 2–4 天 | 新环境搭建更快、减少误配置；降低密钥泄露风险 | 需要梳理现有 env 变量 | 1) 盘点 env（Open-Meteo、Polymarket、Supabase、RPC、支付等）→ 2) `.env.example` 提供默认与说明 → 3) 标注敏感等级（尤其 `SUPABASE_SERVICE_ROLE_KEY`）并禁止前端/日志输出 |
-| 高 | **统一“状态与缓存”方案**：把 JSON 文件状态迁移到 SQLite/Postgres/Redis（至少做到原子/锁一致） | 1–2 周 | 降低并发一致性 bug（多进程/多容器）、便于观测与回放 | 迁移会引入数据兼容与历史清理问题 | 1) 为 `daily_records` 与 `open_meteo_cache` 定义表结构 → 2) 先实现写入双写（JSON+DB）→ 3) 校验一致后切换读取 → 4) 下线 JSON 文件 |
+| 高 | **完成 SQLite 迁移切换与验收**：从 `dual` 过渡到 `sqlite` 主读路径 | 2–5 天 | 真正关闭 JSON/JSONL 并发一致性风险；状态/缓存统一入库 | 迁移校验不充分会导致线上行为漂移 | 1) 线上部署新代码 → 2) 执行迁移与校验脚本 → 3) `dual` 运行至少 24–48 小时 → 4) 校验 `/api/history`、bot 告警、snapshot、缓存都正常 → 5) 再切 `POLYWEATHER_STATE_STORAGE_MODE=sqlite` |
+| 高 | **把轻量可观测性接入外部监控与告警**：围绕 `/metrics` 建立抓取、阈值与巡检 | 3–7 天 | 不再只靠日志定位问题；可以监控第三方源错误率、缓存命中与 HTTP 延迟 | 指标不分层会导致噪音高、告警无用 | 1) 抓取 `/metrics` → 2) 先围绕 HTTP、Open-Meteo、MGM、METAR 建立最小仪表板 → 3) 为 429/403/error/stale_cache 设阈值 → 4) 增加巡检脚本或告警通道 |
+| 高 | **稳定 EMOS shadow 并收紧上线门禁** | 1–2 周 | 让概率引擎升级具备明确发布条件，避免拍脑袋切换 | 当前 shadow bucket brier 退化明显，存在误上线风险 | 1) 持续积累 snapshot 样本 → 2) 定期重训与生成 `evaluation_report` / `shadow_report` / `rollout_report` → 3) 重点压 `bucket_brier` 退化 → 4) 只有门禁从 `hold` 进入 `observe/promote` 后才考虑上线 |
 | 中 | **市场层升级为 async + 类型安全**：引入 `aiopolymarket` 或在现有层加重试/backoff/连接池 | 4–7 天 | 行情层更稳，减少短时网络抖动；更易扩展更多市场/分页 | 依赖升级带来的行为差异 | 1) 把 requests.Session 替换为 aiohttp/httpx → 2) 在 Gamma/CLOB 调用侧实现指数退避 → 3) 引入 typed models，减少解析失败 |
-| 中 | **概率引擎更标准化：引入 EMOS/CRPS 拟合做校准**（替换/增强当前正态近似与规则 σ） | 1–2 周 | 概率输出更可解释、可校准；适合做长期回归评测 | 需要足够历史样本；可能改变用户体验 | 1) 以 `daily_records` 为训练集（模型预报均值/方差→实际）→ 2) 先离线拟合并与现模型对比 → 3) 线上 shadow 输出（不影响主显示）→ 4) 达标后切换 |
 | 中 | **支付合约/链上交互加强审计与防护**：事件重放、重入/授权边界、RPC 多节点容灾 | 1 周 | 提升资金链路可信度；减少链上卡单 | 合约升级需要迁移/再验证 | 1) 为 event loop 增加“最后处理区块高度”持久化与重放工具 → 2) RPC 端支持多 URL fallback → 3) 合约侧考虑 OpenZeppelin Ownable/SafeERC20（如升级）并更新验证流程 |
+| 中 | **将 CI 与分支保护/发布流程真正绑定** | 1–3 天 | 让现有 CI 从“存在”变成“强制门禁” | 历史分支/热修流程可能受影响 | 1) GitHub `main` 开启 required checks → 2) 把 release/tag 流程绑定 CI → 3) 明确热修例外流程 |
 | 低 | **引入外部 AI 预报模型作为附加信号**（GraphCast/FourCastNet/Pangu-Weather 等） | 2–6 周（取决于范围） | 可能提升极端/中期预测能力与差异化 | **商业许可限制**（多为 CC BY-NC-SA/禁止商业）与算力成本 | 1) 先做合规评审（权重许可/数据条款）→ 2) 仅在研究/非商业环境评估 → 3) 若要商用，优先选择可商用权重或自研/购买授权 |
 
 ### 文档、测试与贡献流程的具体补强建议（落到仓库层面）
