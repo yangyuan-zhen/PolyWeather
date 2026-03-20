@@ -57,6 +57,12 @@ function DashboardScreen() {
   const { t } = useI18n();
 
   useEffect(() => {
+    void import("@/components/dashboard/GuideModal");
+    void import("@/components/dashboard/HistoryModal");
+    void import("@/components/dashboard/FutureForecastModal");
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (store.futureModalDate) {

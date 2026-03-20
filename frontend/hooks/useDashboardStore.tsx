@@ -649,7 +649,7 @@ export function DashboardStoreProvider({
       openGuide: () => setIsGuideOpen(true),
       openHistory,
       openTodayModal: async (forceRefresh?: boolean) => {
-        if (!selectedCity || loadingState.cityDetail) {
+        if (!selectedCity) {
           return;
         }
 
@@ -659,35 +659,24 @@ export function DashboardStoreProvider({
           setSelectedForecastDate(cachedDetail.local_date);
           setFutureModalDate(cachedDetail.local_date);
         }
-        if (!proAccess.subscriptionActive) {
-          return;
-        }
+        if (!proAccess.subscriptionActive) return;
 
-        // 乐观 UI: 有缓存则立刻秒开 modal，不阻塞显示
-        if (cachedDetail?.local_date) {
-          setSelectedForecastDate(cachedDetail.local_date);
-          setFutureModalDate(cachedDetail.local_date);
-          setLoadingState((current) => ({ ...current, marketScan: true }));
-        } else {
-          setLoadingState((current) => ({
-            ...current,
-            refresh: true,
-            marketScan: true,
-          }));
-        }
+        setLoadingState((current) => ({
+          ...current,
+          refresh: !cachedDetail?.local_date,
+          marketScan: true,
+        }));
 
-        // 异步静默拉取最新气象与市场数据
         try {
-          const detail = await ensureCityDetail(selectedCity, true);
+          const detail = await ensureCityDetail(
+            selectedCity,
+            Boolean(forceRefresh),
+          );
           setSelectedForecastDate(detail.local_date);
           setFutureModalDate(detail.local_date);
 
+          const marketKey = getMarketScanCacheKey(selectedCity, detail.local_date);
           try {
-            // 如果缓存里没有或者想要强制刷新，则拉取最新市场数据
-            const marketKey = getMarketScanCacheKey(
-              selectedCity,
-              detail.local_date,
-            );
             await ensureCityMarketScan(
               selectedCity,
               forceRefresh || !marketScanByCityName[marketKey],
@@ -697,6 +686,7 @@ export function DashboardStoreProvider({
           } catch {}
         } catch {
           if (cachedDetail?.local_date) {
+            setSelectedForecastDate(cachedDetail.local_date);
             setFutureModalDate(cachedDetail.local_date);
           }
         } finally {
