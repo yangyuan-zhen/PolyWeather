@@ -25,6 +25,13 @@ from web.routes import router  # noqa: E402
 
 app.include_router(router)
 
+__all__ = [
+    "app",
+    "_analyze",
+    "_build_city_detail_payload",
+    "_build_city_summary_payload",
+]
+
 
 if __name__ == "__main__":
     import uvicorn
