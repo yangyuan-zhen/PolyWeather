@@ -1,13 +1,13 @@
-# PolyWeather Side Panel Extension (MVP)
+# PolyWeather 侧边栏插件（MVP）
 
-这是一个 Chrome / Edge 的侧边栏扩展 MVP，用于把 PolyWeather 右侧城市卡片移植到浏览器侧边栏中。
+这是一个 Chrome / Edge 侧边栏扩展的 MVP，用于把 PolyWeather 右侧城市卡片移植到浏览器侧边栏中。
 
 ## 功能
 
 - 侧边栏展示：
   - 城市选择
   - 风险徽章
-  - 城市档案（结算源/距离/观测更新/周边站点）
+  - 城市档案（结算源 / 距离 / 观测更新时间 / 周边站点）
   - 今日日内走势（简版 Canvas）
   - 多日预报
 - 快捷按钮：
@@ -18,15 +18,15 @@
   - 监听当前激活标签页 URL（例如 Polymarket `.../event/highest-temperature-in-ankara-...`）
   - 自动将侧边栏城市切换为 URL 对应城市
 - 设置页可配置：
-  - Site Base URL
-  - API Base URL
+  - 网站基础地址
+  - API 基础地址
   - Bearer Token（可选）
 
 ## 本地安装（开发者模式）
 
 1. 打开 Chrome/Edge 扩展页面：
-   - Chrome: `chrome://extensions`
-   - Edge: `edge://extensions`
+   - Chrome：`chrome://extensions`
+   - Edge：`edge://extensions`
 2. 打开“开发者模式”。
 3. 选择“加载已解压的扩展程序”。
 4. 选择目录：`extension/`。
@@ -36,11 +36,11 @@
 
 首次建议打开扩展“选项页”并确认：
 
-- `Site Base URL`：你的前端域名（例如 `https://polyweather-pro.vercel.app`）
-- `API Base URL`：你的后端 API 域名（若同域也可填前端域名）
+- `网站基础地址`：你的前端域名（例如 `https://polyweather-pro.vercel.app`）
+- `API 基础地址`：你的后端 API 域名（若同域也可填前端域名）
 - `Bearer Token`：后端开启鉴权时填写
 
 ## 说明
 
-- 当前是 MVP，重点是“导流回站”，未接入支付链路。
-- 若你的 API 做了严格鉴权，请先在设置页填 token 再使用。
+- 当前版本是 MVP，重点是“导流回站”，未接入支付链路。
+- 若你的 API 做了严格鉴权，请先在设置页填写 token 再使用。

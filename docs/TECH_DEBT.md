@@ -1,31 +1,31 @@
-# Technical Debt Backlog (v1.4)
+# 技术债与工程待办（v1.4）
 
-Last Updated: `2026-03-14`
+最后更新：`2026-03-14`
 
-Focus after paid launch: payment reliability, entitlement parity, and auditability.
+目标：在收费上线后，优先保证支付可靠性、权限一致性和运营可追溯性。
 
-## 1. Snapshot
+## 1. 债务快照
 
-Current estimate: **93% stable / 7% debt**.
+当前估计：**93% 稳定 / 7% 技术债**。
 
 ```mermaid
 flowchart TD
-    A["Tech Debt"]
+    A["技术债"]
 
-    subgraph P["Payments & Subscriptions"]
-        P1["Automatic replay for failed confirmations"]
-        P2["Refund and support workflow"]
-        P3["Multi-chain settlement reconciliation"]
+    subgraph P["支付与订阅"]
+        P1["异常交易自动重放策略"]
+        P2["退款与工单流程"]
+        P3["多链结算对账"]
     end
 
-    subgraph E["Entitlement & Ops"]
-        E1["Frontend/backend/bot entitlement regression matrix"]
-        E2["Points vs subscription conflict policy"]
+    subgraph E["权限与运营"]
+        E1["前后端/Bot 权限矩阵回归"]
+        E2["积分与订阅冲突策略"]
     end
 
-    subgraph O["Observability"]
-        O1["Layered metrics for payment failures"]
-        O2["Business operations dashboards"]
+    subgraph O["可观测性"]
+        O1["支付失败原因分层指标"]
+        O2["业务监控看板"]
     end
 
     A --> P
@@ -33,41 +33,41 @@ flowchart TD
     A --> O
 ```
 
-## 2. Recently Closed
+## 2. 近期已关闭
 
-- P1 checkout flow live (intent -> submit -> confirm).
-- Automatic reconciliation live (event loop + confirm loop).
-- Wallet binding supports extension wallets + WalletConnect.
-- Account center entitlement rendering is wired end-to-end.
-- Wallet activity watcher supports dedicated channel routing.
+- P1 支付主链路已上线（intent -> submit -> confirm）。
+- 支付自动补单已上线（Event Loop + Confirm Loop）。
+- 钱包绑定支持浏览器钱包 + WalletConnect。
+- 账户中心与 Pro 权限展示链路打通。
+- 钱包异动支持独立频道路由。
 
-## 3. High-Priority Debt
+## 3. 高优先级技术债
 
-| Item | Impact | Suggested Work |
+| 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| Automatic replay strategy for transient tx failures | Manual intervention still needed in some edge cases | Standardize tx replay + fallback paths |
-| Refund/support workflow | Commercial loop incomplete | Add refund state machine + support tooling |
-| Subscription audit visualization | Slower incident triage | Build timeline view for entitlement events |
-| Multi-email same-Telegram binding policy | Points ownership confusion | Add primary-account binding and migration utilities |
+| 支付异常重放策略标准化 | 偶发确认失败需人工介入 | 建立 tx hash 自动回放 + 降级路径 |
+| 退款与售后链路 | 商业闭环不完整 | 增加退款状态机与工单系统 |
+| 订阅审计可视化 | 排障效率受限 | 建立订阅事件时间线视图 |
+| 多邮箱绑定同 TG 账户策略 | 积分归属易混淆 | 引入主账号绑定策略与迁移工具 |
 
-## 4. Medium-Priority Debt
+## 4. 中优先级技术债
 
-| Item | Impact | Suggested Work |
+| 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| Points transparency | User confusion | Expose points breakdown by source |
-| Payment error copy consistency | Conversion impact | Build error-code to UX-copy mapping table |
-| Config sprawl | Ops mistakes | Consolidate payment/push configs into grouped schemas |
+| 积分发放可解释性 | 用户理解成本高 | 输出积分来源明细（发言/签到/奖励） |
+| 支付失败文案标准化 | 转化率受影响 | 建立错误码 -> 文案映射表 |
+| 配置收敛 | 运维出错概率高 | 将支付/推送配置集中分组管理 |
 
-## 5. Low-Priority Debt
+## 5. 低优先级技术债
 
-| Item | Impact | Suggested Work |
+| 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| Offline cache support | Non-core | Evaluate SW + IndexedDB |
-| Cold-start variance | First-load jitter | Add route prewarming for hot cities |
+| 前端离线缓存能力 | 非核心 | 评估 Service Worker + IndexedDB |
+| 冷启动波动 | 首屏抖动 | 热点城市预热 |
 
-## 6. Next Milestones
+## 6. 下阶段里程碑
 
-1. Ship automatic replay and alert stratification for payment anomalies.
-2. Launch minimal refund/support admin flow.
-3. Add business dashboards for payments, renewals, and retention.
-4. Complete entitlement parity regression suite.
+1. 完成支付异常自动重放与告警分层。
+2. 上线退款/售后后台最小版。
+3. 建立商业化运营看板（支付、续费、留存）。
+4. 完成权限矩阵自动化回归测试。

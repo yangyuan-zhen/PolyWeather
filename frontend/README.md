@@ -1,25 +1,25 @@
-# PolyWeather Frontend
+# PolyWeather 前端
 
-Production frontend for PolyWeather Pro.
+PolyWeather Pro 的生产前端工程。
 
-Production URL:
-- https://polyweather-pro.vercel.app/
+线上地址：
+- [https://polyweather-pro.vercel.app/](https://polyweather-pro.vercel.app/)
 
-## Stack
+## 技术栈
 
 - Next.js App Router
 - React + Tailwind
 - Leaflet + Chart.js
 - Supabase Auth
-- WalletConnect + browser EVM wallets
+- WalletConnect + 浏览器 EVM 钱包
 
-## Runtime Model
+## 运行模型
 
-1. Browser -> Next app (`frontend`)
-2. Next Route Handlers (`/api/*`) -> FastAPI backend
-3. FastAPI -> analysis/payment services
+1. 浏览器 -> Next 应用（`frontend`）
+2. Next Route Handlers（`/api/*`）-> FastAPI 后端
+3. FastAPI -> 分析服务 / 支付服务
 
-## Local Development
+## 本地开发
 
 ```bash
 cd frontend
@@ -28,7 +28,7 @@ npm install
 npm run dev
 ```
 
-## Required Environment Variables
+## 必需环境变量
 
 ```env
 POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
@@ -39,22 +39,22 @@ POLYWEATHER_AUTH_REQUIRED=false
 POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 ```
 
-WalletConnect:
+WalletConnect：
 
 ```env
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 ```
 
-Overlay links:
+浮层链接：
 
 ```env
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
 ```
 
-## Route Handlers
+## 路由处理器
 
-Weather:
+天气：
 
 - `GET /api/cities`
 - `GET /api/city/[name]`
@@ -62,11 +62,11 @@ Weather:
 - `GET /api/city/[name]/detail`
 - `GET /api/history/[name]`
 
-Auth:
+鉴权：
 
 - `GET /api/auth/me`
 
-Payments:
+支付：
 
 - `GET /api/payments/config`
 - `GET /api/payments/wallets`
@@ -77,17 +77,17 @@ Payments:
 - `POST /api/payments/intents/[intentId]/submit`
 - `POST /api/payments/intents/[intentId]/confirm`
 
-## Cache Behavior
+## 缓存行为
 
-- `cities` / `summary` / `history`: `ETag + Cache-Control`
-- `summary?force_refresh=true`: `no-store`
-- payment routes: `no-store`
+- `cities` / `summary` / `history`：`ETag + Cache-Control`
+- `summary?force_refresh=true`：`no-store`
+- 支付相关路由：`no-store`
 
-## Open-Core Note
+## 开源边界说明
 
-This frontend repo includes general product UI and standard payment UX.
-Commercial strategy tuning, private ops workflows, and sensitive production parameters are intentionally outside the public docs scope.
+此前端仓库包含通用产品界面和标准支付体验。
+商业策略调优、私有运营流程和敏感生产参数不在公开文档范围内。
 
-See root policy: `docs/OPEN_CORE_POLICY.md`
+详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-Last updated: `2026-03-14`
+最后更新：`2026-03-14`
