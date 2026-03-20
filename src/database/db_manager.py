@@ -354,6 +354,54 @@ class DBManager:
         except Exception:
             return 0
 
+    def grant_points_by_supabase_email(
+        self,
+        supabase_email: str,
+        amount: int,
+    ) -> Dict[str, Any]:
+        email = str(supabase_email or "").strip().lower()
+        points = int(amount or 0)
+        if not email:
+            return {"ok": False, "reason": "invalid_supabase_email"}
+        if points <= 0:
+            return {"ok": False, "reason": "invalid_amount"}
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT telegram_id, username, points, supabase_email
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
+                LIMIT 1
+                """,
+                (email,),
+            ).fetchone()
+            if not row:
+                return {"ok": False, "reason": "user_not_found", "supabase_email": email}
+
+            telegram_id = int(row["telegram_id"] or 0)
+            before = int(row["points"] or 0)
+            after = before + points
+            conn.execute(
+                """
+                UPDATE users
+                SET points = ?
+                WHERE telegram_id = ?
+                """,
+                (after, telegram_id),
+            )
+            conn.commit()
+            return {
+                "ok": True,
+                "telegram_id": telegram_id,
+                "username": str(row["username"] or ""),
+                "supabase_email": str(row["supabase_email"] or email),
+                "points_before": before,
+                "points_added": points,
+                "points_after": after,
+            }
+
     def upsert_user(self, telegram_id: int, username: str):
         with self._get_connection() as conn:
             conn.execute("""
