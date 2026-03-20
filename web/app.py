@@ -15,6 +15,11 @@ if _root not in sys.path:
 if _file_dir not in sys.path:
     sys.path.insert(0, _file_dir)
 
+from web.analysis_service import (  # noqa: E402
+    _analyze,
+    _build_city_detail_payload,
+    _build_city_summary_payload,
+)
 from web.core import app  # noqa: E402
 from web.routes import router  # noqa: E402
 
