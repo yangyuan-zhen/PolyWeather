@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import requests
-from src.analysis.settlement_rounding import wu_round
+from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
 
 # Cross-platform file locking
 import sys
@@ -442,8 +442,8 @@ def get_deb_accuracy(city_name):
             continue
 
         total += 1
-        deb_wu = wu_round(deb_pred)
-        actual_wu = wu_round(actual)
+        deb_wu = apply_city_settlement(city_name, deb_pred)
+        actual_wu = apply_city_settlement(city_name, actual)
         if deb_wu == actual_wu:
             hits += 1
         errors.append(abs(deb_pred - actual))
@@ -507,13 +507,13 @@ def get_mu_accuracy(city_name):
 
         total += 1
         mu_errors.append(abs(mu_val - actual))
-        if wu_round(mu_val) == wu_round(actual):
+        if apply_city_settlement(city_name, mu_val) == apply_city_settlement(city_name, actual):
             mu_hits += 1
 
         # Brier Score from probability snapshot
         prob_snap = record.get("prob_snapshot", [])
         if prob_snap:
-            actual_wu = wu_round(actual)
+            actual_wu = apply_city_settlement(city_name, actual)
             bs = 0.0
             for entry in prob_snap:
                 predicted_p = entry.get("p", 0)

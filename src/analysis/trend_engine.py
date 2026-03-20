@@ -15,7 +15,7 @@ from src.analysis.deb_algorithm import (
     update_daily_record,
     _is_excluded_model_name,
 )
-from src.analysis.settlement_rounding import wu_round
+from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
 
@@ -429,7 +429,7 @@ def analyze_weather_trend(
     forecast_miss_deg = 0.0
 
     if is_dead_market:
-        settled_wu = wu_round(max_so_far) if max_so_far is not None else 0
+        settled_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else 0
         dead_msg = (
             f"🎲 <b>结算预测</b>：已锁定 {settled_wu}{temp_symbol} "
             f"({settlement_source_label} 死盘确认)"
@@ -481,7 +481,7 @@ def analyze_weather_trend(
 
         # Probability Engine
         probs_result = calculate_prob_distribution(
-            mu, sigma, max_so_far, temp_symbol
+            mu, sigma, max_so_far, temp_symbol, city_name
         )
         mu = probs_result.get("mu", mu)
         probabilities = probs_result.get("probabilities", [])
@@ -514,7 +514,7 @@ def analyze_weather_trend(
 
     # === Settlement boundary ===
     if max_so_far is not None:
-        settled = wu_round(max_so_far)
+        settled = apply_city_settlement(city_name, max_so_far)
         fractional = max_so_far - int(max_so_far)
         dist_to_boundary = abs(fractional - 0.5)
         if dist_to_boundary <= 0.3:
@@ -585,7 +585,7 @@ def analyze_weather_trend(
     if max_so_far is not None:
         ai_features.append(
             f"🏔️ 今日实测最高温: {max_so_far}{temp_symbol} "
-            f"({settlement_source_label}结算={wu_round(max_so_far)}{temp_symbol})。"
+            f"({settlement_source_label}结算={apply_city_settlement(city_name, max_so_far)}{temp_symbol})。"
         )
     if city_name:
         _profile = get_city_risk_profile(city_name)
@@ -634,7 +634,7 @@ def analyze_weather_trend(
                 for t, p in sorted_probs[:4]
             ]
         elif is_dead_market and max_so_far is not None:
-            _prob_list = [{"value": wu_round(max_so_far), "probability": 1.0}]
+            _prob_list = [{"value": apply_city_settlement(city_name, max_so_far), "probability": 1.0}]
 
         update_daily_record(
             city_name,
@@ -672,14 +672,14 @@ def analyze_weather_trend(
         "forecast_miss_deg": forecast_miss_deg,
         "max_so_far": max_so_far,
         "cur_temp": cur_temp,
-        "wu_settle": wu_round(max_so_far) if max_so_far is not None else None,
+        "wu_settle": apply_city_settlement(city_name, max_so_far) if max_so_far is not None else None,
     }
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features), structured
 
 
 def calculate_prob_distribution(
-    mu: float, sigma: float, max_so_far: Optional[float], temp_symbol: str
+    mu: float, sigma: float, max_so_far: Optional[float], temp_symbol: str, city_name: str = ""
 ) -> Dict[str, Any]:
     """
     Generalized Gaussian probability distribution calculation.
@@ -691,17 +691,26 @@ def calculate_prob_distribution(
         # 0.5 * (1 + erf( (x-m)/(s*sqrt(2)) ))
         return 0.5 * (1 + math.erf((x - m) / (sigma * math.sqrt(2))))
 
-    min_possible_wu = wu_round(max_so_far) if max_so_far is not None else -999
+    min_possible_wu = apply_city_settlement(city_name, max_so_far) if max_so_far is not None else -999
     probs = {}
     
     # Range: mu +/- 3 sigma or at least +/- 2 degrees
     search_range = max(2, int(sigma * 2.5))
-    target_mu = wu_round(mu)
+    is_exact = is_exact_settlement_city(city_name)
+    target_mu = apply_city_settlement(city_name, mu)
+    if is_exact:
+        target_mu = int(math.floor(mu))
     
     for n in range(target_mu - search_range, target_mu + search_range + 1):
         if n < min_possible_wu:
             continue
-        p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
+        if is_exact:
+            # 向下取整的概率区间为 [n, n + 1)
+            p = _norm_cdf(n + 1.0, mu, sigma) - _norm_cdf(n, mu, sigma)
+        else:
+            # 常规四舍五入的概率区间为 [n - 0.5, n + 0.5)
+            p = _norm_cdf(n + 0.5, mu, sigma) - _norm_cdf(n - 0.5, mu, sigma)
+            
         if p > 0.01:
             probs[n] = p
 
@@ -713,9 +722,10 @@ def calculate_prob_distribution(
         norm_probs = {k: v / total_p for k, v in probs.items()}
         sorted_probs = sorted(norm_probs.items(), key=lambda x: x[1], reverse=True)
         for t, p in sorted_probs[:4]:
+            rng_str = f"[{t}.0~{t+1}.0)" if is_exact else f"[{t-0.5}~{t+0.5})"
             probabilities.append({
                 "value": int(t),
-                "range": f"[{t-0.5}~{t+0.5})",
+                "range": rng_str,
                 "probability": round(p, 3)
             })
 

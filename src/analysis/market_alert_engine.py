@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from src.analysis.settlement_rounding import wu_round
+from src.analysis.settlement_rounding import wu_round, apply_city_settlement, is_exact_settlement_city
 
 
 def _sf(v: Any) -> Optional[float]:
@@ -716,7 +716,7 @@ def _extract_market_snapshot(city_weather: Dict[str, Any]) -> Dict[str, Any]:
             market_url = f"https://polymarket.com/market/{slug}"
 
     anchor_today_high_c, anchor_model = _extract_multi_model_anchor_high_c(city_weather)
-    anchor_settlement = wu_round(anchor_today_high_c)
+    anchor_settlement = apply_city_settlement(city, anchor_today_high_c)
     forecast_bucket = _pick_bucket_for_forecast(
         rows=all_bucket_rows,
         forecast_settlement=anchor_settlement,

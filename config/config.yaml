@@ -1,76 +1,97 @@
-# Weather API Configuration
 weather:
   timeout: 30
-
-# Target Cities
 cities:
-  - id: "london"
-    city: "London"
-    country: "UK"
-    latitude: 51.5074
-    longitude: -0.1278
-  - id: "paris"
-    city: "Paris"
-    country: "France"
-    latitude: 48.8566
-    longitude: 2.3522
-  - id: "ankara"
-    city: "Ankara"
-    country: "Turkey"
-    latitude: 39.9334
-    longitude: 32.8597
-  - id: "new_york"
-    city: "New York"
-    country: "USA"
-    latitude: 40.7128
-    longitude: -74.0060
-  - id: "chicago"
-    city: "Chicago"
-    country: "USA"
-    latitude: 41.8781
-    longitude: -87.6298
-  - id: "lucknow"
-    city: "Lucknow"
-    country: "India"
-    latitude: 26.7606
-    longitude: 80.8893
-  - id: "sao paulo"
-    city: "São Paulo"
-    country: "Brazil"
-    latitude: -23.4356
-    longitude: -46.4731
-  - id: "munich"
-    city: "Munich"
-    country: "Germany"
-    latitude: 48.3538
-    longitude: 11.7861
-  - id: "hong_kong"
-    city: "Hong Kong"
-    country: "China"
-    latitude: 22.3080
-    longitude: 113.9185
-  - id: "shanghai"
-    city: "Shanghai"
-    country: "China"
-    latitude: 31.1434
-    longitude: 121.8052
-  - id: "singapore"
-    city: "Singapore"
-    country: "Singapore"
-    latitude: 1.3644
-    longitude: 103.9915
-  - id: "tokyo"
-    city: "Tokyo"
-    country: "Japan"
-    latitude: 35.5523
-    longitude: 139.7798
-  - id: "tel_aviv"
-    city: "Tel Aviv"
-    country: "Israel"
-    latitude: 32.0114
-    longitude: 34.8867
-# Logging
+- id: london
+  city: London
+  country: UK
+  latitude: 51.5074
+  longitude: -0.1278
+- id: paris
+  city: Paris
+  country: France
+  latitude: 48.8566
+  longitude: 2.3522
+- id: ankara
+  city: Ankara
+  country: Turkey
+  latitude: 39.9334
+  longitude: 32.8597
+- id: new_york
+  city: New York
+  country: USA
+  latitude: 40.7128
+  longitude: -74.006
+- id: chicago
+  city: Chicago
+  country: USA
+  latitude: 41.8781
+  longitude: -87.6298
+- id: lucknow
+  city: Lucknow
+  country: India
+  latitude: 26.7606
+  longitude: 80.8893
+- id: sao paulo
+  city: São Paulo
+  country: Brazil
+  latitude: -23.4356
+  longitude: -46.4731
+- id: munich
+  city: Munich
+  country: Germany
+  latitude: 48.3538
+  longitude: 11.7861
+- id: hong_kong
+  city: Hong Kong
+  country: China
+  latitude: 22.308
+  longitude: 113.9185
+- id: shanghai
+  city: Shanghai
+  country: China
+  latitude: 31.1434
+  longitude: 121.8052
+- id: singapore
+  city: Singapore
+  country: Singapore
+  latitude: 1.3644
+  longitude: 103.9915
+- id: tokyo
+  city: Tokyo
+  country: Japan
+  latitude: 35.5523
+  longitude: 139.7798
+- id: tel_aviv
+  city: Tel Aviv
+  country: Israel
+  latitude: 32.0114
+  longitude: 34.8867
+- id: chengdu
+  city: Chengdu
+  country: China
+  latitude: 30.5785
+  longitude: 103.9471
+- id: chongqing
+  city: Chongqing
+  country: China
+  latitude: 29.7196
+  longitude: 106.6416
+- id: shenzhen
+  city: Shenzhen
+  country: China
+  latitude: 22.6393
+  longitude: 113.8107
+- id: beijing
+  city: Beijing
+  country: China
+  latitude: 40.0801
+  longitude: 116.5846
+- id: wuhan
+  city: Wuhan
+  country: China
+  latitude: 30.7838
+  longitude: 114.2081
 logging:
-  level: "INFO"
-  rotation: "10 MB"
-  retention: "10 days"
+  level: INFO
+  rotation: 10 MB
+  retention: 10 days
