@@ -16,6 +16,7 @@ from src.bot.io_layer import BotIOLayer
 from src.bot.runtime_coordinator import StartupCoordinator
 from src.bot.services.city_command_service import CityCommandService
 from src.bot.services.deb_command_service import DebCommandService
+from src.utils.config_validation import validate_or_raise
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
@@ -58,6 +59,7 @@ def start_bot() -> None:
     from src.database.db_manager import DBManager
     from src.utils.config_loader import load_config
 
+    validate_or_raise("bot")
     config = load_config()
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:

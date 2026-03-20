@@ -28,29 +28,52 @@ npm install
 npm run dev
 ```
 
-## 必需环境变量
+## Vercel 最小部署配置
+
+只跑看板和基础鉴权时，先填这 4 项：
 
 ```env
 POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+NEXT_PUBLIC_SUPABASE_URL=https://<your-supabase-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
 POLYWEATHER_AUTH_ENABLED=true
-POLYWEATHER_AUTH_REQUIRED=false
-POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 ```
 
-WalletConnect：
+建议显式补：
 
 ```env
+POLYWEATHER_AUTH_REQUIRED=true
+```
+
+如果你只是开放游客浏览，可改成：
+
+```env
+POLYWEATHER_AUTH_ENABLED=false
+POLYWEATHER_AUTH_REQUIRED=false
+```
+
+## 可选环境变量
+
+仅在对应功能启用时填写：
+
+```env
+# 看板分享令牌
+POLYWEATHER_DASHBOARD_ACCESS_TOKEN=
+
+# 前端 API 转发到后端时使用的共享令牌
+POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
+
+# 钱包支付
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
-```
 
-浮层链接：
-
-```env
+# 社群入口
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
+NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
 ```
+
+更完整的 Vercel 配置说明见：
+- [docs/FRONTEND_DEPLOYMENT_ZH.md](/E:/web/PolyWeather/docs/FRONTEND_DEPLOYMENT_ZH.md)
 
 ## 路由处理器
 
@@ -90,4 +113,4 @@ NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-03-14`
+最后更新：`2026-03-20`

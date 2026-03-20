@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from loguru import logger
 
 from src.utils.config_loader import load_config
+from src.utils.config_validation import validate_runtime_env
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES  # noqa: F401
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
@@ -34,6 +35,11 @@ app.add_middleware(
 )
 
 _config = load_config()
+_config_validation = validate_runtime_env("web")
+for _warning in _config_validation.warnings:
+    logger.warning(f"[config:web] {_warning}")
+if _config_validation.errors:
+    raise RuntimeError(" | ".join(_config_validation.errors))
 _weather = WeatherDataCollector(_config)
 _market_layer = PolymarketReadOnlyLayer()
 _account_db = DBManager()

@@ -7,11 +7,13 @@ services:
       - .env
     volumes:
       # Persist runtime data outside git workspace.
-      # Host path defaults to /var/lib/polyweather and can be overridden by POLYWEATHER_RUNTIME_DATA_DIR.
+      # Host path defaults to /var/lib/polyweather and can be overridden in .env.
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
       # Keep /app/data compatibility for existing cache/state defaults.
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
       - ./bot.log:/app/bot.log # 挂载日志文件
+    # UID/GID are mainly useful on Linux hosts to avoid root-owned output files.
+    # Windows / macOS can usually keep the fallback values.
     user: "${UID:-1000}:${GID:-1000}"
 
   polyweather_web:
@@ -22,8 +24,10 @@ services:
     env_file:
       - .env
     volumes:
+      # Web service shares the same runtime data directory as bot/state tasks.
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
     ports:
       - "8000:8000"
+    # UID/GID are mainly useful on Linux hosts to avoid root-owned output files.
     user: "${UID:-1000}:${GID:-1000}"

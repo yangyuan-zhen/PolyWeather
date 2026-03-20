@@ -127,6 +127,8 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - 商业化说明：[docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - Open-Core 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
+- 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
+- 前端部署（Vercel）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - 技术债（中文镜像）：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - 技术债（主文档）：[docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)

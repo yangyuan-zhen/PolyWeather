@@ -1,0 +1,178 @@
+# 前端部署配置（Vercel）
+
+本文只覆盖 `frontend` 目录对应的 Next.js 前端部署。
+
+## 一、部署目标
+
+推荐方案：
+
+1. GitHub Actions 负责 `CI`
+2. Vercel 负责前端 `CD`
+3. FastAPI 后端单独部署在 VPS / Docker 主机
+
+前端本身不直接访问天气源，而是通过 Next Route Handlers 转发到后端：
+
+1. 浏览器 -> Vercel 上的 Next.js 前端
+2. Next `/api/*` -> `POLYWEATHER_API_BASE_URL`
+3. FastAPI 后端 -> 分析 / 支付 / 鉴权服务
+
+## 二、Vercel 项目设置
+
+在 Vercel 导入 GitHub 仓库后，使用下面的设置：
+
+- Framework Preset: `Next.js`
+- Root Directory: `frontend`
+- Build Command: `npm run build`
+- Install Command: `npm install`
+
+如果仓库已经连接过 Vercel，通常只需要确认 `Root Directory` 仍然是 `frontend`。
+
+## 三、最小必填环境变量
+
+只部署天气看板和基础登录时，先填下面 4 项：
+
+```env
+POLYWEATHER_API_BASE_URL=https://<your-fastapi-host>
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+POLYWEATHER_AUTH_ENABLED=true
+```
+
+建议显式补：
+
+```env
+POLYWEATHER_AUTH_REQUIRED=true
+```
+
+说明：
+
+- `POLYWEATHER_API_BASE_URL`：前端所有 `/api/*` Route Handler 转发时依赖它，没填会直接返回 500。
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`：Supabase 客户端依赖它们。
+- `POLYWEATHER_AUTH_ENABLED`：关闭时，前端不会启用登录能力。
+- `POLYWEATHER_AUTH_REQUIRED`：控制 middleware 是否强制登录。
+
+## 四、按功能启用的可选环境变量
+
+### 1. 分享式看板
+
+```env
+POLYWEATHER_DASHBOARD_ACCESS_TOKEN=
+```
+
+设置后，可通过 `/?access_token=<token>` 打开带令牌的看板入口。
+
+### 2. 前后端 entitlement 校验
+
+```env
+POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
+```
+
+仅当后端开启 entitlement / 订阅校验时需要。
+
+### 3. 钱包支付
+
+```env
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
+NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
+```
+
+如果不启用钱包支付，可以留空。
+
+### 4. Telegram 入口
+
+```env
+NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
+NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
+```
+
+只影响按钮跳转，不影响核心页面加载。
+
+## 五、推荐的三套配置口径
+
+### 1. 公开游客模式
+
+```env
+POLYWEATHER_API_BASE_URL=https://api.example.com
+POLYWEATHER_AUTH_ENABLED=false
+POLYWEATHER_AUTH_REQUIRED=false
+```
+
+适合公开演示站。
+
+### 2. 正常登录模式
+
+```env
+POLYWEATHER_API_BASE_URL=https://api.example.com
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+POLYWEATHER_AUTH_ENABLED=true
+POLYWEATHER_AUTH_REQUIRED=true
+```
+
+适合正式前端站点。
+
+### 3. 登录 + entitlement 联动
+
+```env
+POLYWEATHER_API_BASE_URL=https://api.example.com
+NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<anon-key>
+POLYWEATHER_AUTH_ENABLED=true
+POLYWEATHER_AUTH_REQUIRED=true
+POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=<shared-token>
+```
+
+适合前后端都启用了会员/订阅保护的生产环境。
+
+## 六、不要放进 Vercel 的变量
+
+这些属于后端私密配置，不应该放到前端项目：
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `TELEGRAM_BOT_TOKEN`
+- `POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN` 以外的后端 secret
+- 支付签名私钥 / 交易私钥 / 任何 bot 凭据
+
+特别注意：
+
+- `NEXT_PUBLIC_*` 会暴露给浏览器
+- 只有明确允许前端公开使用的值，才应加 `NEXT_PUBLIC_`
+
+## 七、上线前检查
+
+Vercel 部署前至少确认：
+
+1. `POLYWEATHER_API_BASE_URL` 指向可访问的后端生产地址
+2. `frontend/.env.example` 和 Vercel Project Settings 中的实际值一致
+3. GitHub Actions 中 `frontend-quality` 已通过
+4. 如果启用鉴权，Supabase redirect URL 已包含前端域名
+
+## 八、常见问题
+
+### 1. 页面打开后 API 全部 500
+
+先检查：
+
+```env
+POLYWEATHER_API_BASE_URL
+```
+
+这是最常见原因。
+
+### 2. Vercel 构建通过，但登录失败
+
+先检查：
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Supabase 项目里的站点 URL / redirect URL
+
+### 3. 钱包入口显示未配置
+
+先检查：
+
+```env
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+```
+
+这是钱包连接的必需项。

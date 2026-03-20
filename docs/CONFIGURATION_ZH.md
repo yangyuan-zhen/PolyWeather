@@ -1,0 +1,286 @@
+# 配置与密钥管理（中文）
+
+## 1. 目标
+
+PolyWeather 的环境变量很多，但不是所有变量都属于同一层级。
+
+当前推荐做法是把配置拆成三类：
+
+1. 可复现基础配置  
+   放在：[.env.example](/E:/web/PolyWeather/.env.example)
+
+2. 敏感密钥模板  
+   放在：[.env.secrets.example](/E:/web/PolyWeather/.env.secrets.example)
+
+3. 平台侧真实密钥  
+   放在：
+   - VPS / Docker `.env`
+   - Vercel Environment Variables
+   - GitHub Secrets（如需要）
+
+## 2. 为什么要拆
+
+如果把所有变量都平铺在一个 `.env` 里，会有三个问题：
+
+1. 新环境很难知道“最小启动到底需要哪些变量”
+2. 敏感密钥和普通开关混在一起，容易误泄露
+3. 调优参数太多时，团队很难区分“必须填”和“保持默认即可”
+
+所以正确做法不是“减少变量数量”，而是：
+
+- 保留变量能力
+- 按职责分层
+- 给出最小启动路径
+
+## 3. 文件职责
+
+### 3.1 根 `.env.example`
+
+文件：
+
+- [.env.example](/E:/web/PolyWeather/.env.example)
+
+用途：
+
+- 后端 / Bot / Docker 的可复现配置模板
+- 只放变量名、默认值、开关与非敏感示例
+
+### 3.2 根 `.env.secrets.example`
+
+文件：
+
+- [.env.secrets.example](/E:/web/PolyWeather/.env.secrets.example)
+
+用途：
+
+- 只列敏感项
+- 帮助运维明确哪些值必须从密钥系统注入
+
+### 3.3 前端 `.env.example`
+
+文件：
+
+- [frontend/.env.example](/E:/web/PolyWeather/frontend/.env.example)
+
+用途：
+
+- 前端本地开发与 Vercel 环境变量模板
+
+## 4. 配置分级
+
+### 4.1 L1：最小启动必需项
+
+这是“服务能跑起来”的最小集合。
+
+后端 / Bot：
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+- `POLYWEATHER_RUNTIME_DATA_DIR`
+- `POLYWEATHER_DB_PATH`
+
+前端：
+
+- `POLYWEATHER_API_BASE_URL`
+
+如果启用登录：
+
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+### 4.2 L2：功能开关
+
+这些变量一般不敏感，但会决定功能是否启用。
+
+例如：
+
+- `POLYWEATHER_AUTH_ENABLED`
+- `POLYWEATHER_AUTH_REQUIRED`
+- `POLYWEATHER_AUTH_REQUIRE_SUBSCRIPTION`
+- `POLYWEATHER_PAYMENT_ENABLED`
+- `POLYMARKET_MARKET_SCAN_ENABLED`
+- `POLYGON_WALLET_WATCH_ENABLED`
+- `POLYMARKET_WALLET_ACTIVITY_ENABLED`
+
+### 4.3 L3：运行调优项
+
+这些一般不需要在第一天就改。
+
+例如：
+
+- 各类 `*_TTL_SEC`
+- 各类 `*_TIMEOUT_SEC`
+- 各类 `*_COOLDOWN_SEC`
+- 各类 `*_INTERVAL_SEC`
+
+策略：
+
+- 先用默认值
+- 出现性能或运维问题时再调
+
+### 4.4 L4：敏感项
+
+这些变量不应写进公开文档截图，也不应提交到仓库。
+
+例如：
+
+- `TELEGRAM_BOT_TOKEN`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN`
+- `POLYWEATHER_DASHBOARD_ACCESS_TOKEN`
+- `METEOBLUE_API_KEY`
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- `POLYMARKET_SECRET_KEY`
+
+## 5. 推荐部署矩阵
+
+### 5.1 VPS / Docker（后端 + Bot）
+
+建议放这些：
+
+- 根 `.env` 的后端项
+- 所有 secrets
+- Bot / 支付 / watcher 配置
+
+### 5.2 Vercel（前端）
+
+建议只放前端真正需要的变量：
+
+- `POLYWEATHER_API_BASE_URL`
+- `NEXT_PUBLIC_SUPABASE_URL`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `POLYWEATHER_AUTH_ENABLED`
+- `POLYWEATHER_AUTH_REQUIRED`
+- `POLYWEATHER_DASHBOARD_ACCESS_TOKEN`
+- `POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN`
+- `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
+- `NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL`
+
+不要把后端专用密钥全搬进 Vercel。
+
+### 5.3 GitHub Actions
+
+当前 CI 不需要大规模 secrets。
+
+如果未来要做自动部署，再考虑：
+
+- `VERCEL_TOKEN`
+- `VERCEL_ORG_ID`
+- `VERCEL_PROJECT_ID`
+
+## 6. 最小部署示例
+
+### 6.1 前端最小变量
+
+```env
+POLYWEATHER_API_BASE_URL=https://your-backend.example.com
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+POLYWEATHER_AUTH_ENABLED=true
+POLYWEATHER_AUTH_REQUIRED=true
+```
+
+### 6.2 后端最小变量
+
+```env
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
+POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
+POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
+UID=1000
+GID=1000
+POLYWEATHER_AUTH_ENABLED=true
+POLYWEATHER_AUTH_REQUIRED=false
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=...
+```
+
+说明：
+
+- `UID` / `GID` 主要给 Linux Docker 主机用，避免容器把运行文件写成 root 所有。
+- Windows / macOS 一般可以直接保留默认值。
+- `POLYWEATHER_RUNTIME_DATA_DIR` 建议放在仓库外，例如 `/var/lib/polyweather`。
+- `docker-compose.yml` 会把这个目录同时挂载到容器内的 `/var/lib/polyweather` 和 `/app/data`，兼容现有缓存与 SQLite 路径。
+
+## 7. 当前建议的运维规则
+
+### 7.1 仓库中允许存在
+
+- `.env.example`
+- `.env.secrets.example`
+- `frontend/.env.example`
+
+### 7.2 仓库中不应提交
+
+- `.env`
+- `.env.local`
+- 任何带真实 token / key 的配置文件
+
+### 7.3 截图与共享规则
+
+以下值一旦出现在截图或聊天里，建议视为泄露并轮换：
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN`
+- `TELEGRAM_BOT_TOKEN`
+- 第三方私有 API Key
+
+## 8. 如何收口配置复杂度
+
+如果你觉得变量仍然太多，正确的做法不是一刀删掉，而是：
+
+1. 把“功能开关”和“调优参数”分开看
+2. 保持 `.env.example` 中：
+   - 最小启动项
+   - 常用功能开关
+   - 默认调优值
+3. 让不常改的高阶参数继续留默认
+
+也就是说：
+
+- 使用者只需要先关心 10-20 个关键变量
+- 其余变量保持默认即可
+
+## 9. 推荐的下一步
+
+当前已经完成：
+
+1. 根 `.env.example` 收口
+2. `.env.secrets.example` 新增
+3. 本文档新增
+4. 运行时配置校验脚本新增
+
+## 10. 配置校验命令
+
+在不启动服务的情况下，你可以直接检查配置：
+
+检查 Web：
+
+```bash
+python scripts/validate_runtime_env.py --component web
+```
+
+检查 Bot：
+
+```bash
+python scripts/validate_runtime_env.py --component bot
+```
+
+返回规则：
+
+- 退出码 `0`：当前配置通过
+- 退出码 `1`：当前配置存在关键缺失
+
+如果某个功能已启用但缺关键变量，脚本会直接报错。
+
+## 11. 推荐的下一步
+
+后续最值得继续做的是：
+
+1. 在 GitHub / Vercel / VPS 三侧固化同一套变量命名  
+2. 给生产部署增加一次性配置审计清单
