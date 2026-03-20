@@ -44,8 +44,8 @@ cities:
 - id: hong_kong
   city: Hong Kong
   country: China
-  latitude: 22.308
-  longitude: 113.9185
+  latitude: 22.3019
+  longitude: 114.1742
 - id: shanghai
   city: Shanghai
   country: China

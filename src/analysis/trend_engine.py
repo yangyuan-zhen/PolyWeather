@@ -127,6 +127,11 @@ def analyze_weather_trend(
     mgm = weather_data.get("mgm", {})
     if mgm and mgm.get("today_high") is not None:
         current_forecasts["MGM"] = _sf(mgm.get("today_high"))
+        
+    if weather_data.get("hko_forecast") is not None:
+        current_forecasts["HKO(港天文)"] = _sf(weather_data.get("hko_forecast"))
+    if weather_data.get("cwa_forecast") is not None:
+        current_forecasts["CWA(台气象)"] = _sf(weather_data.get("cwa_forecast"))
 
     mm_forecasts = weather_data.get("multi_model", {}).get("forecasts", {})
     for m_name, m_val in mm_forecasts.items():
@@ -515,23 +520,40 @@ def analyze_weather_trend(
     # === Settlement boundary ===
     if max_so_far is not None:
         settled = apply_city_settlement(city_name, max_so_far)
+        from src.analysis.settlement_rounding import is_exact_settlement_city
+        is_floor = is_exact_settlement_city(str(city_name).lower())
+        
         fractional = max_so_far - int(max_so_far)
-        dist_to_boundary = abs(fractional - 0.5)
-        if dist_to_boundary <= 0.3:
-            if fractional < 0.5:
+        
+        if is_floor:
+            # For flooring cities like HK, boundary is at 1.0 (approaching next integer)
+            dist_to_next = 1.0 - fractional
+            if dist_to_next <= 0.3:
                 msg = (
                     f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
-                    f"<b>{settled}{temp_symbol}</b>，但只差 <b>{0.5 - fractional:.1f}°</b> "
+                    f"<b>{settled}{temp_symbol}</b>，但只差 <b>{dist_to_next:.1f}°</b> "
                     f"就会进位到 {settled + 1}{temp_symbol}！"
                 )
-            else:
-                msg = (
-                    f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
-                    f"<b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 "
-                    f"<b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
-                )
-            insights.append(msg)
-            ai_features.append(msg)
+                insights.append(msg)
+                ai_features.append(msg)
+        else:
+            # Standard rounding boundary at 0.5
+            dist_to_boundary = abs(fractional - 0.5)
+            if dist_to_boundary <= 0.3:
+                if fractional < 0.5:
+                    msg = (
+                        f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
+                        f"<b>{settled}{temp_symbol}</b>，但只差 {0.5 - fractional:.1f}° "
+                        f"就会进位到 {settled + 1}{temp_symbol}！"
+                    )
+                else:
+                    msg = (
+                        f"⚖️ <b>结算边界</b>：当前最高 {max_so_far}{temp_symbol} → {settlement_source_label} 结算 "
+                        f"<b>{settled}{temp_symbol}</b>，刚刚越过进位线，再降 "
+                        f"<b>{fractional - 0.5:.1f}°</b> 就会回落到 {settled - 1}{temp_symbol}。"
+                    )
+                insights.append(msg)
+                ai_features.append(msg)
 
     # === Peak window AI hints ===
     if peak_hours:

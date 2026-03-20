@@ -510,6 +510,32 @@ class WeatherDataCollector:
             logger.warning(f"CWA settlement fetch failed: {exc}")
             return None
 
+    def fetch_hko_forecast(self) -> Optional[float]:
+        try:
+            url = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=tc"
+            res = self.session.get(url, timeout=self.timeout).json()
+            return float(res['weatherForecast'][0]['forecastMaxtemp']['value'])
+        except Exception as e:
+            logger.warning(f"HKO Forecast request failed: {e}")
+            return None
+
+    def fetch_cwa_taipei_forecast(self) -> Optional[float]:
+        try:
+            if not self.cwa_open_data_auth:
+                return None
+            url = 'https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-061'
+            res = self.session.get(url, params={'Authorization': self.cwa_open_data_auth, 'format': 'JSON', 'elementName': 'MaxT'}, timeout=self.timeout).json()
+            locs = res.get('records', {}).get('Locations', [])[0].get('Location', [])
+            if not locs: return None
+            loc = locs[0]
+            for we in loc.get('WeatherElement', []):
+                if we.get('ElementName') == 'MaxT':
+                    return float(we['Time'][0]['ElementValue'][0]['Temperature'])
+            return None
+        except Exception as e:
+            logger.warning(f"CWA Forecast request failed: {e}")
+            return None
+
     def fetch_settlement_current(self, city: str) -> Optional[Dict[str, Any]]:
         normalized = str(city or "").strip().lower()
         if normalized == "hong kong":
@@ -2145,6 +2171,15 @@ class WeatherDataCollector:
         settlement_current = self.fetch_settlement_current(city_lower)
         if settlement_current:
             results["settlement_current"] = settlement_current
+
+        if city_lower in ["hong_kong", "hong kong", "香港", "hk"]:
+            hko_fcst = self.fetch_hko_forecast()
+            if hko_fcst:
+                results["hko_forecast"] = hko_fcst
+        elif city_lower in ["taipei", "台北", "臺北", "tpe"]:
+            cwa_fcst = self.fetch_cwa_taipei_forecast()
+            if cwa_fcst:
+                results["cwa_forecast"] = cwa_fcst
 
         if lat and lon:
             open_meteo = self.fetch_from_open_meteo(

@@ -31,7 +31,7 @@ from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.analysis.deb_algorithm import calculate_dynamic_weights, get_deb_accuracy
-from src.analysis.settlement_rounding import wu_round
+from src.analysis.settlement_rounding import wu_round, apply_city_settlement
 from src.auth.supabase_entitlement import (
     SUPABASE_ENTITLEMENT,
     extract_bearer_token,
@@ -394,7 +394,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if max_temp_time == "":
         max_temp_time = None
 
-    wu_settle = wu_round(max_so_far) if max_so_far is not None else None
+    wu_settle = apply_city_settlement(city.lower(), max_so_far) if max_so_far is not None else None
 
     # Observation time → local
     obs_time_str = ""
@@ -1075,7 +1075,7 @@ def _build_city_detail_payload(
     temp_symbol = str(data.get("temp_symbol") or "")
     if anchor_temp_c is not None and "F" in temp_symbol.upper():
         anchor_temp_c = (anchor_temp_c - 32.0) * 5.0 / 9.0
-    anchor_settlement = wu_round(anchor_temp_c) if anchor_temp_c is not None else None
+    anchor_settlement = apply_city_settlement(city.lower(), anchor_temp_c) if anchor_temp_c is not None else None
 
     primary_bucket = None
     if isinstance(distribution, list) and distribution:

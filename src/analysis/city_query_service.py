@@ -7,6 +7,7 @@ from src.analysis.metar_narrator import describe_metar_report
 from src.analysis.trend_engine import analyze_weather_trend
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
+from src.analysis.settlement_rounding import apply_city_settlement
 
 
 FAHRENHEIT_CITIES = {
@@ -505,7 +506,7 @@ def build_city_query_report(
 
     max_str = ""
     if max_p is not None:
-        settled_val = int(max_p + 0.5)
+        settled_val = apply_city_settlement(city_name.lower(), max_p)
         max_str = f" (最高: {max_p}{temp_symbol}"
         if max_p_time:
             max_str += f" @{max_p_time}"
@@ -520,12 +521,19 @@ def build_city_query_report(
     )
 
     if use_settlement_current:
+        # HKO/CWA detailed observations
         wind = primary_current.get("wind_speed_kt")
         wind_dir = primary_current.get("wind_dir")
         humidity = primary_current.get("humidity")
         msg_lines.append(
             f"   [{settlement_source_label}] 🌪 {wind or 0}kt ({wind_dir or 0}°) | 💧 湿度: {humidity or 'N/A'}%"
         )
+        # Secondary METAR info if available for context
+        if metar:
+            m_wind = metar_current.get("wind_speed_kt")
+            m_dir = metar_current.get("wind_dir")
+            m_vis = metar_current.get("visibility_mi")
+            msg_lines.append(f"   [METAR] 🌪 {m_wind or 0}kt ({m_dir or 0}°) | 👁️ {m_vis or 10}mi")
     elif metar:
         wind = metar_current.get("wind_speed_kt")
         wind_dir = metar_current.get("wind_dir")
