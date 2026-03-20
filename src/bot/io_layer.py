@@ -165,8 +165,8 @@ class BotIOLayer:
         user_info = self.db.get_user(user.id)
         now = datetime.now()
         today_str = now.strftime("%Y-%m-%d")
-        iso_year, iso_week, _ = now.isocalendar()
-        week_key = f"{iso_year}-W{iso_week:02d}"
+        weekly_profile = self.db.get_weekly_profile(user.id)
+        week_key = str(weekly_profile.get("week_key") or "")
 
         leaderboard = self.db.get_weekly_leaderboard(limit=5)
         rank_text = f"🏆 <b>PolyWeather 周活跃度排行榜 ({week_key})</b>\n"
@@ -185,16 +185,19 @@ class BotIOLayer:
             if daily_points > MESSAGE_DAILY_CAP:
                 daily_points = MESSAGE_DAILY_CAP
 
-            weekly_points = int(user_info.get("weekly_points") or 0)
-            weekly_points_week = str(user_info.get("weekly_points_week") or "")
-            if weekly_points_week != week_key:
-                weekly_points = 0
+            weekly_points = int(weekly_profile.get("weekly_points") or 0)
+            weekly_rank = weekly_profile.get("weekly_rank")
+            ranked_count = int(weekly_profile.get("total_ranked") or 0)
+            weekly_rank_text = (
+                f"{weekly_rank}/{ranked_count}" if weekly_rank and ranked_count > 0 else "未上榜"
+            )
 
             rank_text += "────────────────────\n"
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
-                f"┣ 积分: <code>{user_info['points']}</code>\n"
-                f"┣ 发言: <code>{user_info['message_count']}</code> 次\n"
+                f"┣ 累计积分: <code>{user_info['points']}</code>\n"
+                f"┣ 累计发言: <code>{user_info['message_count']}</code> 次\n"
+                f"┣ 本周排名: <code>{weekly_rank_text}</code>\n"
                 f"┣ 本周发言积分: <code>{weekly_points}</code>\n"
                 f"┣ 今日发言积分: <code>{daily_points}/{MESSAGE_DAILY_CAP}</code>\n"
                 f"┗ /city 消耗: <code>{CITY_QUERY_COST}</code> | /deb 消耗: <code>{DEB_QUERY_COST}</code>"

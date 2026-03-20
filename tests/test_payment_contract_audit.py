@@ -16,3 +16,17 @@ def test_payment_contract_audit_detects_current_controls():
     assert report["checks"]["binds_plan_amount_onchain"] is False
     assert any(risk["id"] == "single_owner_admin" for risk in report["risks"])
 
+
+def test_payment_contract_audit_detects_v2_controls():
+    report = analyze_checkout_contract(
+        os.path.join("contracts", "PolyWeatherCheckoutV2.sol")
+    )
+
+    assert report["contract_name"] == "PolyWeatherCheckoutV2"
+    assert report["checks"]["uses_safe_erc20"] is True
+    assert report["checks"]["has_pause_switch"] is True
+    assert report["checks"]["has_reentrancy_guard"] is True
+    assert report["checks"]["binds_plan_amount_onchain"] is True
+    assert report["checks"]["has_signature_authorization"] is True
+    assert report["checks"]["owner_injected_in_constructor"] is True
+    assert not any(risk["id"] == "single_owner_admin" for risk in report["risks"])

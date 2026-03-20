@@ -17,6 +17,7 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
     checks = {
         "has_only_owner_modifier": _has(r"modifier\s+onlyOwner\s*\(", source),
         "owner_set_in_constructor": _has(r"owner\s*=\s*msg\.sender\s*;", source),
+        "owner_injected_in_constructor": _has(r"constructor\s*\(\s*address\s+initialOwner", source),
         "set_treasury_only_owner": _has(
             r"function\s+setTreasury\s*\([^)]*\)\s*external\s+onlyOwner", source
         ),
@@ -26,6 +27,10 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
         "zero_address_guard_in_constructor": _has(
             r"constructor\s*\([^)]*\)\s*\{\s*require\(\s*_token\s*!=\s*address\(0\)\s*&&\s*_treasury\s*!=\s*address\(0\)",
             source,
+        )
+        or _has(
+            r"constructor[\s\S]*?require\(\s*initialTreasury\s*!=\s*address\(0\)",
+            source,
         ),
         "zero_address_guard_in_setters": _has(
             r"function\s+setTreasury[\s\S]*?require\(\s*_treasury\s*!=\s*address\(0\)",
@@ -34,6 +39,16 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
         and _has(
             r"function\s+setTokenAllowed[\s\S]*?require\(\s*token\s*!=\s*address\(0\)",
             source,
+        )
+        or (
+            _has(
+                r"function\s+setTreasury[\s\S]*?require\(\s*newTreasury\s*!=\s*address\(0\)",
+                source,
+            )
+            and _has(
+                r"function\s+setTokenAllowed[\s\S]*?require\(\s*token\s*!=\s*address\(0\)",
+                source,
+            )
         ),
         "allowed_token_check": _has(r"require\(\s*allowedToken\[token\]", source),
         "amount_non_zero_check": _has(r"require\(\s*amount\s*>\s*0", source),
@@ -41,15 +56,24 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
         "paid_order_written_before_transfer": _has(
             r"paidOrder\[orderId\]\s*=\s*true\s*;\s*require\(IERC20\(token\)\.transferFrom",
             source,
+        )
+        or _has(
+            r"paidOrder\[orderId\]\s*=\s*true\s*;\s*IERC20\(token\)\.safeTransferFrom",
+            source,
         ),
         "emits_order_paid": _has(r"emit\s+OrderPaid\s*\(", source),
         "uses_safe_erc20": _has(r"SafeERC20", source),
         "has_pause_switch": _has(r"\bpaused\b|\bPausable\b|\bwhenNotPaused\b", source),
+        "has_reentrancy_guard": _has(r"nonReentrant|ReentrancyGuard", source),
         "has_rescue_function": _has(
             r"function\s+(rescue|sweep|withdraw|recover)", source
         ),
         "binds_plan_amount_onchain": _has(
-            r"mapping\s*\(\s*uint256\s*=>[\s\S]*plan|planAmount|require\(\s*amount\s*==",
+            r"mapping\s*\(\s*uint256\s*=>[\s\S]*PlanConfig|planAmount|require\(\s*amount\s*==|function\s+setPlan",
+            source,
+        ),
+        "has_signature_authorization": _has(
+            r"EIP712Domain|AUTHORIZED_PAYMENT_TYPEHASH|function\s+payAuthorized",
             source,
         ),
     }
@@ -65,6 +89,14 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
         strengths.append("订单去重状态在外部 transferFrom 前写入，能拦住同订单重复支付与典型重入重放。")
     if checks["emits_order_paid"]:
         strengths.append("链上事件 OrderPaid 明确，可作为链下审计与补单的唯一确认源。")
+    if checks["has_reentrancy_guard"]:
+        strengths.append("支付入口包含 ReentrancyGuard，能进一步收紧外部调用期间的重入风险。")
+    if checks["has_pause_switch"]:
+        strengths.append("合约具备暂停开关，便于紧急止损。")
+    if checks["binds_plan_amount_onchain"]:
+        strengths.append("套餐金额已支持链上绑定，不再完全依赖链下校验。")
+    if checks["has_signature_authorization"]:
+        strengths.append("支持 EIP-712 授权支付，可在链上金额绑定之外增加签名边界。")
 
     if checks["uses_safe_erc20"]:
         strengths.append("使用了 SafeERC20 包装，兼容性更稳。")
@@ -88,7 +120,7 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
             }
         )
 
-    if not checks["binds_plan_amount_onchain"]:
+    if not checks["binds_plan_amount_onchain"] and not checks["has_signature_authorization"]:
         risks.append(
             {
                 "id": "offchain_price_enforcement",
@@ -108,14 +140,15 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
             }
         )
 
-    risks.append(
-        {
-            "id": "single_owner_admin",
-            "severity": "medium",
-            "title": "owner 为单地址管理模型",
-            "detail": "setTreasury 和 setTokenAllowed 由单一 owner 控制。生产建议用多签地址持有 owner，降低单点密钥失窃风险。",
-        }
-    )
+    if not checks["owner_injected_in_constructor"]:
+        risks.append(
+            {
+                "id": "single_owner_admin",
+                "severity": "medium",
+                "title": "owner 为单地址管理模型",
+                "detail": "setTreasury 和 setTokenAllowed 由单一 owner 控制。生产建议用多签地址持有 owner，降低单点密钥失窃风险。",
+            }
+        )
 
     runtime_controls = [
         "后端只认链上 OrderPaid 事件，不认前端自报支付成功。",
@@ -132,7 +165,7 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
 
     return {
         "contract_path": path,
-        "contract_name": "PolyWeatherCheckout",
+        "contract_name": "PolyWeatherCheckoutV2" if "PolyWeatherCheckoutV2" in source else "PolyWeatherCheckout",
         "summary": {
             "strength_count": len(strengths),
             "risk_count": len(risks),
@@ -144,4 +177,3 @@ def analyze_checkout_contract(source_path: str) -> Dict[str, Any]:
         "risks": risks,
         "recommendations": recommendations,
     }
-

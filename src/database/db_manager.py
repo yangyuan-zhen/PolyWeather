@@ -762,19 +762,69 @@ class DBManager:
                 """
                 SELECT
                     username,
-                    points,
-                    message_count,
-                    CASE
-                        WHEN weekly_points_week = ? THEN COALESCE(weekly_points, 0)
-                        ELSE 0
-                    END AS weekly_points
-                FROM users
+                    u.points AS points,
+                    u.message_count AS message_count,
+                    u.telegram_id AS telegram_id,
+                    COALESCE(a.points,
+                        CASE
+                            WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
+                            ELSE 0
+                        END
+                    ) AS weekly_points
+                FROM users u
+                LEFT JOIN weekly_points_archive a
+                    ON a.telegram_id = u.telegram_id
+                    AND a.week_key = ?
                 ORDER BY weekly_points DESC, points DESC, message_count DESC
                 LIMIT ?
                 """,
-                (week_key, limit),
+                (week_key, week_key, limit),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_weekly_profile(self, telegram_id: int) -> Dict[str, Any]:
+        now = datetime.now()
+        iso_year, iso_week, _ = now.isocalendar()
+        week_key = f"{iso_year}-W{iso_week:02d}"
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT
+                    u.telegram_id,
+                    COALESCE(u.points, 0) AS points,
+                    COALESCE(u.message_count, 0) AS message_count,
+                    COALESCE(a.points,
+                        CASE
+                            WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
+                            ELSE 0
+                        END
+                    ) AS weekly_points
+                FROM users u
+                LEFT JOIN weekly_points_archive a
+                    ON a.telegram_id = u.telegram_id
+                    AND a.week_key = ?
+                ORDER BY weekly_points DESC, points DESC, message_count DESC, u.telegram_id ASC
+                """,
+                (week_key, week_key),
+            ).fetchall()
+
+        weekly_rank: Optional[int] = None
+        weekly_points = 0
+        total_ranked = 0
+        for idx, row in enumerate(rows, start=1):
+            row_weekly_points = int(row["weekly_points"] or 0)
+            if row_weekly_points > 0:
+                total_ranked += 1
+            if int(row["telegram_id"] or 0) == int(telegram_id):
+                weekly_rank = idx if row_weekly_points > 0 else None
+                weekly_points = row_weekly_points
+        return {
+            "week_key": week_key,
+            "weekly_points": max(0, int(weekly_points or 0)),
+            "weekly_rank": weekly_rank,
+            "total_ranked": total_ranked,
+        }
 
     def get_weekly_profile_by_supabase_user_id(self, supabase_user_id: str) -> Dict[str, Any]:
         key = str(supabase_user_id or "").strip().lower()
