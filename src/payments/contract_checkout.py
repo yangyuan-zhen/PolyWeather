@@ -247,6 +247,9 @@ class PaymentContractCheckoutService:
         self.chain_id = _env_int("POLYWEATHER_PAYMENT_CHAIN_ID", DEFAULT_POLYGON_CHAIN_ID)
         self.token_decimals = _env_int("POLYWEATHER_PAYMENT_TOKEN_DECIMALS", 6)
         self.rpc_url = str(os.getenv("POLYWEATHER_PAYMENT_RPC_URL") or "").strip()
+        self.rpc_urls = self._load_rpc_urls(
+            os.getenv("POLYWEATHER_PAYMENT_RPC_URLS") or self.rpc_url
+        )
         legacy_receiver_contract = _normalize_address(
             os.getenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT") or ""
         )
@@ -315,6 +318,7 @@ class PaymentContractCheckoutService:
         )
         self._w3_lock = threading.Lock()
         self._w3: Optional[Web3] = None
+        self._w3_url: str = ""
         self._event_topic = Web3.keccak(
             text="OrderPaid(bytes32,address,uint256,address,uint256)"
         ).hex()
@@ -332,7 +336,7 @@ class PaymentContractCheckoutService:
         return bool(
             self.supabase_url
             and self.supabase_service_role_key
-            and self.rpc_url
+            and bool(self.rpc_urls)
             and has_valid_token_routes
         )
 
@@ -347,6 +351,14 @@ class PaymentContractCheckoutService:
                     "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON"
                 ),
             )
+
+    def _load_rpc_urls(self, raw: str) -> List[str]:
+        out: List[str] = []
+        for part in str(raw or "").split(","):
+            url = str(part or "").strip()
+            if url and url not in out:
+                out.append(url)
+        return out
 
     def _default_token_meta(self, address: str) -> Dict[str, str]:
         normalized = _normalize_address(address)
@@ -821,14 +833,47 @@ class PaymentContractCheckoutService:
         result["discount_usdc"] = _format_decimal(discount_usdc)
         return result
 
-    def _get_web3(self) -> Web3:
+    def _build_web3(self, rpc_url: str) -> Web3:
+        return Web3(
+            Web3.HTTPProvider(rpc_url, request_kwargs={"timeout": self.timeout_sec})
+        )
+
+    def _try_connect_rpc(self, rpc_url: str) -> Optional[Web3]:
+        try:
+            w3 = self._build_web3(rpc_url)
+            if not w3.is_connected():
+                return None
+            if int(w3.eth.chain_id) != int(self.chain_id):
+                return None
+            return w3
+        except Exception:
+            return None
+
+    def _rotate_rpc(self) -> Optional[Web3]:
+        for rpc_url in self.rpc_urls:
+            w3 = self._try_connect_rpc(rpc_url)
+            if w3 is not None:
+                self._w3 = w3
+                self._w3_url = rpc_url
+                return w3
+        self._w3 = None
+        self._w3_url = ""
+        return None
+
+    def _get_web3(self, force_refresh: bool = False) -> Web3:
         with self._w3_lock:
-            if self._w3 is None:
-                self._w3 = Web3(
-                    Web3.HTTPProvider(self.rpc_url, request_kwargs={"timeout": self.timeout_sec})
-                )
+            if self._w3 is None or force_refresh:
+                self._rotate_rpc()
         assert self._w3 is not None
         return self._w3
+
+    def get_rpc_runtime_status(self) -> Dict[str, Any]:
+        candidates = list(self.rpc_urls)
+        return {
+            "configured_rpc_count": len(candidates),
+            "active_rpc_url": self._w3_url or (candidates[0] if candidates else ""),
+            "all_rpc_urls": candidates,
+        }
 
     def _get_contract(self, receiver_address: Optional[str] = None):
         w3 = self._get_web3()
@@ -1561,15 +1606,25 @@ class PaymentContractCheckoutService:
     def _wait_receipt(self, tx_hash: str) -> Any:
         import time as _time
 
-        w3 = self._get_web3()
         start = _now_utc()
         while (_now_utc() - start).total_seconds() < self.max_wait_sec:
             try:
+                w3 = self._get_web3()
                 receipt = w3.eth.get_transaction_receipt(tx_hash)
             except Exception:
-                receipt = None
+                try:
+                    w3 = self._get_web3(force_refresh=True)
+                    receipt = w3.eth.get_transaction_receipt(tx_hash)
+                except Exception:
+                    receipt = None
             if receipt and receipt.get("blockNumber"):
                 return receipt
+            try:
+                latest_w3 = self._get_web3()
+                if not latest_w3.is_connected():
+                    self._get_web3(force_refresh=True)
+            except Exception:
+                receipt = None
             _time.sleep(self.poll_interval_sec)
         raise PaymentCheckoutError(408, "tx receipt timeout")
 

@@ -10,7 +10,10 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 from web3 import Web3
 
+from src.database.db_manager import DBManager
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError
+
+_DB = DBManager()
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -70,6 +73,9 @@ def _state_file() -> str:
 
 
 def _load_state(path: str) -> Dict[str, Any]:
+    db_state = _DB.get_payment_runtime_state("payment_event_loop")
+    if isinstance(db_state, dict) and db_state:
+        return db_state
     if not os.path.exists(path):
         return {}
     try:
@@ -82,11 +88,19 @@ def _load_state(path: str) -> Dict[str, Any]:
 
 
 def _save_state(path: str, state: Dict[str, Any]) -> None:
+    _DB.set_payment_runtime_state("payment_event_loop", state)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp_path = f"{path}.tmp"
     with open(tmp_path, "w", encoding="utf-8") as fh:
         json.dump(state, fh, ensure_ascii=False, indent=2)
     os.replace(tmp_path, path)
+
+
+def _append_audit_event(event_type: str, payload: Dict[str, Any]) -> None:
+    try:
+        _DB.append_payment_audit_event(event_type, payload)
+    except Exception as exc:
+        logger.debug(f"payment event audit append failed: {exc}")
 
 
 def _is_pending_confirm_error(exc: PaymentCheckoutError) -> bool:
@@ -232,6 +246,17 @@ def _runner() -> None:
         max_events,
         len(receiver_contracts),
         PAYMENT_CHECKOUT.chain_id,
+    )
+    _append_audit_event(
+        "event_loop_started",
+        {
+            "interval_sec": interval_sec,
+            "lookback_blocks": lookback_blocks,
+            "step_blocks": step_blocks,
+            "max_events": max_events,
+            "receiver_contracts": receiver_contracts,
+            "chain_id": PAYMENT_CHECKOUT.chain_id,
+        },
     )
 
     while True:
@@ -392,6 +417,18 @@ def _runner() -> None:
                 cursor = to_block + 1
 
             if scanned_blocks > 0:
+                cycle_summary = {
+                    "blocks": scanned_blocks,
+                    "events": scanned_events,
+                    "matched": matched_intents,
+                    "submitted": submitted,
+                    "confirmed": confirmed,
+                    "already": already,
+                    "pending": pending,
+                    "failed": failed,
+                    "ignored": ignored,
+                    "last_scanned_block": int(state.get("last_scanned_block") or 0),
+                }
                 logger.info(
                     "payment event cycle blocks={} events={} matched={} submitted={} "
                     "confirmed={} already={} pending={} failed={} ignored={}",
@@ -405,8 +442,10 @@ def _runner() -> None:
                     failed,
                     ignored,
                 )
+                _append_audit_event("event_loop_cycle", cycle_summary)
         except Exception as exc:
             logger.warning(f"payment event cycle failed: {exc}")
+            _append_audit_event("event_loop_error", {"error": str(exc)})
 
         elapsed = time.time() - cycle_started
         time.sleep(max(0.0, interval_sec - elapsed))

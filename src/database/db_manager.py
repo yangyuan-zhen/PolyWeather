@@ -3,7 +3,7 @@ import os
 import hashlib
 import json
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from loguru import logger
 
 
@@ -83,9 +83,27 @@ class DBManager:
                     pro_granted INTEGER DEFAULT 0,
                     pro_error TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    PRIMARY KEY (week_key, telegram_id)
+                PRIMARY KEY (week_key, telegram_id)
                 )
             """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_runtime_state (
+                    state_key TEXT PRIMARY KEY,
+                    payload_json TEXT NOT NULL,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS payment_audit_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_payment_audit_events_created_at ON payment_audit_events(created_at DESC)"
+            )
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS supabase_bindings (
                     supabase_user_id TEXT PRIMARY KEY,
@@ -122,6 +140,91 @@ class DBManager:
             )
             conn.commit()
             logger.info(f"Database initialized successfully path={self.db_path}")
+
+    def get_payment_runtime_state(self, state_key: str) -> Optional[Dict[str, Any]]:
+        key = str(state_key or "").strip()
+        if not key:
+            return None
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT payload_json
+                FROM payment_runtime_state
+                WHERE state_key = ?
+                LIMIT 1
+                """,
+                (key,),
+            ).fetchone()
+            if not row:
+                return None
+            try:
+                payload = json.loads(str(row["payload_json"] or "{}"))
+            except Exception:
+                return None
+            return payload if isinstance(payload, dict) else None
+
+    def set_payment_runtime_state(self, state_key: str, payload: Dict[str, Any]) -> None:
+        key = str(state_key or "").strip()
+        if not key:
+            return
+        body = payload if isinstance(payload, dict) else {}
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO payment_runtime_state (state_key, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(state_key) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at
+                """,
+                (key, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
+            )
+            conn.commit()
+
+    def append_payment_audit_event(self, event_type: str, payload: Dict[str, Any]) -> None:
+        kind = str(event_type or "").strip().lower()
+        if not kind:
+            return
+        body = payload if isinstance(payload, dict) else {}
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO payment_audit_events (event_type, payload_json, created_at)
+                VALUES (?, ?, ?)
+                """,
+                (kind, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
+            )
+            conn.commit()
+
+    def list_payment_audit_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 50), 500))
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, event_type, payload_json, created_at
+                FROM payment_audit_events
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+            out = []
+            for row in rows:
+                try:
+                    payload = json.loads(str(row["payload_json"] or "{}"))
+                except Exception:
+                    payload = {}
+                out.append(
+                    {
+                        "id": int(row["id"]),
+                        "event_type": str(row["event_type"] or ""),
+                        "payload": payload if isinstance(payload, dict) else {},
+                        "created_at": row["created_at"],
+                    }
+                )
+            return out
 
     @staticmethod
     def _safe_week_key(value: str) -> str:

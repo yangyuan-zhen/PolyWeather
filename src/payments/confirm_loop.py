@@ -7,7 +7,10 @@ from typing import Any, Dict
 
 from loguru import logger
 
+from src.database.db_manager import DBManager
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError
+
+_DB = DBManager()
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -46,6 +49,13 @@ def _short_hash(tx_hash: str) -> str:
     return f"{text[:10]}...{text[-6:]}"
 
 
+def _append_audit_event(event_type: str, payload: Dict[str, Any]) -> None:
+    try:
+        _DB.append_payment_audit_event(event_type, payload)
+    except Exception as exc:
+        logger.debug(f"payment confirm audit append failed: {exc}")
+
+
 def _runner() -> None:
     enabled = _env_bool("POLYWEATHER_PAYMENT_CONFIRM_LOOP_ENABLED", True)
     if not enabled:
@@ -66,6 +76,15 @@ def _runner() -> None:
         batch_size,
         PAYMENT_CHECKOUT.chain_id,
         PAYMENT_CHECKOUT.confirmations,
+    )
+    _append_audit_event(
+        "confirm_loop_started",
+        {
+            "interval_sec": interval_sec,
+            "batch_size": batch_size,
+            "chain_id": PAYMENT_CHECKOUT.chain_id,
+            "confirmations": PAYMENT_CHECKOUT.confirmations,
+        },
     )
 
     while True:
@@ -114,6 +133,13 @@ def _runner() -> None:
                     )
 
             if scanned and (confirmed or already_confirmed or failed):
+                cycle_summary = {
+                    "scanned": scanned,
+                    "confirmed": confirmed,
+                    "already_confirmed": already_confirmed,
+                    "pending": pending,
+                    "failed": failed,
+                }
                 logger.info(
                     "payment confirm cycle scanned={} confirmed={} already={} pending={} failed={}",
                     scanned,
@@ -122,8 +148,10 @@ def _runner() -> None:
                     pending,
                     failed,
                 )
+                _append_audit_event("confirm_loop_cycle", cycle_summary)
         except Exception as exc:
             logger.warning(f"payment confirm cycle failed: {exc}")
+            _append_audit_event("confirm_loop_error", {"error": str(exc)})
         time.sleep(interval_sec)
 
 
@@ -135,4 +163,3 @@ def start_payment_confirm_loop():
     )
     thread.start()
     return thread
-

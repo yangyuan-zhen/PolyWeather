@@ -234,6 +234,23 @@ async def payment_config(request: Request):
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@router.get("/api/payments/runtime")
+async def payment_runtime(request: Request):
+    _assert_entitlement(request)
+    try:
+        from src.database.db_manager import DBManager
+
+        db = DBManager()
+        return {
+            "checkout": PAYMENT_CHECKOUT.get_config_payload(),
+            "rpc": PAYMENT_CHECKOUT.get_rpc_runtime_status(),
+            "event_loop_state": db.get_payment_runtime_state("payment_event_loop") or {},
+            "recent_audit_events": db.list_payment_audit_events(limit=20),
+        }
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @router.get("/api/payments/wallets")
 async def payment_wallets(request: Request):
     _assert_entitlement(request)

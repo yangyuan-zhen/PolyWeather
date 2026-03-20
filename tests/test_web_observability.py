@@ -35,3 +35,13 @@ def test_metrics_endpoint_returns_prometheus_payload():
     response = client.get('/metrics')
     assert response.status_code == 200
     assert 'polyweather_http_requests_total' in response.text
+
+
+def test_payment_runtime_endpoint_returns_shape():
+    response = client.get('/api/payments/runtime')
+    assert response.status_code == 200
+    payload = response.json()
+    assert 'checkout' in payload
+    assert 'rpc' in payload
+    assert 'event_loop_state' in payload
+    assert 'recent_audit_events' in payload
