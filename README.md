@@ -14,12 +14,16 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## Product Status (2026-03)
+## Product Status (2026-03-21)
 
 - Subscription live: `Pro Monthly 5 USDC`.
 - Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
 - Onchain checkout live: Polygon contract checkout (USDC / USDC.e).
 - Auto-reconciliation live: event listener + periodic confirm loop.
+- Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
+- Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
+- Runtime state supports gradual SQLite migration (`file / dual / sqlite`).
+- EMOS/CRPS pipeline is integrated in `shadow` mode with rollout gating.
 
 ## Open-Core Boundary (Important)
 
@@ -32,11 +36,12 @@ See: [Open-Core & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 20 monitored cities.
+- Aggregates observations and forecasts for 30 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Generates settlement-oriented probability buckets (`mu` + bucket distribution).
 - Maps weather view to Polymarket quotes for mispricing scan.
 - Reuses one analysis core across web dashboard and Telegram bot.
+- Adds payment audit trails, replay tooling, and incident visibility in ops.
 
 ## Reference Architecture
 
@@ -57,12 +62,13 @@ flowchart LR
     ANA --> PM["Polymarket Read-only Layer"]
 ```
 
-## Monitored Cities (20)
+## Monitored Cities (30)
 
-- Europe / Middle East: Ankara, London, Paris, Munich
-- APAC: Seoul, Hong Kong, Shanghai, Singapore, Tokyo, Wellington
+- Europe / Middle East: Ankara, London, Paris, Munich, Tel Aviv, Milan, Warsaw, Madrid
+- APAC: Seoul, Hong Kong, Taipei, Shanghai, Singapore, Tokyo, Wellington
 - Americas: Toronto, New York, Chicago, Dallas, Miami, Atlanta, Seattle, Buenos Aires, Sao Paulo
 - South Asia: Lucknow
+- China extension: Chengdu, Chongqing, Shenzhen, Beijing, Wuhan
 
 ## Quick Start
 
@@ -91,6 +97,14 @@ POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 
 ## Ops Verification
 
+### Health / system status / metrics
+
+```bash
+curl http://127.0.0.1:8000/healthz
+curl http://127.0.0.1:8000/api/system/status
+curl http://127.0.0.1:8000/metrics
+```
+
 ### Frontend cache headers
 
 ```bash
@@ -101,6 +115,12 @@ POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 
 ```bash
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
+```
+
+### Payment runtime
+
+```bash
+curl http://127.0.0.1:8000/api/payments/runtime
 ```
 
 ### Wallet activity logs
@@ -127,9 +147,15 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - Open-Core policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
+- Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
+- Frontend deployment (ZH): [docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - Tech debt (EN): [docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
 - Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
+- Payment audit: [docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
+- Payment V2 upgrade: [docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
+- Ops admin guide: [docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
+- Deep research report: [docs/deep-research-report.md](docs/deep-research-report.md)
 - Frontend report: [FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - Release process: [RELEASE.md](RELEASE.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
@@ -137,4 +163,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## Version
 
 - Version: `v1.5.0`
-- Last Updated: `2026-03-14`
+- Last Updated: `2026-03-21`

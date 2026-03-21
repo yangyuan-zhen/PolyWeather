@@ -14,13 +14,14 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-03-20）
+## 当前产品状态（2026-03-21）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
 - 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
 - 已上线链上支付：Polygon 合约支付（USDC / USDC.e）。
 - 已上线自动补单：事件监听 + 周期确认双链路。
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
+- 已上线轻量运营后台：`/ops`（会员、周榜、补分、支付异常单）。
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 运行态状态与缓存已支持 SQLite 渐进迁移：`file / dual / sqlite`。
 - 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
@@ -126,6 +127,15 @@ docker compose logs -f polyweather | egrep "payment event loop started|payment c
 curl http://127.0.0.1:8000/api/payments/runtime
 ```
 
+### 运营后台
+
+- 前端入口：`https://polyweather-pro.vercel.app/ops`
+- 后端需配置：
+
+```env
+POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
+```
+
 ### 钱包异动监听日志
 
 ```bash
@@ -159,6 +169,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - 支付审计说明：[docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
+- 运营后台说明：[docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
 - 深度评估报告：[docs/deep-research-report.md](docs/deep-research-report.md)
 - 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
@@ -167,4 +178,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## 当前版本
 
 - 版本：`v1.5.0`
-- 文档最后更新：`2026-03-20`
+- 文档最后更新：`2026-03-21`

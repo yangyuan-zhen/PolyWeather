@@ -1,6 +1,6 @@
 # PolyWeather 支付审计与防护说明
 
-最后更新：`2026-03-20`
+最后更新：`2026-03-21`
 
 ## 1. 当前已落地的防护
 
@@ -22,6 +22,14 @@
 - 后端只认链上 `OrderPaid` 事件。
 - 前端提交 intent 不会直接视为支付完成。
 - `confirm_loop` 会再次按链上交易与确认数校验 intent。
+- 若确认失败，当前会明确把 intent / transaction 落为失败态，而不是长期停留在 `submitted`。
+
+当前已显式识别的失败原因包括：
+
+- `receiver_mismatch`
+- `sender_mismatch`
+- `event_mismatch`
+- `tx_reverted`
 
 ### RPC 多节点容灾
 
@@ -62,6 +70,23 @@ python scripts/replay_payment_events.py --from-block 10000000 --to-block 1000100
 - 候选 RPC 列表
 - event loop 最新状态
 - 最近审计事件
+
+### Ops 事故单
+
+现在 `/ops` 已提供单独的支付异常单列表，默认展示：
+
+- `payment_intent_failed`
+
+支持：
+
+- 按 `reason` 过滤
+- 标记已处理
+
+这让下面这类事故不再需要翻日志定位：
+
+- 已付款但未开通
+- 打到旧收款地址
+- 交易事件不匹配
 
 ## 2. 当前合约的授权边界
 
@@ -175,6 +200,38 @@ curl http://127.0.0.1:8000/api/payments/runtime
 - `rpc.configured_rpc_count`
 - `event_loop_state.last_scanned_block`
 - `recent_audit_events`
+
+如果你在 `/ops` 或脚本里看到：
+
+- `receiver_mismatch`
+
+其含义通常不是“缓存没刷新”，而是：
+
+- 用户这笔交易的 `to` 地址不是当前生产收款合约
+- 常见原因是旧页面、旧 deployment、旧钱包会话，或历史收款地址仍被命中
+
+此时应优先做：
+
+1. 确认链上真实 `to` 地址
+2. 确认当前 `/api/payments/config` 返回的 `receiver_contract`
+3. 如确已收款，再走人工恢复或补开订阅
+
+### 按邮箱恢复最近支付
+
+已提供脚本：
+
+- [reconcile_subscription_by_email.py](/E:/web/PolyWeather/scripts/reconcile_subscription_by_email.py)
+
+命令：
+
+```bash
+docker compose exec polyweather_web python scripts/reconcile_subscription_by_email.py --email user@example.com
+```
+
+适用场景：
+
+- 用户声称已付费但未开通
+- 需要快速确认最近一笔 intent 是否能自动恢复
 
 ## 7. 下一版合约建议
 

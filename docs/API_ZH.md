@@ -1,6 +1,6 @@
 # PolyWeather API 文档（v1.5.0）
 
-最后更新：`2026-03-20`
+最后更新：`2026-03-21`
 
 本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
@@ -74,6 +74,7 @@ flowchart LR
 | `/api/payments/intents/{intent_id}` | GET | 查询 intent 最新状态 |
 | `/api/payments/intents/{intent_id}/submit` | POST | 提交交易哈希 |
 | `/api/payments/intents/{intent_id}/confirm` | POST | 手动触发确认 |
+| `/api/payments/reconcile-latest` | POST | 对当前登录用户最近一笔 intent 做恢复性确认 |
 
 ### 支付状态建议
 
@@ -107,13 +108,34 @@ flowchart LR
 - `polyweather_source_requests_total`
 - `polyweather_source_request_duration_ms_*`
 
-## 7. 缓存策略（当前）
+## 7. Ops 管理接口
+
+这些接口主要给 `/ops` 管理后台使用，默认要求：
+
+- 已登录
+- 当前邮箱位于 `POLYWEATHER_OPS_ADMIN_EMAILS`
+
+| 接口 | 方法 | 用途 |
+| :-- | :-- | :-- |
+| `/api/ops/users` | GET | 按 Telegram ID / 用户名 / 邮箱查询用户 |
+| `/api/ops/leaderboard/weekly` | GET | 本周积分榜 |
+| `/api/ops/memberships` | GET | 当前有效会员（已按用户去重，保留最晚到期） |
+| `/api/ops/users/grant-points` | POST | 手动补分 |
+| `/api/ops/payments/incidents` | GET | 支付异常单（仅 `payment_intent_failed`） |
+| `/api/ops/payments/incidents/{event_id}/resolve` | POST | 标记支付异常单已处理 |
+
+`/api/ops/payments/incidents` 当前支持：
+
+- `reason=<receiver_mismatch|sender_mismatch|event_mismatch|tx_reverted>`
+- 默认不返回已标记处理的记录
+- 重点用于排查“已付款未开通”“打到旧收款地址”等事故
+## 8. 缓存策略（当前）
 
 - `cities` / `summary` / `history`：BFF 支持 `ETag + 304`
 - `summary?force_refresh=true`：`Cache-Control: no-store`
 - 详情接口与支付接口：`no-store`
 
-## 8. 调试示例
+## 9. 调试示例
 
 ### 查询未来日期 market_scan
 
@@ -133,6 +155,12 @@ curl -s http://127.0.0.1:8000/api/payments/config | python3 -m json.tool
 curl -s http://127.0.0.1:8000/api/payments/runtime | python3 -m json.tool
 ```
 
+### 查看支付异常单
+
+```bash
+curl -s "http://127.0.0.1:8000/api/ops/payments/incidents?reason=receiver_mismatch" | python3 -m json.tool
+```
+
 ### 查看系统状态
 
 ```bash
@@ -145,7 +173,7 @@ curl -s http://127.0.0.1:8000/api/system/status | python3 -m json.tool
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-## 9. 开源口径说明
+## 10. 开源口径说明
 
 对外公开文档仅覆盖通用 API 契约。生产商业策略参数不在公开文档披露。
 

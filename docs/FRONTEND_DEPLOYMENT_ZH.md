@@ -87,7 +87,27 @@ NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
 
 只影响按钮跳转，不影响核心页面加载。
 
-## 五、推荐的三套配置口径
+## 五、支付配置与旧部署治理
+
+支付区现在有一层额外防护：
+
+1. 用户点击支付前，前端会重新请求 `/api/payments/config`
+2. 若发现 `receiver_contract` 与页面旧状态不一致，会自动切换到最新地址
+3. 若后端返回的 `tx_payload.to` 与最新 `receiver_contract` 不一致，会直接阻断支付
+
+这层防护的目的，是降低以下事故概率：
+
+- 用户使用长期未刷新的旧标签页
+- 命中旧 deployment URL
+- 页面本地状态残留旧收款地址
+
+如果你变更过支付收款地址，建议同步执行：
+
+1. 在 Vercel 对当前 production 做一次 redeploy
+2. 删除明显过期、可能还带旧支付配置的旧 deployment
+3. 在 `Settings -> Security -> Deployment Retention Policy` 中收紧旧部署保留周期
+
+## 六、推荐的三套配置口径
 
 ### 1. 公开游客模式
 
@@ -124,7 +144,7 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=<shared-token>
 
 适合前后端都启用了会员/订阅保护的生产环境。
 
-## 六、不要放进 Vercel 的变量
+## 七、不要放进 Vercel 的变量
 
 这些属于后端私密配置，不应该放到前端项目：
 
@@ -138,7 +158,7 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=<shared-token>
 - `NEXT_PUBLIC_*` 会暴露给浏览器
 - 只有明确允许前端公开使用的值，才应加 `NEXT_PUBLIC_`
 
-## 七、上线前检查
+## 八、上线前检查
 
 Vercel 部署前至少确认：
 
@@ -146,8 +166,9 @@ Vercel 部署前至少确认：
 2. `frontend/.env.example` 和 Vercel Project Settings 中的实际值一致
 3. GitHub Actions 中 `frontend-quality` 已通过
 4. 如果启用鉴权，Supabase redirect URL 已包含前端域名
+5. `GET /api/payments/config` 返回的是当前最新地址，而不是旧收款合约
 
-## 八、常见问题
+## 九、常见问题
 
 ### 1. 页面打开后 API 全部 500
 

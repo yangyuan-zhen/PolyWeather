@@ -100,6 +100,50 @@ NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
 - `POST /api/payments/intents/[intentId]/submit`
 - `POST /api/payments/intents/[intentId]/confirm`
 
+Ops：
+
+- `GET /ops`
+- `GET /api/ops/users`
+- `GET /api/ops/leaderboard/weekly`
+- `GET /api/ops/memberships`
+- `GET /api/ops/payments/incidents`
+- `POST /api/ops/users/grant-points`
+- `POST /api/ops/payments/incidents/[eventId]/resolve`
+
+## Ops 管理后台
+
+当前前端已内置轻量管理页：
+
+- [https://polyweather-pro.vercel.app/ops](https://polyweather-pro.vercel.app/ops)
+
+页面当前支持：
+
+- 系统状态
+- SQLite / rollout / 支付运行态
+- 用户查询
+- 当前会员
+- 本周积分榜
+- 手动补分
+- 支付异常单筛选与标记已处理
+
+注意：
+
+- `/ops` 页面是否可写，取决于后端 `POLYWEATHER_OPS_ADMIN_EMAILS`
+- 前端登录邮箱本身不会自动获得管理员权限
+
+## 支付安全补充
+
+为降低“旧页面/旧配置导致打到旧收款地址”的风险，支付区现在会：
+
+1. 点击支付前重新请求 `/api/payments/config`
+2. 若 `receiver_contract` 已更新，先切到最新地址
+3. 若后端返回的 `tx_payload.to` 与最新地址不一致，直接阻断支付
+
+这意味着：
+
+- 旧标签页风险已明显降低
+- 但支付地址变更后，仍建议在 Vercel 上 redeploy 当前 production，并清理明显过期 deployment
+
 ## 缓存行为
 
 - `cities` / `summary` / `history`：`ETag + Cache-Control`
@@ -113,4 +157,4 @@ NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-03-20`
+最后更新：`2026-03-21`
