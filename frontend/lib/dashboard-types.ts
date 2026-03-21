@@ -293,6 +293,10 @@ export interface CityDetail {
   }>;
   trend?: TrendInfo;
   peak?: PeakInfo;
+  dynamic_commentary?: {
+    summary?: string | null;
+    notes?: string[] | null;
+  };
   ai_analysis?: string | AiAnalysisStructured | null;
   updated_at?: string;
   multi_model_daily?: Record<string, DailyModelForecast>;

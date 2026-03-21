@@ -31,6 +31,14 @@ SETTLEMENT_SOURCE_LABELS = {
     "mgm": "MGM",
 }
 
+_CLOUD_RANK_LABELS = {
+    0: "晴空到少云",
+    1: "少云",
+    2: "散云",
+    3: "多云",
+    4: "阴天",
+}
+
 
 def _sf(v):
     """Safe float conversion — prevents JSON str types from breaking math."""
@@ -51,6 +59,107 @@ def _resolve_settlement_source_label(city_name: Optional[str]) -> str:
     if not source:
         source = "metar"
     return SETTLEMENT_SOURCE_LABELS.get(source, source.upper())
+
+
+def _wind_bucket_label(wdir: Optional[float]) -> str:
+    if wdir is None:
+        return "风向信号不明确"
+    deg = float(wdir) % 360
+    if 135 <= deg < 225:
+        return "南风主导"
+    if 45 <= deg < 135:
+        return "东风主导"
+    if 225 <= deg < 315:
+        return "西风主导"
+    return "北风主导"
+
+
+def _describe_recent_structure(
+    recent_obs: List[Dict[str, Any]],
+    peak_status: str,
+    trend_direction: str,
+    cur_temp: Optional[float],
+    max_so_far: Optional[float],
+    temp_symbol: str,
+    primary_current: Dict[str, Any],
+) -> Tuple[str, List[str]]:
+    if len(recent_obs) < 2:
+        return "", []
+
+    oldest = recent_obs[-1]
+    newest = recent_obs[0]
+
+    temp_old = _sf(oldest.get("temp"))
+    temp_new = _sf(newest.get("temp"))
+    wdir_old = _sf(oldest.get("wdir"))
+    wdir_new = _sf(newest.get("wdir"))
+    altim_old = _sf(oldest.get("altim"))
+    altim_new = _sf(newest.get("altim"))
+    cloud_old = int(oldest.get("cloud_rank") or 0)
+    cloud_new = int(newest.get("cloud_rank") or 0)
+    humidity = _sf(primary_current.get("humidity"))
+    wx_desc = str(primary_current.get("wx_desc") or "").strip()
+
+    temp_delta = None
+    if temp_old is not None and temp_new is not None:
+        temp_delta = temp_new - temp_old
+
+    wind_angle = None
+    if wdir_old is not None and wdir_new is not None:
+        wind_angle = abs(wdir_new - wdir_old)
+        if wind_angle > 180:
+            wind_angle = 360 - wind_angle
+
+    altim_delta = None
+    if altim_old is not None and altim_new is not None:
+        altim_delta = altim_new - altim_old
+
+    cloud_delta = cloud_new - cloud_old
+    lines: List[str] = []
+
+    if cloud_delta >= 2 and temp_delta is not None and temp_delta >= 0:
+        lines.append("云层明显增厚，但近报尚未跟随降温，短时更像中高云增多或暖湿输送前段。")
+    elif cloud_delta >= 2 and temp_delta is not None and temp_delta <= -0.5:
+        lines.append("云量抬升且温度同步回落，云雨压温的约束正在增强。")
+    elif cloud_delta <= -2 and temp_delta is not None and temp_delta >= 0.5:
+        lines.append("云量回落并伴随升温，短时日照增温效率在改善。")
+
+    if wind_angle is not None and wind_angle >= 60:
+        lines.append(
+            f"低层风向出现明显切换，由 {_wind_bucket_label(wdir_old)} 转为 {_wind_bucket_label(wdir_new)}。"
+        )
+    elif wdir_new is not None:
+        lines.append(f"当前低层风场以{_wind_bucket_label(wdir_new)}为主。")
+
+    if altim_delta is not None:
+        if altim_delta <= -1.5 and trend_direction != "falling":
+            lines.append("气压继续走低，边界层仍偏活跃，峰值尚不能轻判结束。")
+        elif altim_delta >= 1.5 and peak_status != "before":
+            lines.append("气压回升信号更明显，若后续再配合回落，日高温锁定概率会继续上升。")
+
+    if humidity is not None and humidity >= 80 and not wx_desc:
+        lines.append(f"湿度已到 {humidity:.0f}% 左右，后续若云层继续增厚，需要防范压温。")
+    elif wx_desc:
+        lines.append(f"当前伴随“{wx_desc}”天气现象，短时体感与实测升温效率通常都会受抑制。")
+
+    if max_so_far is not None and cur_temp is not None:
+        gap = max_so_far - cur_temp
+        if gap >= 2.0 and peak_status != "before":
+            lines.append(
+                f"当前温度较今日峰值已回落 {gap:.1f}{temp_symbol}，若后续再无明显回补，日高温大概率已接近锁定。"
+            )
+        elif gap <= 0.5 and peak_status == "in_window":
+            lines.append("当前温度仍贴近当日峰值，窗口内仍保留再创新高的可能。")
+
+    if not lines:
+        if trend_direction == "rising":
+            lines.append("近报仍偏升温，短时还看不到明确见顶信号。")
+        elif trend_direction == "falling":
+            lines.append("近报已进入回落段，后续重点看回落是否延续。")
+        else:
+            lines.append("当前结构信号偏中性，仍需继续盯近报温度与风云演变。")
+
+    return lines[0], lines
 
 
 def analyze_weather_trend(
@@ -329,6 +438,21 @@ def analyze_weather_trend(
             "暂不能单凭回落判定今日高温已锁定。"
         )
 
+    recent_obs = metar.get("recent_obs", [])
+    dynamic_summary, dynamic_notes = _describe_recent_structure(
+        recent_obs=recent_obs,
+        peak_status=peak_status,
+        trend_direction=trend_direction,
+        cur_temp=cur_temp,
+        max_so_far=max_so_far,
+        temp_symbol=temp_symbol,
+        primary_current=primary_current,
+    )
+    if dynamic_summary:
+        insights.append(f"🧩 <b>结构解读</b>：{dynamic_summary}")
+    for note in dynamic_notes:
+        ai_features.append(f"🧩 结构解读: {note}")
+
     # === Ensemble ===
     ensemble = weather_data.get("ensemble", {})
     ens_p10 = _sf(ensemble.get("p10"))
@@ -379,7 +503,6 @@ def analyze_weather_trend(
 
         # Shock Score
         shock_score = 0.0
-        recent_obs = metar.get("recent_obs", [])
         if len(recent_obs) >= 2:
             oldest = recent_obs[-1]
             newest = recent_obs[0]
@@ -788,6 +911,10 @@ def analyze_weather_trend(
         "max_so_far": max_so_far,
         "cur_temp": cur_temp,
         "wu_settle": apply_city_settlement(city_name, max_so_far) if max_so_far is not None else None,
+        "dynamic_commentary": {
+            "summary": dynamic_summary,
+            "notes": dynamic_notes,
+        },
     }
     display_str = "\n".join(insights) if insights else ""
     return display_str, "\n".join(ai_features), structured

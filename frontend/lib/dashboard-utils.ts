@@ -528,6 +528,15 @@ export function computeFrontTrendSignal(
   dateStr: string,
   locale: Locale = "zh-CN",
 ) {
+  const backendSummary =
+    dateStr === detail.local_date
+      ? String(detail.dynamic_commentary?.summary || "").trim()
+      : "";
+  const backendNotes = Array.isArray(detail.dynamic_commentary?.notes)
+    ? detail.dynamic_commentary?.notes
+        ?.map((item) => String(item || "").trim())
+        .filter(Boolean) || []
+    : [];
   const slice = getFutureSlice(detail, dateStr);
   const currentTemp = Number(detail.current?.temp);
   const currentDew = Number(detail.current?.dewpoint);
@@ -544,9 +553,11 @@ export function computeFrontTrendSignal(
       }>,
       precipMax: 0,
       score: 0,
-      summary: isEnglish(locale)
-        ? "Insufficient intraday structured data. Keep baseline monitoring."
-        : "当日日内结构化数据不足，暂时只保留基础监控。",
+      summary:
+        backendSummary ||
+        (isEnglish(locale)
+          ? "Insufficient intraday structured data. Keep baseline monitoring."
+          : "当日日内结构化数据不足，暂时只保留基础监控。"),
       weatherGovPeriods: [] as ReturnType<typeof getForecastTextForDate>,
     };
   }
@@ -722,76 +733,261 @@ export function computeFrontTrendSignal(
   const label = score >= 18 ? warmLabel : score <= -18 ? coldLabel : monitorLabel;
   const confidence =
     Math.abs(score) >= 45 ? "high" : Math.abs(score) >= 22 ? "medium" : "low";
+  const summary = (() => {
+    const parts: string[] = [];
+
+    if (isEnglish(locale)) {
+      if (lastBucket === "southerly" && firstBucket !== "southerly") {
+        parts.push("Low-level wind turns more southerly.");
+      } else if (lastBucket === "northerly" && firstBucket !== "northerly") {
+        parts.push("Low-level wind shifts toward a northerly regime.");
+      }
+
+      if (tempDelta >= 0.8) {
+        parts.push(`Temperature rises by ${formatDelta(tempDelta, detail.temp_symbol)}.`);
+      } else if (tempDelta <= -0.8) {
+        parts.push(`Temperature eases by ${formatDelta(tempDelta, detail.temp_symbol)}.`);
+      }
+
+      if (dewDelta >= 0.8) {
+        parts.push("Dew point is lifting, suggesting moisture transport is strengthening.");
+      } else if (dewDelta <= -0.8) {
+        parts.push("Dew point is falling, so low-level air is turning drier.");
+      }
+
+      if (cloudDelta >= 15) {
+        parts.push("Cloud cover is building.");
+      } else if (cloudDelta <= -15) {
+        parts.push("Cloud cover is easing.");
+      }
+
+      if (pressureDelta >= 1) {
+        parts.push("Pressure rebound argues for a cooler push.");
+      } else if (pressureDelta <= -1) {
+        parts.push("Pressure is softening, which is less hostile to warming.");
+      }
+
+      if (precipMax >= 50) {
+        parts.push("Precipitation risk is high enough to watch for cloud/rain suppression.");
+      }
+
+      if (!parts.length) {
+        parts.push(`Structured trend is mixed, so the core judgement still centers on ${windowText}.`);
+      } else {
+        parts.push(`Core judgement remains focused on ${windowText}.`);
+      }
+    } else {
+      if (lastBucket === "southerly" && firstBucket !== "southerly") {
+        parts.push("低层风向更偏南，暖空气输送权重上升。");
+      } else if (lastBucket === "northerly" && firstBucket !== "northerly") {
+        parts.push("低层风向转偏北，冷空气影响权重上升。");
+      }
+
+      if (tempDelta >= 0.8) {
+        parts.push(`气温抬升 ${formatDelta(tempDelta, detail.temp_symbol)}。`);
+      } else if (tempDelta <= -0.8) {
+        parts.push(`气温回落 ${formatDelta(tempDelta, detail.temp_symbol)}。`);
+      }
+
+      if (dewDelta >= 0.8) {
+        parts.push("露点同步上升，说明暖湿输送在增强。");
+      } else if (dewDelta <= -0.8) {
+        parts.push("露点回落，低层空气在转干。");
+      }
+
+      if (cloudDelta >= 15) {
+        parts.push("云量正在增多。");
+      } else if (cloudDelta <= -15) {
+        parts.push("云量正在回落。");
+      }
+
+      if (pressureDelta >= 1) {
+        parts.push("气压回升，更偏向冷空气压入。");
+      } else if (pressureDelta <= -1) {
+        parts.push("气压走低，对增温压制减弱。");
+      }
+
+      if (precipMax >= 50) {
+        parts.push("降水概率已足以关注云雨压温。");
+      }
+
+      if (!parts.length) {
+        parts.push(`结构信号分化较大，核心仍围绕${windowText}观察。`);
+      } else {
+        parts.push(`核心判断窗口仍以${windowText}为主。`);
+      }
+    }
+
+    return parts.join(isEnglish(locale) ? " " : "");
+  })();
+  const cloudNote = (() => {
+    if (cloudDelta >= 15 && tempDelta >= 0.8 && dewDelta >= 0.8) {
+      return isEnglish(locale)
+        ? "Clouds are increasing while temperature and dew point still rise; this usually fits ongoing warm-moist transport rather than immediate cooling."
+        : "云量上升时温度和露点仍在抬升，更像暖湿输送持续中，而不是立刻转凉。";
+    }
+    if (cloudDelta >= 15 && tempDelta >= 0 && lastBucket === "southerly") {
+      return isEnglish(locale)
+        ? "Clouds are building without clear cooling, and the low-level wind still leans southerly; watch for warm advection to continue."
+        : "云量增多但未明显降温，且低层风仍偏南，需继续关注暖平流是否延续。";
+    }
+    if (cloudDelta >= 15 && tempDelta < 0 && precipMax >= 40) {
+      return isEnglish(locale)
+        ? "Clouds are thickening while temperature eases and precipitation risk is elevated; cloud/rain suppression is becoming more likely."
+        : "云量增厚且气温回落，同时降水概率偏高，更像云雨压温开始生效。";
+    }
+    if (cloudDelta >= 15 && tempDelta < 0 && pressureDelta >= 1) {
+      return isEnglish(locale)
+        ? "Clouds are increasing while temperature softens and pressure rebounds; watch for cold-air push or frontal suppression."
+        : "云量上升同时气温走弱、气压回升，需留意冷空气压入或锋面压温。";
+    }
+    if (cloudDelta <= -15 && tempDelta >= 0.8) {
+      return isEnglish(locale)
+        ? "Cloud cover is easing while temperature rises; daytime heating efficiency is improving."
+        : "云量回落且温度抬升，白天增温效率在改善。";
+    }
+    return isEnglish(locale)
+      ? "Read cloud-cover change together with temperature, dew point, wind, and precipitation; cloud change alone does not define the regime."
+      : "云量变化需要结合温度、露点、风向和降水一起看，不能单独决定天气形势。";
+  })();
+  const dewNote = (() => {
+    if (dewDelta >= 1.2 && tempDelta >= 0.8) {
+      return isEnglish(locale)
+        ? "Dew point and temperature rise together, which usually supports strengthening warm-moist transport."
+        : "露点和温度同步抬升，更偏向暖湿输送增强。";
+    }
+    if (dewDelta >= 1.2 && precipMax >= 40) {
+      return isEnglish(locale)
+        ? "Moisture is building while precipitation risk is already notable; watch for showers to cap daytime heating."
+        : "水汽在累积且降水风险已抬升，需关注阵雨对午后增温的压制。";
+    }
+    if (dewDelta <= -1.2 && tempDelta <= 0) {
+      return isEnglish(locale)
+        ? "Drier low-level air is arriving together with softer temperature, which leans away from warm-moist support."
+        : "低层空气在转干且温度偏弱，暖湿支撑正在减弱。";
+    }
+    return isEnglish(locale)
+      ? "Use dew-point change to judge whether low-level warm-moist transport is strengthening or fading."
+      : "露点变化主要用于判断低层暖湿输送是在增强还是减弱。";
+  })();
+  const pressureNote = (() => {
+    if (pressureDelta >= 1.2 && tempDelta <= -0.8) {
+      return isEnglish(locale)
+        ? "Pressure rebound with cooling usually points to a cooler push or frontal suppression."
+        : "气压回升且温度走弱，更像冷空气压入或锋面压温。";
+    }
+    if (pressureDelta <= -1.0 && tempDelta >= 0.8) {
+      return isEnglish(locale)
+        ? "Pressure is softening while temperature rises, a setup less hostile to warming."
+        : "气压走低同时温度抬升，对增温的压制相对减弱。";
+    }
+    return isEnglish(locale)
+      ? "Pressure change is used as a supporting signal for cold-air push versus warming resilience."
+      : "气压变化更适合作为冷空气压入或增温韧性的辅助判断。";
+  })();
+  const windNote = (() => {
+    if (firstBucket !== lastBucket && lastBucket === "southerly") {
+      return isEnglish(locale)
+        ? "Wind turns toward a southerly regime, which is more favorable for warming."
+        : "风向转偏南，更有利于增温。";
+    }
+    if (firstBucket !== lastBucket && lastBucket === "northerly") {
+      return isEnglish(locale)
+        ? "Wind turns toward a northerly regime, which is more favorable for cooling."
+        : "风向转偏北，更有利于降温。";
+    }
+    if (lastBucket === "southerly") {
+      return isEnglish(locale)
+        ? "Low-level flow remains southerly, so warm advection has not been disrupted."
+        : "低层风维持偏南，暖平流支撑尚未被破坏。";
+    }
+    if (lastBucket === "northerly") {
+      return isEnglish(locale)
+        ? "Low-level flow remains northerly, so cooling-side support is still present."
+        : "低层风维持偏北，降温侧支撑仍在。";
+    }
+    return isEnglish(locale)
+      ? "Wind-direction change matters most when it crosses into southerly or northerly buckets."
+      : "风向变化最关键的是是否跨入偏南或偏北风桶。";
+  })();
+  const precipNote = (() => {
+    if (precipMax >= 60) {
+      return isEnglish(locale)
+        ? "Precipitation risk is high enough that cloud/rain suppression can materially change the peak outcome."
+        : "降水概率已高到足以显著改变峰值兑现结果，需要重点防压温。";
+    }
+    if (precipMax >= 40) {
+      return isEnglish(locale)
+        ? "Precipitation risk is meaningful; watch whether cloud and showers interrupt daytime heating."
+        : "降水概率已有存在感，需要关注云系和阵雨是否打断白天增温。";
+    }
+    return isEnglish(locale)
+      ? "Precipitation risk remains limited and is used mainly as a suppression check."
+      : "降水风险暂时有限，主要作为压温风险校验项。";
+  })();
+
+  const metrics = [
+    {
+      label: isEnglish(locale) ? "Temperature delta" : "温度变化",
+      note: isEnglish(locale)
+        ? `Official Open-Meteo hourly data; window: ${windowText}`
+        : `官方 Open-Meteo 小时数据；计算窗口：${windowText}`,
+      tone: tempDelta >= 0.8 ? "warm" : tempDelta <= -0.8 ? "cold" : "",
+      value: formatDelta(tempDelta, detail.temp_symbol),
+    },
+    {
+      label: isEnglish(locale) ? "Dew point delta" : "露点变化",
+      note: dewNote,
+      tone: dewDelta >= 0.8 ? "warm" : dewDelta <= -0.8 ? "cold" : "",
+      value: formatDelta(dewDelta, detail.temp_symbol),
+    },
+    {
+      label: isEnglish(locale) ? "Pressure delta" : "气压变化",
+      note: pressureNote,
+      tone: pressureDelta >= 1 ? "cold" : pressureDelta <= -1 ? "warm" : "",
+      value: formatDelta(pressureDelta, " hPa"),
+    },
+    {
+      label: isEnglish(locale) ? "Wind-direction evolution" : "风向演变",
+      note: windNote,
+      value: `${bucketLabel(firstBucket, locale)} -> ${bucketLabel(lastBucket, locale)}`,
+    },
+    {
+      label: isEnglish(locale) ? "Precip probability" : "降水概率",
+      note: precipNote,
+      tone: precipMax >= 50 ? "cold" : "",
+      value: `${Math.round(precipMax)}%`,
+    },
+    {
+      label: isEnglish(locale) ? "Cloud-cover delta" : "云量变化",
+      note: cloudNote,
+      tone:
+        cloudDelta >= 15 && tempDelta >= 0
+          ? "warm"
+          : cloudDelta >= 15 && tempDelta < 0
+            ? "cold"
+            : "",
+      value: formatDelta(cloudDelta, "%"),
+    },
+  ];
+
+  if (backendNotes.length) {
+    backendNotes.slice(0, metrics.length).forEach((note, index) => {
+      if (!note) return;
+      metrics[index] = {
+        ...metrics[index],
+        note,
+      };
+    });
+  }
 
   return {
     confidence,
     label,
-    metrics: [
-      {
-        label: isEnglish(locale) ? "Temperature delta" : "温度变化",
-        note: isEnglish(locale)
-          ? `Official Open-Meteo hourly data; window: ${windowText}`
-          : `官方 Open-Meteo 小时数据；计算窗口：${windowText}`,
-        tone: tempDelta >= 0.8 ? "warm" : tempDelta <= -0.8 ? "cold" : "",
-        value: formatDelta(tempDelta, detail.temp_symbol),
-      },
-      {
-        label: isEnglish(locale) ? "Dew point delta" : "露点变化",
-        note: isEnglish(locale)
-          ? "Rising dew point often supports warm/wet advection"
-          : "露点上升更偏向暖湿平流",
-        tone: dewDelta >= 0.8 ? "warm" : dewDelta <= -0.8 ? "cold" : "",
-        value: formatDelta(dewDelta, detail.temp_symbol),
-      },
-      {
-        label: isEnglish(locale) ? "Pressure delta" : "气压变化",
-        note: isEnglish(locale)
-          ? "Pressure rebound usually implies cold-air push"
-          : "气压回升更偏向冷空气压入",
-        tone: pressureDelta >= 1 ? "cold" : pressureDelta <= -1 ? "warm" : "",
-        value: formatDelta(pressureDelta, " hPa"),
-      },
-      {
-        label: isEnglish(locale) ? "Wind-direction evolution" : "风向演变",
-        note: isEnglish(locale)
-          ? "Warming-favor: S/SW; cooling-favor: N/NW"
-          : "增温有利：南/西南风；降温有利：北/西北风",
-        value: `${bucketLabel(firstBucket, locale)} -> ${bucketLabel(lastBucket, locale)}`,
-      },
-      {
-        label: isEnglish(locale) ? "Precip probability" : "降水概率",
-        note: "weather.gov / Open-Meteo",
-        tone: precipMax >= 50 ? "cold" : "",
-        value: `${Math.round(precipMax)}%`,
-      },
-      {
-        label: isEnglish(locale) ? "Cloud-cover delta" : "云量变化",
-        note: isEnglish(locale)
-          ? "Cloud increase without cooling may imply warm advection"
-          : "云量抬升但未降温，常见于暖平流前段",
-        tone:
-          cloudDelta >= 15 && tempDelta >= 0
-            ? "warm"
-            : cloudDelta >= 15 && tempDelta < 0
-              ? "cold"
-              : "",
-        value: formatDelta(cloudDelta, "%"),
-      },
-    ],
+    metrics,
     precipMax,
     score,
-    summary:
-      label === warmLabel
-        ? isEnglish(locale)
-          ? `Southerly flow strengthens with rising dew point and temperature. ${windowText} leans warm advection.`
-          : `风向更偏南 / 西南，露点与温度整体抬升，${windowText}偏向暖平流。`
-        : label === coldLabel
-          ? isEnglish(locale)
-            ? `Temperature declines with pressure rebound and/or northerly shift. ${windowText} leans cold-front suppression.`
-            : `温度下滑、气压回升或风向转北，${windowText}更像冷锋或冷平流压制。`
-            : isEnglish(locale)
-              ? `Structured trend uses weather.gov + Open-Meteo, with core judgement focused on ${windowText}.`
-              : `结构化来源以 weather.gov 和 Open-Meteo 为主，核心判断窗口为${windowText}。`,
+    summary: backendSummary || summary,
     weatherGovPeriods,
   };
 }

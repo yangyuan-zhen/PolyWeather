@@ -870,9 +870,9 @@ export function FutureForecastModal() {
                           }}
                         />
                       </div>
-                      <div className="future-front-meta">
-                        <span className="future-front-pill">
-                          {t("future.judgement")}: {view.front.label}
+                    <div className="future-front-meta">
+                      <span className="future-front-pill">
+                        {t("future.judgement")}: {view.front.label}
                         </span>
                         <span className="future-front-pill">
                           {t("future.confidence")}:{" "}
@@ -883,6 +883,11 @@ export function FutureForecastModal() {
                           {Math.round(view.front.precipMax)}%
                         </span>
                       </div>
+                      {view.front.summary ? (
+                        <div className="future-trend-summary">
+                          {view.front.summary}
+                        </div>
+                      ) : null}
                     </div>
                     <div className="future-trend-grid">
                       {view.front.metrics.slice(0, 6).map((metric) => (

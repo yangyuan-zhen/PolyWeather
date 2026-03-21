@@ -350,6 +350,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     probability_calibrated_mu = None
     probability_calibrated_sigma = None
     ai_text = ""
+    dynamic_commentary = {"summary": "", "notes": []}
     try:
         _, _ai_context, sd = _trend_analyze(raw, sym, city)
 
@@ -364,6 +365,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         probability_raw_sigma = sd.get("probability_raw_sigma")
         probability_calibrated_mu = sd.get("probability_calibrated_mu")
         probability_calibrated_sigma = sd.get("probability_calibrated_sigma")
+        dynamic_commentary = sd.get("dynamic_commentary") or dynamic_commentary
         trend_info["is_dead_market"] = sd.get("trend_info", {}).get("is_dead_market", False)
         trend_info["direction"] = sd.get("trend_info", {}).get("direction", trend_info.get("direction", "unknown"))
         trend_info["is_cooling"] = sd.get("trend_info", {}).get("is_cooling", False)
@@ -666,6 +668,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "last_h": last_peak_h,
             "status": peak_status,
         },
+        "dynamic_commentary": dynamic_commentary,
         "hourly": today_hourly,
         "hourly_next_48h": next_48h_hourly,
         "metar_today_obs": metar_today_obs_payload,
@@ -850,6 +853,7 @@ def _build_city_detail_payload(
             if not _is_excluded_model_name(k)
         },
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
+        "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
         "market_scan": market_scan,
         "risk": data.get("risk"),
         "ai_analysis": data.get("ai_analysis") or "",

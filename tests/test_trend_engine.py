@@ -258,3 +258,50 @@ class TestTrendDirection:
         )
         _, _, sd = analyze_weather_trend(data, "°C", "test_city")
         assert sd["trend_info"]["direction"] == "stagnant"
+
+
+class TestDynamicCommentary:
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.append_probability_snapshot")
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_dynamic_commentary_detects_cloud_build_without_cooling(
+        self, _udr, _snapshot, _deb_acc, _dw
+    ):
+        data = _make_weather_data(
+            cur_temp=28.0,
+            max_so_far=28.2,
+            local_time="2026-03-04 14:00",
+            recent_temps=[("14:00", 28.0), ("13:00", 27.6), ("12:00", 27.0)],
+            recent_obs=[
+                {"temp": 28.0, "wdir": 185, "wspd": 8, "cloud_rank": 3, "altim": 1009.2},
+                {"temp": 27.6, "wdir": 170, "wspd": 7, "cloud_rank": 2, "altim": 1010.0},
+                {"temp": 27.2, "wdir": 155, "wspd": 6, "cloud_rank": 1, "altim": 1010.8},
+            ],
+        )
+
+        display_str, ai_context, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        summary = sd["dynamic_commentary"]["summary"]
+        notes = sd["dynamic_commentary"]["notes"]
+        assert summary
+        assert "云层明显增厚" in summary
+        assert "结构解读" in display_str
+        assert any("云层明显增厚" in note for note in notes)
+        assert "结构解读" in ai_context
+
+    @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
+    @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
+    @patch("src.analysis.trend_engine.append_probability_snapshot")
+    @patch("src.analysis.trend_engine.update_daily_record")
+    def test_dynamic_commentary_falls_back_when_recent_obs_missing(
+        self, _udr, _snapshot, _deb_acc, _dw
+    ):
+        data = _make_weather_data(recent_obs=[])
+
+        display_str, ai_context, sd = analyze_weather_trend(data, "°C", "test_city")
+
+        assert sd["dynamic_commentary"]["summary"] == ""
+        assert sd["dynamic_commentary"]["notes"] == []
+        assert "结构解读" not in display_str
+        assert "结构解读" not in ai_context
