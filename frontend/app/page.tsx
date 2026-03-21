@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
-import { DashboardEntry } from "@/components/dashboard/DashboardEntry";
+import { LandingPage } from "@/components/landing/LandingPage";
 
 export const metadata: Metadata = {
-  title: "PolyWeather - Global Weather Intelligence Map",
+  title: "PolyWeather | Weather Market Intelligence",
   description:
-    "PolyWeather dashboard with METAR, MGM, DEB fusion forecast, multi-model comparison, and history reconciliation.",
+    "PolyWeather turns real-time weather observations and model spreads into settlement-focused probabilities, market scan signals, and Pro decision support.",
 };
 
 export default function HomePage() {
-  return <DashboardEntry />;
+  return <LandingPage />;
 }
