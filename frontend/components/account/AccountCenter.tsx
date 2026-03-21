@@ -148,6 +148,14 @@ type IntentStatusResponse = {
 declare global {
   interface Window {
     ethereum?: EvmProvider;
+    okxwallet?: {
+      ethereum?: EvmProvider;
+    };
+    okexchain?: EvmProvider;
+    rabby?: EvmProvider;
+    bitkeep?: {
+      ethereum?: EvmProvider;
+    };
   }
 }
 
@@ -282,45 +290,51 @@ function shortAddress(address: string) {
 }
 
 function getEvmProvider(): EvmProvider | null {
-  if (typeof window === "undefined") return null;
+  return listInjectedProviders()[0]?.provider || null;
+}
+
+function collectInjectedProviders(): EvmProvider[] {
+  if (typeof window === "undefined") return [];
+  const out: EvmProvider[] = [];
+  const seen = new Set<EvmProvider>();
+
+  const push = (provider: unknown) => {
+    if (!provider || typeof provider !== "object") return;
+    const candidate = provider as EvmProvider;
+    if (typeof candidate.request !== "function") return;
+    if (seen.has(candidate)) return;
+    seen.add(candidate);
+    out.push(candidate);
+  };
+
   const root = window.ethereum;
-  if (!root) return null;
-  const candidates = Array.isArray(root.providers)
-    ? root.providers.filter(
-        (p): p is EvmProvider => !!p && typeof p.request === "function",
-      )
-    : [];
-  if (candidates.length) {
-    return candidates.find((p) => p.isMetaMask) || candidates[0];
+  if (Array.isArray(root?.providers)) {
+    root.providers.forEach(push);
   }
-  return typeof root.request === "function" ? root : null;
+  push(root);
+  push(window.okxwallet?.ethereum);
+  push(window.okexchain);
+  push(window.rabby);
+  push(window.bitkeep?.ethereum);
+
+  return out;
+}
+
+function getInjectedProviderStableId(provider: EvmProvider, index: number): string {
+  if (provider.isOkxWallet) return `okx:${index}`;
+  if (provider.isMetaMask) return `metamask:${index}`;
+  if (provider.isRabby) return `rabby:${index}`;
+  if (provider.isBitKeep) return `bitget:${index}`;
+  return `evm:${index}`;
 }
 
 function listInjectedProviders(): InjectedProviderOption[] {
-  if (typeof window === "undefined") return [];
-  const root = window.ethereum;
-  if (!root) return [];
-  const candidates = Array.isArray(root.providers)
-    ? root.providers.filter(
-        (p): p is EvmProvider => !!p && typeof p.request === "function",
-      )
-    : typeof root.request === "function"
-      ? [root]
-      : [];
+  const candidates = collectInjectedProviders();
   const seen = new Set<string>();
   const out: InjectedProviderOption[] = [];
   candidates.forEach((provider, index) => {
     const label = getEvmWalletLabel(provider);
-    const key = [
-      provider.isMetaMask ? "metamask" : "",
-      provider.isRabby ? "rabby" : "",
-      provider.isOkxWallet ? "okx" : "",
-      provider.isBitKeep ? "bitget" : "",
-      label.toLowerCase().replace(/\s+/g, "-"),
-      String(index),
-    ]
-      .filter(Boolean)
-      .join(":");
+    const key = getInjectedProviderStableId(provider, index);
     if (seen.has(key)) return;
     seen.add(key);
     out.push({
