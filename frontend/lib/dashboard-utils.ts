@@ -972,7 +972,11 @@ export function computeFrontTrendSignal(
   ];
 
   if (backendNotes.length) {
-    backendNotes.slice(0, metrics.length).forEach((note, index) => {
+    const normalizedSummary = backendSummary.trim();
+    const alignedNotes = backendNotes.filter(
+      (note) => String(note || "").trim() !== normalizedSummary,
+    );
+    alignedNotes.slice(0, metrics.length).forEach((note, index) => {
       if (!note) return;
       metrics[index] = {
         ...metrics[index],
