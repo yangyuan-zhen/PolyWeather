@@ -413,13 +413,17 @@ function listInjectedProviders(): InjectedProviderOption[] {
     }
   });
   const seen = new Set<string>();
+  const seenLabels = new Set<string>();
   const out: InjectedProviderOption[] = [];
   candidates.forEach((provider, index) => {
     const detail = detailByProvider.get(provider);
     const label = detectWalletLabel(provider, detail);
     const key = getInjectedProviderStableId(provider, index, detail);
     if (seen.has(key)) return;
+    const normalizedLabel = label.trim().toLowerCase();
+    if (normalizedLabel && seenLabels.has(normalizedLabel)) return;
     seen.add(key);
+    if (normalizedLabel) seenLabels.add(normalizedLabel);
     out.push({
       key,
       provider,
