@@ -382,9 +382,10 @@ function getInjectedProviderStableId(
   index: number,
   detail?: Eip6963ProviderDetail,
 ): string {
-  const uuid = String(detail?.info?.uuid || "").trim();
   const rdns = String(detail?.info?.rdns || "").toLowerCase();
-  if (uuid) return `eip6963:${uuid}`;
+  const announcedName = String(detail?.info?.name || "").toLowerCase().trim();
+  if (rdns) return `rdns:${rdns}`;
+  if (announcedName) return `name:${announcedName}`;
   if (provider.isOkxWallet || rdns.includes("okx")) return `okx:${index}`;
   if (provider.isMetaMask || rdns.includes("metamask")) return `metamask:${index}`;
   if (provider.isRabby || rdns.includes("rabby")) return `rabby:${index}`;
@@ -1644,6 +1645,7 @@ export function AccountCenter() {
         setPaymentInfo(
           `${walletLabel} 已绑定: ${shortAddress(address)}。现在可点击“立即订阅并激活服务”。`,
         );
+        await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
         if (options.openOverlayAfterBind) setShowOverlay(true);
         setPaymentBusy(false);
         return true;
@@ -1684,7 +1686,7 @@ export function AccountCenter() {
       );
       setProviderMode(providerSelection.mode);
       if (options.openOverlayAfterBind) setShowOverlay(true);
-      await loadPaymentSnapshot();
+      await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
       return true;
     } catch (error) {
       setPaymentInfo("");
