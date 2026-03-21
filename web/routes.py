@@ -294,6 +294,50 @@ async def ops_memberships(request: Request, limit: int = 200):
     return {"memberships": rows}
 
 
+@router.get("/api/ops/payments/incidents")
+async def ops_payment_incidents(
+    request: Request,
+    limit: int = 50,
+    reason: str = "",
+    include_resolved: bool = False,
+):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    incidents = db.list_payment_audit_events(
+        limit=max(1, min(int(limit or 50), 200)),
+        event_type="payment_intent_failed",
+    )
+    normalized_reason = str(reason or "").strip().lower()
+    filtered = []
+    for item in incidents:
+        payload = item.get("payload") if isinstance(item, dict) else {}
+        payload = payload if isinstance(payload, dict) else {}
+        item_reason = str(payload.get("reason") or "").strip().lower()
+        resolved_at = str(payload.get("resolved_at") or "").strip()
+        if normalized_reason and item_reason != normalized_reason:
+            continue
+        if not include_resolved and resolved_at:
+            continue
+        filtered.append(item)
+    return {"incidents": filtered}
+
+
+@router.post("/api/ops/payments/incidents/{event_id}/resolve")
+async def ops_resolve_payment_incident(request: Request, event_id: int):
+    _assert_entitlement(request)
+    admin = _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    resolved = db.mark_payment_audit_event_resolved(event_id, str(admin.get("email") or ""))
+    if not resolved:
+        raise HTTPException(status_code=404, detail="payment_incident_not_found")
+    return {"ok": True, "incident": resolved}
+
+
 @router.post("/api/ops/users/grant-points")
 async def ops_grant_points(request: Request, body: GrantPointsRequest):
     _assert_entitlement(request)

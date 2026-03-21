@@ -1815,6 +1815,68 @@ class PaymentContractCheckoutService:
             "subscription": subscription_row,
         }
 
+    def _mark_intent_failed(
+        self,
+        *,
+        user_id: str,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+        reason: str,
+        detail: str,
+        extra: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        now_iso = _to_iso(_now_utc())
+        metadata = dict(intent.metadata or {})
+        metadata["confirm_failure"] = {
+            "reason": str(reason or "").strip().lower(),
+            "detail": str(detail or "").strip(),
+            "tx_hash": str(tx_hash or "").strip().lower(),
+            "at": now_iso,
+            **(extra or {}),
+        }
+        self._rest(
+            "PATCH",
+            "payment_intents",
+            params={"id": f"eq.{intent.intent_id}", "user_id": f"eq.{user_id}"},
+            payload={
+                "status": "failed",
+                "metadata": metadata,
+                "updated_at": now_iso,
+            },
+            prefer="return=representation",
+            allowed_status=[200],
+        )
+        if tx_hash:
+            self._rest(
+                "POST",
+                "payment_transactions",
+                params={"on_conflict": "tx_hash"},
+                payload={
+                    "intent_id": intent.intent_id,
+                    "chain_id": self.chain_id,
+                    "tx_hash": str(tx_hash).strip().lower(),
+                    "from_address": None,
+                    "to_address": intent.receiver_address,
+                    "status": "failed",
+                    "updated_at": now_iso,
+                },
+                prefer="resolution=merge-duplicates,return=representation",
+                allowed_status=[200, 201],
+            )
+        self._db.append_payment_audit_event(
+            "payment_intent_failed",
+            {
+                "intent_id": intent.intent_id,
+                "user_id": user_id,
+                "plan_code": intent.plan_code,
+                "reason": str(reason or "").strip().lower(),
+                "detail": str(detail or "").strip(),
+                "tx_hash": str(tx_hash or "").strip().lower(),
+                "receiver_expected": intent.receiver_address,
+                **(extra or {}),
+            },
+        )
+
     def _notify_telegram(self, user_id: str, plan_code: str, amount_usdc: str, tx_hash: str) -> None:
         if not self.notify_telegram:
             return
@@ -1881,6 +1943,13 @@ class PaymentContractCheckoutService:
         # Wait for receipt first to avoid transient RPC lag on eth_getTransaction.
         receipt = self._wait_receipt(tx_hash_text)
         if int(receipt.get("status") or 0) != 1:
+            self._mark_intent_failed(
+                user_id=user_id,
+                intent=intent,
+                tx_hash=tx_hash_text,
+                reason="tx_reverted",
+                detail="tx reverted",
+            )
             raise PaymentCheckoutError(400, "tx reverted")
 
         try:
@@ -1900,12 +1969,31 @@ class PaymentContractCheckoutService:
         if not tx_to or not tx_from:
             raise PaymentCheckoutError(409, "tx indexed partially; retry confirm")
         if tx_to != intent.receiver_address:
+            self._mark_intent_failed(
+                user_id=user_id,
+                intent=intent,
+                tx_hash=tx_hash_text,
+                reason="receiver_mismatch",
+                detail=f"tx to mismatch: got={tx_to} expected={intent.receiver_address}",
+                extra={
+                    "receiver_actual": tx_to,
+                    "from_address": tx_from,
+                },
+            )
             raise PaymentCheckoutError(
                 400,
                 f"tx to mismatch: got={tx_to} expected={intent.receiver_address}",
             )
         if intent.payment_mode == "strict" and intent.allowed_wallet:
             if tx_from != intent.allowed_wallet:
+                self._mark_intent_failed(
+                    user_id=user_id,
+                    intent=intent,
+                    tx_hash=tx_hash_text,
+                    reason="sender_mismatch",
+                    detail=f"tx sender mismatch: got={tx_from} expected={intent.allowed_wallet}",
+                    extra={"from_address": tx_from},
+                )
                 raise PaymentCheckoutError(
                     400,
                     f"tx sender mismatch: got={tx_from} expected={intent.allowed_wallet}",
@@ -1921,6 +2009,14 @@ class PaymentContractCheckoutService:
             )
         event_match = self._extract_matching_event(receipt, intent)
         if not event_match:
+            self._mark_intent_failed(
+                user_id=user_id,
+                intent=intent,
+                tx_hash=tx_hash_text,
+                reason="event_mismatch",
+                detail="OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",
+                extra={"from_address": tx_from, "receiver_actual": tx_to},
+            )
             raise PaymentCheckoutError(
                 400,
                 "OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",

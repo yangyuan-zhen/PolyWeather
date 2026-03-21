@@ -53,7 +53,30 @@ type PaymentRuntimePayload = {
     id: number;
     event_type: string;
     created_at: string;
+    payload?: {
+      reason?: string;
+      detail?: string;
+      tx_hash?: string;
+      receiver_actual?: string;
+      receiver_expected?: string;
+    };
   }>;
+};
+
+type PaymentIncident = {
+  id: number;
+  event_type: string;
+  created_at: string;
+  payload?: {
+    reason?: string;
+    detail?: string;
+    tx_hash?: string;
+    receiver_actual?: string;
+    receiver_expected?: string;
+    plan_code?: string;
+    resolved_at?: string;
+    resolved_by?: string;
+  };
 };
 
 type AuthMePayload = {
@@ -130,10 +153,14 @@ export function OpsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<OpsUser[]>([]);
   const [memberships, setMemberships] = useState<MembershipEntry[]>([]);
+  const [paymentIncidents, setPaymentIncidents] = useState<PaymentIncident[]>([]);
+  const [incidentReasonFilter, setIncidentReasonFilter] = useState("all");
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardEntry[]>([]);
   const [membershipsLoading, setMembershipsLoading] = useState(false);
+  const [incidentsLoading, setIncidentsLoading] = useState(false);
+  const [resolvingIncidentId, setResolvingIncidentId] = useState<number | null>(null);
   const [grantEmail, setGrantEmail] = useState("");
   const [grantPoints, setGrantPoints] = useState("300");
   const [grantStatus, setGrantStatus] = useState<string | null>(null);
@@ -210,11 +237,47 @@ export function OpsDashboard() {
     }
   }, []);
 
+  const loadPaymentIncidents = useCallback(async (reasonFilter?: string) => {
+    setIncidentsLoading(true);
+    try {
+      const url = new URL("/api/ops/payments/incidents", window.location.origin);
+      url.searchParams.set("limit", "20");
+      const selectedReason = String(reasonFilter || incidentReasonFilter || "all");
+      if (selectedReason && selectedReason !== "all") {
+        url.searchParams.set("reason", selectedReason);
+      }
+      const data = await readJson<{ incidents?: PaymentIncident[] }>(url.toString());
+      setPaymentIncidents(data.incidents || []);
+    } catch {
+      setPaymentIncidents([]);
+    } finally {
+      setIncidentsLoading(false);
+    }
+  }, [incidentReasonFilter]);
+
   useEffect(() => {
     void loadUsers("");
     void loadLeaderboard();
     void loadMemberships();
-  }, [loadLeaderboard, loadMemberships, loadUsers]);
+    void loadPaymentIncidents(incidentReasonFilter);
+  }, [loadLeaderboard, loadMemberships, loadPaymentIncidents, loadUsers]);
+
+  const resolveIncident = useCallback(async (eventId: number) => {
+    setResolvingIncidentId(eventId);
+    try {
+      const response = await fetch(`/api/ops/payments/incidents/${eventId}/resolve`, {
+        method: "POST",
+      });
+      if (!response.ok) {
+        const raw = await response.text();
+        throw new Error(raw || `HTTP ${response.status}`);
+      }
+      await loadPaymentIncidents(incidentReasonFilter);
+      await load();
+    } finally {
+      setResolvingIncidentId(null);
+    }
+  }, [incidentReasonFilter, load, loadPaymentIncidents]);
 
   const rolloutDecision = status?.probability?.rollout?.decision;
 
@@ -256,12 +319,13 @@ export function OpsDashboard() {
       await loadUsers(searchQuery);
       await loadLeaderboard();
       await loadMemberships();
+      await loadPaymentIncidents(incidentReasonFilter);
     } catch (submitError) {
       setGrantError(String(submitError));
     } finally {
       setGrantLoading(false);
     }
-  }, [grantEmail, grantPoints, loadLeaderboard, loadMemberships, loadUsers, searchQuery]);
+  }, [grantEmail, grantPoints, incidentReasonFilter, loadLeaderboard, loadMemberships, loadPaymentIncidents, loadUsers, searchQuery]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
@@ -419,6 +483,18 @@ export function OpsDashboard() {
                       <span className="text-xs text-slate-500">#{item.id}</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">{formatDateTime(item.created_at)}</div>
+                    {item.payload?.reason ? (
+                      <div className="mt-2 space-y-1 text-xs text-amber-300">
+                        <div>原因: {item.payload.reason}</div>
+                        {item.payload.tx_hash ? <div>Tx: {maskUrl(item.payload.tx_hash)}</div> : null}
+                        {item.payload.receiver_actual ? (
+                          <div>实际收款: {maskUrl(item.payload.receiver_actual)}</div>
+                        ) : null}
+                        {item.payload.receiver_expected ? (
+                          <div>期望收款: {maskUrl(item.payload.receiver_expected)}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
                 {!payments?.recent_audit_events?.length ? (
@@ -428,6 +504,83 @@ export function OpsDashboard() {
             </CardContent>
           </Card>
         </section>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <CardTitle>支付异常单</CardTitle>
+                <CardDescription>只显示已明确标记失败的支付确认事故。</CardDescription>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
+                  value={incidentReasonFilter}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setIncidentReasonFilter(next);
+                    void loadPaymentIncidents(next);
+                  }}
+                >
+                  <option value="all">全部原因</option>
+                  <option value="receiver_mismatch">receiver_mismatch</option>
+                  <option value="sender_mismatch">sender_mismatch</option>
+                  <option value="event_mismatch">event_mismatch</option>
+                  <option value="tx_reverted">tx_reverted</option>
+                </select>
+                <Button variant="secondary" onClick={() => void loadPaymentIncidents(incidentReasonFilter)} disabled={incidentsLoading}>
+                  {incidentsLoading ? "加载中" : "刷新异常"}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+              <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+                <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">时间</th>
+                    <th className="px-4 py-3">原因</th>
+                    <th className="px-4 py-3">套餐</th>
+                    <th className="px-4 py-3">Tx</th>
+                    <th className="px-4 py-3">实际收款</th>
+                    <th className="px-4 py-3">期望收款</th>
+                    <th className="px-4 py-3">操作</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {paymentIncidents.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-4 py-3">{formatDateTime(item.created_at)}</td>
+                      <td className="px-4 py-3">{item.payload?.reason || "-"}</td>
+                      <td className="px-4 py-3">{item.payload?.plan_code || "-"}</td>
+                      <td className="px-4 py-3">{maskUrl(item.payload?.tx_hash)}</td>
+                      <td className="px-4 py-3">{maskUrl(item.payload?.receiver_actual)}</td>
+                      <td className="px-4 py-3">{maskUrl(item.payload?.receiver_expected)}</td>
+                      <td className="px-4 py-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void resolveIncident(item.id)}
+                          disabled={resolvingIncidentId === item.id}
+                        >
+                          {resolvingIncidentId === item.id ? "处理中" : "标记已处理"}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!paymentIncidents.length ? (
+                    <tr>
+                      <td className="px-4 py-4 text-slate-500" colSpan={7}>
+                        暂无支付异常单
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

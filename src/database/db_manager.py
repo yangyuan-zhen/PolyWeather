@@ -197,19 +197,36 @@ class DBManager:
             )
             conn.commit()
 
-    def list_payment_audit_events(self, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_payment_audit_events(
+        self,
+        limit: int = 50,
+        event_type: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
         safe_limit = max(1, min(int(limit or 50), 500))
+        kind = str(event_type or "").strip().lower()
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
-            rows = conn.execute(
-                """
-                SELECT id, event_type, payload_json, created_at
-                FROM payment_audit_events
-                ORDER BY id DESC
-                LIMIT ?
-                """,
-                (safe_limit,),
-            ).fetchall()
+            if kind:
+                rows = conn.execute(
+                    """
+                    SELECT id, event_type, payload_json, created_at
+                    FROM payment_audit_events
+                    WHERE event_type = ?
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (kind, safe_limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT id, event_type, payload_json, created_at
+                    FROM payment_audit_events
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (safe_limit,),
+                ).fetchall()
             out = []
             for row in rows:
                 try:
@@ -225,6 +242,52 @@ class DBManager:
                     }
                 )
             return out
+
+    def mark_payment_audit_event_resolved(
+        self,
+        event_id: int,
+        resolved_by: str,
+    ) -> Optional[Dict[str, Any]]:
+        safe_id = int(event_id or 0)
+        actor = str(resolved_by or "").strip().lower()
+        if safe_id <= 0 or not actor:
+            return None
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT id, event_type, payload_json, created_at
+                FROM payment_audit_events
+                WHERE id = ?
+                LIMIT 1
+                """,
+                (safe_id,),
+            ).fetchone()
+            if not row:
+                return None
+            try:
+                payload = json.loads(str(row["payload_json"] or "{}"))
+            except Exception:
+                payload = {}
+            if not isinstance(payload, dict):
+                payload = {}
+            payload["resolved_at"] = datetime.now().isoformat()
+            payload["resolved_by"] = actor
+            conn.execute(
+                """
+                UPDATE payment_audit_events
+                SET payload_json = ?
+                WHERE id = ?
+                """,
+                (json.dumps(payload, ensure_ascii=False), safe_id),
+            )
+            conn.commit()
+            return {
+                "id": int(row["id"]),
+                "event_type": str(row["event_type"] or ""),
+                "payload": payload,
+                "created_at": row["created_at"],
+            }
 
     @staticmethod
     def _safe_week_key(value: str) -> str:
