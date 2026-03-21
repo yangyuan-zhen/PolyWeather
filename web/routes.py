@@ -256,19 +256,28 @@ async def ops_memberships(request: Request, limit: int = 200):
 
     db = DBManager()
     subscriptions = SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=limit)
-    user_map = db.get_users_by_supabase_user_ids(
-        [str(item.get("user_id") or "") for item in subscriptions]
-    )
+    subscription_user_ids = [str(item.get("user_id") or "") for item in subscriptions]
+    user_map = db.get_users_by_supabase_user_ids(subscription_user_ids)
+    unresolved_user_ids = [
+        user_id
+        for user_id in subscription_user_ids
+        if str(user_id or "").strip().lower()
+        and not str(
+            (user_map.get(str(user_id).strip().lower(), {}) or {}).get("supabase_email") or ""
+        ).strip()
+    ]
+    auth_user_map = SUPABASE_ENTITLEMENT.get_auth_users(unresolved_user_ids)
     deduped: dict[str, dict] = {}
     for item in subscriptions:
         user_id = str(item.get("user_id") or "").strip().lower()
         local_user = user_map.get(user_id, {})
+        auth_user = auth_user_map.get(user_id, {})
         row = {
             "user_id": user_id,
-            "email": str(local_user.get("supabase_email") or ""),
+            "email": str(local_user.get("supabase_email") or auth_user.get("email") or ""),
             "telegram_id": local_user.get("telegram_id"),
             "username": local_user.get("username"),
-            "registered_at": local_user.get("created_at"),
+            "registered_at": local_user.get("created_at") or auth_user.get("created_at"),
             "plan_code": item.get("plan_code"),
             "starts_at": item.get("starts_at"),
             "expires_at": item.get("expires_at"),

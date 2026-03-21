@@ -101,6 +101,9 @@ class SupabaseEntitlementService:
             "Accept": "application/json",
         }
 
+    def _admin_user_endpoint(self, user_id: str) -> str:
+        return f"{self.supabase_url}/auth/v1/admin/users/{user_id}"
+
     def get_identity(self, access_token: str) -> Optional[SupabaseIdentity]:
         if not access_token:
             return None
@@ -264,6 +267,46 @@ class SupabaseEntitlementService:
         except Exception as exc:
             logger.warning(f"supabase active subscriptions query error: {exc}")
             return []
+
+    def get_auth_users(self, user_ids: List[str]) -> Dict[str, Dict[str, object]]:
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return {}
+
+        keys = []
+        for item in user_ids or []:
+            key = str(item or "").strip().lower()
+            if key and key not in keys:
+                keys.append(key)
+        if not keys:
+            return {}
+
+        out: Dict[str, Dict[str, object]] = {}
+        for user_id in keys:
+            try:
+                response = requests.get(
+                    self._admin_user_endpoint(user_id),
+                    headers=self._request_headers_for_service_role(),
+                    timeout=self.timeout_sec,
+                )
+                if response.status_code != 200:
+                    logger.warning(
+                        "supabase admin user query failed user_id={} status={}",
+                        user_id,
+                        response.status_code,
+                    )
+                    continue
+                raw = response.json() if response.content else {}
+                payload = raw.get("user") if isinstance(raw, dict) and isinstance(raw.get("user"), dict) else raw
+                if not isinstance(payload, dict):
+                    continue
+                out[user_id] = {
+                    "email": str(payload.get("email") or "").strip(),
+                    "created_at": payload.get("created_at"),
+                }
+            except Exception as exc:
+                logger.warning(f"supabase admin user query error user_id={user_id}: {exc}")
+        return out
 
 
 SUPABASE_ENTITLEMENT = SupabaseEntitlementService()
