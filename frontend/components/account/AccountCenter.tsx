@@ -1125,6 +1125,49 @@ export function AccountCenter() {
     walletAddress,
   ]);
 
+  const fetchLatestPaymentConfig = useCallback(
+    async (
+      authHeaders?: Record<string, string>,
+      syncState = true,
+    ): Promise<PaymentConfig> => {
+      const headers = authHeaders || (await buildAuthedHeaders(false));
+      const configRes = await fetch("/api/payments/config", {
+        cache: "no-store",
+        headers,
+      });
+      if (!configRes.ok) {
+        const raw = (await configRes.text()).slice(0, 350);
+        throw new Error(`load payment config failed: ${raw}`);
+      }
+      const configJson = (await configRes.json()) as PaymentConfig;
+      if (syncState) {
+        setPaymentConfig(configJson);
+        if (!selectedPlanCode && configJson.plans?.length) {
+          setSelectedPlanCode(configJson.plans[0].plan_code);
+        }
+        const tokenOptions = Array.isArray(configJson.tokens)
+          ? configJson.tokens.filter(
+              (row) =>
+                typeof row?.address === "string" &&
+                String(row.address).startsWith("0x"),
+            )
+          : [];
+        const defaultTokenAddress = String(
+          configJson.default_token_address ||
+            tokenOptions.find((row) => row.is_default)?.address ||
+            tokenOptions[0]?.address ||
+            configJson.token_address ||
+            "",
+        ).toLowerCase();
+        if (defaultTokenAddress) {
+          setSelectedTokenAddress((prev) => prev || defaultTokenAddress);
+        }
+      }
+      return configJson;
+    },
+    [buildAuthedHeaders, selectedPlanCode],
+  );
+
   const loadSnapshot = useCallback(async () => {
     setErrorText("");
     try {
@@ -1856,7 +1899,28 @@ export function AccountCenter() {
         Authorization: `Bearer ${accessToken}`,
       };
 
-      const targetChainId = Number(paymentConfig.chain_id || 137);
+      const latestConfig = await fetchLatestPaymentConfig(authHeaders, true);
+      if (!latestConfig?.enabled || !latestConfig?.configured) {
+        throw new Error(copy.payNotReady);
+      }
+      const expectedReceiver = String(
+        latestConfig.receiver_contract || "",
+      ).toLowerCase();
+      if (!expectedReceiver.startsWith("0x")) {
+        throw new Error("payment receiver contract is not configured");
+      }
+      if (
+        paymentConfig?.receiver_contract &&
+        String(paymentConfig.receiver_contract).toLowerCase() !== expectedReceiver
+      ) {
+        setPaymentInfo(
+          `检测到支付配置已更新，已切换到最新地址 ${shortAddress(expectedReceiver)}。`,
+        );
+      } else {
+        setPaymentInfo(`当前收款合约: ${shortAddress(expectedReceiver)}`);
+      }
+
+      const targetChainId = Number(latestConfig.chain_id || 137);
       await ensureTargetChain(eth, targetChainId);
 
       const createRes = await fetch("/api/payments/intents", {
@@ -1883,6 +1947,12 @@ export function AccountCenter() {
       const txPayload = created.tx_payload;
       if (!intentId || !txPayload?.to || !txPayload?.data)
         throw new Error("intent payload invalid");
+      const intentReceiver = String(txPayload.to || "").toLowerCase();
+      if (intentReceiver !== expectedReceiver) {
+        throw new Error(
+          `payment receiver changed: expected ${expectedReceiver}, got ${intentReceiver}. 请刷新页面后重试。`,
+        );
+      }
       setLastIntentId(intentId);
 
       const tokenAddress = String(txPayload.token_address || "").toLowerCase();
@@ -1898,7 +1968,7 @@ export function AccountCenter() {
       const tokenDecimals = Number(
         txPayload.token_decimals ??
           selectedPaymentToken?.decimals ??
-          paymentConfig?.token_decimals ??
+          latestConfig?.token_decimals ??
           6,
       );
 
