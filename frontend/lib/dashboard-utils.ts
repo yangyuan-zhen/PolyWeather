@@ -254,9 +254,7 @@ export function getTemperatureChartData(
   observationSource.forEach((item) => {
     const parts = String(item.time || "").split(":");
     let hour = Number.parseInt(parts[0], 10);
-    const minute = Number.parseInt(parts[1] || "0", 10);
     if (Number.isNaN(hour)) return;
-    if (minute >= 30) hour = (hour + 1) % 24;
     const key = `${String(hour).padStart(2, "0")}:00`;
     const index = times.indexOf(key);
     if (index >= 0 && metarPoints[index] === null) {
@@ -269,8 +267,6 @@ export function getTemperatureChartData(
     const match = detail.mgm.time.match(/T?(\d{2}):(\d{2})/);
     if (match) {
       let hour = Number.parseInt(match[1], 10);
-      const minute = Number.parseInt(match[2], 10);
-      if (minute >= 30) hour = (hour + 1) % 24;
       const key = `${String(hour).padStart(2, "0")}:00`;
       const index = times.indexOf(key);
       if (index >= 0) {
