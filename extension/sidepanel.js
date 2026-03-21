@@ -34,7 +34,7 @@ const I18N = {
     noContinuousObs: "暂无连续观测",
     nearbyMonitoringSuffix: "个参与监控",
     today: "今天",
-    debSeries: "DEB",
+    omSeries: "OM预测",
     loadCityDetailFailed: "加载城市详情失败",
     refreshFailed: "刷新温度数据失败",
     initFailed: "初始化失败",
@@ -69,7 +69,7 @@ const I18N = {
     noContinuousObs: "No continuous observations",
     nearbyMonitoringSuffix: " stations monitored",
     today: "Today",
-    debSeries: "DEB",
+    omSeries: "OM Forecast",
     loadCityDetailFailed: "Failed to load city detail",
     refreshFailed: "Failed to refresh weather data",
     initFailed: "Initialization failed",
@@ -689,7 +689,7 @@ function drawTrendChart(detail) {
     trend.forEach((p, idx) => {
       const x = canUseMinuteAxis ? xFromMinute(p.m) : xFromIndex(idx, trend.length);
       const y = yFromValue(p.v);
-      hoverPoints.push({ x, y, time: p.t, value: p.v, series: t("debSeries") });
+      hoverPoints.push({ x, y, time: p.t, value: p.v, series: t("omSeries") });
       if (idx === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     });
