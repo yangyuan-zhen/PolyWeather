@@ -1132,11 +1132,16 @@ export function getShortTermNowcastLines(
     ? detail.metar_recent_obs.slice(-4)
     : [];
   const nearby = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const nearbySource = String(detail.nearby_source || "").toLowerCase();
   const sourceLabel =
-    detail.name === "ankara"
+    nearbySource === "mgm" || detail.name === "ankara"
       ? isEnglish(locale)
         ? "MGM nearby stations"
         : "MGM 周边站"
+      : nearbySource === "official_cluster"
+        ? isEnglish(locale)
+          ? "Official nearby stations"
+          : "官方周边站"
       : isEnglish(locale)
         ? "METAR nearby stations"
         : "METAR 周边站";

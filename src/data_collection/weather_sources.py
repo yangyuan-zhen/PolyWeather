@@ -585,6 +585,32 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         if cluster_data:
             results["mgm_nearby"] = cluster_data
+            results["nearby_source"] = "metar_cluster"
+
+    def _attach_warsaw_official_nearby(
+        self, results: Dict, use_fahrenheit: bool
+    ) -> None:
+        if "mgm_nearby" in results:
+            return
+
+        official_rows = []
+        epwa_rows = self.fetch_metar_nearby_cluster(["EPWA"], use_fahrenheit=use_fahrenheit)
+        if epwa_rows:
+            epwa = dict(epwa_rows[0])
+            epwa["name"] = "Warszawa-Okęcie (EPWA)"
+            official_rows.append(epwa)
+
+        imgw_row = self.fetch_imgw_synoptic_station_current(
+            "Warszawa",
+            display_name="Warszawa (IMGW synoptic)",
+            use_fahrenheit=use_fahrenheit,
+        )
+        if imgw_row:
+            official_rows.append(imgw_row)
+
+        if official_rows:
+            results["mgm_nearby"] = official_rows
+            results["nearby_source"] = "official_cluster"
 
     def _attach_nws_and_models(
         self,
@@ -649,6 +675,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     results["metar"] = metar_data
 
                 self._attach_turkish_mgm_data(results, city_lower)
+                if city_lower == "warsaw":
+                    self._attach_warsaw_official_nearby(results, use_fahrenheit)
                 self._attach_global_nearby_cluster(
                     results, city_lower, use_fahrenheit
                 )
@@ -668,6 +696,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     results["metar"] = metar_data
 
                 self._attach_turkish_mgm_data(results, city_lower)
+                if city_lower == "warsaw":
+                    self._attach_warsaw_official_nearby(results, use_fahrenheit)
                 self._attach_global_nearby_cluster(
                     results, city_lower, use_fahrenheit
                 )

@@ -635,6 +635,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         },
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
+        "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() == "ankara" else "metar_cluster"),
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,
@@ -837,7 +838,7 @@ def _build_city_detail_payload(
             "weather_gov": {},
             "mgm": data.get("mgm") or {},
             "mgm_nearby": data.get("mgm_nearby") or [],
-            "nearby_source": "mgm" if data.get("name") == "ankara" else "metar_cluster",
+            "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),
         },
         "timeseries": {
             "metar_recent_obs": data.get("metar_recent_obs") or [],
@@ -856,6 +857,7 @@ def _build_city_detail_payload(
         "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
         "market_scan": market_scan,
         "risk": data.get("risk"),
+        "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),
         "ai_analysis": data.get("ai_analysis") or "",
         "errors": {},
     }

@@ -9,6 +9,9 @@ from loguru import logger
 
 
 class SettlementSourceMixin:
+    IMGW_METEO_API_BASE = "https://meteo.imgw.pl/api/v1"
+    IMGW_METEO_API_TOKEN = "p4DXKjsYadfBV21TYrDk"
+
     def _get_settlement_cache(self, key: str) -> Optional[Dict[str, Any]]:
         now_ts = time.time()
         with self._settlement_cache_lock:
@@ -259,6 +262,84 @@ class SettlementSourceMixin:
         except Exception as exc:
             logger.warning(f"CWA Forecast request failed: {exc}")
             return None
+
+    def _imgw_api_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+        try:
+            query = {"token": self.IMGW_METEO_API_TOKEN}
+            if isinstance(params, dict):
+                query.update(params)
+            response = self.session.get(
+                f"{self.IMGW_METEO_API_BASE}/{path}",
+                params=query,
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return response.json() if response.content else None
+        except Exception as exc:
+            logger.warning(f"IMGW API request failed path={path}: {exc}")
+            return None
+
+    def fetch_imgw_synoptic_station_current(
+        self,
+        localization: str,
+        *,
+        display_name: Optional[str] = None,
+        use_fahrenheit: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        cache_key = f"imgw:synoptic:{str(localization or '').strip().lower()}"
+        cached = self._get_settlement_cache(cache_key)
+        if cached:
+            return cached
+
+        location_payload = self._imgw_api_get("geo/search", {"name": localization})
+        location_rows = (location_payload or {}).get("data") or []
+        if not isinstance(location_rows, list) or not location_rows:
+            return None
+        location_row = location_rows[0] if isinstance(location_rows[0], dict) else None
+        if not isinstance(location_row, dict):
+            return None
+
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        synoptic_payload = self._imgw_api_get(
+            "forecast/synoptic",
+            {"date": date_str, "localization": localization},
+        )
+        data = (synoptic_payload or {}).get("data") or {}
+        if not isinstance(data, dict) or not data:
+            return None
+
+        latest_row = None
+        for key in sorted(data.keys()):
+            row = data.get(key)
+            if isinstance(row, dict) and row.get("temp") is not None:
+                latest_row = row
+        if not isinstance(latest_row, dict):
+            return None
+
+        temp_kelvin = self._safe_float(latest_row.get("temp"))
+        if temp_kelvin is None:
+            return None
+        temp_c = temp_kelvin - 273.15
+        temp_value = (temp_c * 9 / 5) + 32 if use_fahrenheit else temp_c
+        wind_speed_ms = self._safe_float(latest_row.get("ws"))
+
+        payload = {
+            "name": display_name or str(location_row.get("name") or localization),
+            "lat": self._safe_float(location_row.get("lat")),
+            "lon": self._safe_float(location_row.get("lon")),
+            "temp": round(temp_value, 1),
+            "icao": "IMGW",
+            "istNo": "IMGW",
+            "wind_dir": self._safe_float(latest_row.get("wd")),
+            "wind_speed": wind_speed_ms,
+            "wind_speed_kt": round(float(wind_speed_ms) * 1.943844, 1) if wind_speed_ms is not None else None,
+            "source": "imgw_synoptic",
+            "raw_time": latest_row.get("fd"),
+        }
+        if payload["lat"] is None or payload["lon"] is None:
+            return None
+        self._set_settlement_cache(cache_key, payload)
+        return payload
 
     def fetch_settlement_current(self, city: str) -> Optional[Dict[str, Any]]:
         normalized = str(city or "").strip().lower()

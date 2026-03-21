@@ -267,6 +267,7 @@ export interface CityDetail {
   current: CurrentConditions;
   mgm?: MgmData;
   mgm_nearby?: NearbyStation[];
+  nearby_source?: string;
   forecast?: ForecastData;
   multi_model?: Record<string, number | null>;
   deb?: DebForecast;
