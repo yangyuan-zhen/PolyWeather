@@ -259,22 +259,29 @@ async def ops_memberships(request: Request, limit: int = 200):
     user_map = db.get_users_by_supabase_user_ids(
         [str(item.get("user_id") or "") for item in subscriptions]
     )
-    rows = []
+    deduped: dict[str, dict] = {}
     for item in subscriptions:
         user_id = str(item.get("user_id") or "").strip().lower()
         local_user = user_map.get(user_id, {})
-        rows.append(
-            {
-                "user_id": user_id,
-                "email": str(local_user.get("supabase_email") or ""),
-                "telegram_id": local_user.get("telegram_id"),
-                "username": local_user.get("username"),
-                "registered_at": local_user.get("created_at"),
-                "plan_code": item.get("plan_code"),
-                "starts_at": item.get("starts_at"),
-                "expires_at": item.get("expires_at"),
-            }
-        )
+        row = {
+            "user_id": user_id,
+            "email": str(local_user.get("supabase_email") or ""),
+            "telegram_id": local_user.get("telegram_id"),
+            "username": local_user.get("username"),
+            "registered_at": local_user.get("created_at"),
+            "plan_code": item.get("plan_code"),
+            "starts_at": item.get("starts_at"),
+            "expires_at": item.get("expires_at"),
+        }
+        existing = deduped.get(user_id)
+        existing_expires = str(existing.get("expires_at") or "") if existing else ""
+        current_expires = str(row.get("expires_at") or "")
+        if existing is None or current_expires > existing_expires:
+            deduped[user_id] = row
+    rows = sorted(
+        deduped.values(),
+        key=lambda item: str(item.get("expires_at") or ""),
+    )
     return {"memberships": rows}
 
 
