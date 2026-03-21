@@ -165,6 +165,23 @@ export function CitySidebar() {
                   const summary = store.citySummariesByName[city.name];
                   const snapshot = detail || summary;
                   const isActive = store.selectedCity === city.name;
+                  const tempSymbol = snapshot?.temp_symbol || "°C";
+                  const currentTempText =
+                    snapshot?.current?.temp != null
+                      ? t("sidebar.currentTemp", {
+                          temp: `${snapshot.current.temp}${tempSymbol}`,
+                        })
+                      : t("common.na");
+                  const peakTempText =
+                    detail?.current?.max_so_far != null &&
+                    detail.current.max_temp_time
+                      ? t("sidebar.peakTempAt", {
+                          temp: `${detail.current.max_so_far}${tempSymbol}`,
+                          time: detail.current.max_temp_time,
+                        })
+                      : detail?.current?.max_temp_time
+                        ? t("sidebar.peakAt", { time: detail.current.max_temp_time })
+                        : "";
 
                   return (
                     <button
@@ -186,9 +203,7 @@ export function CitySidebar() {
                             snapshot?.current?.temp != null && "loaded",
                           )}
                         >
-                          {snapshot?.current?.temp != null
-                            ? `${snapshot.current.temp}${snapshot.temp_symbol || "°C"}`
-                            : t("common.na")}
+                          {currentTempText}
                         </span>
                       </div>
 
@@ -196,11 +211,7 @@ export function CitySidebar() {
                         <span className="city-local-time">
                           {snapshot?.local_time ? `🕒 ${snapshot.local_time}` : ""}
                         </span>
-                        <span className="city-max-info">
-                          {detail?.current?.max_temp_time
-                            ? t("sidebar.peakAt", { time: detail.current.max_temp_time })
-                            : ""}
-                        </span>
+                        <span className="city-max-info">{peakTempText}</span>
                       </div>
                     </button>
                   );

@@ -21,6 +21,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "header.langEn": "EN",
 
     "sidebar.title": "监控城市",
+    "sidebar.currentTemp": "当前 {temp}",
+    "sidebar.peakTempAt": "峰值 {temp} @ {time}",
     "sidebar.peakAt": "峰值 @ {time}",
     "sidebar.group.high": "高风险",
     "sidebar.group.medium": "中风险",
@@ -180,6 +182,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "header.langEn": "EN",
 
     "sidebar.title": "Monitored Cities",
+    "sidebar.currentTemp": "Current {temp}",
+    "sidebar.peakTempAt": "Peak {temp} @ {time}",
     "sidebar.peakAt": "Peak @ {time}",
     "sidebar.group.high": "High Risk",
     "sidebar.group.medium": "Medium Risk",
