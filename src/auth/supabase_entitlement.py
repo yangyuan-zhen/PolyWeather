@@ -70,6 +70,13 @@ class SupabaseEntitlementService:
         self._sub_cache: Dict[str, Dict[str, object]] = {}
         self._sub_cache_lock = threading.Lock()
 
+    def invalidate_subscription_cache(self, user_id: str) -> None:
+        key = str(user_id or "").strip()
+        if not key:
+            return
+        with self._sub_cache_lock:
+            self._sub_cache.pop(key, None)
+
     @property
     def configured(self) -> bool:
         return bool(self.supabase_url and self.anon_key)

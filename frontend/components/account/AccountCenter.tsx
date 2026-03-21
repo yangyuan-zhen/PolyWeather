@@ -171,6 +171,10 @@ type ProviderSelection = {
   mode: ProviderMode;
 };
 
+type InjectedProviderOption = ProviderSelection & {
+  key: string;
+};
+
 type ConnectBindOptions = {
   openOverlayAfterBind?: boolean;
 };
@@ -290,6 +294,43 @@ function getEvmProvider(): EvmProvider | null {
     return candidates.find((p) => p.isMetaMask) || candidates[0];
   }
   return typeof root.request === "function" ? root : null;
+}
+
+function listInjectedProviders(): InjectedProviderOption[] {
+  if (typeof window === "undefined") return [];
+  const root = window.ethereum;
+  if (!root) return [];
+  const candidates = Array.isArray(root.providers)
+    ? root.providers.filter(
+        (p): p is EvmProvider => !!p && typeof p.request === "function",
+      )
+    : typeof root.request === "function"
+      ? [root]
+      : [];
+  const seen = new Set<string>();
+  const out: InjectedProviderOption[] = [];
+  candidates.forEach((provider, index) => {
+    const label = getEvmWalletLabel(provider);
+    const key = [
+      provider.isMetaMask ? "metamask" : "",
+      provider.isRabby ? "rabby" : "",
+      provider.isOkxWallet ? "okx" : "",
+      provider.isBitKeep ? "bitget" : "",
+      label.toLowerCase().replace(/\s+/g, "-"),
+      String(index),
+    ]
+      .filter(Boolean)
+      .join(":");
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({
+      key,
+      provider,
+      label,
+      mode: "auto",
+    });
+  });
+  return out;
 }
 
 function getEvmWalletLabel(provider: EvmProvider | null): string {
@@ -549,6 +590,21 @@ export function AccountCenter() {
       walletConnectMissing: isEn
         ? "WalletConnect disabled: please configure"
         : "未启用 WalletConnect：请配置",
+      walletExtensionDetected: isEn
+        ? "Detected browser wallets"
+        : "检测到的浏览器钱包",
+      walletExtensionChoose: isEn
+        ? "Choose extension wallet"
+        : "选择浏览器钱包",
+      walletRecoveryBusy: isEn
+        ? "Recovering Pro entitlement after on-chain payment..."
+        : "正在根据链上支付恢复 Pro 权限...",
+      walletRecoveryDone: isEn
+        ? "Pro entitlement recovered."
+        : "Pro 权限已恢复。",
+      walletRecoveryFailed: isEn
+        ? "Paid detected but entitlement is still pending. Please refresh in a minute or contact support."
+        : "已检测到支付，但订阅状态仍在同步中。请稍后刷新，或联系管理员处理。",
       unbind: isEn ? "Unbind" : "解绑",
       unbindConfirm: isEn
         ? "Unbind wallet {address}? You can bind it again later."
@@ -607,15 +663,26 @@ export function AccountCenter() {
   const [selectedTokenAddress, setSelectedTokenAddress] = useState("");
   const [selectedWallet, setSelectedWallet] = useState("");
   const [providerMode, setProviderMode] = useState<ProviderMode>("auto");
+  const [injectedProviderOptions, setInjectedProviderOptions] = useState<
+    InjectedProviderOption[]
+  >([]);
+  const [selectedInjectedProviderKey, setSelectedInjectedProviderKey] =
+    useState("");
   const [paymentBusy, setPaymentBusy] = useState(false);
   const [paymentInfo, setPaymentInfo] = useState("");
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
   const [showSecondarySections, setShowSecondarySections] = useState(false);
+  const [reconcileBusy, setReconcileBusy] = useState(false);
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
+  const authUserId = backend?.user_id || user?.id || "";
+  const authIsAuthenticated = Boolean(authUserId);
+  const paymentReadyForRecovery = Boolean(
+    paymentConfig?.enabled && paymentConfig?.configured,
+  );
 
   useEffect(() => {
     let canceled = false;
@@ -645,6 +712,30 @@ export function AccountCenter() {
       if (timeoutId != null && typeof window !== "undefined") {
         window.clearTimeout(timeoutId);
       }
+    };
+  }, []);
+
+  useEffect(() => {
+    const syncProviders = () => {
+      const nextOptions = listInjectedProviders();
+      setInjectedProviderOptions(nextOptions);
+      setSelectedInjectedProviderKey((current) => {
+        if (current && nextOptions.some((row) => row.key === current)) {
+          return current;
+        }
+        return nextOptions[0]?.key || "";
+      });
+    };
+    syncProviders();
+    if (typeof window === "undefined") return;
+    window.addEventListener("ethereum#initialized", syncProviders as EventListener, {
+      once: false,
+    });
+    return () => {
+      window.removeEventListener(
+        "ethereum#initialized",
+        syncProviders as EventListener,
+      );
     };
   }, []);
 
@@ -736,14 +827,23 @@ export function AccountCenter() {
   );
 
   const resolvePaymentProvider = useCallback(
-    async (mode: ProviderMode = "auto"): Promise<ProviderSelection> => {
+    async (
+      mode: ProviderMode = "auto",
+      preferredInjectedKey = "",
+    ): Promise<ProviderSelection> => {
       const targetChainId = Number(paymentConfig?.chain_id || 137);
       if (mode !== "walletconnect") {
-        const injected = getEvmProvider();
+        const injectedOptions = listInjectedProviders();
+        const injected =
+          injectedOptions.find((row) => row.key === preferredInjectedKey)
+            ?.provider || getEvmProvider();
+        const label =
+          injectedOptions.find((row) => row.key === preferredInjectedKey)?.label ||
+          getEvmWalletLabel(injected);
         if (injected) {
           return {
             provider: injected,
-            label: getEvmWalletLabel(injected),
+            label,
             mode: "auto",
           };
         }
@@ -936,12 +1036,96 @@ export function AccountCenter() {
     void loadPaymentSnapshot();
   }, [loadPaymentSnapshot]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!lastIntentId) return;
+    window.sessionStorage.setItem("polyweather:lastPaymentIntentId", lastIntentId);
+  }, [lastIntentId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedIntentId = window.sessionStorage.getItem(
+      "polyweather:lastPaymentIntentId",
+    );
+    if (storedIntentId && !lastIntentId) {
+      setLastIntentId(storedIntentId);
+    }
+  }, [lastIntentId]);
+
   const onRefresh = async () => {
     setRefreshing(true);
     await loadSnapshot();
     await loadPaymentSnapshot();
     setRefreshing(false);
   };
+
+  const reconcileLatestPayment = useCallback(async () => {
+    if (!authIsAuthenticated || reconcileBusy) return false;
+    setReconcileBusy(true);
+    try {
+      const headers = await buildAuthedHeaders(true, true);
+      const res = await fetch("/api/payments/reconcile-latest", {
+        method: "POST",
+        headers,
+      });
+      if (!res.ok) {
+        return false;
+      }
+      const json = (await res.json()) as {
+        ok?: boolean;
+        action?: string;
+        subscription?: { plan_code?: string | null } | null;
+      };
+      if (json.ok) {
+        setPaymentInfo(copy.walletRecoveryDone);
+        setPaymentError("");
+        await loadSnapshot();
+        await loadPaymentSnapshot();
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      setReconcileBusy(false);
+    }
+  }, [
+    authIsAuthenticated,
+    buildAuthedHeaders,
+    copy.walletRecoveryDone,
+    loadPaymentSnapshot,
+    loadSnapshot,
+    reconcileBusy,
+  ]);
+
+  useEffect(() => {
+    if (!authIsAuthenticated) return;
+    if (backend?.subscription_active) return;
+    if (!paymentReadyForRecovery) return;
+    if (!lastIntentId) return;
+    let cancelled = false;
+    const run = async () => {
+      setPaymentInfo(copy.walletRecoveryBusy);
+      const repaired = await reconcileLatestPayment();
+      if (cancelled) return;
+      if (!repaired && !backend?.subscription_active) {
+        setPaymentInfo("");
+        setPaymentError(copy.walletRecoveryFailed);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    backend?.subscription_active,
+    authIsAuthenticated,
+    copy.walletRecoveryBusy,
+    copy.walletRecoveryFailed,
+    lastIntentId,
+    paymentReadyForRecovery,
+    reconcileLatestPayment,
+  ]);
 
   const onSignOut = async () => {
     if (walletConnectProviderCache?.disconnect) {
@@ -1285,7 +1469,10 @@ export function AccountCenter() {
 
     setPaymentBusy(true);
     try {
-      const providerSelection = await resolvePaymentProvider(mode);
+      const providerSelection = await resolvePaymentProvider(
+        mode,
+        selectedInjectedProviderKey,
+      );
       const eth = providerSelection.provider;
       const walletLabel = providerSelection.label;
 
@@ -1480,7 +1667,10 @@ export function AccountCenter() {
     setPaymentBusy(true);
     let approvedInThisRun = false;
     try {
-      const providerSelection = await resolvePaymentProvider(providerMode);
+      const providerSelection = await resolvePaymentProvider(
+        providerMode,
+        selectedInjectedProviderKey,
+      );
       const eth = providerSelection.provider;
       const activeAccounts = (await eth.request({
         method: "eth_requestAccounts",
@@ -2153,6 +2343,31 @@ export function AccountCenter() {
             </div>
 
             <div className="mt-6 grid grid-cols-1 gap-2">
+              {injectedProviderOptions.length > 1 && (
+                <label className="mb-2 block">
+                  <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
+                    {copy.walletExtensionDetected}
+                  </span>
+                  <select
+                    value={selectedInjectedProviderKey}
+                    onChange={(event) =>
+                      setSelectedInjectedProviderKey(event.target.value)
+                    }
+                    disabled={paymentBusy}
+                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
+                  >
+                    {injectedProviderOptions.map((option) => (
+                      <option
+                        key={option.key}
+                        value={option.key}
+                        className="bg-slate-900 text-slate-200"
+                      >
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               <button
                 onClick={() => {
                   setProviderMode("auto");

@@ -14,6 +14,7 @@ from eth_account import Account
 from eth_account.messages import encode_defunct
 from web3 import Web3
 
+from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
 from src.database.db_manager import DBManager
 
 DEFAULT_POLYGON_CHAIN_ID = 137
@@ -1417,7 +1418,9 @@ class PaymentContractCheckoutService:
         )
         if not isinstance(rows, list) or not rows:
             raise PaymentCheckoutError(404, "payment intent not found")
-        return self._serialize_intent(rows[0])
+        intent = self._serialize_intent(rows[0])
+        setattr(intent, "user_id", user_id)
+        return intent
 
     def list_pending_confirm_intents(self, limit: int = 20) -> List[Dict[str, Any]]:
         """
@@ -1756,7 +1759,61 @@ class PaymentContractCheckoutService:
             prefer="return=representation",
             allowed_status=[201],
         )
+        SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
         return sub_rows[0] if isinstance(sub_rows, list) and sub_rows else {}
+
+    def _ensure_confirmed_subscription(
+        self,
+        user_id: str,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+    ) -> Optional[Dict[str, Any]]:
+        SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
+        latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+            user_id,
+            respect_requirement=False,
+        )
+        if isinstance(latest_subscription, dict):
+            return latest_subscription
+
+        plan = self._select_plan(intent.plan_code)
+        return self._grant_subscription(
+            user_id=user_id,
+            plan_code=intent.plan_code,
+            duration_days=plan["duration_days"],
+            tx_hash=tx_hash,
+            payload={
+                "intent_id": intent.intent_id,
+                "order_id_hex": intent.order_id_hex,
+                "repaired_from_confirmed_intent": True,
+            },
+        )
+
+    def _ensure_confirm_side_effects(
+        self,
+        user_id: str,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+    ) -> Dict[str, Any]:
+        payment_row = {}
+        if tx_hash:
+            payment_row = self._insert_payment_record(
+                user_id=user_id,
+                tx_hash=tx_hash,
+                amount_units=int(intent.amount_units),
+                token_address=intent.token_address,
+                payload={
+                    "tx_hash": tx_hash,
+                    "intent_id": intent.intent_id,
+                    "order_id_hex": intent.order_id_hex,
+                    "reconciled": True,
+                },
+            )
+        subscription_row = self._ensure_confirmed_subscription(user_id, intent, tx_hash)
+        return {
+            "payment": payment_row,
+            "subscription": subscription_row,
+        }
 
     def _notify_telegram(self, user_id: str, plan_code: str, amount_usdc: str, tx_hash: str) -> None:
         if not self.notify_telegram:
@@ -1800,7 +1857,15 @@ class PaymentContractCheckoutService:
         self._ensure_enabled()
         intent = self.get_intent(user_id, intent_id)
         if intent.status == "confirmed":
-            return {"intent": intent.__dict__, "already_confirmed": True}
+            tx_hash_text = str(tx_hash or intent.tx_hash or "").strip().lower()
+            repaired = self._ensure_confirm_side_effects(user_id, intent, tx_hash_text)
+            refreshed = self.get_intent(user_id, intent_id)
+            return {
+                "intent": refreshed.__dict__,
+                "already_confirmed": True,
+                "payment": repaired.get("payment"),
+                "subscription": repaired.get("subscription"),
+            }
         if intent.status in {"failed", "cancelled", "expired"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}")
         tx_hash_text = str(tx_hash or intent.tx_hash or "").strip().lower()
@@ -1939,6 +2004,69 @@ class PaymentContractCheckoutService:
             "subscription": subscription_row,
             "points_redemption": points_result,
             "tx": payload,
+        }
+
+    def reconcile_latest_intent(self, user_id: str) -> Dict[str, Any]:
+        self._ensure_enabled()
+        rows = self._rest(
+            "GET",
+            "payment_intents",
+            params={
+                "select": (
+                    "id,user_id,plan_code,plan_id,chain_id,token_address,receiver_address,"
+                    "amount_units,payment_mode,allowed_wallet,order_id_hex,status,expires_at,tx_hash,metadata"
+                ),
+                "user_id": f"eq.{user_id}",
+                "status": "in.(created,submitted,confirmed)",
+                "order": "updated_at.desc",
+                "limit": "5",
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(rows, list) or not rows:
+            return {"ok": False, "reason": "intent_not_found"}
+
+        attempts: List[Dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            intent = self._serialize_intent(row)
+            status = str(intent.status or "").strip().lower()
+            tx_hash_text = str(intent.tx_hash or "").strip().lower()
+            try:
+                if status == "submitted" and tx_hash_text:
+                    result = self.confirm_intent_tx(user_id, intent.intent_id, tx_hash_text)
+                    return {"ok": True, "action": "confirmed_submitted_intent", **result}
+                if status == "confirmed":
+                    repaired = self._ensure_confirm_side_effects(user_id, intent, tx_hash_text)
+                    refreshed = self.get_intent(user_id, intent.intent_id)
+                    return {
+                        "ok": True,
+                        "action": "reconciled_confirmed_intent",
+                        "intent": refreshed.__dict__,
+                        "payment": repaired.get("payment"),
+                        "subscription": repaired.get("subscription"),
+                    }
+            except PaymentCheckoutError as exc:
+                attempts.append(
+                    {
+                        "intent_id": intent.intent_id,
+                        "status": status,
+                        "status_code": exc.status_code,
+                        "error": exc.detail,
+                    }
+                )
+
+        SUPABASE_ENTITLEMENT.invalidate_subscription_cache(user_id)
+        latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+            user_id,
+            respect_requirement=False,
+        )
+        return {
+            "ok": bool(latest_subscription),
+            "action": "checked_without_repair",
+            "subscription": latest_subscription,
+            "attempts": attempts,
         }
 PAYMENT_CHECKOUT = PaymentContractCheckoutService()
 

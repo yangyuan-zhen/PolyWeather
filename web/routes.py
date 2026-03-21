@@ -416,6 +416,16 @@ async def payment_confirm_tx(
         raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
 
+@router.post("/api/payments/reconcile-latest")
+async def payment_reconcile_latest(request: Request):
+    _assert_entitlement(request)
+    identity = _require_supabase_identity(request)
+    try:
+        return PAYMENT_CHECKOUT.reconcile_latest_intent(identity["user_id"])
+    except PaymentCheckoutError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+
+
 @router.get("/api/city/{name}/summary")
 async def city_summary(request: Request, name: str, force_refresh: bool = False):
     _assert_entitlement(request)
