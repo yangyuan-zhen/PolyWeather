@@ -183,6 +183,18 @@ type InjectedProviderOption = ProviderSelection & {
   key: string;
 };
 
+type Eip6963ProviderInfo = {
+  uuid: string;
+  name: string;
+  icon: string;
+  rdns: string;
+};
+
+type Eip6963ProviderDetail = {
+  info: Eip6963ProviderInfo;
+  provider: EvmProvider;
+};
+
 type ConnectBindOptions = {
   openOverlayAfterBind?: boolean;
 };
@@ -205,6 +217,7 @@ const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
+const eip6963Providers = new Map<string, Eip6963ProviderDetail>();
 
 function isWalletConnectResetError(error: unknown): boolean {
   const source = error as any;
@@ -293,6 +306,50 @@ function getEvmProvider(): EvmProvider | null {
   return listInjectedProviders()[0]?.provider || null;
 }
 
+function getEip6963Providers(): Eip6963ProviderDetail[] {
+  return Array.from(eip6963Providers.values());
+}
+
+function detectWalletLabel(
+  provider: EvmProvider | null,
+  detail?: Eip6963ProviderDetail,
+): string {
+  if (!provider && !detail) return "EVM 钱包";
+  const announcedName = String(detail?.info?.name || "").trim();
+  const announcedRdns = String(detail?.info?.rdns || "").toLowerCase();
+  if (
+    provider?.isOkxWallet ||
+    announcedName.toLowerCase().includes("okx") ||
+    announcedRdns.includes("okx")
+  ) {
+    return "OKX Wallet";
+  }
+  if (
+    provider?.isMetaMask ||
+    announcedName.toLowerCase().includes("metamask") ||
+    announcedRdns.includes("metamask")
+  ) {
+    return "MetaMask";
+  }
+  if (
+    provider?.isRabby ||
+    announcedName.toLowerCase().includes("rabby") ||
+    announcedRdns.includes("rabby")
+  ) {
+    return "Rabby";
+  }
+  if (
+    provider?.isBitKeep ||
+    announcedName.toLowerCase().includes("bitget") ||
+    announcedRdns.includes("bitkeep") ||
+    announcedRdns.includes("bitget")
+  ) {
+    return "Bitget Wallet";
+  }
+  if (announcedName) return announcedName;
+  return "EVM 钱包";
+}
+
 function collectInjectedProviders(): EvmProvider[] {
   if (typeof window === "undefined") return [];
   const out: EvmProvider[] = [];
@@ -320,21 +377,46 @@ function collectInjectedProviders(): EvmProvider[] {
   return out;
 }
 
-function getInjectedProviderStableId(provider: EvmProvider, index: number): string {
-  if (provider.isOkxWallet) return `okx:${index}`;
-  if (provider.isMetaMask) return `metamask:${index}`;
-  if (provider.isRabby) return `rabby:${index}`;
-  if (provider.isBitKeep) return `bitget:${index}`;
+function getInjectedProviderStableId(
+  provider: EvmProvider,
+  index: number,
+  detail?: Eip6963ProviderDetail,
+): string {
+  const uuid = String(detail?.info?.uuid || "").trim();
+  const rdns = String(detail?.info?.rdns || "").toLowerCase();
+  if (uuid) return `eip6963:${uuid}`;
+  if (provider.isOkxWallet || rdns.includes("okx")) return `okx:${index}`;
+  if (provider.isMetaMask || rdns.includes("metamask")) return `metamask:${index}`;
+  if (provider.isRabby || rdns.includes("rabby")) return `rabby:${index}`;
+  if (
+    provider.isBitKeep ||
+    rdns.includes("bitkeep") ||
+    rdns.includes("bitget")
+  ) {
+    return `bitget:${index}`;
+  }
   return `evm:${index}`;
 }
 
 function listInjectedProviders(): InjectedProviderOption[] {
+  const detailByProvider = new Map<EvmProvider, Eip6963ProviderDetail>();
+  getEip6963Providers().forEach((detail) => {
+    if (detail?.provider && typeof detail.provider.request === "function") {
+      detailByProvider.set(detail.provider, detail);
+    }
+  });
   const candidates = collectInjectedProviders();
+  detailByProvider.forEach((_detail, provider) => {
+    if (!candidates.includes(provider)) {
+      candidates.push(provider);
+    }
+  });
   const seen = new Set<string>();
   const out: InjectedProviderOption[] = [];
   candidates.forEach((provider, index) => {
-    const label = getEvmWalletLabel(provider);
-    const key = getInjectedProviderStableId(provider, index);
+    const detail = detailByProvider.get(provider);
+    const label = detectWalletLabel(provider, detail);
+    const key = getInjectedProviderStableId(provider, index, detail);
     if (seen.has(key)) return;
     seen.add(key);
     out.push({
@@ -348,12 +430,7 @@ function listInjectedProviders(): InjectedProviderOption[] {
 }
 
 function getEvmWalletLabel(provider: EvmProvider | null): string {
-  if (!provider) return "EVM 钱包";
-  if (provider.isMetaMask) return "MetaMask";
-  if (provider.isRabby) return "Rabby";
-  if (provider.isOkxWallet) return "OKX Wallet";
-  if (provider.isBitKeep) return "Bitget Wallet";
-  return "EVM 钱包";
+  return detectWalletLabel(provider);
 }
 
 async function getWalletConnectProvider(
@@ -476,7 +553,10 @@ function normalizePaymentError(error: unknown): NormalizedPaymentError {
     ?.trim();
   const lower = String(rawMessage || "").toLowerCase();
 
-  if (lower.includes("confirm pending") || lower.includes("payment pending timeout")) {
+  if (
+    lower.includes("confirm pending") ||
+    lower.includes("payment pending timeout")
+  ) {
     return {
       message: "链上交易已提交，正在确认中，请稍后刷新查看状态。",
       pending: true,
@@ -569,12 +649,15 @@ export function AccountCenter() {
       authMode: isEn ? "Auth Mode" : "鉴权模式",
       weatherEngine: isEn ? "Weather Engine" : "气象引擎",
       intradayAnalysis: isEn ? "Intraday Analysis" : "今日内分析",
-      historyFuture:
-        isEn ? "Historical + Future-date Analysis" : "历史对账 + 未来日期分析",
-      smartPush:
-        isEn ? "Cross-platform Smart Weather Push" : "全平台智能气象推送",
-      deepMode:
-        isEn ? "Deep mode (incl. high-temp window)" : "深度版（含高温时段）",
+      historyFuture: isEn
+        ? "Historical + Future-date Analysis"
+        : "历史对账 + 未来日期分析",
+      smartPush: isEn
+        ? "Cross-platform Smart Weather Push"
+        : "全平台智能气象查询",
+      deepMode: isEn
+        ? "Deep mode (incl. high-temp window)"
+        : "深度版（含高温时段）",
       compactVisible: isEn ? "Compact visible" : "简版可见",
       enabled: isEn ? "Enabled" : "已开启",
       locked: isEn ? "Locked" : "锁定",
@@ -587,7 +670,7 @@ export function AccountCenter() {
       telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
       telegramHint: isEn
         ? "Send the command below to the polyweather bot to sync notifications and access."
-        : "将下方命令发送给polyweather机器人，实现全平台气象推送与权限同步。",
+        : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
@@ -598,9 +681,12 @@ export function AccountCenter() {
       primary: "Primary",
       polygonChain: "Polygon Chain",
       noWallet: isEn ? "No payout wallet bound yet." : "未绑定任何收件钱包",
-      bindExt:
-        isEn ? "Bind Browser Wallet (EVM Extension)" : "绑定浏览器钱包（EVM扩展）",
-      bindQr: isEn ? "Bind via QR (WalletConnect)" : "扫码绑定（WalletConnect）",
+      bindExt: isEn
+        ? "Bind Browser Wallet (EVM Extension)"
+        : "绑定浏览器钱包（EVM扩展）",
+      bindQr: isEn
+        ? "Bind via QR (WalletConnect)"
+        : "扫码绑定（WalletConnect）",
       walletConnectMissing: isEn
         ? "WalletConnect disabled: please configure"
         : "未启用 WalletConnect：请配置",
@@ -720,7 +806,11 @@ export function AccountCenter() {
 
     return () => {
       canceled = true;
-      if (win && idleId != null && typeof win.cancelIdleCallback === "function") {
+      if (
+        win &&
+        idleId != null &&
+        typeof win.cancelIdleCallback === "function"
+      ) {
         win.cancelIdleCallback(idleId);
       }
       if (timeoutId != null && typeof window !== "undefined") {
@@ -740,12 +830,40 @@ export function AccountCenter() {
         return nextOptions[0]?.key || "";
       });
     };
+
+    const handleAnnounce = (event: Event) => {
+      const customEvent = event as CustomEvent<Eip6963ProviderDetail>;
+      const detail = customEvent.detail;
+      if (!detail?.provider || typeof detail.provider.request !== "function") {
+        return;
+      }
+      const uuid = String(detail.info?.uuid || "").trim();
+      const fallbackKey = `${String(detail.info?.rdns || "wallet").toLowerCase()}:${String(
+        detail.info?.name || "wallet",
+      ).toLowerCase()}`;
+      eip6963Providers.set(uuid || fallbackKey, detail);
+      syncProviders();
+    };
+
     syncProviders();
     if (typeof window === "undefined") return;
-    window.addEventListener("ethereum#initialized", syncProviders as EventListener, {
-      once: false,
-    });
+    window.addEventListener(
+      "eip6963:announceProvider",
+      handleAnnounce as EventListener,
+    );
+    window.dispatchEvent(new Event("eip6963:requestProvider"));
+    window.addEventListener(
+      "ethereum#initialized",
+      syncProviders as EventListener,
+      {
+        once: false,
+      },
+    );
     return () => {
+      window.removeEventListener(
+        "eip6963:announceProvider",
+        handleAnnounce as EventListener,
+      );
       window.removeEventListener(
         "ethereum#initialized",
         syncProviders as EventListener,
@@ -790,11 +908,7 @@ export function AccountCenter() {
     } = await client.auth.refreshSession();
     const refreshedToken = String(refreshed?.access_token || "").trim();
     if (refreshedToken) return refreshedToken;
-    if (
-      cachedToken &&
-      Number.isFinite(expiresAtSec) &&
-      expiresAtSec > nowSec
-    ) {
+    if (cachedToken && Number.isFinite(expiresAtSec) && expiresAtSec > nowSec) {
       return cachedToken;
     }
     throw new Error(
@@ -852,8 +966,8 @@ export function AccountCenter() {
           injectedOptions.find((row) => row.key === preferredInjectedKey)
             ?.provider || getEvmProvider();
         const label =
-          injectedOptions.find((row) => row.key === preferredInjectedKey)?.label ||
-          getEvmWalletLabel(injected);
+          injectedOptions.find((row) => row.key === preferredInjectedKey)
+            ?.label || getEvmWalletLabel(injected);
         if (injected) {
           return {
             provider: injected,
@@ -971,7 +1085,8 @@ export function AccountCenter() {
         if (wallets.length) {
           const currentSelected = String(selectedWallet || "").toLowerCase();
           const hasCurrent = wallets.some(
-            (row) => String(row.address || "").toLowerCase() === currentSelected,
+            (row) =>
+              String(row.address || "").toLowerCase() === currentSelected,
           );
           const fallback =
             wallets.find((row) => Boolean(row.is_primary))?.address ||
@@ -979,7 +1094,9 @@ export function AccountCenter() {
           if (!currentSelected || !hasCurrent) {
             setSelectedWallet(fallback);
           }
-          const currentWalletAddress = String(walletAddress || "").toLowerCase();
+          const currentWalletAddress = String(
+            walletAddress || "",
+          ).toLowerCase();
           const hasWalletAddress = wallets.some(
             (row) =>
               String(row.address || "").toLowerCase() === currentWalletAddress,
@@ -1053,7 +1170,10 @@ export function AccountCenter() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!lastIntentId) return;
-    window.sessionStorage.setItem("polyweather:lastPaymentIntentId", lastIntentId);
+    window.sessionStorage.setItem(
+      "polyweather:lastPaymentIntentId",
+      lastIntentId,
+    );
   }, [lastIntentId]);
 
   useEffect(() => {
@@ -1405,7 +1525,11 @@ export function AccountCenter() {
           await loadPaymentSnapshot();
           return;
         }
-        if (status === "failed" || status === "cancelled" || status === "expired") {
+        if (
+          status === "failed" ||
+          status === "cancelled" ||
+          status === "expired"
+        ) {
           throw new Error(`payment ${status}`);
         }
         setPaymentInfo(
@@ -1508,7 +1632,8 @@ export function AccountCenter() {
         method: "eth_requestAccounts",
       })) as string[];
       const address = String(accounts?.[0] || "").toLowerCase();
-      if (!address) throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
+      if (!address)
+        throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
 
       const existingWallet = boundWallets.find(
         (w) => String(w.address || "").toLowerCase() === address,
@@ -1637,7 +1762,10 @@ export function AccountCenter() {
       await loadPaymentSnapshot();
       setPaymentInfo(
         newPrimary
-          ? copy.unbindDonePrimary.replace("{address}", shortAddress(newPrimary))
+          ? copy.unbindDonePrimary.replace(
+              "{address}",
+              shortAddress(newPrimary),
+            )
           : copy.unbindDone,
       );
     } catch (error) {
@@ -1690,7 +1818,8 @@ export function AccountCenter() {
         method: "eth_requestAccounts",
       })) as string[];
       const activeAddress = String(activeAccounts?.[0] || "").toLowerCase();
-      if (!activeAddress) throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
+      if (!activeAddress)
+        throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
 
       const boundAddrSet = new Set(
         boundWallets.map((row) => String(row.address || "").toLowerCase()),
@@ -2132,8 +2261,16 @@ export function AccountCenter() {
               <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
                 {copy.membershipDetails}
               </h3>
-              <InfoRow icon={ShieldCheck} label={copy.authMode} value="Supabase" />
-              <InfoRow icon={BarChart3} label={copy.weatherEngine} value="DEB + 多模型" />
+              <InfoRow
+                icon={ShieldCheck}
+                label={copy.authMode}
+                value="Supabase"
+              />
+              <InfoRow
+                icon={BarChart3}
+                label={copy.weatherEngine}
+                value="DEB + 多模型"
+              />
               <InfoRow
                 icon={Zap}
                 label={copy.intradayAnalysis}
@@ -2157,7 +2294,11 @@ export function AccountCenter() {
               <h3 className="text-sm font-bold text-indigo-400 uppercase tracking-widest mb-4">
                 {copy.identityStatus}
               </h3>
-              <InfoRow icon={Mail} label={copy.boundEmail} value={email || "--"} />
+              <InfoRow
+                icon={Mail}
+                label={copy.boundEmail}
+                value={email || "--"}
+              />
               <InfoRow
                 icon={LogIn}
                 label={copy.loginMethod}
@@ -2197,9 +2338,7 @@ export function AccountCenter() {
                 onPay={() => void handleOverlayCheckout()}
                 onClose={() => setShowOverlay(false)}
                 payBusy={paymentBusy}
-                payLabel={
-                  hasPayingWallet ? copy.payNow : copy.connectAndPay
-                }
+                payLabel={hasPayingWallet ? copy.payNow : copy.connectAndPay}
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
                 txHash={lastTxHash || undefined}
@@ -2214,207 +2353,209 @@ export function AccountCenter() {
 
         {/* Telegram Bot Section */}
         {showSecondarySections ? (
-        <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
-          <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
-            <Bot
-              size={140}
-              className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:rotate-0 transition-transform duration-1000"
-            />
-            <div className="relative z-10">
-              <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-blue-400">
-                <Bot size={22} /> {copy.telegramBind}
-              </h3>
-              <p className="text-slate-400 text-sm mb-6">
-                {copy.telegramHint}
-              </p>
-              <div className="mb-4 flex flex-wrap gap-2">
-                {TELEGRAM_BOT_URL ? (
-                  <Link
-                    href={TELEGRAM_BOT_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
-                  >
-                    {copy.telegramBotLink}
-                    <ExternalLink size={12} />
-                  </Link>
-                ) : null}
-                {TELEGRAM_GROUP_URL ? (
-                  <Link
-                    href={TELEGRAM_GROUP_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
-                  >
-                    {copy.telegramGroupLink}
-                    <ExternalLink size={12} />
-                  </Link>
-                ) : null}
-              </div>
-              <div className="flex gap-2">
-                <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
-                  {bindCommand}
-                </code>
-                <button
-                  onClick={() => handleCopy(bindCommand)}
-                  className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
-                  title={copy.copyCommand}
-                  aria-label={copy.copyCommand}
-                >
-                  {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-                </button>
-              </div>
-            </div>
-          </section>
-
-          {/* Payment Details / Wallet Management */}
-          <section className="w-full md:w-96 bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between">
-            <div>
-              <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
-                <Wallet size={18} /> {copy.paymentMgmt}
-              </h3>
-              {paymentError ? (
-                <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
-                  {paymentError}
-                </div>
-              ) : null}
-              {!paymentError && paymentInfo ? (
-                <div className="mb-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
-                  {paymentInfo}
-                </div>
-              ) : null}
-              {availableTokenList.length > 0 && (
-                <div className="mb-5">
-                  <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
-                    {copy.paymentToken}
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {availableTokenList.map((token) => {
-                      const active =
-                        token.address ===
-                        (resolvedSelectedTokenAddress || token.address);
-                      return (
-                        <button
-                          type="button"
-                          key={token.address}
-                          onClick={() => setSelectedTokenAddress(token.address)}
-                          disabled={paymentBusy}
-                          className={`rounded-xl border px-3 py-2 text-left transition-all ${
-                            active
-                              ? "bg-blue-500/15 border-blue-500/40 text-white"
-                              : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
-                          }`}
-                        >
-                          <div className="text-xs font-bold">
-                            {token.symbol}
-                          </div>
-                          <div className="text-[10px] opacity-80 truncate">
-                            {token.name}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              {boundWallets.length ? (
-                <div className="space-y-3">
-                  {boundWallets.map((w) => (
-                    <div
-                      key={w.address}
-                      className={`p-3 rounded-xl border transition-all ${selectedWallet === w.address ? "bg-blue-500/10 border-blue-500/30 text-white" : "bg-white/5 border-white/5 text-slate-400"}`}
+          <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
+            <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
+              <Bot
+                size={140}
+                className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:rotate-0 transition-transform duration-1000"
+              />
+              <div className="relative z-10">
+                <h3 className="text-lg font-bold mb-2 flex items-center gap-2 text-blue-400">
+                  <Bot size={22} /> {copy.telegramBind}
+                </h3>
+                <p className="text-slate-400 text-sm mb-6">
+                  {copy.telegramHint}
+                </p>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {TELEGRAM_BOT_URL ? (
+                    <Link
+                      href={TELEGRAM_BOT_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-mono">
-                          {shortAddress(w.address)}
-                        </span>
-                        {w.is_primary && (
-                          <span className="text-[8px] bg-blue-500 px-1 rounded">
-                            {copy.primary}
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10px]">{copy.polygonChain}</div>
-                      <div className="mt-2 flex justify-end">
-                        <button
-                          type="button"
-                          onClick={() => void handleUnbindWallet(w.address)}
-                          disabled={paymentBusy}
-                          className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
-                        >
-                          <Minus size={12} />
-                          {copy.unbind}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                      {copy.telegramBotLink}
+                      <ExternalLink size={12} />
+                    </Link>
+                  ) : null}
+                  {TELEGRAM_GROUP_URL ? (
+                    <Link
+                      href={TELEGRAM_GROUP_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
+                    >
+                      {copy.telegramGroupLink}
+                      <ExternalLink size={12} />
+                    </Link>
+                  ) : null}
                 </div>
-              ) : (
-                <p className="text-xs text-slate-500 italic">
-                  {copy.noWallet}
-                </p>
-              )}
-            </div>
-
-            <div className="mt-6 grid grid-cols-1 gap-2">
-              {injectedProviderOptions.length > 1 && (
-                <label className="mb-2 block">
-                  <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
-                    {copy.walletExtensionDetected}
-                  </span>
-                  <select
-                    value={selectedInjectedProviderKey}
-                    onChange={(event) =>
-                      setSelectedInjectedProviderKey(event.target.value)
-                    }
-                    disabled={paymentBusy}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
-                  >
-                    {injectedProviderOptions.map((option) => (
-                      <option
-                        key={option.key}
-                        value={option.key}
-                        className="bg-slate-900 text-slate-200"
-                      >
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              )}
-              <button
-                onClick={() => {
-                  setProviderMode("auto");
-                  void connectAndBindWallet("auto");
-                }}
-                disabled={paymentBusy || !isAuthenticated}
-                className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                <PlusIcon className="w-4 h-4" /> {copy.bindExt}
-              </button>
-              <button
-                onClick={() => {
-                  setProviderMode("walletconnect");
-                  void connectAndBindWallet("walletconnect");
-                }}
-                disabled={
-                  paymentBusy || !isAuthenticated || !walletConnectEnabled
-                }
-                className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                <CreditCard className="w-4 h-4" /> {copy.bindQr}
-              </button>
-              {!walletConnectEnabled && (
-                <p className="text-[11px] text-slate-500">
-                  {copy.walletConnectMissing}
-                  <code className="mx-1">
-                    NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+                <div className="flex gap-2">
+                  <code className="flex-grow bg-black/40 border border-white/10 p-4 rounded-xl font-mono text-xs text-blue-300 overflow-hidden text-ellipsis whitespace-nowrap">
+                    {bindCommand}
                   </code>
-                </p>
-              )}
-            </div>
-          </section>
-        </div>
+                  <button
+                    onClick={() => handleCopy(bindCommand)}
+                    className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
+                    title={copy.copyCommand}
+                    aria-label={copy.copyCommand}
+                  >
+                    {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            {/* Payment Details / Wallet Management */}
+            <section className="w-full md:w-96 bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between">
+              <div>
+                <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
+                  <Wallet size={18} /> {copy.paymentMgmt}
+                </h3>
+                {paymentError ? (
+                  <div className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[11px] text-red-200">
+                    {paymentError}
+                  </div>
+                ) : null}
+                {!paymentError && paymentInfo ? (
+                  <div className="mb-4 rounded-xl border border-cyan-400/35 bg-cyan-500/10 px-3 py-2 text-[11px] text-cyan-200">
+                    {paymentInfo}
+                  </div>
+                ) : null}
+                {availableTokenList.length > 0 && (
+                  <div className="mb-5">
+                    <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">
+                      {copy.paymentToken}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {availableTokenList.map((token) => {
+                        const active =
+                          token.address ===
+                          (resolvedSelectedTokenAddress || token.address);
+                        return (
+                          <button
+                            type="button"
+                            key={token.address}
+                            onClick={() =>
+                              setSelectedTokenAddress(token.address)
+                            }
+                            disabled={paymentBusy}
+                            className={`rounded-xl border px-3 py-2 text-left transition-all ${
+                              active
+                                ? "bg-blue-500/15 border-blue-500/40 text-white"
+                                : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                            }`}
+                          >
+                            <div className="text-xs font-bold">
+                              {token.symbol}
+                            </div>
+                            <div className="text-[10px] opacity-80 truncate">
+                              {token.name}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {boundWallets.length ? (
+                  <div className="space-y-3">
+                    {boundWallets.map((w) => (
+                      <div
+                        key={w.address}
+                        className={`p-3 rounded-xl border transition-all ${selectedWallet === w.address ? "bg-blue-500/10 border-blue-500/30 text-white" : "bg-white/5 border-white/5 text-slate-400"}`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[10px] font-mono">
+                            {shortAddress(w.address)}
+                          </span>
+                          {w.is_primary && (
+                            <span className="text-[8px] bg-blue-500 px-1 rounded">
+                              {copy.primary}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px]">{copy.polygonChain}</div>
+                        <div className="mt-2 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => void handleUnbindWallet(w.address)}
+                            disabled={paymentBusy}
+                            className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                          >
+                            <Minus size={12} />
+                            {copy.unbind}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">
+                    {copy.noWallet}
+                  </p>
+                )}
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 gap-2">
+                {injectedProviderOptions.length > 1 && (
+                  <label className="mb-2 block">
+                    <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
+                      {copy.walletExtensionDetected}
+                    </span>
+                    <select
+                      value={selectedInjectedProviderKey}
+                      onChange={(event) =>
+                        setSelectedInjectedProviderKey(event.target.value)
+                      }
+                      disabled={paymentBusy}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
+                    >
+                      {injectedProviderOptions.map((option) => (
+                        <option
+                          key={option.key}
+                          value={option.key}
+                          className="bg-slate-900 text-slate-200"
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+                <button
+                  onClick={() => {
+                    setProviderMode("auto");
+                    void connectAndBindWallet("auto");
+                  }}
+                  disabled={paymentBusy || !isAuthenticated}
+                  className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <PlusIcon className="w-4 h-4" /> {copy.bindExt}
+                </button>
+                <button
+                  onClick={() => {
+                    setProviderMode("walletconnect");
+                    void connectAndBindWallet("walletconnect");
+                  }}
+                  disabled={
+                    paymentBusy || !isAuthenticated || !walletConnectEnabled
+                  }
+                  className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  <CreditCard className="w-4 h-4" /> {copy.bindQr}
+                </button>
+                {!walletConnectEnabled && (
+                  <p className="text-[11px] text-slate-500">
+                    {copy.walletConnectMissing}
+                    <code className="mx-1">
+                      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+                    </code>
+                  </p>
+                )}
+              </div>
+            </section>
+          </div>
         ) : (
           <div className="lg:col-span-12 grid grid-cols-1 gap-6 md:grid-cols-3">
             <div className="md:col-span-2 h-48 animate-pulse rounded-[2rem] border border-white/10 bg-white/5" />
