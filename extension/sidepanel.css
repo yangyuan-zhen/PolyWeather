@@ -66,6 +66,23 @@ body {
   margin-bottom: 12px;
 }
 
+.freshness-hint {
+  margin: -2px 0 12px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.08);
+  color: #fcd34d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.freshness-hint.stale {
+  border-color: rgba(248, 113, 113, 0.38);
+  background: rgba(248, 113, 113, 0.1);
+  color: #fecaca;
+}
+
 .risk-badge {
   padding: 5px 9px;
   border-radius: 10px;

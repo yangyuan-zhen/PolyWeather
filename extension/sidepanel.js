@@ -39,7 +39,10 @@ const I18N = {
     refreshFailed: "刷新温度数据失败",
     initFailed: "初始化失败",
     publicReadHint: "当前插件是公开读模式，Token 可留空。请检查后端是否仍开启了接口鉴权。",
-    publicModeHint: "公开模式只需配置 API Base；Token 可留空。"
+    publicModeHint: "公开模式只需配置 API Base；Token 可留空。",
+    freshnessRecent: "数据约 {minutes} 分钟前更新。",
+    freshnessWarn: "数据已 {minutes} 分钟未更新，建议点右上角刷新。",
+    freshnessStale: "数据已 {minutes} 分钟未更新，当前结果可能偏旧，请立即刷新。"
   },
   en: {
     loadingWeather: "Loading weather data...",
@@ -71,7 +74,10 @@ const I18N = {
     refreshFailed: "Failed to refresh weather data",
     initFailed: "Initialization failed",
     publicReadHint: "The extension is in public read mode. Token can be empty. Check whether the backend still requires auth.",
-    publicModeHint: "In public mode only API Base is required; Token can be empty."
+    publicModeHint: "In public mode only API Base is required; Token can be empty.",
+    freshnessRecent: "Data updated about {minutes} min ago.",
+    freshnessWarn: "Data is {minutes} min old. Consider refreshing.",
+    freshnessStale: "Data is {minutes} min old and may be stale. Refresh now."
   }
 };
 
@@ -116,6 +122,8 @@ const els = {
   nearbyLabel: document.getElementById("nearbyLabel"),
   trendTitle: document.getElementById("trendTitle"),
   forecastTitle: document.getElementById("forecastTitle")
+  ,
+  freshnessHint: document.getElementById("freshnessHint")
 };
 
 function normalizeBase(url) {
@@ -258,6 +266,14 @@ function showError(message) {
   els.errorBox.classList.remove("hidden");
 }
 
+function tf(key, params = {}) {
+  let text = t(key);
+  for (const [name, value] of Object.entries(params)) {
+    text = text.replace(`{${name}}`, String(value));
+  }
+  return text;
+}
+
 function clearError() {
   els.errorBox.textContent = "";
   els.errorBox.classList.add("hidden");
@@ -398,6 +414,44 @@ function formatForecastDate(day, index) {
   const m = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!m) return str || "--";
   return `${m[2]}/${m[3]}`;
+}
+
+function parseIsoDate(value) {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+}
+
+function renderFreshness(detail) {
+  if (!els.freshnessHint) return;
+  const updatedAt = parseIsoDate(detail?.updated_at);
+  if (!updatedAt) {
+    els.freshnessHint.classList.add("hidden");
+    els.freshnessHint.classList.remove("stale");
+    els.freshnessHint.textContent = "";
+    return;
+  }
+
+  const minutes = Math.max(
+    0,
+    Math.round((Date.now() - updatedAt.getTime()) / 60000)
+  );
+
+  if (minutes < 8) {
+    els.freshnessHint.classList.add("hidden");
+    els.freshnessHint.classList.remove("stale");
+    els.freshnessHint.textContent = "";
+    return;
+  }
+
+  const isStale = minutes >= 20;
+  els.freshnessHint.classList.remove("hidden");
+  els.freshnessHint.classList.toggle("stale", isStale);
+  els.freshnessHint.textContent = isStale
+    ? tf("freshnessStale", { minutes })
+    : tf("freshnessWarn", { minutes });
 }
 
 function parseTimeToMinute(value) {
@@ -717,6 +771,7 @@ function renderForecast(detail) {
 function renderDetail(detail) {
   state.detail = detail;
   renderRiskBadge(detail);
+  renderFreshness(detail);
 
   const profile = getSettlementSourceDisplay(detail);
   els.settlementLabel.textContent = profile.label;
