@@ -5,7 +5,7 @@ import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 import requests
 from loguru import logger
@@ -230,6 +230,40 @@ class SupabaseEntitlementService:
         if respect_requirement and not self.require_subscription:
             return True
         return self._query_active_subscription(user_id)
+
+    def list_active_subscriptions(self, limit: int = 200) -> List[Dict[str, object]]:
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return []
+        try:
+            safe_limit = max(1, min(int(limit or 200), 1000))
+            now_iso = datetime.now(timezone.utc).isoformat()
+            params = {
+                "select": "id,user_id,status,plan_code,starts_at,expires_at",
+                "status": "eq.active",
+                "expires_at": f"gt.{now_iso}",
+                "order": "expires_at.asc",
+                "limit": str(safe_limit),
+            }
+            response = requests.get(
+                self._subscription_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params=params,
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase active subscriptions query failed status={}",
+                    response.status_code,
+                )
+                return []
+            data = response.json() if response.content else []
+            if not isinstance(data, list):
+                return []
+            return [row for row in data if isinstance(row, dict)]
+        except Exception as exc:
+            logger.warning(f"supabase active subscriptions query error: {exc}")
+            return []
 
 
 SUPABASE_ENTITLEMENT = SupabaseEntitlementService()

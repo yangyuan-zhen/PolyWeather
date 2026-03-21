@@ -406,6 +406,42 @@ class DBManager:
             ).fetchall()
             return [dict(row) for row in rows]
 
+    def get_users_by_supabase_user_ids(
+        self,
+        supabase_user_ids: List[str],
+    ) -> Dict[str, Dict[str, Any]]:
+        keys = [
+            str(item or "").strip().lower()
+            for item in (supabase_user_ids or [])
+            if str(item or "").strip()
+        ]
+        if not keys:
+            return {}
+        placeholders = ",".join("?" for _ in keys)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT
+                    lower(trim(COALESCE(supabase_user_id, ''))) AS supabase_user_id,
+                    telegram_id,
+                    username,
+                    supabase_email,
+                    created_at,
+                    points,
+                    weekly_points,
+                    message_count
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_user_id, ''))) IN ({placeholders})
+                """,
+                tuple(keys),
+            ).fetchall()
+            return {
+                str(row["supabase_user_id"] or "").strip().lower(): dict(row)
+                for row in rows
+                if str(row["supabase_user_id"] or "").strip()
+            }
+
     def get_points_by_supabase_user_id(self, supabase_user_id: str) -> int:
         user = self.get_user_by_supabase_user_id(supabase_user_id)
         if not user:

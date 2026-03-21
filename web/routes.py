@@ -248,6 +248,36 @@ async def ops_weekly_leaderboard(request: Request, limit: int = 20):
     return {"leaderboard": db.get_weekly_leaderboard(limit=limit)}
 
 
+@router.get("/api/ops/memberships")
+async def ops_memberships(request: Request, limit: int = 200):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    subscriptions = SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=limit)
+    user_map = db.get_users_by_supabase_user_ids(
+        [str(item.get("user_id") or "") for item in subscriptions]
+    )
+    rows = []
+    for item in subscriptions:
+        user_id = str(item.get("user_id") or "").strip().lower()
+        local_user = user_map.get(user_id, {})
+        rows.append(
+            {
+                "user_id": user_id,
+                "email": str(local_user.get("supabase_email") or ""),
+                "telegram_id": local_user.get("telegram_id"),
+                "username": local_user.get("username"),
+                "registered_at": local_user.get("created_at"),
+                "plan_code": item.get("plan_code"),
+                "starts_at": item.get("starts_at"),
+                "expires_at": item.get("expires_at"),
+            }
+        )
+    return {"memberships": rows}
+
+
 @router.post("/api/ops/users/grant-points")
 async def ops_grant_points(request: Request, body: GrantPointsRequest):
     _assert_entitlement(request)

@@ -86,6 +86,17 @@ type WeeklyLeaderboardEntry = {
   weekly_points?: number;
 };
 
+type MembershipEntry = {
+  user_id: string;
+  email?: string | null;
+  telegram_id?: number | null;
+  username?: string | null;
+  registered_at?: string | null;
+  plan_code?: string | null;
+  starts_at?: string | null;
+  expires_at?: string | null;
+};
+
 function formatDateTime(value?: string | null) {
   if (!value) return "-";
   const date = new Date(value);
@@ -118,9 +129,11 @@ export function OpsDashboard() {
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [users, setUsers] = useState<OpsUser[]>([]);
+  const [memberships, setMemberships] = useState<MembershipEntry[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<WeeklyLeaderboardEntry[]>([]);
+  const [membershipsLoading, setMembershipsLoading] = useState(false);
   const [grantEmail, setGrantEmail] = useState("");
   const [grantPoints, setGrantPoints] = useState("300");
   const [grantStatus, setGrantStatus] = useState<string | null>(null);
@@ -183,10 +196,25 @@ export function OpsDashboard() {
     }
   }, []);
 
+  const loadMemberships = useCallback(async () => {
+    setMembershipsLoading(true);
+    try {
+      const data = await readJson<{ memberships?: MembershipEntry[] }>(
+        "/api/ops/memberships?limit=200",
+      );
+      setMemberships(data.memberships || []);
+    } catch {
+      setMemberships([]);
+    } finally {
+      setMembershipsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadUsers("");
     void loadLeaderboard();
-  }, [loadLeaderboard, loadUsers]);
+    void loadMemberships();
+  }, [loadLeaderboard, loadMemberships, loadUsers]);
 
   const rolloutDecision = status?.probability?.rollout?.decision;
 
@@ -227,12 +255,13 @@ export function OpsDashboard() {
       );
       await loadUsers(searchQuery);
       await loadLeaderboard();
+      await loadMemberships();
     } catch (submitError) {
       setGrantError(String(submitError));
     } finally {
       setGrantLoading(false);
     }
-  }, [grantEmail, grantPoints, loadLeaderboard, loadUsers, searchQuery]);
+  }, [grantEmail, grantPoints, loadLeaderboard, loadMemberships, loadUsers, searchQuery]);
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
@@ -399,6 +428,52 @@ export function OpsDashboard() {
             </CardContent>
           </Card>
         </section>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>当前会员</CardTitle>
+            <CardDescription>当前有效订阅用户、注册时间和到期时间。</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm text-slate-300">
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-xs text-slate-500">
+                当前有效会员数：{memberships.length}
+              </div>
+              <Button variant="secondary" onClick={() => void loadMemberships()} disabled={membershipsLoading}>
+                {membershipsLoading ? "加载中" : "刷新会员"}
+              </Button>
+            </div>
+            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+              <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+                <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">邮箱</th>
+                    <th className="px-4 py-3">用户名</th>
+                    <th className="px-4 py-3">注册时间</th>
+                    <th className="px-4 py-3">到期时间</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {memberships.map((item) => (
+                    <tr key={`${item.user_id}-${item.expires_at || ""}`}>
+                      <td className="px-4 py-3">{item.email || "-"}</td>
+                      <td className="px-4 py-3">{item.username || "-"}</td>
+                      <td className="px-4 py-3">{formatDateTime(item.registered_at)}</td>
+                      <td className="px-4 py-3">{formatDateTime(item.expires_at)}</td>
+                    </tr>
+                  ))}
+                  {!memberships.length ? (
+                    <tr>
+                      <td className="px-4 py-4 text-slate-500" colSpan={4}>
+                        暂无有效会员
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
         <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <Card>

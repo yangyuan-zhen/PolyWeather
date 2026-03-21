@@ -7,6 +7,7 @@ import { ForecastTable } from "@/components/dashboard/PanelSections";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { getCityScenery } from "@/lib/dashboard-scenery";
 import { CityDetail } from "@/lib/dashboard-types";
 import {
@@ -146,6 +147,10 @@ export function DetailPanel() {
   const profileStats = useMemo(
     () => (detail ? getCityProfileStats(detail, locale) : []),
     [detail, locale],
+  );
+  const officialLinks = useMemo(
+    () => (detail ? getOfficialSourceLinks(detail) : []),
+    [detail],
   );
   const scenery = getCityScenery(detail?.name);
   const blurActiveElement = () => {
@@ -335,6 +340,33 @@ export function DetailPanel() {
                 ))}
               </div>
             </section>
+
+            {officialLinks.length > 0 ? (
+              <section className="detail-section">
+                <h3>{locale === "en-US" ? "Official Sources" : "官方参考"}</h3>
+                <p className="detail-source-note">
+                  {locale === "en-US"
+                    ? "AGENCY = national meteorological service, METAR = airport observation, AIRPORT = airport official page."
+                    : "AGENCY = 国家气象机构，METAR = 机场实测报文，AIRPORT = 机场官网页面。"}
+                </p>
+                <div className="detail-source-list">
+                  {officialLinks.map((link) => (
+                    <a
+                      key={`${link.label}-${link.href}`}
+                      className="detail-source-link"
+                      href={link.href}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <span className="detail-source-kind">
+                        {link.kind.toUpperCase()}
+                      </span>
+                      <span className="detail-source-label">{link.label}</span>
+                    </a>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <section className="detail-section rounded-2xl">
               <h3>{t("detail.todayMiniTrend")}</h3>

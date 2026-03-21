@@ -2260,6 +2260,58 @@
   padding: 12px;
 }
 
+.root :global(.detail-source-list) {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.root :global(.detail-source-note) {
+  margin: 8px 0 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.root :global(.detail-source-link) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-main);
+  text-decoration: none;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.root :global(.detail-source-link:hover) {
+  background: rgba(34, 211, 238, 0.08);
+  border-color: rgba(34, 211, 238, 0.28);
+  transform: translateY(-1px);
+}
+
+.root :global(.detail-source-kind) {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--accent-cyan);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
+.root :global(.detail-source-label) {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-main);
+  text-align: right;
+}
+
 .root :global(.detail-label) {
   display: block;
   color: var(--text-muted);
