@@ -41,6 +41,11 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
+import {
+  getAllowedPaymentHosts,
+  getCurrentPaymentHost,
+  isPaymentHostAllowed,
+} from "@/lib/payment-host";
 import { useI18n } from "@/hooks/useI18n";
 
 const UnlockProOverlay = dynamic(
@@ -683,6 +688,10 @@ export function AccountCenter() {
       copyCommand: isEn ? "Copy command" : "复制命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
+      paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
+      paymentWallet: isEn ? "Paying Wallet" : "付款钱包",
+      paymentReceiver: isEn ? "Receiver Contract" : "当前收款合约",
+      paymentHost: isEn ? "Payment Host" : "支付域名",
       primary: "Primary",
       polygonChain: "Polygon Chain",
       noWallet: isEn ? "No payout wallet bound yet." : "未绑定任何收件钱包",
@@ -736,6 +745,12 @@ export function AccountCenter() {
       payNotReady: isEn
         ? "Payment service is not fully configured."
         : "支付服务未配置完成。",
+      paymentHostBlocked: isEn
+        ? "Payments are disabled on this host. Please return to the production site: {host}"
+        : "当前域名不允许发起支付，请回到主站后重试：{host}",
+      paymentGuardHint: isEn
+        ? "Payment will be credited to the current account and bound wallet shown below."
+        : "支付将记入下方显示的当前账号和绑定钱包，请先核对。",
       openBindFlow: isEn
         ? "Please bind a wallet first. Opening bind flow..."
         : "请先完成钱包绑定，正在拉起绑定流程...",
@@ -787,6 +802,12 @@ export function AccountCenter() {
   const authIsAuthenticated = Boolean(authUserId);
   const paymentReadyForRecovery = Boolean(
     paymentConfig?.enabled && paymentConfig?.configured,
+  );
+  const allowedPaymentHosts = useMemo(() => getAllowedPaymentHosts(), []);
+  const currentPaymentHost = useMemo(() => getCurrentPaymentHost(), []);
+  const paymentHostAllowed = useMemo(
+    () => isPaymentHostAllowed(currentPaymentHost),
+    [currentPaymentHost],
   );
 
   useEffect(() => {
@@ -1445,6 +1466,18 @@ export function AccountCenter() {
   const paymentFeatureReady = Boolean(
     paymentConfig?.enabled && paymentConfig?.configured,
   );
+  const paymentReceiverAddress = String(
+    selectedPaymentToken?.receiver_contract ||
+      paymentConfig?.receiver_contract ||
+      "",
+  ).toLowerCase();
+  const paymentWalletLabel = String(
+    selectedWallet ||
+      walletAddress ||
+      boundWallets.find((row) => row.is_primary)?.address ||
+      boundWallets[0]?.address ||
+      "",
+  ).toLowerCase();
   const hasPayingWallet = Boolean(
     String(
       selectedWallet || walletAddress || boundWallets[0]?.address || "",
@@ -1838,6 +1871,15 @@ export function AccountCenter() {
     setPaymentError("");
     setPaymentInfo("");
     setLastTxHash("");
+    if (!paymentHostAllowed) {
+      setPaymentError(
+        copy.paymentHostBlocked.replace(
+          "{host}",
+          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+        ),
+      );
+      return;
+    }
     if (!isAuthenticated) {
       setPaymentError(copy.loginBeforePay);
       return;
@@ -1934,7 +1976,11 @@ export function AccountCenter() {
           use_points: billing.canRedeem && usePoints,
           points_to_consume:
             billing.canRedeem && usePoints ? billing.pointsUsed : 0,
-          metadata: { source: "account_center" },
+          metadata: {
+            source: "account_center",
+            frontend_host: currentPaymentHost || null,
+            account_email: email || null,
+          },
         }),
       });
       if (!createRes.ok) {
@@ -2109,6 +2155,15 @@ export function AccountCenter() {
   };
 
   const handleOverlayCheckout = async () => {
+    if (!paymentHostAllowed) {
+      setPaymentError(
+        copy.paymentHostBlocked.replace(
+          "{host}",
+          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+        ),
+      );
+      return;
+    }
     if (!isAuthenticated) {
       setPaymentError(copy.loginBeforePay);
       return;
@@ -2498,6 +2553,40 @@ export function AccountCenter() {
                     {paymentInfo}
                   </div>
                 ) : null}
+                {!paymentHostAllowed ? (
+                  <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200">
+                    {copy.paymentHostBlocked.replace(
+                      "{host}",
+                      allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+                    )}
+                  </div>
+                ) : null}
+                <div className="mb-5 space-y-3">
+                  <InfoRow
+                    icon={Mail}
+                    label={copy.paymentAccount}
+                    value={email || "--"}
+                    isPrimary
+                  />
+                  <InfoRow
+                    icon={Wallet}
+                    label={copy.paymentWallet}
+                    value={shortAddress(paymentWalletLabel) || "--"}
+                  />
+                  <InfoRow
+                    icon={ShieldCheck}
+                    label={copy.paymentReceiver}
+                    value={shortAddress(paymentReceiverAddress) || "--"}
+                  />
+                  <InfoRow
+                    icon={ExternalLink}
+                    label={copy.paymentHost}
+                    value={currentPaymentHost || "--"}
+                  />
+                  <p className="text-[11px] text-slate-500">
+                    {copy.paymentGuardHint}
+                  </p>
+                </div>
                 {availableTokenList.length > 0 && (
                   <div className="mb-5">
                     <p className="text-[11px] uppercase tracking-widest text-slate-500 mb-2">

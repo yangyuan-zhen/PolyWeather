@@ -3,6 +3,7 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import { isPaymentHostAllowed } from "@/lib/payment-host";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -11,6 +12,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "POLYWEATHER_API_BASE_URL is not configured" },
       { status: 500 },
+    );
+  }
+  const requestHost =
+    req.headers.get("x-forwarded-host") ||
+    req.headers.get("host") ||
+    req.nextUrl.hostname;
+  if (!isPaymentHostAllowed(requestHost)) {
+    return NextResponse.json(
+      {
+        error:
+          "Payments are disabled on this host. Please return to the main production site and retry.",
+        host: requestHost,
+      },
+      { status: 409 },
     );
   }
   try {

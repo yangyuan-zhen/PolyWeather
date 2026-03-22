@@ -66,6 +66,7 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 # 钱包支付
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
+NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=polyweather-pro.vercel.app
 
 # 社群入口
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
@@ -138,6 +139,8 @@ Ops：
 1. 点击支付前重新请求 `/api/payments/config`
 2. 若 `receiver_contract` 已更新，先切到最新地址
 3. 若后端返回的 `tx_payload.to` 与最新地址不一致，直接阻断支付
+4. 仅允许在 `NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS` 白名单域名上创建 payment intent
+5. 支付区会明确显示当前账号、付款钱包和收款合约，避免账号/钱包/地址混淆
 
 这意味着：
 
