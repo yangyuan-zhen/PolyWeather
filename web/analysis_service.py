@@ -147,17 +147,11 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         ):
             settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
 
-    metar_today_obs_payload = (
-        []
-        if use_settlement_current
-        else [
-            {"time": t, "temp": v}
-            for t, v in (metar.get("today_obs", []) if metar else [])
-        ]
-    )
-    metar_recent_obs_payload = (
-        [] if use_settlement_current else (metar.get("recent_obs", []) if metar else [])
-    )
+    metar_today_obs_payload = [
+        {"time": t, "temp": v}
+        for t, v in (metar.get("today_obs", []) if metar else [])
+    ]
+    metar_recent_obs_payload = metar.get("recent_obs", []) if metar else []
 
     # ── 3. Local time parsing ──
     local_time_full = om.get("current", {}).get("local_time", "")

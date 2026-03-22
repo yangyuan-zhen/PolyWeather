@@ -240,15 +240,34 @@ export function getTemperatureChartData(
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
     observationCode === "hko" || observationCode === "cwa";
+  const officialObservationSource =
+    settlementSource
+      ? detail.settlement_today_obs?.length
+        ? detail.settlement_today_obs
+        : detail.current?.obs_time && detail.current?.temp != null
+          ? [{ time: detail.current.obs_time, temp: detail.current.temp }]
+          : []
+      : [];
+  const metarObservationSource = detail.metar_today_obs?.length
+    ? detail.metar_today_obs
+    : detail.trend?.recent || [];
+  const shouldUseMetarFallback =
+    settlementSource &&
+    officialObservationSource.length > 0 &&
+    officialObservationSource.length < 3 &&
+    metarObservationSource.length >= 3;
   const observationSource = settlementSource
-    ? detail.settlement_today_obs?.length
-      ? detail.settlement_today_obs
-      : detail.current?.obs_time && detail.current?.temp != null
-        ? [{ time: detail.current.obs_time, temp: detail.current.temp }]
-        : []
-    : detail.metar_today_obs?.length
-      ? detail.metar_today_obs
-      : detail.trend?.recent || [];
+    ? shouldUseMetarFallback
+      ? metarObservationSource
+      : officialObservationSource
+    : metarObservationSource;
+  const metarFallbackTag = (() => {
+    const icao = String(detail.risk?.icao || "").trim().toUpperCase();
+    if (!icao) return "METAR";
+    return `${icao} METAR`;
+  })();
+  const observationDisplayTag =
+    settlementSource && shouldUseMetarFallback ? metarFallbackTag : observationTag;
 
   const metarPoints = new Array(times.length).fill(null);
   observationSource.forEach((item) => {
@@ -329,7 +348,14 @@ export function getTemperatureChartData(
       .reverse()
       .map((item) => `${item.temp}${detail.temp_symbol}@${item.time}`)
       .join(" -> ");
-    legendParts.push(`${observationTag}: ${recentText}`);
+    legendParts.push(`${observationDisplayTag}: ${recentText}`);
+  }
+  if (shouldUseMetarFallback) {
+    legendParts.push(
+      isEnglish(locale)
+        ? `Official ${observationTag} feed is sparse today, so the continuous observation line switches to ${metarFallbackTag}.`
+        : `今日官方 ${observationTag} 点位较稀疏，连续实测线改用 ${metarFallbackTag}。`,
+    );
   }
 
   return {
@@ -344,8 +370,8 @@ export function getTemperatureChartData(
       temps,
     },
     observationLabel: isEnglish(locale)
-      ? `${observationTag} Observation`
-      : `${observationTag} 实况`,
+      ? `${observationDisplayTag} Observation`
+      : `${observationDisplayTag} 实况`,
     legendText: legendParts.join(" | "),
     max,
     min,
