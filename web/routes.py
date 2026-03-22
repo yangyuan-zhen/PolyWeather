@@ -294,7 +294,7 @@ async def ops_memberships(request: Request, limit: int = 200):
         auth_user = auth_user_map.get(user_id, {})
         row = {
             "user_id": user_id,
-            "email": str(local_user.get("supabase_email") or auth_user.get("email") or ""),
+            "email": str(auth_user.get("email") or local_user.get("supabase_email") or ""),
             "telegram_id": local_user.get("telegram_id"),
             "username": local_user.get("username"),
             "registered_at": local_user.get("created_at") or auth_user.get("created_at"),

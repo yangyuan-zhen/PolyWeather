@@ -90,3 +90,52 @@ def test_auth_me_auto_reconciles_missing_subscription(monkeypatch):
     payload = response.json()
     assert payload["subscription_active"] is True
     assert payload["subscription_plan_code"] == "pro_monthly"
+
+
+def test_ops_memberships_prefers_supabase_auth_email(monkeypatch):
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(routes, "_require_ops_admin", lambda request: None)
+    monkeypatch.setattr(routes.PAYMENT_CHECKOUT, "enabled", False)
+
+    class _FakeDB:
+        @staticmethod
+        def get_users_by_supabase_user_ids(user_ids):
+            return {
+                "user-1": {
+                    "supabase_email": "stale@example.com",
+                    "username": "tester",
+                    "telegram_id": 1,
+                    "created_at": "2026-03-01T00:00:00+00:00",
+                }
+            }
+
+    import src.database.db_manager as db_module
+
+    monkeypatch.setattr(db_module, "DBManager", lambda: _FakeDB())
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "list_active_subscriptions",
+        lambda limit=200: [
+            {
+                "user_id": "user-1",
+                "plan_code": "pro_monthly",
+                "starts_at": "2026-03-22T00:00:00+00:00",
+                "expires_at": "2026-04-21T00:00:00+00:00",
+            }
+        ],
+    )
+    monkeypatch.setattr(
+        routes.SUPABASE_ENTITLEMENT,
+        "get_auth_users",
+        lambda user_ids: {
+            "user-1": {
+                "email": "fresh@example.com",
+                "created_at": "2026-03-02T00:00:00+00:00",
+            }
+        },
+    )
+    response = client.get("/api/ops/memberships")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["memberships"][0]["email"] == "fresh@example.com"
