@@ -719,20 +719,61 @@ export function computeFrontTrendSignal(
   }
 
   const score = Math.max(-100, Math.min(100, warmScore - coldScore));
-  const warmLabel = isEnglish(locale)
-    ? "Warm advection / warm-front tendency"
-    : "暖平流 / 暖锋倾向";
-  const coldLabel = isEnglish(locale)
-    ? "Cold advection / cold-front tendency"
-    : "冷平流 / 冷锋倾向";
-  const monitorLabel = isEnglish(locale) ? "Monitoring" : "监控中";
+  const warmLabel = isEnglish(locale) ? "Near-term warming bias" : "未来偏升温";
+  const coldLabel = isEnglish(locale) ? "Near-term cooling bias" : "未来偏降温";
+  const monitorLabel = isEnglish(locale) ? "Direction unclear" : "方向不清";
   const label = score >= 18 ? warmLabel : score <= -18 ? coldLabel : monitorLabel;
   const confidence =
     Math.abs(score) >= 45 ? "high" : Math.abs(score) >= 22 ? "medium" : "low";
+  const directionalLead = (() => {
+    if (isEnglish(locale)) {
+      if (score >= 18 && tempDelta >= 0.5) {
+        return `Over ${windowText}, temperatures still lean warmer.`;
+      }
+      if (score <= -18 && tempDelta <= -0.5) {
+        return `Over ${windowText}, temperatures still lean cooler.`;
+      }
+      if (score >= 18) {
+        return `Over ${windowText}, the structure still leans warmer, but the warming pace is not strong yet.`;
+      }
+      if (score <= -18) {
+        return `Over ${windowText}, the structure still leans cooler, but the cooling pace is not decisive yet.`;
+      }
+      if (tempDelta >= 0.8) {
+        return `Over ${windowText}, temperatures still lean warmer, but confidence is limited.`;
+      }
+      if (tempDelta <= -0.8) {
+        return `Over ${windowText}, temperatures still lean cooler, but confidence is limited.`;
+      }
+      return `Over ${windowText}, temperatures are more likely to stay range-bound for now.`;
+    }
+
+    if (score >= 18 && tempDelta >= 0.5) {
+      return `${windowText}偏增温，后续更可能继续往上走。`;
+    }
+    if (score <= -18 && tempDelta <= -0.5) {
+      return `${windowText}偏降温，后续更可能继续往下走。`;
+    }
+    if (score >= 18) {
+      return `${windowText}仍偏增温，但增温兑现力度暂时不算强。`;
+    }
+    if (score <= -18) {
+      return `${windowText}仍偏降温，但降温兑现力度暂时不算强。`;
+    }
+    if (tempDelta >= 0.8) {
+      return `${windowText}略偏增温，但结构信号置信度有限。`;
+    }
+    if (tempDelta <= -0.8) {
+      return `${windowText}略偏降温，但结构信号置信度有限。`;
+    }
+    return `${windowText}更像震荡整理，短时升降温方向暂不清晰。`;
+  })();
   const summary = (() => {
     const parts: string[] = [];
 
     if (isEnglish(locale)) {
+      parts.push(directionalLead);
+
       if (lastBucket === "southerly" && firstBucket !== "southerly") {
         parts.push("Low-level wind turns more southerly.");
       } else if (lastBucket === "northerly" && firstBucket !== "northerly") {
@@ -773,6 +814,8 @@ export function computeFrontTrendSignal(
         parts.push(`Core judgement remains focused on ${windowText}.`);
       }
     } else {
+      parts.push(directionalLead);
+
       if (lastBucket === "southerly" && firstBucket !== "southerly") {
         parts.push("低层风向更偏南，暖空气输送权重上升。");
       } else if (lastBucket === "northerly" && firstBucket !== "northerly") {
