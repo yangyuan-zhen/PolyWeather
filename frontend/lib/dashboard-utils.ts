@@ -276,8 +276,13 @@ export function getTemperatureChartData(
     if (Number.isNaN(hour)) return;
     const key = `${String(hour).padStart(2, "0")}:00`;
     const index = times.indexOf(key);
-    if (index >= 0 && metarPoints[index] === null) {
-      metarPoints[index] = item.temp ?? null;
+    const temp = item.temp ?? null;
+    if (index >= 0 && temp != null) {
+      const existing = metarPoints[index];
+      // Multiple reports can land in the same hour bucket. Keep the peak
+      // value so an intrahour high is not hidden by a later weaker report.
+      metarPoints[index] =
+        existing == null ? temp : Math.max(Number(existing), Number(temp));
     }
   });
 
