@@ -681,6 +681,9 @@ export function AccountCenter() {
       telegramHint: isEn
         ? "Send the command below to the polyweather bot to sync notifications and access."
         : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。",
+      paymentManualSupport: isEn
+        ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
+        : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
@@ -2533,6 +2536,9 @@ export function AccountCenter() {
                   >
                     {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                   </button>
+                </div>
+                <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/8 px-4 py-3 text-xs leading-6 text-amber-100/90">
+                  {copy.paymentManualSupport}
                 </div>
               </div>
             </section>
