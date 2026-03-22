@@ -188,6 +188,21 @@ async def auth_me(request: Request):
                 user_id,
                 respect_requirement=False,
             )
+            if (
+                not latest_subscription
+                and getattr(PAYMENT_CHECKOUT, "enabled", False)
+            ):
+                try:
+                    PAYMENT_CHECKOUT.reconcile_latest_intent(user_id)
+                    latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+                        user_id,
+                        respect_requirement=False,
+                    )
+                except Exception:
+                    latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+                        user_id,
+                        respect_requirement=False,
+                    )
             subscription_active = bool(latest_subscription)
             if isinstance(latest_subscription, dict):
                 subscription_plan_code = latest_subscription.get("plan_code")
@@ -255,6 +270,11 @@ async def ops_memberships(request: Request, limit: int = 200):
     from src.database.db_manager import DBManager
 
     db = DBManager()
+    if getattr(PAYMENT_CHECKOUT, "enabled", False):
+        try:
+            PAYMENT_CHECKOUT.reconcile_recent_intents(limit=min(max(int(limit or 200), 20), 200))
+        except Exception:
+            pass
     subscriptions = SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=limit)
     subscription_user_ids = [str(item.get("user_id") or "") for item in subscriptions]
     user_map = db.get_users_by_supabase_user_ids(subscription_user_ids)

@@ -1815,6 +1815,40 @@ class PaymentContractCheckoutService:
             "subscription": subscription_row,
         }
 
+    def _attempt_confirm_repair(
+        self,
+        *,
+        user_id: str,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+        reason: str,
+        detail: str,
+    ) -> Dict[str, Any]:
+        self._db.append_payment_audit_event(
+            "payment_confirm_repair_needed",
+            {
+                "user_id": user_id,
+                "intent_id": intent.intent_id,
+                "plan_code": intent.plan_code,
+                "reason": str(reason or "").strip().lower(),
+                "detail": str(detail or "").strip(),
+                "tx_hash": str(tx_hash or "").strip().lower(),
+            },
+        )
+        repaired = self._ensure_confirm_side_effects(user_id, intent, tx_hash)
+        if repaired.get("payment") or repaired.get("subscription"):
+            self._db.append_payment_audit_event(
+                "payment_confirm_repaired",
+                {
+                    "user_id": user_id,
+                    "intent_id": intent.intent_id,
+                    "plan_code": intent.plan_code,
+                    "tx_hash": str(tx_hash or "").strip().lower(),
+                    "reason": str(reason or "").strip().lower(),
+                },
+            )
+        return repaired
+
     def _mark_intent_failed(
         self,
         *,
@@ -2072,20 +2106,35 @@ class PaymentContractCheckoutService:
             "points_redemption": points_result,
         }
         plan = self._select_plan(intent.plan_code)
-        payment_row = self._insert_payment_record(
-            user_id=user_id,
-            tx_hash=tx_hash_text,
-            amount_units=intent.amount_units,
-            token_address=intent.token_address,
-            payload=payload,
-        )
-        subscription_row = self._grant_subscription(
-            user_id=user_id,
-            plan_code=intent.plan_code,
-            duration_days=plan["duration_days"],
-            tx_hash=tx_hash_text,
-            payload=payload,
-        )
+        payment_row = {}
+        subscription_row = {}
+        try:
+            payment_row = self._insert_payment_record(
+                user_id=user_id,
+                tx_hash=tx_hash_text,
+                amount_units=intent.amount_units,
+                token_address=intent.token_address,
+                payload=payload,
+            )
+            subscription_row = self._grant_subscription(
+                user_id=user_id,
+                plan_code=intent.plan_code,
+                duration_days=plan["duration_days"],
+                tx_hash=tx_hash_text,
+                payload=payload,
+            )
+        except PaymentCheckoutError as exc:
+            repaired = self._attempt_confirm_repair(
+                user_id=user_id,
+                intent=intent,
+                tx_hash=tx_hash_text,
+                reason="side_effect_failure",
+                detail=exc.detail,
+            )
+            payment_row = repaired.get("payment") or payment_row
+            subscription_row = repaired.get("subscription") or subscription_row
+            if not subscription_row:
+                raise
         self._notify_telegram(
             user_id=user_id,
             plan_code=intent.plan_code,
@@ -2163,6 +2212,47 @@ class PaymentContractCheckoutService:
             "action": "checked_without_repair",
             "subscription": latest_subscription,
             "attempts": attempts,
+        }
+
+    def reconcile_recent_intents(self, limit: int = 50) -> Dict[str, Any]:
+        self._ensure_enabled()
+        safe_limit = max(1, min(int(limit or 50), 200))
+        rows = self._rest(
+            "GET",
+            "payment_intents",
+            params={
+                "select": "id,user_id,status,updated_at",
+                "status": "in.(submitted,confirmed)",
+                "order": "updated_at.desc",
+                "limit": str(safe_limit),
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(rows, list) or not rows:
+            return {"ok": True, "processed_users": 0, "repaired_users": 0}
+
+        seen_users: set[str] = set()
+        repaired_users = 0
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            user_id = str(row.get("user_id") or "").strip()
+            if not user_id or user_id in seen_users:
+                continue
+            seen_users.add(user_id)
+            try:
+                result = self.reconcile_latest_intent(user_id)
+                if bool(result.get("ok")) and result.get("subscription"):
+                    repaired_users += 1
+            except PaymentCheckoutError:
+                continue
+            except Exception:
+                continue
+
+        return {
+            "ok": True,
+            "processed_users": len(seen_users),
+            "repaired_users": repaired_users,
         }
 PAYMENT_CHECKOUT = PaymentContractCheckoutService()
 
