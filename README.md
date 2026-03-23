@@ -14,7 +14,7 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## Product Status (2026-03-21)
+## Product Status (2026-03-24)
 
 - Subscription live: `Pro Monthly 5 USDC`.
 - Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
@@ -24,6 +24,11 @@ Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
 - Runtime state supports gradual SQLite migration (`file / dual / sqlite`).
 - EMOS/CRPS pipeline is integrated in `shadow` mode with rollout gating.
+- Intraday structural signal is now peak-window aware and bilingual (`zh-CN` / `en-US`).
+- Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
+- Temperature chart now overlays `TAF Timing` markers near the expected peak window.
+- Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
+- Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
 
 ## Open-Core Boundary (Important)
 
@@ -42,6 +47,8 @@ See: [Open-Core & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Maps weather view to Polymarket quotes for mispricing scan.
 - Reuses one analysis core across web dashboard and Telegram bot.
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
+- Adds peak-window-oriented intraday structure cards for surface + upper-air analysis.
+- Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
 
 ## Reference Architecture
 
@@ -54,8 +61,10 @@ flowchart LR
 
     API --> WX["Weather Collector"]
     WX --> METAR["Aviation Weather (METAR)"]
+    WX --> TAF["Aviation Weather (TAF)"]
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
+    WX --> HKO["HKO / NOAA / Official settlement sources"]
 
     API --> ANA["DEB + Trend + Probability + Market Scan"]
     ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
@@ -85,6 +94,17 @@ cd frontend
 npm install
 npm run dev
 ```
+
+## Recent Highlights
+
+- Taipei settlement is aligned to `NOAA RCTP` and rounded whole-degree Celsius logic.
+- Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
+- Intraday analysis now separates:
+  - `Surface Structure`
+  - `Upper-Air Structure`
+  - `Trade cue`
+- `TAF` is used as an airport-side confirmation layer, not as the main temperature model.
+- Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 
 ## Runtime Data (Recommended on VPS)
 
@@ -163,4 +183,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## Version
 
 - Version: `v1.5.1`
-- Last Updated: `2026-03-21`
+- Last Updated: `2026-03-24`

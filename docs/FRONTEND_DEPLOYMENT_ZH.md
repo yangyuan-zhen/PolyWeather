@@ -78,7 +78,18 @@ NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 
 如果不启用钱包支付，可以留空。
 
-### 4. Telegram 入口
+### 4. `/ops` 管理员页面守卫
+
+```env
+POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
+```
+
+说明：
+
+- `/ops` 现在不是只有后端接口限制，前端页面入口也会读取管理员邮箱白名单。
+- 因此前端部署到 Vercel 时，也应配置 `POLYWEATHER_OPS_ADMIN_EMAILS`。
+
+### 5. Telegram 入口
 
 ```env
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
@@ -167,6 +178,7 @@ Vercel 部署前至少确认：
 3. GitHub Actions 中 `frontend-quality` 已通过
 4. 如果启用鉴权，Supabase redirect URL 已包含前端域名
 5. `GET /api/payments/config` 返回的是当前最新地址，而不是旧收款合约
+6. 如果启用了 `/ops`，确认 `POLYWEATHER_OPS_ADMIN_EMAILS` 已在 Vercel 与后端同时配置
 
 ## 九、常见问题
 

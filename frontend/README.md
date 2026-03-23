@@ -19,6 +19,19 @@ PolyWeather Pro 的生产前端工程。
 2. Next Route Handlers（`/api/*`）-> FastAPI 后端
 3. FastAPI -> 分析服务 / 支付服务
 
+## 当前前端能力
+
+- 主站 Dashboard 支持地图、城市详情、今日日内分析、历史准确率对账和账户中心
+- 今日日内分析支持：
+  - 峰值窗口感知的近地面结构信号
+  - 高空结构信号
+  - 交易动作卡
+  - 非香港机场城市的 `TAF` 时段提示与走势图联动
+- 历史对账支持：
+  - `DEB / 最佳单模型 / 实测最高温` 对比
+  - 峰值前 12 小时 `DEB` 参考（近似）
+- `/ops` 已支持桌面表格 + 手机端卡片化视图
+
 ## 本地开发
 
 ```bash
@@ -67,6 +80,7 @@ POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN=
 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID=
 NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 NEXT_PUBLIC_PAYMENT_ALLOWED_HOSTS=polyweather-pro.vercel.app
+POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 
 # 社群入口
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
@@ -126,10 +140,12 @@ Ops：
 - 本周积分榜
 - 手动补分
 - 支付异常单筛选与标记已处理
+- 手机端卡片化视图
 
 注意：
 
-- `/ops` 页面是否可写，取决于后端 `POLYWEATHER_OPS_ADMIN_EMAILS`
+- `/ops` 现在是前后端双层管理员限制
+- Vercel 前端和后端都应配置相同的 `POLYWEATHER_OPS_ADMIN_EMAILS`
 - 前端登录邮箱本身不会自动获得管理员权限
 
 ## 支付安全补充
@@ -160,4 +176,4 @@ Ops：
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-03-21`
+最后更新：`2026-03-24`

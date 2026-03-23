@@ -15,6 +15,22 @@
 - 台北主结算源切换到 `NOAA RCTP`，按最终质控后的最高整度摄氏值展示和说明
 - 浏览器插件同步台北 `NOAA RCTP` 结算参考标签和说明
 - `/ops` 手机端收口为卡片化视图，保留桌面表格
+- 账户中心补充本周积分显示，`weekly_points` 与周排行同屏展示
+- Dashboard 历史对账补充“峰值前 12 小时 DEB 参考（近似）”卡片
+- 历史图不再错误混入 `settlement_history` 实测，历史样本仅按可比较样本统计
+- 新增 `scripts/backfill_recent_daily_actuals_from_metar.py`，支持为缺失 `daily_records` 的 METAR 城市补最近 14 天 `actual_high`
+- 历史接口对新接入的 METAR 城市增加自动 bootstrap，避免新增城市历史页整块空白
+- 香港历史/日内展示继续坚持 `HKO` 官方口径，不再 fallback 到 `VHHH METAR` 连续线
+- 香港 HKO 当天官方点位不再落单独 JSON，统一写入 runtime state
+- 今日日内结构信号按城市本地时间与峰值窗口分析，不再只看固定下午时段
+- 新增高空结构信号：冲高环境、压温风险、午后扰动、冲高效率，并提供中英文说明
+- 新增交易动作卡：结合高空结构、市场拥挤度与 `edge_percent` 输出 `偏暖侧 / 偏谨慎 / 先观察`
+- 非香港机场城市新增 `TAF` 接入，支持 `FM / TEMPO / BECMG / PROB30/40` 时间片解析
+- 温度走势图新增 `TAF 时段 / TAF Timing` 标记，并在 tooltip 中显示对应时段摘要
+- `TAF` 信号与 `market_signal / edge_percent` 联动进入交易动作，提示更贴近交易语境
+- `TAF` 展示词已改成普通用户可读版本：`基础时段 / 明确切换 / 临时波动 / 逐步转变`
+- 日内结构总摘要补充“TAF 未新增压温不等于继续升温”的解释，避免误读
+- 浏览器插件多日预报改为 `DEB` 优先，基础判断卡补充方向、置信度与原因，并统一引流到主站首页
 
 
 ## Unreleased

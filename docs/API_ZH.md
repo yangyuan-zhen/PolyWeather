@@ -1,6 +1,6 @@
 # PolyWeather API 文档（v1.5.1）
 
-最后更新：`2026-03-21`
+最后更新：`2026-03-24`
 
 本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
@@ -44,9 +44,70 @@ flowchart LR
 
 - `market_scan.available`
 - `market_scan.signal_label`
+- `market_scan.edge_percent`
 - `market_scan.anchor_model / anchor_high / anchor_settlement`
 - `market_scan.yes_buy / no_buy`
 - `market_scan.primary_market.tradable`
+- `peak.first_h / peak.last_h / peak.status`
+- `vertical_profile_signal.heating_setup / suppression_risk / trigger_risk / mixing_strength`
+- `taf.signal.peak_window / suppression_level / disruption_level / markers`
+
+### `detail` 新增结构信号说明
+
+`/api/city/{name}/detail` 现在会返回一组更偏交易场景的结构字段：
+
+#### 1. `peak`
+
+- `first_h`：预计峰值窗口起始小时
+- `last_h`：预计峰值窗口结束小时
+- `status`：`before_peak | near_peak | after_peak`
+
+这组字段用于让日内结构信号围绕真实峰值窗口分析，而不是固定只看下午。
+
+#### 2. `vertical_profile_signal`
+
+重点字段：
+
+- `source`
+- `window`
+- `cape_max`
+- `cin_min`
+- `lifted_index_min`
+- `boundary_layer_height_max`
+- `shear_10m_180m_max`
+- `suppression_risk`
+- `trigger_risk`
+- `mixing_strength`
+- `shear_risk`
+- `heating_setup`
+- `heating_score`
+- `summary_zh`
+- `summary_en`
+
+这组字段对应前端“高空结构信号 / Upper-Air Structure”卡片。
+
+#### 3. `taf.signal`
+
+仅对**非香港机场城市**启用。当前已支持解析：
+
+- `FM`
+- `TEMPO`
+- `BECMG`
+- `PROB30`
+- `PROB40`
+
+重点字段：
+
+- `peak_window`
+- `segments`
+- `markers`
+- `suppression_level`
+- `disruption_level`
+- `wind_shift`
+- `summary_zh`
+- `summary_en`
+
+`markers` 会被前端温度走势图拿来做 `TAF 时段 / TAF Timing` 标记。
 
 ## 4. 鉴权与账户接口
 
@@ -134,6 +195,7 @@ flowchart LR
 - `cities` / `summary` / `history`：BFF 支持 `ETag + 304`
 - `summary?force_refresh=true`：`Cache-Control: no-store`
 - 详情接口与支付接口：`no-store`
+- `METAR` / `TAF` / settlement current 由后端各自维护短 TTL 缓存
 
 ## 9. 调试示例
 
