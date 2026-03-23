@@ -584,6 +584,7 @@ export function computeFrontTrendSignal(
   locale: Locale = "zh-CN",
 ) {
   const upperAirSignal = detail.vertical_profile_signal || {};
+  const tafSignal = detail.taf?.signal || {};
   const upperAirTradeCue = upperAirSignal.source
     ? upperAirSignal.heating_setup === "supportive"
       ? {
@@ -612,7 +613,7 @@ export function computeFrontTrendSignal(
             value: isEnglish(locale) ? "Wait / confirm" : "先观察",
           }
     : null;
-  const upperAirSummary = upperAirSignal.source
+  const baseUpperAirSummary = upperAirSignal.source
     ? (() => {
         const hasMetrics =
           upperAirSignal.cape_max != null ||
@@ -639,6 +640,43 @@ export function computeFrontTrendSignal(
           : "高空结构整体偏中性，单看这层不给明确边，交易仍要让近地面走势来定。";
       })()
     : "";
+  const tafSummary =
+    tafSignal.available && dateStr === detail.local_date
+      ? isEnglish(locale)
+        ? String(tafSignal.summary_en || "").trim()
+        : String(tafSignal.summary_zh || "").trim()
+      : "";
+  const upperAirSummary = [baseUpperAirSummary, tafSummary]
+    .filter(Boolean)
+    .join(isEnglish(locale) ? " " : "");
+  const tafMetric =
+    tafSignal.available && dateStr === detail.local_date
+      ? {
+          label: isEnglish(locale) ? "Airport TAF" : "机场预报",
+          note: tafSummary ||
+            (isEnglish(locale)
+              ? "Airport TAF is available for the current peak window."
+              : "当前峰值窗口已接入机场 TAF 预报。"),
+          tone:
+            tafSignal.suppression_level === "high"
+              ? "cold"
+              : tafSignal.suppression_level === "low"
+                ? "warm"
+                : "",
+          value:
+            tafSignal.suppression_level === "high"
+              ? isEnglish(locale)
+                ? "Suppression watch"
+                : "防压温"
+              : tafSignal.suppression_level === "medium"
+                ? isEnglish(locale)
+                  ? "Watch clouds/rain"
+                  : "看云雨"
+                : isEnglish(locale)
+                  ? "Mostly stable"
+                  : "暂稳",
+        }
+      : null;
   const upperAirMetrics = upperAirSignal.source
     ? [
         ...(upperAirTradeCue ? [upperAirTradeCue] : []),
@@ -762,8 +800,11 @@ export function computeFrontTrendSignal(
                 ? "Weak"
                 : "弱",
         },
+        ...(tafMetric ? [tafMetric] : []),
       ]
-    : [];
+    : tafMetric
+      ? [tafMetric]
+      : [];
   const rawBackendSummary =
     dateStr === detail.local_date
       ? String(detail.dynamic_commentary?.summary || "").trim()
@@ -1140,6 +1181,9 @@ export function computeFrontTrendSignal(
 
     return parts.join(isEnglish(locale) ? " " : "");
   })();
+  const combinedSummary = [backendSummary || summary, tafSummary]
+    .filter(Boolean)
+    .join(isEnglish(locale) ? " " : "");
   const cloudNote = (() => {
     if (cloudDelta >= 15 && tempDelta >= 0.8 && dewDelta >= 0.8) {
       return isEnglish(locale)
@@ -1313,7 +1357,7 @@ export function computeFrontTrendSignal(
     upperAirSummary,
     precipMax,
     score,
-    summary: backendSummary || summary,
+    summary: combinedSummary || backendSummary || summary,
     weatherGovPeriods,
   };
 }

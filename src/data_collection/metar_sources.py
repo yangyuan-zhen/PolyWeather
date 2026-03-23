@@ -224,6 +224,65 @@ class MetarSourceMixin:
             record_source_call("metar", "current", "parse_error", (time.perf_counter() - started) * 1000.0)
             return None
 
+    def fetch_taf(self, city: str, utc_offset: int = 0) -> Optional[Dict]:
+        """从 NOAA Aviation Weather Center 获取 TAF 机场终端区预报原文。"""
+        started = time.perf_counter()
+        icao = self.get_icao_code(city)
+        if not icao:
+            record_source_call("taf", "current", "missing_icao", (time.perf_counter() - started) * 1000.0)
+            return None
+
+        cache_key = f"{icao}:{utc_offset}"
+        now_ts = time.time()
+        with self._taf_cache_lock:
+            cached = self._taf_cache.get(cache_key)
+            if cached and now_ts - cached["t"] < self.taf_cache_ttl_sec:
+                record_source_call("taf", "current", "cache_hit", (time.perf_counter() - started) * 1000.0)
+                return cached["d"]
+
+        try:
+            url = "https://aviationweather.gov/api/data/taf"
+            params = {
+                "ids": icao,
+                "format": "json",
+                "hours": 24,
+                "_t": int(time.time()),
+            }
+            response = self.session.get(url, params=params, timeout=self.timeout)
+            response.raise_for_status()
+            data = response.json()
+            if not data:
+                return None
+
+            latest = data[0]
+            result = {
+                "source": "taf",
+                "icao": icao,
+                "station_name": latest.get("name", icao),
+                "timestamp": datetime.utcnow().isoformat(),
+                "issue_time": latest.get("issueTime"),
+                "valid_time_from": latest.get("validTimeFrom"),
+                "valid_time_to": latest.get("validTimeTo"),
+                "raw_taf": latest.get("rawTAF") or latest.get("rawTaf") or latest.get("raw_text") or "",
+            }
+            with self._taf_cache_lock:
+                self._taf_cache[cache_key] = {"d": result, "t": now_ts}
+            record_source_call("taf", "current", "success", (time.perf_counter() - started) * 1000.0)
+            return result
+        except requests.exceptions.RequestException as exc:
+            logger.error(f"TAF 请求失败 ({icao}): {exc}")
+            with self._taf_cache_lock:
+                stale = self._taf_cache.get(cache_key)
+                if stale:
+                    record_source_call("taf", "current", "stale_cache", (time.perf_counter() - started) * 1000.0)
+                    return stale["d"]
+            record_source_call("taf", "current", "error", (time.perf_counter() - started) * 1000.0)
+            return None
+        except (KeyError, IndexError, TypeError, ValueError) as exc:
+            logger.error(f"TAF 数据解析失败 ({icao}): {exc}")
+            record_source_call("taf", "current", "parse_error", (time.perf_counter() - started) * 1000.0)
+            return None
+
     def fetch_metar_nearby_cluster(self, icaos: List[str], use_fahrenheit: bool = False) -> list:
         """批量获取一组 ICAO 站点的 METAR 数据，用于地图周边显示。"""
         if not icaos:

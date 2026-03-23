@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import time as _time
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
@@ -291,6 +292,105 @@ def _build_vertical_profile_signal(
     }
 
 
+def _build_taf_signal(
+    taf_data: Dict[str, Any],
+    city: str,
+    first_peak_h: int,
+    last_peak_h: int,
+) -> Dict[str, Any]:
+    if str(city or "").strip().lower() == "hong kong":
+        return {}
+    raw_taf = str((taf_data or {}).get("raw_taf") or "").upper().strip()
+    if not raw_taf:
+        return {}
+
+    precip_codes = re.findall(
+        r"\b(?:-|\+)?(?:TSRA|TS|VCTS|SHRA|RA|DZ|SN|SHSN|SHGS)\b",
+        raw_taf,
+    )
+    cloud_matches = re.findall(r"\b(FEW|SCT|BKN|OVC)(\d{3})\b", raw_taf)
+    wind_matches = re.findall(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b", raw_taf)
+    tempo_tokens = re.findall(r"\b(?:TEMPO|BECMG|PROB30|PROB40|FM\d{6})\b", raw_taf)
+
+    low_ceiling_ft = None
+    ceiling_cover = None
+    for cover, base in cloud_matches:
+        if cover not in {"BKN", "OVC"}:
+            continue
+        try:
+            base_ft = int(base) * 100
+        except Exception:
+            continue
+        if low_ceiling_ft is None or base_ft < low_ceiling_ft:
+            low_ceiling_ft = base_ft
+            ceiling_cover = cover
+
+    direction_buckets: list[str] = []
+    for direction, _speed in wind_matches:
+        if direction == "VRB":
+            direction_buckets.append("variable")
+            continue
+        try:
+            deg = int(direction)
+        except Exception:
+            continue
+        if 135 <= deg <= 225:
+            direction_buckets.append("southerly")
+        elif deg >= 315 or deg <= 45:
+            direction_buckets.append("northerly")
+        else:
+            direction_buckets.append("cross")
+    unique_buckets = [bucket for bucket in dict.fromkeys(direction_buckets) if bucket]
+
+    suppression_level = "low"
+    if any(code in {"TSRA", "TS", "VCTS", "SHRA", "SHSN", "SHGS"} for code in precip_codes):
+        suppression_level = "high"
+    elif precip_codes or (low_ceiling_ft is not None and low_ceiling_ft <= 4000):
+        suppression_level = "medium"
+
+    disruption_level = "low"
+    if tempo_tokens and suppression_level == "high":
+        disruption_level = "high"
+    elif tempo_tokens or len(unique_buckets) >= 2:
+        disruption_level = "medium"
+
+    wind_shift = len(unique_buckets) >= 2 or "variable" in unique_buckets
+    peak_window = f"{max(0, first_peak_h - 2):02d}:00-{min(23, last_peak_h + 1):02d}:00"
+
+    if suppression_level == "high":
+        summary_zh = f"TAF 在峰值窗口（{peak_window}）提示阵雨或雷暴扰动，机场端压温风险偏高。"
+        summary_en = f"TAF flags shower or thunderstorm disruption around the peak window ({peak_window}), so airport-side suppression risk is high."
+    elif suppression_level == "medium":
+        summary_zh = f"TAF 在峰值窗口（{peak_window}）提示云量或弱降水扰动，需要防峰值被压低。"
+        summary_en = f"TAF points to cloud or light-precip disruption around the peak window ({peak_window}); the airport high may be capped."
+    else:
+        summary_zh = f"TAF 在峰值窗口（{peak_window}）暂未提示明显云雨压温。"
+        summary_en = f"TAF does not flag a strong cloud/rain suppression signal around the peak window ({peak_window})."
+
+    if wind_shift:
+        summary_zh += " 同时机场预报风向存在阶段性切换。"
+        summary_en += " Airport wind direction also shifts by regime during the window."
+
+    return {
+        "available": True,
+        "source": "aviationweather-taf",
+        "raw_taf": raw_taf,
+        "issue_time": (taf_data or {}).get("issue_time"),
+        "valid_time_from": (taf_data or {}).get("valid_time_from"),
+        "valid_time_to": (taf_data or {}).get("valid_time_to"),
+        "peak_window": peak_window,
+        "precip_codes": precip_codes,
+        "low_ceiling_ft": low_ceiling_ft,
+        "ceiling_cover": ceiling_cover,
+        "wind_regimes": unique_buckets,
+        "wind_shift": wind_shift,
+        "suppression_level": suppression_level,
+        "disruption_level": disruption_level,
+        "summary_zh": summary_zh,
+        "summary_en": summary_en,
+    }
+
+
 def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
@@ -319,6 +419,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     )
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
+    taf = raw.get("taf", {})
     mgm = raw.get("mgm") or {}
     settlement_current = raw.get("settlement_current") or {}
     ens_raw = raw.get("ensemble", {})
@@ -771,6 +872,12 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         first_peak_h,
         last_peak_h,
     )
+    taf_signal = _build_taf_signal(
+        taf if isinstance(taf, dict) else {},
+        city,
+        first_peak_h,
+        last_peak_h,
+    )
 
     # ── 13. Cloud description (METAR primary, MGM fallback) ──
     clouds = mc.get("clouds", [])
@@ -995,6 +1102,12 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "hourly": today_hourly,
         "hourly_next_48h": next_48h_hourly,
         "vertical_profile_signal": vertical_profile_signal,
+        "taf": {
+            **(taf if isinstance(taf, dict) else {}),
+            "signal": taf_signal,
+        }
+        if taf_signal or taf
+        else {},
         "metar_today_obs": metar_today_obs_payload,
         "metar_recent_obs": metar_recent_obs_payload,
         "settlement_today_obs": settlement_today_obs,
@@ -1158,6 +1271,7 @@ def _build_city_detail_payload(
                 "raw_metar": data.get("current", {}).get("raw_metar"),
                 "current": data.get("current"),
             },
+            "taf": data.get("taf") or {},
             "weather_gov": {},
             "mgm": data.get("mgm") or {},
             "mgm_nearby": data.get("mgm_nearby") or [],
@@ -1179,6 +1293,7 @@ def _build_city_detail_payload(
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
         "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
+        "taf": data.get("taf") or {},
         "market_scan": market_scan,
         "risk": data.get("risk"),
         "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),

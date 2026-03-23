@@ -304,6 +304,28 @@ export interface CityDetail {
     summary?: string | null;
     notes?: string[] | null;
   };
+  taf?: {
+    source?: string | null;
+    icao?: string | null;
+    issue_time?: string | null;
+    valid_time_from?: string | null;
+    valid_time_to?: string | null;
+    raw_taf?: string | null;
+    signal?: {
+      available?: boolean;
+      source?: string | null;
+      peak_window?: string | null;
+      precip_codes?: string[] | null;
+      low_ceiling_ft?: number | null;
+      ceiling_cover?: string | null;
+      wind_regimes?: string[] | null;
+      wind_shift?: boolean | null;
+      suppression_level?: string | null;
+      disruption_level?: string | null;
+      summary_zh?: string | null;
+      summary_en?: string | null;
+    };
+  };
   vertical_profile_signal?: {
     source?: string | null;
     window_start?: string | null;

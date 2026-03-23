@@ -132,6 +132,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self._metar_cache: Dict[str, Dict] = {}
         self._metar_cache_lock = threading.Lock()
+        self.taf_cache_ttl_sec = int(
+            os.getenv("TAF_CACHE_TTL_SEC", "900")
+        )
+        self._taf_cache: Dict[str, Dict] = {}
+        self._taf_cache_lock = threading.Lock()
         self.settlement_cache_ttl_sec = int(
             os.getenv("SETTLEMENT_SOURCE_CACHE_TTL_SEC", "120")
         )
@@ -669,6 +674,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 if metar_data:
                     results["metar"] = metar_data
+                if city_lower != "hong kong":
+                    taf_data = self.fetch_taf(city, utc_offset=utc_offset)
+                    if taf_data:
+                        results["taf"] = taf_data
 
                 self._attach_turkish_mgm_data(results, city_lower)
                 if city_lower == "warsaw":
@@ -690,6 +699,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 if metar_data:
                     results["metar"] = metar_data
+                if city_lower != "hong kong":
+                    taf_data = self.fetch_taf(city, utc_offset=fallback_utc_offset)
+                    if taf_data:
+                        results["taf"] = taf_data
 
                 self._attach_turkish_mgm_data(results, city_lower)
                 if city_lower == "warsaw":
@@ -704,6 +717,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
             if metar_data:
                 results["metar"] = metar_data
+            if city_lower != "hong kong":
+                taf_data = self.fetch_taf(city)
+                if taf_data:
+                    results["taf"] = taf_data
 
         return results
 
