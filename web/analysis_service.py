@@ -326,17 +326,59 @@ def _build_taf_signal(
         base = issue_dt
         year = base.year
         month = base.month
-        candidate = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+        day_offset = 0
+        normalized_hour = hour
+        if normalized_hour >= 24:
+            day_offset += normalized_hour // 24
+            normalized_hour = normalized_hour % 24
+        candidate = datetime(
+            year,
+            month,
+            day,
+            normalized_hour,
+            minute,
+            tzinfo=timezone.utc,
+        )
+        if day_offset:
+            candidate += timedelta(days=day_offset)
         if candidate < base - timedelta(days=20):
             if month == 12:
-                candidate = datetime(year + 1, 1, day, hour, minute, tzinfo=timezone.utc)
+                candidate = datetime(
+                    year + 1,
+                    1,
+                    day,
+                    normalized_hour,
+                    minute,
+                    tzinfo=timezone.utc,
+                ) + timedelta(days=day_offset)
             else:
-                candidate = datetime(year, month + 1, day, hour, minute, tzinfo=timezone.utc)
+                candidate = datetime(
+                    year,
+                    month + 1,
+                    day,
+                    normalized_hour,
+                    minute,
+                    tzinfo=timezone.utc,
+                ) + timedelta(days=day_offset)
         elif candidate > base + timedelta(days=20):
             if month == 1:
-                candidate = datetime(year - 1, 12, day, hour, minute, tzinfo=timezone.utc)
+                candidate = datetime(
+                    year - 1,
+                    12,
+                    day,
+                    normalized_hour,
+                    minute,
+                    tzinfo=timezone.utc,
+                ) + timedelta(days=day_offset)
             else:
-                candidate = datetime(year, month - 1, day, hour, minute, tzinfo=timezone.utc)
+                candidate = datetime(
+                    year,
+                    month - 1,
+                    day,
+                    normalized_hour,
+                    minute,
+                    tzinfo=timezone.utc,
+                ) + timedelta(days=day_offset)
         return candidate
 
     def _parse_period(token: str) -> tuple[Optional[datetime], Optional[datetime]]:
