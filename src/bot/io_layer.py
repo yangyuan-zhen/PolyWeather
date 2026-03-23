@@ -214,6 +214,17 @@ class BotIOLayer:
 
         user = message.from_user
         username = self.display_name(user)
+        preview = text.strip().replace("\n", " ")
+        if len(preview) > 80:
+            preview = preview[:77] + "..."
+        logger.info(
+            "group text received chat_id={} thread_id={} user_id={} text_len={} preview={!r}",
+            getattr(chat, "id", None),
+            getattr(message, "message_thread_id", None),
+            getattr(user, "id", None),
+            len(text.strip()),
+            preview,
+        )
         self.db.upsert_user(user.id, username)
 
         result = self.db.add_message_activity(
@@ -230,3 +241,14 @@ class BotIOLayer:
                 f"message points awarded user={user.id} points=+{awarded} "
                 f"daily_points={result.get('daily_points')}/{MESSAGE_DAILY_CAP}"
             )
+            return
+
+        logger.info(
+            "message points skipped chat_id={} thread_id={} user_id={} reason={} daily_points={} weekly_points={}",
+            getattr(chat, "id", None),
+            getattr(message, "message_thread_id", None),
+            getattr(user, "id", None),
+            result.get("reason") or "unknown",
+            result.get("daily_points"),
+            result.get("weekly_points"),
+        )
