@@ -1224,7 +1224,34 @@ export function computeFrontTrendSignal(
 
     return parts.join(isEnglish(locale) ? " " : "");
   })();
-  const combinedSummary = [backendSummary || summary, tafSummary]
+  const tafContrastSummary =
+    tafSignal.available && dateStr === detail.local_date
+      ? (() => {
+          const tafSuppression = String(
+            tafSignal.suppression_level || "low",
+          ).toLowerCase();
+          const isCoolingBias = score <= -18;
+          const isWarmingBias = score >= 18;
+
+          if (tafSuppression === "low" && isCoolingBias) {
+            return isEnglish(locale)
+              ? "TAF is not adding a new cloud/rain suppression signal, but the near-surface window is already leaning cooler, so the current cooling bias still comes mainly from surface structure."
+              : "TAF 没有新增云雨压温利空，但当前峰值窗口里的近地面结构已经偏弱，所以这次偏降温判断仍主要来自近地面信号。";
+          }
+          if (tafSuppression === "low" && isWarmingBias) {
+            return isEnglish(locale)
+              ? "TAF is not adding a new cloud/rain cap, and the warmer bias still comes mainly from the surface window."
+              : "TAF 没有新增云雨压温约束，当前偏升温判断仍主要来自近地面窗口。";
+          }
+          if (tafSuppression === "medium" && isCoolingBias) {
+            return isEnglish(locale)
+              ? "TAF is not the only driver here; it only reinforces part of the cooling-side case, while the main tilt still comes from the surface window."
+              : "这次偏降温不只是 TAF 在起作用；TAF 只是加强了部分冷侧判断，主方向仍来自近地面窗口。";
+          }
+          return "";
+        })()
+      : "";
+  const combinedSummary = [backendSummary || summary, tafSummary, tafContrastSummary]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
   const cloudNote = (() => {
