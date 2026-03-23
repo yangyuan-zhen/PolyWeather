@@ -539,7 +539,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             if normalized == "hong kong":
                 self._settlement_cache.pop("hko:hong_kong", None)
             elif normalized == "taipei":
-                self._settlement_cache.pop("cwa:taipei:466920", None)
+                self._settlement_cache.pop("noaa:rctp", None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
@@ -557,10 +557,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             hko_forecast = self.fetch_hko_forecast()
             if hko_forecast:
                 results["hko_forecast"] = hko_forecast
-        elif city_lower in ["taipei", "台北", "臺北", "tpe"]:
-            cwa_forecast = self.fetch_cwa_taipei_forecast()
-            if cwa_forecast:
-                results["cwa_forecast"] = cwa_forecast
 
     def _attach_turkish_mgm_data(self, results: Dict, city_lower: str) -> None:
         if city_lower not in self.TURKISH_PROVINCES:

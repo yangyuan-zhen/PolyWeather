@@ -60,8 +60,8 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   taipei: [
     {
-      label: "CWA 中央气象署",
-      href: "https://www.cwa.gov.tw/V8/E/",
+      label: "NOAA RCTP Timeseries",
+      href: "https://www.weather.gov/wrh/timeseries?site=RCTP",
       kind: "agency",
     },
     {
@@ -70,8 +70,8 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "airport",
     },
     {
-      label: "RCSS METAR",
-      href: "https://aviationweather.gov/data/metar/?id=RCSS&decoded=1&taf=1",
+      label: "RCTP METAR",
+      href: "https://aviationweather.gov/data/metar/?id=RCTP&decoded=1&taf=1",
       kind: "metar",
     },
   ],

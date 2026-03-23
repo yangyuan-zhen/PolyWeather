@@ -452,6 +452,10 @@ export function FutureForecastModal() {
     "--score-position": scorePosition,
   } as CSSProperties & { "--score-position": string };
   const weatherSummary = getWeatherSummary(detail, locale);
+  const isTaipeiNoaa =
+    store.selectedCity === "taipei" &&
+    (detail.current?.settlement_source === "noaa" ||
+      detail.current?.settlement_source_label === "NOAA");
   const marketMidpoint = formatMarketPercent(
     marketScan?.market_price ?? marketScan?.yes_token?.implied_probability,
   );
@@ -551,11 +555,15 @@ export function FutureForecastModal() {
       ? locale === "en-US"
         ? "Hong Kong Observatory (HKO)"
         : "香港天文台 (HKO)"
-      : settlementSourceCode === "cwa"
+      : settlementSourceCode === "noaa"
         ? locale === "en-US"
-          ? "Central Weather Administration (CWA)"
-          : "交通部中央气象署 (CWA)"
-        : risk.airport
+          ? "NOAA RCTP (Taiwan Taoyuan International Airport)"
+          : "NOAA RCTP（台湾桃园国际机场）"
+        : settlementSourceCode === "cwa"
+          ? locale === "en-US"
+            ? "Central Weather Administration (CWA)"
+            : "交通部中央气象署 (CWA)"
+          : risk.airport
           ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
           : "--";
 
@@ -652,6 +660,24 @@ export function FutureForecastModal() {
             </button>
           </div>
           <div className="modal-body future-modal-body">
+            {isTaipeiNoaa && (
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "12px 14px",
+                  border: "1px solid rgba(56, 189, 248, 0.24)",
+                  borderRadius: "12px",
+                  background: "rgba(14, 165, 233, 0.08)",
+                  color: "var(--text-secondary)",
+                  fontSize: "13px",
+                  lineHeight: 1.6,
+                }}
+              >
+                {locale === "en-US"
+                  ? "Taipei now settles against NOAA RCTP (Taiwan Taoyuan International Airport). The market uses the highest rounded whole-degree Celsius reading in the Temp column after the day is finalized."
+                  : "台北当前按 NOAA RCTP（台湾桃园国际机场）结算。市场最终采用该日 Temp 列完成质控后的最高整度摄氏值，不按小数温度结算。"}
+              </div>
+            )}
             {isToday ? (
               <div className="future-v2-layout">
                 <aside className="future-v2-left">

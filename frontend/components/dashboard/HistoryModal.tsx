@@ -12,6 +12,7 @@ function HistoryChart() {
   const store = useDashboardStore();
   const { locale } = useI18n();
   const { data } = useHistoryData();
+  const isTaipei = store.selectedCity === "taipei";
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
@@ -33,7 +34,13 @@ function HistoryChart() {
         borderColor: "#f87171",
         borderWidth: 2,
         data: summary.actuals,
-        label: locale === "en-US" ? "Observed High" : "实测最高温",
+        label: isTaipei
+          ? locale === "en-US"
+            ? "NOAA Settled High (RCTP)"
+            : "NOAA 结算最高温 (RCTP)"
+          : locale === "en-US"
+            ? "Observed High"
+            : "实测最高温",
         pointBackgroundColor: "#f87171",
         pointBorderColor: "#fff",
         pointHoverRadius: 7,
@@ -135,7 +142,7 @@ function HistoryChart() {
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [hasBestBaseline, hasMgm, summary, locale]);
+  }, [hasBestBaseline, hasMgm, isTaipei, summary, locale]);
 
   if (!summary.recentData.length) return null;
 
@@ -152,6 +159,7 @@ export function HistoryModal() {
   const { data, error, isLoading, isOpen } = useHistoryData();
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
+  const isTaipei = store.selectedCity === "taipei";
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
@@ -200,6 +208,24 @@ export function HistoryModal() {
             </button>
           </div>
           <div className="modal-body">
+            {isTaipei && (
+              <div
+                style={{
+                  marginBottom: "16px",
+                  padding: "12px 14px",
+                  border: "1px solid rgba(56, 189, 248, 0.24)",
+                  borderRadius: "12px",
+                  background: "rgba(14, 165, 233, 0.08)",
+                  color: "var(--text-secondary)",
+                  fontSize: "13px",
+                  lineHeight: 1.6,
+                }}
+              >
+                {t("lang") === "en-US"
+                  ? "Taipei historical actuals are aligned to NOAA RCTP settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized."
+                  : "台北历史对账已按 NOAA RCTP 结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。"}
+              </div>
+            )}
             <div className="history-stats">
               {isLoading ? (
                 <span style={{ color: "var(--text-muted)" }}>

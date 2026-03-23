@@ -24,7 +24,7 @@ def is_exact_settlement_city(city: str) -> bool:
     if not city:
         return False
     c = str(city).lower().strip()
-    return c in ["hong kong", "hk", "taipei", "tpe", "臺北", "台北", "香港"]
+    return c in ["hong kong", "hk", "香港"]
 
 
 def apply_city_settlement(city: str, value: Optional[Number]) -> Optional[int]:
@@ -38,4 +38,3 @@ def apply_city_settlement(city: str, value: Optional[Number]) -> Optional[int]:
     if is_exact_settlement_city(city):
         return int(math.floor(float(value)))
     return wu_round(value)
-

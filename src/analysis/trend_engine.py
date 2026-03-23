@@ -28,6 +28,7 @@ SETTLEMENT_SOURCE_LABELS = {
     "metar": "METAR",
     "hko": "HKO",
     "cwa": "CWA",
+    "noaa": "NOAA",
     "mgm": "MGM",
 }
 

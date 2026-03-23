@@ -52,7 +52,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "guide.title": "📎 PolyWeather 系统技术说明",
     "guide.closeAria": "关闭技术说明",
     "guide.footer":
-      "数据源以 METAR、香港天文台(HKO)、中央气象署(CWA)、Turkish MGM、Open-Meteo、weather.gov 为主。",
+      "数据源以 METAR、香港天文台(HKO)、NOAA RCTP、Turkish MGM、Open-Meteo、weather.gov 为主。",
 
     "history.title": "📊 历史准确率对账 - {city}",
     "history.closeAria": "关闭历史对账",
@@ -214,7 +214,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "guide.title": "📎 PolyWeather Technical Overview",
     "guide.closeAria": "Close technical overview",
     "guide.footer":
-      "Primary data sources are METAR, Hong Kong Observatory (HKO), CWA (Taiwan), Turkish MGM, Open-Meteo, and weather.gov.",
+      "Primary data sources are METAR, Hong Kong Observatory (HKO), NOAA RCTP, Turkish MGM, Open-Meteo, and weather.gov.",
 
     "history.title": "📊 Historical Reconciliation - {city}",
     "history.closeAria": "Close history reconciliation",

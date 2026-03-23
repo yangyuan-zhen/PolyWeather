@@ -20,6 +20,7 @@ const I18N = {
     settlementAirport: "结算机场",
     hko: "香港天文台 (HKO)",
     cwa: "交通部中央气象署 (CWA)",
+    noaa: "NOAA RCTP（台湾桃园国际机场）",
     city: "城市",
     refresh: "刷新数据",
     cityProfile: "城市档案",
@@ -35,6 +36,9 @@ const I18N = {
     nearbyMonitoringSuffix: "个参与监控",
     today: "今天",
     omSeries: "OM预测",
+    noaaSettlementRef: "NOAA RCTP 结算参考",
+    noaaSettlementLegend:
+      "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作结算参考。",
     loadCityDetailFailed: "加载城市详情失败",
     refreshFailed: "刷新温度数据失败",
     initFailed: "初始化失败",
@@ -55,6 +59,7 @@ const I18N = {
     settlementAirport: "Settlement Airport",
     hko: "Hong Kong Observatory (HKO)",
     cwa: "Central Weather Administration (CWA)",
+    noaa: "NOAA RCTP (Taiwan Taoyuan International Airport)",
     city: "City",
     refresh: "Refresh data",
     cityProfile: "City Profile",
@@ -70,6 +75,9 @@ const I18N = {
     nearbyMonitoringSuffix: " stations monitored",
     today: "Today",
     omSeries: "OM Forecast",
+    noaaSettlementRef: "NOAA RCTP Settlement Reference",
+    noaaSettlementLegend:
+      "Taipei settles on NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; the plotted line is only a settlement reference.",
     loadCityDetailFailed: "Failed to load city detail",
     refreshFailed: "Failed to refresh weather data",
     initFailed: "Initialization failed",
@@ -394,6 +402,12 @@ function getSettlementSourceDisplay(detail) {
       value: t("cwa")
     };
   }
+  if (source === "noaa") {
+    return {
+      label: t("settlementSource"),
+      value: t("noaa")
+    };
+  }
   const airport = detail?.risk?.airport || "--";
   const icao = detail?.risk?.icao ? ` (${detail.risk.icao})` : "";
   return {
@@ -629,7 +643,10 @@ function drawTrendChart(detail) {
   const points = [...trend, ...obs];
   const hoverPoints = [];
   const tempSymbol = detail?.temp_symbol || "°C";
-  const obsSeriesLabel = String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
+  const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
+  const obsSeriesLabel = sourceCode === "noaa"
+    ? t("noaaSettlementRef")
+    : String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
   if (!points.length) {
     setChartHover([], tempSymbol);
     ctx.fillStyle = "#8ba0be";
@@ -788,14 +805,23 @@ function renderDetail(detail) {
   drawTrendChart(detail);
   renderForecast(detail);
 
-  const sourceTag = String(detail?.current?.settlement_source_label || "").toUpperCase() || "OBS";
+  const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
+  const sourceTag = sourceCode === "noaa"
+    ? t("noaaSettlementRef")
+    : String(detail?.current?.settlement_source_label || "").toUpperCase() || "OBS";
   const obs = getObservationRows(detail);
   if (obs.length >= 2) {
     const first = obs[0];
     const last = obs[obs.length - 1];
-    els.chartLegend.textContent = `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time}`;
+    els.chartLegend.textContent =
+      sourceCode === "noaa"
+        ? `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time} | ${t("noaaSettlementLegend")}`
+        : `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time}`;
   } else {
-    els.chartLegend.textContent = `${sourceTag}: ${t("noContinuousObs")}`;
+    els.chartLegend.textContent =
+      sourceCode === "noaa"
+        ? `${sourceTag}: ${t("noContinuousObs")} | ${t("noaaSettlementLegend")}`
+        : `${sourceTag}: ${t("noContinuousObs")}`;
   }
 }
 

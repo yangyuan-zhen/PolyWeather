@@ -40,7 +40,7 @@ function getObservationSourceCode(detail: CityDetail): string {
     .trim()
     .toLowerCase();
   if (city === "hong kong") return "hko";
-  if (city === "taipei") return "cwa";
+  if (city === "taipei") return "noaa";
   return "metar";
 }
 
@@ -52,6 +52,7 @@ function getObservationSourceTag(detail: CityDetail): string {
   const code = getObservationSourceCode(detail);
   if (code === "hko") return "HKO";
   if (code === "cwa") return "CWA";
+  if (code === "noaa") return "NOAA";
   if (code === "mgm") return "MGM";
   return "METAR";
 }
@@ -239,7 +240,7 @@ export function getTemperatureChartData(
   const observationTag = getObservationSourceTag(detail);
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
-    observationCode === "hko" || observationCode === "cwa";
+    observationCode === "hko" || observationCode === "cwa" || observationCode === "noaa";
   const officialObservationSource =
     settlementSource
       ? detail.settlement_today_obs?.length
@@ -267,7 +268,11 @@ export function getTemperatureChartData(
     return `${icao} METAR`;
   })();
   const observationDisplayTag =
-    settlementSource && shouldUseMetarFallback ? metarFallbackTag : observationTag;
+    settlementSource && shouldUseMetarFallback
+      ? metarFallbackTag
+      : observationCode === "noaa"
+        ? "NOAA RCTP"
+        : observationTag;
 
   const metarPoints = new Array(times.length).fill(null);
   observationSource.forEach((item) => {
@@ -361,6 +366,12 @@ export function getTemperatureChartData(
         ? `Official ${observationTag} feed is sparse today, so the continuous observation line switches to ${metarFallbackTag}.`
         : `今日官方 ${observationTag} 点位较稀疏，连续实测线改用 ${metarFallbackTag}。`,
     );
+  } else if (observationCode === "noaa") {
+    legendParts.push(
+      isEnglish(locale)
+        ? "Taipei settles on NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; the plotted line is a settlement reference."
+        : "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作为结算参考线。",
+    );
   }
 
   return {
@@ -374,9 +385,14 @@ export function getTemperatureChartData(
       offset,
       temps,
     },
-    observationLabel: isEnglish(locale)
-      ? `${observationDisplayTag} Observation`
-      : `${observationDisplayTag} 实况`,
+    observationLabel:
+      observationCode === "noaa" && !shouldUseMetarFallback
+        ? isEnglish(locale)
+          ? `${observationDisplayTag} Settlement Reference`
+          : `${observationDisplayTag} 结算参考`
+        : isEnglish(locale)
+          ? `${observationDisplayTag} Observation`
+          : `${observationDisplayTag} 实况`,
     legendText: legendParts.join(" | "),
     max,
     min,
@@ -1416,7 +1432,7 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const current = detail.current || {};
   const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
   const sourceCode = getObservationSourceCode(detail);
-  const isOfficialSource = sourceCode === "hko" || sourceCode === "cwa";
+  const isOfficialSource = sourceCode === "hko" || sourceCode === "cwa" || sourceCode === "noaa";
 
   const sourceDisplay = (() => {
     if (sourceCode === "hko") {
@@ -1428,6 +1444,11 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       return isEnglish(locale)
         ? "Central Weather Administration (CWA)"
         : "交通部中央气象署 (CWA)";
+    }
+    if (sourceCode === "noaa") {
+      return isEnglish(locale)
+        ? "NOAA RCTP (Taiwan Taoyuan)"
+        : "NOAA RCTP（台湾桃园国际机场）";
     }
     const tag = getObservationSourceTag(detail);
     if (sourceCode === "mgm") {
@@ -1491,7 +1512,7 @@ export function getSettlementRiskNarrative(
 ) {
   const risk = detail.risk || {};
   const sourceCode = getObservationSourceCode(detail);
-  const stationTerm = sourceCode === "hko" || sourceCode === "cwa"
+  const stationTerm = sourceCode === "hko" || sourceCode === "cwa" || sourceCode === "noaa"
     ? isEnglish(locale)
       ? "settlement reference station"
       : "结算参考站"
