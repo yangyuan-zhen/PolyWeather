@@ -579,6 +579,122 @@ export function computeFrontTrendSignal(
   dateStr: string,
   locale: Locale = "zh-CN",
 ) {
+  const upperAirSignal = detail.vertical_profile_signal || {};
+  const upperAirMetrics = upperAirSignal.source
+    ? [
+        {
+          label: isEnglish(locale) ? "Convective suppression" : "对流压温风险",
+          note:
+            upperAirSignal.cape_max != null || upperAirSignal.cin_min != null
+              ? isEnglish(locale)
+                ? `CAPE max ${Math.round(Number(upperAirSignal.cape_max ?? 0))}, CIN min ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}.`
+                : `CAPE 峰值 ${Math.round(Number(upperAirSignal.cape_max ?? 0))}，CIN 最低 ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}。`
+              : isEnglish(locale)
+                ? "Derived from the next 48h upper-air profile."
+                : "根据未来 48 小时高空剖面估算。",
+          tone:
+            upperAirSignal.suppression_risk === "high"
+              ? "cold"
+              : upperAirSignal.suppression_risk === "low"
+                ? "warm"
+                : "",
+          value:
+            upperAirSignal.suppression_risk === "high"
+              ? isEnglish(locale)
+                ? "High"
+                : "高"
+              : upperAirSignal.suppression_risk === "medium"
+                ? isEnglish(locale)
+                  ? "Medium"
+                  : "中"
+                : isEnglish(locale)
+                  ? "Low"
+                  : "低",
+        },
+        {
+          label: isEnglish(locale) ? "Trigger setup" : "午后触发性",
+          note:
+            upperAirSignal.lifted_index_min != null
+              ? isEnglish(locale)
+                ? `Lifted index min ${Number(upperAirSignal.lifted_index_min).toFixed(1)}.`
+                : `Lifted Index 最低 ${Number(upperAirSignal.lifted_index_min).toFixed(1)}。`
+              : isEnglish(locale)
+                ? "Uses instability and lifted-index structure."
+                : "结合不稳定能量与抬升指数判断。",
+          tone:
+            upperAirSignal.trigger_risk === "high"
+              ? "cold"
+              : upperAirSignal.trigger_risk === "low"
+                ? "warm"
+                : "",
+          value:
+            upperAirSignal.trigger_risk === "high"
+              ? isEnglish(locale)
+                ? "High"
+                : "高"
+              : upperAirSignal.trigger_risk === "medium"
+                ? isEnglish(locale)
+                  ? "Medium"
+                  : "中"
+                : isEnglish(locale)
+                  ? "Low"
+                  : "低",
+        },
+        {
+          label: isEnglish(locale) ? "Deep mixing" : "深层混合",
+          note:
+            upperAirSignal.boundary_layer_height_max != null
+              ? isEnglish(locale)
+                ? `Boundary-layer height peaks near ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} m.`
+                : `边界层高度峰值约 ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} 米。`
+              : isEnglish(locale)
+                ? "Tracks daytime boundary-layer depth."
+                : "跟踪白天边界层混合深度。",
+          tone:
+            upperAirSignal.mixing_strength === "strong"
+              ? "warm"
+              : upperAirSignal.mixing_strength === "weak"
+                ? "cold"
+                : "",
+          value:
+            upperAirSignal.mixing_strength === "strong"
+              ? isEnglish(locale)
+                ? "Strong"
+                : "强"
+              : upperAirSignal.mixing_strength === "medium"
+                ? isEnglish(locale)
+                  ? "Medium"
+                  : "中"
+                : isEnglish(locale)
+                  ? "Weak"
+                  : "弱",
+        },
+        {
+          label: isEnglish(locale) ? "Shear proxy" : "高空风切变",
+          note:
+            upperAirSignal.shear_10m_180m_max != null
+              ? isEnglish(locale)
+                ? `10m-180m shear proxy peaks near ${Number(upperAirSignal.shear_10m_180m_max).toFixed(1)}.`
+                : `10m-180m 风切变代理峰值约 ${Number(upperAirSignal.shear_10m_180m_max).toFixed(1)}。`
+              : isEnglish(locale)
+                ? "Uses 10m vs 180m wind-vector spread as a simple proxy."
+                : "使用 10m 与 180m 风矢量差做简化代理。",
+          tone: upperAirSignal.shear_risk === "high" ? "cold" : "",
+          value:
+            upperAirSignal.shear_risk === "high"
+              ? isEnglish(locale)
+                ? "High"
+                : "高"
+              : upperAirSignal.shear_risk === "medium"
+                ? isEnglish(locale)
+                  ? "Medium"
+                  : "中"
+                : isEnglish(locale)
+                  ? "Low"
+                  : "低",
+        },
+      ]
+    : [];
   const backendSummary =
     dateStr === detail.local_date
       ? String(detail.dynamic_commentary?.summary || "").trim()
@@ -602,6 +718,10 @@ export function computeFrontTrendSignal(
         tone?: string;
         value: string;
       }>,
+      upperAirMetrics,
+      upperAirSummary: isEnglish(locale)
+        ? String(upperAirSignal.summary_en || "").trim()
+        : String(upperAirSignal.summary_zh || "").trim(),
       precipMax: 0,
       score: 0,
       summary:
@@ -1083,6 +1203,10 @@ export function computeFrontTrendSignal(
     confidence,
     label,
     metrics,
+    upperAirMetrics,
+    upperAirSummary: isEnglish(locale)
+      ? String(upperAirSignal.summary_en || "").trim()
+      : String(upperAirSignal.summary_zh || "").trim(),
     precipMax,
     score,
     summary: backendSummary || summary,

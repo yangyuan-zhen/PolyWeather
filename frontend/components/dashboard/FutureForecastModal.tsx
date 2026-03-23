@@ -932,6 +932,43 @@ export function FutureForecastModal() {
                         </div>
                       ))}
                     </div>
+                    {view.front.upperAirSummary ||
+                    (view.front.upperAirMetrics?.length || 0) > 0 ? (
+                      <>
+                        <div
+                          style={{
+                            color: "var(--text-primary)",
+                            fontSize: "0.95rem",
+                            fontWeight: 700,
+                            marginTop: "18px",
+                          }}
+                        >
+                          {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
+                        </div>
+                        {view.front.upperAirSummary ? (
+                          <div className="future-trend-summary">
+                            {view.front.upperAirSummary}
+                          </div>
+                        ) : null}
+                        <div className="future-trend-grid">
+                          {(view.front.upperAirMetrics || []).map((metric) => (
+                            <div key={metric.label} className="future-trend-card">
+                              <div className="future-trend-label">{metric.label}</div>
+                              <div
+                                className={clsx(
+                                  "future-trend-value",
+                                  metric.tone === "warm" && "warm",
+                                  metric.tone === "cold" && "cold",
+                                )}
+                              >
+                                {metric.value}
+                              </div>
+                              <div className="future-trend-note">{metric.note}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
                   </section>
 
                   <section className="future-modal-section">

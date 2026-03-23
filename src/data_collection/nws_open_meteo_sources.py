@@ -187,7 +187,12 @@ class NwsOpenMeteoSourceMixin:
                 "latitude": lat,
                 "longitude": lon,
                 "current_weather": "true",
-                "hourly": "temperature_2m,shortwave_radiation,dew_point_2m,pressure_msl,wind_speed_10m,wind_direction_10m,precipitation_probability,cloud_cover",
+                "hourly": (
+                    "temperature_2m,shortwave_radiation,dew_point_2m,pressure_msl,"
+                    "wind_speed_10m,wind_direction_10m,wind_speed_180m,wind_direction_180m,"
+                    "precipitation_probability,cloud_cover,cape,convective_inhibition,"
+                    "lifted_index,boundary_layer_height"
+                ),
                 "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,

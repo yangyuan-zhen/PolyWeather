@@ -24,6 +24,167 @@ from src.analysis.settlement_rounding import apply_city_settlement
 from src.analysis.metar_narrator import describe_metar_report
 from src.data_collection.city_registry import ALIASES
 
+def _wind_components(speed: Optional[float], direction: Optional[float]) -> tuple[Optional[float], Optional[float]]:
+    if speed is None or direction is None:
+        return None, None
+    try:
+        import math
+
+        rad = math.radians(float(direction))
+        spd = float(speed)
+        u = -spd * math.sin(rad)
+        v = -spd * math.cos(rad)
+        return u, v
+    except Exception:
+        return None, None
+
+
+def _build_vertical_profile_signal(
+    hourly_next_48h: Dict[str, list],
+    local_date: str,
+    local_hour: int,
+) -> Dict[str, Any]:
+    times = hourly_next_48h.get("times") or []
+    if not times:
+        return {}
+
+    preferred_start = max(local_hour, 12)
+    preferred_end = 19
+    candidate_indexes = [
+        index
+        for index, ts in enumerate(times)
+        if str(ts).startswith(local_date)
+        and preferred_start <= int(str(ts).split("T")[1][:2]) <= preferred_end
+    ]
+    if not candidate_indexes:
+        candidate_indexes = [
+            index
+            for index, ts in enumerate(times)
+            if str(ts).startswith(local_date)
+        ]
+    if not candidate_indexes:
+        return {}
+
+    def _series(name: str) -> list:
+        values = hourly_next_48h.get(name) or []
+        return [values[idx] if idx < len(values) else None for idx in candidate_indexes]
+
+    def _max_numeric(values: list) -> Optional[float]:
+        valid = [_sf(value) for value in values if _sf(value) is not None]
+        return max(valid) if valid else None
+
+    def _min_numeric(values: list) -> Optional[float]:
+        valid = [_sf(value) for value in values if _sf(value) is not None]
+        return min(valid) if valid else None
+
+    cape_max = _max_numeric(_series("cape"))
+    cin_min = _min_numeric(_series("convective_inhibition"))
+    lifted_index_min = _min_numeric(_series("lifted_index"))
+    boundary_layer_height_max = _max_numeric(_series("boundary_layer_height"))
+
+    shear_values: list[float] = []
+    speed_10m = hourly_next_48h.get("wind_speed_10m") or []
+    direction_10m = hourly_next_48h.get("wind_direction_10m") or []
+    speed_180m = hourly_next_48h.get("wind_speed_180m") or []
+    direction_180m = hourly_next_48h.get("wind_direction_180m") or []
+    for idx in candidate_indexes:
+        s10 = _sf(speed_10m[idx]) if idx < len(speed_10m) else None
+        d10 = _sf(direction_10m[idx]) if idx < len(direction_10m) else None
+        s180 = _sf(speed_180m[idx]) if idx < len(speed_180m) else None
+        d180 = _sf(direction_180m[idx]) if idx < len(direction_180m) else None
+        u10, v10 = _wind_components(s10, d10)
+        u180, v180 = _wind_components(s180, d180)
+        if None in (u10, v10, u180, v180):
+            continue
+        import math
+
+        shear_values.append(math.sqrt((u180 - u10) ** 2 + (v180 - v10) ** 2))
+    shear_10m_180m_max = max(shear_values) if shear_values else None
+
+    suppression_risk = "low"
+    if (cape_max is not None and cape_max >= 900) or (
+        cin_min is not None and cin_min <= -60
+    ):
+        suppression_risk = "high"
+    elif (cape_max is not None and cape_max >= 300) or (
+        cin_min is not None and cin_min <= -20
+    ):
+        suppression_risk = "medium"
+
+    trigger_risk = "low"
+    if (
+        cape_max is not None
+        and cape_max >= 800
+        and lifted_index_min is not None
+        and lifted_index_min <= -2
+    ):
+        trigger_risk = "high"
+    elif (
+        cape_max is not None
+        and cape_max >= 250
+        and lifted_index_min is not None
+        and lifted_index_min <= 0
+    ):
+        trigger_risk = "medium"
+
+    mixing_strength = "weak"
+    if boundary_layer_height_max is not None and boundary_layer_height_max >= 1800:
+        mixing_strength = "strong"
+    elif boundary_layer_height_max is not None and boundary_layer_height_max >= 1000:
+        mixing_strength = "medium"
+
+    shear_risk = "low"
+    if shear_10m_180m_max is not None and shear_10m_180m_max >= 12:
+        shear_risk = "high"
+    elif shear_10m_180m_max is not None and shear_10m_180m_max >= 6:
+        shear_risk = "medium"
+
+    zh_parts = []
+    en_parts = []
+    if suppression_risk == "high":
+        zh_parts.append("午后对流压温风险偏高。")
+        en_parts.append("Afternoon convective suppression risk is elevated.")
+    elif suppression_risk == "medium":
+        zh_parts.append("存在一定云雨压温风险。")
+        en_parts.append("There is some cloud and shower suppression risk.")
+    if mixing_strength == "strong":
+        zh_parts.append("边界层混合较深，若无云雨打断仍有冲高空间。")
+        en_parts.append("Deep boundary-layer mixing still supports additional warming if convection stays limited.")
+    elif mixing_strength == "medium":
+        zh_parts.append("白天混合条件中等。")
+        en_parts.append("Daytime mixing potential is moderate.")
+    if shear_risk == "high":
+        zh_parts.append("高空风切变较强，午后结构波动可能加大。")
+        en_parts.append("Upper-level shear is relatively strong and may increase afternoon volatility.")
+    if trigger_risk == "high":
+        zh_parts.append("抬升触发条件较好，需警惕午后云团发展。")
+        en_parts.append("Trigger conditions are favorable enough to watch for afternoon convective development.")
+    elif trigger_risk == "medium":
+        zh_parts.append("午后具备一定触发条件。")
+        en_parts.append("There is some afternoon trigger potential.")
+    if not zh_parts:
+        zh_parts.append("高空结构整体平稳，暂未看到明显压温信号。")
+    if not en_parts:
+        en_parts.append("The upper-air structure looks fairly stable, without a strong suppression signal yet.")
+
+    return {
+        "source": "open-meteo-gfs",
+        "window_start": times[candidate_indexes[0]] if candidate_indexes else None,
+        "window_end": times[candidate_indexes[-1]] if candidate_indexes else None,
+        "cape_max": cape_max,
+        "cin_min": cin_min,
+        "lifted_index_min": lifted_index_min,
+        "boundary_layer_height_max": boundary_layer_height_max,
+        "shear_10m_180m_max": shear_10m_180m_max,
+        "suppression_risk": suppression_risk,
+        "trigger_risk": trigger_risk,
+        "mixing_strength": mixing_strength,
+        "shear_risk": shear_risk,
+        "summary_zh": "".join(zh_parts),
+        "summary_en": " ".join(en_parts),
+    }
+
+
 def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
@@ -301,8 +462,14 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     h_pressure = hourly.get("pressure_msl", [])
     h_wspd = hourly.get("wind_speed_10m", [])
     h_wdir = hourly.get("wind_direction_10m", [])
+    h_wspd_180m = hourly.get("wind_speed_180m", [])
+    h_wdir_180m = hourly.get("wind_direction_180m", [])
     h_precip_prob = hourly.get("precipitation_probability", [])
     h_cloud_cover = hourly.get("cloud_cover", [])
+    h_cape = hourly.get("cape", [])
+    h_cin = hourly.get("convective_inhibition", [])
+    h_lifted_index = hourly.get("lifted_index", [])
+    h_boundary_layer_height = hourly.get("boundary_layer_height", [])
     if (not h_times or not h_temps) and metar:
         metar_today_obs = metar.get("today_obs", []) or []
         parsed_obs = []
@@ -324,8 +491,14 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             h_pressure = [None for _ in parsed_obs]
             h_wspd = [None for _ in parsed_obs]
             h_wdir = [None for _ in parsed_obs]
+            h_wspd_180m = [None for _ in parsed_obs]
+            h_wdir_180m = [None for _ in parsed_obs]
             h_precip_prob = [None for _ in parsed_obs]
             h_cloud_cover = [None for _ in parsed_obs]
+            h_cape = [None for _ in parsed_obs]
+            h_cin = [None for _ in parsed_obs]
+            h_lifted_index = [None for _ in parsed_obs]
+            h_boundary_layer_height = [None for _ in parsed_obs]
 
     peak_hours = []
     if h_times and h_temps and om_today is not None:
@@ -422,8 +595,14 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "pressure_msl": [],
         "wind_speed_10m": [],
         "wind_direction_10m": [],
+        "wind_speed_180m": [],
+        "wind_direction_180m": [],
         "precipitation_probability": [],
         "cloud_cover": [],
+        "cape": [],
+        "convective_inhibition": [],
+        "lifted_index": [],
+        "boundary_layer_height": [],
     }
     try:
         local_anchor = datetime.strptime(
@@ -454,12 +633,36 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             next_48h_hourly["wind_direction_10m"].append(
                 h_wdir[i] if i < len(h_wdir) else None
             )
+            next_48h_hourly["wind_speed_180m"].append(
+                h_wspd_180m[i] if i < len(h_wspd_180m) else None
+            )
+            next_48h_hourly["wind_direction_180m"].append(
+                h_wdir_180m[i] if i < len(h_wdir_180m) else None
+            )
             next_48h_hourly["precipitation_probability"].append(
                 h_precip_prob[i] if i < len(h_precip_prob) else None
             )
             next_48h_hourly["cloud_cover"].append(
                 h_cloud_cover[i] if i < len(h_cloud_cover) else None
             )
+            next_48h_hourly["cape"].append(
+                h_cape[i] if i < len(h_cape) else None
+            )
+            next_48h_hourly["convective_inhibition"].append(
+                h_cin[i] if i < len(h_cin) else None
+            )
+            next_48h_hourly["lifted_index"].append(
+                h_lifted_index[i] if i < len(h_lifted_index) else None
+            )
+            next_48h_hourly["boundary_layer_height"].append(
+                h_boundary_layer_height[i] if i < len(h_boundary_layer_height) else None
+            )
+
+    vertical_profile_signal = _build_vertical_profile_signal(
+        next_48h_hourly,
+        local_date_str,
+        local_hour,
+    )
 
     # ── 13. Cloud description (METAR primary, MGM fallback) ──
     clouds = mc.get("clouds", [])
@@ -683,6 +886,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "dynamic_commentary": dynamic_commentary,
         "hourly": today_hourly,
         "hourly_next_48h": next_48h_hourly,
+        "vertical_profile_signal": vertical_profile_signal,
         "metar_today_obs": metar_today_obs_payload,
         "metar_recent_obs": metar_recent_obs_payload,
         "settlement_today_obs": settlement_today_obs,
@@ -866,6 +1070,7 @@ def _build_city_detail_payload(
         },
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
         "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
+        "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "market_scan": market_scan,
         "risk": data.get("risk"),
         "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),

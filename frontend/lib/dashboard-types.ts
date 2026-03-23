@@ -153,9 +153,15 @@ export interface HourlySeries {
   pressure_msl?: Array<number | null>;
   wind_speed_10m?: Array<number | null>;
   wind_direction_10m?: Array<number | null>;
+  wind_speed_180m?: Array<number | null>;
+  wind_direction_180m?: Array<number | null>;
   precipitation_probability?: Array<number | null>;
   cloud_cover?: Array<number | null>;
   radiation?: Array<number | null>;
+  cape?: Array<number | null>;
+  convective_inhibition?: Array<number | null>;
+  lifted_index?: Array<number | null>;
+  boundary_layer_height?: Array<number | null>;
 }
 
 export interface WeatherGovPeriod {
@@ -297,6 +303,22 @@ export interface CityDetail {
   dynamic_commentary?: {
     summary?: string | null;
     notes?: string[] | null;
+  };
+  vertical_profile_signal?: {
+    source?: string | null;
+    window_start?: string | null;
+    window_end?: string | null;
+    cape_max?: number | null;
+    cin_min?: number | null;
+    lifted_index_min?: number | null;
+    boundary_layer_height_max?: number | null;
+    shear_10m_180m_max?: number | null;
+    suppression_risk?: string | null;
+    trigger_risk?: string | null;
+    mixing_strength?: string | null;
+    shear_risk?: string | null;
+    summary_zh?: string | null;
+    summary_en?: string | null;
   };
   ai_analysis?: string | AiAnalysisStructured | null;
   updated_at?: string;
