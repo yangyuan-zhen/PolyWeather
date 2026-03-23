@@ -28,8 +28,10 @@ const I18N = {
     obsUpdate: "观测更新",
     nearbyStations: "周边站点",
     intradayTrend: "今日日内走势（简版）",
+    directionTitle: "方向判断",
     forecast: "多日预报",
-    openFull: "打开完整网站分析",
+    openFull: "打开网站查看更多",
+    openFullHint: "插件只提供基础判断；更多分析请到网站查看。",
     noTrendData: "暂无趋势数据",
     noForecast: "暂无多日预报",
     noContinuousObs: "暂无连续观测",
@@ -46,7 +48,27 @@ const I18N = {
     publicModeHint: "公开模式只需配置 API Base；Token 可留空。",
     freshnessRecent: "数据约 {minutes} 分钟前更新。",
     freshnessWarn: "数据已 {minutes} 分钟未更新，建议点右上角刷新。",
-    freshnessStale: "数据已 {minutes} 分钟未更新，当前结果可能偏旧，请立即刷新。"
+    freshnessStale: "数据已 {minutes} 分钟未更新，当前结果可能偏旧，请立即刷新。",
+    directionWarmer: "未来偏升温",
+    directionCooler: "未来偏降温",
+    directionFlat: "方向不清",
+    confidenceHigh: "高置信",
+    confidenceMedium: "中置信",
+    confidenceLow: "低置信",
+    confidenceNeutral: "待观察",
+    decisionWindow: "未来约 {hours} 小时",
+    reasonDebAbove: "DEB 路径高于当前实测，未来窗口上沿约 {delta}{symbol}。",
+    reasonDebBelow: "DEB 路径低于当前实测，未来窗口下沿约 {delta}{symbol}。",
+    reasonObsAboveOm: "当前实测高于 OM 基线约 {delta}{symbol}，短时偏暖。",
+    reasonObsBelowOm: "当前实测低于 OM 基线约 {delta}{symbol}，短时偏冷。",
+    reasonNearPeak: "当前已接近日内高点，继续上冲空间有限。",
+    reasonRoomToPeak: "当前距日内预测高点仍有约 {delta}{symbol} 空间。",
+    reasonRangeWide: "未来窗口振幅偏大，波动仍可能反复。",
+    reasonRangeTight: "未来窗口振幅较小，更像缓慢推进而非急变。",
+    reasonNoObs: "当前连续实测偏少，方向判断主要依赖短窗预测。",
+    decisionSummaryWarmer: "未来几小时更可能缓慢抬升，板面更容易向高温侧移动。",
+    decisionSummaryCooler: "未来几小时更可能回落，板面更容易向低温侧移动。",
+    decisionSummaryFlat: "未来几小时更像震荡整理，短时升降温方向不够清晰。"
   },
   en: {
     loadingWeather: "Loading weather data...",
@@ -67,8 +89,10 @@ const I18N = {
     obsUpdate: "Observation Update",
     nearbyStations: "Nearby Stations",
     intradayTrend: "Today's Intraday Trend",
+    directionTitle: "Direction Bias",
     forecast: "Forecast",
-    openFull: "Open Full Site Analysis",
+    openFull: "Open Website for More",
+    openFullHint: "The extension only provides a basic bias. Visit the site for more analysis.",
     noTrendData: "No trend data available",
     noForecast: "No multi-day forecast",
     noContinuousObs: "No continuous observations",
@@ -85,7 +109,27 @@ const I18N = {
     publicModeHint: "In public mode only API Base is required; Token can be empty.",
     freshnessRecent: "Data updated about {minutes} min ago.",
     freshnessWarn: "Data is {minutes} min old. Consider refreshing.",
-    freshnessStale: "Data is {minutes} min old and may be stale. Refresh now."
+    freshnessStale: "Data is {minutes} min old and may be stale. Refresh now.",
+    directionWarmer: "Bias Warmer",
+    directionCooler: "Bias Cooler",
+    directionFlat: "Direction Unclear",
+    confidenceHigh: "High Conviction",
+    confidenceMedium: "Medium Conviction",
+    confidenceLow: "Low Conviction",
+    confidenceNeutral: "Watch",
+    decisionWindow: "Next ~{hours}h",
+    reasonDebAbove: "DEB path sits above current observation, with about {delta}{symbol} upside in the window.",
+    reasonDebBelow: "DEB path sits below current observation, with about {delta}{symbol} downside in the window.",
+    reasonObsAboveOm: "Current observation runs about {delta}{symbol} above the OM baseline, keeping the short-term tone warmer.",
+    reasonObsBelowOm: "Current observation runs about {delta}{symbol} below the OM baseline, keeping the short-term tone cooler.",
+    reasonNearPeak: "Current temperature is already close to the intraday peak, limiting further upside.",
+    reasonRoomToPeak: "There is still about {delta}{symbol} room to the projected intraday peak.",
+    reasonRangeWide: "The next-window range is wide, so the path can still swing around.",
+    reasonRangeTight: "The next-window range is tight, pointing to a gradual move rather than a sharp break.",
+    reasonNoObs: "Continuous observations are sparse, so the bias relies more on the short-window forecast.",
+    decisionSummaryWarmer: "The next few hours are more likely to drift warmer, so the board should lean toward the hotter side.",
+    decisionSummaryCooler: "The next few hours are more likely to ease lower, so the board should lean toward the cooler side.",
+    decisionSummaryFlat: "The next few hours look more range-bound, so there is no clear temperature direction yet."
   }
 };
 
@@ -121,6 +165,7 @@ const els = {
   forecastRow: document.getElementById("forecastRow"),
   errorBox: document.getElementById("errorBox"),
   openFullBtn: document.getElementById("openFullBtn"),
+  openFullHint: document.getElementById("openFullHint"),
   loadingOverlay: document.getElementById("loadingOverlay"),
   loadingText: document.getElementById("loadingText"),
   cityLabel: document.getElementById("cityLabel"),
@@ -129,8 +174,13 @@ const els = {
   obsTimeLabel: document.getElementById("obsTimeLabel"),
   nearbyLabel: document.getElementById("nearbyLabel"),
   trendTitle: document.getElementById("trendTitle"),
-  forecastTitle: document.getElementById("forecastTitle")
-  ,
+  decisionTitle: document.getElementById("decisionTitle"),
+  decisionDirection: document.getElementById("decisionDirection"),
+  decisionWindow: document.getElementById("decisionWindow"),
+  decisionConfidence: document.getElementById("decisionConfidence"),
+  decisionSummary: document.getElementById("decisionSummary"),
+  decisionReasons: document.getElementById("decisionReasons"),
+  forecastTitle: document.getElementById("forecastTitle"),
   freshnessHint: document.getElementById("freshnessHint")
 };
 
@@ -759,6 +809,120 @@ function drawTrendChart(detail) {
   setChartHover(hoverPoints, tempSymbol);
 }
 
+function renderDecision(detail) {
+  if (!els.decisionDirection || !els.decisionConfidence || !els.decisionSummary || !els.decisionReasons) {
+    return;
+  }
+
+  const symbol = detail?.temp_symbol || "°C";
+  const currentTemp = Number(detail?.current?.temp);
+  const maxSoFar = Number(detail?.current?.max_temp_so_far);
+  const trendRows = extractTrendSeries(detail).trend;
+  const obsRows = getObservationRows(detail);
+  const obsLatest = obsRows.length ? obsRows[obsRows.length - 1] : null;
+  const currentMinute = Number.isFinite(obsLatest?.minute)
+    ? obsLatest.minute
+    : parseTimeToMinute(detail?.current?.obs_time);
+  const futureRows = trendRows.filter((row) => Number.isFinite(row.m) && Number.isFinite(currentMinute) ? row.m >= currentMinute : true);
+  const shortWindow = futureRows.slice(0, 4);
+  const hours = Math.max(1, Math.min(4, shortWindow.length || 4));
+  const baseTemp = Number.isFinite(currentTemp)
+    ? currentTemp
+    : (obsLatest && Number.isFinite(obsLatest.temp) ? obsLatest.temp : NaN);
+
+  let directionKey = "directionFlat";
+  let summaryKey = "decisionSummaryFlat";
+  let confidenceKey = "confidenceNeutral";
+  let confidenceClass = "neutral";
+  const reasons = [];
+
+  const futureTemps = shortWindow.map((row) => Number(row.v)).filter(Number.isFinite);
+  const futureMax = futureTemps.length ? Math.max(...futureTemps) : Number.NaN;
+  const futureMin = futureTemps.length ? Math.min(...futureTemps) : Number.NaN;
+  const futureEnd = futureTemps.length ? futureTemps[futureTemps.length - 1] : Number.NaN;
+  const projectedDelta = Number.isFinite(baseTemp) && Number.isFinite(futureEnd)
+    ? futureEnd - baseTemp
+    : Number.NaN;
+  const windowAmplitude = Number.isFinite(futureMax) && Number.isFinite(futureMin)
+    ? futureMax - futureMin
+    : Number.NaN;
+
+  if (Number.isFinite(projectedDelta)) {
+    if (projectedDelta >= 0.8) {
+      directionKey = "directionWarmer";
+      summaryKey = "decisionSummaryWarmer";
+      confidenceKey = projectedDelta >= 1.8 ? "confidenceHigh" : projectedDelta >= 1.2 ? "confidenceMedium" : "confidenceLow";
+      confidenceClass = projectedDelta >= 1.8 ? "high" : projectedDelta >= 1.2 ? "medium" : "low";
+    } else if (projectedDelta <= -0.8) {
+      directionKey = "directionCooler";
+      summaryKey = "decisionSummaryCooler";
+      const absDelta = Math.abs(projectedDelta);
+      confidenceKey = absDelta >= 1.8 ? "confidenceHigh" : absDelta >= 1.2 ? "confidenceMedium" : "confidenceLow";
+      confidenceClass = absDelta >= 1.8 ? "high" : absDelta >= 1.2 ? "medium" : "low";
+    } else {
+      confidenceKey = Math.abs(projectedDelta) >= 0.4 ? "confidenceLow" : "confidenceNeutral";
+      confidenceClass = Math.abs(projectedDelta) >= 0.4 ? "low" : "neutral";
+    }
+  }
+
+  if (Number.isFinite(baseTemp) && Number.isFinite(futureMax)) {
+    const upside = futureMax - baseTemp;
+    const downside = baseTemp - futureMin;
+    if (directionKey === "directionWarmer" && upside > 0.3) {
+      reasons.push(tf("reasonDebAbove", { delta: upside.toFixed(1), symbol }));
+    } else if (directionKey === "directionCooler" && downside > 0.3) {
+      reasons.push(tf("reasonDebBelow", { delta: downside.toFixed(1), symbol }));
+    }
+  }
+
+  if (Number.isFinite(baseTemp) && trendRows.length) {
+    const nearest = trendRows.reduce((best, row) => {
+      if (!Number.isFinite(row.m) || !Number.isFinite(currentMinute)) return best;
+      if (!best) return row;
+      return Math.abs(row.m - currentMinute) < Math.abs(best.m - currentMinute) ? row : best;
+    }, null);
+    if (nearest && Number.isFinite(nearest.v)) {
+      const omGap = baseTemp - nearest.v;
+      if (omGap >= 0.8) {
+        reasons.push(tf("reasonObsAboveOm", { delta: omGap.toFixed(1), symbol }));
+      } else if (omGap <= -0.8) {
+        reasons.push(tf("reasonObsBelowOm", { delta: Math.abs(omGap).toFixed(1), symbol }));
+      }
+    }
+  }
+
+  if (Number.isFinite(baseTemp) && Number.isFinite(maxSoFar)) {
+    const gapToPeak = maxSoFar - baseTemp;
+    if (gapToPeak <= 0.6) {
+      reasons.push(t("reasonNearPeak"));
+    } else if (gapToPeak >= 1.2) {
+      reasons.push(tf("reasonRoomToPeak", { delta: gapToPeak.toFixed(1), symbol }));
+    }
+  }
+
+  if (Number.isFinite(windowAmplitude)) {
+    if (windowAmplitude >= 2.2) reasons.push(t("reasonRangeWide"));
+    else if (windowAmplitude <= 1.0) reasons.push(t("reasonRangeTight"));
+  }
+
+  if (!obsRows.length) {
+    reasons.push(t("reasonNoObs"));
+  }
+
+  els.decisionDirection.textContent = t(directionKey);
+  els.decisionWindow.textContent = tf("decisionWindow", { hours });
+  els.decisionConfidence.textContent = t(confidenceKey);
+  els.decisionConfidence.classList.remove("high", "medium", "low", "neutral");
+  els.decisionConfidence.classList.add(confidenceClass);
+  els.decisionSummary.textContent = t(summaryKey);
+  els.decisionReasons.innerHTML = "";
+  for (const reason of reasons.slice(0, 3)) {
+    const li = document.createElement("li");
+    li.textContent = reason;
+    els.decisionReasons.appendChild(li);
+  }
+}
+
 function renderForecast(detail) {
   const symbol = detail?.temp_symbol || "°C";
   const daily = Array.isArray(detail?.forecast?.daily) ? detail.forecast.daily : [];
@@ -803,6 +967,7 @@ function renderDetail(detail) {
     : `${nearby}${t("nearbyMonitoringSuffix")}`;
 
   drawTrendChart(detail);
+  renderDecision(detail);
   renderForecast(detail);
 
   const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
@@ -874,8 +1039,10 @@ function applyStaticTranslations() {
   if (els.obsTimeLabel) els.obsTimeLabel.textContent = t("obsUpdate");
   if (els.nearbyLabel) els.nearbyLabel.textContent = t("nearbyStations");
   if (els.trendTitle) els.trendTitle.textContent = t("intradayTrend");
+  if (els.decisionTitle) els.decisionTitle.textContent = t("directionTitle");
   if (els.forecastTitle) els.forecastTitle.textContent = t("forecast");
   if (els.openFullBtn) els.openFullBtn.textContent = t("openFull");
+  if (els.openFullHint) els.openFullHint.textContent = t("openFullHint");
   if (els.refreshBtn) {
     els.refreshBtn.title = t("refresh");
     els.refreshBtn.setAttribute("aria-label", t("refresh"));
@@ -1025,10 +1192,8 @@ function bindUrlSync() {
 }
 
 function openMainSite(view) {
-  const city = encodeURIComponent(state.config.selectedCity || "");
   const siteBase = normalizeBase(state.config.siteBase || state.config.apiBase);
-  const url = `${siteBase}/?city=${city}&view=${encodeURIComponent(view || "dashboard")}`;
-  chrome.tabs.create({ url });
+  chrome.tabs.create({ url: siteBase });
 }
 
 function bindEvents() {
