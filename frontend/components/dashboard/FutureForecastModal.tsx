@@ -337,7 +337,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
                       (item) => item.index === ctx.dataIndex,
                     );
                     if (!marker) return label;
-                    return `${label}: ${marker.summary}`;
+                    return `${label}: ${String(marker.summary || "").replace(
+                      marker.markerType,
+                      marker.displayType || marker.markerType,
+                    )}`;
                   }
                   const value = ctx.parsed.y;
                   if (value == null) return label;

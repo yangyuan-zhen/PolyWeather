@@ -347,6 +347,10 @@ export function getTemperatureChartData(
         tafMarkerPoints[index] = tafMarkerValue;
       }
       return {
+        displayType: formatTafMarkerType(
+          String(marker?.marker_type || "").trim(),
+          locale,
+        ),
         endLocal: String(marker?.end_local || "").trim(),
         index,
         labelTime,
@@ -414,11 +418,7 @@ export function getTemperatureChartData(
   if (tafMarkers.length) {
     const tafText = tafMarkers
       .slice(0, 4)
-      .map((marker) =>
-        isEnglish(locale)
-          ? `${marker.markerType} ${marker.startLocal}-${marker.endLocal}`
-          : `${marker.markerType} ${marker.startLocal}-${marker.endLocal}`,
-      )
+      .map((marker) => `${marker.displayType} ${marker.startLocal}-${marker.endLocal}`)
       .join(" | ");
     legendParts.push(
       isEnglish(locale)
@@ -596,6 +596,36 @@ function bucketLabel(bucket: string | null, locale: Locale = "zh-CN") {
       easterly: "东风",
       westerly: "西风",
     }[bucket || ""] || "风向不明"
+  );
+}
+
+function formatTafMarkerType(type: string, locale: Locale = "zh-CN") {
+  const normalized = String(type || "").trim().toUpperCase();
+  if (isEnglish(locale)) {
+    return (
+      {
+        BASE: "Base regime",
+        FM: "Hard shift",
+        TEMPO: "Temporary swing",
+        BECMG: "Gradual shift",
+        PROB30: "30% risk window",
+        PROB40: "40% risk window",
+        "PROB30 TEMPO": "30% temporary swing",
+        "PROB40 TEMPO": "40% temporary swing",
+      }[normalized] || normalized
+    );
+  }
+  return (
+    {
+      BASE: "基础时段",
+      FM: "明确切换",
+      TEMPO: "临时波动",
+      BECMG: "逐步转变",
+      PROB30: "30% 风险窗",
+      PROB40: "40% 风险窗",
+      "PROB30 TEMPO": "30% 临时波动",
+      "PROB40 TEMPO": "40% 临时波动",
+    }[normalized] || normalized
   );
 }
 

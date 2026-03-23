@@ -571,8 +571,8 @@ def _build_taf_signal(
     peak_window = f"{peak_window_start.strftime('%H:%M')}-{peak_window_end.strftime('%H:%M')}"
 
     if suppression_level == "high":
-        summary_zh = f"TAF 在峰值窗口（{peak_window}）提示阵雨或雷暴扰动，机场端压温风险偏高。"
-        summary_en = f"TAF flags shower or thunderstorm disruption around the peak window ({peak_window}), so airport-side suppression risk is high."
+        summary_zh = f"TAF 在峰值窗口（{peak_window}）提示阵雨或雷暴扰动，机场最高温可能被云雨压低。"
+        summary_en = f"TAF flags shower or thunderstorm disruption around the peak window ({peak_window}), airport high may get capped by showers/storms."
     elif suppression_level == "medium":
         summary_zh = f"TAF 在峰值窗口（{peak_window}）提示云量或弱降水扰动，需要防峰值被压低。"
         summary_en = f"TAF points to cloud or light-precip disruption around the peak window ({peak_window}); the airport high may be capped."
