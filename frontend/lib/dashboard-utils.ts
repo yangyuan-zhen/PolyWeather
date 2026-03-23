@@ -1339,19 +1339,23 @@ export function getHistorySummary(
       ? row.date < cityLocalDate
       : row.date < new Date().toISOString().slice(0, 10);
   });
+  const comparableSettledData = settledData.filter((row) => {
+    const actual = toFinite(row.actual);
+    const deb = toFinite(row.deb);
+    return actual != null && deb != null;
+  });
 
   let hits = 0;
   const debErrors: number[] = [];
   const modelErrors: Record<string, number[]> = {};
 
-  settledData.forEach((row) => {
+  comparableSettledData.forEach((row) => {
     const actual = toFinite(row.actual);
     const deb = toFinite(row.deb);
-    if (actual != null && deb != null) {
-      debErrors.push(Math.abs(actual - deb));
-      if (wuRound(actual) === wuRound(deb)) {
-        hits += 1;
-      }
+    if (actual == null || deb == null) return;
+    debErrors.push(Math.abs(actual - deb));
+    if (wuRound(actual) === wuRound(deb)) {
+      hits += 1;
     }
 
     const forecasts = row.forecasts || {};
@@ -1389,7 +1393,7 @@ export function getHistorySummary(
   let debWinDaysVsBest = 0;
   let debVsBestComparableDays = 0;
   if (bestModelName) {
-    settledData.forEach((row) => {
+    comparableSettledData.forEach((row) => {
       const actual = toFinite(row.actual);
       const deb = toFinite(row.deb);
       const bestModelVal = toFinite(row.forecasts?.[bestModelName]);
@@ -1430,7 +1434,7 @@ export function getHistorySummary(
       : null,
     mgms: recentData.map((row) => row.mgm ?? null),
     recentData,
-    settledCount: settledData.length,
+    settledCount: comparableSettledData.length,
     actuals: recentData.map((row) => row.actual),
   };
 }

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from datetime import datetime, timedelta
 from typing import Optional
@@ -47,6 +48,29 @@ from web.core import (
 )
 
 router = APIRouter()
+
+_SETTLEMENT_HISTORY_CACHE: Optional[dict] = None
+
+
+def _load_settlement_history() -> dict:
+    global _SETTLEMENT_HISTORY_CACHE
+    if _SETTLEMENT_HISTORY_CACHE is not None:
+        return _SETTLEMENT_HISTORY_CACHE
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    history_path = os.path.join(
+        project_root,
+        "artifacts",
+        "probability_calibration",
+        "settlement_history.json",
+    )
+    try:
+        with open(history_path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        _SETTLEMENT_HISTORY_CACHE = payload if isinstance(payload, dict) else {}
+    except Exception:
+        _SETTLEMENT_HISTORY_CACHE = {}
+    return _SETTLEMENT_HISTORY_CACHE
 
 
 def _parse_snapshot_dt(value: object) -> Optional[datetime]:
@@ -198,8 +222,11 @@ async def city_history(request: Request, name: str):
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     history_file = os.path.join(project_root, "data", "daily_records.json")
     data = load_history(history_file)
+    settlement_history = _load_settlement_history()
+    settlement_city_data = settlement_history.get(city, {})
 
-    if city not in data:
+    city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
+    if not city_data and not isinstance(settlement_city_data, dict):
         source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
         return {
             "history": [],
@@ -207,10 +234,20 @@ async def city_history(request: Request, name: str):
             "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
         }
 
-    city_data = data[city]
+    settlement_city_data = settlement_city_data if isinstance(settlement_city_data, dict) else {}
     out = []
-    for day, rec in sorted(city_data.items()):
+    all_days = sorted(set(city_data.keys()) | set(settlement_city_data.keys()))
+    for day in all_days:
+        rec = city_data.get(day, {})
+        if not isinstance(rec, dict):
+            rec = {}
+        settlement_rec = settlement_city_data.get(day, {})
+        if not isinstance(settlement_rec, dict):
+            settlement_rec = {}
+
         act = rec.get("actual_high")
+        if act is None:
+            act = settlement_rec.get("max_temp")
         deb = rec.get("deb_prediction")
         mu = rec.get("mu")
         snapshots = load_snapshot_rows_for_day(city, day)
