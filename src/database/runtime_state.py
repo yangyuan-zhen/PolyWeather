@@ -132,6 +132,22 @@ class RuntimeStateDB:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_open_meteo_cache_expires ON open_meteo_cache_store(source_kind, expires_at)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS official_intraday_observations_store (
+                    source_code TEXT NOT NULL,
+                    station_code TEXT NOT NULL,
+                    target_date TEXT NOT NULL,
+                    observation_time TEXT NOT NULL,
+                    value REAL NOT NULL,
+                    payload_json TEXT,
+                    PRIMARY KEY (source_code, station_code, observation_time)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_official_intraday_obs_station_date ON official_intraday_observations_store(source_code, station_code, target_date, observation_time)"
+            )
             conn.commit()
 
 
@@ -464,6 +480,78 @@ class OpenMeteoCacheRepository:
             return float(row["max_updated_at"] or 0.0)
         except Exception:
             return 0.0
+
+
+class OfficialIntradayObservationRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def upsert_point(
+        self,
+        *,
+        source_code: str,
+        station_code: str,
+        target_date: str,
+        observation_time: str,
+        value: float,
+        payload: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        payload_json = json.dumps(payload, ensure_ascii=False) if payload is not None else None
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO official_intraday_observations_store (
+                    source_code, station_code, target_date, observation_time, value, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(source_code, station_code, observation_time) DO UPDATE SET
+                    target_date = excluded.target_date,
+                    value = excluded.value,
+                    payload_json = excluded.payload_json
+                """,
+                (
+                    source_code,
+                    station_code,
+                    target_date,
+                    observation_time,
+                    float(value),
+                    payload_json,
+                ),
+            )
+            conn.commit()
+
+    def load_points(
+        self,
+        *,
+        source_code: str,
+        station_code: str,
+        target_date: str,
+    ) -> List[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT observation_time, value, payload_json
+                FROM official_intraday_observations_store
+                WHERE source_code = ? AND station_code = ? AND target_date = ?
+                ORDER BY observation_time
+                """,
+                (source_code, station_code, target_date),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            point = {
+                "time": str(row["observation_time"] or "").strip(),
+                "temp": float(row["value"]),
+            }
+            if row["payload_json"]:
+                try:
+                    payload = json.loads(row["payload_json"])
+                except Exception:
+                    payload = None
+                if isinstance(payload, dict):
+                    point.update(payload)
+            if point["time"]:
+                out.append(point)
+        return out
 
 
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:

@@ -1,15 +1,23 @@
 from __future__ import annotations
 
 import csv
-import json
 import math
-import os
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+
+from src.database.runtime_state import (
+    OfficialIntradayObservationRepository,
+    STATE_STORAGE_DUAL,
+    STATE_STORAGE_SQLITE,
+    get_state_storage_mode,
+)
+
+
+_official_intraday_repo = OfficialIntradayObservationRepository()
 
 
 class SettlementSourceMixin:
@@ -116,13 +124,6 @@ class SettlementSourceMixin:
                 return row
         return rows[0] if rows else None
 
-    def _get_runtime_data_dir(self) -> str:
-        configured = str(os.getenv("POLYWEATHER_RUNTIME_DATA_DIR") or "").strip()
-        if configured:
-            return configured
-        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        return os.path.join(project_root, "data")
-
     def _get_settlement_series_lock(self) -> threading.Lock:
         lock = getattr(self, "_settlement_series_lock", None)
         if lock is not None:
@@ -130,9 +131,6 @@ class SettlementSourceMixin:
         lock = threading.Lock()
         setattr(self, "_settlement_series_lock", lock)
         return lock
-
-    def _hko_today_obs_path(self) -> str:
-        return os.path.join(self._get_runtime_data_dir(), "hko_hong_kong_today_obs.json")
 
     @staticmethod
     def _sort_temp_points(points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -164,41 +162,26 @@ class SettlementSourceMixin:
         local_dt = obs_dt.astimezone(timezone(timedelta(hours=8)))
         date_str = local_dt.strftime("%Y-%m-%d")
         time_str = local_dt.strftime("%H:%M")
-        path = self._hko_today_obs_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
+        mode = get_state_storage_mode()
+        if mode not in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+            return [{"time": time_str, "temp": round(float(current_temp), 1)}]
 
         lock = self._get_settlement_series_lock()
         with lock:
-            payload: Dict[str, Any] = {}
-            if os.path.exists(path):
-                try:
-                    with open(path, "r", encoding="utf-8") as fh:
-                        payload = json.load(fh) or {}
-                except Exception:
-                    payload = {}
-
-            existing_date = str(payload.get("date") or "").strip()
-            if existing_date != date_str:
-                payload = {"date": date_str, "points": []}
-
-            indexed: Dict[str, Dict[str, Any]] = {}
-            for raw_point in payload.get("points") or []:
-                if not isinstance(raw_point, dict):
-                    continue
-                raw_time = str(raw_point.get("time") or "").strip()
-                raw_temp = self._safe_float(raw_point.get("temp"))
-                if not raw_time or raw_temp is None:
-                    continue
-                indexed[raw_time] = {"time": raw_time, "temp": round(raw_temp, 1)}
-
-            indexed[time_str] = {"time": time_str, "temp": round(float(current_temp), 1)}
-            points = self._sort_temp_points(list(indexed.values()))
-            payload = {"date": date_str, "station_code": "HKO", "points": points}
-
-            with open(path, "w", encoding="utf-8") as fh:
-                json.dump(payload, fh, ensure_ascii=False)
-
-            return points
+            _official_intraday_repo.upsert_point(
+                source_code="hko",
+                station_code="HKO",
+                target_date=date_str,
+                observation_time=time_str,
+                value=round(float(current_temp), 1),
+                payload={"time": time_str, "temp": round(float(current_temp), 1)},
+            )
+            points = _official_intraday_repo.load_points(
+                source_code="hko",
+                station_code="HKO",
+                target_date=date_str,
+            )
+            return self._sort_temp_points(points)
 
     def fetch_hko_settlement_current(self) -> Optional[Dict[str, Any]]:
         cache_key = "hko:hong_kong"
