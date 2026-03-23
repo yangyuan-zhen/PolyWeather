@@ -317,6 +317,8 @@ export interface CityDetail {
     trigger_risk?: string | null;
     mixing_strength?: string | null;
     shear_risk?: string | null;
+    heating_setup?: string | null;
+    heating_score?: number | null;
     summary_zh?: string | null;
     summary_en?: string | null;
   };

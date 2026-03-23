@@ -580,17 +580,77 @@ export function computeFrontTrendSignal(
   locale: Locale = "zh-CN",
 ) {
   const upperAirSignal = detail.vertical_profile_signal || {};
+  const upperAirSummary = upperAirSignal.source
+    ? (() => {
+        const hasMetrics =
+          upperAirSignal.cape_max != null ||
+          upperAirSignal.cin_min != null ||
+          upperAirSignal.boundary_layer_height_max != null ||
+          upperAirSignal.shear_10m_180m_max != null;
+        if (!hasMetrics) {
+          return isEnglish(locale)
+            ? "Upper-air inputs are incomplete. For now, trade direction should rely more on surface structure."
+            : "高空输入还不完整，当前交易方向先更多参考近地面结构信号。";
+        }
+        if (upperAirSignal.heating_setup === "supportive") {
+          return isEnglish(locale)
+            ? "Upper-air structure still favors further warming. Leaning too early against higher buckets is risky."
+            : "高空结构仍偏向继续增温，过早去押更低温区间风险较高。";
+        }
+        if (upperAirSignal.heating_setup === "suppressed") {
+          return isEnglish(locale)
+            ? "Upper-air structure leans toward capping the afternoon high. Chasing higher buckets needs caution."
+            : "高空结构更偏向压住午后峰值，追更高温区间要更谨慎。";
+        }
+        return isEnglish(locale)
+          ? "Upper-air structure is fairly neutral. It does not give a clean edge by itself, so surface trends still decide the trade."
+          : "高空结构整体偏中性，单看这层不给明确边，交易仍要让近地面走势来定。";
+      })()
+    : "";
   const upperAirMetrics = upperAirSignal.source
     ? [
         {
-          label: isEnglish(locale) ? "Convective suppression" : "对流压温风险",
+          label: isEnglish(locale) ? "Peak setup" : "冲高环境",
+          note:
+            upperAirSignal.heating_setup === "supportive"
+              ? isEnglish(locale)
+                ? "Still supportive of more daytime heating. Fading stronger buckets too early is risky."
+                : "仍偏向白天继续冲高，过早去反着做更高温区间比较危险。"
+              : upperAirSignal.heating_setup === "suppressed"
+                ? isEnglish(locale)
+                  ? "Leans toward capping the afternoon peak. Be careful chasing stronger buckets."
+                  : "更偏向压住午后峰值，追更高温区间要谨慎。"
+                : isEnglish(locale)
+                  ? "Neutral on its own. Surface structure still decides the side."
+                  : "单看这层偏中性，最终还是要看近地面信号站哪边。",
+          tone:
+            upperAirSignal.heating_setup === "supportive"
+              ? "warm"
+              : upperAirSignal.heating_setup === "suppressed"
+                ? "cold"
+                : "",
+          value:
+            upperAirSignal.heating_setup === "supportive"
+              ? isEnglish(locale)
+                ? "Supportive"
+                : "偏支持"
+              : upperAirSignal.heating_setup === "suppressed"
+                ? isEnglish(locale)
+                  ? "Suppressed"
+                  : "偏压制"
+                : isEnglish(locale)
+                  ? "Neutral"
+                  : "中性",
+        },
+        {
+          label: isEnglish(locale) ? "Peak suppression risk" : "压温风险",
           note:
             upperAirSignal.cape_max != null || upperAirSignal.cin_min != null
               ? isEnglish(locale)
-                ? `CAPE max ${Math.round(Number(upperAirSignal.cape_max ?? 0))}, CIN min ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}.`
-                : `CAPE 峰值 ${Math.round(Number(upperAirSignal.cape_max ?? 0))}，CIN 最低 ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}。`
+                ? `How likely clouds or showers are to cap the high. CAPE ${Math.round(Number(upperAirSignal.cape_max ?? 0))}, CIN ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}.`
+                : `看云和阵雨有多大概率把峰值压住。CAPE ${Math.round(Number(upperAirSignal.cape_max ?? 0))}，CIN ${Number(upperAirSignal.cin_min ?? 0).toFixed(0)}。`
               : isEnglish(locale)
-                ? "Derived from the next 48h upper-air profile."
+                ? "Estimated from the next 48h upper-air profile."
                 : "根据未来 48 小时高空剖面估算。",
           tone:
             upperAirSignal.suppression_risk === "high"
@@ -612,12 +672,12 @@ export function computeFrontTrendSignal(
                   : "低",
         },
         {
-          label: isEnglish(locale) ? "Trigger setup" : "午后触发性",
+          label: isEnglish(locale) ? "Afternoon disruption" : "午后扰动",
           note:
             upperAirSignal.lifted_index_min != null
               ? isEnglish(locale)
-                ? `Lifted index min ${Number(upperAirSignal.lifted_index_min).toFixed(1)}.`
-                : `Lifted Index 最低 ${Number(upperAirSignal.lifted_index_min).toFixed(1)}。`
+                ? `How easily the afternoon can turn noisy. Lifted Index ${Number(upperAirSignal.lifted_index_min).toFixed(1)}.`
+                : `看午后是否容易突然起云、起对流，把走势搅乱。Lifted Index ${Number(upperAirSignal.lifted_index_min).toFixed(1)}。`
               : isEnglish(locale)
                 ? "Uses instability and lifted-index structure."
                 : "结合不稳定能量与抬升指数判断。",
@@ -641,15 +701,15 @@ export function computeFrontTrendSignal(
                   : "低",
         },
         {
-          label: isEnglish(locale) ? "Deep mixing" : "深层混合",
+          label: isEnglish(locale) ? "Heating efficiency" : "冲高效率",
           note:
             upperAirSignal.boundary_layer_height_max != null
               ? isEnglish(locale)
-                ? `Boundary-layer height peaks near ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} m.`
-                : `边界层高度峰值约 ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} 米。`
+                ? `How efficiently surface warmth can keep translating upward. Mixing depth peaks near ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} m.`
+                : `看地面热量能不能持续往上送，决定冲高效率。混合层高度峰值约 ${Math.round(Number(upperAirSignal.boundary_layer_height_max))} 米。`
               : isEnglish(locale)
-                ? "Tracks daytime boundary-layer depth."
-                : "跟踪白天边界层混合深度。",
+                ? "Tracks daytime mixing depth."
+                : "跟踪白天混合层深度。",
           tone:
             upperAirSignal.mixing_strength === "strong"
               ? "warm"
@@ -666,32 +726,8 @@ export function computeFrontTrendSignal(
                   ? "Medium"
                   : "中"
                 : isEnglish(locale)
-                  ? "Weak"
-                  : "弱",
-        },
-        {
-          label: isEnglish(locale) ? "Shear proxy" : "高空风切变",
-          note:
-            upperAirSignal.shear_10m_180m_max != null
-              ? isEnglish(locale)
-                ? `10m-180m shear proxy peaks near ${Number(upperAirSignal.shear_10m_180m_max).toFixed(1)}.`
-                : `10m-180m 风切变代理峰值约 ${Number(upperAirSignal.shear_10m_180m_max).toFixed(1)}。`
-              : isEnglish(locale)
-                ? "Uses 10m vs 180m wind-vector spread as a simple proxy."
-                : "使用 10m 与 180m 风矢量差做简化代理。",
-          tone: upperAirSignal.shear_risk === "high" ? "cold" : "",
-          value:
-            upperAirSignal.shear_risk === "high"
-              ? isEnglish(locale)
-                ? "High"
-                : "高"
-              : upperAirSignal.shear_risk === "medium"
-                ? isEnglish(locale)
-                  ? "Medium"
-                  : "中"
-                : isEnglish(locale)
-                  ? "Low"
-                  : "低",
+                ? "Weak"
+                : "弱",
         },
       ]
     : [];
@@ -719,9 +755,7 @@ export function computeFrontTrendSignal(
         value: string;
       }>,
       upperAirMetrics,
-      upperAirSummary: isEnglish(locale)
-        ? String(upperAirSignal.summary_en || "").trim()
-        : String(upperAirSignal.summary_zh || "").trim(),
+      upperAirSummary,
       precipMax: 0,
       score: 0,
       summary:
@@ -1204,9 +1238,7 @@ export function computeFrontTrendSignal(
     label,
     metrics,
     upperAirMetrics,
-    upperAirSummary: isEnglish(locale)
-      ? String(upperAirSignal.summary_en || "").trim()
-      : String(upperAirSignal.summary_zh || "").trim(),
+    upperAirSummary,
     precipMax,
     score,
     summary: backendSummary || summary,

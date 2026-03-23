@@ -77,6 +77,16 @@ def _build_vertical_profile_signal(
         valid = [_sf(value) for value in values if _sf(value) is not None]
         return min(valid) if valid else None
 
+    def _level_label(level: str, locale: str) -> str:
+        mapping = {
+            "high": {"zh": "高", "en": "high"},
+            "medium": {"zh": "中", "en": "medium"},
+            "low": {"zh": "低", "en": "low"},
+            "strong": {"zh": "强", "en": "strong"},
+            "weak": {"zh": "弱", "en": "weak"},
+        }
+        return mapping.get(level, {}).get(locale, level)
+
     cape_max = _max_numeric(_series("cape"))
     cin_min = _min_numeric(_series("convective_inhibition"))
     lifted_index_min = _min_numeric(_series("lifted_index"))
@@ -102,42 +112,77 @@ def _build_vertical_profile_signal(
     shear_10m_180m_max = max(shear_values) if shear_values else None
 
     suppression_risk = "low"
-    if (cape_max is not None and cape_max >= 900) or (
-        cin_min is not None and cin_min <= -60
+    if (cape_max is not None and cape_max >= 700) or (
+        cin_min is not None and cin_min <= -50
     ):
         suppression_risk = "high"
-    elif (cape_max is not None and cape_max >= 300) or (
-        cin_min is not None and cin_min <= -20
+    elif (cape_max is not None and cape_max >= 150) or (
+        cin_min is not None and cin_min <= -15
     ):
         suppression_risk = "medium"
 
     trigger_risk = "low"
     if (
         cape_max is not None
-        and cape_max >= 800
+        and cape_max >= 550
         and lifted_index_min is not None
-        and lifted_index_min <= -2
+        and lifted_index_min <= -1.5
     ):
         trigger_risk = "high"
     elif (
         cape_max is not None
-        and cape_max >= 250
+        and cape_max >= 120
         and lifted_index_min is not None
-        and lifted_index_min <= 0
+        and lifted_index_min <= 0.5
     ):
         trigger_risk = "medium"
 
     mixing_strength = "weak"
-    if boundary_layer_height_max is not None and boundary_layer_height_max >= 1800:
+    if boundary_layer_height_max is not None and boundary_layer_height_max >= 1400:
         mixing_strength = "strong"
-    elif boundary_layer_height_max is not None and boundary_layer_height_max >= 1000:
+    elif boundary_layer_height_max is not None and boundary_layer_height_max >= 700:
         mixing_strength = "medium"
 
     shear_risk = "low"
-    if shear_10m_180m_max is not None and shear_10m_180m_max >= 12:
+    if shear_10m_180m_max is not None and shear_10m_180m_max >= 8:
         shear_risk = "high"
-    elif shear_10m_180m_max is not None and shear_10m_180m_max >= 6:
+    elif shear_10m_180m_max is not None and shear_10m_180m_max >= 4:
         shear_risk = "medium"
+
+    heating_setup = "neutral"
+    heating_score = 0
+    if suppression_risk == "high":
+        heating_score -= 2
+    elif suppression_risk == "medium":
+        heating_score -= 1
+    if trigger_risk == "high":
+        heating_score -= 2
+    elif trigger_risk == "medium":
+        heating_score -= 1
+    if mixing_strength == "strong":
+        heating_score += 2
+    elif mixing_strength == "medium":
+        heating_score += 1
+    else:
+        heating_score -= 1
+    if shear_risk == "high":
+        heating_score -= 1
+
+    if heating_score >= 2:
+        heating_setup = "supportive"
+    elif heating_score <= -2:
+        heating_setup = "suppressed"
+
+    has_profile_data = any(
+        value is not None
+        for value in (
+            cape_max,
+            cin_min,
+            lifted_index_min,
+            boundary_layer_height_max,
+            shear_10m_180m_max,
+        )
+    )
 
     zh_parts = []
     en_parts = []
@@ -147,25 +192,82 @@ def _build_vertical_profile_signal(
     elif suppression_risk == "medium":
         zh_parts.append("存在一定云雨压温风险。")
         en_parts.append("There is some cloud and shower suppression risk.")
+    elif has_profile_data:
+        zh_parts.append("高空对流压温风险暂时不高。")
+        en_parts.append("Upper-air suppression risk remains limited for now.")
     if mixing_strength == "strong":
         zh_parts.append("边界层混合较深，若无云雨打断仍有冲高空间。")
         en_parts.append("Deep boundary-layer mixing still supports additional warming if convection stays limited.")
     elif mixing_strength == "medium":
         zh_parts.append("白天混合条件中等。")
         en_parts.append("Daytime mixing potential is moderate.")
+    elif has_profile_data:
+        zh_parts.append("边界层混合偏浅。")
+        en_parts.append("Boundary-layer mixing remains shallow.")
     if shear_risk == "high":
         zh_parts.append("高空风切变较强，午后结构波动可能加大。")
         en_parts.append("Upper-level shear is relatively strong and may increase afternoon volatility.")
+    elif shear_risk == "medium":
+        zh_parts.append("高空风切变有一定存在感。")
+        en_parts.append("Upper-level shear is noticeable.")
+    elif has_profile_data:
+        zh_parts.append("高空风切变扰动有限。")
+        en_parts.append("Upper-level shear disruption remains limited.")
     if trigger_risk == "high":
         zh_parts.append("抬升触发条件较好，需警惕午后云团发展。")
         en_parts.append("Trigger conditions are favorable enough to watch for afternoon convective development.")
     elif trigger_risk == "medium":
         zh_parts.append("午后具备一定触发条件。")
         en_parts.append("There is some afternoon trigger potential.")
-    if not zh_parts:
+    elif has_profile_data:
+        zh_parts.append("午后触发条件偏弱。")
+        en_parts.append("Afternoon trigger potential remains weak.")
+    if not has_profile_data:
+        zh_parts.append("高空剖面字段暂缺，当前仅保留基础默认信号。")
+        en_parts.append("Upper-air profile fields are currently unavailable, so only a fallback signal is shown.")
+    elif not zh_parts:
         zh_parts.append("高空结构整体平稳，暂未看到明显压温信号。")
     if not en_parts:
         en_parts.append("The upper-air structure looks fairly stable, without a strong suppression signal yet.")
+
+    if has_profile_data:
+        summary_tokens_zh = []
+        summary_tokens_en = []
+        window_start = str(times[candidate_indexes[0]]).split("T")[1][:5]
+        window_end = str(times[candidate_indexes[-1]]).split("T")[1][:5]
+        zh_parts.append(f"判断窗口：{window_start}-{window_end}。")
+        en_parts.append(f"Signal window: {window_start}-{window_end}.")
+        if cape_max is not None:
+            summary_tokens_zh.append(f"CAPE≈{round(cape_max)}")
+            summary_tokens_en.append(f"CAPE≈{round(cape_max)}")
+        if cin_min is not None:
+            summary_tokens_zh.append(f"CIN≈{round(cin_min)}")
+            summary_tokens_en.append(f"CIN≈{round(cin_min)}")
+        if boundary_layer_height_max is not None:
+            summary_tokens_zh.append(f"混合层≈{round(boundary_layer_height_max)}m")
+            summary_tokens_en.append(f"mixing≈{round(boundary_layer_height_max)}m")
+        if shear_10m_180m_max is not None:
+            summary_tokens_zh.append(f"切变≈{shear_10m_180m_max:.1f}")
+            summary_tokens_en.append(f"shear≈{shear_10m_180m_max:.1f}")
+        zh_parts.append(
+            f"压温{_level_label(suppression_risk, 'zh')}、触发{_level_label(trigger_risk, 'zh')}、混合{_level_label(mixing_strength, 'zh')}、切变{_level_label(shear_risk, 'zh')}。"
+        )
+        en_parts.append(
+            f"Suppression { _level_label(suppression_risk, 'en') }, trigger { _level_label(trigger_risk, 'en') }, mixing { _level_label(mixing_strength, 'en') }, shear { _level_label(shear_risk, 'en') }."
+        )
+        if heating_setup == "supportive":
+            zh_parts.append("整体更偏向支持白天冲高。")
+            en_parts.append("Overall, the profile is more supportive of daytime heating.")
+        elif heating_setup == "suppressed":
+            zh_parts.append("整体更偏向抑制午后冲高。")
+            en_parts.append("Overall, the profile leans more toward suppressing the afternoon peak.")
+        else:
+            zh_parts.append("整体更像中性环境，仍需结合地面信号。")
+            en_parts.append("Overall, the profile looks fairly neutral and still needs surface confirmation.")
+        if summary_tokens_zh:
+            zh_parts.append(" / ".join(summary_tokens_zh) + "。")
+        if summary_tokens_en:
+            en_parts.append(" / ".join(summary_tokens_en) + ".")
 
     return {
         "source": "open-meteo-gfs",
@@ -180,6 +282,8 @@ def _build_vertical_profile_signal(
         "trigger_risk": trigger_risk,
         "mixing_strength": mixing_strength,
         "shear_risk": shear_risk,
+        "heating_setup": heating_setup,
+        "heating_score": heating_score,
         "summary_zh": "".join(zh_parts),
         "summary_en": " ".join(en_parts),
     }

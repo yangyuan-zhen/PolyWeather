@@ -828,6 +828,76 @@ export function FutureForecastModal() {
                       <strong>{marketSignal}</strong>
                     </div>
                   </section>
+
+                  <section className="future-v2-card">
+                    <h4 className="future-v2-card-title">
+                      {locale === "en-US"
+                        ? "City Risk Profile & Airport Narrative"
+                        : "城市风险档案与机场报文解读"}
+                    </h4>
+                    <div className="future-v2-stack">
+                      <div className="future-v2-subpanel">
+                        <h5 className="future-v2-subpanel-title">
+                          {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
+                        </h5>
+                        <div className="risk-info" style={{ marginTop: "10px" }}>
+                          {!risk.airport ? (
+                            <span style={{ color: "var(--text-muted)" }}>
+                              {t("section.noRiskProfile")}
+                            </span>
+                          ) : (
+                            <>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {settlementProfileLabel}
+                                </span>
+                                <span>{settlementProfileValue}</span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {t("section.distance")}
+                                </span>
+                                <span>{risk.distance_km ?? "--"}km</span>
+                              </div>
+                              {risk.warning ? (
+                                <div className="risk-row">
+                                  <span className="risk-label">
+                                    {t("section.note")}
+                                  </span>
+                                  <span>{risk.warning}</span>
+                                </div>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                      <div className="future-v2-subpanel">
+                        <h5 className="future-v2-subpanel-title">
+                          {locale === "en-US" ? "Airport Narrative" : "机场报文解读"}
+                        </h5>
+                        <div className="ai-box" style={{ marginTop: "10px" }}>
+                          {!ai.summary && ai.bullets.length === 0 ? (
+                            <span className="ai-placeholder">
+                              {t("future.noAi")}
+                            </span>
+                          ) : (
+                            <>
+                              {ai.summary ? (
+                                <div className="ai-summary">{ai.summary}</div>
+                              ) : null}
+                              {ai.bullets.length > 0 ? (
+                                <ul className="ai-list">
+                                  {ai.bullets.map((item) => (
+                                    <li key={item}>{item}</li>
+                                  ))}
+                                </ul>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </section>
                 </aside>
 
                 <main className="future-v2-right">
@@ -915,6 +985,9 @@ export function FutureForecastModal() {
                         </div>
                       ) : null}
                     </div>
+                    <div className="future-subsection-title">
+                      {locale === "en-US" ? "Surface Structure" : "近地面信号"}
+                    </div>
                     <div className="future-trend-grid">
                       {view.front.metrics.slice(0, 6).map((metric) => (
                         <div key={metric.label} className="future-trend-card">
@@ -935,14 +1008,7 @@ export function FutureForecastModal() {
                     {view.front.upperAirSummary ||
                     (view.front.upperAirMetrics?.length || 0) > 0 ? (
                       <>
-                        <div
-                          style={{
-                            color: "var(--text-primary)",
-                            fontSize: "0.95rem",
-                            fontWeight: 700,
-                            marginTop: "18px",
-                          }}
-                        >
+                        <div className="future-subsection-title">
                           {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
                         </div>
                         {view.front.upperAirSummary ? (
@@ -969,74 +1035,6 @@ export function FutureForecastModal() {
                         </div>
                       </>
                     ) : null}
-                  </section>
-
-                  <section className="future-modal-section">
-                    <h3>
-                      {locale === "en-US"
-                        ? "City Risk Profile & Airport Narrative"
-                        : "城市风险档案与机场报文解读"}
-                    </h3>
-                    <div className="future-modal-grid">
-                      <div>
-                        <h4 className="future-v2-card-title">
-                          {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
-                        </h4>
-                        <div className="risk-info" style={{ marginTop: "10px" }}>
-                          {!risk.airport ? (
-                            <span style={{ color: "var(--text-muted)" }}>
-                              {t("section.noRiskProfile")}
-                            </span>
-                          ) : (
-                            <>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {settlementProfileLabel}
-                                </span>
-                                <span>{settlementProfileValue}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {t("section.distance")}
-                                </span>
-                                <span>{risk.distance_km ?? "--"}km</span>
-                              </div>
-                              {risk.warning ? (
-                                <div className="risk-row">
-                                  <span className="risk-label">
-                                    {t("section.note")}
-                                  </span>
-                                  <span>{risk.warning}</span>
-                                </div>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                      <div>
-                        <h4 className="future-v2-card-title">{t("future.ai")}</h4>
-                        <div className="ai-box" style={{ marginTop: "10px" }}>
-                          {!ai.summary && ai.bullets.length === 0 ? (
-                            <span className="ai-placeholder">
-                              {t("future.noAi")}
-                            </span>
-                          ) : (
-                            <>
-                              {ai.summary ? (
-                                <div className="ai-summary">{ai.summary}</div>
-                              ) : null}
-                              {ai.bullets.length > 0 ? (
-                                <ul className="ai-list">
-                                  {ai.bullets.map((item) => (
-                                    <li key={item}>{item}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
                   </section>
                 </main>
               </div>

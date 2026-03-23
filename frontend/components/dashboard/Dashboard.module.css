@@ -2056,6 +2056,27 @@
   letter-spacing: 0.02em;
 }
 
+.root :global(.future-v2-stack) {
+  margin-top: 14px;
+  display: grid;
+  gap: 12px;
+}
+
+.root :global(.future-v2-subpanel) {
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px;
+}
+
+.root :global(.future-v2-subpanel-title) {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
 .root :global(.future-v2-market-v3) {
   margin-top: 16px;
   display: flex;
@@ -2308,6 +2329,13 @@
   line-height: 1.45;
 }
 
+.root :global(.future-subsection-title) {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-top: 18px;
+}
+
 .root :global(.future-trend-value.warm) {
   color: #34d399;
 }
@@ -2444,6 +2472,10 @@
     padding: 10px;
   }
 
+  .root :global(.future-v2-subpanel) {
+    padding: 10px;
+  }
+
   .root :global(.future-trend-value) {
     font-size: 16px;
   }
@@ -2452,6 +2484,11 @@
   .root :global(.future-text-block) {
     font-size: 12px;
     line-height: 1.6;
+  }
+
+  .root :global(.future-subsection-title) {
+    font-size: 0.9rem;
+    margin-top: 14px;
   }
 
   .root :global(.future-front-meta) {
