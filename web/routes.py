@@ -8,7 +8,10 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from src.analysis.deb_algorithm import load_history
+from src.analysis.deb_algorithm import (
+    bootstrap_recent_daily_history_if_missing,
+    load_history,
+)
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.data_collection.city_registry import ALIASES
 from src.utils.metrics import export_prometheus_metrics
@@ -194,6 +197,8 @@ async def city_detail(request: Request, name: str, force_refresh: bool = False):
 async def city_history(request: Request, name: str):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
+
+    bootstrap_recent_daily_history_if_missing(city, lookback_days=14)
 
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     history_file = os.path.join(project_root, "data", "daily_records.json")

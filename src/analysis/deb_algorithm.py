@@ -262,6 +262,65 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
         return {"ok": False, "reason": str(e), "updated": 0}
 
 
+def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int = 14):
+    """
+    For METAR-settled cities added after launch, ensure recent daily_records rows
+    exist so the history page can show recent actual highs without requiring a
+    one-off backfill script.
+    """
+    try:
+        from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
+
+        city_key = str(city_name or "").strip().lower()
+        city_key = ALIASES.get(city_key, city_key)
+        city_meta = CITY_REGISTRY.get(city_key)
+        if not isinstance(city_meta, dict):
+            return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
+
+        settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+        if settlement_source != "metar":
+            return {"ok": True, "reason": "non_metar_city", "seeded": 0, "updated": 0}
+
+        icao = str(city_meta.get("icao") or "").strip().upper()
+        if not icao:
+            return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
+
+        tz_offset = int(city_meta.get("tz_offset") or 0)
+        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
+        local_today = local_now.date()
+
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        history_file = os.path.join(project_root, "data", "daily_records.json")
+        data = load_history(history_file)
+        city_rows = data.get(city_key)
+        if not isinstance(city_rows, dict):
+            city_rows = {}
+            data[city_key] = city_rows
+
+        seeded = 0
+        for offset in range(max(lookback_days, 1), 0, -1):
+            day = (local_today - timedelta(days=offset)).strftime("%Y-%m-%d")
+            if day not in city_rows:
+                city_rows[day] = {}
+                seeded += 1
+
+        if seeded > 0:
+            save_history(history_file, data)
+
+        reconcile_result = reconcile_recent_actual_highs(city_key, lookback_days=lookback_days)
+        return {
+            "ok": True,
+            "reason": "bootstrapped" if seeded > 0 else "already_seeded",
+            "seeded": seeded,
+            "updated": int(reconcile_result.get("updated") or 0),
+            "icao": icao,
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e), "seeded": 0, "updated": 0}
+
+
 def update_daily_record(
     city_name,
     date_str,
