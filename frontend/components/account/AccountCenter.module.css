@@ -390,6 +390,10 @@
   .cards {
     grid-template-columns: 1fr;
   }
+
+  .metaList dd {
+    max-width: 56%;
+  }
 }
 
 @media (max-width: 560px) {
@@ -413,6 +417,75 @@
   .actions {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .ghostBtn,
+  .primaryBtn {
+    min-height: 40px;
+    justify-content: center;
+  }
+
+  .title {
+    font-size: 22px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .heroCard {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .avatar {
+    width: 56px;
+    height: 56px;
+    border-radius: 16px;
+    font-size: 20px;
+  }
+
+  .heroMain h2 {
+    font-size: 22px;
+  }
+
+  .updatedText {
+    text-align: left;
+  }
+
+  .metaList > div {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .metaList dd {
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .commandRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .command {
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 48px;
+    padding: 10px 12px;
+  }
+
+  .copyBtn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .noticeRow,
+  .errorRow {
+    width: 100%;
+    align-items: flex-start;
+    line-height: 1.5;
   }
 }
 

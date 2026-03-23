@@ -142,6 +142,23 @@ async function readJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function MobileField({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-950/60 px-3 py-2">
+      <div className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">{label}</div>
+      <div className={`mt-1 break-all text-sm text-slate-200 ${mono ? "font-mono text-xs" : ""}`}>{value}</div>
+    </div>
+  );
+}
+
 export function OpsDashboard() {
   const [health, setHealth] = useState<HealthPayload | null>(null);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
@@ -328,9 +345,9 @@ export function OpsDashboard() {
   }, [grantEmail, grantPoints, incidentReasonFilter, loadLeaderboard, loadMemberships, loadPaymentIncidents, loadUsers, searchQuery]);
 
   return (
-    <main className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100 sm:px-6 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <section className="flex flex-col gap-4 rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl backdrop-blur-xl lg:flex-row lg:items-end lg:justify-between">
+    <main className="min-h-screen bg-slate-950 px-3 py-6 text-slate-100 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:gap-6">
+        <section className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant="secondary">Ops</Badge>
@@ -344,20 +361,20 @@ export function OpsDashboard() {
                 EMOS {rolloutDecision?.decision || "hold"}
               </Badge>
             </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight">PolyWeather Ops</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                直接挂在现有域名下的轻量运营页。先做只读运维视图，把系统状态、支付运行态和当前登录态聚合起来。
-              </p>
+              <div>
+                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">PolyWeather Ops</h1>
+                <p className="mt-2 max-w-3xl text-sm text-slate-400">
+                  直接挂在现有域名下的轻量运营页。先做只读运维视图，把系统状态、支付运行态和当前登录态聚合起来。
+                </p>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-            <span>刷新时间: {formatDateTime(refreshedAt)}</span>
-            <Button onClick={() => void load()} disabled={loading} className="gap-2">
-              <RefreshCcw className="h-4 w-4" />
-              {loading ? "加载中" : "刷新"}
-            </Button>
-          </div>
+            <div className="flex flex-col items-stretch gap-3 text-xs text-slate-400 sm:flex-row sm:flex-wrap sm:items-center">
+              <span className="break-all">刷新时间: {formatDateTime(refreshedAt)}</span>
+              <Button onClick={() => void load()} disabled={loading} className="gap-2 sm:w-auto">
+                <RefreshCcw className="h-4 w-4" />
+                {loading ? "加载中" : "刷新"}
+              </Button>
+            </div>
         </section>
 
         {error ? (
@@ -507,17 +524,17 @@ export function OpsDashboard() {
 
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <CardTitle>支付异常单</CardTitle>
-                <CardDescription>只显示已明确标记失败的支付确认事故。</CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  className="rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200"
-                  value={incidentReasonFilter}
-                  onChange={(event) => {
-                    const next = event.target.value;
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>支付异常单</CardTitle>
+                  <CardDescription>只显示已明确标记失败的支付确认事故。</CardDescription>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <select
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-200 sm:w-auto"
+                    value={incidentReasonFilter}
+                    onChange={(event) => {
+                      const next = event.target.value;
                     setIncidentReasonFilter(next);
                     void loadPaymentIncidents(next);
                   }}
@@ -528,15 +545,46 @@ export function OpsDashboard() {
                   <option value="event_mismatch">event_mismatch</option>
                   <option value="tx_reverted">tx_reverted</option>
                 </select>
-                <Button variant="secondary" onClick={() => void loadPaymentIncidents(incidentReasonFilter)} disabled={incidentsLoading}>
-                  {incidentsLoading ? "加载中" : "刷新异常"}
-                </Button>
+                  <Button variant="secondary" onClick={() => void loadPaymentIncidents(incidentReasonFilter)} disabled={incidentsLoading} className="w-full sm:w-auto">
+                    {incidentsLoading ? "加载中" : "刷新异常"}
+                  </Button>
+                </div>
               </div>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
-              <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3 md:hidden">
+                {paymentIncidents.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-100">{item.payload?.reason || "-"}</div>
+                        <div className="mt-1 text-xs text-slate-500">{formatDateTime(item.created_at)}</div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => void resolveIncident(item.id)}
+                        disabled={resolvingIncidentId === item.id}
+                      >
+                        {resolvingIncidentId === item.id ? "处理中" : "已处理"}
+                      </Button>
+                    </div>
+                    <div className="grid gap-2">
+                      <MobileField label="套餐" value={item.payload?.plan_code || "-"} />
+                      <MobileField label="Tx" value={maskUrl(item.payload?.tx_hash)} mono />
+                      <MobileField label="实际收款" value={maskUrl(item.payload?.receiver_actual)} mono />
+                      <MobileField label="期望收款" value={maskUrl(item.payload?.receiver_expected)} mono />
+                    </div>
+                  </div>
+                ))}
+                {!paymentIncidents.length ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-4 text-sm text-slate-500">
+                    暂无支付异常单
+                  </div>
+                ) : null}
+              </div>
+              <div className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 md:block">
+                <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
                 <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.14em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3">时间</th>
@@ -588,15 +636,32 @@ export function OpsDashboard() {
             <CardDescription>当前有效订阅用户、注册时间和到期时间。</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 text-sm text-slate-300">
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-xs text-slate-500">
-                当前有效会员数：{memberships.length}
-              </div>
-              <Button variant="secondary" onClick={() => void loadMemberships()} disabled={membershipsLoading}>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-xs text-slate-500">
+                  当前有效会员数：{memberships.length}
+                </div>
+              <Button variant="secondary" onClick={() => void loadMemberships()} disabled={membershipsLoading} className="w-full sm:w-auto">
                 {membershipsLoading ? "加载中" : "刷新会员"}
               </Button>
             </div>
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70">
+            <div className="space-y-3 md:hidden">
+              {memberships.map((item) => (
+                <div key={`${item.user_id}-${item.expires_at || ""}`} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="font-semibold text-slate-100">{item.email || "-"}</div>
+                  <div className="mt-1 text-xs text-slate-500">{item.username || "-"}</div>
+                  <div className="mt-3 grid gap-2">
+                    <MobileField label="注册时间" value={formatDateTime(item.registered_at)} />
+                    <MobileField label="到期时间" value={formatDateTime(item.expires_at)} />
+                  </div>
+                </div>
+              ))}
+              {!memberships.length ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-4 text-sm text-slate-500">
+                  暂无有效会员
+                </div>
+              ) : null}
+            </div>
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 md:block">
               <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
                 <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.14em] text-slate-500">
                   <tr>
@@ -642,7 +707,7 @@ export function OpsDashboard() {
                   placeholder="telegram id / username / email"
                   className="h-10 flex-1 rounded-xl border border-slate-800 bg-slate-950 px-3 text-sm text-slate-100 outline-none ring-0"
                 />
-                <Button variant="secondary" onClick={() => void loadUsers(searchQuery)} disabled={usersLoading}>
+                <Button variant="secondary" onClick={() => void loadUsers(searchQuery)} disabled={usersLoading} className="w-full sm:w-auto">
                   {usersLoading ? "查询中" : "查询"}
                 </Button>
               </div>

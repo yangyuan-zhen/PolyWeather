@@ -162,5 +162,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## Version
 
-- Version: `v1.5.0`
+- Version: `v1.5.1`
 - Last Updated: `2026-03-21`

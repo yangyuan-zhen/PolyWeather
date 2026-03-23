@@ -1392,8 +1392,58 @@
 }
 
 @media (max-width: 768px) {
+  .root :global(.header) {
+    height: auto;
+    min-height: var(--header-height);
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+
+  .root :global(.brand) {
+    align-items: flex-start;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .root :global(.header-right) {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 8px;
+    min-width: 0;
+  }
+
+  .root :global(.lang-switch) {
+    order: 1;
+  }
+
+  .root :global(.account-btn),
+  .root :global(.info-btn) {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .root :global(.live-badge) {
+    order: 4;
+    padding: 4px 10px;
+    white-space: nowrap;
+  }
+
+  .root :global(.refresh-btn) {
+    order: 5;
+  }
+
   .root :global(.city-list) {
-    display: none;
+    display: flex;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-height: min(36vh, 320px);
+    border-radius: 14px;
+    z-index: 920;
   }
   .root :global(.detail-panel) {
     width: 100%;
@@ -1401,15 +1451,97 @@
   .root {
     --panel-width: 100%;
   }
+
+  .root :global(.city-list-header) {
+    padding: 12px 14px;
+    font-size: 14px;
+  }
+
+  .root :global(.city-list-items) {
+    padding: 6px;
+  }
+
+  .root :global(.city-group-header) {
+    padding: 8px 9px;
+  }
+
+  .root :global(.city-item) {
+    padding: 8px 9px;
+  }
+
+  .root :global(.city-item .city-name-text),
+  .root :global(.city-item .city-temp) {
+    font-size: 12px;
+  }
+
+  .root :global(.city-item-info) {
+    padding-left: 18px;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+
+  .root :global(.panel-header) {
+    padding: 16px 16px 14px;
+  }
 }
 
 @media (max-width: 600px) {
+  .root :global(.header) {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .root :global(.brand) {
+    justify-content: space-between;
+    width: 100%;
+  }
+
   .root :global(.subtitle) {
     display: none;
   }
   .root :global(.brand h1) {
     font-size: 16px;
   }
+
+  .root :global(.header-right) {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+
+  .root :global(.lang-switch) {
+    margin-right: auto;
+  }
+
+  .root :global(.account-btn),
+  .root :global(.info-btn) {
+    min-height: 34px;
+    padding: 6px 9px;
+    font-size: 11px;
+  }
+
+  .root :global(.account-btn span),
+  .root :global(.info-btn span) {
+    max-width: 88px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .root :global(.live-badge) {
+    padding: 4px 8px;
+    font-size: 10px;
+    letter-spacing: 0.6px;
+  }
+
+  .root :global(.refresh-btn) {
+    width: 34px;
+    height: 34px;
+    font-size: 16px;
+  }
+
   .root :global(.hero-value) {
     font-size: 42px;
   }
@@ -1419,6 +1551,47 @@
   }
   .root :global(.hero-item .value) {
     font-size: 14px;
+  }
+
+  .root :global(.city-list) {
+    left: 6px;
+    right: 6px;
+    bottom: 6px;
+    max-height: min(40vh, 300px);
+  }
+
+  .root :global(.city-list-header) {
+    padding: 10px 12px;
+  }
+
+  .root :global(.city-group-title) {
+    font-size: 11px;
+  }
+
+  .root :global(.city-item-main) {
+    gap: 6px;
+  }
+
+  .root :global(.city-item-info) {
+    font-size: 9px;
+  }
+
+  .root :global(.panel-header) {
+    padding: 14px 14px 12px;
+  }
+
+  .root :global(.city-marker:hover) {
+    transform: none;
+  }
+
+  .root :global(.marker-bubble) {
+    min-width: 48px;
+    min-height: 32px;
+    padding: 6px 10px;
+  }
+
+  .root :global(.marker-name) {
+    font-size: 11px;
   }
 }
 
@@ -1490,6 +1663,7 @@
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
+  min-width: 0;
 }
 .root :global(.future-modal-title-with-actions) {
   display: flex;
@@ -1658,6 +1832,32 @@
 }
 
 @media (max-width: 640px) {
+  .root :global(.modal-content) {
+    border-radius: 14px;
+    max-height: calc(100vh - 16px);
+  }
+
+  .root :global(.modal-content.history-modal),
+  .root :global(.modal-content.large.future-modal) {
+    width: min(100vw - 12px, 100%);
+    max-width: none;
+  }
+
+  .root :global(.modal-header) {
+    padding: 14px 14px 12px;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .root :global(.modal-header h2) {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .root :global(.modal-body) {
+    padding: 14px;
+  }
+
   .root :global(.history-modal .history-stats) {
     grid-template-columns: 1fr;
   }
@@ -2192,6 +2392,93 @@
   .root :global(.future-modal-grid),
   .root :global(.future-trend-grid) {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .root :global(.future-modal-body) {
+    gap: 12px;
+    padding-right: 0;
+  }
+
+  .root :global(.future-v2-card),
+  .root :global(.future-modal-section) {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .root :global(.future-v2-hero-main) {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .root :global(.future-v2-hero-temp) {
+    font-size: 44px;
+  }
+
+  .root :global(.future-v2-hero-divider) {
+    height: 44px;
+  }
+
+  .root :global(.future-v2-hero-obs) {
+    font-size: 18px;
+  }
+
+  .root :global(.future-v2-mini-grid) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.future-v2-mini-item strong) {
+    font-size: 20px;
+  }
+
+  .root :global(.future-v2-main-chart) {
+    min-height: 280px;
+  }
+
+  .root :global(.future-chart-wrapper) {
+    height: 190px;
+  }
+
+  .root :global(.future-trend-card) {
+    padding: 10px;
+  }
+
+  .root :global(.future-trend-value) {
+    font-size: 16px;
+  }
+
+  .root :global(.future-trend-note),
+  .root :global(.future-text-block) {
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .root :global(.future-front-meta) {
+    gap: 8px;
+  }
+
+  .root :global(.future-front-pill) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .root :global(.detail-grid) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.detail-mini-chart) {
+    height: 170px;
+  }
+
+  .root :global(.detail-source-link) {
+    padding: 10px 12px;
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .root :global(.detail-source-label) {
+    text-align: left;
   }
 }
 
