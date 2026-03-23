@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Request
@@ -8,6 +9,7 @@ from fastapi.responses import PlainTextResponse
 from loguru import logger
 
 from src.analysis.deb_algorithm import load_history
+from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.data_collection.city_registry import ALIASES
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
@@ -45,6 +47,79 @@ from web.core import (
 )
 
 router = APIRouter()
+
+
+def _parse_snapshot_dt(value: object) -> Optional[datetime]:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _build_peak_minus_12h_reference(
+    *,
+    actual_high: object,
+    snapshots: list[dict],
+) -> dict:
+    actual = _sf(actual_high)
+    if actual is None or not snapshots:
+        return {}
+
+    tolerance = 0.11
+    normalized = []
+    for row in snapshots:
+        if not isinstance(row, dict):
+            continue
+        dt = _parse_snapshot_dt(row.get("timestamp"))
+        if dt is None:
+            continue
+        normalized.append(
+            {
+                "dt": dt,
+                "max_so_far": _sf(row.get("max_so_far")),
+                "deb_prediction": _sf(row.get("deb_prediction")),
+            }
+        )
+    if not normalized:
+        return {}
+
+    peak_row = next(
+        (
+            row
+            for row in normalized
+            if row["max_so_far"] is not None and row["max_so_far"] >= actual - tolerance
+        ),
+        None,
+    )
+    if peak_row is None:
+        return {}
+
+    peak_dt = peak_row["dt"]
+    anchor_dt = peak_dt - timedelta(hours=12)
+    anchor_row = None
+    for row in normalized:
+        if row["dt"] <= anchor_dt and row["deb_prediction"] is not None:
+            anchor_row = row
+        elif row["dt"] > anchor_dt:
+            break
+
+    peak_time = peak_dt.strftime("%H:%M")
+    result = {
+        "actual_peak_time": peak_time,
+    }
+    if anchor_row and anchor_row["deb_prediction"] is not None:
+        deb_value = float(anchor_row["deb_prediction"])
+        result.update(
+            {
+                "deb_at_peak_minus_12h": deb_value,
+                "deb_at_peak_minus_12h_time": anchor_row["dt"].strftime("%H:%M"),
+                "deb_at_peak_minus_12h_error": round(deb_value - actual, 1),
+            }
+        )
+    return result
 
 
 def _normalize_city_or_404(name: str) -> str:
@@ -138,6 +213,11 @@ async def city_history(request: Request, name: str):
         act = rec.get("actual_high")
         deb = rec.get("deb_prediction")
         mu = rec.get("mu")
+        snapshots = load_snapshot_rows_for_day(city, day)
+        peak_ref = _build_peak_minus_12h_reference(
+            actual_high=act,
+            snapshots=snapshots,
+        )
         forecasts_raw = rec.get("forecasts", {}) or {}
         forecasts = {}
         if isinstance(forecasts_raw, dict):
@@ -155,6 +235,10 @@ async def city_history(request: Request, name: str):
                 "mu": float(mu) if mu is not None else None,
                 "mgm": float(mgm) if mgm is not None else None,
                 "forecasts": forecasts,
+                "actual_peak_time": peak_ref.get("actual_peak_time"),
+                "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
+                "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
+                "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
             }
         )
 

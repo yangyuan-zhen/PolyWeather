@@ -86,6 +86,52 @@ def _load_recent_rows(path: str, max_lines: int = DEDUP_SCAN_LINES) -> List[Dict
     return rows
 
 
+def load_snapshot_rows_for_day(
+    city_name: str,
+    target_date: str,
+    archive_path: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    city_key = str(city_name or "").strip().lower()
+    date_key = str(target_date or "").strip()
+    if not city_key or not date_key:
+        return []
+
+    mode = get_state_storage_mode()
+    if mode == STATE_STORAGE_SQLITE:
+        return _snapshot_repo.load_rows_by_city_date(city_key, date_key)
+
+    root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    path = archive_path or os.path.join(root_dir, "data", "probability_training_snapshots.jsonl")
+    if not os.path.exists(path):
+        if mode == STATE_STORAGE_DUAL:
+            return _snapshot_repo.load_rows_by_city_date(city_key, date_key)
+        return []
+
+    rows: List[Dict[str, Any]] = []
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                if not isinstance(row, dict):
+                    continue
+                if str(row.get("city") or "").strip().lower() != city_key:
+                    continue
+                if str(row.get("date") or "").strip() != date_key:
+                    continue
+                rows.append(row)
+    except Exception:
+        return []
+
+    rows.sort(key=lambda row: str(row.get("timestamp") or ""))
+    return rows
+
+
 def _should_skip_append(path: str, payload: Dict[str, Any]) -> bool:
     mode = get_state_storage_mode()
     if mode == STATE_STORAGE_SQLITE:

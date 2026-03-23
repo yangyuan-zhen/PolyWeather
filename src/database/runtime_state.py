@@ -362,6 +362,25 @@ class ProbabilitySnapshotRepository:
                 continue
         return out
 
+    def load_rows_by_city_date(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM probability_training_snapshots_store
+                WHERE city = ? AND target_date = ?
+                ORDER BY timestamp ASC, id ASC
+                """,
+                (city, target_date),
+            ).fetchall()
+        out = []
+        for row in rows:
+            try:
+                out.append(json.loads(row["payload_json"]))
+            except Exception:
+                continue
+        return out
+
     def load_all_rows(self) -> List[Dict[str, Any]]:
         with self.db.connect() as conn:
             rows = conn.execute(

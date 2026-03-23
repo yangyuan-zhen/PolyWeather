@@ -312,6 +312,10 @@ export interface HistoryPoint {
   mu?: number | null;
   mgm?: number | null;
   forecasts?: Record<string, number | null>;
+  actual_peak_time?: string | null;
+  deb_at_peak_minus_12h?: number | null;
+  deb_at_peak_minus_12h_time?: string | null;
+  deb_at_peak_minus_12h_error?: number | null;
 }
 
 export interface LoadingState {

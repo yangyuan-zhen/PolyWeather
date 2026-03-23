@@ -155,7 +155,7 @@ function HistoryChart() {
 
 export function HistoryModal() {
   const store = useDashboardStore();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const { data, error, isLoading, isOpen } = useHistoryData();
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
@@ -163,6 +163,19 @@ export function HistoryModal() {
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
+  );
+  const settledPeakRows = useMemo(
+    () =>
+      summary.recentData
+        .filter(
+          (row) =>
+            row.actual != null &&
+            row.actual_peak_time &&
+            row.deb_at_peak_minus_12h != null,
+        )
+        .slice(-8)
+        .reverse(),
+    [summary.recentData],
   );
 
   if (!isOpen) return null;
@@ -283,6 +296,106 @@ export function HistoryModal() {
               )}
             </div>
             {!isLoading && !error && <HistoryChart />}
+            {!isLoading && !error && settledPeakRows.length > 0 && (
+              <div
+                style={{
+                  marginTop: "18px",
+                  padding: "14px 16px",
+                  border: "1px solid rgba(148, 163, 184, 0.14)",
+                  borderRadius: "16px",
+                  background: "rgba(15, 23, 42, 0.42)",
+                }}
+              >
+                <div
+                  style={{
+                    color: "var(--text-primary)",
+                    fontSize: "14px",
+                    fontWeight: 700,
+                    marginBottom: "10px",
+                  }}
+                >
+                  {locale === "en-US"
+                    ? "Peak-12h DEB Reference (Approx.)"
+                    : "峰值前 12 小时 DEB 参考（近似）"}
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: "8px",
+                  }}
+                >
+                  {settledPeakRows.map((row) => (
+                    <div
+                      key={row.date}
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(72px, 88px) 1fr",
+                        gap: "10px",
+                        padding: "10px 12px",
+                        borderRadius: "12px",
+                        background: "rgba(255,255,255,0.03)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontSize: "12px",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {row.date}
+                      </div>
+                      <div
+                        style={{
+                          color: "var(--text-secondary)",
+                          fontSize: "12px",
+                          lineHeight: 1.7,
+                        }}
+                      >
+                        <div>
+                          {locale === "en-US" ? "Peak ref" : "峰值参考"}:{" "}
+                          <span style={{ color: "var(--text-primary)" }}>
+                            {row.actual}
+                            {store.selectedDetail?.temp_symbol || "°C"} @{" "}
+                            {row.actual_peak_time}
+                          </span>
+                        </div>
+                        <div>
+                          {locale === "en-US" ? "DEB@-12h" : "峰值前12小时 DEB"}:{" "}
+                          <span style={{ color: "var(--text-primary)" }}>
+                            {row.deb_at_peak_minus_12h}
+                            {store.selectedDetail?.temp_symbol || "°C"} @{" "}
+                            {row.deb_at_peak_minus_12h_time}
+                          </span>
+                        </div>
+                        <div>
+                          {locale === "en-US" ? "Actual" : "最终实测"}:{" "}
+                          <span style={{ color: "var(--text-primary)" }}>
+                            {row.actual}
+                            {store.selectedDetail?.temp_symbol || "°C"}
+                          </span>
+                        </div>
+                        <div>
+                          {locale === "en-US" ? "Error" : "误差"}:{" "}
+                          <span
+                            style={{
+                              color:
+                                (row.deb_at_peak_minus_12h_error ?? 0) > 0
+                                  ? "#f59e0b"
+                                  : "#34d399",
+                            }}
+                          >
+                            {row.deb_at_peak_minus_12h_error != null
+                              ? `${row.deb_at_peak_minus_12h_error > 0 ? "+" : ""}${row.deb_at_peak_minus_12h_error}${store.selectedDetail?.temp_symbol || "°C"}`
+                              : "--"}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
