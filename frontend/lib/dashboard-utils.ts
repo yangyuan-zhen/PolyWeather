@@ -1281,7 +1281,9 @@ export function computeFrontTrendSignal(
           return "";
         })()
       : "";
-  const combinedSummary = [backendSummary || summary, tafSummary, tafContrastSummary]
+  const backendSupplement =
+    backendSummary && backendSummary !== summary ? backendSummary : "";
+  const combinedSummary = [summary, tafSummary, tafContrastSummary, backendSupplement]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
   const cloudNote = (() => {
