@@ -315,7 +315,21 @@ export interface CityDetail {
       available?: boolean;
       source?: string | null;
       peak_window?: string | null;
-      precip_codes?: string[] | null;
+      segments?: Array<{
+        type?: string | null;
+        start_local?: string | null;
+        end_local?: string | null;
+        tokens?: string[] | null;
+      }> | null;
+      markers?: Array<{
+        label_time?: string | null;
+        marker_type?: string | null;
+        start_local?: string | null;
+        end_local?: string | null;
+        suppression_level?: string | null;
+        summary_zh?: string | null;
+        summary_en?: string | null;
+      }> | null;
       low_ceiling_ft?: number | null;
       ceiling_cover?: string | null;
       wind_regimes?: string[] | null;

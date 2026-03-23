@@ -295,67 +295,238 @@ def _build_vertical_profile_signal(
 def _build_taf_signal(
     taf_data: Dict[str, Any],
     city: str,
+    local_date: str,
+    utc_offset: int,
     first_peak_h: int,
     last_peak_h: int,
 ) -> Dict[str, Any]:
     if str(city or "").strip().lower() == "hong kong":
         return {}
-    raw_taf = str((taf_data or {}).get("raw_taf") or "").upper().strip()
+    raw_taf = re.sub(r"\s+", " ", str((taf_data or {}).get("raw_taf") or "").upper().strip())
     if not raw_taf:
         return {}
 
-    precip_codes = re.findall(
-        r"\b(?:-|\+)?(?:TSRA|TS|VCTS|SHRA|RA|DZ|SN|SHSN|SHGS)\b",
-        raw_taf,
-    )
-    cloud_matches = re.findall(r"\b(FEW|SCT|BKN|OVC)(\d{3})\b", raw_taf)
-    wind_matches = re.findall(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b", raw_taf)
-    tempo_tokens = re.findall(r"\b(?:TEMPO|BECMG|PROB30|PROB40|FM\d{6})\b", raw_taf)
+    issue_raw = str((taf_data or {}).get("issue_time") or "").strip()
+    issue_dt = None
+    if issue_raw:
+        try:
+            issue_dt = datetime.fromisoformat(issue_raw.replace("Z", "+00:00"))
+        except Exception:
+            issue_dt = None
+    if issue_dt is None:
+        issue_dt = datetime.now(timezone.utc)
 
+    local_tz = timezone(timedelta(seconds=int(utc_offset or 0)))
+    valid_match = re.search(r"\b(\d{2})(\d{2})/(\d{2})(\d{2})\b", raw_taf)
+    tokens = raw_taf.split()
+    if not valid_match:
+        return {}
+
+    def _infer_utc(day: int, hour: int, minute: int = 0) -> datetime:
+        base = issue_dt
+        year = base.year
+        month = base.month
+        candidate = datetime(year, month, day, hour, minute, tzinfo=timezone.utc)
+        if candidate < base - timedelta(days=20):
+            if month == 12:
+                candidate = datetime(year + 1, 1, day, hour, minute, tzinfo=timezone.utc)
+            else:
+                candidate = datetime(year, month + 1, day, hour, minute, tzinfo=timezone.utc)
+        elif candidate > base + timedelta(days=20):
+            if month == 1:
+                candidate = datetime(year - 1, 12, day, hour, minute, tzinfo=timezone.utc)
+            else:
+                candidate = datetime(year, month - 1, day, hour, minute, tzinfo=timezone.utc)
+        return candidate
+
+    def _parse_period(token: str) -> tuple[Optional[datetime], Optional[datetime]]:
+        match = re.match(r"^(\d{2})(\d{2})/(\d{2})(\d{2})$", token)
+        if not match:
+            return None, None
+        start = _infer_utc(int(match.group(1)), int(match.group(2)))
+        end = _infer_utc(int(match.group(3)), int(match.group(4)))
+        if end <= start:
+            end += timedelta(days=1)
+        return start, end
+
+    valid_start_utc, valid_end_utc = _parse_period(valid_match.group(0))
+    if valid_start_utc is None or valid_end_utc is None:
+        return {}
+
+    segment_indexes: list[int] = []
+    for idx, token in enumerate(tokens):
+        if re.match(r"^FM\d{6}$", token) or token in {"TEMPO", "BECMG", "PROB30", "PROB40"}:
+            segment_indexes.append(idx)
+
+    base_start_idx = 0
+    for idx, token in enumerate(tokens):
+        if token == valid_match.group(0):
+            base_start_idx = idx + 1
+            break
+
+    segments: list[Dict[str, Any]] = []
+    first_segment_idx = segment_indexes[0] if segment_indexes else len(tokens)
+    if base_start_idx < first_segment_idx:
+        segments.append(
+            {
+                "type": "BASE",
+                "start_utc": valid_start_utc,
+                "end_utc": valid_end_utc,
+                "tokens": tokens[base_start_idx:first_segment_idx],
+            }
+        )
+
+    idx_pos = 0
+    while idx_pos < len(segment_indexes):
+        start_idx = segment_indexes[idx_pos]
+        end_idx = segment_indexes[idx_pos + 1] if idx_pos + 1 < len(segment_indexes) else len(tokens)
+        token = tokens[start_idx]
+        seg_type = token
+        seg_start = valid_start_utc
+        seg_end = valid_end_utc
+        payload_start = start_idx + 1
+
+        if re.match(r"^FM(\d{2})(\d{2})(\d{2})$", token):
+            match = re.match(r"^FM(\d{2})(\d{2})(\d{2})$", token)
+            seg_type = "FM"
+            seg_start = _infer_utc(int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            if idx_pos + 1 < len(segment_indexes):
+                next_token = tokens[segment_indexes[idx_pos + 1]]
+                next_match = re.match(r"^FM(\d{2})(\d{2})(\d{2})$", next_token)
+                if next_match:
+                    seg_end = _infer_utc(int(next_match.group(1)), int(next_match.group(2)), int(next_match.group(3)))
+                else:
+                    seg_end = valid_end_utc
+            else:
+                seg_end = valid_end_utc
+        elif token in {"TEMPO", "BECMG"}:
+            seg_type = token
+            if payload_start < len(tokens):
+                seg_start, seg_end = _parse_period(tokens[payload_start])
+                payload_start += 1
+        elif token in {"PROB30", "PROB40"}:
+            seg_type = token
+            if payload_start < len(tokens) and tokens[payload_start] == "TEMPO":
+                seg_type = f"{token} TEMPO"
+                payload_start += 1
+            if payload_start < len(tokens):
+                seg_start, seg_end = _parse_period(tokens[payload_start])
+                payload_start += 1
+
+        if seg_start is None or seg_end is None:
+            idx_pos += 1
+            continue
+        if seg_end <= seg_start:
+            seg_end = seg_start + timedelta(hours=1)
+
+        segments.append(
+            {
+                "type": seg_type,
+                "start_utc": seg_start,
+                "end_utc": seg_end,
+                "tokens": tokens[payload_start:end_idx],
+            }
+        )
+        idx_pos += 1
+
+    peak_window_start = datetime.strptime(f"{local_date} {max(0, first_peak_h - 2):02d}:00", "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
+    peak_window_end = datetime.strptime(f"{local_date} {min(23, last_peak_h + 1):02d}:00", "%Y-%m-%d %H:%M").replace(tzinfo=local_tz)
+
+    precip_rank = {"low": 0, "medium": 1, "high": 2}
+    suppression_level = "low"
+    disruption_level = "low"
     low_ceiling_ft = None
     ceiling_cover = None
-    for cover, base in cloud_matches:
-        if cover not in {"BKN", "OVC"}:
-            continue
-        try:
-            base_ft = int(base) * 100
-        except Exception:
-            continue
-        if low_ceiling_ft is None or base_ft < low_ceiling_ft:
-            low_ceiling_ft = base_ft
-            ceiling_cover = cover
+    wind_regimes: list[str] = []
+    markers: list[Dict[str, Any]] = []
+    active_segments: list[Dict[str, Any]] = []
 
-    direction_buckets: list[str] = []
-    for direction, _speed in wind_matches:
-        if direction == "VRB":
-            direction_buckets.append("variable")
+    def _segment_precip_level(tokens_block: list[str]) -> str:
+        joined = " ".join(tokens_block)
+        if re.search(r"\b(?:-|\+)?(?:TSRA|TS|VCTS|SHRA|SHSN|SHGS)\b", joined):
+            return "high"
+        if re.search(r"\b(?:-|\+)?(?:RA|DZ|SN)\b", joined):
+            return "medium"
+        return "low"
+
+    for segment in segments:
+        start_local = segment["start_utc"].astimezone(local_tz)
+        end_local = segment["end_utc"].astimezone(local_tz)
+        if end_local < peak_window_start or start_local > peak_window_end:
             continue
-        try:
+        active_segments.append(segment)
+        joined = " ".join(segment["tokens"])
+        level = _segment_precip_level(segment["tokens"])
+        if precip_rank[level] > precip_rank[suppression_level]:
+            suppression_level = level
+
+        cloud_matches = re.findall(r"\b(FEW|SCT|BKN|OVC)(\d{3})\b", joined)
+        for cover, base in cloud_matches:
+            if cover not in {"BKN", "OVC"}:
+                continue
+            try:
+                base_ft = int(base) * 100
+            except Exception:
+                continue
+            if low_ceiling_ft is None or base_ft < low_ceiling_ft:
+                low_ceiling_ft = base_ft
+                ceiling_cover = cover
+        if low_ceiling_ft is not None and low_ceiling_ft <= 4000 and suppression_level == "low":
+            suppression_level = "medium"
+
+        wind_matches = re.findall(r"\b(\d{3}|VRB)(\d{2,3})(?:G\d{2,3})?KT\b", joined)
+        segment_regimes = []
+        for direction, _speed in wind_matches:
+            if direction == "VRB":
+                segment_regimes.append("variable")
+                continue
             deg = int(direction)
-        except Exception:
-            continue
-        if 135 <= deg <= 225:
-            direction_buckets.append("southerly")
-        elif deg >= 315 or deg <= 45:
-            direction_buckets.append("northerly")
-        else:
-            direction_buckets.append("cross")
-    unique_buckets = [bucket for bucket in dict.fromkeys(direction_buckets) if bucket]
+            if 135 <= deg <= 225:
+                segment_regimes.append("southerly")
+            elif deg >= 315 or deg <= 45:
+                segment_regimes.append("northerly")
+            else:
+                segment_regimes.append("cross")
+        for item in segment_regimes:
+            if item not in wind_regimes:
+                wind_regimes.append(item)
 
-    suppression_level = "low"
-    if any(code in {"TSRA", "TS", "VCTS", "SHRA", "SHSN", "SHGS"} for code in precip_codes):
-        suppression_level = "high"
-    elif precip_codes or (low_ceiling_ft is not None and low_ceiling_ft <= 4000):
-        suppression_level = "medium"
+        if segment["type"] in {"TEMPO", "BECMG", "PROB30", "PROB40", "PROB30 TEMPO", "PROB40 TEMPO"}:
+            disruption_level = "medium" if disruption_level == "low" else disruption_level
+        if segment["type"] in {"PROB30 TEMPO", "PROB40 TEMPO"} or level == "high":
+            disruption_level = "high"
 
-    disruption_level = "low"
-    if tempo_tokens and suppression_level == "high":
-        disruption_level = "high"
-    elif tempo_tokens or len(unique_buckets) >= 2:
-        disruption_level = "medium"
+        marker_time_local = start_local
+        marker_hour = marker_time_local.strftime("%H:00")
+        hazards = []
+        if level != "low":
+            hazards.append(level)
+        if low_ceiling_ft is not None and segment_regimes is not None:
+            hazards.append("cloud")
+        if segment_regimes:
+            hazards.append("wind")
+        summary_zh = (
+            f"{segment['type']} {start_local.strftime('%H:%M')}-{end_local.strftime('%H:%M')} "
+            f"{'有阵雨/雷暴扰动' if level == 'high' else '有云雨扰动' if level == 'medium' else '以稳定为主'}"
+        )
+        summary_en = (
+            f"{segment['type']} {start_local.strftime('%H:%M')}-{end_local.strftime('%H:%M')} "
+            f"{'shows shower/thunder disruption' if level == 'high' else 'shows cloud/rain disruption' if level == 'medium' else 'stays relatively stable'}"
+        )
+        markers.append(
+            {
+                "label_time": marker_hour,
+                "marker_type": segment["type"],
+                "start_local": start_local.strftime("%H:%M"),
+                "end_local": end_local.strftime("%H:%M"),
+                "suppression_level": level,
+                "summary_zh": summary_zh,
+                "summary_en": summary_en,
+            }
+        )
 
-    wind_shift = len(unique_buckets) >= 2 or "variable" in unique_buckets
-    peak_window = f"{max(0, first_peak_h - 2):02d}:00-{min(23, last_peak_h + 1):02d}:00"
+    wind_shift = len(wind_regimes) >= 2 or "variable" in wind_regimes
+    peak_window = f"{peak_window_start.strftime('%H:%M')}-{peak_window_end.strftime('%H:%M')}"
 
     if suppression_level == "high":
         summary_zh = f"TAF 在峰值窗口（{peak_window}）提示阵雨或雷暴扰动，机场端压温风险偏高。"
@@ -366,7 +537,6 @@ def _build_taf_signal(
     else:
         summary_zh = f"TAF 在峰值窗口（{peak_window}）暂未提示明显云雨压温。"
         summary_en = f"TAF does not flag a strong cloud/rain suppression signal around the peak window ({peak_window})."
-
     if wind_shift:
         summary_zh += " 同时机场预报风向存在阶段性切换。"
         summary_en += " Airport wind direction also shifts by regime during the window."
@@ -379,10 +549,19 @@ def _build_taf_signal(
         "valid_time_from": (taf_data or {}).get("valid_time_from"),
         "valid_time_to": (taf_data or {}).get("valid_time_to"),
         "peak_window": peak_window,
-        "precip_codes": precip_codes,
+        "segments": [
+            {
+                "type": seg["type"],
+                "start_local": seg["start_utc"].astimezone(local_tz).strftime("%H:%M"),
+                "end_local": seg["end_utc"].astimezone(local_tz).strftime("%H:%M"),
+                "tokens": seg["tokens"],
+            }
+            for seg in active_segments
+        ],
+        "markers": markers,
         "low_ceiling_ft": low_ceiling_ft,
         "ceiling_cover": ceiling_cover,
-        "wind_regimes": unique_buckets,
+        "wind_regimes": wind_regimes,
         "wind_shift": wind_shift,
         "suppression_level": suppression_level,
         "disruption_level": disruption_level,
@@ -875,6 +1054,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     taf_signal = _build_taf_signal(
         taf if isinstance(taf, dict) else {},
         city,
+        local_date_str,
+        int(utc_offset or 0),
         first_peak_h,
         last_peak_h,
     )

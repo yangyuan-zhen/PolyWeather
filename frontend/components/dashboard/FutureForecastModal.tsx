@@ -285,6 +285,20 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           tension: 0.3,
         });
       }
+      if ((todayChartData.tafMarkers || []).length > 0) {
+        datasets.push({
+          backgroundColor: "#f59e0b",
+          borderColor: "#f59e0b",
+          borderWidth: 0,
+          data: todayChartData.datasets.tafMarkerPoints,
+          fill: false,
+          label: locale === "en-US" ? "TAF Timing" : "TAF 时段",
+          order: -2,
+          pointHoverRadius: 8,
+          pointRadius: 5,
+          showLine: false,
+        });
+      }
 
       return {
         data: {
@@ -315,6 +329,21 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               backgroundColor: "rgba(15, 23, 42, 0.96)",
               borderColor: "rgba(34, 211, 238, 0.2)",
               borderWidth: 1,
+              callbacks: {
+                label: (ctx) => {
+                  const label = String(ctx.dataset.label || "");
+                  if (label === "TAF Timing" || label === "TAF 时段") {
+                    const marker = (todayChartData.tafMarkers || []).find(
+                      (item) => item.index === ctx.dataIndex,
+                    );
+                    if (!marker) return label;
+                    return `${label}: ${marker.summary}`;
+                  }
+                  const value = ctx.parsed.y;
+                  if (value == null) return label;
+                  return `${label}: ${value.toFixed(1)}${detail.temp_symbol || "°C"}`;
+                },
+              },
             },
           },
           responsive: true,
@@ -504,81 +533,154 @@ export function FutureForecastModal() {
       }`
     : "--";
   const upperAirSignal = detail.vertical_profile_signal || {};
+  const tafSignal = detail.taf?.signal || {};
   const topBucketProbability = normalizeMarketValue(topBucket?.probability);
+  const numericEdge = Number(marketScan?.edge_percent);
   const hottestMatchesSettlement =
     hottestBucketLabel !== "--" &&
     settlementBucketLabel !== "--" &&
     hottestBucketLabel === settlementBucketLabel;
   const marketAwareUpperAirCue = useMemo(() => {
-    if (!isToday || !upperAirSignal.source) return null;
+    if (!isToday || (!upperAirSignal.source && !tafSignal.available)) return null;
 
     const crowded = hottestMatchesSettlement && (topBucketProbability || 0) >= 0.3;
     const setup = String(upperAirSignal.heating_setup || "neutral").toLowerCase();
+    const tafSuppression = String(
+      tafSignal.suppression_level || "low",
+    ).toLowerCase();
+    const tafDisruption = String(
+      tafSignal.disruption_level || "low",
+    ).toLowerCase();
+    const signalLabel = String(marketScan?.signal_label || "").toUpperCase();
+    const edgeAbs = Number.isFinite(numericEdge) ? Math.abs(numericEdge) : 0;
+    const strongEdge = edgeAbs >= 8;
+    const reasons: string[] = [];
+    let score = 0;
 
     if (setup === "supportive") {
+      score += 2;
+      reasons.push(
+        locale === "en-US"
+          ? "upper-air structure still supports daytime heating"
+          : "高空结构仍偏支持白天冲高",
+      );
+    } else if (setup === "suppressed") {
+      score -= 2;
+      reasons.push(
+        locale === "en-US"
+          ? "upper-air structure still leans toward capping the peak"
+          : "高空结构更偏向压住峰值",
+      );
+    }
+
+    if (tafSuppression === "high") {
+      score -= 2;
+      reasons.push(
+        locale === "en-US"
+          ? "TAF flags meaningful cloud/rain suppression near the peak window"
+          : "TAF 在峰值窗口提示云雨压温风险偏高",
+      );
+    } else if (tafSuppression === "medium") {
+      score -= 1;
+      reasons.push(
+        locale === "en-US"
+          ? "TAF keeps some cloud/rain suppression risk on the table"
+          : "TAF 仍提示一定的云雨压温风险",
+      );
+    }
+
+    if (tafDisruption === "high") {
+      score -= 1;
+      reasons.push(
+        locale === "en-US"
+          ? "TAF also suggests a noisier afternoon regime"
+          : "TAF 还提示午后扰动偏强",
+      );
+    } else if (tafDisruption === "medium") {
+      score -= 0.5;
+      reasons.push(
+        locale === "en-US"
+          ? "TAF keeps some afternoon timing noise in play"
+          : "TAF 提示午后仍可能有时段性扰动",
+      );
+    }
+
+    if (strongEdge && signalLabel === "BUY YES") {
+      score += 1;
+      reasons.push(
+        locale === "en-US"
+          ? `market edge still leans hotter (${formatSignedPercent(numericEdge)})`
+          : `市场 edge 仍偏向更热一侧（${formatSignedPercent(numericEdge)}）`,
+      );
+    } else if (strongEdge && signalLabel === "BUY NO") {
+      score -= 1;
+      reasons.push(
+        locale === "en-US"
+          ? `market edge still leans cooler (${formatSignedPercent(numericEdge)})`
+          : `市场 edge 仍偏向更冷一侧（${formatSignedPercent(numericEdge)}）`,
+      );
+    }
+
+    if (crowded && score > 0) {
+      score -= 0.5;
+      reasons.push(
+        locale === "en-US"
+          ? "the target bucket is already getting crowded"
+          : "目标区间已经开始变拥挤",
+      );
+    }
+
+    if (score >= 1.5) {
       return {
-        summary: locale === "en-US"
-          ? crowded
-            ? "Upper-air structure still leans warmer, but the target bucket is already crowded. Do not fade lower buckets too early, and do not chase blindly either."
-            : "Upper-air structure still leans warmer, and the market is not fully crowded into the target bucket yet. Do not fade lower buckets too early."
-          : crowded
-            ? "高空结构仍偏支持冲高，但当前目标区间已经较拥挤。不宜过早做更低温区间，也不要盲目继续追价。"
-            : "高空结构仍偏支持冲高，市场最热桶还没完全挤到目标区间。不宜过早做更低温区间。",
-        note: locale === "en-US"
-          ? crowded
-            ? "Warmer side still has structural support, but price is no longer cheap. Wait for surface follow-through before adding."
-            : "Warmer side still has structural support and is not fully overcrowded yet. Fading lower buckets too early is risky."
-          : crowded
-            ? "暖侧仍有结构支撑，但价格已经不算便宜，继续加仓前先等近地面兑现。"
-            : "暖侧仍有结构支撑，且还没有完全过热，过早去做更低温区间风险较高。",
+        summary:
+          locale === "en-US"
+            ? "The combined upper-air, TAF, and market read still leans warmer. Do not fade lower buckets too early."
+            : "高空、TAF 和市场三层信号合并后仍偏暖侧，不宜过早做更低温区间。",
+        note:
+          locale === "en-US"
+            ? `${reasons.slice(0, 2).join("; ")}.`
+            : `${reasons.slice(0, 2).join("；")}。`,
         tone: "warm",
         value: locale === "en-US" ? "Lean warmer" : "偏暖侧",
       };
     }
 
-    if (setup === "suppressed") {
+    if (score <= -1.5) {
       return {
-        summary: locale === "en-US"
-          ? crowded
-            ? "Upper-air structure leans toward capping the high, and the target bucket is already crowded. Chasing higher buckets needs extra caution."
-            : "Upper-air structure leans toward capping the high. Be more careful chasing higher buckets."
-          : crowded
-            ? "高空结构更偏向压住峰值，而且目标区间已经较拥挤。追更高温区间要更谨慎。"
-            : "高空结构更偏向压住峰值，追更高温区间要更谨慎。",
-        note: locale === "en-US"
-          ? crowded
-            ? "Both structure and crowding argue for caution on the hotter side."
-            : "The hotter side needs stronger surface confirmation before adding."
-          : crowded
-            ? "结构和拥挤度都不利于继续追热。"
-            : "更高温区间需要更强的近地面确认后再考虑追价。",
+        summary:
+          locale === "en-US"
+            ? "The combined upper-air, TAF, and market read leans more defensive. Be more careful chasing higher buckets."
+            : "高空、TAF 和市场三层信号合并后更偏防守，追更高温区间要更谨慎。",
+        note:
+          locale === "en-US"
+            ? `${reasons.slice(0, 2).join("; ")}.`
+            : `${reasons.slice(0, 2).join("；")}。`,
         tone: "cold",
         value: locale === "en-US" ? "Lean cautious" : "偏谨慎",
       };
     }
 
     return {
-      summary: locale === "en-US"
-        ? crowded
-          ? "Upper-air structure is neutral, while the target bucket is already crowded. Let surface structure and price action decide before taking a side."
-          : "Upper-air structure is neutral. Let surface structure and price action decide before taking a side."
-        : crowded
-          ? "高空结构偏中性，但目标区间已经较拥挤。先看近地面结构和盘口变化，不急着继续站边。"
-          : "高空结构偏中性，先看近地面结构和盘口变化，不急着站边。",
-      note: locale === "en-US"
-        ? crowded
-          ? "There is no clean edge from the upper-air layer alone, and the market is already leaning. Wait for confirmation."
-          : "There is no clean edge from the upper-air layer alone. Wait for confirmation."
-        : crowded
-          ? "单看高空层没有明确边，而且市场已经先站位，先等确认。"
-          : "单看高空层没有明确边，先等确认。",
+      summary:
+        locale === "en-US"
+          ? "The combined upper-air, TAF, and market read is mixed. Let surface structure and price action decide before taking a side."
+          : "高空、TAF 和市场三层信号目前偏混合，先看近地面结构和盘口变化，不急着站边。",
+      note:
+        locale === "en-US"
+          ? `${reasons.slice(0, 2).join("; ") || "No clean edge from the upper-air layer alone"}.`
+          : `${reasons.slice(0, 2).join("；") || "单看高空层还没有干净的交易边"}。`,
       tone: "",
       value: locale === "en-US" ? "Wait / confirm" : "先观察",
     };
   }, [
+    tafSignal.available,
+    tafSignal.disruption_level,
+    tafSignal.suppression_level,
+    marketScan?.signal_label,
     hottestMatchesSettlement,
     isToday,
     locale,
+    numericEdge,
     topBucketProbability,
     upperAirSignal.heating_setup,
     upperAirSignal.source,

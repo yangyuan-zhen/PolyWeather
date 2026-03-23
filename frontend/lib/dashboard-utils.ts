@@ -334,6 +334,32 @@ export function getTemperatureChartData(
 
   const min = Math.floor(Math.min(...allValues)) - 1;
   const max = Math.ceil(Math.max(...allValues)) + 1;
+  const tafMarkersRaw = Array.isArray(detail.taf?.signal?.markers)
+    ? detail.taf?.signal?.markers || []
+    : [];
+  const tafMarkerValue = max - 0.4;
+  const tafMarkerPoints = new Array(times.length).fill(null);
+  const tafMarkers = tafMarkersRaw
+    .map((marker) => {
+      const labelTime = String(marker?.label_time || "").trim();
+      const index = times.indexOf(labelTime);
+      if (index >= 0) {
+        tafMarkerPoints[index] = tafMarkerValue;
+      }
+      return {
+        endLocal: String(marker?.end_local || "").trim(),
+        index,
+        labelTime,
+        markerType: String(marker?.marker_type || "").trim(),
+        startLocal: String(marker?.start_local || "").trim(),
+        summary:
+          isEnglish(locale)
+            ? String(marker?.summary_en || "").trim()
+            : String(marker?.summary_zh || "").trim(),
+        suppressionLevel: String(marker?.suppression_level || "").trim(),
+      };
+    })
+    .filter((marker) => marker.index >= 0);
 
   const legendParts: string[] = [];
   if (detail.mgm?.temp != null) {
@@ -385,6 +411,21 @@ export function getTemperatureChartData(
         : "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作为结算参考线。",
     );
   }
+  if (tafMarkers.length) {
+    const tafText = tafMarkers
+      .slice(0, 4)
+      .map((marker) =>
+        isEnglish(locale)
+          ? `${marker.markerType} ${marker.startLocal}-${marker.endLocal}`
+          : `${marker.markerType} ${marker.startLocal}-${marker.endLocal}`,
+      )
+      .join(" | ");
+    legendParts.push(
+      isEnglish(locale)
+        ? `TAF timing: ${tafText}`
+        : `TAF 时段: ${tafText}`,
+    );
+  }
 
   return {
     datasets: {
@@ -395,6 +436,7 @@ export function getTemperatureChartData(
       mgmHourlyPoints,
       mgmPoints,
       offset,
+      tafMarkerPoints,
       temps,
     },
     observationLabel:
@@ -408,6 +450,7 @@ export function getTemperatureChartData(
     legendText: legendParts.join(" | "),
     max,
     min,
+    tafMarkers,
     times,
   };
 }
