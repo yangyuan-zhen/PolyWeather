@@ -11,9 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.analysis.deb_algorithm import load_history, save_history
-from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
-from src.database.runtime_state import STATE_STORAGE_FILE, get_state_storage_mode
+from src.analysis.deb_algorithm import load_history, save_history  # noqa: E402
+from src.analysis.probability_snapshot_archive import (  # noqa: E402
+    load_snapshot_rows_for_day,
+)
+from src.database.runtime_state import STATE_STORAGE_FILE, get_state_storage_mode  # noqa: E402
 
 
 def _load_daily_records(path: Path) -> Dict[str, Dict[str, Dict[str, Any]]]:
