@@ -10,6 +10,14 @@ const METAR_WX_MAP: Record<
   string,
   { en: string; icon: string; zh: string }
 > = {
+  VCSH: { en: "Showers nearby", icon: "🌦️", zh: "附近有阵雨" },
+  SHRA: { en: "Rain showers", icon: "🌦️", zh: "阵雨" },
+  "-SHRA": { en: "Light rain showers", icon: "🌦️", zh: "小阵雨" },
+  "+SHRA": { en: "Heavy rain showers", icon: "⛈️", zh: "强阵雨" },
+  VCRA: { en: "Rain nearby", icon: "🌧️", zh: "附近有降雨" },
+  TSRA: { en: "Thunderstorms with rain", icon: "⛈️", zh: "雷雨" },
+  "-TSRA": { en: "Light thunderstorms with rain", icon: "⛈️", zh: "小雷雨" },
+  "+TSRA": { en: "Heavy thunderstorms with rain", icon: "⛈️", zh: "强雷雨" },
   RA: { en: "Rain", icon: "🌧️", zh: "降雨" },
   "-RA": { en: "Light rain", icon: "🌦️", zh: "小雨" },
   "+RA": { en: "Heavy rain", icon: "⛈️", zh: "强降雨" },
@@ -18,6 +26,8 @@ const METAR_WX_MAP: Record<
   "+SN": { en: "Heavy snow", icon: "🌨️", zh: "大雪" },
   DZ: { en: "Drizzle", icon: "🌦️", zh: "毛毛雨" },
   FG: { en: "Fog", icon: "🌫️", zh: "雾" },
+  VCFG: { en: "Fog nearby", icon: "🌫️", zh: "附近有雾" },
+  MIFG: { en: "Shallow fog", icon: "🌫️", zh: "浅雾" },
   BR: { en: "Mist", icon: "🌫️", zh: "薄雾" },
   HZ: { en: "Haze", icon: "🌫️", zh: "霾" },
   TS: { en: "Thunderstorm", icon: "⛈️", zh: "雷暴" },

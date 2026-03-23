@@ -164,6 +164,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 - Chinese overview: [README_ZH.md](README_ZH.md)
 - Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
+- TAF signal guide (ZH): [docs/TAF_SIGNAL_ZH.md](docs/TAF_SIGNAL_ZH.md)
 - Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - Open-Core policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
