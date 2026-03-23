@@ -711,6 +711,10 @@ export function ForecastTable() {
   if (!data) return null;
 
   const daily = data.forecast?.daily || [];
+  const resolveForecastTemp = (date: string, fallback: number | null | undefined) => {
+    const debPrediction = data.multi_model_daily?.[date]?.deb?.prediction;
+    return debPrediction ?? fallback ?? null;
+  };
   return (
     <section className="forecast-section">
       <h3>{t("forecast.title")}</h3>
@@ -744,7 +748,7 @@ export function ForecastTable() {
                     : day.date.substring(5).replace("-", "/")}
                 </div>
                 <div className="f-temp">
-                  {day.max_temp}
+                  {resolveForecastTemp(day.date, day.max_temp)}
                   {data.temp_symbol}
                 </div>
               </button>

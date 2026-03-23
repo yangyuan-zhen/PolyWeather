@@ -926,9 +926,12 @@ function renderDecision(detail) {
 function renderForecast(detail) {
   const symbol = detail?.temp_symbol || "°C";
   const daily = Array.isArray(detail?.forecast?.daily) ? detail.forecast.daily : [];
+  const dailyDeb = detail?.multi_model_daily || {};
   els.forecastRow.innerHTML = "";
   for (let i = 0; i < Math.min(daily.length, 6); i += 1) {
     const day = daily[i];
+    const debValue = dailyDeb?.[day?.date]?.deb?.prediction;
+    const displayTemp = debValue ?? day?.max_temp;
     const card = document.createElement("div");
     card.className = `forecast-card ${i === 0 ? "today" : ""}`;
 
@@ -939,7 +942,7 @@ function renderForecast(detail) {
 
     const v = document.createElement("div");
     v.className = "f-temp";
-    v.textContent = formatTemp(day?.max_temp, symbol);
+    v.textContent = formatTemp(displayTemp, symbol);
     card.appendChild(v);
 
     els.forecastRow.appendChild(card);
@@ -1023,6 +1026,10 @@ function normalizeAggregateDetail(payload) {
     forecast: {
       daily: Array.isArray(timeseries.forecast_daily) ? timeseries.forecast_daily : []
     },
+    multi_model_daily:
+      timeseries.multi_model_daily && typeof timeseries.multi_model_daily === "object"
+        ? timeseries.multi_model_daily
+        : {},
     hourly: timeseries.hourly || { times: [], temps: [] },
     metar_today_obs: timeseries.metar_today_obs || [],
     settlement_today_obs: timeseries.settlement_today_obs || [],
