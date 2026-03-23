@@ -296,8 +296,10 @@ def update_daily_record(
     if date_str not in data[city_name]:
         data[city_name][date_str] = {}
 
-    # 统一过滤已弃用模型，避免历史/展示残留
-    forecasts = {
+    # 统一过滤已弃用模型，避免历史/展示残留。
+    # 对同一天的多次刷新，保留历史上已经拿到的模型值，避免某次上游短暂缺失
+    # 把已有 forecast 整体覆盖成更稀疏的新字典，导致历史图断线。
+    next_forecasts = {
         k: v for k, v in (forecasts or {}).items() if not _is_excluded_model_name(k)
     }
 
@@ -346,10 +348,17 @@ def update_daily_record(
     old_mu = existing.get("mu")
     old_probs = existing.get("prob_snapshot")
     old_shadow_probs = existing.get("shadow_prob_snapshot")
+    old_forecasts = existing.get("forecasts") if isinstance(existing.get("forecasts"), dict) else {}
+    merged_forecasts = dict(old_forecasts)
+    for model_name, model_value in next_forecasts.items():
+        if model_value is not None:
+            merged_forecasts[model_name] = model_value
+        elif model_name not in merged_forecasts:
+            merged_forecasts[model_name] = model_value
     next_mu = round(mu, 2) if mu is not None else None
     if (
         old_actual == actual_high
-        and existing.get("forecasts") == forecasts
+        and old_forecasts == merged_forecasts
         and (deb_prediction is None or old_deb == deb_prediction)
         and (mu is None or old_mu == next_mu)
         and (compact_probs is None or old_probs == compact_probs)
@@ -375,7 +384,7 @@ def update_daily_record(
         except Exception:
             pass
 
-    existing["forecasts"] = forecasts
+    existing["forecasts"] = merged_forecasts
     existing["actual_high"] = actual_high
     if deb_prediction is not None:
         existing["deb_prediction"] = deb_prediction
