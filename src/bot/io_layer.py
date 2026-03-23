@@ -26,6 +26,9 @@ class BotIOLayer:
         self.query_topic_map = self._parse_topic_map(
             os.getenv("TELEGRAM_QUERY_TOPIC_MAP")
         )
+        self.message_cooldown_map = self._parse_int_map(
+            os.getenv("POLYWEATHER_BOT_MESSAGE_COOLDOWN_BY_CHAT")
+        )
         self.query_topic_chat_id = str(
             os.getenv("TELEGRAM_QUERY_TOPIC_CHAT_ID") or ""
         ).strip()
@@ -66,6 +69,34 @@ class BotIOLayer:
             if chat_id and topic_id > 0:
                 out[chat_id] = topic_id
         return out
+
+    @staticmethod
+    def _parse_int_map(raw: Optional[str]) -> Dict[str, int]:
+        """
+        Parse env maps like:
+        - "-1003586303099:10,-1003539418691:20"
+        - Supports comma/semicolon/newline separators.
+        """
+        out: Dict[str, int] = {}
+        if not raw:
+            return out
+        normalized = str(raw).replace("\r", ",").replace("\n", ",").replace(";", ",")
+        for part in normalized.split(","):
+            row = part.strip()
+            if not row or ":" not in row:
+                continue
+            key, value_raw = row.split(":", 1)
+            key = str(key or "").strip()
+            value = BotIOLayer._safe_int(value_raw, default=-1)
+            if key and value >= 0:
+                out[key] = value
+        return out
+
+    def _resolve_message_cooldown(self, chat_id: Any) -> int:
+        chat_key = str(chat_id).strip() if chat_id is not None else ""
+        if chat_key and chat_key in self.message_cooldown_map:
+            return self.message_cooldown_map[chat_key]
+        return MESSAGE_COOLDOWN_SEC
 
     def _resolve_query_target(
         self,
@@ -214,15 +245,17 @@ class BotIOLayer:
 
         user = message.from_user
         username = self.display_name(user)
+        cooldown_sec = self._resolve_message_cooldown(getattr(chat, "id", None))
         preview = text.strip().replace("\n", " ")
         if len(preview) > 80:
             preview = preview[:77] + "..."
         logger.info(
-            "group text received chat_id={} thread_id={} user_id={} text_len={} preview={!r}",
+            "group text received chat_id={} thread_id={} user_id={} text_len={} cooldown_sec={} preview={!r}",
             getattr(chat, "id", None),
             getattr(message, "message_thread_id", None),
             getattr(user, "id", None),
             len(text.strip()),
+            cooldown_sec,
             preview,
         )
         self.db.upsert_user(user.id, username)
@@ -231,7 +264,7 @@ class BotIOLayer:
             user.id,
             text=text,
             points_to_add=MESSAGE_POINTS,
-            cooldown_sec=MESSAGE_COOLDOWN_SEC,
+            cooldown_sec=cooldown_sec,
             daily_cap=MESSAGE_DAILY_CAP,
             min_text_length=MESSAGE_MIN_LENGTH,
         )
