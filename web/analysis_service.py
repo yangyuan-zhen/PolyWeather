@@ -43,13 +43,15 @@ def _build_vertical_profile_signal(
     hourly_next_48h: Dict[str, list],
     local_date: str,
     local_hour: int,
+    first_peak_h: int,
+    last_peak_h: int,
 ) -> Dict[str, Any]:
     times = hourly_next_48h.get("times") or []
     if not times:
         return {}
 
-    preferred_start = max(local_hour, 12)
-    preferred_end = 19
+    preferred_start = max(local_hour, max(0, first_peak_h - 2))
+    preferred_end = min(23, last_peak_h + 1)
     candidate_indexes = [
         index
         for index, ts in enumerate(times)
@@ -766,6 +768,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         next_48h_hourly,
         local_date_str,
         local_hour,
+        first_peak_h,
+        last_peak_h,
     )
 
     # ── 13. Cloud description (METAR primary, MGM fallback) ──

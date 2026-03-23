@@ -503,6 +503,86 @@ export function FutureForecastModal() {
         marketScan.confidence ? ` / ${marketScan.confidence}` : ""
       }`
     : "--";
+  const upperAirSignal = detail.vertical_profile_signal || {};
+  const topBucketProbability = normalizeMarketValue(topBucket?.probability);
+  const hottestMatchesSettlement =
+    hottestBucketLabel !== "--" &&
+    settlementBucketLabel !== "--" &&
+    hottestBucketLabel === settlementBucketLabel;
+  const marketAwareUpperAirCue = useMemo(() => {
+    if (!isToday || !upperAirSignal.source) return null;
+
+    const crowded = hottestMatchesSettlement && (topBucketProbability || 0) >= 0.3;
+    const setup = String(upperAirSignal.heating_setup || "neutral").toLowerCase();
+
+    if (setup === "supportive") {
+      return {
+        summary: locale === "en-US"
+          ? crowded
+            ? "Upper-air structure still leans warmer, but the target bucket is already crowded. Do not fade lower buckets too early, and do not chase blindly either."
+            : "Upper-air structure still leans warmer, and the market is not fully crowded into the target bucket yet. Do not fade lower buckets too early."
+          : crowded
+            ? "高空结构仍偏支持冲高，但当前目标区间已经较拥挤。不宜过早做更低温区间，也不要盲目继续追价。"
+            : "高空结构仍偏支持冲高，市场最热桶还没完全挤到目标区间。不宜过早做更低温区间。",
+        note: locale === "en-US"
+          ? crowded
+            ? "Warmer side still has structural support, but price is no longer cheap. Wait for surface follow-through before adding."
+            : "Warmer side still has structural support and is not fully overcrowded yet. Fading lower buckets too early is risky."
+          : crowded
+            ? "暖侧仍有结构支撑，但价格已经不算便宜，继续加仓前先等近地面兑现。"
+            : "暖侧仍有结构支撑，且还没有完全过热，过早去做更低温区间风险较高。",
+        tone: "warm",
+        value: locale === "en-US" ? "Lean warmer" : "偏暖侧",
+      };
+    }
+
+    if (setup === "suppressed") {
+      return {
+        summary: locale === "en-US"
+          ? crowded
+            ? "Upper-air structure leans toward capping the high, and the target bucket is already crowded. Chasing higher buckets needs extra caution."
+            : "Upper-air structure leans toward capping the high. Be more careful chasing higher buckets."
+          : crowded
+            ? "高空结构更偏向压住峰值，而且目标区间已经较拥挤。追更高温区间要更谨慎。"
+            : "高空结构更偏向压住峰值，追更高温区间要更谨慎。",
+        note: locale === "en-US"
+          ? crowded
+            ? "Both structure and crowding argue for caution on the hotter side."
+            : "The hotter side needs stronger surface confirmation before adding."
+          : crowded
+            ? "结构和拥挤度都不利于继续追热。"
+            : "更高温区间需要更强的近地面确认后再考虑追价。",
+        tone: "cold",
+        value: locale === "en-US" ? "Lean cautious" : "偏谨慎",
+      };
+    }
+
+    return {
+      summary: locale === "en-US"
+        ? crowded
+          ? "Upper-air structure is neutral, while the target bucket is already crowded. Let surface structure and price action decide before taking a side."
+          : "Upper-air structure is neutral. Let surface structure and price action decide before taking a side."
+        : crowded
+          ? "高空结构偏中性，但目标区间已经较拥挤。先看近地面结构和盘口变化，不急着继续站边。"
+          : "高空结构偏中性，先看近地面结构和盘口变化，不急着站边。",
+      note: locale === "en-US"
+        ? crowded
+          ? "There is no clean edge from the upper-air layer alone, and the market is already leaning. Wait for confirmation."
+          : "There is no clean edge from the upper-air layer alone. Wait for confirmation."
+        : crowded
+          ? "单看高空层没有明确边，而且市场已经先站位，先等确认。"
+          : "单看高空层没有明确边，先等确认。",
+      tone: "",
+      value: locale === "en-US" ? "Wait / confirm" : "先观察",
+    };
+  }, [
+    hottestMatchesSettlement,
+    isToday,
+    locale,
+    topBucketProbability,
+    upperAirSignal.heating_setup,
+    upperAirSignal.source,
+  ]);
   const metarParsed = parseMetarTempDew(detail.current?.raw_metar);
   const fallbackDewpoint =
     detail.current?.dewpoint ??
@@ -566,6 +646,21 @@ export function FutureForecastModal() {
           : risk.airport
           ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
           : "--";
+  const displayedUpperAirSummary =
+    marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
+  const displayedUpperAirMetrics = (view.front.upperAirMetrics || []).map(
+    (metric, index) =>
+      index === 0 &&
+      (metric.label === "Trade cue" || metric.label === "交易动作") &&
+      marketAwareUpperAirCue
+        ? {
+            ...metric,
+            note: marketAwareUpperAirCue.note,
+            tone: marketAwareUpperAirCue.tone,
+            value: marketAwareUpperAirCue.value,
+          }
+        : metric,
+  );
 
   return (
     <div
@@ -1005,19 +1100,19 @@ export function FutureForecastModal() {
                         </div>
                       ))}
                     </div>
-                    {view.front.upperAirSummary ||
-                    (view.front.upperAirMetrics?.length || 0) > 0 ? (
+                    {displayedUpperAirSummary ||
+                    displayedUpperAirMetrics.length > 0 ? (
                       <>
                         <div className="future-subsection-title">
                           {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
                         </div>
-                        {view.front.upperAirSummary ? (
+                        {displayedUpperAirSummary ? (
                           <div className="future-trend-summary">
-                            {view.front.upperAirSummary}
+                            {displayedUpperAirSummary}
                           </div>
                         ) : null}
                         <div className="future-trend-grid">
-                          {(view.front.upperAirMetrics || []).map((metric) => (
+                          {displayedUpperAirMetrics.map((metric) => (
                             <div key={metric.label} className="future-trend-card">
                               <div className="future-trend-label">{metric.label}</div>
                               <div

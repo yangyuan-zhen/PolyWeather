@@ -30,6 +30,10 @@ function isEnglish(locale: Locale) {
   return locale === "en-US";
 }
 
+function containsCjk(text: string) {
+  return /[\u3400-\u9fff]/.test(text);
+}
+
 function getObservationSourceCode(detail: CityDetail): string {
   const source = String(detail.current?.settlement_source || "")
     .trim()
@@ -580,6 +584,34 @@ export function computeFrontTrendSignal(
   locale: Locale = "zh-CN",
 ) {
   const upperAirSignal = detail.vertical_profile_signal || {};
+  const upperAirTradeCue = upperAirSignal.source
+    ? upperAirSignal.heating_setup === "supportive"
+      ? {
+          label: isEnglish(locale) ? "Trade cue" : "交易动作",
+          note: isEnglish(locale)
+            ? "Do not fade lower buckets too early."
+            : "不宜过早做更低温区间。",
+          tone: "warm",
+          value: isEnglish(locale) ? "Lean warmer" : "偏暖侧",
+        }
+      : upperAirSignal.heating_setup === "suppressed"
+        ? {
+            label: isEnglish(locale) ? "Trade cue" : "交易动作",
+            note: isEnglish(locale)
+              ? "Be more careful chasing higher buckets."
+              : "追更高温区间要更谨慎。",
+            tone: "cold",
+            value: isEnglish(locale) ? "Lean cautious" : "偏谨慎",
+          }
+        : {
+            label: isEnglish(locale) ? "Trade cue" : "交易动作",
+            note: isEnglish(locale)
+              ? "Let surface structure and market price action decide first."
+              : "先看近地面结构和盘口变化，不急着站边。",
+            tone: "",
+            value: isEnglish(locale) ? "Wait / confirm" : "先观察",
+          }
+    : null;
   const upperAirSummary = upperAirSignal.source
     ? (() => {
         const hasMetrics =
@@ -609,6 +641,7 @@ export function computeFrontTrendSignal(
     : "";
   const upperAirMetrics = upperAirSignal.source
     ? [
+        ...(upperAirTradeCue ? [upperAirTradeCue] : []),
         {
           label: isEnglish(locale) ? "Peak setup" : "冲高环境",
           note:
@@ -731,15 +764,23 @@ export function computeFrontTrendSignal(
         },
       ]
     : [];
-  const backendSummary =
+  const rawBackendSummary =
     dateStr === detail.local_date
       ? String(detail.dynamic_commentary?.summary || "").trim()
       : "";
-  const backendNotes = Array.isArray(detail.dynamic_commentary?.notes)
+  const backendSummary =
+    rawBackendSummary &&
+    (!isEnglish(locale) || !containsCjk(rawBackendSummary))
+      ? rawBackendSummary
+      : "";
+  const rawBackendNotes = Array.isArray(detail.dynamic_commentary?.notes)
     ? detail.dynamic_commentary?.notes
         ?.map((item) => String(item || "").trim())
         .filter(Boolean) || []
     : [];
+  const backendNotes = rawBackendNotes.filter(
+    (note) => !isEnglish(locale) || !containsCjk(note),
+  );
   const slice = getFutureSlice(detail, dateStr);
   const currentTemp = Number(detail.current?.temp);
   const currentDew = Number(detail.current?.dewpoint);
@@ -807,8 +848,21 @@ export function computeFrontTrendSignal(
   const isTargetToday = dateStr === detail.local_date;
   const currentHm = normalizeHm(detail.local_time);
   const sunsetHm = normalizeHm(detail.forecast?.sunset);
+  const peakFirstHour = Number(detail.peak?.first_h);
+  const peakLastHour = Number(detail.peak?.last_h);
+  const hasPeakWindow =
+    Number.isFinite(peakFirstHour) &&
+    Number.isFinite(peakLastHour) &&
+    peakFirstHour >= 0 &&
+    peakLastHour >= peakFirstHour;
   const currentMinutes = hmToMinutes(currentHm);
   const sunsetMinutes = hmToMinutes(sunsetHm);
+  const peakWindowStartMinutes = hasPeakWindow
+    ? Math.max(0, (peakFirstHour - 2) * 60)
+    : null;
+  const peakWindowEndMinutes = hasPeakWindow
+    ? Math.min(23 * 60 + 59, (peakLastHour + 1) * 60)
+    : null;
   const canUseSunsetWindow =
     isTargetToday &&
     currentMinutes !== null &&
@@ -829,24 +883,42 @@ export function computeFrontTrendSignal(
           return minutes === null ? false : minutes <= sunsetMinutes;
         })
       : futureSlice;
+  const aroundPeakSlice =
+    isTargetToday &&
+    peakWindowStartMinutes !== null &&
+    peakWindowEndMinutes !== null
+      ? futureSlice.filter((point) => {
+          const minutes = pointMinutes(point);
+          return minutes === null
+            ? false
+            : minutes >= peakWindowStartMinutes && minutes <= peakWindowEndMinutes;
+        })
+      : [];
   const workingSlice =
-    untilSunsetSlice.length >= 2
+    aroundPeakSlice.length >= 2
+      ? aroundPeakSlice
+      : untilSunsetSlice.length >= 2
       ? untilSunsetSlice
       : futureSlice.length >= 2
         ? futureSlice
         : slice;
+  const usingPeakWindow = aroundPeakSlice.length >= 2;
   const usingSunsetWindow = canUseSunsetWindow && untilSunsetSlice.length >= 2;
   const first = workingSlice[0] || slice[0];
   const last = workingSlice[workingSlice.length - 1] || slice[slice.length - 1];
   const effectiveHours = Math.max(1, workingSlice.length);
   const windowLabel = `${first?.label || "--"}-${last?.label || "--"}`;
   const windowText = isEnglish(locale)
-    ? usingSunsetWindow
+    ? usingPeakWindow
+      ? `today ${windowLabel} (~${effectiveHours}h, around peak window)`
+      : usingSunsetWindow
       ? `today ${windowLabel} (~${effectiveHours}h, now -> sunset)`
       : isTargetToday
         ? `today ${windowLabel} (~${effectiveHours}h)`
         : `daily ${windowLabel} (~${effectiveHours}h)`
-    : usingSunsetWindow
+    : usingPeakWindow
+      ? `今日 ${windowLabel}（约 ${effectiveHours} 小时，围绕峰值窗口）`
+      : usingSunsetWindow
       ? `今日 ${windowLabel}（约 ${effectiveHours} 小时，当前至日落）`
       : isTargetToday
         ? `今日 ${windowLabel}（约 ${effectiveHours} 小时）`
