@@ -388,11 +388,14 @@ function getInjectedProviderStableId(
   detail?: Eip6963ProviderDetail,
 ): string {
   const rdns = String(detail?.info?.rdns || "").toLowerCase();
-  const announcedName = String(detail?.info?.name || "").toLowerCase().trim();
+  const announcedName = String(detail?.info?.name || "")
+    .toLowerCase()
+    .trim();
   if (rdns) return `rdns:${rdns}`;
   if (announcedName) return `name:${announcedName}`;
   if (provider.isOkxWallet || rdns.includes("okx")) return `okx:${index}`;
-  if (provider.isMetaMask || rdns.includes("metamask")) return `metamask:${index}`;
+  if (provider.isMetaMask || rdns.includes("metamask"))
+    return `metamask:${index}`;
   if (provider.isRabby || rdns.includes("rabby")) return `rabby:${index}`;
   if (
     provider.isBitKeep ||
@@ -652,6 +655,7 @@ export function AccountCenter() {
       guestUser: isEn ? "Guest User" : "游客用户",
       joinedAt: isEn ? "Joined" : "加入时间",
       totalPoints: isEn ? "Total Points" : "总积分 (荣誉)",
+      weeklyPoints: isEn ? "Weekly Points" : "本周积分 (竞技)",
       weeklyRank: isEn ? "Weekly Rank" : "周排行 (竞技)",
       weeklyRewards: isEn ? "Weekly Rewards" : "周榜奖励",
       membershipDetails: isEn ? "Membership Details" : "会员权限详情",
@@ -683,7 +687,7 @@ export function AccountCenter() {
         : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。",
       paymentManualSupport: isEn
         ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
-        : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。",
+        : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
@@ -1956,7 +1960,8 @@ export function AccountCenter() {
       }
       if (
         paymentConfig?.receiver_contract &&
-        String(paymentConfig.receiver_contract).toLowerCase() !== expectedReceiver
+        String(paymentConfig.receiver_contract).toLowerCase() !==
+          expectedReceiver
       ) {
         setPaymentInfo(
           `检测到支付配置已更新，已切换到最新地址 ${shortAddress(expectedReceiver)}。`,
@@ -2313,12 +2318,22 @@ export function AccountCenter() {
                 {totalPoints.toLocaleString()}
               </p>
             </div>
+            <div className="px-6 py-4 bg-emerald-500/10 rounded-2xl border border-emerald-500/20 text-center min-w-[140px]">
+              <p className="text-[10px] text-emerald-300 uppercase tracking-widest mb-1 font-bold">
+                {copy.weeklyPoints}
+              </p>
+              <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
+                <TrendingUp size={16} className="text-emerald-400" />{" "}
+                {weeklyPoints.toLocaleString()}
+              </p>
+            </div>
             <div className="px-6 py-4 bg-blue-500/10 rounded-2xl border border-blue-500/20 text-center min-w-[140px]">
               <p className="text-[10px] text-blue-400 uppercase tracking-widest mb-1 font-bold">
                 {copy.weeklyRank}
               </p>
               <p className="text-xl font-bold text-white flex items-center justify-center gap-2">
-                <Trophy size={16} className="text-amber-400" /> #{weeklyRank}
+                <Trophy size={16} className="text-amber-400" />{" "}
+                {weeklyRank === "--" ? weeklyRank : `#${weeklyRank}`}
               </p>
             </div>
           </div>
