@@ -252,8 +252,10 @@ export function getTemperatureChartData(
   const metarObservationSource = detail.metar_today_obs?.length
     ? detail.metar_today_obs
     : detail.trend?.recent || [];
+  const allowMetarFallback =
+    settlementSource && observationCode !== "hko";
   const shouldUseMetarFallback =
-    settlementSource &&
+    allowMetarFallback &&
     officialObservationSource.length > 0 &&
     officialObservationSource.length < 3 &&
     metarObservationSource.length >= 3;
@@ -365,6 +367,12 @@ export function getTemperatureChartData(
       isEnglish(locale)
         ? `Official ${observationTag} feed is sparse today, so the continuous observation line switches to ${metarFallbackTag}.`
         : `今日官方 ${observationTag} 点位较稀疏，连续实测线改用 ${metarFallbackTag}。`,
+    );
+  } else if (observationCode === "hko") {
+    legendParts.push(
+      isEnglish(locale)
+        ? "Hong Kong uses HKO official readings. The chart keeps official HKO points instead of switching to airport METAR."
+        : "香港按 HKO 官方读数展示；图中保留 HKO 官方点位，不切换到机场 METAR 连续线。",
     );
   } else if (observationCode === "noaa") {
     legendParts.push(

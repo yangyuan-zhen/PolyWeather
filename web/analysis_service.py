@@ -138,14 +138,31 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     settlement_today_obs = []
     if use_settlement_current:
-        if obs_time_str and cur_temp is not None:
-            settlement_today_obs.append({"time": obs_time_str, "temp": cur_temp})
-        if (
-            max_temp_time
-            and max_so_far is not None
-            and str(max_temp_time) != str(obs_time_str)
-        ):
-            settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
+        explicit_settlement_obs = settlement_current.get("today_obs") or []
+        normalized_obs = []
+        for item in explicit_settlement_obs:
+            if isinstance(item, dict):
+                raw_time = str(item.get("time") or "").strip()
+                raw_temp = _sf(item.get("temp"))
+            elif isinstance(item, (list, tuple)) and len(item) >= 2:
+                raw_time = str(item[0] or "").strip()
+                raw_temp = _sf(item[1])
+            else:
+                continue
+            if not raw_time or raw_temp is None:
+                continue
+            normalized_obs.append({"time": raw_time, "temp": raw_temp})
+        if normalized_obs:
+            settlement_today_obs = normalized_obs
+        else:
+            if obs_time_str and cur_temp is not None:
+                settlement_today_obs.append({"time": obs_time_str, "temp": cur_temp})
+            if (
+                max_temp_time
+                and max_so_far is not None
+                and str(max_temp_time) != str(obs_time_str)
+            ):
+                settlement_today_obs.append({"time": str(max_temp_time), "temp": max_so_far})
 
     metar_today_obs_payload = [
         {"time": t, "temp": v}

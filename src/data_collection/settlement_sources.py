@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import csv
+import json
 import math
+import os
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -113,6 +116,90 @@ class SettlementSourceMixin:
                 return row
         return rows[0] if rows else None
 
+    def _get_runtime_data_dir(self) -> str:
+        configured = str(os.getenv("POLYWEATHER_RUNTIME_DATA_DIR") or "").strip()
+        if configured:
+            return configured
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        return os.path.join(project_root, "data")
+
+    def _get_settlement_series_lock(self) -> threading.Lock:
+        lock = getattr(self, "_settlement_series_lock", None)
+        if lock is not None:
+            return lock
+        lock = threading.Lock()
+        setattr(self, "_settlement_series_lock", lock)
+        return lock
+
+    def _hko_today_obs_path(self) -> str:
+        return os.path.join(self._get_runtime_data_dir(), "hko_hong_kong_today_obs.json")
+
+    @staticmethod
+    def _sort_temp_points(points: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        def _key(item: Dict[str, Any]) -> tuple:
+            raw = str(item.get("time") or "")
+            try:
+                hh, mm = raw.split(":")
+                return int(hh), int(mm)
+            except Exception:
+                return (99, 99)
+
+        return sorted(points, key=_key)
+
+    def _update_hko_today_obs(
+        self,
+        *,
+        obs_iso: Optional[str],
+        current_temp: Optional[float],
+    ) -> List[Dict[str, Any]]:
+        if not obs_iso or current_temp is None:
+            return []
+
+        try:
+            obs_dt = datetime.fromisoformat(str(obs_iso).replace("Z", "+00:00"))
+        except Exception:
+            return []
+        if obs_dt.tzinfo is None:
+            obs_dt = obs_dt.replace(tzinfo=timezone(timedelta(hours=8)))
+        local_dt = obs_dt.astimezone(timezone(timedelta(hours=8)))
+        date_str = local_dt.strftime("%Y-%m-%d")
+        time_str = local_dt.strftime("%H:%M")
+        path = self._hko_today_obs_path()
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+
+        lock = self._get_settlement_series_lock()
+        with lock:
+            payload: Dict[str, Any] = {}
+            if os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as fh:
+                        payload = json.load(fh) or {}
+                except Exception:
+                    payload = {}
+
+            existing_date = str(payload.get("date") or "").strip()
+            if existing_date != date_str:
+                payload = {"date": date_str, "points": []}
+
+            indexed: Dict[str, Dict[str, Any]] = {}
+            for raw_point in payload.get("points") or []:
+                if not isinstance(raw_point, dict):
+                    continue
+                raw_time = str(raw_point.get("time") or "").strip()
+                raw_temp = self._safe_float(raw_point.get("temp"))
+                if not raw_time or raw_temp is None:
+                    continue
+                indexed[raw_time] = {"time": raw_time, "temp": round(raw_temp, 1)}
+
+            indexed[time_str] = {"time": time_str, "temp": round(float(current_temp), 1)}
+            points = self._sort_temp_points(list(indexed.values()))
+            payload = {"date": date_str, "station_code": "HKO", "points": points}
+
+            with open(path, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False)
+
+            return points
+
     def fetch_hko_settlement_current(self) -> Optional[Dict[str, Any]]:
         cache_key = "hko:hong_kong"
         cached = self._get_settlement_cache(cache_key)
@@ -154,6 +241,16 @@ class SettlementSourceMixin:
             wind_dir = self._hko_compass_to_deg(
                 wind_row.get("10-Minute Mean Wind Direction(Compass points)") if wind_row else None
             )
+            today_obs = self._update_hko_today_obs(
+                obs_iso=obs_iso,
+                current_temp=current_temp,
+            )
+            derived_max_time = None
+            if today_obs and max_so_far is not None:
+                hottest = max(today_obs, key=lambda item: float(item.get("temp") or -999))
+                hottest_temp = self._safe_float(hottest.get("temp"))
+                if hottest_temp is not None and abs(hottest_temp - float(max_so_far)) <= 0.05:
+                    derived_max_time = str(hottest.get("time") or "").strip() or None
 
             payload: Dict[str, Any] = {
                 "source": "hko",
@@ -164,12 +261,13 @@ class SettlementSourceMixin:
                 "current": {
                     "temp": round(current_temp, 1) if current_temp is not None else None,
                     "max_temp_so_far": round(max_so_far, 1) if max_so_far is not None else None,
-                    "max_temp_time": None,
+                    "max_temp_time": derived_max_time,
                     "today_low": round(min_so_far, 1) if min_so_far is not None else None,
                     "humidity": round(humidity, 1) if humidity is not None else None,
                     "wind_speed_kt": wind_speed_kt,
                     "wind_dir": wind_dir,
                 },
+                "today_obs": today_obs,
                 "unit": "celsius",
             }
             self._set_settlement_cache(cache_key, payload)
