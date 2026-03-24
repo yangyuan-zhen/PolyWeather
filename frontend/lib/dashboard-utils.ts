@@ -795,14 +795,206 @@ export function computeFrontTrendSignal(
         ? String(tafSignal.summary_en || "").trim()
         : String(tafSignal.summary_zh || "").trim()
       : "";
-  const upperAirSummary = [baseUpperAirSummary, tafSummary]
+  let upperAirSummary = baseUpperAirSummary;
+  let tafMetric:
+    | {
+        label: string;
+        note: string;
+        tone?: string;
+        value: string;
+      }
+    | null = null;
+  let upperAirMetrics: Array<{
+    label: string;
+    note: string;
+    tone?: string;
+    value: string;
+  }> = [];
+  const rawBackendSummary =
+    dateStr === detail.local_date
+      ? String(detail.dynamic_commentary?.summary || "").trim()
+      : "";
+  const backendSummary =
+    rawBackendSummary &&
+    (!isEnglish(locale) || !containsCjk(rawBackendSummary))
+      ? rawBackendSummary
+      : "";
+  const rawBackendNotes = Array.isArray(detail.dynamic_commentary?.notes)
+    ? detail.dynamic_commentary?.notes
+        ?.map((item) => String(item || "").trim())
+        .filter(Boolean) || []
+    : [];
+  const backendNotes = rawBackendNotes.filter(
+    (note) => !isEnglish(locale) || !containsCjk(note),
+  );
+  const slice = getFutureSlice(detail, dateStr);
+  const currentTemp = Number(detail.current?.temp);
+  const currentDew = Number(detail.current?.dewpoint);
+
+  if (!slice.length) {
+    return {
+      confidence: "low",
+      label: isEnglish(locale) ? "Monitoring" : "监控中",
+      metrics: [] as Array<{
+        label: string;
+        note: string;
+        tone?: string;
+        value: string;
+      }>,
+      upperAirMetrics,
+      upperAirSummary,
+      precipMax: 0,
+      score: 0,
+      summary:
+        backendSummary ||
+        (isEnglish(locale)
+          ? "Insufficient intraday structured data. Keep baseline monitoring."
+          : "当日日内结构化数据不足，暂时只保留基础监控。"),
+      weatherGovPeriods: [] as ReturnType<typeof getForecastTextForDate>,
+    };
+  }
+
+  const normalizeHm = (value: unknown): string | null => {
+    const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  };
+  const hmToMinutes = (value: string | null) => {
+    if (!value) return null;
+    const [hourPart, minutePart] = value.split(":");
+    const hour = Number.parseInt(hourPart || "", 10);
+    const minute = Number.parseInt(minutePart || "", 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return hour * 60 + minute;
+  };
+  const pointMinutes = (point: { label?: string }) =>
+    hmToMinutes(normalizeHm(point.label));
+
+  const isTargetToday = dateStr === detail.local_date;
+  const currentHm = normalizeHm(detail.local_time);
+  const sunsetHm = normalizeHm(detail.forecast?.sunset);
+  const peakFirstHour = Number(detail.peak?.first_h);
+  const peakLastHour = Number(detail.peak?.last_h);
+  const hasPeakWindow =
+    Number.isFinite(peakFirstHour) &&
+    Number.isFinite(peakLastHour) &&
+    peakFirstHour >= 0 &&
+    peakLastHour >= peakFirstHour;
+  const currentMinutes = hmToMinutes(currentHm);
+  const sunsetMinutes = hmToMinutes(sunsetHm);
+  const peakWindowStartMinutes = hasPeakWindow
+    ? Math.max(0, (peakFirstHour - 2) * 60)
+    : null;
+  const peakWindowEndMinutes = hasPeakWindow
+    ? Math.min(23 * 60 + 59, (peakLastHour + 1) * 60)
+    : null;
+  const canUseSunsetWindow =
+    isTargetToday &&
+    currentMinutes !== null &&
+    sunsetMinutes !== null &&
+    sunsetMinutes > currentMinutes;
+  const tafMarkers = Array.isArray(tafSignal.markers) ? tafSignal.markers : [];
+  const markerSummary = (
+    marker:
+      | {
+          summary_zh?: string | null;
+          summary_en?: string | null;
+        }
+      | null
+      | undefined,
+  ) =>
+    !marker
+      ? ""
+      : isEnglish(locale)
+        ? String(marker.summary_en || "").trim()
+        : String(marker.summary_zh || "").trim();
+  const currentTafMarker =
+    tafSignal.available && currentMinutes !== null
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker?.start_local));
+          const end = hmToMinutes(normalizeHm(marker?.end_local));
+          if (start === null || end === null) return false;
+          return currentMinutes >= start && currentMinutes <= end;
+        })
+      : null;
+  const nextTafMarker =
+    tafSignal.available && currentMinutes !== null && !currentTafMarker
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker?.start_local));
+          return start !== null && start > currentMinutes;
+        })
+      : null;
+  const peakWindowTafMarker =
+    tafSignal.available &&
+    peakWindowStartMinutes !== null &&
+    peakWindowEndMinutes !== null
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker?.start_local));
+          const end = hmToMinutes(normalizeHm(marker?.end_local));
+          if (start === null || end === null) return false;
+          return start <= peakWindowEndMinutes && end >= peakWindowStartMinutes;
+        })
+      : null;
+  const currentTafSummary = markerSummary(currentTafMarker);
+  const peakTafSummary = markerSummary(peakWindowTafMarker);
+  const nextTafSummary = markerSummary(nextTafMarker);
+  const tafTimelineSummary =
+    tafSignal.available && dateStr === detail.local_date
+      ? (() => {
+          if (currentTafMarker && currentTafSummary) {
+            const range = `${normalizeHm(currentTafMarker.start_local) || "--:--"}-${normalizeHm(currentTafMarker.end_local) || "--:--"}`;
+            return isEnglish(locale)
+              ? `Current active TAF segment (${range}): ${currentTafSummary}`
+              : `当前生效的 TAF 时段（${range}）：${currentTafSummary}`;
+          }
+          if (nextTafMarker && nextTafSummary) {
+            const range = `${normalizeHm(nextTafMarker.start_local) || "--:--"}-${normalizeHm(nextTafMarker.end_local) || "--:--"}`;
+            return isEnglish(locale)
+              ? `Next TAF segment (${range}): ${nextTafSummary}`
+              : `下一段 TAF 时段（${range}）：${nextTafSummary}`;
+          }
+          return "";
+        })()
+      : "";
+  const effectivePeakTafSummary =
+    peakTafSummary && peakTafSummary !== currentTafSummary ? peakTafSummary : "";
+  upperAirSummary = [
+    baseUpperAirSummary,
+    tafTimelineSummary,
+    effectivePeakTafSummary,
+    tafSummary,
+  ]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
-  const tafMetric =
+  tafMetric =
     tafSignal.available && dateStr === detail.local_date
       ? {
           label: isEnglish(locale) ? "Airport TAF" : "机场预报",
-          note: tafSummary ||
+          note:
+            tafTimelineSummary ||
+            effectivePeakTafSummary ||
+            tafSummary ||
             (isEnglish(locale)
               ? "Airport TAF is available for the current peak window."
               : "当前峰值窗口已接入机场 TAF 预报。"),
@@ -826,7 +1018,7 @@ export function computeFrontTrendSignal(
                   : "暂稳",
         }
       : null;
-  const upperAirMetrics = upperAirSignal.source
+  upperAirMetrics = upperAirSignal.source
     ? [
         ...(upperAirTradeCue ? [upperAirTradeCue] : []),
         {
@@ -946,118 +1138,14 @@ export function computeFrontTrendSignal(
                   ? "Medium"
                   : "中"
                 : isEnglish(locale)
-                ? "Weak"
-                : "弱",
+                  ? "Weak"
+                  : "弱",
         },
         ...(tafMetric ? [tafMetric] : []),
       ]
     : tafMetric
       ? [tafMetric]
       : [];
-  const rawBackendSummary =
-    dateStr === detail.local_date
-      ? String(detail.dynamic_commentary?.summary || "").trim()
-      : "";
-  const backendSummary =
-    rawBackendSummary &&
-    (!isEnglish(locale) || !containsCjk(rawBackendSummary))
-      ? rawBackendSummary
-      : "";
-  const rawBackendNotes = Array.isArray(detail.dynamic_commentary?.notes)
-    ? detail.dynamic_commentary?.notes
-        ?.map((item) => String(item || "").trim())
-        .filter(Boolean) || []
-    : [];
-  const backendNotes = rawBackendNotes.filter(
-    (note) => !isEnglish(locale) || !containsCjk(note),
-  );
-  const slice = getFutureSlice(detail, dateStr);
-  const currentTemp = Number(detail.current?.temp);
-  const currentDew = Number(detail.current?.dewpoint);
-
-  if (!slice.length) {
-    return {
-      confidence: "low",
-      label: isEnglish(locale) ? "Monitoring" : "监控中",
-      metrics: [] as Array<{
-        label: string;
-        note: string;
-        tone?: string;
-        value: string;
-      }>,
-      upperAirMetrics,
-      upperAirSummary,
-      precipMax: 0,
-      score: 0,
-      summary:
-        backendSummary ||
-        (isEnglish(locale)
-          ? "Insufficient intraday structured data. Keep baseline monitoring."
-          : "当日日内结构化数据不足，暂时只保留基础监控。"),
-      weatherGovPeriods: [] as ReturnType<typeof getForecastTextForDate>,
-    };
-  }
-
-  const normalizeHm = (value: unknown): string | null => {
-    const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
-    if (!match) return null;
-    const hour = Number.parseInt(match[1], 10);
-    const minute = Number.parseInt(match[2], 10);
-    if (
-      !Number.isFinite(hour) ||
-      !Number.isFinite(minute) ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59
-    ) {
-      return null;
-    }
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  };
-  const hmToMinutes = (value: string | null) => {
-    if (!value) return null;
-    const [hourPart, minutePart] = value.split(":");
-    const hour = Number.parseInt(hourPart || "", 10);
-    const minute = Number.parseInt(minutePart || "", 10);
-    if (
-      !Number.isFinite(hour) ||
-      !Number.isFinite(minute) ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59
-    ) {
-      return null;
-    }
-    return hour * 60 + minute;
-  };
-  const pointMinutes = (point: { label?: string }) =>
-    hmToMinutes(normalizeHm(point.label));
-
-  const isTargetToday = dateStr === detail.local_date;
-  const currentHm = normalizeHm(detail.local_time);
-  const sunsetHm = normalizeHm(detail.forecast?.sunset);
-  const peakFirstHour = Number(detail.peak?.first_h);
-  const peakLastHour = Number(detail.peak?.last_h);
-  const hasPeakWindow =
-    Number.isFinite(peakFirstHour) &&
-    Number.isFinite(peakLastHour) &&
-    peakFirstHour >= 0 &&
-    peakLastHour >= peakFirstHour;
-  const currentMinutes = hmToMinutes(currentHm);
-  const sunsetMinutes = hmToMinutes(sunsetHm);
-  const peakWindowStartMinutes = hasPeakWindow
-    ? Math.max(0, (peakFirstHour - 2) * 60)
-    : null;
-  const peakWindowEndMinutes = hasPeakWindow
-    ? Math.min(23 * 60 + 59, (peakLastHour + 1) * 60)
-    : null;
-  const canUseSunsetWindow =
-    isTargetToday &&
-    currentMinutes !== null &&
-    sunsetMinutes !== null &&
-    sunsetMinutes > currentMinutes;
 
   const futureSlice =
     isTargetToday && currentMinutes !== null
@@ -1359,7 +1447,14 @@ export function computeFrontTrendSignal(
       : "";
   const backendSupplement =
     backendSummary && backendSummary !== summary ? backendSummary : "";
-  const combinedSummary = [summary, tafSummary, tafContrastSummary, backendSupplement]
+  const combinedSummary = [
+    summary,
+    tafTimelineSummary,
+    effectivePeakTafSummary,
+    tafSummary,
+    tafContrastSummary,
+    backendSupplement,
+  ]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
   const cloudNote = (() => {
