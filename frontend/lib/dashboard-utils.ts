@@ -739,8 +739,8 @@ export function computeFrontTrendSignal(
       ? {
           label: isEnglish(locale) ? "Trade cue" : "交易动作",
           note: isEnglish(locale)
-            ? "Do not fade lower buckets too early."
-            : "不宜过早做更低温区间。",
+            ? "The setup still supports further warming. Do not call the high too early."
+            : "结构仍支持继续升温，别太早押高温见顶。",
           tone: "warm",
           value: isEnglish(locale) ? "Lean warmer" : "偏暖侧",
         }
@@ -748,16 +748,16 @@ export function computeFrontTrendSignal(
         ? {
             label: isEnglish(locale) ? "Trade cue" : "交易动作",
             note: isEnglish(locale)
-              ? "Be more careful chasing higher buckets."
-              : "追更高温区间要更谨慎。",
+              ? "Further upside looks less reliable. Do not chase the high blindly."
+              : "高温继续上冲的把握不大，别盲目追热。",
             tone: "cold",
             value: isEnglish(locale) ? "Lean cautious" : "偏谨慎",
           }
         : {
             label: isEnglish(locale) ? "Trade cue" : "交易动作",
             note: isEnglish(locale)
-              ? "Let surface structure and market price action decide first."
-              : "先看近地面结构和盘口变化，不急着站边。",
+              ? "The picture is still mixed. Let the next move decide first."
+              : "现在还看不出明确方向，先等下一步走势确认。",
             tone: "",
             value: isEnglish(locale) ? "Wait / confirm" : "先观察",
           }
@@ -776,17 +776,17 @@ export function computeFrontTrendSignal(
         }
         if (upperAirSignal.heating_setup === "supportive") {
           return isEnglish(locale)
-            ? "Upper-air structure still favors further warming. Leaning too early against higher buckets is risky."
-            : "高空结构仍偏向继续增温，过早去押更低温区间风险较高。";
+            ? "Upper-air structure still favors further warming. Do not call the high too early."
+            : "高空结构仍偏向继续增温，别太早押高温见顶。";
         }
         if (upperAirSignal.heating_setup === "suppressed") {
           return isEnglish(locale)
-            ? "Upper-air structure leans toward capping the afternoon high. Chasing higher buckets needs caution."
-            : "高空结构更偏向压住午后峰值，追更高温区间要更谨慎。";
+            ? "Upper-air structure leans toward capping the afternoon high. Further upside looks less reliable."
+            : "高空结构更偏向压住午后峰值，高温继续上冲的把握不大。";
         }
         return isEnglish(locale)
-          ? "Upper-air structure is fairly neutral. It does not give a clean edge by itself, so surface trends still decide the trade."
-          : "高空结构整体偏中性，单看这层不给明确边，交易仍要让近地面走势来定。";
+          ? "Upper-air structure is fairly neutral. It does not provide a clean edge yet."
+          : "高空结构整体偏中性，暂时还给不出明确方向。";
       })()
     : "";
   const tafSummary =
@@ -1046,15 +1046,15 @@ export function computeFrontTrendSignal(
           note:
             upperAirSignal.heating_setup === "supportive"
               ? isEnglish(locale)
-                ? "Still supportive of more daytime heating. Fading stronger buckets too early is risky."
-                : "仍偏向白天继续冲高，过早去反着做更高温区间比较危险。"
+                ? "Still supportive of more daytime heating. Do not call the high too early."
+                : "结构仍支持白天继续升温，别太早押高温见顶。"
               : upperAirSignal.heating_setup === "suppressed"
                 ? isEnglish(locale)
-                  ? "Leans toward capping the afternoon peak. Be careful chasing stronger buckets."
-                  : "更偏向压住午后峰值，追更高温区间要谨慎。"
+                  ? "Leans toward capping the afternoon peak. Further upside looks less reliable."
+                  : "更偏向压住午后峰值，高温继续上冲的把握不大。"
                 : isEnglish(locale)
-                  ? "Neutral on its own. Surface structure still decides the side."
-                  : "单看这层偏中性，最终还是要看近地面信号站哪边。",
+                  ? "Neutral on its own. It does not provide a clear directional edge yet."
+                  : "单看这层偏中性，暂时还没有明确方向优势。",
           tone:
             upperAirSignal.heating_setup === "supportive"
               ? "warm"
