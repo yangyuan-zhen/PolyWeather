@@ -25,6 +25,7 @@ import {
 } from "@/components/dashboard/PanelSections";
 import {
   getFutureModalView,
+  getAirportNarrative,
   parseAiAnalysis,
   getTemperatureChartData,
   getWeatherSummary,
@@ -723,7 +724,7 @@ export function FutureForecastModal() {
     detail.current?.raw_metar,
     detail.current?.visibility_mi,
   );
-  const ai = parseAiAnalysis(detail.ai_analysis);
+  const ai = getAirportNarrative(detail, locale);
   const risk = detail.risk || {};
   const settlementSourceCode = String(
     detail.current?.settlement_source || "",

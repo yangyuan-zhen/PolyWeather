@@ -523,6 +523,72 @@ export function parseAiAnalysis(analysis: CityDetail["ai_analysis"]) {
   };
 }
 
+export function getAirportNarrative(
+  detail: CityDetail,
+  locale: Locale = "zh-CN",
+) {
+  const parsed = parseAiAnalysis(detail.ai_analysis);
+  if (!isEnglish(locale)) return parsed;
+
+  const englishSummary = containsCjk(parsed.summary) ? "" : parsed.summary.trim();
+  const englishBullets = parsed.bullets
+    .map((item) => String(item || "").trim())
+    .filter((item) => item && !containsCjk(item));
+
+  if (englishSummary || englishBullets.length > 0) {
+    return {
+      bullets: englishBullets,
+      summary: englishSummary,
+    };
+  }
+
+  const sourceLabel =
+    String(detail.current?.settlement_source_label || "").trim() ||
+    String(detail.risk?.icao || "").trim() ||
+    String(detail.risk?.airport || "").trim() ||
+    String(detail.display_name || detail.name || "").trim() ||
+    "Airport";
+  const currentTemp = Number(detail.current?.temp);
+  const tempText = Number.isFinite(currentTemp)
+    ? `${currentTemp}${detail.temp_symbol || "°C"}`
+    : null;
+  const obsTime = String(detail.current?.obs_time || "").trim();
+  const weatherText = getWeatherSummary(detail, locale).weatherText.toLowerCase();
+  const windBucket = bucketLabel(
+    trendBucketFromDir(detail.current?.wind_dir ?? null),
+    locale,
+  );
+  const windSpeedKt = Number(detail.current?.wind_speed_kt);
+  const tafSummary = String(detail.taf?.signal?.summary_en || "").trim();
+  const windPhrase = Number.isFinite(windSpeedKt)
+    ? `${windBucket} around ${windSpeedKt} kt`
+    : `${windBucket} prevailing`;
+  const summaryParts = [
+    tempText
+      ? `${sourceLabel} reports ${tempText}${obsTime ? ` at ${obsTime}` : ""}, ${weatherText}.`
+      : `${sourceLabel} reports ${weatherText}${obsTime ? ` at ${obsTime}` : ""}.`,
+    `${windPhrase}.`,
+    tafSummary,
+  ].filter(Boolean);
+
+  const bullets: string[] = [];
+  const rawMetar = String(detail.current?.raw_metar || "").trim();
+  if (rawMetar) {
+    bullets.push(`Latest METAR: ${rawMetar}`);
+  }
+  if (tafSummary) {
+    bullets.push(`TAF signal: ${tafSummary}`);
+  }
+  if (detail.taf?.raw_taf) {
+    bullets.push(`TAF available for airport-side timing checks.`);
+  }
+
+  return {
+    bullets,
+    summary: summaryParts.join(" "),
+  };
+}
+
 export function pickAnkaraNearbyStations(stations: NearbyStation[]) {
   const preferredNames = [
     "Airport (MGM/17128)",
