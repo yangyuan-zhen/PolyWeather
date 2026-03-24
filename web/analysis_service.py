@@ -494,7 +494,9 @@ def _build_taf_signal(
     for segment in segments:
         start_local = segment["start_utc"].astimezone(local_tz)
         end_local = segment["end_utc"].astimezone(local_tz)
-        if end_local < peak_window_start or start_local > peak_window_end:
+        overlap_start = max(start_local, peak_window_start)
+        overlap_end = min(end_local, peak_window_end)
+        if overlap_end <= overlap_start:
             continue
         active_segments.append(segment)
         joined = " ".join(segment["tokens"])
@@ -538,7 +540,7 @@ def _build_taf_signal(
         if segment["type"] in {"PROB30 TEMPO", "PROB40 TEMPO"} or level == "high":
             disruption_level = "high"
 
-        marker_time_local = start_local
+        marker_time_local = overlap_start
         marker_hour = marker_time_local.strftime("%H:00")
         hazards = []
         if level != "low":
@@ -548,19 +550,19 @@ def _build_taf_signal(
         if segment_regimes:
             hazards.append("wind")
         summary_zh = (
-            f"{segment['type']} {start_local.strftime('%H:%M')}-{end_local.strftime('%H:%M')} "
+            f"{segment['type']} {overlap_start.strftime('%H:%M')}-{overlap_end.strftime('%H:%M')} "
             f"{'有阵雨/雷暴扰动' if level == 'high' else '有云雨扰动' if level == 'medium' else '以稳定为主'}"
         )
         summary_en = (
-            f"{segment['type']} {start_local.strftime('%H:%M')}-{end_local.strftime('%H:%M')} "
+            f"{segment['type']} {overlap_start.strftime('%H:%M')}-{overlap_end.strftime('%H:%M')} "
             f"{'shows shower/thunder disruption' if level == 'high' else 'shows cloud/rain disruption' if level == 'medium' else 'stays relatively stable'}"
         )
         markers.append(
             {
                 "label_time": marker_hour,
                 "marker_type": segment["type"],
-                "start_local": start_local.strftime("%H:%M"),
-                "end_local": end_local.strftime("%H:%M"),
+                "start_local": overlap_start.strftime("%H:%M"),
+                "end_local": overlap_end.strftime("%H:%M"),
                 "suppression_level": level,
                 "summary_zh": summary_zh,
                 "summary_en": summary_en,

@@ -977,13 +977,33 @@ export function computeFrontTrendSignal(
           return "";
         })()
       : "";
+  const peakTafStillRelevant =
+    peakWindowEndMinutes === null ||
+    currentMinutes === null ||
+    currentMinutes < peakWindowEndMinutes;
   const effectivePeakTafSummary =
-    peakTafSummary && peakTafSummary !== currentTafSummary ? peakTafSummary : "";
+    peakTafStillRelevant &&
+    peakTafSummary &&
+    peakTafSummary !== currentTafSummary
+      ? peakTafSummary
+      : "";
+  const currentTafLine = tafTimelineSummary
+    ? isEnglish(locale)
+      ? `Current TAF: ${tafTimelineSummary}`
+      : `当前 TAF：${tafTimelineSummary}`
+    : "";
+  const peakTafLine = effectivePeakTafSummary
+    ? isEnglish(locale)
+      ? `Peak-window TAF: ${effectivePeakTafSummary}`
+      : `峰值窗口 TAF：${effectivePeakTafSummary}`
+    : "";
+  const tafFallbackSummary =
+    currentTafLine || peakTafLine ? "" : tafSummary;
   upperAirSummary = [
     baseUpperAirSummary,
-    tafTimelineSummary,
-    effectivePeakTafSummary,
-    tafSummary,
+    currentTafLine,
+    peakTafLine,
+    tafFallbackSummary,
   ]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
@@ -992,9 +1012,9 @@ export function computeFrontTrendSignal(
       ? {
           label: isEnglish(locale) ? "Airport TAF" : "机场预报",
           note:
-            tafTimelineSummary ||
-            effectivePeakTafSummary ||
-            tafSummary ||
+            currentTafLine ||
+            peakTafLine ||
+            tafFallbackSummary ||
             (isEnglish(locale)
               ? "Airport TAF is available for the current peak window."
               : "当前峰值窗口已接入机场 TAF 预报。"),
@@ -1449,9 +1469,9 @@ export function computeFrontTrendSignal(
     backendSummary && backendSummary !== summary ? backendSummary : "";
   const combinedSummary = [
     summary,
-    tafTimelineSummary,
-    effectivePeakTafSummary,
-    tafSummary,
+    currentTafLine,
+    peakTafLine,
+    tafFallbackSummary,
     tafContrastSummary,
     backendSupplement,
   ]
