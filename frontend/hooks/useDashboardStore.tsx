@@ -491,17 +491,19 @@ export function DashboardStoreProvider({
       await refreshProAccess();
     }
     const access = proAccessRef.current;
-    if (!access.authenticated || !access.subscriptionActive) {
-      return;
-    }
     setLoadingState((current) => ({ ...current, cityDetail: true }));
     try {
       const detail = await ensureCityDetail(cityName);
       setSelectedForecastDate(detail.local_date);
-      // 预热市场数据，不做 await 阻塞，后台静默拉取
-      void ensureCityMarketScan(cityName, false, null, detail.local_date).catch(
-        () => {},
-      );
+      if (access.authenticated && access.subscriptionActive) {
+        // 预热市场数据，不做 await 阻塞，后台静默拉取
+        void ensureCityMarketScan(
+          cityName,
+          false,
+          null,
+          detail.local_date,
+        ).catch(() => {});
+      }
     } finally {
       setLoadingState((current) => ({ ...current, cityDetail: false }));
     }
