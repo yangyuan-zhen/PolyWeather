@@ -31,6 +31,7 @@ function isStaticAsset(pathname: string) {
     pathname.startsWith("/sitemap.xml") ||
     pathname.startsWith("/icons/") ||
     pathname.startsWith("/images/") ||
+    pathname.startsWith("/scenery/") ||
     pathname.startsWith("/static/")
   );
 }
