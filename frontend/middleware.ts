@@ -37,10 +37,17 @@ function isStaticAsset(pathname: string) {
 
 function isPublicPage(pathname: string) {
   return (
+    pathname === "/" ||
+    pathname.startsWith("/docs") ||
+    pathname.startsWith("/subscription-help") ||
     pathname === "/entitlement-required" ||
     pathname.startsWith("/auth/login") ||
     pathname.startsWith("/auth/callback")
   );
+}
+
+function isPublicApi(pathname: string) {
+  return pathname === "/api/cities" || /^\/api\/city\/[^/]+\/summary$/i.test(pathname);
 }
 
 function handleLegacyTokenGate(request: NextRequest) {
@@ -50,7 +57,7 @@ function handleLegacyTokenGate(request: NextRequest) {
   }
 
   const { pathname, searchParams } = request.nextUrl;
-  if (isStaticAsset(pathname) || isPublicPage(pathname)) {
+  if (isStaticAsset(pathname) || isPublicPage(pathname) || isPublicApi(pathname)) {
     return NextResponse.next();
   }
 
@@ -91,7 +98,7 @@ function handleLegacyTokenGate(request: NextRequest) {
 
 async function handleSupabaseAuthGate(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (isPublicPage(pathname)) {
+  if (isPublicPage(pathname) || isPublicApi(pathname)) {
     return NextResponse.next();
   }
   if (pathname.startsWith("/api/")) {

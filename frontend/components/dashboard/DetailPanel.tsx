@@ -131,6 +131,17 @@ export function DetailPanel() {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
+  const selectedCityItem = useMemo(
+    () =>
+      store.selectedCity
+        ? store.cities.find((city) => city.name === store.selectedCity) || null
+        : null,
+    [store.cities, store.selectedCity],
+  );
+  const selectedSummary = store.selectedCity
+    ? store.citySummariesByName[store.selectedCity] || null
+    : null;
+  const isBasicGuestPanel = !detail && Boolean(store.selectedCity && selectedCityItem && selectedSummary);
   const isPro = store.proAccess.subscriptionActive;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
@@ -279,7 +290,7 @@ export function DetailPanel() {
       </div>
 
       <div className="panel-body">
-        {!detail ? (
+        {!detail && !isBasicGuestPanel ? (
           <section>
             <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
               {store.loadingState.cityDetail
@@ -289,18 +300,78 @@ export function DetailPanel() {
           </section>
         ) : (
           <>
+            {isBasicGuestPanel && selectedCityItem && selectedSummary ? (
+              <>
+                <section className="detail-section">
+                  <h3>{t("detail.profile")}</h3>
+                  <div className="detail-grid">
+                    <div className="detail-card">
+                      <span className="detail-label">{locale === "en-US" ? "City" : "城市"}</span>
+                      <span className="detail-value">{selectedCityItem.display_name}</span>
+                    </div>
+                    <div className="detail-card">
+                      <span className="detail-label">{locale === "en-US" ? "Current" : "当前温度"}</span>
+                      <span className="detail-value">
+                        {selectedSummary.current?.temp != null
+                          ? `${selectedSummary.current.temp}${selectedSummary.temp_symbol || "°C"}`
+                          : t("common.na")}
+                      </span>
+                    </div>
+                    <div className="detail-card">
+                      <span className="detail-label">{locale === "en-US" ? "Observation" : "观测时间"}</span>
+                      <span className="detail-value">{selectedSummary.current?.obs_time || t("common.na")}</span>
+                    </div>
+                    <div className="detail-card">
+                      <span className="detail-label">{locale === "en-US" ? "DEB" : "DEB 预测"}</span>
+                      <span className="detail-value">
+                        {selectedSummary.deb?.prediction != null
+                          ? `${selectedSummary.deb.prediction}${selectedSummary.temp_symbol || "°C"}`
+                          : t("common.na")}
+                      </span>
+                    </div>
+                    <div className="detail-card">
+                      <span className="detail-label">{locale === "en-US" ? "Settlement" : "结算口径"}</span>
+                      <span className="detail-value">
+                        {selectedSummary.current?.settlement_source_label ||
+                          selectedCityItem.settlement_source_label ||
+                          t("common.na")}
+                      </span>
+                    </div>
+                    <div className="detail-card">
+                      <span className="detail-label">{t("section.airport")}</span>
+                      <span className="detail-value">{selectedCityItem.airport || t("common.na")}</span>
+                    </div>
+                  </div>
+                </section>
+                <section className="detail-section">
+                  <div className="detail-card">
+                    <span className="detail-label">
+                      {locale === "en-US" ? "Pro required for intraday analysis and history" : "今日日内分析与历史对账需开通 Pro"}
+                    </span>
+                    <span className="detail-source-note" style={{ marginTop: 8 }}>
+                      {locale === "en-US"
+                        ? "Guests can browse the city overview here. Sign in and subscribe to unlock the full intraday model, history reconciliation, and market-linked weather analysis."
+                        : "游客可先浏览城市概览。登录并开通 Pro 后，可查看完整的今日日内分析、历史对账和市场联动天气解读。"}
+                    </span>
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            {!isBasicGuestPanel ? (
+              <>
             <section className="detail-scenery-card">
               {scenery ? (
                 <>
                   <img
                     className="detail-scenery-image"
                     src={scenery.imageUrl}
-                    alt={t("detail.sceneryAlt", { city: detail.display_name })}
+                    alt={t("detail.sceneryAlt", { city: detail?.display_name || "" })}
                   />
                   <div className="detail-scenery-overlay">
                     <div className="detail-scenery-copy">
                       <span className="detail-scenery-kicker">
-                        {detail.display_name}
+                        {detail?.display_name}
                       </span>
                     </div>
                     <a
@@ -316,7 +387,7 @@ export function DetailPanel() {
               ) : (
                 <div className="detail-scenery-fallback">
                   <span className="detail-scenery-kicker">
-                    {detail.display_name}
+                    {detail?.display_name}
                   </span>
                   <strong className="detail-scenery-title">
                     {t("detail.sceneryTitle")}
@@ -370,13 +441,15 @@ export function DetailPanel() {
             <section className="detail-section rounded-2xl">
               <h3>{t("detail.todayMiniTrend")}</h3>
               {heavyContentReady ? (
-                <DetailMiniTemperatureChart detail={detail} />
+                <DetailMiniTemperatureChart detail={detail!} />
               ) : (
                 <div className="detail-mini-meta">{t("detail.loading")}</div>
               )}
             </section>
 
             {heavyContentReady ? <ForecastTable /> : null}
+              </>
+            ) : null}
           </>
         )}
       </div>

@@ -216,6 +216,7 @@ export function DashboardStoreProvider({
   const [proAccess, setProAccess] = useState<ProAccessState>(
     getInitialProAccessState,
   );
+  const proAccessRef = useRef<ProAccessState>(getInitialProAccessState());
 
   const mapStopMotionRef = useRef<() => void>(() => {});
   const hydratedSelectionRef = useRef(false);
@@ -253,6 +254,10 @@ export function DashboardStoreProvider({
   useEffect(() => {
     citySummariesRef.current = citySummariesByName;
   }, [citySummariesByName]);
+
+  useEffect(() => {
+    proAccessRef.current = proAccess;
+  }, [proAccess]);
 
   const scheduleBackgroundDetailRefresh = (
     cityName: string,
@@ -481,6 +486,14 @@ export function DashboardStoreProvider({
     setIsPanelOpen(true);
     setSelectedForecastDate(null);
     setFutureModalDate(null);
+
+    if (proAccessRef.current.loading) {
+      await refreshProAccess();
+    }
+    const access = proAccessRef.current;
+    if (!access.authenticated || !access.subscriptionActive) {
+      return;
+    }
     setLoadingState((current) => ({ ...current, cityDetail: true }));
     try {
       const detail = await ensureCityDetail(cityName);

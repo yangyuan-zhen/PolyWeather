@@ -156,7 +156,6 @@ async def metrics():
 
 @router.get("/api/cities")
 async def list_cities(request: Request):
-    _assert_entitlement(request)
     try:
         out = []
         for name, info in CITIES.items():
@@ -630,7 +629,6 @@ async def payment_reconcile_latest(request: Request):
 
 @router.get("/api/city/{name}/summary")
 async def city_summary(request: Request, name: str, force_refresh: bool = False):
-    _assert_entitlement(request)
     data = _analyze(_normalize_city_or_404(name), force_refresh=force_refresh)
     return _build_city_summary_payload(data)
 

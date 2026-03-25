@@ -154,6 +154,8 @@ export interface CitySummary {
   current?: {
     temp?: number | null;
     obs_time?: string | null;
+    settlement_source?: string | null;
+    settlement_source_label?: string | null;
   };
   deb?: {
     prediction?: number | null;
