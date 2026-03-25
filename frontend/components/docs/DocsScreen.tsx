@@ -128,6 +128,20 @@ function BlockRenderer({ block }: { block: DocsPageContent["sections"][number]["
           ))}
         </ul>
       );
+    case "link":
+      return (
+        <div>
+          <a
+            href={block.href}
+            target="_blank"
+            rel="noreferrer"
+            className={styles.linkCard}
+          >
+            {block.label}
+          </a>
+          {block.caption ? <p className={styles.linkCaption}>{block.caption}</p> : null}
+        </div>
+      );
     case "image":
       return (
         <figure>

@@ -4,7 +4,7 @@ Production weather-intelligence stack for temperature settlement markets.
 
 Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
 
-Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday signals, TAF, settlement sources, history, extension, API overview, and changelog).
+Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday signals, TAF, settlement sources, history, and extension).
 
 ## Product Screenshots
 

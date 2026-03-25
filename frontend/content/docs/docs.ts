@@ -5,6 +5,7 @@ export type DocsBlock =
   | { type: "callout"; tone?: "info" | "warning" | "success"; title?: string; text: string }
   | { type: "bullets"; items: string[] }
   | { type: "steps"; items: string[] }
+  | { type: "link"; href: string; label: string; caption?: string }
   | { type: "image"; src: string; alt: string; caption?: string };
 
 export interface DocsSection {
@@ -21,7 +22,7 @@ export interface DocsPageContent {
 
 export interface DocsPageMeta {
   slug: string;
-  group: "getting-started" | "analysis" | "settlement" | "history" | "developer";
+  group: "getting-started" | "analysis" | "settlement" | "history";
 }
 
 export interface DocsPage extends DocsPageMeta {
@@ -187,7 +188,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "什么叫机场端压温风险偏高",
             blocks: [
               { type: "paragraph", text: "它的意思不是整座城市一定更冷，而是作为结算依据的机场站点，在峰值窗口里更可能因为云、阵雨或雷暴扰动，冲不到本来可能达到的更高温度。" },
-              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、CWA 等实际结算源。" },
+              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA RCTP 等实际结算源。" },
             ],
           },
         ],
@@ -215,7 +216,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "What airport-side suppression risk means",
             blocks: [
               { type: "paragraph", text: "It does not mean the entire city must run cooler. It means the airport station used for settlement is more likely to get capped by clouds, showers, or thunderstorm disruption during the peak window and fail to reach the next warmer bucket." },
-              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement source such as METAR, HKO, MGM, or CWA." },
+              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement source such as METAR, HKO, MGM, or NOAA RCTP." },
             ],
           },
         ],
@@ -241,7 +242,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北：按中央气象署 CWA 口径，机场观测只作为结构参考。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
+              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北：按 NOAA RCTP（台湾桃园国际机场）最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
             ],
           },
           {
@@ -268,7 +269,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "Taipei: follows CWA; airport observations are used only as structural references.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
+              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "Taipei: settles against NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
             ],
           },
           {
@@ -346,12 +347,24 @@ export const DOCS_PAGES: DocsPage[] = [
   },
   {
     slug: "extension",
-    group: "developer",
+    group: "getting-started",
     content: {
       "zh-CN": {
         title: "浏览器插件",
         description: "侧边栏插件是主站的轻量入口，负责监控、基础判断和导流，不承载完整分析链路。",
         sections: [
+          {
+            id: "extension-install",
+            title: "安装地址",
+            blocks: [
+              {
+                type: "link",
+                href: "https://chromewebstore.google.com/detail/mhndjbgjljjfcfkojhmhpfcbconnikne?utm_source=item-share-cb",
+                label: "打开 Chrome Web Store",
+                caption: "安装插件后，可在侧边栏里快速跳回主站的今日日内分析与历史对账。",
+              },
+            ],
+          },
           {
             id: "extension-role",
             title: "插件负责什么",
@@ -399,6 +412,18 @@ export const DOCS_PAGES: DocsPage[] = [
         description: "The side-panel extension is a lightweight lead-in to the main site. It focuses on monitoring, basic bias, and traffic flow back to the full dashboard.",
         sections: [
           {
+            id: "extension-install",
+            title: "Install link",
+            blocks: [
+              {
+                type: "link",
+                href: "https://chromewebstore.google.com/detail/mhndjbgjljjfcfkojhmhpfcbconnikne?utm_source=item-share-cb",
+                label: "Open Chrome Web Store",
+                caption: "Once installed, the side panel can route users back into the main intraday analysis and history views.",
+              },
+            ],
+          },
+          {
             id: "extension-role",
             title: "What the extension does",
             blocks: [
@@ -435,192 +460,6 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "paragraph",
                 text: "The extension now prefers DEB for the multi-day forecast. It falls back to the original daily max only when a DEB value is missing for that date.",
-              },
-            ],
-          },
-        ],
-      },
-    },
-  },
-  {
-    slug: "api",
-    group: "developer",
-    content: {
-      "zh-CN": {
-        title: "API 概览",
-        description: "这页不是完整接口清单，而是帮助你快速理解当前公开 API 的主链路、关键字段和使用重点。",
-        sections: [
-          {
-            id: "api-shape",
-            title: "请求链路",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "浏览器先请求 Next.js BFF（`/api/*`）。",
-                  "BFF 再转发到 FastAPI 后端。", 
-                  "FastAPI 聚合天气源、DEB 分析、市场扫描和支付状态。",
-                ],
-              },
-            ],
-          },
-          {
-            id: "api-weather",
-            title: "天气分析主接口",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "`GET /api/cities`：城市列表。",
-                  "`GET /api/city/{name}/summary`：轻量摘要。",
-                  "`GET /api/city/{name}/detail`：聚合详情，含 `market_scan`、`peak`、`vertical_profile_signal` 和 `taf.signal`。",
-                  "`GET /api/history/{name}`：历史对账数据。",
-                ],
-              },
-              {
-                type: "callout",
-                tone: "info",
-                title: "detail 重点字段",
-                text: "`detail` 是网页端主入口。结构信号、峰值窗口、TAF markers 和市场扫描都从这里拿。",
-              },
-            ],
-          },
-          {
-            id: "api-ops-payments",
-            title: "鉴权、支付与 Ops",
-            blocks: [
-              {
-                type: "paragraph",
-                text: "账户状态由 `/api/auth/me` 提供。支付链路走 `/api/payments/*`。运维后台 `/ops` 依赖 `/api/ops/*` 系列接口，并受管理员邮箱白名单控制。",
-              },
-            ],
-          },
-        ],
-      },
-      "en-US": {
-        title: "API Overview",
-        description: "This is not the full endpoint list. It is the shortest path to understanding the public API chain, key fields, and what the frontend actually depends on.",
-        sections: [
-          {
-            id: "api-shape",
-            title: "Request path",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "The browser hits the Next.js BFF under `/api/*` first.",
-                  "The BFF forwards to the FastAPI backend.",
-                  "FastAPI aggregates weather sources, DEB analysis, market scan, and payment state.",
-                ],
-              },
-            ],
-          },
-          {
-            id: "api-weather",
-            title: "Main weather-analysis endpoints",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "`GET /api/cities`: city list.",
-                  "`GET /api/city/{name}/summary`: lightweight city summary.",
-                  "`GET /api/city/{name}/detail`: aggregated detail with `market_scan`, `peak`, `vertical_profile_signal`, and `taf.signal`.",
-                  "`GET /api/history/{name}`: history reconciliation data.",
-                ],
-              },
-              {
-                type: "callout",
-                tone: "info",
-                title: "Key point",
-                text: "`detail` is the main frontend payload. Peak-window logic, structural signals, TAF markers, and market scan all hang off this response.",
-              },
-            ],
-          },
-          {
-            id: "api-ops-payments",
-            title: "Auth, payments, and ops",
-            blocks: [
-              {
-                type: "paragraph",
-                text: "Account state comes from `/api/auth/me`. Payments live under `/api/payments/*`. The `/ops` admin dashboard depends on `/api/ops/*` and is guarded by an admin email allowlist.",
-              },
-            ],
-          },
-        ],
-      },
-    },
-  },
-  {
-    slug: "changelog",
-    group: "developer",
-    content: {
-      "zh-CN": {
-        title: "更新日志",
-        description: "这里保留对产品和技术影响最大的版本变化，方便快速判断最近有哪些能力已经上线。",
-        sections: [
-          {
-            id: "v151",
-            title: "1.5.1 关键变化",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "今日日内结构信号改成峰值窗口感知，并新增高空结构信号与交易动作卡。",
-                  "非香港机场城市新增 TAF 接入，支持 `FM / TEMPO / BECMG / PROB30/40` 时间片解析。",
-                  "温度走势图新增 `TAF 时段 / TAF Timing` 标记。",
-                  "历史对账新增“峰值前 12 小时 DEB 参考（近似）”。",
-                  "浏览器插件多日预报改为 DEB 优先。",
-                ],
-              },
-            ],
-          },
-          {
-            id: "v150",
-            title: "1.5.0 关键变化",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "运行态支持 SQLite 渐进迁移。",
-                  "新增 `/healthz`、`/api/system/status`、`/metrics`。",
-                  "支付侧新增更完整的审计与恢复能力。",
-                ],
-              },
-            ],
-          },
-        ],
-      },
-      "en-US": {
-        title: "Changelog",
-        description: "This page keeps only the highest-signal product and technical changes so readers can quickly see what is already live.",
-        sections: [
-          {
-            id: "v151",
-            title: "1.5.1 highlights",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "Intraday structural signal became peak-window aware and gained upper-air structure plus trade cue cards.",
-                  "Non-Hong Kong airport cities now ingest TAF with `FM / TEMPO / BECMG / PROB30/40` parsing.",
-                  "The temperature chart now overlays `TAF Timing` markers.",
-                  "History reconciliation now includes approximate `DEB at peak minus 12 hours`.",
-                  "The browser extension now prefers DEB for multi-day forecast.",
-                ],
-              },
-            ],
-          },
-          {
-            id: "v150",
-            title: "1.5.0 highlights",
-            blocks: [
-              {
-                type: "bullets",
-                items: [
-                  "Runtime state gained gradual SQLite migration support.",
-                  "Added `/healthz`, `/api/system/status`, and `/metrics`.",
-                  "Payment flows gained stronger audit and recovery tooling.",
-                ],
               },
             ],
           },

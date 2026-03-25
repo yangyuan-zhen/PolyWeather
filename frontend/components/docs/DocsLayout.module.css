@@ -214,6 +214,30 @@
   margin-top: 8px;
 }
 
+.linkCard {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  background: rgba(8, 47, 73, 0.3);
+  color: #67e8f9;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.linkCard:hover {
+  background: rgba(34, 211, 238, 0.12);
+}
+
+.linkCaption {
+  margin: 10px 0 0;
+  color: rgba(148, 163, 184, 0.92);
+  line-height: 1.75;
+}
+
 .toc {
   position: sticky;
   top: 86px;

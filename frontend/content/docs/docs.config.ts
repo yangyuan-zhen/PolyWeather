@@ -17,10 +17,6 @@ export const DOCS_GROUPS: DocsNavGroup[] = [
     id: "history",
     title: { "zh-CN": "历史对账", "en-US": "History & Reconciliation" },
   },
-  {
-    id: "developer",
-    title: { "zh-CN": "开发者", "en-US": "Developer" },
-  },
 ];
 
 export function getDocsGroupTitle(groupId: DocsNavGroup["id"], locale: DocsLocale) {
