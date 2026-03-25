@@ -151,9 +151,15 @@ export function DetailPanel() {
   const isVisible =
     store.isPanelOpen &&
     Boolean(store.selectedCity) &&
-    Boolean(detail) &&
+    (Boolean(detail) || isBasicGuestPanel) &&
     !store.loadingState.cityDetail &&
     !isOverlayOpen;
+  const panelDisplayName =
+    detail?.display_name ||
+    selectedCityItem?.display_name ||
+    store.selectedCity ||
+    "...";
+  const panelRiskLevel = detail?.risk?.level || selectedCityItem?.risk_level || "low";
   const profileStats = useMemo(
     () => (detail ? getCityProfileStats(detail, locale) : []),
     [detail, locale],
@@ -246,10 +252,10 @@ export function DetailPanel() {
           ×
         </button>
         <div className="panel-title-area">
-          <h2>{detail?.display_name?.toUpperCase() || "..."}</h2>
+          <h2>{panelDisplayName.toUpperCase()}</h2>
           <div className="panel-meta">
-            <span className={clsx("risk-badge", detail?.risk?.level || "low")}>
-              {getRiskBadgeLabel(detail?.risk?.level, locale)}
+            <span className={clsx("risk-badge", panelRiskLevel)}>
+              {getRiskBadgeLabel(panelRiskLevel, locale)}
             </span>
             <div className="relative group">
               <button
