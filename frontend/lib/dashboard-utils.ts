@@ -494,13 +494,18 @@ export function getTemperatureChartData(
         }) || null
       : null;
   tafMarkers.forEach((marker) => {
-    if (sameMarker(marker, currentTafMarker) || sameMarker(marker, nextTafMarker)) {
+    const isPrimaryTafMarker =
+      sameMarker(marker, currentTafMarker) || sameMarker(marker, nextTafMarker);
+    const isPeakReferenceMarker = sameMarker(marker, peakWindowTafMarker);
+    if (isPrimaryTafMarker) {
       marker.isCurrent = true;
       tafCurrentMarkerPoints[marker.index] = tafMarkerValue;
     }
-    if (sameMarker(marker, peakWindowTafMarker)) {
+    if (isPeakReferenceMarker) {
       marker.isPeakWindow = true;
-      tafPeakWindowMarkerPoints[marker.index] = tafMarkerValue - 0.15;
+      if (!isPrimaryTafMarker) {
+        tafPeakWindowMarkerPoints[marker.index] = tafMarkerValue - 0.15;
+      }
     }
   });
   const formatTafLegendMarker = (
