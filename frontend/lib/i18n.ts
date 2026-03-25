@@ -8,6 +8,8 @@ export const LOCALE_STORAGE_KEY = "polyweather.locale";
 const MESSAGES: Record<Locale, Record<string, string>> = {
   "zh-CN": {
     "header.subtitle": "天气衍生品智能分析",
+    "header.docs": "文档",
+    "header.docsAria": "打开产品文档中心",
     "header.info": "技术说明",
     "header.infoAria": "查看系统技术说明",
     "header.account": "账户",
@@ -169,6 +171,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
   },
   "en-US": {
     "header.subtitle": "Weather Derivatives Intelligence",
+    "header.docs": "Docs",
+    "header.docsAria": "Open product documentation",
     "header.info": "Tech Notes",
     "header.infoAria": "Open system technical notes",
     "header.account": "Account",

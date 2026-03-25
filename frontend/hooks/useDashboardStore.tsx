@@ -27,15 +27,12 @@ import {
 
 interface DashboardStoreValue extends DashboardState {
   closeFutureModal: () => void;
-  closeGuide: () => void;
   closeHistory: () => void;
   closePanel: () => void;
   ensureCityDetail: (cityName: string, force?: boolean) => Promise<CityDetail>;
   futureModalDate: string | null;
-  isGuideOpen: boolean;
   loadCities: () => Promise<void>;
   openFutureModal: (dateStr: string, forceRefresh?: boolean) => void;
-  openGuide: () => void;
   openHistory: () => Promise<void>;
   openTodayModal: (forceRefresh?: boolean) => Promise<void>;
   registerMapStopMotion: (stopMotion: () => void) => void;
@@ -216,7 +213,6 @@ export function DashboardStoreProvider({
   const [historyState, setHistoryState] = useState<HistoryState>(
     getInitialHistoryState,
   );
-  const [isGuideOpen, setIsGuideOpen] = useState(false);
   const [proAccess, setProAccess] = useState<ProAccessState>(
     getInitialProAccessState,
   );
@@ -615,7 +611,6 @@ export function DashboardStoreProvider({
       cityDetailsByName,
       citySummariesByName,
       closeFutureModal: () => setFutureModalDate(null),
-      closeGuide: () => setIsGuideOpen(false),
       closeHistory: () =>
         setHistoryState((current) => ({ ...current, isOpen: false })),
       closePanel: () => {
@@ -625,7 +620,6 @@ export function DashboardStoreProvider({
       futureModalDate,
       historyState,
       isPanelOpen,
-      isGuideOpen,
       loadCities,
       loadingState,
       proAccess,
@@ -646,7 +640,6 @@ export function DashboardStoreProvider({
             setLoadingState((current) => ({ ...current, marketScan: false }));
           });
       },
-      openGuide: () => setIsGuideOpen(true),
       openHistory,
       openTodayModal: async (forceRefresh?: boolean) => {
         if (!selectedCity) {
@@ -719,7 +712,6 @@ export function DashboardStoreProvider({
       futureModalDate,
       historyState,
       isPanelOpen,
-      isGuideOpen,
       loadingState,
       proAccess,
       marketScanByCityName,

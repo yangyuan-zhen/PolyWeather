@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { LogIn, UserRound } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
@@ -14,8 +15,11 @@ import {
 export function HeaderBar() {
   const store = useDashboardStore();
   const { locale, setLocale, t } = useI18n();
+  const pathname = usePathname();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const supabaseReady = hasSupabasePublicEnv();
+  const docsHref = "/docs/intro";
+  const docsActive = pathname?.startsWith("/docs");
 
   useEffect(() => {
     let mounted = true;
@@ -79,6 +83,15 @@ export function HeaderBar() {
         </div>
 
         <Link
+          href={docsHref}
+          className={clsx("info-btn", docsActive && "active")}
+          title={t("header.docsAria")}
+          aria-label={t("header.docsAria")}
+        >
+          {t("header.docs")}
+        </Link>
+
+        <Link
           href={accountHref}
           className="account-btn"
           title={accountAria}
@@ -88,15 +101,14 @@ export function HeaderBar() {
           <span>{accountLabel}</span>
         </Link>
 
-        <button
-          type="button"
+        <Link
+          href={docsHref}
           className="info-btn"
           title={t("header.infoAria")}
           aria-label={t("header.infoAria")}
-          onClick={store.openGuide}
         >
           {t("header.info")}
-        </button>
+        </Link>
 
         <div className="live-badge" id="liveBadge">
           <span className="pulse-dot" />

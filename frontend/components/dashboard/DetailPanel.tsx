@@ -136,8 +136,7 @@ export function DetailPanel() {
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
     Boolean(store.futureModalDate) ||
-    store.historyState.isOpen ||
-    store.isGuideOpen;
+    store.historyState.isOpen;
   const isVisible =
     store.isPanelOpen &&
     Boolean(store.selectedCity) &&

@@ -21,15 +21,6 @@ const MapCanvas = dynamic(
   },
 );
 
-const GuideModal = dynamic(
-  () =>
-    import("@/components/dashboard/GuideModal").then((module) => module.GuideModal),
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
-
 const HistoryModal = dynamic(
   () =>
     import("@/components/dashboard/HistoryModal").then(
@@ -57,7 +48,6 @@ function DashboardScreen() {
   const { t } = useI18n();
 
   useEffect(() => {
-    void import("@/components/dashboard/GuideModal");
     void import("@/components/dashboard/HistoryModal");
     void import("@/components/dashboard/FutureForecastModal");
   }, []);
@@ -71,10 +61,6 @@ function DashboardScreen() {
       }
       if (store.historyState.isOpen) {
         store.closeHistory();
-        return;
-      }
-      if (store.isGuideOpen) {
-        store.closeGuide();
         return;
       }
       if (store.isPanelOpen) {
@@ -100,7 +86,6 @@ function DashboardScreen() {
       <HeaderBar />
       <CitySidebar />
       <DetailPanel />
-      {store.isGuideOpen && <GuideModal />}
       {store.historyState.isOpen && <HistoryModal />}
       {store.futureModalDate && <FutureForecastModal />}
       {showLoading && (

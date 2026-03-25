@@ -21,8 +21,7 @@ export function MapCanvas() {
     selectedDetail: store.selectedDetail,
     suspendMotion:
       Boolean(store.futureModalDate) ||
-      store.historyState.isOpen ||
-      store.isGuideOpen,
+      store.historyState.isOpen,
     isLoadingDetail: store.loadingState.cityDetail,
   });
 
