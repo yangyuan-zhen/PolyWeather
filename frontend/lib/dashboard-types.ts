@@ -66,6 +66,25 @@ export interface CurrentConditions {
   dewpoint?: number | null;
 }
 
+export interface AirportCurrentConditions {
+  temp: number | null;
+  obs_time: string | null;
+  max_so_far?: number | null;
+  max_temp_time?: string | null;
+  obs_age_min?: number | null;
+  report_time?: string | null;
+  receipt_time?: string | null;
+  obs_time_epoch?: number | null;
+  wind_speed_kt?: number | null;
+  wind_dir?: number | null;
+  humidity?: number | null;
+  cloud_desc?: string | null;
+  visibility_mi?: number | null;
+  wx_desc?: string | null;
+  raw_metar?: string | null;
+  source_label?: string | null;
+}
+
 export interface NearbyStation {
   name?: string;
   icao?: string;
@@ -271,6 +290,7 @@ export interface CityDetail {
   local_date: string;
   risk: DashboardRisk;
   current: CurrentConditions;
+  airport_current?: AirportCurrentConditions;
   mgm?: MgmData;
   mgm_nearby?: NearbyStation[];
   nearby_source?: string;

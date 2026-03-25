@@ -284,6 +284,10 @@ export function getTemperatureChartData(
       ? metarObservationSource
       : officialObservationSource
     : metarObservationSource;
+  const airportMetarSource =
+    settlementSource && observationCode === "wunderground"
+      ? metarObservationSource
+      : [];
   const metarFallbackTag = (() => {
     const icao = String(detail.risk?.icao || "").trim().toUpperCase();
     if (!icao) return "METAR";
@@ -311,6 +315,20 @@ export function getTemperatureChartData(
       // Multiple reports can land in the same hour bucket. Keep the peak
       // value so an intrahour high is not hidden by a later weaker report.
       metarPoints[index] =
+        existing == null ? temp : Math.max(Number(existing), Number(temp));
+    }
+  });
+  const airportMetarPoints = new Array(times.length).fill(null);
+  airportMetarSource.forEach((item) => {
+    const parts = String(item.time || "").split(":");
+    const hour = Number.parseInt(parts[0], 10);
+    if (Number.isNaN(hour)) return;
+    const key = `${String(hour).padStart(2, "0")}:00`;
+    const index = times.indexOf(key);
+    const temp = item.temp ?? null;
+    if (index >= 0 && temp != null) {
+      const existing = airportMetarPoints[index];
+      airportMetarPoints[index] =
         existing == null ? temp : Math.max(Number(existing), Number(temp));
     }
   });
@@ -344,6 +362,7 @@ export function getTemperatureChartData(
   const allValues = [
     ...debTemps.filter((value) => value != null),
     ...metarPoints.filter((value) => value != null),
+    ...airportMetarPoints.filter((value) => value != null),
     ...mgmPoints.filter((value) => value != null),
     ...mgmHourlyPoints.filter((value) => value != null),
   ] as number[];
@@ -414,6 +433,18 @@ export function getTemperatureChartData(
       .join(" -> ");
     legendParts.push(`${observationDisplayTag}: ${recentText}`);
   }
+  if (airportMetarSource.length > 0) {
+    const airportRecentText = [...airportMetarSource]
+      .slice(-4)
+      .reverse()
+      .map((item) => `${item.temp}${detail.temp_symbol}@${item.time}`)
+      .join(" -> ");
+    legendParts.push(
+      isEnglish(locale)
+        ? `${metarFallbackTag}: ${airportRecentText}`
+        : `${metarFallbackTag}: ${airportRecentText}`,
+    );
+  }
   if (shouldUseMetarFallback) {
     legendParts.push(
       isEnglish(locale)
@@ -453,6 +484,7 @@ export function getTemperatureChartData(
 
   return {
     datasets: {
+      airportMetarPoints,
       debFuture,
       debPast,
       hasMgmHourly,

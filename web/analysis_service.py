@@ -760,6 +760,15 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         for t, v in (metar.get("today_obs", []) if metar else [])
     ]
     metar_recent_obs_payload = metar.get("recent_obs", []) if metar else []
+    airport_max_so_far = None
+    airport_max_temp_time = None
+    for point in metar_today_obs_payload:
+        value = _sf(point.get("temp")) if isinstance(point, dict) else None
+        if value is None:
+            continue
+        if airport_max_so_far is None or value >= airport_max_so_far:
+            airport_max_so_far = value
+            airport_max_temp_time = str(point.get("time") or "") or None
 
     # ── 3. Local time parsing ──
     local_time_full = om.get("current", {}).get("local_time", "")
@@ -1272,10 +1281,10 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "settlement_source": settlement_source,
             "settlement_source_label": settlement_source_label,
             "obs_time": obs_time_str,
-            "obs_age_min": metar_age_min,
-            "report_time": metar.get("report_time") if metar else None,
-            "receipt_time": metar.get("receipt_time") if metar else None,
-            "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
+            "obs_age_min": None if use_settlement_current else metar_age_min,
+            "report_time": primary_current.get("report_time"),
+            "receipt_time": primary_current.get("receipt_time"),
+            "obs_time_epoch": primary_current.get("obs_time_epoch"),
             "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
             "wind_dir": _sf(primary_current.get("wind_dir")),
             "humidity": _sf(primary_current.get("humidity")),
@@ -1286,6 +1295,24 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "visibility_mi": _sf(primary_current.get("visibility_mi")),
             "wx_desc": primary_current.get("wx_desc"),
             "raw_metar": primary_current.get("raw_metar"),
+        },
+        "airport_current": {
+            "temp": _sf(mc.get("temp")),
+            "obs_time": metar.get("obs_time"),
+            "max_so_far": airport_max_so_far,
+            "max_temp_time": airport_max_temp_time,
+            "obs_age_min": metar_age_min,
+            "report_time": metar.get("report_time") if metar else None,
+            "receipt_time": metar.get("receipt_time") if metar else None,
+            "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
+            "wind_speed_kt": _sf(mc.get("wind_speed_kt")),
+            "wind_dir": _sf(mc.get("wind_dir")),
+            "humidity": _sf(mc.get("humidity")),
+            "cloud_desc": metar.get("cloud_desc") if metar else None,
+            "visibility_mi": _sf(mc.get("visibility_mi")),
+            "wx_desc": mc.get("wx_desc"),
+            "raw_metar": mc.get("raw_metar"),
+            "source_label": "METAR",
         },
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
@@ -1489,12 +1516,12 @@ def _build_city_detail_payload(
         "official": {
             "available": bool(data.get("current", {}).get("temp") is not None),
             "metar": {
-                "observation_time": data.get("current", {}).get("obs_time"),
-                "obs_age_min": data.get("current", {}).get("obs_age_min"),
-                "report_time": data.get("current", {}).get("report_time"),
-                "receipt_time": data.get("current", {}).get("receipt_time"),
-                "raw_metar": data.get("current", {}).get("raw_metar"),
-                "current": data.get("current"),
+                "observation_time": data.get("airport_current", {}).get("obs_time"),
+                "obs_age_min": data.get("airport_current", {}).get("obs_age_min"),
+                "report_time": data.get("airport_current", {}).get("report_time"),
+                "receipt_time": data.get("airport_current", {}).get("receipt_time"),
+                "raw_metar": data.get("airport_current", {}).get("raw_metar"),
+                "current": data.get("airport_current") or {},
             },
             "taf": data.get("taf") or {},
             "weather_gov": {},
@@ -1521,6 +1548,7 @@ def _build_city_detail_payload(
         "taf": data.get("taf") or {},
         "market_scan": market_scan,
         "risk": data.get("risk"),
+        "airport_current": data.get("airport_current") or {},
         "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),
         "ai_analysis": data.get("ai_analysis") or "",
         "errors": {},

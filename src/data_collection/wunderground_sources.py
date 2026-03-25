@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import json
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from loguru import logger
@@ -41,6 +42,65 @@ class WundergroundSourceMixin:
             return html
         except Exception as exc:
             logger.warning(f"Wunderground page fetch failed url={url}: {exc}")
+            return None
+
+    @staticmethod
+    def _wu_extract_app_state(html: str) -> Optional[Dict[str, Any]]:
+        match = re.search(
+            r'<script id="app-root-state" type="application/json">(.*?)</script>',
+            html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return None
+        try:
+            payload = json.loads(str(match.group(1) or ""))
+            return payload if isinstance(payload, dict) else None
+        except Exception:
+            return None
+
+    @staticmethod
+    def _wu_extract_station_history_url(html: str) -> Optional[str]:
+        match = re.search(
+            r'<div[^>]*class="station-name"[^>]*>\s*<a[^>]+href="([^"]*?/history/daily/[^"]+)"',
+            html,
+            re.IGNORECASE | re.DOTALL,
+        )
+        if not match:
+            return None
+        href = str(match.group(1) or "").strip()
+        if not href:
+            return None
+        if href.startswith("http://") or href.startswith("https://"):
+            return href
+        return f"https://www.wunderground.com{href}"
+
+    @staticmethod
+    def _wu_extract_station_id_from_history_url(url: Optional[str]) -> Optional[str]:
+        text = str(url or "").strip()
+        if not text:
+            return None
+        match = re.search(r"/history/daily/(?:[^/]+/){1,3}([^/]+)/date/", text, re.IGNORECASE)
+        return str(match.group(1) or "").strip() or None if match else None
+
+    @staticmethod
+    def _wu_extract_station_name_from_history_url(url: Optional[str]) -> Optional[str]:
+        text = str(url or "").strip()
+        if not text:
+            return None
+        match = re.search(r"/history/daily/(?:[^/]+/){1,3}([^/]+)/date/", text, re.IGNORECASE)
+        return str(match.group(1) or "").strip() or None if match else None
+
+    @staticmethod
+    def _safe_float(value: Any) -> Optional[float]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        if not text:
+            return None
+        try:
+            return float(text)
+        except Exception:
             return None
 
     @staticmethod
@@ -94,6 +154,44 @@ class WundergroundSourceMixin:
             return round((float(value) - 32.0) * 5.0 / 9.0, 1)
         return round(float(value), 1)
 
+    @staticmethod
+    def _wu_parse_observation_iso(raw: Optional[str], utc_offset_seconds: int) -> Optional[str]:
+        text = str(raw or "").strip()
+        if not text:
+            return None
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%dT%H:%M:%S%z")
+            return parsed.astimezone(timezone.utc).isoformat()
+        except Exception:
+            pass
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+            parsed = parsed.replace(tzinfo=timezone(timedelta(seconds=utc_offset_seconds)))
+            return parsed.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return None
+
+    @staticmethod
+    def _wu_find_current_observation_block(
+        app_state: Dict[str, Any],
+        *,
+        icao: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        normalized_icao = str(icao or "").strip().upper()
+        fallback_block: Optional[Dict[str, Any]] = None
+        for value in app_state.values():
+            if not isinstance(value, dict):
+                continue
+            url = str(value.get("u") or "")
+            body = value.get("b")
+            if not isinstance(body, dict) or "observations/current" not in url:
+                continue
+            if normalized_icao and f"icaoCode={normalized_icao}" in url:
+                return body
+            if fallback_block is None:
+                fallback_block = body
+        return fallback_block
+
     def fetch_wunderground_settlement_current(
         self,
         city: str,
@@ -112,44 +210,108 @@ class WundergroundSourceMixin:
         if not html:
             return None
 
-        fallback_icao = str(icao or "").strip()
-        station_name = station_label or self._wu_extract_station_name(html, fallback_icao)
-        display_temp, display_unit = self._wu_extract_station_temperature(
-            html,
-            station_name=station_name,
+        city_meta = CITY_REGISTRY.get(normalized_city) or {}
+        utc_offset_seconds = int(city_meta.get("tz_offset") or 0)
+        fallback_icao = str(icao or "").strip().upper()
+        history_url = self._wu_extract_station_history_url(html)
+        station_id = self._wu_extract_station_id_from_history_url(history_url)
+        station_name = (
+            station_label
+            or self._wu_extract_station_name(html, fallback_icao)
+            or self._wu_extract_station_name_from_history_url(history_url)
+            or fallback_icao
+            or str(city or "").title()
         )
-        temp_c = self._wu_to_celsius(display_temp, display_unit)
+
+        app_state = self._wu_extract_app_state(html) or {}
+        current_block = self._wu_find_current_observation_block(app_state, icao=fallback_icao)
+
+        display_temp = None
+        display_unit = "F"
+        obs_iso = None
+        humidity = None
+        wind_speed_kt = None
+        wind_dir = None
+        wx_phrase = None
+        dewpoint_c = None
+        official_high_c = None
+        official_low_c = None
+
+        if current_block:
+            display_temp = self._safe_float(current_block.get("temperature"))
+            obs_iso = self._wu_parse_observation_iso(
+                current_block.get("validTimeLocal"),
+                utc_offset_seconds,
+            )
+            humidity = self._safe_float(current_block.get("relativeHumidity"))
+            wind_speed_kt = self._safe_float(current_block.get("windSpeed"))
+            wind_dir = str(current_block.get("windDirectionCardinal") or "").strip() or None
+            wx_phrase = str(current_block.get("wxPhraseLong") or "").strip() or None
+            dewpoint_c = self._wu_to_celsius(
+                self._safe_float(current_block.get("temperatureDewPoint")),
+                "F",
+            )
+            official_high_c = self._wu_to_celsius(
+                self._safe_float(
+                    current_block.get("temperatureMaxSince7Am")
+                    or current_block.get("temperatureMax24Hour")
+                ),
+                "F",
+            )
+            official_low_c = self._wu_to_celsius(
+                self._safe_float(current_block.get("temperatureMin24Hour")),
+                "F",
+            )
+
+        if display_temp is None:
+            display_temp, display_unit = self._wu_extract_station_temperature(
+                html,
+                station_name=station_name,
+            )
+        temp_c = self._wu_to_celsius(self._safe_float(display_temp), display_unit)
         if temp_c is None:
             logger.warning(f"Wunderground temperature parse failed city={city} url={url}")
             return None
 
-        city_meta = CITY_REGISTRY.get(normalized_city) or {}
-        utc_offset_seconds = int(city_meta.get("tz_offset") or 0)
-        obs_iso = datetime.now(timezone.utc).isoformat()
+        obs_iso = obs_iso or datetime.now(timezone.utc).isoformat()
         today_obs = self._update_official_today_obs(
             source_code="wunderground",
-            station_code=fallback_icao or normalized_city,
+            station_code=station_id or fallback_icao or normalized_city,
             obs_iso=obs_iso,
             current_temp=temp_c,
             utc_offset_seconds=utc_offset_seconds,
         )
-        max_so_far = None
-        max_temp_time = None
-        today_low = None
+
+        sampled_max = None
+        sampled_max_time = None
+        sampled_low = None
         if today_obs:
             hottest = max(today_obs, key=lambda item: float(item.get("temp") or -999))
             coldest = min(today_obs, key=lambda item: float(item.get("temp") or 999))
-            max_so_far = self._wu_to_celsius(float(hottest.get("temp")), "C")
-            today_low = self._wu_to_celsius(float(coldest.get("temp")), "C")
-            max_temp_time = str(hottest.get("time") or "").strip() or None
+            sampled_max = self._wu_to_celsius(float(hottest.get("temp")), "C")
+            sampled_max_time = str(hottest.get("time") or "").strip() or None
+            sampled_low = self._wu_to_celsius(float(coldest.get("temp")), "C")
+
+        max_so_far = official_high_c if official_high_c is not None else sampled_max
+        today_low = official_low_c if official_low_c is not None else sampled_low
+        max_temp_time = sampled_max_time
+        if max_so_far is not None and abs(float(max_so_far) - float(temp_c)) < 0.05:
+            try:
+                local_obs = datetime.fromisoformat(obs_iso.replace("Z", "+00:00")).astimezone(
+                    timezone(timedelta(seconds=utc_offset_seconds))
+                )
+                max_temp_time = local_obs.strftime("%H:%M")
+            except Exception:
+                pass
 
         payload: Dict[str, Any] = {
             "source": "wunderground",
             "source_label": "Wunderground",
-            "station_code": fallback_icao or None,
-            "station_name": station_name or fallback_icao or str(city or "").title(),
+            "station_code": station_id or fallback_icao or None,
+            "station_name": station_name,
             "observation_time": obs_iso,
             "source_url": url,
+            "history_url": history_url,
             "current": {
                 "temp": temp_c,
                 "display_temp": display_temp,
@@ -157,9 +319,11 @@ class WundergroundSourceMixin:
                 "max_temp_so_far": max_so_far,
                 "max_temp_time": max_temp_time,
                 "today_low": today_low,
-                "humidity": None,
-                "wind_speed_kt": None,
-                "wind_dir": None,
+                "humidity": humidity,
+                "wind_speed_kt": wind_speed_kt,
+                "wind_dir": wind_dir,
+                "cloud_desc": wx_phrase,
+                "dewpoint": dewpoint_c,
             },
             "today_obs": today_obs,
             "unit": "celsius",

@@ -256,6 +256,24 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         pointRadius: 5,
       });
 
+      if (
+        todayChartData.datasets.airportMetarPoints?.some((value) => value != null)
+      ) {
+        datasets.push({
+          backgroundColor: "#60a5fa",
+          borderColor: "#60a5fa",
+          borderWidth: 1,
+          data: todayChartData.datasets.airportMetarPoints,
+          fill: false,
+          label:
+            locale === "en-US" ? "Airport METAR" : "机场 METAR",
+          order: 0,
+          pointHoverRadius: 6,
+          pointRadius: 4,
+          showLine: false,
+        });
+      }
+
       if (todayChartData.datasets.mgmPoints.some((value) => value != null)) {
         datasets.push({
           backgroundColor: "#facc15",
@@ -759,6 +777,22 @@ export function FutureForecastModal() {
           : risk.airport
           ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
           : "--";
+  const airportCurrentText =
+    detail.airport_current?.temp != null
+      ? `${detail.airport_current.temp}${detail.temp_symbol}${
+          detail.airport_current?.obs_time
+            ? ` @${detail.airport_current.obs_time}`
+            : ""
+        }`
+      : "--";
+  const airportMaxText =
+    detail.airport_current?.max_so_far != null
+      ? `${detail.airport_current.max_so_far}${detail.temp_symbol}${
+          detail.airport_current?.max_temp_time
+            ? ` @${detail.airport_current.max_temp_time}`
+            : ""
+        }`
+      : "--";
   const displayedUpperAirSummary =
     marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
   const displayedUpperAirMetrics = (view.front.upperAirMetrics || []).map(
@@ -1061,6 +1095,26 @@ export function FutureForecastModal() {
                                 </span>
                                 <span>{settlementProfileValue}</span>
                               </div>
+                              {settlementSourceCode === "wunderground" ? (
+                                <div className="risk-row">
+                                  <span className="risk-label">
+                                    {locale === "en-US"
+                                      ? "Airport METAR"
+                                      : "机场 METAR"}
+                                  </span>
+                                  <span>{airportCurrentText}</span>
+                                </div>
+                              ) : null}
+                              {settlementSourceCode === "wunderground" ? (
+                                <div className="risk-row">
+                                  <span className="risk-label">
+                                    {locale === "en-US"
+                                      ? "Airport high"
+                                      : "机场目前最高温"}
+                                  </span>
+                                  <span>{airportMaxText}</span>
+                                </div>
+                              ) : null}
                               <div className="risk-row">
                                 <span className="risk-label">
                                   {t("section.distance")}
