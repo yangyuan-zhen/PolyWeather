@@ -30,6 +30,7 @@ SETTLEMENT_SOURCE_LABELS = {
     "cwa": "CWA",
     "noaa": "NOAA",
     "mgm": "MGM",
+    "wunderground": "Wunderground",
 }
 
 _CLOUD_RANK_LABELS = {

@@ -76,6 +76,7 @@ SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
     "cwa": "CWA",
     "noaa": "NOAA",
     "mgm": "MGM",
+    "wunderground": "Wunderground",
 }
 
 _cache: Dict[str, Dict] = {}

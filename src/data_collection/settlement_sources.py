@@ -183,6 +183,49 @@ class SettlementSourceMixin:
             )
             return self._sort_temp_points(points)
 
+    def _update_official_today_obs(
+        self,
+        *,
+        source_code: str,
+        station_code: str,
+        obs_iso: Optional[str],
+        current_temp: Optional[float],
+        utc_offset_seconds: int,
+    ) -> List[Dict[str, Any]]:
+        if not obs_iso or current_temp is None:
+            return []
+
+        try:
+            obs_dt = datetime.fromisoformat(str(obs_iso).replace("Z", "+00:00"))
+        except Exception:
+            return []
+        if obs_dt.tzinfo is None:
+            obs_dt = obs_dt.replace(tzinfo=timezone.utc)
+        local_tz = timezone(timedelta(seconds=int(utc_offset_seconds or 0)))
+        local_dt = obs_dt.astimezone(local_tz)
+        date_str = local_dt.strftime("%Y-%m-%d")
+        time_str = local_dt.strftime("%H:%M")
+        mode = get_state_storage_mode()
+        if mode not in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+            return [{"time": time_str, "temp": round(float(current_temp), 1)}]
+
+        lock = self._get_settlement_series_lock()
+        with lock:
+            _official_intraday_repo.upsert_point(
+                source_code=source_code,
+                station_code=station_code,
+                target_date=date_str,
+                observation_time=time_str,
+                value=round(float(current_temp), 1),
+                payload={"time": time_str, "temp": round(float(current_temp), 1)},
+            )
+            points = _official_intraday_repo.load_points(
+                source_code=source_code,
+                station_code=station_code,
+                target_date=date_str,
+            )
+            return self._sort_temp_points(points)
+
     def fetch_hko_settlement_current(self) -> Optional[Dict[str, Any]]:
         cache_key = "hko:hong_kong"
         cached = self._get_settlement_cache(cache_key)
@@ -537,6 +580,22 @@ class SettlementSourceMixin:
 
     def fetch_settlement_current(self, city: str) -> Optional[Dict[str, Any]]:
         normalized = str(city or "").strip().lower()
+        try:
+            from src.data_collection.city_registry import CITY_REGISTRY
+
+            city_meta = CITY_REGISTRY.get(normalized) or {}
+            settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+            if settlement_source == "wunderground":
+                settlement_url = str(city_meta.get("settlement_url") or "").strip()
+                if settlement_url:
+                    return self.fetch_wunderground_settlement_current(
+                        normalized,
+                        url=settlement_url,
+                        station_label=str(city_meta.get("settlement_station_label") or "").strip() or None,
+                        icao=str(city_meta.get("icao") or "").strip() or None,
+                    )
+        except Exception as exc:
+            logger.warning(f"Wunderground settlement dispatch failed city={city}: {exc}")
         if normalized == "hong kong":
             return self.fetch_hko_settlement_current()
         if normalized == "taipei":

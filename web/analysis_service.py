@@ -665,7 +665,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     mc = metar.get("current", {}) if metar else {}
     mg_cur = mgm.get("current", {}) if mgm else {}
     sc_cur = settlement_current.get("current", {}) if settlement_current else {}
-    use_settlement_current = settlement_source in {"hko", "cwa", "noaa"} and bool(sc_cur)
+    use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else mc
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is None:

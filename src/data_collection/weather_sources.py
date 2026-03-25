@@ -10,9 +10,10 @@ from src.data_collection.settlement_sources import SettlementSourceMixin
 from src.data_collection.metar_sources import MetarSourceMixin
 from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
+from src.data_collection.wunderground_sources import WundergroundSourceMixin
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, NwsOpenMeteoSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, NwsOpenMeteoSourceMixin, WundergroundSourceMixin):
     """
     Multi-source weather data collector
 

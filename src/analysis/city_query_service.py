@@ -39,6 +39,7 @@ def _resolve_settlement_source(city_meta: Dict[str, Any]) -> Tuple[str, str]:
         "cwa": "CWA",
         "noaa": "NOAA",
         "mgm": "MGM",
+        "wunderground": "Wunderground",
     }
     return source, source_label_map.get(source, source.upper())
 
