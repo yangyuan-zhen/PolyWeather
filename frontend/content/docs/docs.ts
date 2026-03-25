@@ -62,7 +62,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "how-to-read",
             title: "如何快速读懂主站",
             blocks: [
-              { type: "steps", items: ["先看今日气温预测图，确认当前实测、DEB 预测和峰值窗口。", "再看今日日内结构信号，判断现在是偏支持继续升温、偏压制，还是先观察。", "最后看市场对照与概率分布，判断市场是否已经把天气结构 price in。"] },
+              { type: "steps", items: ["先看今日气温预测图，确认当前实测、DEB 预测和峰值窗口。", "再看今日日内结构信号，判断现在是偏支持继续升温、偏压制，还是先观察。", "最后看市场对照与概率分布，判断市场是否已经把天气结构计入价格。"] },
             ],
           },
         ],
@@ -401,7 +401,7 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "插件的多日预报已改为 DEB 优先显示。只有某一天没有 DEB 值时，才回退到原始 daily forecast max temp。",
+                text: "插件的多日预报已改为 DEB 优先显示。只有某一天没有 DEB 值时，才回退到原始的日最高温预报值。",
               },
             ],
           },

@@ -101,15 +101,6 @@ export function HeaderBar() {
           <span>{accountLabel}</span>
         </Link>
 
-        <Link
-          href={docsHref}
-          className="info-btn"
-          title={t("header.infoAria")}
-          aria-label={t("header.infoAria")}
-        >
-          {t("header.info")}
-        </Link>
-
         <div className="live-badge" id="liveBadge">
           <span className="pulse-dot" />
           <span>{t("header.live")}</span>
