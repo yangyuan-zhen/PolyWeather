@@ -67,6 +67,7 @@ function getObservationSourceTag(detail: CityDetail): string {
   if (code === "hko") return "HKO";
   if (code === "cwa") return "CWA";
   if (code === "noaa") return "NOAA";
+  if (code === "wunderground") return "WUNDERGROUND";
   if (code === "mgm") return "MGM";
   return "METAR";
 }
@@ -254,7 +255,10 @@ export function getTemperatureChartData(
   const observationTag = getObservationSourceTag(detail);
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
-    observationCode === "hko" || observationCode === "cwa" || observationCode === "noaa";
+    observationCode === "hko" ||
+    observationCode === "cwa" ||
+    observationCode === "noaa" ||
+    observationCode === "wunderground";
   const officialObservationSource =
     settlementSource
       ? detail.settlement_today_obs?.length
@@ -267,7 +271,9 @@ export function getTemperatureChartData(
     ? detail.metar_today_obs
     : detail.trend?.recent || [];
   const allowMetarFallback =
-    settlementSource && observationCode !== "hko";
+    settlementSource &&
+    observationCode !== "hko" &&
+    observationCode !== "wunderground";
   const shouldUseMetarFallback =
     allowMetarFallback &&
     officialObservationSource.length > 0 &&
@@ -288,6 +294,8 @@ export function getTemperatureChartData(
       ? metarFallbackTag
       : observationCode === "noaa"
         ? "NOAA RCTP"
+        : observationCode === "wunderground"
+          ? "Wunderground"
         : observationTag;
 
   const metarPoints = new Array(times.length).fill(null);
@@ -424,6 +432,12 @@ export function getTemperatureChartData(
         ? "Taipei settles on NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; the plotted line is a settlement reference."
         : "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作为结算参考线。",
     );
+  } else if (observationCode === "wunderground") {
+    legendParts.push(
+      isEnglish(locale)
+        ? "This city settles on the configured Wunderground station; the plotted observation points follow that settlement source."
+        : "该城市按配置的 Wunderground 站点结算；图中实测点位按该结算源展示。",
+    );
   }
   if (tafMarkers.length) {
     const tafText = tafMarkers
@@ -450,7 +464,8 @@ export function getTemperatureChartData(
       temps,
     },
     observationLabel:
-      observationCode === "noaa" && !shouldUseMetarFallback
+    (observationCode === "noaa" || observationCode === "wunderground") &&
+    !shouldUseMetarFallback
         ? isEnglish(locale)
           ? `${observationDisplayTag} Settlement Reference`
           : `${observationDisplayTag} 结算参考`
@@ -2064,7 +2079,11 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const current = detail.current || {};
   const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
   const sourceCode = getObservationSourceCode(detail);
-  const isOfficialSource = sourceCode === "hko" || sourceCode === "cwa" || sourceCode === "noaa";
+  const isOfficialSource =
+    sourceCode === "hko" ||
+    sourceCode === "cwa" ||
+    sourceCode === "noaa" ||
+    sourceCode === "wunderground";
 
   const sourceDisplay = (() => {
     if (sourceCode === "hko") {
@@ -2081,6 +2100,16 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       return isEnglish(locale)
         ? "NOAA RCTP (Taiwan Taoyuan)"
         : "NOAA RCTP（台湾桃园国际机场）";
+    }
+    if (sourceCode === "wunderground") {
+      const stationName = String(
+        detail.current?.settlement_source_label ||
+          detail.risk?.airport ||
+          "Wunderground",
+      ).trim();
+      return isEnglish(locale)
+        ? `${stationName} (Wunderground)`
+        : `${stationName}（Wunderground）`;
     }
     const tag = getObservationSourceTag(detail);
     if (sourceCode === "mgm") {
@@ -2144,7 +2173,11 @@ export function getSettlementRiskNarrative(
 ) {
   const risk = detail.risk || {};
   const sourceCode = getObservationSourceCode(detail);
-  const stationTerm = sourceCode === "hko" || sourceCode === "cwa" || sourceCode === "noaa"
+  const stationTerm =
+    sourceCode === "hko" ||
+    sourceCode === "cwa" ||
+    sourceCode === "noaa" ||
+    sourceCode === "wunderground"
     ? isEnglish(locale)
       ? "settlement reference station"
       : "结算参考站"

@@ -730,7 +730,10 @@ export function FutureForecastModal() {
     detail.current?.settlement_source || "",
   ).toLowerCase();
   const isOfficialSettlementSource =
-    settlementSourceCode === "hko" || settlementSourceCode === "cwa";
+    settlementSourceCode === "hko" ||
+    settlementSourceCode === "cwa" ||
+    settlementSourceCode === "noaa" ||
+    settlementSourceCode === "wunderground";
   const settlementProfileLabel = isOfficialSettlementSource
     ? locale === "en-US"
       ? "Settlement source"
@@ -745,10 +748,14 @@ export function FutureForecastModal() {
         ? locale === "en-US"
           ? "NOAA RCTP (Taiwan Taoyuan International Airport)"
           : "NOAA RCTP（台湾桃园国际机场）"
-        : settlementSourceCode === "cwa"
+      : settlementSourceCode === "cwa"
           ? locale === "en-US"
             ? "Central Weather Administration (CWA)"
             : "交通部中央气象署 (CWA)"
+          : settlementSourceCode === "wunderground"
+            ? locale === "en-US"
+              ? `${detail.current?.settlement_source_label || risk.airport || "Wunderground"}`
+              : `${detail.current?.settlement_source_label || risk.airport || "Wunderground"}`
           : risk.airport
           ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
           : "--";
