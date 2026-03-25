@@ -44,6 +44,40 @@ class WundergroundSourceMixin:
             logger.warning(f"Wunderground page fetch failed url={url}: {exc}")
             return None
 
+    def _fetch_wunderground_history_page(self, url: str) -> Optional[str]:
+        if not url:
+            return None
+        cache_key = f"wu:history:{url}"
+        cached = self._get_settlement_cache(cache_key)
+        if isinstance(cached, dict):
+            html = str(cached.get("html") or "")
+            if html:
+                return html
+
+        try:
+            response = self.session.get(
+                url,
+                headers={
+                    "User-Agent": "Mozilla/5.0",
+                    "Referer": url,
+                },
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            html = str(response.text or "")
+            if not html:
+                return None
+            ttl_backup = getattr(self, "settlement_cache_ttl_sec", self._WU_PAGE_TTL_SEC)
+            try:
+                self.settlement_cache_ttl_sec = self._WU_PAGE_TTL_SEC
+                self._set_settlement_cache(cache_key, {"html": html})
+            finally:
+                self.settlement_cache_ttl_sec = ttl_backup
+            return html
+        except Exception as exc:
+            logger.warning(f"Wunderground history page fetch failed url={url}: {exc}")
+            return None
+
     @staticmethod
     def _wu_extract_app_state(html: str) -> Optional[Dict[str, Any]]:
         match = re.search(
@@ -159,6 +193,109 @@ class WundergroundSourceMixin:
         text = str(raw or "").strip()
         if not text:
             return None
+
+    @staticmethod
+    def _wu_parse_history_time(raw: Any, utc_offset_seconds: int) -> Optional[str]:
+        if raw is None:
+            return None
+        if isinstance(raw, (int, float)):
+            try:
+                return datetime.fromtimestamp(float(raw), timezone.utc).isoformat()
+            except Exception:
+                return None
+        text = str(raw).strip()
+        if not text:
+            return None
+        for fmt in (
+            "%Y-%m-%dT%H:%M:%S%z",
+            "%Y-%m-%dT%H:%M:%S",
+            "%Y-%m-%d %H:%M:%S",
+            "%Y-%m-%d %H:%M",
+        ):
+            try:
+                parsed = datetime.strptime(text, fmt)
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=timezone(timedelta(seconds=utc_offset_seconds)))
+                return parsed.astimezone(timezone.utc).isoformat()
+            except Exception:
+                continue
+        return None
+
+    @classmethod
+    def _wu_observation_temp_c(cls, obs: Dict[str, Any]) -> Optional[float]:
+        if not isinstance(obs, dict):
+            return None
+        metric = obs.get("metric")
+        if isinstance(metric, dict):
+            for key in ("temp", "temperature", "tempAvg", "temperatureAvg"):
+                value = cls._safe_float(metric.get(key))
+                if value is not None:
+                    return round(float(value), 1)
+        imperial = obs.get("imperial")
+        if isinstance(imperial, dict):
+            for key in ("temp", "temperature", "tempAvg", "temperatureAvg"):
+                value = cls._safe_float(imperial.get(key))
+                if value is not None:
+                    return cls._wu_to_celsius(value, "F")
+        for key in ("temp", "temperature"):
+            value = cls._safe_float(obs.get(key))
+            if value is not None:
+                return round(float(value), 1)
+        return None
+
+    @classmethod
+    def _wu_observation_time_iso(cls, obs: Dict[str, Any], utc_offset_seconds: int) -> Optional[str]:
+        if not isinstance(obs, dict):
+            return None
+        for key in ("validTimeLocal", "obsTimeLocal", "observationTime", "timestamp", "validTimeUtc", "epoch"):
+            value = obs.get(key)
+            parsed = cls._wu_parse_history_time(value, utc_offset_seconds)
+            if parsed:
+                return parsed
+        return None
+
+    @classmethod
+    def _wu_iter_lists(cls, node: Any):
+        if isinstance(node, dict):
+            for value in node.values():
+                yield from cls._wu_iter_lists(value)
+        elif isinstance(node, list):
+            yield node
+            for item in node:
+                yield from cls._wu_iter_lists(item)
+
+    @classmethod
+    def _wu_extract_history_observations(
+        cls,
+        app_state: Dict[str, Any],
+        *,
+        utc_offset_seconds: int,
+    ) -> list[dict[str, Any]]:
+        best: list[dict[str, Any]] = []
+        for candidate in cls._wu_iter_lists(app_state):
+            if not candidate or not all(isinstance(item, dict) for item in candidate):
+                continue
+            parsed: list[dict[str, Any]] = []
+            seen_times: set[str] = set()
+            for item in candidate:
+                temp_c = cls._wu_observation_temp_c(item)
+                time_iso = cls._wu_observation_time_iso(item, utc_offset_seconds)
+                if temp_c is None or not time_iso:
+                    continue
+                try:
+                    local_dt = datetime.fromisoformat(time_iso.replace("Z", "+00:00")).astimezone(
+                        timezone(timedelta(seconds=utc_offset_seconds))
+                    )
+                except Exception:
+                    continue
+                hhmm = local_dt.strftime("%H:%M")
+                if hhmm in seen_times:
+                    continue
+                seen_times.add(hhmm)
+                parsed.append({"time": hhmm, "temp": round(float(temp_c), 1)})
+            if len(parsed) > len(best):
+                best = parsed
+        return best
         try:
             parsed = datetime.strptime(text, "%Y-%m-%dT%H:%M:%S%z")
             return parsed.astimezone(timezone.utc).isoformat()
@@ -274,13 +411,48 @@ class WundergroundSourceMixin:
             return None
 
         obs_iso = obs_iso or datetime.now(timezone.utc).isoformat()
-        today_obs = self._update_official_today_obs(
-            source_code="wunderground",
-            station_code=station_id or fallback_icao or normalized_city,
-            obs_iso=obs_iso,
-            current_temp=temp_c,
-            utc_offset_seconds=utc_offset_seconds,
+        today_obs: list[dict[str, Any]] = []
+        history_html = self._fetch_wunderground_history_page(history_url) if history_url else None
+        history_state = self._wu_extract_app_state(history_html or "") if history_html else None
+        history_obs = (
+            self._wu_extract_history_observations(
+                history_state or {},
+                utc_offset_seconds=utc_offset_seconds,
+            )
+            if isinstance(history_state, dict)
+            else []
         )
+        if history_obs:
+            today_obs = history_obs
+            for point in history_obs:
+                point_time = str(point.get("time") or "").strip()
+                point_temp = self._safe_float(point.get("temp"))
+                if not point_time or point_temp is None:
+                    continue
+                try:
+                    local_dt = datetime.strptime(point_time, "%H:%M").replace(
+                        year=datetime.now(timezone(timedelta(seconds=utc_offset_seconds))).year,
+                        month=datetime.now(timezone(timedelta(seconds=utc_offset_seconds))).month,
+                        day=datetime.now(timezone(timedelta(seconds=utc_offset_seconds))).day,
+                        tzinfo=timezone(timedelta(seconds=utc_offset_seconds)),
+                    )
+                    self._update_official_today_obs(
+                        source_code="wunderground",
+                        station_code=station_id or fallback_icao or normalized_city,
+                        obs_iso=local_dt.astimezone(timezone.utc).isoformat(),
+                        current_temp=point_temp,
+                        utc_offset_seconds=utc_offset_seconds,
+                    )
+                except Exception:
+                    continue
+        else:
+            today_obs = self._update_official_today_obs(
+                source_code="wunderground",
+                station_code=station_id or fallback_icao or normalized_city,
+                obs_iso=obs_iso,
+                current_temp=temp_c,
+                utc_offset_seconds=utc_offset_seconds,
+            )
 
         sampled_max = None
         sampled_max_time = None

@@ -689,7 +689,9 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if max_temp_time == "":
         max_temp_time = None
 
-    wu_settle = apply_city_settlement(city.lower(), max_so_far) if max_so_far is not None else None
+    raw_settlement_max = max_so_far
+    wu_settle = apply_city_settlement(city.lower(), raw_settlement_max) if raw_settlement_max is not None else None
+    display_settlement_max = wu_settle if settlement_source == "wunderground" and wu_settle is not None else raw_settlement_max
 
     # Observation time → local
     obs_time_str = ""
@@ -1275,8 +1277,9 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         },
         "current": {
             "temp": cur_temp,
-            "max_so_far": max_so_far,
+            "max_so_far": display_settlement_max,
             "max_temp_time": max_temp_time,
+            "raw_max_so_far": raw_settlement_max,
             "wu_settlement": wu_settle,
             "settlement_source": settlement_source,
             "settlement_source_label": settlement_source_label,

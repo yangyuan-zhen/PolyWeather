@@ -30,7 +30,7 @@ def is_exact_settlement_city(city: str) -> bool:
 def apply_city_settlement(city: str, value: Optional[Number]) -> Optional[int]:
     """
     根据城市返回最终的结算值：
-    - 香港/台北: 向下取整 (e.g. 28.9 -> 28)
+    - 香港: 向下取整 (e.g. 28.9 -> 28)
     - 其他: WU 规则四舍五入
     """
     if value is None:
