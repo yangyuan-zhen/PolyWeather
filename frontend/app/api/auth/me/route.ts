@@ -20,6 +20,14 @@ export async function GET(req: NextRequest) {
       headers: auth.headers,
       cache: "no-store",
     });
+    if (res.status === 401 || res.status === 403) {
+      const response = NextResponse.json({
+        authenticated: false,
+        subscription_active: false,
+        points: 0,
+      });
+      return applyAuthResponseCookies(response, auth.response);
+    }
     if (!res.ok) {
       const raw = await res.text();
       const response = NextResponse.json(

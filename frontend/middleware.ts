@@ -47,7 +47,13 @@ function isPublicPage(pathname: string) {
 }
 
 function isPublicApi(pathname: string) {
-  return pathname === "/api/cities" || /^\/api\/city\/[^/]+\/summary$/i.test(pathname);
+  return (
+    pathname === "/api/auth/me" ||
+    pathname === "/api/cities" ||
+    pathname === "/api/vitals" ||
+    /^\/api\/city\/[^/]+$/i.test(pathname) ||
+    /^\/api\/city\/[^/]+\/summary$/i.test(pathname)
+  );
 }
 
 function handleLegacyTokenGate(request: NextRequest) {
