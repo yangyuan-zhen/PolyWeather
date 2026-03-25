@@ -193,6 +193,17 @@ class WundergroundSourceMixin:
         text = str(raw or "").strip()
         if not text:
             return None
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%dT%H:%M:%S%z")
+            return parsed.astimezone(timezone.utc).isoformat()
+        except Exception:
+            pass
+        try:
+            parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
+            parsed = parsed.replace(tzinfo=timezone(timedelta(seconds=utc_offset_seconds)))
+            return parsed.astimezone(timezone.utc).isoformat()
+        except Exception:
+            return None
 
     @staticmethod
     def _wu_parse_history_time(raw: Any, utc_offset_seconds: int) -> Optional[str]:
@@ -296,17 +307,6 @@ class WundergroundSourceMixin:
             if len(parsed) > len(best):
                 best = parsed
         return best
-        try:
-            parsed = datetime.strptime(text, "%Y-%m-%dT%H:%M:%S%z")
-            return parsed.astimezone(timezone.utc).isoformat()
-        except Exception:
-            pass
-        try:
-            parsed = datetime.strptime(text, "%Y-%m-%d %H:%M:%S")
-            parsed = parsed.replace(tzinfo=timezone(timedelta(seconds=utc_offset_seconds)))
-            return parsed.astimezone(timezone.utc).isoformat()
-        except Exception:
-            return None
 
     @staticmethod
     def _wu_find_current_observation_block(
