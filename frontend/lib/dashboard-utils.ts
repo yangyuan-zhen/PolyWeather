@@ -832,6 +832,11 @@ export function computeFrontTrendSignal(
   const currentDew = Number(detail.current?.dewpoint);
 
   if (!slice.length) {
+    const fallbackSummary =
+      backendSummary ||
+      (isEnglish(locale)
+        ? "Insufficient intraday structured data. Keep baseline monitoring."
+        : "当日日内结构化数据不足，暂时只保留基础监控。");
     return {
       confidence: "low",
       label: isEnglish(locale) ? "Monitoring" : "监控中",
@@ -845,11 +850,8 @@ export function computeFrontTrendSignal(
       upperAirSummary,
       precipMax: 0,
       score: 0,
-      summary:
-        backendSummary ||
-        (isEnglish(locale)
-          ? "Insufficient intraday structured data. Keep baseline monitoring."
-          : "当日日内结构化数据不足，暂时只保留基础监控。"),
+      summary: fallbackSummary,
+      summaryLines: [fallbackSummary],
       weatherGovPeriods: [] as ReturnType<typeof getForecastTextForDate>,
     };
   }
@@ -918,6 +920,10 @@ export function computeFrontTrendSignal(
   const markerSummary = (
     marker:
       | {
+          marker_type?: string | null;
+          start_local?: string | null;
+          end_local?: string | null;
+          suppression_level?: string | null;
           summary_zh?: string | null;
           summary_en?: string | null;
         }
@@ -945,6 +951,66 @@ export function computeFrontTrendSignal(
           return start !== null && start > currentMinutes;
         })
       : null;
+  const sameMarker = (
+    left:
+      | { marker_type?: string | null; start_local?: string | null; end_local?: string | null }
+      | null
+      | undefined,
+    right:
+      | { marker_type?: string | null; start_local?: string | null; end_local?: string | null }
+      | null
+      | undefined,
+  ) =>
+    !!left &&
+    !!right &&
+    String(left.marker_type || "") === String(right.marker_type || "") &&
+    String(left.start_local || "") === String(right.start_local || "") &&
+    String(left.end_local || "") === String(right.end_local || "");
+  const formatTafSegmentLine = (
+    marker:
+      | {
+          marker_type?: string | null;
+          start_local?: string | null;
+          end_local?: string | null;
+          suppression_level?: string | null;
+        }
+      | null
+      | undefined,
+    kind: "current" | "next" | "peak",
+  ) => {
+    if (!marker) return "";
+    const range = `${normalizeHm(marker.start_local) || "--:--"}-${normalizeHm(marker.end_local) || "--:--"}`;
+    const typeLabel = formatTafMarkerType(
+      String(marker.marker_type || ""),
+      locale,
+    );
+    const level = String(marker.suppression_level || "low").toLowerCase();
+    const statusText = isEnglish(locale)
+      ? level === "high"
+        ? "shows shower or thunderstorm disruption"
+        : level === "medium"
+          ? "shows cloud or light-rain disruption"
+          : "stays relatively stable"
+      : level === "high"
+        ? "有阵雨或雷暴扰动"
+        : level === "medium"
+          ? "有云量或弱降水扰动"
+          : "以稳定为主";
+    const prefix = isEnglish(locale)
+      ? kind === "current"
+        ? "Current TAF"
+        : kind === "next"
+          ? "Next TAF"
+          : "Peak-window TAF"
+      : kind === "current"
+        ? "当前 TAF"
+        : kind === "next"
+          ? "下一段 TAF"
+          : "峰值窗口 TAF";
+    return isEnglish(locale)
+      ? `${prefix}: ${typeLabel} (${range}), ${statusText}.`
+      : `${prefix}：${typeLabel}（${range}），${statusText}。`;
+  };
   const peakWindowTafMarker =
     tafSignal.available &&
     peakWindowStartMinutes !== null &&
@@ -956,27 +1022,7 @@ export function computeFrontTrendSignal(
           return start <= peakWindowEndMinutes && end >= peakWindowStartMinutes;
         })
       : null;
-  const currentTafSummary = markerSummary(currentTafMarker);
   const peakTafSummary = markerSummary(peakWindowTafMarker);
-  const nextTafSummary = markerSummary(nextTafMarker);
-  const tafTimelineSummary =
-    tafSignal.available && dateStr === detail.local_date
-      ? (() => {
-          if (currentTafMarker && currentTafSummary) {
-            const range = `${normalizeHm(currentTafMarker.start_local) || "--:--"}-${normalizeHm(currentTafMarker.end_local) || "--:--"}`;
-            return isEnglish(locale)
-              ? `Current active TAF segment (${range}): ${currentTafSummary}`
-              : `当前生效的 TAF 时段（${range}）：${currentTafSummary}`;
-          }
-          if (nextTafMarker && nextTafSummary) {
-            const range = `${normalizeHm(nextTafMarker.start_local) || "--:--"}-${normalizeHm(nextTafMarker.end_local) || "--:--"}`;
-            return isEnglish(locale)
-              ? `Next TAF segment (${range}): ${nextTafSummary}`
-              : `下一段 TAF 时段（${range}）：${nextTafSummary}`;
-          }
-          return "";
-        })()
-      : "";
   const peakTafStillRelevant =
     peakWindowEndMinutes === null ||
     currentMinutes === null ||
@@ -984,19 +1030,19 @@ export function computeFrontTrendSignal(
   const effectivePeakTafSummary =
     peakTafStillRelevant &&
     peakTafSummary &&
-    peakTafSummary !== currentTafSummary
+    !sameMarker(peakWindowTafMarker, currentTafMarker) &&
+    !sameMarker(peakWindowTafMarker, nextTafMarker)
       ? peakTafSummary
       : "";
-  const currentTafLine = tafTimelineSummary
-    ? isEnglish(locale)
-      ? `Current TAF: ${tafTimelineSummary}`
-      : `当前 TAF：${tafTimelineSummary}`
-    : "";
-  const peakTafLine = effectivePeakTafSummary
-    ? isEnglish(locale)
-      ? `Peak-window TAF: ${effectivePeakTafSummary}`
-      : `峰值窗口 TAF：${effectivePeakTafSummary}`
-    : "";
+  const currentTafLine = currentTafMarker
+    ? formatTafSegmentLine(currentTafMarker, "current")
+    : nextTafMarker
+      ? formatTafSegmentLine(nextTafMarker, "next")
+      : "";
+  const peakTafLine =
+    effectivePeakTafSummary && peakWindowTafMarker
+      ? formatTafSegmentLine(peakWindowTafMarker, "peak")
+      : "";
   const tafFallbackSummary =
     currentTafLine || peakTafLine ? "" : tafSummary;
   upperAirSummary = [
@@ -1465,18 +1511,26 @@ export function computeFrontTrendSignal(
           return "";
         })()
       : "";
-  const backendSupplement =
-    backendSummary && backendSummary !== summary ? backendSummary : "";
-  const combinedSummary = [
-    summary,
+  const tafSummaryLineBody = [
     currentTafLine,
     peakTafLine,
     tafFallbackSummary,
     tafContrastSummary,
-    backendSupplement,
   ]
     .filter(Boolean)
     .join(isEnglish(locale) ? " " : "");
+  const surfaceSummaryLine = summary
+    ? isEnglish(locale)
+      ? `Surface: ${summary}`
+      : `近地面：${summary}`
+    : "";
+  const tafSummaryLine = tafSummaryLineBody
+    ? isEnglish(locale)
+      ? `Airport TAF: ${tafSummaryLineBody}`
+      : `机场 TAF：${tafSummaryLineBody}`
+    : "";
+  const summaryLines = [surfaceSummaryLine, tafSummaryLine].filter(Boolean);
+  const combinedSummary = summaryLines.join(isEnglish(locale) ? " " : "");
   const cloudNote = (() => {
     if (cloudDelta >= 15 && tempDelta >= 0.8 && dewDelta >= 0.8) {
       return isEnglish(locale)
@@ -1651,6 +1705,7 @@ export function computeFrontTrendSignal(
     precipMax,
     score,
     summary: combinedSummary || backendSummary || summary,
+    summaryLines,
     weatherGovPeriods,
   };
 }

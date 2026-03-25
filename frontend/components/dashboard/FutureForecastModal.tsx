@@ -1182,7 +1182,12 @@ export function FutureForecastModal() {
                       </div>
                       {view.front.summary ? (
                         <div className="future-trend-summary">
-                          {view.front.summary}
+                          {Array.isArray(view.front.summaryLines) &&
+                          view.front.summaryLines.length > 0
+                            ? view.front.summaryLines.map((line, index) => (
+                                <div key={`${index}-${line}`}>{line}</div>
+                              ))
+                            : view.front.summary}
                         </div>
                       ) : null}
                     </div>
