@@ -374,8 +374,70 @@ export function getTemperatureChartData(
   const tafMarkersRaw = Array.isArray(detail.taf?.signal?.markers)
     ? detail.taf?.signal?.markers || []
     : [];
+  const normalizeHm = (value: unknown): string | null => {
+    const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
+    if (!match) return null;
+    const hour = Number.parseInt(match[1], 10);
+    const minute = Number.parseInt(match[2], 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  };
+  const hmToMinutes = (value: string | null) => {
+    if (!value) return null;
+    const [hourPart, minutePart] = value.split(":");
+    const hour = Number.parseInt(hourPart || "", 10);
+    const minute = Number.parseInt(minutePart || "", 10);
+    if (
+      !Number.isFinite(hour) ||
+      !Number.isFinite(minute) ||
+      hour < 0 ||
+      hour > 23 ||
+      minute < 0 ||
+      minute > 59
+    ) {
+      return null;
+    }
+    return hour * 60 + minute;
+  };
+  const currentMinutes = hmToMinutes(normalizeHm(detail.local_time));
+  const peakFirstHour = Number(detail.peak?.first_h);
+  const peakLastHour = Number(detail.peak?.last_h);
+  const peakWindowStartMinutes =
+    Number.isFinite(peakFirstHour) && peakFirstHour >= 0
+      ? Math.max(0, (peakFirstHour - 2) * 60)
+      : null;
+  const peakWindowEndMinutes =
+    Number.isFinite(peakLastHour) && peakLastHour >= peakFirstHour
+      ? Math.min(23 * 60 + 59, (peakLastHour + 1) * 60)
+      : null;
   const tafMarkerValue = max - 0.4;
   const tafMarkerPoints = new Array(times.length).fill(null);
+  const tafCurrentMarkerPoints = new Array(times.length).fill(null);
+  const tafPeakWindowMarkerPoints = new Array(times.length).fill(null);
+  const sameMarker = (
+    left:
+      | { markerType?: string | null; startLocal?: string | null; endLocal?: string | null }
+      | null
+      | undefined,
+    right:
+      | { markerType?: string | null; startLocal?: string | null; endLocal?: string | null }
+      | null
+      | undefined,
+  ) =>
+    !!left &&
+    !!right &&
+    String(left.markerType || "") === String(right.markerType || "") &&
+    String(left.startLocal || "") === String(right.startLocal || "") &&
+    String(left.endLocal || "") === String(right.endLocal || "");
   const tafMarkers = tafMarkersRaw
     .map((marker) => {
       const labelTime = String(marker?.label_time || "").trim();
@@ -397,10 +459,63 @@ export function getTemperatureChartData(
           isEnglish(locale)
             ? String(marker?.summary_en || "").trim()
             : String(marker?.summary_zh || "").trim(),
+        isCurrent: false,
+        isPeakWindow: false,
         suppressionLevel: String(marker?.suppression_level || "").trim(),
       };
     })
     .filter((marker) => marker.index >= 0);
+  const currentTafMarker =
+    currentMinutes !== null
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          const end = hmToMinutes(normalizeHm(marker.endLocal));
+          return start !== null && end !== null && currentMinutes >= start && currentMinutes <= end;
+        }) || null
+      : null;
+  const nextTafMarker =
+    currentMinutes !== null && !currentTafMarker
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          return start !== null && start > currentMinutes;
+        }) || null
+      : null;
+  const peakWindowTafMarker =
+    peakWindowStartMinutes !== null && peakWindowEndMinutes !== null
+      ? tafMarkers.find((marker) => {
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          const end = hmToMinutes(normalizeHm(marker.endLocal));
+          return (
+            start !== null &&
+            end !== null &&
+            start <= peakWindowEndMinutes &&
+            end >= peakWindowStartMinutes
+          );
+        }) || null
+      : null;
+  tafMarkers.forEach((marker) => {
+    if (sameMarker(marker, currentTafMarker) || sameMarker(marker, nextTafMarker)) {
+      marker.isCurrent = true;
+      tafCurrentMarkerPoints[marker.index] = tafMarkerValue;
+    }
+    if (sameMarker(marker, peakWindowTafMarker)) {
+      marker.isPeakWindow = true;
+      tafPeakWindowMarkerPoints[marker.index] = tafMarkerValue - 0.15;
+    }
+  });
+  const formatTafLegendMarker = (
+    marker:
+      | { displayType?: string | null; startLocal?: string | null; endLocal?: string | null; summary?: string | null }
+      | null
+      | undefined,
+  ) => {
+    if (!marker) return "";
+    const range = `${marker.startLocal || "--:--"}-${marker.endLocal || "--:--"}`;
+    const status = String(marker.summary || "").trim();
+    return status
+      ? `${marker.displayType || ""} ${range} ${status}`.trim()
+      : `${marker.displayType || ""} ${range}`.trim();
+  };
 
   const legendParts: string[] = [];
   if (detail.mgm?.temp != null) {
@@ -471,14 +586,25 @@ export function getTemperatureChartData(
     );
   }
   if (tafMarkers.length) {
-    const tafText = tafMarkers
-      .slice(0, 4)
-      .map((marker) => `${marker.displayType} ${marker.startLocal}-${marker.endLocal}`)
-      .join(" | ");
+    const primaryTafMarker = currentTafMarker || nextTafMarker;
+    if (primaryTafMarker) {
+      legendParts.push(
+        isEnglish(locale)
+          ? `Current TAF: ${formatTafLegendMarker(primaryTafMarker)}`
+          : `当前 TAF：${formatTafLegendMarker(primaryTafMarker)}`,
+      );
+    }
+    if (peakWindowTafMarker && !sameMarker(peakWindowTafMarker, primaryTafMarker)) {
+      legendParts.push(
+        isEnglish(locale)
+          ? `Peak-window TAF: ${formatTafLegendMarker(peakWindowTafMarker)}`
+          : `峰值窗口 TAF：${formatTafLegendMarker(peakWindowTafMarker)}`,
+      );
+    }
     legendParts.push(
       isEnglish(locale)
-        ? `TAF timing: ${tafText}`
-        : `TAF 时段: ${tafText}`,
+        ? "Use the current TAF segment as primary; peak-window segments are reference only."
+        : "以当前 TAF 时段为准，峰值窗口时段仅作参考。",
     );
   }
 
@@ -492,7 +618,9 @@ export function getTemperatureChartData(
       mgmHourlyPoints,
       mgmPoints,
       offset,
+      tafCurrentMarkerPoints,
       tafMarkerPoints,
+      tafPeakWindowMarkerPoints,
       temps,
     },
     observationLabel:
@@ -1013,7 +1141,7 @@ export function computeFrontTrendSignal(
     String(left.marker_type || "") === String(right.marker_type || "") &&
     String(left.start_local || "") === String(right.start_local || "") &&
     String(left.end_local || "") === String(right.end_local || "");
-  const formatTafSegmentLine = (
+  const formatTafSegmentBody = (
     marker:
       | {
           marker_type?: string | null;
@@ -1043,20 +1171,9 @@ export function computeFrontTrendSignal(
         : level === "medium"
           ? "有云量或弱降水扰动"
           : "以稳定为主";
-    const prefix = isEnglish(locale)
-      ? kind === "current"
-        ? "Current TAF"
-        : kind === "next"
-          ? "Next TAF"
-          : "Peak-window TAF"
-      : kind === "current"
-        ? "当前 TAF"
-        : kind === "next"
-          ? "下一段 TAF"
-          : "峰值窗口 TAF";
     return isEnglish(locale)
-      ? `${prefix}: ${typeLabel} (${range}), ${statusText}.`
-      : `${prefix}：${typeLabel}（${range}），${statusText}。`;
+      ? `${typeLabel} (${range}), ${statusText}.`
+      : `${typeLabel}（${range}），${statusText}。`;
   };
   const peakWindowTafMarker =
     tafSignal.available &&
@@ -1082,20 +1199,44 @@ export function computeFrontTrendSignal(
       ? peakTafSummary
       : "";
   const currentTafLine = currentTafMarker
-    ? formatTafSegmentLine(currentTafMarker, "current")
+    ? isEnglish(locale)
+      ? `Use current TAF as primary: ${formatTafSegmentBody(currentTafMarker, "current")}`
+      : `以当前 TAF 为准：${formatTafSegmentBody(currentTafMarker, "current")}`
     : nextTafMarker
-      ? formatTafSegmentLine(nextTafMarker, "next")
+      ? isEnglish(locale)
+        ? `Use next TAF segment as primary: ${formatTafSegmentBody(nextTafMarker, "next")}`
+        : `以下一段 TAF 为准：${formatTafSegmentBody(nextTafMarker, "next")}`
       : "";
+  const currentTafLineForSummary = currentTafLine.replace(/^Use (current|next) TAF (as primary|segment as primary):\s*/i, "").replace(/^以(当前|下一段) TAF 为准：/, "");
   const peakTafLine =
     effectivePeakTafSummary && peakWindowTafMarker
-      ? formatTafSegmentLine(peakWindowTafMarker, "peak")
+      ? isEnglish(locale)
+        ? `Peak-window reference: ${formatTafSegmentBody(peakWindowTafMarker, "peak")}`
+        : `峰值窗口参考：${formatTafSegmentBody(peakWindowTafMarker, "peak")}`
       : "";
+  const peakTafLineForSummary = peakTafLine.replace(/^Peak-window reference:\s*/i, "").replace(/^峰值窗口参考：/, "");
   const tafFallbackSummary =
     currentTafLine || peakTafLine ? "" : tafSummary;
+  const tafPrimarySummary = currentTafMarker
+    ? isEnglish(locale)
+      ? `Use current TAF as primary: ${currentTafLineForSummary}`
+      : `以当前 TAF 为准：${currentTafLineForSummary}`
+    : nextTafMarker
+      ? isEnglish(locale)
+        ? `Use next TAF segment as primary: ${currentTafLineForSummary}`
+        : `以下一段 TAF 为准：${currentTafLineForSummary}`
+      : "";
+  const tafReferenceSummary =
+    peakTafLineForSummary &&
+    peakTafLineForSummary !== currentTafLineForSummary
+      ? isEnglish(locale)
+        ? `Peak-window reference: ${peakTafLineForSummary}`
+        : `峰值窗口参考：${peakTafLineForSummary}`
+      : "";
   upperAirSummary = [
     baseUpperAirSummary,
-    currentTafLine,
-    peakTafLine,
+    tafPrimarySummary,
+    tafReferenceSummary,
     tafFallbackSummary,
   ]
     .filter(Boolean)
@@ -1105,8 +1246,8 @@ export function computeFrontTrendSignal(
       ? {
           label: isEnglish(locale) ? "Airport TAF" : "机场预报",
           note:
-            currentTafLine ||
-            peakTafLine ||
+            tafPrimarySummary ||
+            tafReferenceSummary ||
             tafFallbackSummary ||
             (isEnglish(locale)
               ? "Airport TAF is available for the current peak window."
@@ -1559,8 +1700,8 @@ export function computeFrontTrendSignal(
         })()
       : "";
   const tafSummaryLineBody = [
-    currentTafLine,
-    peakTafLine,
+    tafPrimarySummary,
+    tafReferenceSummary,
     tafFallbackSummary,
     tafContrastSummary,
   ]

@@ -309,12 +309,36 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "#f59e0b",
           borderColor: "#f59e0b",
           borderWidth: 0,
+          data: todayChartData.datasets.tafCurrentMarkerPoints,
+          fill: false,
+          label: locale === "en-US" ? "Current TAF" : "当前 TAF",
+          order: -3,
+          pointHoverRadius: 8,
+          pointRadius: 6,
+          showLine: false,
+        });
+        datasets.push({
+          backgroundColor: "rgba(250, 204, 21, 0.72)",
+          borderColor: "rgba(250, 204, 21, 0.72)",
+          borderWidth: 0,
+          data: todayChartData.datasets.tafPeakWindowMarkerPoints,
+          fill: false,
+          label: locale === "en-US" ? "Peak-window TAF" : "峰值窗口 TAF",
+          order: -2,
+          pointHoverRadius: 7,
+          pointRadius: 4,
+          showLine: false,
+        });
+        datasets.push({
+          backgroundColor: "#f59e0b",
+          borderColor: "#f59e0b",
+          borderWidth: 0,
           data: todayChartData.datasets.tafMarkerPoints,
           fill: false,
           label: locale === "en-US" ? "TAF Timing" : "TAF 时段",
-          order: -2,
-          pointHoverRadius: 8,
-          pointRadius: 5,
+          order: -4,
+          pointHoverRadius: 0,
+          pointRadius: 0,
           showLine: false,
         });
       }
@@ -334,6 +358,7 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
                 filter: (legendItem, chartData) => {
                   const text = String(legendItem.text || "");
                   if (!text) return false;
+                  if (text === "TAF Timing" || text === "TAF 时段") return false;
                   if (!text.includes("DEB")) return true;
 
                   const firstDebIndex = (chartData.datasets || []).findIndex(
@@ -351,12 +376,33 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               callbacks: {
                 label: (ctx) => {
                   const label = String(ctx.dataset.label || "");
-                  if (label === "TAF Timing" || label === "TAF 时段") {
+                  if (
+                    label === "TAF Timing" ||
+                    label === "TAF 时段" ||
+                    label === "Current TAF" ||
+                    label === "当前 TAF" ||
+                    label === "Peak-window TAF" ||
+                    label === "峰值窗口 TAF"
+                  ) {
                     const marker = (todayChartData.tafMarkers || []).find(
                       (item) => item.index === ctx.dataIndex,
                     );
                     if (!marker) return label;
-                    return `${label}: ${String(marker.summary || "").replace(
+                    const prefix =
+                      marker.isCurrent && marker.isPeakWindow
+                        ? locale === "en-US"
+                          ? "Current / peak-window TAF"
+                          : "当前 / 峰值窗口 TAF"
+                        : marker.isCurrent
+                          ? locale === "en-US"
+                            ? "Current TAF"
+                            : "当前 TAF"
+                          : marker.isPeakWindow
+                            ? locale === "en-US"
+                              ? "Peak-window TAF"
+                              : "峰值窗口 TAF"
+                            : label;
+                    return `${prefix}: ${String(marker.summary || "").replace(
                       marker.markerType,
                       marker.displayType || marker.markerType,
                     )}`;
