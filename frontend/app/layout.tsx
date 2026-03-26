@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/react";
 import { SpeedInsights } from "@vercel/speed-insights/next";
-import { WebVitalsReporter } from "@/components/observability/WebVitalsReporter";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -35,7 +34,6 @@ export default function RootLayout({
       </head>
       <body className="min-h-screen font-sans antialiased">
         {children}
-        <WebVitalsReporter />
         <Analytics />
         <SpeedInsights />
       </body>

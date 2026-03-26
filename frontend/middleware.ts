@@ -57,6 +57,16 @@ function isPublicApi(pathname: string) {
   );
 }
 
+function shouldRefreshOptionalSupabaseSession(pathname: string) {
+  return (
+    pathname.startsWith("/account") ||
+    pathname.startsWith("/ops") ||
+    pathname.startsWith("/api/ops/") ||
+    pathname.startsWith("/api/payments/") ||
+    pathname === "/api/system/status"
+  );
+}
+
 function handleLegacyTokenGate(request: NextRequest) {
   const requiredToken = process.env.POLYWEATHER_DASHBOARD_ACCESS_TOKEN?.trim();
   if (!requiredToken) {
@@ -144,6 +154,15 @@ async function handleSupabaseAuthGate(request: NextRequest) {
 }
 
 async function handleSupabaseOptionalSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  if (
+    isPublicPage(pathname) ||
+    isPublicApi(pathname) ||
+    !shouldRefreshOptionalSupabaseSession(pathname)
+  ) {
+    return NextResponse.next();
+  }
+
   const response = NextResponse.next({
     request: {
       headers: request.headers,
