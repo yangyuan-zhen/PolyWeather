@@ -19,6 +19,7 @@ import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
+import { IntradaySignalScene } from "@/components/dashboard/IntradaySignalScene";
 import {
   ModelForecast,
   ProbabilityDistribution,
@@ -179,6 +180,159 @@ function parseVisibilityText(
     return `${sm[1]} mi`;
   }
   return "--";
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function parseClockMinutes(value?: string | null) {
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{1,2}):(\d{2})$/);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return null;
+  return hours * 60 + minutes;
+}
+
+function parseVisibilityMiles(value?: string | null) {
+  const text = String(value || "").trim();
+  if (!text || text === "--") return null;
+  const match = text.match(/(\d+(?:\.\d+)?)/);
+  if (!match) return null;
+  const numeric = Number(match[1]);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function parseLeadingNumber(value?: string | number | null) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = String(value || "").trim();
+  const match = text.match(/[-+]?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const numeric = Number(match[0]);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function getCurrentMetricDescriptor(
+  kind: "humidity" | "dewpoint" | "wind" | "visibility",
+  value: string,
+  numeric: number | null,
+  aux?: number | null,
+) {
+  if (kind === "humidity") {
+    const percent = numeric != null ? clamp(numeric, 0, 100) : null;
+    const hint =
+      percent == null
+        ? "--"
+        : percent >= 75
+          ? "偏湿"
+          : percent >= 45
+            ? "适中"
+            : "偏干";
+    const tone =
+      percent == null ? "neutral" : percent >= 75 ? "cyan" : percent >= 45 ? "blue" : "amber";
+    return { fill: percent, hint, tone, value };
+  }
+
+  if (kind === "dewpoint") {
+    const spread = aux != null && numeric != null ? aux - numeric : null;
+    const closeness =
+      spread != null ? clamp(100 - spread * 12, 0, 100) : null;
+    const hint =
+      spread == null
+        ? "--"
+        : spread <= 2
+          ? "近饱和"
+          : spread <= 6
+            ? "偏湿"
+            : "偏干";
+    const tone =
+      spread == null ? "neutral" : spread <= 2 ? "cyan" : spread <= 6 ? "blue" : "amber";
+    return { fill: closeness, hint, tone, value };
+  }
+
+  if (kind === "wind") {
+    const percent = numeric != null ? clamp((numeric / 25) * 100, 0, 100) : null;
+    const hint =
+      numeric == null
+        ? "--"
+        : numeric >= 18
+          ? "偏强"
+          : numeric >= 8
+            ? "中等"
+            : "较弱";
+    const tone =
+      numeric == null ? "neutral" : numeric >= 18 ? "amber" : numeric >= 8 ? "blue" : "cyan";
+    return { fill: percent, hint, tone, value };
+  }
+
+  const percent = numeric != null ? clamp((numeric / 10) * 100, 0, 100) : null;
+  const hint =
+    numeric == null
+      ? "--"
+      : numeric >= 6
+        ? "通透"
+        : numeric >= 3
+          ? "一般"
+          : "受限";
+  const tone =
+    numeric == null ? "neutral" : numeric >= 6 ? "cyan" : numeric >= 3 ? "blue" : "amber";
+  return { fill: percent, hint, tone, value };
+}
+
+function getTrendMetricVisual(metric: {
+  label?: string;
+  value?: string;
+  tone?: string;
+}) {
+  const label = String(metric.label || "").toLowerCase();
+  const value = String(metric.value || "");
+  const numeric = parseLeadingNumber(value);
+
+  if (numeric == null) return null;
+
+  if (label.includes("降水") || label.includes("precip")) {
+    return {
+      mode: "fill" as const,
+      percent: clamp(numeric, 0, 100),
+      tone: "cold" as const,
+    };
+  }
+
+  if (label.includes("温度") || label.includes("temp")) {
+    return {
+      mode: "center" as const,
+      percent: clamp(50 + (numeric / 4) * 50, 0, 100),
+      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+    };
+  }
+
+  if (label.includes("露点") || label.includes("dew")) {
+    return {
+      mode: "center" as const,
+      percent: clamp(50 + (numeric / 3) * 50, 0, 100),
+      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+    };
+  }
+
+  if (label.includes("气压") || label.includes("pressure")) {
+    return {
+      mode: "center" as const,
+      percent: clamp(50 + (numeric / 4) * 50, 0, 100),
+      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+    };
+  }
+
+  if (label.includes("云量") || label.includes("cloud")) {
+    return {
+      mode: "center" as const,
+      percent: clamp(50 + (numeric / 40) * 50, 0, 100),
+      tone: numeric >= 0 ? "cold" as const : "warm" as const,
+    };
+  }
+
+  return null;
 }
 
 function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
@@ -796,6 +950,55 @@ export function FutureForecastModal() {
     detail.current?.raw_metar,
     detail.current?.visibility_mi,
   );
+  const humidityValue =
+    fallbackHumidity != null ? Math.round(fallbackHumidity) : null;
+  const windValue =
+    detail.current?.wind_speed_kt != null
+      ? Number(detail.current.wind_speed_kt)
+      : null;
+  const visibilityValue = parseVisibilityMiles(visibilityText);
+  const daylightProgress = (() => {
+    const now = parseClockMinutes(detail.current?.obs_time);
+    const sunrise = parseClockMinutes(detail.forecast?.sunrise);
+    const sunset = parseClockMinutes(detail.forecast?.sunset);
+    if (now == null || sunrise == null || sunset == null || sunset <= sunrise) {
+      return null;
+    }
+    const percent = clamp(((now - sunrise) / (sunset - sunrise)) * 100, 0, 100);
+    const phase =
+      now < sunrise ? "夜间" : now > sunset ? "已日落" : "白昼进行中";
+    return {
+      phase,
+      percent,
+    };
+  })();
+  const currentMetricVisuals = [
+    {
+      key: "humidity",
+      label: locale === "en-US" ? "Humidity" : "湿度",
+      ...getCurrentMetricDescriptor("humidity", humidityText, humidityValue),
+    },
+    {
+      key: "dewpoint",
+      label: locale === "en-US" ? "Dew Point" : "露点",
+      ...getCurrentMetricDescriptor(
+        "dewpoint",
+        dewpointText,
+        fallbackDewpoint != null ? Number(fallbackDewpoint) : null,
+        detail.current?.temp != null ? Number(detail.current.temp) : null,
+      ),
+    },
+    {
+      key: "wind",
+      label: locale === "en-US" ? "Wind" : "风速",
+      ...getCurrentMetricDescriptor("wind", windText, windValue),
+    },
+    {
+      key: "visibility",
+      label: locale === "en-US" ? "Visibility" : "能见度",
+      ...getCurrentMetricDescriptor("visibility", visibilityText, visibilityValue),
+    },
+  ];
   const ai = getAirportNarrative(detail, locale);
   const risk = detail.risk || {};
   const settlementSourceCode = String(
@@ -1001,6 +1204,34 @@ export function FutureForecastModal() {
                     <div className="future-v2-hero-obs">
                       @{detail.current?.obs_time || "--"}
                     </div>
+                    {daylightProgress ? (
+                      <div className="future-v2-daylight">
+                        <div className="future-v2-daylight-head">
+                          <span>
+                            {locale === "en-US"
+                              ? "Solar Window"
+                              : "昼夜进度"}
+                          </span>
+                          <strong>
+                            {locale === "en-US"
+                              ? `${daylightProgress.phase} ${Math.round(daylightProgress.percent)}%`
+                              : `${daylightProgress.phase} ${Math.round(daylightProgress.percent)}%`}
+                          </strong>
+                        </div>
+                        <div
+                          className="future-v2-daylight-bar"
+                          style={
+                            {
+                              "--daylight-progress": `${daylightProgress.percent}%`,
+                            } as CSSProperties & { "--daylight-progress": string }
+                          }
+                        />
+                        <div className="future-v2-daylight-times">
+                          <span>{detail.forecast?.sunrise || "--"}</span>
+                          <span>{detail.forecast?.sunset || "--"}</span>
+                        </div>
+                      </div>
+                    ) : null}
                     <div className="future-v2-mini-grid">
                       <div className="future-v2-mini-item">
                         <span>
@@ -1040,25 +1271,43 @@ export function FutureForecastModal() {
                     <h4 className="future-v2-card-title">
                       {locale === "en-US" ? "Current Metrics" : "当前指标"}
                     </h4>
+                    <IntradaySignalScene
+                      metrics={currentMetricVisuals}
+                      score={view.front.score}
+                    />
                     <div className="future-v2-mini-grid future-v2-mini-grid-tight">
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Humidity" : "湿度"}</span>
-                        <strong>{humidityText}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Dew Point" : "露点"}</span>
-                        <strong>{dewpointText}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Wind" : "风速"}</span>
-                        <strong>{windText}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>
-                          {locale === "en-US" ? "Visibility" : "能见度"}
-                        </span>
-                        <strong>{visibilityText}</strong>
-                      </div>
+                      {currentMetricVisuals.map((metric) => (
+                        <div key={metric.key} className="future-v2-mini-item future-v2-signal-item">
+                          <div className="future-v2-signal-head">
+                            <span>{metric.label}</span>
+                            <em
+                              className={clsx(
+                                "future-v2-signal-tag",
+                                metric.tone === "cyan" && "cyan",
+                                metric.tone === "blue" && "blue",
+                                metric.tone === "amber" && "amber",
+                              )}
+                            >
+                              {metric.hint}
+                            </em>
+                          </div>
+                          <strong>{metric.value}</strong>
+                          <div className="future-v2-signal-meter">
+                            <div
+                              className={clsx(
+                                "future-v2-signal-fill",
+                                metric.tone === "cyan" && "cyan",
+                                metric.tone === "blue" && "blue",
+                                metric.tone === "amber" && "amber",
+                              )}
+                              style={{
+                                width:
+                                  metric.fill != null ? `${metric.fill}%` : "18%",
+                              }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </section>
 
@@ -1322,6 +1571,31 @@ export function FutureForecastModal() {
                           >
                             {metric.value}
                           </div>
+                          {getTrendMetricVisual(metric) ? (
+                            <div
+                              className={clsx(
+                                "future-trend-meter",
+                                getTrendMetricVisual(metric)?.mode === "center" &&
+                                  "center",
+                              )}
+                            >
+                              {getTrendMetricVisual(metric)?.mode === "center" ? (
+                                <span className="future-trend-meter-midline" />
+                              ) : null}
+                              <div
+                                className={clsx(
+                                  "future-trend-meter-fill",
+                                  getTrendMetricVisual(metric)?.tone === "warm" &&
+                                    "warm",
+                                  getTrendMetricVisual(metric)?.tone === "cold" &&
+                                    "cold",
+                                )}
+                                style={{
+                                  width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
+                                }}
+                              />
+                            </div>
+                          ) : null}
                           <div className="future-trend-note">{metric.note}</div>
                         </div>
                       ))}
@@ -1350,6 +1624,31 @@ export function FutureForecastModal() {
                               >
                                 {metric.value}
                               </div>
+                              {getTrendMetricVisual(metric) ? (
+                                <div
+                                  className={clsx(
+                                    "future-trend-meter",
+                                    getTrendMetricVisual(metric)?.mode === "center" &&
+                                      "center",
+                                  )}
+                                >
+                                  {getTrendMetricVisual(metric)?.mode === "center" ? (
+                                    <span className="future-trend-meter-midline" />
+                                  ) : null}
+                                  <div
+                                    className={clsx(
+                                      "future-trend-meter-fill",
+                                      getTrendMetricVisual(metric)?.tone === "warm" &&
+                                        "warm",
+                                      getTrendMetricVisual(metric)?.tone === "cold" &&
+                                        "cold",
+                                    )}
+                                    style={{
+                                      width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
+                                    }}
+                                  />
+                                </div>
+                              ) : null}
                               <div className="future-trend-note">{metric.note}</div>
                             </div>
                           ))}
