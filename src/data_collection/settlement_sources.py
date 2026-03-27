@@ -147,41 +147,17 @@ class SettlementSourceMixin:
     def _update_hko_today_obs(
         self,
         *,
+        station_code: str,
         obs_iso: Optional[str],
         current_temp: Optional[float],
     ) -> List[Dict[str, Any]]:
-        if not obs_iso or current_temp is None:
-            return []
-
-        try:
-            obs_dt = datetime.fromisoformat(str(obs_iso).replace("Z", "+00:00"))
-        except Exception:
-            return []
-        if obs_dt.tzinfo is None:
-            obs_dt = obs_dt.replace(tzinfo=timezone(timedelta(hours=8)))
-        local_dt = obs_dt.astimezone(timezone(timedelta(hours=8)))
-        date_str = local_dt.strftime("%Y-%m-%d")
-        time_str = local_dt.strftime("%H:%M")
-        mode = get_state_storage_mode()
-        if mode not in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
-            return [{"time": time_str, "temp": round(float(current_temp), 1)}]
-
-        lock = self._get_settlement_series_lock()
-        with lock:
-            _official_intraday_repo.upsert_point(
-                source_code="hko",
-                station_code="HKO",
-                target_date=date_str,
-                observation_time=time_str,
-                value=round(float(current_temp), 1),
-                payload={"time": time_str, "temp": round(float(current_temp), 1)},
-            )
-            points = _official_intraday_repo.load_points(
-                source_code="hko",
-                station_code="HKO",
-                target_date=date_str,
-            )
-            return self._sort_temp_points(points)
+        return self._update_official_today_obs(
+            source_code="hko",
+            station_code=station_code,
+            obs_iso=obs_iso,
+            current_temp=current_temp,
+            utc_offset_seconds=28800,
+        )
 
     def _update_official_today_obs(
         self,
@@ -226,8 +202,24 @@ class SettlementSourceMixin:
             )
             return self._sort_temp_points(points)
 
-    def fetch_hko_settlement_current(self) -> Optional[Dict[str, Any]]:
-        cache_key = "hko:hong_kong"
+    def fetch_hko_settlement_current(
+        self,
+        *,
+        station_code: str = "HKO",
+        station_name: str = "HK Observatory",
+        station_candidates: Optional[List[str]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_station_code = str(station_code or "HKO").strip() or "HKO"
+        normalized_station_name = str(station_name or "HK Observatory").strip() or "HK Observatory"
+        candidate_names = [
+            str(item).strip()
+            for item in (station_candidates or [normalized_station_name])
+            if str(item).strip()
+        ]
+        if not candidate_names:
+            candidate_names = [normalized_station_name]
+
+        cache_key = f"hko:{normalized_station_code.lower()}"
         cached = self._get_settlement_cache(cache_key)
         if cached:
             return cached
@@ -248,11 +240,10 @@ class SettlementSourceMixin:
             humidity_rows = self._csv_rows(humidity_csv.text)
             wind_rows = self._csv_rows(wind_csv.text)
 
-            station_candidates = ["HK Observatory", "Hong Kong Observatory"]
-            temp_row = self._pick_station_row(temp_rows, station_candidates)
-            maxmin_row = self._pick_station_row(maxmin_rows, station_candidates)
-            humidity_row = self._pick_station_row(humidity_rows, station_candidates)
-            wind_row = self._pick_station_row(wind_rows, station_candidates)
+            temp_row = self._pick_station_row(temp_rows, candidate_names)
+            maxmin_row = self._pick_station_row(maxmin_rows, candidate_names)
+            humidity_row = self._pick_station_row(humidity_rows, candidate_names)
+            wind_row = self._pick_station_row(wind_rows, candidate_names)
             if not temp_row or not maxmin_row:
                 return None
 
@@ -268,6 +259,7 @@ class SettlementSourceMixin:
                 wind_row.get("10-Minute Mean Wind Direction(Compass points)") if wind_row else None
             )
             today_obs = self._update_hko_today_obs(
+                station_code=normalized_station_code,
                 obs_iso=obs_iso,
                 current_temp=current_temp,
             )
@@ -281,8 +273,8 @@ class SettlementSourceMixin:
             payload: Dict[str, Any] = {
                 "source": "hko",
                 "source_label": "HKO",
-                "station_code": "HKO",
-                "station_name": "HK Observatory",
+                "station_code": normalized_station_code,
+                "station_name": normalized_station_name,
                 "observation_time": obs_iso,
                 "current": {
                     "temp": round(current_temp, 1) if current_temp is not None else None,
@@ -299,7 +291,7 @@ class SettlementSourceMixin:
             self._set_settlement_cache(cache_key, payload)
             return payload
         except Exception as exc:
-            logger.warning(f"HKO settlement fetch failed: {exc}")
+            logger.warning(f"HKO settlement fetch failed station={normalized_station_code}: {exc}")
             return None
 
     def fetch_cwa_taipei_settlement_current(self) -> Optional[Dict[str, Any]]:
@@ -594,10 +586,32 @@ class SettlementSourceMixin:
                         station_label=str(city_meta.get("settlement_station_label") or "").strip() or None,
                         icao=str(city_meta.get("icao") or "").strip() or None,
                     )
+            if settlement_source == "hko":
+                raw_candidates = city_meta.get("settlement_station_candidates") or []
+                if isinstance(raw_candidates, str):
+                    station_candidates = [raw_candidates]
+                else:
+                    station_candidates = [
+                        str(item).strip()
+                        for item in raw_candidates
+                        if str(item).strip()
+                    ]
+                station_name = (
+                    str(city_meta.get("settlement_station_label") or "").strip()
+                    or (station_candidates[0] if station_candidates else "HK Observatory")
+                )
+                station_code = (
+                    str(city_meta.get("settlement_station_code") or "").strip()
+                    or str(city_meta.get("icao") or "").strip()
+                    or "HKO"
+                )
+                return self.fetch_hko_settlement_current(
+                    station_code=station_code,
+                    station_name=station_name,
+                    station_candidates=station_candidates,
+                )
         except Exception as exc:
-            logger.warning(f"Wunderground settlement dispatch failed city={city}: {exc}")
-        if normalized == "hong kong":
-            return self.fetch_hko_settlement_current()
+            logger.warning(f"Settlement source dispatch failed city={city}: {exc}")
         if normalized == "taipei":
             return self.fetch_noaa_rctp_settlement_current()
         return None

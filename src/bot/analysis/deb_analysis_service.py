@@ -88,7 +88,7 @@ class DebAnalysisService:
         ):
             lines.extend(
                 [
-                    f"🔁 已用 METAR 历史回填修正 {int(reconcile_info.get('updated'))} 天实测最高温",
+                    f"🔁 已用官方历史回填修正 {int(reconcile_info.get('updated'))} 天实测最高温",
                     "",
                 ]
             )

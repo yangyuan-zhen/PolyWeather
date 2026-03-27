@@ -150,18 +150,44 @@ def _parse_metar_row_time(row):
     return None
 
 
-def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
+def _get_history_file_path():
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    return os.path.join(project_root, "data", "daily_records.json")
+
+
+def _resolve_city_history_context(city_name: str):
+    from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
+
+    city_key = str(city_name or "").strip().lower()
+    city_key = ALIASES.get(city_key, city_key)
+    city_meta = CITY_REGISTRY.get(city_key)
+    if not isinstance(city_meta, dict):
+        return None, None
+    return city_key, city_meta
+
+
+def _parse_hko_ryes_max_temp(payload):
+    if not isinstance(payload, dict):
+        return None
+    for key, value in payload.items():
+        if not str(key or "").endswith("MaxTemp"):
+            continue
+        parsed = _sf(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7):
     """
     Reconcile recent `actual_high` values using historical METAR data from
     aviationweather.gov to fix stale/wrong daily records.
     """
     try:
-        from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
-
-        city_key = str(city_name or "").strip().lower()
-        city_key = ALIASES.get(city_key, city_key)
-        city_meta = CITY_REGISTRY.get(city_key)
-        if not isinstance(city_meta, dict):
+        city_key, city_meta = _resolve_city_history_context(city_name)
+        if not city_key or not isinstance(city_meta, dict):
             return {"ok": False, "reason": "unknown_city", "updated": 0}
 
         icao = str(city_meta.get("icao") or "").strip().upper()
@@ -171,10 +197,7 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
         tz_offset = int(city_meta.get("tz_offset") or 0)
         use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
 
-        project_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        history_file = os.path.join(project_root, "data", "daily_records.json")
+        history_file = _get_history_file_path()
         data = load_history(history_file)
         city_data = data.get(city_key) or {}
         if not isinstance(city_data, dict) or not city_data:
@@ -257,42 +280,145 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
             "scanned_dates": len(target_dates),
             "metar_rows": len(rows),
             "icao": icao,
+            "source": "metar",
         }
     except Exception as e:
         return {"ok": False, "reason": str(e), "updated": 0}
 
 
-def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int = 14):
+def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
     """
-    For METAR-settled cities added after launch, ensure recent daily_records rows
-    exist so the history page can show recent actual highs without requiring a
-    one-off backfill script.
+    Reconcile recent `actual_high` values using HKO's RYES daily summary endpoint.
+    This covers HKO-settled cities such as Hong Kong and Shek Kong.
     """
     try:
-        from src.data_collection.city_registry import CITY_REGISTRY, ALIASES
+        city_key, city_meta = _resolve_city_history_context(city_name)
+        if not city_key or not isinstance(city_meta, dict):
+            return {"ok": False, "reason": "unknown_city", "updated": 0}
 
-        city_key = str(city_name or "").strip().lower()
-        city_key = ALIASES.get(city_key, city_key)
-        city_meta = CITY_REGISTRY.get(city_key)
-        if not isinstance(city_meta, dict):
+        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        if not station_code:
+            return {"ok": False, "reason": "missing_station_code", "updated": 0}
+
+        tz_offset = int(city_meta.get("tz_offset") or 0)
+        use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
+        history_file = _get_history_file_path()
+        data = load_history(history_file)
+        city_data = data.get(city_key) or {}
+        if not isinstance(city_data, dict) or not city_data:
+            return {"ok": True, "reason": "no_city_history", "updated": 0}
+
+        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
+        local_today = local_now.strftime("%Y-%m-%d")
+        cutoff = (local_now - timedelta(days=max(lookback_days, 1) + 1)).strftime(
+            "%Y-%m-%d"
+        )
+        target_dates = sorted(
+            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+        )
+        if not target_dates:
+            return {"ok": True, "reason": "no_target_dates", "updated": 0}
+
+        updated = 0
+        scanned_dates = 0
+        base_url = "https://data.weather.gov.hk/weatherAPI/opendata/opendata.php"
+
+        for date_str in target_dates:
+            date_token = date_str.replace("-", "")
+            try:
+                resp = requests.get(
+                    base_url,
+                    params={
+                        "dataType": "RYES",
+                        "date": date_token,
+                        "lang": "en",
+                        "station": station_code,
+                    },
+                    timeout=12,
+                )
+                resp.raise_for_status()
+                payload = resp.json() if resp.content else {}
+            except Exception:
+                continue
+
+            scanned_dates += 1
+            max_temp_c = _parse_hko_ryes_max_temp(payload)
+            if max_temp_c is None:
+                continue
+
+            corrected = (
+                round(max_temp_c * 9 / 5 + 32, 1)
+                if use_fahrenheit
+                else round(max_temp_c, 1)
+            )
+            rec = city_data.get(date_str) or {}
+            old = rec.get("actual_high")
+            try:
+                old_val = float(old) if old is not None else None
+            except Exception:
+                old_val = None
+
+            if old_val is None or abs(old_val - corrected) >= 0.1:
+                rec["actual_high"] = corrected
+                city_data[date_str] = rec
+                updated += 1
+
+        if updated > 0:
+            data[city_key] = city_data
+            save_history(history_file, data)
+
+        return {
+            "ok": True,
+            "updated": updated,
+            "scanned_dates": scanned_dates,
+            "station_code": station_code,
+            "source": "hko",
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e), "updated": 0}
+
+
+def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
+    """
+    Reconcile recent `actual_high` values using the city's official settlement source.
+    """
+    city_key, city_meta = _resolve_city_history_context(city_name)
+    if not city_key or not isinstance(city_meta, dict):
+        return {"ok": False, "reason": "unknown_city", "updated": 0}
+
+    settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
+    if settlement_source == "hko":
+        return _reconcile_recent_hko_actual_highs(city_key, lookback_days=lookback_days)
+    return _reconcile_recent_metar_actual_highs(city_key, lookback_days=lookback_days)
+
+
+def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int = 14):
+    """
+    For supported settlement cities added after launch, ensure recent daily_records
+    rows exist so the history page can show recent actual highs without requiring
+    a one-off backfill script.
+    """
+    try:
+        city_key, city_meta = _resolve_city_history_context(city_name)
+        if not city_key or not isinstance(city_meta, dict):
             return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
 
         settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
-        if settlement_source != "metar":
-            return {"ok": True, "reason": "non_metar_city", "seeded": 0, "updated": 0}
+        if settlement_source not in {"metar", "hko"}:
+            return {"ok": True, "reason": "unsupported_settlement_source", "seeded": 0, "updated": 0}
 
         icao = str(city_meta.get("icao") or "").strip().upper()
-        if not icao:
+        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        if settlement_source == "metar" and not icao:
             return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
+        if settlement_source == "hko" and not station_code:
+            return {"ok": False, "reason": "missing_station_code", "seeded": 0, "updated": 0}
 
         tz_offset = int(city_meta.get("tz_offset") or 0)
         local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
         local_today = local_now.date()
 
-        project_root = os.path.dirname(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        history_file = os.path.join(project_root, "data", "daily_records.json")
+        history_file = _get_history_file_path()
         data = load_history(history_file)
         city_rows = data.get(city_key)
         if not isinstance(city_rows, dict):
@@ -310,13 +436,18 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
             save_history(history_file, data)
 
         reconcile_result = reconcile_recent_actual_highs(city_key, lookback_days=lookback_days)
-        return {
+        result = {
             "ok": True,
             "reason": "bootstrapped" if seeded > 0 else "already_seeded",
             "seeded": seeded,
             "updated": int(reconcile_result.get("updated") or 0),
-            "icao": icao,
+            "settlement_source": settlement_source,
         }
+        if icao:
+            result["icao"] = icao
+        if station_code:
+            result["station_code"] = station_code
+        return result
     except Exception as e:
         return {"ok": False, "reason": str(e), "seeded": 0, "updated": 0}
 

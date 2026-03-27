@@ -37,6 +37,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "paris": ["LFPG", "LFPO", "LFPB"],
         "seoul": ["RKSI", "RKSS"],
         "hong kong": ["VHHH", "VMMC", "ZGSZ"],
+        "shek kong": ["VHSK", "VHHH", "VMMC", "ZGSZ"],
         "taipei": ["RCSS", "RCTP"],
         "chengdu": ["ZUUU", "ZUTF"],
         "chongqing": ["ZUCK", "ZUPS"],
@@ -429,6 +430,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "hong kong": "Hong Kong",
             "hong kong international airport": "Hong Kong",
             "香港": "Hong Kong",
+            "shek kong": "Shek Kong",
+            "vhsk": "Shek Kong",
+            "石岗": "Shek Kong",
+            "石崗": "Shek Kong",
             "taipei": "Taipei",
             "台北": "Taipei",
             "臺北": "Taipei",
@@ -542,13 +547,24 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                         self._metar_cache.pop(key, None)
         normalized = str(city or "").strip().lower()
         with self._settlement_cache_lock:
-            if normalized == "hong kong":
-                self._settlement_cache.pop("hko:hong_kong", None)
+            city_meta = self.CITY_REGISTRY.get(normalized) or {}
+            settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+            if settlement_source == "hko":
+                station_code = (
+                    str(city_meta.get("settlement_station_code") or "").strip()
+                    or str(city_meta.get("icao") or "").strip()
+                    or normalized
+                )
+                self._settlement_cache.pop(f"hko:{station_code.lower()}", None)
             elif normalized == "taipei":
                 self._settlement_cache.pop("noaa:rctp", None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
+
+    def _supports_aviationweather(self, city_lower: str) -> bool:
+        city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
+        return not bool(city_meta.get("disable_aviationweather"))
 
     def _log_temperature_unit(self, city: str, use_fahrenheit: bool) -> None:
         unit = "华氏度 (°F)" if use_fahrenheit else "摄氏度 (°C)"
@@ -651,6 +667,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         results = {}
         city_lower = city.lower().strip()
         use_fahrenheit = self._uses_fahrenheit(city_lower)
+        supports_aviationweather = self._supports_aviationweather(city_lower)
 
         if force_refresh:
             self._evict_city_caches(
@@ -670,12 +687,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 results["open-meteo"] = open_meteo
                 # 获取时区偏移以过滤 METAR
                 utc_offset = open_meteo.get("utc_offset", 0)
-                metar_data = self.fetch_metar(
-                    city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset
-                )
-                if metar_data:
-                    results["metar"] = metar_data
-                if city_lower != "hong kong":
+                if supports_aviationweather:
+                    metar_data = self.fetch_metar(
+                        city, use_fahrenheit=use_fahrenheit, utc_offset=utc_offset
+                    )
+                    if metar_data:
+                        results["metar"] = metar_data
+                if supports_aviationweather and city_lower != "hong kong":
                     taf_data = self.fetch_taf(city, utc_offset=utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
@@ -693,14 +711,15 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 fallback_utc_offset = int(
                     self.CITY_REGISTRY.get(city_lower, {}).get("tz_offset", 0)
                 )
-                metar_data = self.fetch_metar(
-                    city,
-                    use_fahrenheit=use_fahrenheit,
-                    utc_offset=fallback_utc_offset,
-                )
-                if metar_data:
-                    results["metar"] = metar_data
-                if city_lower != "hong kong":
+                if supports_aviationweather:
+                    metar_data = self.fetch_metar(
+                        city,
+                        use_fahrenheit=use_fahrenheit,
+                        utc_offset=fallback_utc_offset,
+                    )
+                    if metar_data:
+                        results["metar"] = metar_data
+                if supports_aviationweather and city_lower != "hong kong":
                     taf_data = self.fetch_taf(city, utc_offset=fallback_utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
@@ -715,10 +734,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     results, city, lat, lon, use_fahrenheit
                 )
         else:
-            metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
-            if metar_data:
-                results["metar"] = metar_data
-            if city_lower != "hong kong":
+            if supports_aviationweather:
+                metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
+                if metar_data:
+                    results["metar"] = metar_data
+            if supports_aviationweather and city_lower != "hong kong":
                 taf_data = self.fetch_taf(city)
                 if taf_data:
                     results["taf"] = taf_data

@@ -58,6 +58,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
+  "shek kong": [
+    {
+      label: "香港天文台",
+      href: "https://www.hko.gov.hk/en/index.html",
+      kind: "agency",
+    },
+    {
+      label: "HKO 区域天气数据",
+      href: "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv",
+      kind: "agency",
+    },
+    {
+      label: "VHSK Timeseries",
+      href: "https://www.weather.gov/wrh/timeseries?site=VHSK",
+      kind: "metar",
+    },
+  ],
   taipei: [
     {
       label: "NOAA RCTP Timeseries",
