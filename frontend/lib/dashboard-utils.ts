@@ -53,7 +53,13 @@ function getObservationSourceCode(detail: CityDetail): string {
   const city = String(detail.name || detail.display_name || "")
     .trim()
     .toLowerCase();
-  if (city === "hong kong") return "hko";
+  if (
+    city === "hong kong" ||
+    city === "shek kong" ||
+    city === "lau fau shan"
+  ) {
+    return "hko";
+  }
   if (city === "taipei") return "noaa";
   return "metar";
 }
@@ -70,6 +76,20 @@ function getObservationSourceTag(detail: CityDetail): string {
   if (code === "wunderground") return "WUNDERGROUND";
   if (code === "mgm") return "MGM";
   return "METAR";
+}
+
+function getNoaaStationCode(detail: CityDetail): string {
+  return String(detail.current?.station_code || detail.risk?.icao || "NOAA")
+    .trim()
+    .toUpperCase();
+}
+
+function getNoaaStationName(detail: CityDetail): string {
+  return (
+    String(detail.current?.station_name || "").trim() ||
+    String(detail.risk?.airport || "").trim() ||
+    getNoaaStationCode(detail)
+  );
 }
 
 function normalizeCloudSummary(
@@ -297,7 +317,7 @@ export function getTemperatureChartData(
     settlementSource && shouldUseMetarFallback
       ? metarFallbackTag
       : observationCode === "noaa"
-        ? "NOAA RCTP"
+        ? `NOAA ${getNoaaStationCode(detail)}`
         : observationCode === "wunderground"
           ? "Wunderground"
         : observationTag;
@@ -574,14 +594,15 @@ export function getTemperatureChartData(
   } else if (observationCode === "hko") {
     legendParts.push(
       isEnglish(locale)
-        ? "Hong Kong uses HKO official readings. The chart keeps official HKO points instead of switching to airport METAR."
-        : "香港按 HKO 官方读数展示；图中保留 HKO 官方点位，不切换到机场 METAR 连续线。",
+        ? "This city uses HKO official readings. The chart keeps official HKO points instead of switching to airport METAR."
+        : "该城市按 HKO 官方读数展示；图中保留 HKO 官方点位，不切换到机场 METAR 连续线。",
     );
   } else if (observationCode === "noaa") {
+    const noaaCode = getNoaaStationCode(detail);
     legendParts.push(
       isEnglish(locale)
-        ? "Taipei settles on NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; the plotted line is a settlement reference."
-        : "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作为结算参考线。",
+        ? `This city settles on NOAA ${noaaCode} using the finalized highest rounded whole-degree Celsius Temp reading; the plotted line is a settlement reference.`
+        : `该城市按 NOAA ${noaaCode} 最终完成质控后的最高整度摄氏 Temp 读数结算；图中曲线仅作为结算参考线。`,
     );
   } else if (observationCode === "wunderground") {
     legendParts.push(
@@ -2275,9 +2296,11 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
         : "交通部中央气象署 (CWA)";
     }
     if (sourceCode === "noaa") {
+      const noaaCode = getNoaaStationCode(detail);
+      const noaaName = getNoaaStationName(detail);
       return isEnglish(locale)
-        ? "NOAA RCTP (Taiwan Taoyuan)"
-        : "NOAA RCTP（台湾桃园国际机场）";
+        ? `NOAA ${noaaCode} (${noaaName})`
+        : `NOAA ${noaaCode}（${noaaName}）`;
     }
     if (sourceCode === "wunderground") {
       const stationName = String(

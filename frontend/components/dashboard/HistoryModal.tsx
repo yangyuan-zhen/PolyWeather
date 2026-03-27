@@ -12,7 +12,16 @@ function HistoryChart() {
   const store = useDashboardStore();
   const { locale } = useI18n();
   const { data } = useHistoryData();
-  const isTaipei = store.selectedCity === "taipei";
+  const isNoaaSettlement =
+    store.selectedDetail?.current?.settlement_source === "noaa" ||
+    store.selectedDetail?.current?.settlement_source_label === "NOAA";
+  const noaaStationCode = String(
+    store.selectedDetail?.current?.station_code ||
+      store.selectedDetail?.risk?.icao ||
+      "NOAA",
+  )
+    .trim()
+    .toUpperCase();
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
@@ -34,10 +43,10 @@ function HistoryChart() {
         borderColor: "#f87171",
         borderWidth: 2,
         data: summary.actuals,
-        label: isTaipei
+        label: isNoaaSettlement
           ? locale === "en-US"
-            ? "NOAA Settled High (RCTP)"
-            : "NOAA 结算最高温 (RCTP)"
+            ? `NOAA Settled High (${noaaStationCode})`
+            : `NOAA 结算最高温 (${noaaStationCode})`
           : locale === "en-US"
             ? "Observed High"
             : "实测最高温",
@@ -142,7 +151,7 @@ function HistoryChart() {
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [hasBestBaseline, hasMgm, isTaipei, summary, locale]);
+  }, [hasBestBaseline, hasMgm, isNoaaSettlement, noaaStationCode, summary, locale]);
 
   if (!summary.recentData.length) return null;
 
@@ -159,7 +168,20 @@ export function HistoryModal() {
   const { data, error, isLoading, isOpen } = useHistoryData();
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
-  const isTaipei = store.selectedCity === "taipei";
+  const isNoaaSettlement =
+    store.selectedDetail?.current?.settlement_source === "noaa" ||
+    store.selectedDetail?.current?.settlement_source_label === "NOAA";
+  const noaaStationCode = String(
+    store.selectedDetail?.current?.station_code ||
+      store.selectedDetail?.risk?.icao ||
+      "NOAA",
+  )
+    .trim()
+    .toUpperCase();
+  const noaaStationName =
+    String(store.selectedDetail?.current?.station_name || "").trim() ||
+    String(store.selectedDetail?.risk?.airport || "").trim() ||
+    noaaStationCode;
   const summary = useMemo(
     () => getHistorySummary(data, store.selectedDetail?.local_date),
     [data, store.selectedDetail?.local_date],
@@ -221,7 +243,7 @@ export function HistoryModal() {
             </button>
           </div>
           <div className="modal-body">
-            {isTaipei && (
+            {isNoaaSettlement && (
               <div
                 style={{
                   marginBottom: "16px",
@@ -235,8 +257,8 @@ export function HistoryModal() {
                 }}
               >
                 {t("lang") === "en-US"
-                  ? "Taipei historical actuals are aligned to NOAA RCTP settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized."
-                  : "台北历史对账已按 NOAA RCTP 结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。"}
+                  ? `${store.selectedDetail?.display_name || store.selectedCity || "This city"} historical actuals are aligned to NOAA ${noaaStationCode} (${noaaStationName}) settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized.`
+                  : `${store.selectedDetail?.display_name || store.selectedCity || "该城市"}历史对账已按 NOAA ${noaaStationCode}（${noaaStationName}）结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。`}
               </div>
             )}
             <div className="history-stats">

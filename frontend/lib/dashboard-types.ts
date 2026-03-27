@@ -50,6 +50,8 @@ export interface CurrentConditions {
   wu_settlement: number | null;
   settlement_source?: string | null;
   settlement_source_label?: string | null;
+  station_code?: string | null;
+  station_name?: string | null;
   obs_time: string | null;
   obs_age_min: number | null;
   wind_speed_kt: number | null;

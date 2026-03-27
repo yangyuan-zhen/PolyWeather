@@ -37,6 +37,7 @@ const CITY_MARKER_DISPLAY_OFFSETS: Record<
   // Shek Kong sits between the Hong Kong and Shenzhen cards and gets visually buried
   // by their wide marker bubbles. Shift only the rendered marker, not the true point.
   "shek kong": { x: 34, y: -26, zIndexOffset: 320 },
+  "lau fau shan": { x: -40, y: 14, zIndexOffset: 300 },
 };
 
 function getMarkerDisplayOffset(cityName: string) {

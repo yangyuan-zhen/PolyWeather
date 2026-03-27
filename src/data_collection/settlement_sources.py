@@ -24,7 +24,7 @@ class SettlementSourceMixin:
     IMGW_METEO_API_BASE = "https://meteo.imgw.pl/api/v1"
     IMGW_METEO_API_TOKEN = "p4DXKjsYadfBV21TYrDk"
     NOAA_WRH_MESO_TOKEN = "7c76618b66c74aee913bdbae4b448bdd"
-    NOAA_WRH_TIMESERIES_REFERER = "https://www.weather.gov/wrh/timeseries?site=RCTP"
+    NOAA_WRH_TIMESERIES_REFERER_BASE = "https://www.weather.gov/wrh/timeseries?site="
 
     def _get_settlement_cache(self, key: str) -> Optional[Dict[str, Any]]:
         now_ts = time.time()
@@ -389,8 +389,14 @@ class SettlementSourceMixin:
             logger.warning(f"CWA Forecast request failed: {exc}")
             return None
 
-    def fetch_noaa_rctp_settlement_current(self) -> Optional[Dict[str, Any]]:
-        cache_key = "noaa:rctp"
+    def fetch_noaa_station_settlement_current(
+        self,
+        *,
+        station_code: str = "RCTP",
+        station_name: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        normalized_station_code = str(station_code or "RCTP").strip().upper() or "RCTP"
+        cache_key = f"noaa:{normalized_station_code.lower()}"
         cached = self._get_settlement_cache(cache_key)
         if cached:
             return cached
@@ -399,7 +405,7 @@ class SettlementSourceMixin:
             response = self.session.get(
                 "https://api.synopticdata.com/v2/stations/timeseries",
                 params={
-                    "STID": "RCTP",
+                    "STID": normalized_station_code,
                     "showemptystations": 1,
                     "recent": 2880,
                     "complete": 1,
@@ -407,7 +413,7 @@ class SettlementSourceMixin:
                     "obtimezone": "local",
                 },
                 headers={
-                    "Referer": self.NOAA_WRH_TIMESERIES_REFERER,
+                    "Referer": f"{self.NOAA_WRH_TIMESERIES_REFERER_BASE}{normalized_station_code}",
                     "Origin": "https://www.weather.gov",
                     "User-Agent": "Mozilla/5.0",
                 },
@@ -429,7 +435,6 @@ class SettlementSourceMixin:
             if not isinstance(stamps, list) or not isinstance(temps, list) or not stamps or not temps:
                 return None
 
-            target_date = datetime.now(timezone(timedelta(hours=8))).date()
             today_rows: List[tuple[datetime, int]] = []
             latest_dt: Optional[datetime] = None
             latest_temp: Optional[int] = None
@@ -446,17 +451,27 @@ class SettlementSourceMixin:
                     dt = datetime.strptime(str(stamp), "%Y-%m-%dT%H:%M:%S%z")
                 except Exception:
                     continue
-                if dt.date() == target_date:
-                    today_rows.append((dt, rounded_temp))
                 if latest_dt is None or dt >= latest_dt:
                     latest_dt = dt
                     latest_temp = rounded_temp
                     latest_humidity = self._safe_float(humidity_list[idx] if idx < len(humidity_list) else None)
                     latest_wind_speed_ms = self._safe_float(wind_speed_list[idx] if idx < len(wind_speed_list) else None)
                     latest_wind_dir = self._safe_float(wind_dir_list[idx] if idx < len(wind_dir_list) else None)
-
             if latest_dt is None or latest_temp is None:
                 return None
+
+            target_date = latest_dt.date()
+            for idx, stamp in enumerate(stamps):
+                raw_temp = temps[idx] if idx < len(temps) else None
+                rounded_temp = self._js_round(raw_temp)
+                if rounded_temp is None:
+                    continue
+                try:
+                    dt = datetime.strptime(str(stamp), "%Y-%m-%dT%H:%M:%S%z")
+                except Exception:
+                    continue
+                if dt.date() == target_date:
+                    today_rows.append((dt, rounded_temp))
 
             max_so_far = None
             max_temp_time = None
@@ -468,12 +483,16 @@ class SettlementSourceMixin:
                     if temp == max_so_far:
                         max_temp_time = dt.strftime("%H:%M")
                         break
+            today_obs = [
+                {"time": dt.strftime("%H:%M"), "temp": temp}
+                for dt, temp in today_rows
+            ]
 
             result = {
                 "source": "noaa",
                 "source_label": "NOAA",
-                "station_code": "RCTP",
-                "station_name": str(station.get("NAME") or "Taiwan Taoyuan International Airport"),
+                "station_code": normalized_station_code,
+                "station_name": str(station_name or station.get("NAME") or normalized_station_code),
                 "observation_time": latest_dt.isoformat(),
                 "current": {
                     "temp": latest_temp,
@@ -484,12 +503,15 @@ class SettlementSourceMixin:
                     "wind_speed_kt": round(float(latest_wind_speed_ms) * 1.943844, 1) if latest_wind_speed_ms is not None else None,
                     "wind_dir": latest_wind_dir,
                 },
+                "today_obs": today_obs,
                 "unit": "celsius",
             }
             self._set_settlement_cache(cache_key, result)
             return result
         except Exception as exc:
-            logger.warning(f"NOAA RCTP settlement fetch failed: {exc}")
+            logger.warning(
+                f"NOAA settlement fetch failed station={normalized_station_code}: {exc}"
+            )
             return None
 
     def _imgw_api_get(self, path: str, params: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
@@ -610,8 +632,25 @@ class SettlementSourceMixin:
                     station_name=station_name,
                     station_candidates=station_candidates,
                 )
+            if settlement_source == "noaa":
+                station_code = (
+                    str(city_meta.get("settlement_station_code") or "").strip()
+                    or str(city_meta.get("icao") or "").strip()
+                    or normalized.upper()
+                )
+                station_name = (
+                    str(city_meta.get("settlement_station_label") or "").strip()
+                    or station_code
+                )
+                return self.fetch_noaa_station_settlement_current(
+                    station_code=station_code,
+                    station_name=station_name,
+                )
         except Exception as exc:
             logger.warning(f"Settlement source dispatch failed city={city}: {exc}")
         if normalized == "taipei":
-            return self.fetch_noaa_rctp_settlement_current()
+            return self.fetch_noaa_station_settlement_current(
+                station_code="RCTP",
+                station_name="Taiwan Taoyuan International Airport",
+            )
         return None

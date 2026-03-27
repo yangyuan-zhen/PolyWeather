@@ -180,6 +180,22 @@ def _parse_hko_ryes_max_temp(payload):
     return None
 
 
+def _parse_noaa_timeseries_stamp(raw_value):
+    try:
+        return datetime.strptime(str(raw_value), "%Y-%m-%dT%H:%M:%S%z")
+    except Exception:
+        return None
+
+
+def _noaa_round_temp(value):
+    if value is None:
+        return None
+    try:
+        return int(float(value) + 0.5)
+    except Exception:
+        return None
+
+
 def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7):
     """
     Reconcile recent `actual_high` values using historical METAR data from
@@ -378,6 +394,125 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
         return {"ok": False, "reason": str(e), "updated": 0}
 
 
+def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14):
+    """
+    Reconcile recent `actual_high` values using NOAA weather.gov timeseries data.
+    The settlement rule uses the highest rounded whole-degree Celsius Temp reading
+    once the date is finalized.
+    """
+    try:
+        city_key, city_meta = _resolve_city_history_context(city_name)
+        if not city_key or not isinstance(city_meta, dict):
+            return {"ok": False, "reason": "unknown_city", "updated": 0}
+
+        station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
+        if not station_code:
+            return {"ok": False, "reason": "missing_station_code", "updated": 0}
+
+        tz_offset = int(city_meta.get("tz_offset") or 0)
+        use_fahrenheit = bool(city_meta.get("use_fahrenheit"))
+        history_file = _get_history_file_path()
+        data = load_history(history_file)
+        city_data = data.get(city_key) or {}
+        if not isinstance(city_data, dict) or not city_data:
+            return {"ok": True, "reason": "no_city_history", "updated": 0}
+
+        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
+        local_today = local_now.strftime("%Y-%m-%d")
+        cutoff = (local_now - timedelta(days=max(lookback_days, 1) + 1)).strftime(
+            "%Y-%m-%d"
+        )
+        target_dates = sorted(
+            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+        )
+        if not target_dates:
+            return {"ok": True, "reason": "no_target_dates", "updated": 0}
+
+        recent_minutes = max(4320, min(28800, (lookback_days + 3) * 1440))
+        response = requests.get(
+            "https://api.synopticdata.com/v2/stations/timeseries",
+            params={
+                "STID": station_code,
+                "showemptystations": 1,
+                "recent": recent_minutes,
+                "complete": 1,
+                "token": "7c76618b66c74aee913bdbae4b448bdd",
+                "obtimezone": "local",
+            },
+            headers={
+                "Referer": f"https://www.weather.gov/wrh/timeseries?site={station_code}",
+                "Origin": "https://www.weather.gov",
+                "User-Agent": "Mozilla/5.0",
+            },
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json() if response.content else {}
+        stations = payload.get("STATION") or []
+        station = stations[0] if isinstance(stations, list) and stations else None
+        if not isinstance(station, dict):
+            return {"ok": True, "reason": "no_station_payload", "updated": 0}
+
+        obs = station.get("OBSERVATIONS") or {}
+        stamps = obs.get("date_time") or []
+        temps = obs.get("air_temp_set_1") or []
+        if not isinstance(stamps, list) or not isinstance(temps, list):
+            return {"ok": True, "reason": "missing_observations", "updated": 0}
+
+        daily_max = {}
+        scanned_rows = 0
+        for idx, stamp in enumerate(stamps):
+            rounded_temp = _noaa_round_temp(temps[idx] if idx < len(temps) else None)
+            if rounded_temp is None:
+                continue
+            dt = _parse_noaa_timeseries_stamp(stamp)
+            if dt is None:
+                continue
+            date_key = dt.date().strftime("%Y-%m-%d")
+            if date_key < cutoff or date_key >= local_today:
+                continue
+            scanned_rows += 1
+            prev = daily_max.get(date_key)
+            if prev is None or rounded_temp > prev:
+                daily_max[date_key] = rounded_temp
+
+        updated = 0
+        for date_key in target_dates:
+            corrected = daily_max.get(date_key)
+            if corrected is None:
+                continue
+            next_value = (
+                round((corrected - 32) * 5 / 9, 1)
+                if use_fahrenheit
+                else int(corrected)
+            )
+            rec = city_data.get(date_key) or {}
+            old = rec.get("actual_high")
+            try:
+                old_val = float(old) if old is not None else None
+            except Exception:
+                old_val = None
+            if old_val is None or abs(old_val - next_value) >= 0.1:
+                rec["actual_high"] = next_value
+                city_data[date_key] = rec
+                updated += 1
+
+        if updated > 0:
+            data[city_key] = city_data
+            save_history(history_file, data)
+
+        return {
+            "ok": True,
+            "updated": updated,
+            "scanned_dates": len(target_dates),
+            "rows": scanned_rows,
+            "station_code": station_code,
+            "source": "noaa",
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e), "updated": 0}
+
+
 def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
     """
     Reconcile recent `actual_high` values using the city's official settlement source.
@@ -389,6 +524,8 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
     settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
     if settlement_source == "hko":
         return _reconcile_recent_hko_actual_highs(city_key, lookback_days=lookback_days)
+    if settlement_source == "noaa":
+        return _reconcile_recent_noaa_actual_highs(city_key, lookback_days=lookback_days)
     return _reconcile_recent_metar_actual_highs(city_key, lookback_days=lookback_days)
 
 
@@ -404,14 +541,14 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
             return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
 
         settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
-        if settlement_source not in {"metar", "hko"}:
+        if settlement_source not in {"metar", "hko", "noaa"}:
             return {"ok": True, "reason": "unsupported_settlement_source", "seeded": 0, "updated": 0}
 
         icao = str(city_meta.get("icao") or "").strip().upper()
         station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
         if settlement_source == "metar" and not icao:
             return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
-        if settlement_source == "hko" and not station_code:
+        if settlement_source in {"hko", "noaa"} and not station_code:
             return {"ok": False, "reason": "missing_station_code", "seeded": 0, "updated": 0}
 
         tz_offset = int(city_meta.get("tz_offset") or 0)

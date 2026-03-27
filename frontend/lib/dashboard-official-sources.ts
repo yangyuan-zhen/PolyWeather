@@ -75,6 +75,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
+  "lau fau shan": [
+    {
+      label: "香港天文台",
+      href: "https://www.hko.gov.hk/en/index.html",
+      kind: "agency",
+    },
+    {
+      label: "HKO 区域天气数据",
+      href: "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv",
+      kind: "agency",
+    },
+    {
+      label: "HKO 实时读数页",
+      href: "https://www.hko.gov.hk/textonly/v2/forecast/text_readings_e.htm",
+      kind: "agency",
+    },
+  ],
   taipei: [
     {
       label: "NOAA RCTP Timeseries",
@@ -89,6 +106,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     {
       label: "RCTP METAR",
       href: "https://aviationweather.gov/data/metar/?id=RCTP&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  istanbul: [
+    {
+      label: "NOAA LTFM Timeseries",
+      href: "https://www.weather.gov/wrh/timeseries?site=LTFM",
+      kind: "agency",
+    },
+    {
+      label: "Istanbul Airport",
+      href: "https://www.istairport.com/en",
+      kind: "airport",
+    },
+    {
+      label: "LTFM METAR",
+      href: "https://aviationweather.gov/data/metar/?id=LTFM&decoded=1&taf=1",
       kind: "metar",
     },
   ],

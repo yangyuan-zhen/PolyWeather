@@ -549,10 +549,18 @@ export function FutureForecastModal() {
     "--score-position": scorePosition,
   } as CSSProperties & { "--score-position": string };
   const weatherSummary = getWeatherSummary(detail, locale);
-  const isTaipeiNoaa =
-    store.selectedCity === "taipei" &&
-    (detail.current?.settlement_source === "noaa" ||
-      detail.current?.settlement_source_label === "NOAA");
+  const isNoaaSettlement =
+    detail.current?.settlement_source === "noaa" ||
+    detail.current?.settlement_source_label === "NOAA";
+  const noaaStationCode = String(
+    detail.current?.station_code || detail.risk?.icao || "NOAA",
+  )
+    .trim()
+    .toUpperCase();
+  const noaaStationName =
+    String(detail.current?.station_name || "").trim() ||
+    String(detail.risk?.airport || "").trim() ||
+    noaaStationCode;
   const marketMidpoint = formatMarketPercent(
     marketScan?.market_price ?? marketScan?.yes_token?.implied_probability,
   );
@@ -810,9 +818,9 @@ export function FutureForecastModal() {
         : "香港天文台 (HKO)"
       : settlementSourceCode === "noaa"
         ? locale === "en-US"
-          ? "NOAA RCTP (Taiwan Taoyuan International Airport)"
-          : "NOAA RCTP（台湾桃园国际机场）"
-      : settlementSourceCode === "cwa"
+          ? `NOAA ${noaaStationCode} (${noaaStationName})`
+          : `NOAA ${noaaStationCode}（${noaaStationName}）`
+        : settlementSourceCode === "cwa"
           ? locale === "en-US"
             ? "Central Weather Administration (CWA)"
             : "交通部中央气象署 (CWA)"
@@ -948,7 +956,7 @@ export function FutureForecastModal() {
             </button>
           </div>
           <div className="modal-body future-modal-body">
-            {isTaipeiNoaa && (
+            {isNoaaSettlement && (
               <div
                 style={{
                   marginBottom: "16px",
@@ -962,8 +970,8 @@ export function FutureForecastModal() {
                 }}
               >
                 {locale === "en-US"
-                  ? "Taipei now settles against NOAA RCTP (Taiwan Taoyuan International Airport). The market uses the highest rounded whole-degree Celsius reading in the Temp column after the day is finalized."
-                  : "台北当前按 NOAA RCTP（台湾桃园国际机场）结算。市场最终采用该日 Temp 列完成质控后的最高整度摄氏值，不按小数温度结算。"}
+                  ? `${detail.display_name} now settles against NOAA ${noaaStationCode} (${noaaStationName}). The market uses the highest rounded whole-degree Celsius reading in the Temp column after the day is finalized.`
+                  : `${detail.display_name} 当前按 NOAA ${noaaStationCode}（${noaaStationName}）结算。市场最终采用该日 Temp 列完成质控后的最高整度摄氏值，不按小数温度结算。`}
               </div>
             )}
             {isToday ? (

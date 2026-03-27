@@ -188,7 +188,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "什么叫机场端压温风险偏高",
             blocks: [
               { type: "paragraph", text: "它的意思不是整座城市一定更冷，而是作为结算依据的机场站点，在峰值窗口里更可能因为云、阵雨或雷暴扰动，冲不到本来可能达到的更高温度。" },
-              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA RCTP、Wunderground 指定站点等实际结算源。" },
+              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA 指定站点、Wunderground 指定站点等实际结算源。" },
             ],
           },
         ],
@@ -216,7 +216,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "What airport-side suppression risk means",
             blocks: [
               { type: "paragraph", text: "It does not mean the entire city must run cooler. It means the airport station used for settlement is more likely to get capped by clouds, showers, or thunderstorm disruption during the peak window and fail to reach the next warmer bucket." },
-              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement source such as METAR, HKO, MGM, NOAA RCTP, or a designated Wunderground station." },
+              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement source such as METAR, HKO, MGM, a designated NOAA station, or a designated Wunderground station." },
             ],
           },
         ],
@@ -242,7 +242,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北：按 NOAA RCTP（台湾桃园国际机场）最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Shenzhen：当前按 Wunderground 指定站点（Shenzhen Bao'an Intl Airport Station）镜像结算页主值。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
+              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北、伊斯坦布尔等 NOAA 市场：按 weather.gov / NOAA 指定站点最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Shenzhen：当前按 Wunderground 指定站点（Shenzhen Bao'an Intl Airport Station）镜像结算页主值。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
             ],
           },
           {
@@ -269,7 +269,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "Taipei: settles against NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Shenzhen: currently mirrors the designated Wunderground station value for Shenzhen Bao'an Intl Airport Station.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
+              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "NOAA markets such as Taipei and Istanbul settle against the designated weather.gov / NOAA station using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Shenzhen: currently mirrors the designated Wunderground station value for Shenzhen Bao'an Intl Airport Station.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
             ],
           },
           {

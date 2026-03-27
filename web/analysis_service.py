@@ -1283,6 +1283,8 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "wu_settlement": wu_settle,
             "settlement_source": settlement_source,
             "settlement_source_label": settlement_source_label,
+            "station_code": settlement_current.get("station_code"),
+            "station_name": settlement_current.get("station_name"),
             "obs_time": obs_time_str,
             "obs_age_min": None if use_settlement_current else metar_age_min,
             "report_time": primary_current.get("report_time"),

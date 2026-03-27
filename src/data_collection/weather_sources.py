@@ -32,12 +32,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     # 城市周边 METAR 集群（用于在全球城市模拟类似安卡拉的多测站地图分布）
     CITY_METAR_CLUSTERS = {
         "buenos aires": ["SAEZ", "SABE", "SADP", "SADF", "SADL", "SADJ"],
+        "istanbul": ["LTFM", "LTBA", "LTFJ"],
         "london": ["EGLL", "EGLC", "EGKK", "EGSS", "EGGW"],
         "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
         "paris": ["LFPG", "LFPO", "LFPB"],
         "seoul": ["RKSI", "RKSS"],
         "hong kong": ["VHHH", "VMMC", "ZGSZ"],
         "shek kong": ["VHSK", "VHHH", "VMMC", "ZGSZ"],
+        "lau fau shan": ["VHHH", "VMMC", "ZGSZ"],
         "taipei": ["RCSS", "RCTP"],
         "chengdu": ["ZUUU", "ZUTF"],
         "chongqing": ["ZUCK", "ZUPS"],
@@ -425,6 +427,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "迈阿密": "Miami",
             "atlanta": "Atlanta",
             "亚特兰大": "Atlanta",
+            "istanbul": "Istanbul",
+            "ist": "Istanbul",
+            "ltfm": "Istanbul",
+            "伊斯坦布尔": "Istanbul",
             "seoul": "Seoul",
             "首尔": "Seoul",
             "hong kong": "Hong Kong",
@@ -434,6 +440,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "vhsk": "Shek Kong",
             "石岗": "Shek Kong",
             "石崗": "Shek Kong",
+            "lau fau shan": "Lau Fau Shan",
+            "lfs": "Lau Fau Shan",
+            "流浮山": "Lau Fau Shan",
             "taipei": "Taipei",
             "台北": "Taipei",
             "臺北": "Taipei",
@@ -556,8 +565,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     or normalized
                 )
                 self._settlement_cache.pop(f"hko:{station_code.lower()}", None)
-            elif normalized == "taipei":
-                self._settlement_cache.pop("noaa:rctp", None)
+            elif settlement_source == "noaa":
+                station_code = (
+                    str(city_meta.get("settlement_station_code") or "").strip()
+                    or str(city_meta.get("icao") or "").strip()
+                    or normalized
+                )
+                self._settlement_cache.pop(f"noaa:{station_code.lower()}", None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
