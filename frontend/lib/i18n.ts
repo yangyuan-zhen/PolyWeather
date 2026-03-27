@@ -31,7 +31,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.group.low": "低风险",
     "sidebar.group.other": "其他",
 
-    "dashboard.loading": "正在获取气象数据，请稍候...",
+    "dashboard.loading": "正在同步站点观测与结算源，请稍候...",
 
     "detail.closeAria": "关闭城市详情面板",
     "detail.waitSelect": "等待选择城市",
@@ -194,7 +194,8 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.group.low": "Low Risk",
     "sidebar.group.other": "Others",
 
-    "dashboard.loading": "Loading weather data, please wait...",
+    "dashboard.loading":
+      "Synchronizing station observations and settlement feeds...",
 
     "detail.closeAria": "Close city detail panel",
     "detail.waitSelect": "Waiting for city selection",

@@ -102,8 +102,42 @@ function DashboardScreen() {
       {store.futureModalDate && <FutureForecastModal />}
       {showLoading && (
         <div className="loading-overlay">
-          <div className="loading-spinner" />
-          <span>{t("dashboard.loading")}</span>
+          <div className="loading-card">
+            <div className="loading-clouds" aria-hidden="true">
+              <span className="loading-cloud loading-cloud-1" />
+              <span className="loading-cloud loading-cloud-2" />
+            </div>
+            <div className="loading-windfield" aria-hidden="true">
+              <span className="loading-windline loading-windline-1" />
+              <span className="loading-windline loading-windline-2" />
+              <span className="loading-windline loading-windline-3" />
+            </div>
+            <div className="loading-radar" aria-hidden="true">
+              <div className="loading-radar-core" />
+              <div className="loading-radar-ring loading-radar-ring-1" />
+              <div className="loading-radar-ring loading-radar-ring-2" />
+              <div className="loading-radar-sweep" />
+              <div className="loading-radar-blip loading-radar-blip-1" />
+              <div className="loading-radar-blip loading-radar-blip-2" />
+            </div>
+            <div className="loading-thermals" aria-hidden="true">
+              <span className="loading-thermal loading-thermal-1" />
+              <span className="loading-thermal loading-thermal-2" />
+              <span className="loading-thermal loading-thermal-3" />
+              <span className="loading-thermal loading-thermal-4" />
+            </div>
+            <div className="loading-drizzle" aria-hidden="true">
+              <span className="loading-drizzle-drop loading-drizzle-drop-1" />
+              <span className="loading-drizzle-drop loading-drizzle-drop-2" />
+              <span className="loading-drizzle-drop loading-drizzle-drop-3" />
+              <span className="loading-drizzle-drop loading-drizzle-drop-4" />
+              <span className="loading-drizzle-drop loading-drizzle-drop-5" />
+            </div>
+            <div className="loading-copy">
+              <strong>PolyWeather</strong>
+              <span>{t("dashboard.loading")}</span>
+            </div>
+          </div>
         </div>
       )}
     </div>
