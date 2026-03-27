@@ -75,6 +75,46 @@
   z-index: 1;
 }
 
+.weatherAura {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0.88;
+  mix-blend-mode: screen;
+  overflow: hidden;
+}
+
+.weatherAura :global(canvas) {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.94;
+  filter: saturate(1.05) blur(0.3px);
+}
+
+.weatherAuraScrim {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(
+      180deg,
+      rgba(5, 10, 24, 0.52) 0%,
+      rgba(6, 10, 22, 0.12) 24%,
+      rgba(5, 8, 19, 0.08) 54%,
+      rgba(4, 6, 15, 0.34) 100%
+    ),
+    radial-gradient(
+      circle at 50% 60%,
+      rgba(92, 142, 255, 0.06) 0%,
+      rgba(92, 142, 255, 0) 48%
+    );
+}
+
+.weatherAura[data-reduced-motion="true"] :global(canvas) {
+  display: none;
+}
+
 .root :global(.map .leaflet-tile),
 .root :global(.map .leaflet-marker-icon),
 .root :global(.map .leaflet-marker-shadow),

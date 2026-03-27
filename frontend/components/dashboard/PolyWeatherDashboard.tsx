@@ -21,6 +21,17 @@ const MapCanvas = dynamic(
   },
 );
 
+const WeatherAuraLayer = dynamic(
+  () =>
+    import("@/components/dashboard/WeatherAuraLayer").then(
+      (module) => module.WeatherAuraLayer,
+    ),
+  {
+    ssr: false,
+    loading: () => null,
+  },
+);
+
 const HistoryModal = dynamic(
   () =>
     import("@/components/dashboard/HistoryModal").then(
@@ -83,6 +94,7 @@ function DashboardScreen() {
   return (
     <div className={styles.root}>
       <MapCanvas />
+      <WeatherAuraLayer />
       <HeaderBar />
       <CitySidebar />
       <DetailPanel />
