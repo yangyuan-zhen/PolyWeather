@@ -30,6 +30,22 @@ interface UseLeafletMapArgs {
 const AUTO_NEARBY_MIN_ZOOM = 8;
 const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
 const MAP_MAX_ZOOM = 19;
+const CITY_MARKER_DISPLAY_OFFSETS: Record<
+  string,
+  { x: number; y: number; zIndexOffset?: number }
+> = {
+  // Shek Kong sits between the Hong Kong and Shenzhen cards and gets visually buried
+  // by their wide marker bubbles. Shift only the rendered marker, not the true point.
+  "shek kong": { x: 34, y: -26, zIndexOffset: 320 },
+};
+
+function getMarkerDisplayOffset(cityName: string) {
+  return CITY_MARKER_DISPLAY_OFFSETS[String(cityName || "").toLowerCase()] || {
+    x: 0,
+    y: 0,
+    zIndexOffset: 0,
+  };
+}
 
 function createMarkerIcon(
   city: CityListItem,
@@ -41,11 +57,16 @@ function createMarkerIcon(
   const shortName = label.length > 10 ? `${label.substring(0, 8)}...` : label;
   const tempText =
     snapshot?.current?.temp != null ? `${snapshot.current.temp}${unit}` : "--";
+  const offset = getMarkerDisplayOffset(city.name);
+  const styleAttr =
+    offset.x || offset.y
+      ? ` style="transform: translate(${offset.x}px, ${offset.y}px);"`
+      : "";
 
   return L.divIcon({
     className: "",
     html: `
-      <div class="city-marker" data-city="${city.name}">
+      <div class="city-marker" data-city="${city.name}"${styleAttr}>
         <div class="marker-bubble ${riskClass}">${tempText}</div>
         <div class="marker-name">${shortName}</div>
       </div>
@@ -252,6 +273,7 @@ export function useLeafletMap({
               // Create new marker
               const marker = L.marker([city.lat, city.lon], {
                 icon: createMarkerIcon(city, snapshot),
+                zIndexOffset: getMarkerDisplayOffset(city.name).zIndexOffset || 0,
               }).addTo(map);
 
               marker.on("click", () => {
