@@ -3022,6 +3022,20 @@
   line-height: 1.45;
 }
 
+.root :global(.future-trend-summary-muted) {
+  color: var(--text-muted);
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.root :global(.future-trend-card-empty) {
+  background: linear-gradient(
+    180deg,
+    rgba(148, 163, 184, 0.05) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
 .root :global(.future-subsection-title) {
   color: var(--text-primary);
   font-size: 0.95rem;

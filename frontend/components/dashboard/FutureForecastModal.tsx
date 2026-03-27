@@ -1600,17 +1600,22 @@ export function FutureForecastModal() {
                         </div>
                       ))}
                     </div>
-                    {displayedUpperAirSummary ||
-                    displayedUpperAirMetrics.length > 0 ? (
-                      <>
-                        <div className="future-subsection-title">
-                          {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
+                    <>
+                      <div className="future-subsection-title">
+                        {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
+                      </div>
+                      {displayedUpperAirSummary ? (
+                        <div className="future-trend-summary">
+                          {displayedUpperAirSummary}
                         </div>
-                        {displayedUpperAirSummary ? (
-                          <div className="future-trend-summary">
-                            {displayedUpperAirSummary}
-                          </div>
-                        ) : null}
+                      ) : (
+                        <div className="future-trend-summary future-trend-summary-muted">
+                          {locale === "en-US"
+                            ? "Upper-air structure is temporarily unavailable for this city. For now, lean on surface structure and TAF timing."
+                            : "该城市当前暂无可用的高空结构数据，先以近地面结构和 TAF 时段作为主判断。"}
+                        </div>
+                      )}
+                      {displayedUpperAirMetrics.length > 0 ? (
                         <div className="future-trend-grid">
                           {displayedUpperAirMetrics.map((metric) => (
                             <div key={metric.label} className="future-trend-card">
@@ -1653,8 +1658,22 @@ export function FutureForecastModal() {
                             </div>
                           ))}
                         </div>
-                      </>
-                    ) : null}
+                      ) : (
+                        <div className="future-trend-card future-trend-card-empty">
+                          <div className="future-trend-label">
+                            {locale === "en-US" ? "Upper-air source" : "高空数据源"}
+                          </div>
+                          <div className="future-trend-value">
+                            {locale === "en-US" ? "Not available" : "暂不可用"}
+                          </div>
+                          <div className="future-trend-note">
+                            {locale === "en-US"
+                              ? "No upper-air diagnostic feed is attached to this city right now."
+                              : "当前该城市未接入可用的高空诊断源，所以这里先保留说明卡片。"}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   </section>
                 </main>
               </div>
