@@ -404,9 +404,14 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   shenzhen: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NOAA ZGSZ Timeseries",
+      href: "https://www.weather.gov/wrh/timeseries?site=ZGSZ",
       kind: "agency",
+    },
+    {
+      label: "深圳宝安国际机场",
+      href: "https://www.szairport.com/",
+      kind: "airport",
     },
     {
       label: "ZGSZ METAR",

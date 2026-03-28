@@ -242,14 +242,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北、伊斯坦布尔等 NOAA 市场：按 weather.gov / NOAA 指定站点最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Shenzhen：当前按 Wunderground 指定站点（Shenzhen Bao'an Intl Airport Station）镜像结算页主值。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
+              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北、伊斯坦布尔、深圳等 NOAA 市场：按 weather.gov / NOAA 指定站点最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
             ],
           },
           {
             id: "common-mistakes",
             title: "最常见的误解",
             blocks: [
-              { type: "bullets", items: ["TAF 不是结算源，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "如果结算页直接看 Wunderground 站点主值，就应优先镜像该站点，而不是擅自回退到其他站。", "香港和台北不能简单套用机场 TAF / METAR 主链逻辑。"] },
+              { type: "bullets", items: ["TAF 不是结算源，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "NOAA 市场要优先看 weather.gov 指定站点的最终 Temp 列，不要拿其他站或第三方页面替代。", "香港和台北不能简单套用机场 TAF / METAR 主链逻辑。"] },
             ],
           },
         ],
@@ -269,14 +269,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "NOAA markets such as Taipei and Istanbul settle against the designated weather.gov / NOAA station using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Shenzhen: currently mirrors the designated Wunderground station value for Shenzhen Bao'an Intl Airport Station.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
+              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "NOAA markets such as Taipei, Istanbul, and Shenzhen settle against the designated weather.gov / NOAA station using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
             ],
           },
           {
             id: "common-mistakes",
             title: "Common mistakes",
             blocks: [
-              { type: "bullets", items: ["TAF is not a settlement source. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "If the settlement page itself references a Wunderground station, the product should mirror that station first instead of silently switching to another source.", "Hong Kong and Taipei should not be forced into the generic airport TAF / METAR chain."] },
+              { type: "bullets", items: ["TAF is not a settlement source. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "NOAA markets should anchor to the designated weather.gov Temp column once the date is finalized, not to a nearby third-party station page.", "Hong Kong and Taipei should not be forced into the generic airport TAF / METAR chain."] },
             ],
           },
         ],
