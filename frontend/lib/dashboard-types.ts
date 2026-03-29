@@ -162,11 +162,25 @@ export interface CitySummary {
   deb?: {
     prediction?: number | null;
   };
+  deviation_monitor?: DeviationMonitor;
   risk?: {
     level?: RiskLevel;
     warning?: string | null;
   };
   updated_at?: string | null;
+}
+
+export interface DeviationMonitor {
+  available?: boolean;
+  current_delta?: number | null;
+  reference_temp?: number | null;
+  direction?: "normal" | "cold" | "hot" | string;
+  severity?: "normal" | "light" | "strong" | string;
+  trend?: "stable" | "expanding" | "contracting" | string;
+  label_zh?: string | null;
+  label_en?: string | null;
+  trend_label_zh?: string | null;
+  trend_label_en?: string | null;
 }
 
 export interface HourlySeries {
@@ -301,6 +315,7 @@ export interface CityDetail {
   forecast?: ForecastData;
   multi_model?: Record<string, number | null>;
   deb?: DebForecast;
+  deviation_monitor?: DeviationMonitor;
   probabilities?: {
     mu?: number | null;
     distribution?: ProbabilityBucket[];

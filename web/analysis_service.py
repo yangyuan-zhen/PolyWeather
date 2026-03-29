@@ -24,6 +24,162 @@ from src.analysis.deb_algorithm import calculate_dynamic_weights
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.analysis.metar_narrator import describe_metar_report
 from src.data_collection.city_registry import ALIASES
+from src.models.lgbm_daily_high import predict_lgbm_daily_high
+
+
+def _interpolate_hourly_value(
+    times: list,
+    values: list,
+    local_date: str,
+    target_hour_frac: float,
+) -> Optional[float]:
+    points = []
+    for ts, raw_value in zip(times or [], values or []):
+        if not str(ts).startswith(local_date):
+            continue
+        value = _sf(raw_value)
+        if value is None:
+            continue
+        try:
+            hh_mm = str(ts).split("T")[1]
+            hour = int(hh_mm[:2])
+            minute = int(hh_mm[3:5]) if len(hh_mm) >= 5 else 0
+        except Exception:
+            continue
+        points.append((hour + minute / 60.0, value))
+
+    if not points:
+        return None
+    points.sort(key=lambda item: item[0])
+
+    if target_hour_frac <= points[0][0]:
+        return float(points[0][1])
+    if target_hour_frac >= points[-1][0]:
+        return float(points[-1][1])
+
+    for idx in range(1, len(points)):
+        left_hour, left_value = points[idx - 1]
+        right_hour, right_value = points[idx]
+        if target_hour_frac > right_hour:
+            continue
+        if right_hour == left_hour:
+            return float(right_value)
+        ratio = (target_hour_frac - left_hour) / (right_hour - left_hour)
+        return float(left_value + (right_value - left_value) * ratio)
+
+    return float(points[-1][1])
+
+
+def _build_deviation_monitor(
+    *,
+    current_temp: Optional[float],
+    deb_prediction: Optional[float],
+    om_today: Optional[float],
+    hourly_times: list,
+    hourly_temps: list,
+    local_date: str,
+    local_hour_frac: float,
+    observation_points: list,
+) -> Dict[str, Any]:
+    if current_temp is None or deb_prediction is None or om_today is None:
+        return {}
+
+    offset = _sf(deb_prediction) - _sf(om_today)
+    if offset is None:
+        return {}
+
+    expected_now = _interpolate_hourly_value(
+        hourly_times,
+        [(_sf(value) + offset) if _sf(value) is not None else None for value in hourly_temps],
+        local_date,
+        local_hour_frac,
+    )
+    if expected_now is None:
+        return {}
+
+    delta = float(current_temp) - expected_now
+    abs_delta = abs(delta)
+    if abs_delta < 0.8:
+        direction = "normal"
+        severity = "normal"
+    elif delta <= -1.8:
+        direction = "cold"
+        severity = "strong"
+    elif delta >= 1.8:
+        direction = "hot"
+        severity = "strong"
+    elif delta < 0:
+        direction = "cold"
+        severity = "light"
+    else:
+        direction = "hot"
+        severity = "light"
+
+    deviation_series = []
+    for item in observation_points or []:
+        if not isinstance(item, dict):
+            continue
+        obs_temp = _sf(item.get("temp"))
+        raw_time = str(item.get("time") or "").strip()
+        if obs_temp is None:
+            continue
+        match = re.search(r"(\d{1,2}):(\d{2})", raw_time)
+        if not match:
+            continue
+        obs_hour_frac = int(match.group(1)) + int(match.group(2)) / 60.0
+        ref_temp = _interpolate_hourly_value(
+            hourly_times,
+            [(_sf(value) + offset) if _sf(value) is not None else None for value in hourly_temps],
+            local_date,
+            obs_hour_frac,
+        )
+        if ref_temp is None:
+            continue
+        deviation_series.append(float(obs_temp) - ref_temp)
+
+    trend = "stable"
+    if len(deviation_series) >= 2:
+        latest = deviation_series[-1]
+        previous = deviation_series[-2]
+        if latest * previous > 0:
+            if abs(latest) - abs(previous) >= 0.3:
+                trend = "expanding"
+            elif abs(previous) - abs(latest) >= 0.3:
+                trend = "contracting"
+
+    if direction == "normal":
+        label_zh = f"正常 ±{abs_delta:.1f}°C"
+        label_en = f"Normal ±{abs_delta:.1f}°C"
+    elif direction == "cold":
+        label_zh = f"偏冷 {delta:.1f}°C"
+        label_en = f"Cool bias {delta:.1f}°C"
+    else:
+        label_zh = f"偏热 +{abs_delta:.1f}°C"
+        label_en = f"Warm bias +{abs_delta:.1f}°C"
+
+    trend_zh = {
+        "contracting": "收敛中",
+        "expanding": "扩大中",
+        "stable": "稳定",
+    }.get(trend, "稳定")
+    trend_en = {
+        "contracting": "contracting",
+        "expanding": "expanding",
+        "stable": "stable",
+    }.get(trend, "stable")
+
+    return {
+        "available": True,
+        "current_delta": round(delta, 1),
+        "reference_temp": round(expected_now, 1),
+        "direction": direction,
+        "severity": severity,
+        "trend": trend,
+        "label_zh": label_zh,
+        "label_en": label_en,
+        "trend_label_zh": trend_zh,
+        "trend_label_en": trend_en,
+    }
 
 def _wind_components(speed: Optional[float], direction: Optional[float]) -> tuple[Optional[float], Optional[float]]:
     if speed is None or direction is None:
@@ -959,6 +1115,40 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     else:
         peak_status = "before"
 
+    if current_forecasts and deb_val is not None:
+        lgbm_val, _ = predict_lgbm_daily_high(
+            city_name=city,
+            current_forecasts=current_forecasts,
+            deb_prediction=deb_val,
+            current_temp=cur_temp,
+            max_so_far=max_so_far,
+            humidity=_sf(primary_current.get("humidity")),
+            wind_speed_kt=_sf(primary_current.get("wind_speed_kt")),
+            visibility_mi=_sf(primary_current.get("visibility_mi")),
+            local_hour=local_hour,
+            local_date=local_date_str,
+            peak_status=peak_status,
+        )
+        if lgbm_val is not None:
+            current_forecasts["LGBM"] = lgbm_val
+            blended, winfo = calculate_dynamic_weights(city, current_forecasts)
+            if blended is not None:
+                deb_val = blended
+                deb_weights = winfo
+
+    deviation_monitor = _build_deviation_monitor(
+        current_temp=cur_temp,
+        deb_prediction=deb_val,
+        om_today=om_today,
+        hourly_times=h_times,
+        hourly_temps=h_temps,
+        local_date=local_date_str,
+        local_hour_frac=local_hour_frac,
+        observation_points=(
+            settlement_today_obs if settlement_today_obs else metar_today_obs_payload
+        ),
+    )
+
     # ── 10. Shared analysis (probability, trend, AI) via trend_engine ──
     # This single call replaces the duplicate probability engine, dead market
     # detection, forecast bust grading, and AI context building.
@@ -1335,6 +1525,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
+        "deviation_monitor": deviation_monitor,
         "ensemble": ens_data,
         "probabilities": {
             "mu": round(mu, 1) if mu is not None else None,
@@ -1398,6 +1589,7 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
             "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
         },
         "deb": {"prediction": data.get("deb", {}).get("prediction")},
+        "deviation_monitor": data.get("deviation_monitor") or {},
         "risk": {
             "level": data.get("risk", {}).get("level"),
             "warning": data.get("risk", {}).get("warning"),

@@ -4,7 +4,7 @@ import { startTransition, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
-import { CityListItem } from "@/lib/dashboard-types";
+import { CityListItem, DeviationMonitor } from "@/lib/dashboard-types";
 
 type RiskGroupKey = "high" | "medium" | "low" | "other";
 
@@ -50,7 +50,7 @@ function normalizeExpandedGroups(
 
 export function CitySidebar() {
   const store = useDashboardStore();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const selectedCity = store.selectedCity;
   const riskOrder = { high: 0, medium: 1, low: 2, other: 3 };
   const [expandedGroups, setExpandedGroups] = useState<
@@ -114,6 +114,16 @@ export function CitySidebar() {
     } catch {}
   }, [expandedGroups]);
 
+  const formatDeviationText = (monitor?: DeviationMonitor | null) => {
+    if (!monitor?.available) return "";
+    const label =
+      locale === "en-US" ? monitor.label_en : monitor.label_zh;
+    const trendLabel =
+      locale === "en-US" ? monitor.trend_label_en : monitor.trend_label_zh;
+    if (!label) return "";
+    return trendLabel ? `${label} · ${trendLabel}` : label;
+  };
+
   const groupMeta: Array<{ key: RiskGroupKey; label: string }> = [
     { key: "high", label: t("sidebar.group.high") },
     { key: "medium", label: t("sidebar.group.medium") },
@@ -172,6 +182,9 @@ export function CitySidebar() {
                           temp: `${snapshot.current.temp}${tempSymbol}`,
                         })
                       : t("common.na");
+                  const deviationText = formatDeviationText(
+                    snapshot?.deviation_monitor,
+                  );
                   const peakTempText =
                     detail?.current?.max_so_far != null &&
                     detail.current.max_temp_time
@@ -182,6 +195,11 @@ export function CitySidebar() {
                       : detail?.current?.max_temp_time
                         ? t("sidebar.peakAt", { time: detail.current.max_temp_time })
                         : "";
+                  const deviationDirection =
+                    snapshot?.deviation_monitor?.direction || "normal";
+                  const deviationSeverity =
+                    snapshot?.deviation_monitor?.severity || "normal";
+                  const secondaryText = deviationText || peakTempText;
 
                   return (
                     <button
@@ -211,7 +229,19 @@ export function CitySidebar() {
                         <span className="city-local-time">
                           {snapshot?.local_time ? `🕒 ${snapshot.local_time}` : ""}
                         </span>
-                        <span className="city-max-info">{peakTempText}</span>
+                        <span
+                          className={clsx(
+                            "city-max-info",
+                            deviationText && "city-deviation-info",
+                            deviationText &&
+                              `city-deviation-${deviationDirection}`,
+                            deviationText &&
+                              deviationSeverity === "strong" &&
+                              "strong",
+                          )}
+                        >
+                          {secondaryText}
+                        </span>
                       </div>
                     </button>
                   );

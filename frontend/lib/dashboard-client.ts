@@ -74,6 +74,7 @@ export function toCitySummary(detail: CityDetail): CitySummary {
     deb: {
       prediction: detail.deb?.prediction,
     },
+    deviation_monitor: detail.deviation_monitor,
     risk: {
       level: detail.risk?.level,
       warning: detail.risk?.warning,

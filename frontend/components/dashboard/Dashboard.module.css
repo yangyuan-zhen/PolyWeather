@@ -488,6 +488,30 @@
   font-weight: 500;
 }
 
+.root :global(.city-item .city-deviation-info) {
+  font-weight: 600;
+}
+
+.root :global(.city-item .city-deviation-cold) {
+  color: #38bdf8;
+}
+
+.root :global(.city-item .city-deviation-hot) {
+  color: #f59e0b;
+}
+
+.root :global(.city-item .city-deviation-normal) {
+  color: #22d3ee;
+}
+
+.root :global(.city-item .city-deviation-info.strong) {
+  text-shadow: 0 0 10px rgba(56, 189, 248, 0.18);
+}
+
+.root :global(.city-item .city-deviation-hot.strong) {
+  text-shadow: 0 0 10px rgba(245, 158, 11, 0.24);
+}
+
 .root :global(.city-item .risk-dot) {
   width: 10px;
   height: 10px;

@@ -1,0 +1,66 @@
+{
+  "model_type": "LightGBMRegressor",
+  "target": "actual_high",
+  "horizon": "D0",
+  "feature_names": [
+    "actual_high_lag_1",
+    "actual_high_lag_2",
+    "actual_high_lag_3",
+    "actual_high_lag_7",
+    "actual_high_mean_7",
+    "actual_high_mean_14",
+    "actual_high_trend_3",
+    "open_meteo",
+    "ecmwf",
+    "gfs",
+    "gem",
+    "jma",
+    "icon",
+    "mgm",
+    "nws",
+    "deb_prediction",
+    "model_median",
+    "model_spread",
+    "current_temp",
+    "max_so_far",
+    "humidity",
+    "wind_speed_kt",
+    "visibility_mi",
+    "local_hour",
+    "month",
+    "weekday",
+    "peak_status_code"
+  ],
+  "base_model_columns": [
+    "open_meteo",
+    "ecmwf",
+    "gfs",
+    "gem",
+    "jma",
+    "icon",
+    "mgm",
+    "nws"
+  ],
+  "model_path": "artifacts\\models\\lgbm_daily_high.txt",
+  "sample_count": 29,
+  "train_count": 17,
+  "validation_count": 12,
+  "metrics": {
+    "validation": {
+      "sample_count": 12,
+      "lgbm_mae": 2.975,
+      "deb_mae": 2.267,
+      "best_single_mae": 1.167,
+      "median_mae": 2.483
+    },
+    "full_sample": {
+      "sample_count": 29,
+      "lgbm_mae": 1.442,
+      "deb_mae": 3.448,
+      "best_single_mae": 2.486,
+      "median_mae": 3.628
+    }
+  },
+  "generated_at": "2026-03-29T14:57:35.832414Z",
+  "trained_at": "2026-03-29T14:57:35.832414Z"
+}

@@ -58,40 +58,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
-  "shek kong": [
-    {
-      label: "香港天文台",
-      href: "https://www.hko.gov.hk/en/index.html",
-      kind: "agency",
-    },
-    {
-      label: "HKO 区域天气数据",
-      href: "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv",
-      kind: "agency",
-    },
-    {
-      label: "VHSK Timeseries",
-      href: "https://www.weather.gov/wrh/timeseries?site=VHSK",
-      kind: "metar",
-    },
-  ],
-  "lau fau shan": [
-    {
-      label: "香港天文台",
-      href: "https://www.hko.gov.hk/en/index.html",
-      kind: "agency",
-    },
-    {
-      label: "HKO 区域天气数据",
-      href: "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv",
-      kind: "agency",
-    },
-    {
-      label: "HKO 实时读数页",
-      href: "https://www.hko.gov.hk/textonly/v2/forecast/text_readings_e.htm",
-      kind: "agency",
-    },
-  ],
   taipei: [
     {
       label: "NOAA RCTP Timeseries",
@@ -147,6 +113,108 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     {
       label: "KLGA METAR",
       href: "https://aviationweather.gov/data/metar/?id=KLGA&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "los angeles": [
+    {
+      label: "NWS Los Angeles/Oxnard",
+      href: "https://www.weather.gov/lox/",
+      kind: "agency",
+    },
+    {
+      label: "LAX Airport",
+      href: "https://www.flylax.com/",
+      kind: "airport",
+    },
+    {
+      label: "KLAX METAR",
+      href: "https://aviationweather.gov/data/metar/?id=KLAX&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "san francisco": [
+    {
+      label: "NWS San Francisco Bay Area",
+      href: "https://www.weather.gov/mtr/",
+      kind: "agency",
+    },
+    {
+      label: "SFO Airport",
+      href: "https://www.flysfo.com/",
+      kind: "airport",
+    },
+    {
+      label: "KSFO METAR",
+      href: "https://aviationweather.gov/data/metar/?id=KSFO&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  aurora: [
+    {
+      label: "NWS Denver/Boulder",
+      href: "https://www.weather.gov/bou/",
+      kind: "agency",
+    },
+    {
+      label: "Buckley Space Force Base",
+      href: "https://www.buckley.spaceforce.mil/",
+      kind: "airport",
+    },
+    {
+      label: "KBKF METAR",
+      href: "https://aviationweather.gov/data/metar/?id=KBKF&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  austin: [
+    {
+      label: "NWS Austin/San Antonio",
+      href: "https://www.weather.gov/ewx/",
+      kind: "agency",
+    },
+    {
+      label: "Austin-Bergstrom Airport",
+      href: "https://www.austintexas.gov/airport",
+      kind: "airport",
+    },
+    {
+      label: "KAUS METAR",
+      href: "https://aviationweather.gov/data/metar/?id=KAUS&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  houston: [
+    {
+      label: "NWS Houston/Galveston",
+      href: "https://www.weather.gov/hgx/",
+      kind: "agency",
+    },
+    {
+      label: "William P. Hobby Airport",
+      href: "https://www.fly2houston.com/hobby",
+      kind: "airport",
+    },
+    {
+      label: "KHOU METAR",
+      href: "https://aviationweather.gov/data/metar/?id=KHOU&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "mexico city": [
+    {
+      label: "SMN",
+      href: "https://smn.conagua.gob.mx/",
+      kind: "agency",
+    },
+    {
+      label: "AICM",
+      href: "https://www.aicm.com.mx/",
+      kind: "airport",
+    },
+    {
+      label: "MMMX METAR",
+      href: "https://aviationweather.gov/data/metar/?id=MMMX&decoded=1&taf=1",
       kind: "metar",
     },
   ],

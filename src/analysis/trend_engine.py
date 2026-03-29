@@ -23,6 +23,7 @@ from src.analysis.probability_snapshot_archive import append_probability_snapsho
 from src.analysis.settlement_rounding import apply_city_settlement, is_exact_settlement_city
 from src.data_collection.city_registry import CITY_REGISTRY
 from src.data_collection.city_risk_profiles import get_city_risk_profile
+from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
 SETTLEMENT_SOURCE_LABELS = {
     "metar": "METAR",
@@ -417,6 +418,38 @@ def analyze_weather_trend(
         peak_status = "in_window"
     else:
         peak_status = "before"
+
+    if city_name and current_forecasts and deb_prediction is not None:
+        lgbm_prediction, _ = predict_lgbm_daily_high(
+            city_name=city_name,
+            current_forecasts=current_forecasts,
+            deb_prediction=deb_prediction,
+            current_temp=cur_temp,
+            max_so_far=max_so_far,
+            humidity=_sf(primary_current.get("humidity")),
+            wind_speed_kt=_sf(primary_current.get("wind_speed_kt")),
+            visibility_mi=_sf(primary_current.get("visibility_mi")),
+            local_hour=local_hour,
+            local_date=local_date_str,
+            peak_status=peak_status,
+        )
+        if lgbm_prediction is not None:
+            current_forecasts["LGBM"] = lgbm_prediction
+            blended_high, weight_info = calculate_dynamic_weights(
+                city_name, current_forecasts
+            )
+            if blended_high is not None:
+                deb_prediction = blended_high
+                deb_weights = weight_info
+                _deb_to_save = blended_high
+                if insights and "DEB 融合预测" in insights[0]:
+                    insights[0] = (
+                        f"🧬 <b>DEB 融合预测</b>：<b>{blended_high}{temp_symbol}</b> ({weight_info})"
+                    )
+                if ai_features and "DEB系统已通过历史偏差矫正算出期待点是" in ai_features[0]:
+                    ai_features[0] = (
+                        f"🧬 DEB系统已通过历史偏差矫正算出期待点是: {blended_high}{temp_symbol}。"
+                    )
 
     if trend_direction == "stagnant":
         if peak_status == "before":
@@ -871,6 +904,11 @@ def analyze_weather_trend(
             ens_data=ens_data,
             current_forecasts=current_forecasts,
             max_so_far=max_so_far,
+            current_temp=cur_temp,
+            humidity=_sf(primary_current.get("humidity")),
+            wind_speed_kt=_sf(primary_current.get("wind_speed_kt")),
+            visibility_mi=_sf(primary_current.get("visibility_mi")),
+            local_hour=local_hour_frac,
             peak_status=peak_status,
             probabilities=_prob_list,
             shadow_probabilities=_shadow_prob_list,

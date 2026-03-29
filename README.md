@@ -171,6 +171,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Open-Core policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
+- LightGBM daily-high model (ZH): [docs/LGBM_DAILY_HIGH_ZH.md](docs/LGBM_DAILY_HIGH_ZH.md)
 - Frontend deployment (ZH): [docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
 - Tech debt (EN): [docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)

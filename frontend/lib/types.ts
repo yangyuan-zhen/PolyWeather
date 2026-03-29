@@ -186,6 +186,7 @@ export interface ModelComparison {
   ICON?: number;
   GEM?: number;
   JMA?: number;
+  LGBM?: number;
   MGM?: number;
   NWS?: number;
 }

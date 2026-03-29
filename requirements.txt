@@ -4,6 +4,7 @@ pyTelegramBotAPI
 python-dotenv
 pytz
 numpy
+lightgbm
 web3
 fastapi
 uvicorn
