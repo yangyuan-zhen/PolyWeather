@@ -559,38 +559,6 @@ class NwsOpenMeteoSourceMixin:
                 record_source_call("open_meteo", "multi_model", "empty", (time.perf_counter() - started) * 1000.0)
                 return None
 
-            timesfm_meta = {}
-            try:
-                from src.models.timesfm_adapter import (
-                    TIMESFM_MODEL_NAME,
-                    predict_timesfm_daily,
-                )
-
-                timesfm_result = predict_timesfm_daily(
-                    city_name=city,
-                    forecast_dates=dates,
-                    daily_model_forecasts=daily_forecasts,
-                )
-                timesfm_predictions = (
-                    timesfm_result.get("predictions", {})
-                    if isinstance(timesfm_result, dict)
-                    else {}
-                )
-                if isinstance(timesfm_predictions, dict):
-                    for date_str, raw_value in timesfm_predictions.items():
-                        parsed = round(float(raw_value), 1) if raw_value is not None else None
-                        if parsed is None:
-                            continue
-                        daily_forecasts.setdefault(date_str, {})[TIMESFM_MODEL_NAME] = parsed
-                if isinstance(timesfm_result, dict):
-                    timesfm_meta = {
-                        key: value
-                        for key, value in timesfm_result.items()
-                        if key != "predictions"
-                    }
-            except Exception as exc:
-                logger.warning(f"TimesFM adapter failed for {city}: {exc}")
-
             # 今天的预报 (向后兼容)
             today_date = dates[0] if dates else None
             forecasts = daily_forecasts.get(today_date, {})
@@ -606,7 +574,6 @@ class NwsOpenMeteoSourceMixin:
                 "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
                 "dates": dates,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
-                "timesfm_meta": timesfm_meta,
             }
             with self._multi_model_cache_lock:
                 self._multi_model_cache[cache_key] = {
