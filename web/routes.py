@@ -275,10 +275,15 @@ async def auth_me(request: Request):
 
     if SUPABASE_ENTITLEMENT.enabled and user_id:
         try:
-            latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+            latest_subscription = SUPABASE_ENTITLEMENT.ensure_signup_trial(
                 user_id,
-                respect_requirement=False,
+                created_at=getattr(request.state, "auth_created_at", None),
             )
+            if not latest_subscription:
+                latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
+                    user_id,
+                    respect_requirement=False,
+                )
             if (
                 not latest_subscription
                 and getattr(PAYMENT_CHECKOUT, "enabled", False)

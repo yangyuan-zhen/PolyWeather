@@ -179,6 +179,7 @@ def _bind_optional_supabase_identity(request: Request) -> None:
     request.state.auth_user_id = identity.user_id
     request.state.auth_email = identity.email
     request.state.auth_points = identity.points
+    request.state.auth_created_at = identity.created_at
 
 
 def _resolve_auth_points(request: Request) -> int:
