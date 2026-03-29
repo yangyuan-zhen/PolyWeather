@@ -195,7 +195,6 @@ export function HistoryModal() {
             row.actual_peak_time &&
             row.deb_at_peak_minus_12h != null,
         )
-        .slice(-8)
         .reverse(),
     [summary.recentData],
   );
@@ -319,61 +318,19 @@ export function HistoryModal() {
             </div>
             {!isLoading && !error && <HistoryChart />}
             {!isLoading && !error && settledPeakRows.length > 0 && (
-              <div
-                style={{
-                  marginTop: "18px",
-                  padding: "14px 16px",
-                  border: "1px solid rgba(148, 163, 184, 0.14)",
-                  borderRadius: "16px",
-                  background: "rgba(15, 23, 42, 0.42)",
-                }}
-              >
-                <div
-                  style={{
-                    color: "var(--text-primary)",
-                    fontSize: "14px",
-                    fontWeight: 700,
-                    marginBottom: "10px",
-                  }}
-                >
+              <div className="history-peak-reference">
+                <div className="history-peak-reference-title">
                   {locale === "en-US"
                     ? "Peak-12h DEB Reference (Approx.)"
                     : "峰值前 12 小时 DEB 参考（近似）"}
                 </div>
-                <div
-                  style={{
-                    display: "grid",
-                    gap: "8px",
-                  }}
-                >
+                <div className="history-peak-reference-scroll">
                   {settledPeakRows.map((row) => (
-                    <div
-                      key={row.date}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "minmax(72px, 88px) 1fr",
-                        gap: "10px",
-                        padding: "10px 12px",
-                        borderRadius: "12px",
-                        background: "rgba(255,255,255,0.03)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          color: "var(--text-secondary)",
-                          fontSize: "12px",
-                          fontWeight: 700,
-                        }}
-                      >
+                    <div key={row.date} className="history-peak-reference-row">
+                      <div className="history-peak-reference-date">
                         {row.date}
                       </div>
-                      <div
-                        style={{
-                          color: "var(--text-secondary)",
-                          fontSize: "12px",
-                          lineHeight: 1.7,
-                        }}
-                      >
+                      <div className="history-peak-reference-meta">
                         <div>
                           {locale === "en-US" ? "Peak ref" : "峰值参考"}:{" "}
                           <span style={{ color: "var(--text-primary)" }}>

@@ -2237,6 +2237,70 @@
   height: 100% !important;
 }
 
+.root :global(.history-modal .history-peak-reference) {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.root :global(.history-modal .history-peak-reference-title) {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.root :global(.history-modal .history-peak-reference-scroll) {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(96, 165, 250, 0.5) rgba(15, 23, 42, 0.32);
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar) {
+  width: 8px;
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar-track) {
+  background: rgba(15, 23, 42, 0.32);
+  border-radius: 999px;
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar-thumb) {
+  background: linear-gradient(
+    180deg,
+    rgba(56, 189, 248, 0.72) 0%,
+    rgba(96, 165, 250, 0.52) 100%
+  );
+  border-radius: 999px;
+}
+
+.root :global(.history-modal .history-peak-reference-row) {
+  display: grid;
+  grid-template-columns: minmax(72px, 88px) 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.root :global(.history-modal .history-peak-reference-date) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.root :global(.history-modal .history-peak-reference-meta) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
 @media (max-width: 980px) {
   .root :global(.history-modal .modal-body) {
     padding: 18px;
@@ -2249,6 +2313,10 @@
 
   .root :global(.history-modal .history-chart-wrapper) {
     height: 360px;
+  }
+
+  .root :global(.history-modal .history-peak-reference-scroll) {
+    max-height: 320px;
   }
 }
 
@@ -2290,6 +2358,20 @@
   .root :global(.history-modal .history-chart-wrapper) {
     height: 300px;
     padding: 8px 10px 6px;
+  }
+
+  .root :global(.history-modal .history-peak-reference) {
+    padding: 12px;
+  }
+
+  .root :global(.history-modal .history-peak-reference-scroll) {
+    max-height: 260px;
+    padding-right: 2px;
+  }
+
+  .root :global(.history-modal .history-peak-reference-row) {
+    grid-template-columns: 1fr;
+    gap: 6px;
   }
 }
 

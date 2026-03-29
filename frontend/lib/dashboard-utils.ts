@@ -182,6 +182,8 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   const current = detail.current || {};
   const parts: string[] = [];
   const sourceTag = getObservationSourceTag(detail);
+  const suppressAnkaraMgmObservation =
+    String(detail.name || "").trim().toLowerCase() === "ankara";
 
   if (current.obs_time) {
     const ageText =
@@ -211,7 +213,7 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
     parts.push(`👁️ ${current.visibility_mi}mi`);
   }
 
-  if (detail.mgm?.temp != null) {
+  if (!suppressAnkaraMgmObservation && detail.mgm?.temp != null) {
     const timeMatch = detail.mgm.time?.match(/T?(\d{2}:\d{2})/);
     const timeText = timeMatch ? ` @${timeMatch[1]}` : "";
     parts.push(
@@ -251,6 +253,8 @@ export function getTemperatureChartData(
   const hourly = detail.hourly || {};
   const times = hourly.times || [];
   const temps = hourly.temps || [];
+  const suppressAnkaraMgmObservation =
+    String(detail.name || "").trim().toLowerCase() === "ankara";
 
   if (!times.length) return null;
 
@@ -354,7 +358,11 @@ export function getTemperatureChartData(
   });
 
   const mgmPoints = new Array(times.length).fill(null);
-  if (detail.mgm?.temp != null && detail.mgm?.time) {
+  if (
+    !suppressAnkaraMgmObservation &&
+    detail.mgm?.temp != null &&
+    detail.mgm?.time
+  ) {
     const match = detail.mgm.time.match(/T?(\d{2}):(\d{2})/);
     if (match) {
       let hour = Number.parseInt(match[1], 10);
@@ -543,7 +551,7 @@ export function getTemperatureChartData(
   };
 
   const legendParts: string[] = [];
-  if (detail.mgm?.temp != null) {
+  if (!suppressAnkaraMgmObservation && detail.mgm?.temp != null) {
     legendParts.push(`MGM: ${detail.mgm.temp}${detail.temp_symbol}`);
   }
   if (!hasMgmHourly && debMax != null && omMax != null && Math.abs(offset) > 0.3) {
