@@ -2252,6 +2252,9 @@ export function getHistorySummary(
   }, 0);
   const mgmSeriesComplete =
     settledData.length >= 2 && mgmSettledCount === settledData.length;
+  const mgmSeries = mgmSeriesComplete
+    ? recentData.map((row) => row.mgm ?? null)
+    : recentData.map(() => null);
 
   return {
     dates: recentData.map((row) => row.date),
@@ -2281,7 +2284,7 @@ export function getHistorySummary(
       ? Number(((hits / debErrors.length) * 100).toFixed(0))
       : null,
     mgmSeriesComplete,
-    mgms: recentData.map((row) => row.mgm ?? null),
+    mgms: mgmSeries,
     recentData,
     settledCount: comparableSettledData.length,
     actuals: recentData.map((row) => row.actual),

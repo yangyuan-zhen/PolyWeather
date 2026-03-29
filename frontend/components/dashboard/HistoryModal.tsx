@@ -263,31 +263,25 @@ export function HistoryModal() {
             )}
             {isLoading ? (
               <div className="history-modal-loading">
-                <div className="loading-card history-loading-card">
-                  <div className="loading-clouds" aria-hidden="true">
-                    <span className="loading-cloud loading-cloud-1" />
-                    <span className="loading-cloud loading-cloud-2" />
+                <div className="history-fetch-loading">
+                  <div className="history-fetch-scan" aria-hidden="true">
+                    <span className="history-fetch-ring history-fetch-ring-1" />
+                    <span className="history-fetch-ring history-fetch-ring-2" />
+                    <span className="history-fetch-sweep" />
+                    <span className="history-fetch-core" />
                   </div>
-                  <div className="loading-windfield" aria-hidden="true">
-                    <span className="loading-windline loading-windline-1" />
-                    <span className="loading-windline loading-windline-2" />
-                    <span className="loading-windline loading-windline-3" />
+                  <div className="history-fetch-bars" aria-hidden="true">
+                    <span className="history-fetch-bar history-fetch-bar-1" />
+                    <span className="history-fetch-bar history-fetch-bar-2" />
+                    <span className="history-fetch-bar history-fetch-bar-3" />
+                    <span className="history-fetch-bar history-fetch-bar-4" />
                   </div>
-                  <div className="loading-radar history-loading-radar" aria-hidden="true">
-                    <div className="loading-radar-core" />
-                    <div className="loading-radar-ring loading-radar-ring-1" />
-                    <div className="loading-radar-ring loading-radar-ring-2" />
-                    <div className="loading-radar-sweep" />
-                    <div className="loading-radar-blip loading-radar-blip-1" />
-                    <div className="loading-radar-blip loading-radar-blip-2" />
+                  <div className="history-fetch-lines" aria-hidden="true">
+                    <span className="history-fetch-line history-fetch-line-1" />
+                    <span className="history-fetch-line history-fetch-line-2" />
+                    <span className="history-fetch-line history-fetch-line-3" />
                   </div>
-                  <div className="loading-thermals history-loading-thermals" aria-hidden="true">
-                    <span className="loading-thermal loading-thermal-1" />
-                    <span className="loading-thermal loading-thermal-2" />
-                    <span className="loading-thermal loading-thermal-3" />
-                    <span className="loading-thermal loading-thermal-4" />
-                  </div>
-                  <div className="loading-copy history-loading-copy">
+                  <div className="history-fetch-copy">
                     <strong>
                       {locale === "en-US"
                         ? "Scanning archived settlement history"
