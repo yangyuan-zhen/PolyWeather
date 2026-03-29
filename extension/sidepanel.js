@@ -4,7 +4,7 @@ const DEFAULT_CONFIG = {
   selectedCity: "",
   siteBase: "https://polyweather-pro.vercel.app"
 };
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 const locale = String(navigator.language || "en").toLowerCase().startsWith("zh")
   ? "zh"
   : "en";
@@ -253,6 +253,37 @@ function getCityAliasTokens(rawCityName) {
   if (normalized === "buenos aires") {
     aliases.add("buenos-aires");
     aliases.add("buenosaires");
+  }
+  if (normalized === "aurora") {
+    aliases.add("denver");
+    aliases.add("denver-co");
+    aliases.add("buckley");
+    aliases.add("kbkf");
+  }
+  if (normalized === "los angeles") {
+    aliases.add("los-angeles");
+    aliases.add("lax");
+    aliases.add("klax");
+  }
+  if (normalized === "san francisco") {
+    aliases.add("san-francisco");
+    aliases.add("sfo");
+    aliases.add("ksfo");
+  }
+  if (normalized === "austin") {
+    aliases.add("aus");
+    aliases.add("kaus");
+  }
+  if (normalized === "houston") {
+    aliases.add("hou");
+    aliases.add("hobby");
+    aliases.add("khou");
+  }
+  if (normalized === "mexico city") {
+    aliases.add("mexicocity");
+    aliases.add("ciudad-de-mexico");
+    aliases.add("cdmx");
+    aliases.add("mmmx");
   }
 
   return [...aliases].filter((item) => item && item.length >= 2);
@@ -1148,11 +1179,14 @@ async function loadCities(options = {}) {
   }
 }
 
-function getActiveTabUrl() {
+function getActiveTabInfo() {
   return new Promise((resolve) => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const first = Array.isArray(tabs) && tabs.length ? tabs[0] : null;
-      resolve(String(first?.url || ""));
+      resolve({
+        url: String(first?.url || ""),
+        title: String(first?.title || "")
+      });
     });
   });
 }
@@ -1161,12 +1195,12 @@ async function syncCityFromActiveUrl() {
   if (state.syncBusy || !state.cities.length) return;
   state.syncBusy = true;
   try {
-    const url = await getActiveTabUrl();
+    const { url, title } = await getActiveTabInfo();
     if (!url) return;
     if (url === state.lastActiveUrl) return;
     state.lastActiveUrl = url;
 
-    const inferred = inferCityFromUrl(url);
+    const inferred = inferCityFromUrl(url) || matchCityInText(title);
     if (!inferred) return;
     if (inferred === state.config.selectedCity) return;
     await setSelectedCity(inferred, { persist: true, reloadDetail: true });
