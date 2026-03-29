@@ -235,8 +235,8 @@ curl -s http://127.0.0.1:8000/api/system/status | python3 -m json.tool
 docker compose logs -f polyweather | egrep "payment event loop started|payment confirm loop started|payment auto-confirmed"
 ```
 
-## 10. 开源口径说明
+## 10. AGPL 与公开口径说明
 
-对外公开文档仅覆盖通用 API 契约。生产商业策略参数不在公开文档披露。
+本仓库代码自 `2026-03-30` 起采用 `AGPL-3.0-only`。对外公开文档仅覆盖通用 API 契约；生产商业策略参数、私有运营阈值与托管服务能力不在公开文档披露。
 
-详见：[Open-Core 与商用边界](OPEN_CORE_POLICY.md)
+详见：[AGPL-3.0 与商用边界](OPEN_CORE_POLICY.md)

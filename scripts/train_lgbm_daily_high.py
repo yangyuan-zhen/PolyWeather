@@ -4,20 +4,13 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import TYPE_CHECKING, Any, Dict, List
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if ROOT_DIR not in sys.path:
-    sys.path.insert(0, ROOT_DIR)
 
-import lightgbm as lgb
-import numpy as np
-
-from src.models.lgbm_features import (
-    FEATURE_NAMES,
-    build_training_samples,
-    schema_payload,
-)
+if TYPE_CHECKING:
+    import lightgbm as lgb
+    import numpy as np
 
 
 MODEL_PATH = os.path.join(ROOT_DIR, "artifacts", "models", "lgbm_daily_high.txt")
@@ -58,15 +51,21 @@ def _chronological_split(samples: List[Dict[str, Any]]) -> tuple[List[Dict[str, 
     return ordered[:-validation_count], ordered[-validation_count:]
 
 
-def _dataset_from_samples(samples: List[Dict[str, Any]]) -> tuple[np.ndarray, np.ndarray]:
+def _dataset_from_samples(samples: List[Dict[str, Any]], np: Any) -> tuple[Any, Any]:
     features = np.asarray([row["vector"] for row in samples], dtype=np.float32)
     targets = np.asarray([row["target"] for row in samples], dtype=np.float32)
     return features, targets
 
 
-def _train_model(train_samples: List[Dict[str, Any]], valid_samples: List[Dict[str, Any]]) -> lgb.Booster:
-    train_x, train_y = _dataset_from_samples(train_samples)
-    train_data = lgb.Dataset(train_x, label=train_y, feature_name=FEATURE_NAMES, free_raw_data=True)
+def _train_model(
+    train_samples: List[Dict[str, Any]],
+    valid_samples: List[Dict[str, Any]],
+    lgb: Any,
+    np: Any,
+    feature_names: List[str],
+) -> Any:
+    train_x, train_y = _dataset_from_samples(train_samples, np)
+    train_data = lgb.Dataset(train_x, label=train_y, feature_name=feature_names, free_raw_data=True)
     valid_sets = [train_data]
     valid_names = ["train"]
 
@@ -85,8 +84,8 @@ def _train_model(train_samples: List[Dict[str, Any]], valid_samples: List[Dict[s
 
     callbacks = []
     if valid_samples:
-        valid_x, valid_y = _dataset_from_samples(valid_samples)
-        valid_data = lgb.Dataset(valid_x, label=valid_y, feature_name=FEATURE_NAMES, reference=train_data)
+        valid_x, valid_y = _dataset_from_samples(valid_samples, np)
+        valid_data = lgb.Dataset(valid_x, label=valid_y, feature_name=feature_names, reference=train_data)
         valid_sets.append(valid_data)
         valid_names.append("valid")
         callbacks.append(lgb.early_stopping(stopping_rounds=15, verbose=False))
@@ -101,7 +100,7 @@ def _train_model(train_samples: List[Dict[str, Any]], valid_samples: List[Dict[s
     )
 
 
-def _evaluate(booster: lgb.Booster, samples: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _evaluate(booster: Any, samples: List[Dict[str, Any]], np: Any) -> Dict[str, Any]:
     if not samples:
         return {
             "sample_count": 0,
@@ -111,7 +110,7 @@ def _evaluate(booster: lgb.Booster, samples: List[Dict[str, Any]]) -> Dict[str, 
             "median_mae": None,
         }
 
-    features, _ = _dataset_from_samples(samples)
+    features, _ = _dataset_from_samples(samples, np)
     preds = booster.predict(features, num_iteration=booster.best_iteration)
     lgbm_pairs: List[tuple[float, float]] = []
     deb_pairs: List[tuple[float, float]] = []
@@ -144,14 +143,25 @@ def _evaluate(booster: lgb.Booster, samples: List[Dict[str, Any]]) -> Dict[str, 
 
 
 def main() -> int:
+    if ROOT_DIR not in sys.path:
+        sys.path.insert(0, ROOT_DIR)
+
+    import lightgbm as lgb
+    import numpy as np
+    from src.models.lgbm_features import (
+        FEATURE_NAMES,
+        build_training_samples,
+        schema_payload,
+    )
+
     samples = build_training_samples()
     if len(samples) < 16:
         raise SystemExit(f"Not enough supervised samples for LightGBM training: {len(samples)}")
 
     train_samples, valid_samples = _chronological_split(samples)
-    booster = _train_model(train_samples, valid_samples)
+    booster = _train_model(train_samples, valid_samples, lgb, np, FEATURE_NAMES)
 
-    all_features, all_targets = _dataset_from_samples(samples)
+    all_features, all_targets = _dataset_from_samples(samples, np)
     final_train = lgb.Dataset(all_features, label=all_targets, feature_name=FEATURE_NAMES, free_raw_data=True)
     final_booster = lgb.train(
         params={
@@ -174,8 +184,8 @@ def main() -> int:
     final_booster.save_model(MODEL_PATH)
 
     metrics = {
-        "validation": _evaluate(booster, valid_samples),
-        "full_sample": _evaluate(final_booster, samples),
+        "validation": _evaluate(booster, valid_samples, np),
+        "full_sample": _evaluate(final_booster, samples, np),
     }
     schema = schema_payload(
         model_path=os.path.relpath(MODEL_PATH, ROOT_DIR),

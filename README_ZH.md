@@ -26,14 +26,15 @@
 - 运行态状态与缓存已支持 SQLite 渐进迁移：`file / dual / sqlite`。
 - 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
 
-## 开源边界（重要）
+## 许可证与商用边界（重要）
 
-本项目采用 **Open-Core** 策略：
+本仓库自 `2026-03-30` 起采用 **GNU AGPL-3.0-only**。
 
-- 仓库公开部分：天气聚合、基础分析、前端看板、Bot 基础能力、支付标准流程示例。
-- 生产私有部分：商业风控规则、运营阈值、收费策略细节、付费用户运营脚本、内部对账与审计策略。
+- 仓库公开部分：天气聚合、基础分析、前端看板、Bot 基础能力、标准支付流程。
+- 不包含在仓库中的部分：生产私有数据、商业风控规则、运营阈值、收费策略细节、内部对账与增长工具。
+- 商标、品牌、域名、生产数据库与托管服务运营能力，不因代码许可证一并授权。
 
-详细见：[Open-Core 与商用边界](docs/OPEN_CORE_POLICY.md)
+详细见：[AGPL-3.0 与商用边界](docs/OPEN_CORE_POLICY.md)
 
 ## 核心能力
 
@@ -158,7 +159,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - 英文总览：[README.md](README.md)
 - API 文档（中文）：[docs/API_ZH.md](docs/API_ZH.md)
 - 商业化说明：[docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
-- Open-Core 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- AGPL-3.0 边界：[docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - 前端部署（Vercel）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)

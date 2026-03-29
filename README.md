@@ -3,6 +3,7 @@
 Production weather-intelligence stack for temperature settlement markets.
 
 Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
+中文说明: [README_ZH.md](README_ZH.md)
 
 Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday signals, TAF, settlement sources, history, and extension).
 
@@ -32,14 +33,15 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
 
-## Open-Core Boundary (Important)
+## License & Commercial Boundary
 
-This repository follows an **Open-Core** strategy:
+This repository is licensed under **GNU AGPL-3.0 only** from `2026-03-30` onward.
 
-- Public in repo: weather aggregation, core analysis, dashboard, bot baseline, standard payment flow.
-- Private in production: commercial risk rules, operational thresholds, pricing strategy details, internal reconciliation policies, and growth operations tooling.
+- Public in repo: weather aggregation, core analysis, dashboard, bot baseline, and standard payment flow.
+- Not included in this repository: private production data, internal operating thresholds, commercial risk rules, pricing strategy details, and growth tooling.
+- Trademark, brand, domain, production databases, and hosted-service operations are **not** granted by the code license.
 
-See: [Open-Core & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
+See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ## Core Capabilities
 
@@ -168,7 +170,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
 - TAF signal guide (ZH): [docs/TAF_SIGNAL_ZH.md](docs/TAF_SIGNAL_ZH.md)
 - Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
-- Open-Core policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
+- AGPL-3.0 policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - LightGBM daily-high model (ZH): [docs/LGBM_DAILY_HIGH_ZH.md](docs/LGBM_DAILY_HIGH_ZH.md)
