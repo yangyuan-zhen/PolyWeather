@@ -4,13 +4,9 @@ import json
 import os
 import sys
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import Any, Dict, List
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-if TYPE_CHECKING:
-    import lightgbm as lgb
-    import numpy as np
 
 
 MODEL_PATH = os.path.join(ROOT_DIR, "artifacts", "models", "lgbm_daily_high.txt")
