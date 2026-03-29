@@ -111,8 +111,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_TTL_SEC", "900")
         )
         self.multi_model_cache_version = str(
-            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v2")
-        ).strip() or "v2"
+            os.getenv("OPEN_METEO_MULTI_MODEL_CACHE_VERSION", "v4")
+        ).strip() or "v4"
         self._open_meteo_cache: Dict[str, Dict] = {}
         self._ensemble_cache: Dict[str, Dict] = {}
         self._multi_model_cache: Dict[str, Dict] = {}

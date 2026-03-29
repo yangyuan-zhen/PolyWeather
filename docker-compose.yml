@@ -31,3 +31,15 @@ services:
       - "8000:8000"
     # UID/GID are mainly useful on Linux hosts to avoid root-owned output files.
     user: "${UID:-1000}:${GID:-1000}"
+
+  polyweather_timesfm:
+    build:
+      context: .
+      dockerfile: timesfm_service/Dockerfile
+    container_name: polyweather_timesfm
+    restart: unless-stopped
+    profiles:
+      - timesfm
+    environment:
+      TIMESFM_MODEL_ID: ${TIMESFM_MODEL_ID:-google/timesfm-2.5-200m-pytorch}
+      TIMESFM_PORT: ${POLYWEATHER_TIMESFM_PORT:-8011}

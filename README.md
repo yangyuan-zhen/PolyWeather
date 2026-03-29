@@ -162,6 +162,21 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 | `/diag` | Startup diagnostics |
 | `/help` | Help and usage |
 
+## Optional TimesFM Service
+
+PolyWeather can consume a separate official TimesFM inference service for 1 to 3 day forecasts.
+
+1. Enable it in `.env`:
+   - `POLYWEATHER_TIMESFM_ENABLED=true`
+   - `POLYWEATHER_TIMESFM_SERVICE_URL=http://polyweather_timesfm:8011`
+2. Start the optional service profile:
+
+```bash
+docker compose --profile timesfm up --build polyweather_timesfm
+```
+
+Service implementation lives in [`timesfm_service/`](timesfm_service/).
+
 ## Documentation Index
 
 - Chinese overview: [README_ZH.md](README_ZH.md)
