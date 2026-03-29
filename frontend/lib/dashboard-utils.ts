@@ -2247,6 +2247,12 @@ export function getHistorySummary(
     });
   }
 
+  const mgmSettledCount = settledData.reduce((count, row) => {
+    return toFinite(row.mgm) != null ? count + 1 : count;
+  }, 0);
+  const mgmSeriesComplete =
+    settledData.length >= 2 && mgmSettledCount === settledData.length;
+
   return {
     dates: recentData.map((row) => row.date),
     debMae: debErrors.length
@@ -2274,6 +2280,7 @@ export function getHistorySummary(
     hitRate: debErrors.length
       ? Number(((hits / debErrors.length) * 100).toFixed(0))
       : null,
+    mgmSeriesComplete,
     mgms: recentData.map((row) => row.mgm ?? null),
     recentData,
     settledCount: comparableSettledData.length,

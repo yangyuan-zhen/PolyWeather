@@ -2237,6 +2237,46 @@
   height: 100% !important;
 }
 
+.root :global(.history-modal .history-modal-loading) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+
+.root :global(.history-modal .history-loading-card) {
+  min-width: min(100%, 420px);
+  padding: 22px 26px;
+  gap: 16px;
+  border-radius: 22px;
+}
+
+.root :global(.history-modal .history-loading-card .loading-clouds),
+.root :global(.history-modal .history-loading-card .loading-windfield) {
+  width: 180px;
+}
+
+.root :global(.history-modal .history-loading-radar) {
+  width: 86px;
+  height: 86px;
+}
+
+.root :global(.history-modal .history-loading-thermals) {
+  height: 22px;
+  gap: 6px;
+}
+
+.root :global(.history-modal .history-loading-copy strong) {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+}
+
+.root :global(.history-modal .history-loading-copy span) {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .root :global(.history-modal .history-peak-reference) {
   margin-top: 18px;
   padding: 14px 16px;
@@ -2315,6 +2355,10 @@
     height: 360px;
   }
 
+  .root :global(.history-modal .history-modal-loading) {
+    min-height: 340px;
+  }
+
   .root :global(.history-modal .history-peak-reference-scroll) {
     max-height: 320px;
   }
@@ -2358,6 +2402,26 @@
   .root :global(.history-modal .history-chart-wrapper) {
     height: 300px;
     padding: 8px 10px 6px;
+  }
+
+  .root :global(.history-modal .history-modal-loading) {
+    min-height: 280px;
+  }
+
+  .root :global(.history-modal .history-loading-card) {
+    width: 100%;
+    min-width: 0;
+    padding: 18px 16px;
+  }
+
+  .root :global(.history-modal .history-loading-card .loading-clouds),
+  .root :global(.history-modal .history-loading-card .loading-windfield) {
+    width: 150px;
+  }
+
+  .root :global(.history-modal .history-loading-radar) {
+    width: 72px;
+    height: 72px;
   }
 
   .root :global(.history-modal .history-peak-reference) {

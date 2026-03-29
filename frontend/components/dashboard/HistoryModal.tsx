@@ -28,6 +28,7 @@ function HistoryChart() {
   );
   const hasMgm =
     store.selectedCity === "ankara" &&
+    summary.mgmSeriesComplete &&
     summary.mgms.some((value) => value != null);
   const hasBestBaseline =
     Boolean(summary.bestModelName) &&
@@ -260,20 +261,58 @@ export function HistoryModal() {
                   : `${store.selectedDetail?.display_name || store.selectedCity || "该城市"}历史对账已按 NOAA ${noaaStationCode}（${noaaStationName}）结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。`}
               </div>
             )}
-            <div className="history-stats">
-              {isLoading ? (
-                <span style={{ color: "var(--text-muted)" }}>
-                  {t("history.loading")}
-                </span>
-              ) : error ? (
+            {isLoading ? (
+              <div className="history-modal-loading">
+                <div className="loading-card history-loading-card">
+                  <div className="loading-clouds" aria-hidden="true">
+                    <span className="loading-cloud loading-cloud-1" />
+                    <span className="loading-cloud loading-cloud-2" />
+                  </div>
+                  <div className="loading-windfield" aria-hidden="true">
+                    <span className="loading-windline loading-windline-1" />
+                    <span className="loading-windline loading-windline-2" />
+                    <span className="loading-windline loading-windline-3" />
+                  </div>
+                  <div className="loading-radar history-loading-radar" aria-hidden="true">
+                    <div className="loading-radar-core" />
+                    <div className="loading-radar-ring loading-radar-ring-1" />
+                    <div className="loading-radar-ring loading-radar-ring-2" />
+                    <div className="loading-radar-sweep" />
+                    <div className="loading-radar-blip loading-radar-blip-1" />
+                    <div className="loading-radar-blip loading-radar-blip-2" />
+                  </div>
+                  <div className="loading-thermals history-loading-thermals" aria-hidden="true">
+                    <span className="loading-thermal loading-thermal-1" />
+                    <span className="loading-thermal loading-thermal-2" />
+                    <span className="loading-thermal loading-thermal-3" />
+                    <span className="loading-thermal loading-thermal-4" />
+                  </div>
+                  <div className="loading-copy history-loading-copy">
+                    <strong>
+                      {locale === "en-US"
+                        ? "Scanning archived settlement history"
+                        : "正在扫描历史结算档案"}
+                    </strong>
+                    <span>
+                      {locale === "en-US"
+                        ? "Reconciling settled highs, DEB traces, and baseline forecasts..."
+                        : "正在对齐实测高温、DEB 轨迹与基线预报..."}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="history-stats">
+                  {error ? (
                 <span style={{ color: "var(--accent-red)" }}>
                   {t("history.error")}
                 </span>
-              ) : !summary.recentData.length ? (
+                  ) : !summary.recentData.length ? (
                 <span style={{ color: "var(--text-muted)" }}>
                   {t("history.empty")}
                 </span>
-              ) : (
+                  ) : (
                 <>
                   <div className="h-stat-card">
                     <span className="label">{t("history.debHitRate")}</span>
@@ -314,10 +353,10 @@ export function HistoryModal() {
                     </span>
                   </div>
                 </>
-              )}
-            </div>
-            {!isLoading && !error && <HistoryChart />}
-            {!isLoading && !error && settledPeakRows.length > 0 && (
+                  )}
+                </div>
+                {!error && <HistoryChart />}
+                {!error && settledPeakRows.length > 0 && (
               <div className="history-peak-reference">
                 <div className="history-peak-reference-title">
                   {locale === "en-US"
@@ -374,6 +413,8 @@ export function HistoryModal() {
                   ))}
                 </div>
               </div>
+                )}
+              </>
             )}
           </div>
         </div>
