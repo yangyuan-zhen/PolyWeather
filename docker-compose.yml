@@ -1,10 +1,14 @@
+x-polyweather-base: &polyweather-base
+  build: .
+  image: polyweather-app:latest
+  env_file:
+    - .env
+
 services:
   polyweather:
-    build: .
+    <<: *polyweather-base
     container_name: polyweather_bot
     restart: unless-stopped
-    env_file:
-      - .env
     volumes:
       # Persist runtime data outside git workspace.
       # Host path defaults to /var/lib/polyweather and can be overridden in .env.
@@ -17,12 +21,10 @@ services:
     user: "${UID:-1000}:${GID:-1000}"
 
   polyweather_web:
-    build: .
+    <<: *polyweather-base
     container_name: polyweather_web
     restart: unless-stopped
     command: python web/app.py
-    env_file:
-      - .env
     volumes:
       # Web service shares the same runtime data directory as bot/state tasks.
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
