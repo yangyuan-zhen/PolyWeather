@@ -12,6 +12,20 @@ import {
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
 
+function parseExpiryInfo(raw?: string | null) {
+  const text = String(raw || "").trim();
+  if (!text) return null;
+  const dt = new Date(text);
+  if (Number.isNaN(dt.getTime())) return null;
+  const diffMs = dt.getTime() - Date.now();
+  const daysLeft = Math.ceil(diffMs / 86_400_000);
+  return {
+    date: dt,
+    daysLeft,
+    expired: diffMs <= 0,
+  };
+}
+
 export function HeaderBar() {
   const store = useDashboardStore();
   const { locale, setLocale, t } = useI18n();
@@ -56,6 +70,36 @@ export function HeaderBar() {
   const accountAria = isAuthenticated
     ? t("header.accountAria")
     : t("header.signInAria");
+  const expiryInfo = parseExpiryInfo(store.proAccess.subscriptionExpiresAt);
+  const isTrialPlan = /trial/i.test(
+    String(store.proAccess.subscriptionPlanCode || ""),
+  );
+  const showRenewReminder =
+    isAuthenticated &&
+    !store.proAccess.loading &&
+    (
+      (store.proAccess.subscriptionActive &&
+        expiryInfo &&
+        expiryInfo.daysLeft <= 3) ||
+      (!store.proAccess.subscriptionActive && Boolean(expiryInfo))
+    );
+  const renewReminderLabel = !showRenewReminder
+    ? ""
+    : !store.proAccess.subscriptionActive
+      ? isTrialPlan
+        ? locale === "en-US"
+          ? "Trial ended"
+          : "试用已结束"
+        : locale === "en-US"
+          ? "Pro expired"
+          : "Pro 已到期"
+      : isTrialPlan
+        ? locale === "en-US"
+          ? `Trial ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
+          : `试用剩余 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`
+        : locale === "en-US"
+          ? `Pro ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
+          : `Pro 还剩 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`;
 
   return (
     <header className="header">
@@ -100,6 +144,20 @@ export function HeaderBar() {
           {isAuthenticated ? <UserRound size={14} /> : <LogIn size={14} />}
           <span>{accountLabel}</span>
         </Link>
+
+        {showRenewReminder ? (
+          <Link
+            href="/account"
+            className={clsx(
+              "account-renew-badge",
+              !store.proAccess.subscriptionActive && "expired",
+            )}
+            title={renewReminderLabel}
+            aria-label={renewReminderLabel}
+          >
+            <span>{renewReminderLabel}</span>
+          </Link>
+        ) : null}
 
         <div className="live-badge" id="liveBadge">
           <span className="pulse-dot" />

@@ -301,6 +301,20 @@ function formatTime(value: string | undefined | null, locale: string) {
   }
 }
 
+function parseSubscriptionExpiry(value: string | undefined | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const dt = new Date(raw);
+  if (Number.isNaN(dt.getTime())) return null;
+  const diffMs = dt.getTime() - Date.now();
+  return {
+    raw,
+    date: dt,
+    expired: diffMs <= 0,
+    daysLeft: Math.ceil(diffMs / 86_400_000),
+  };
+}
+
 function shortAddress(address: string) {
   const text = String(address || "");
   if (!text.startsWith("0x") || text.length < 12) return text || "--";
@@ -768,6 +782,25 @@ export function AccountCenter() {
       freeTier: "FREE TIER",
       proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
       noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
+      trialEndsSoonTitle: isEn ? "Trial ending soon" : "试用即将结束",
+      trialEndsSoonBody: isEn
+        ? "Your 3-day trial is almost over. Upgrade to Pro to keep full intraday analysis and history."
+        : "你的 3 天试用即将结束。升级 Pro 后可继续使用完整日内分析和历史对账。",
+      trialExpiredTitle: isEn ? "Trial ended" : "试用已结束",
+      trialExpiredBody: isEn
+        ? "Your trial access has ended. Renew with Pro to restore full access."
+        : "试用权限已结束。开通 Pro 后可恢复完整权限。",
+      proEndsSoonTitle: isEn ? "Pro renewal due soon" : "Pro 即将到期",
+      proEndsSoonBody: isEn
+        ? "Your Pro membership will expire soon. Renew now to avoid interruption."
+        : "你的 Pro 会员即将到期。现在续费可避免权限中断。",
+      proExpiredTitle: isEn ? "Pro expired" : "Pro 已到期",
+      proExpiredBody: isEn
+        ? "Your Pro membership has expired. Renew now to restore premium access."
+        : "你的 Pro 会员已到期。立即续费可恢复高级权限。",
+      renewNow: isEn ? "Renew Now" : "立即续费",
+      trialBadge: isEn ? "TRIAL" : "试用中",
+      daysLeft: isEn ? "{days} days left" : "剩余 {days} 天",
     }),
     [isEn],
   );
@@ -1368,15 +1401,43 @@ export function AccountCenter() {
   const initials = (displayName.slice(0, 2) || "PW").toUpperCase();
   const joinedAt = formatTime(user?.created_at, locale);
   const isSubscribed = Boolean(backend?.subscription_active);
+  const planCode = String(backend?.subscription_plan_code || "").trim();
+  const isTrialPlan = /trial/i.test(planCode);
   const expiryRaw = String(
     backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
   ).trim();
+  const expiryInfo = parseSubscriptionExpiry(expiryRaw);
   const expiryFormatted = formatTime(expiryRaw, locale);
   const proExpiry = isSubscribed
     ? expiryFormatted !== "--"
       ? expiryFormatted
       : expiryRaw || copy.proPendingSync
     : copy.noProSubscription;
+  const showExpiringSoon =
+    Boolean(isSubscribed && expiryInfo && !expiryInfo.expired && expiryInfo.daysLeft <= 3);
+  const showExpiredReminder = Boolean(!isSubscribed && expiryInfo && expiryInfo.expired);
+  const subscriptionStatusTitle = showExpiredReminder
+    ? isTrialPlan
+      ? copy.trialExpiredTitle
+      : copy.proExpiredTitle
+    : showExpiringSoon
+      ? isTrialPlan
+        ? copy.trialEndsSoonTitle
+        : copy.proEndsSoonTitle
+      : "";
+  const subscriptionStatusBody = showExpiredReminder
+    ? isTrialPlan
+      ? copy.trialExpiredBody
+      : copy.proExpiredBody
+    : showExpiringSoon
+      ? isTrialPlan
+        ? copy.trialEndsSoonBody
+        : copy.proEndsSoonBody
+      : "";
+  const subscriptionStatusMeta =
+    expiryInfo && (showExpiringSoon || showExpiredReminder)
+      ? `${formatTime(expiryInfo.raw, locale)} · ${copy.daysLeft.replace("{days}", String(Math.max(expiryInfo.daysLeft, 0)))}`
+      : "";
 
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
@@ -2234,7 +2295,8 @@ export function AccountCenter() {
               onClick={() => setShowOverlay(true)}
               className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
             >
-              <Crown size={16} /> {copy.upgradePro}
+              <Crown size={16} />{" "}
+              {showExpiredReminder ? copy.renewNow : copy.upgradePro}
             </button>
           )}
           <button
@@ -2269,6 +2331,35 @@ export function AccountCenter() {
       </header>
 
       <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6 z-10 relative">
+        {(showExpiringSoon || showExpiredReminder) && (
+          <div className="lg:col-span-12 rounded-[2rem] border border-amber-400/30 bg-amber-500/10 px-6 py-5 shadow-xl">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-300">
+                  <Crown size={16} />
+                  <span>{subscriptionStatusTitle}</span>
+                </div>
+                <p className="mt-1 text-sm text-amber-50/90">
+                  {subscriptionStatusBody}
+                </p>
+                {subscriptionStatusMeta ? (
+                  <p className="mt-1 text-xs text-amber-200/80">
+                    {subscriptionStatusMeta}
+                  </p>
+                ) : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOverlay(true)}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300/35 bg-amber-300/12 px-4 py-2 text-sm font-bold text-amber-100 transition-all hover:bg-amber-300/20"
+              >
+                <Crown size={16} />
+                {showExpiredReminder ? copy.renewNow : copy.upgradePro}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* User Card */}
         <div className="lg:col-span-8 bg-white/5 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-8 shadow-2xl flex flex-col md:flex-row items-center gap-8">
           <div className="relative">
@@ -2287,7 +2378,11 @@ export function AccountCenter() {
               <span
                 className={`px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-tighter border ${isSubscribed ? "bg-blue-500/20 border-blue-500/40 text-blue-400" : "bg-slate-700/50 border-white/10 text-slate-500"}`}
               >
-                {isSubscribed ? copy.proMember : copy.freeTier}
+                {isSubscribed
+                  ? isTrialPlan
+                    ? copy.trialBadge
+                    : copy.proMember
+                  : copy.freeTier}
               </span>
             </div>
             <p className="text-slate-500 font-mono text-sm mb-4">

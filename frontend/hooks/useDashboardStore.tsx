@@ -72,6 +72,8 @@ function getInitialProAccessState(): ProAccessState {
     loading: true,
     authenticated: false,
     subscriptionActive: false,
+    subscriptionPlanCode: null,
+    subscriptionExpiresAt: null,
     points: 0,
     error: null,
   };
@@ -407,12 +409,16 @@ export function DashboardStoreProvider({
       const payload = (await response.json()) as {
         authenticated?: boolean;
         subscription_active?: boolean | null;
+        subscription_plan_code?: string | null;
+        subscription_expires_at?: string | null;
         points?: number;
       };
       setProAccess({
         loading: false,
         authenticated: Boolean(payload.authenticated),
         subscriptionActive: payload.subscription_active === true,
+        subscriptionPlanCode: payload.subscription_plan_code ?? null,
+        subscriptionExpiresAt: payload.subscription_expires_at ?? null,
         points: payload.points ?? 0,
         error: null,
       });
@@ -421,6 +427,8 @@ export function DashboardStoreProvider({
         loading: false,
         authenticated: false,
         subscriptionActive: false,
+        subscriptionPlanCode: null,
+        subscriptionExpiresAt: null,
         points: 0,
         error: String(error),
       });

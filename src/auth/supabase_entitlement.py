@@ -420,6 +420,12 @@ class SupabaseEntitlementService:
             return None
         return self._query_latest_active_subscription(user_id)
 
+    def get_latest_subscription_any_status(
+        self,
+        user_id: str,
+    ) -> Optional[Dict[str, object]]:
+        return self._query_latest_subscription_any_status(user_id)
+
     def has_active_subscription(
         self,
         user_id: str,

@@ -436,6 +436,8 @@ export interface ProAccessState {
   loading: boolean;
   authenticated: boolean;
   subscriptionActive: boolean;
+  subscriptionPlanCode: string | null;
+  subscriptionExpiresAt: string | null;
   points: number;
   error: string | null;
 }
