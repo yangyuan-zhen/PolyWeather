@@ -125,6 +125,36 @@ def _build_peak_minus_12h_reference(
     return result
 
 
+def _merge_missing_history_forecasts_from_snapshots(
+    forecasts: dict,
+    snapshots: list[dict],
+) -> dict:
+    merged = dict(forecasts or {})
+    if not snapshots:
+        return merged
+
+    fallback_values: dict[str, Optional[float]] = {}
+    for row in snapshots:
+        if not isinstance(row, dict):
+            continue
+        multi_model = row.get("multi_model") or {}
+        if not isinstance(multi_model, dict):
+            continue
+        for model_name, model_value in multi_model.items():
+            model_key = str(model_name or "").strip()
+            if not model_key or _is_excluded_model_name(model_key):
+                continue
+            parsed = _sf(model_value)
+            if parsed is not None:
+                fallback_values[model_key] = parsed
+
+    for model_name, model_value in fallback_values.items():
+        existing = _sf(merged.get(model_name))
+        if existing is None:
+            merged[model_name] = model_value
+    return merged
+
+
 def _normalize_city_or_404(name: str) -> str:
     city = name.lower().strip().replace("-", " ")
     city = ALIASES.get(city, city)
@@ -233,6 +263,10 @@ async def city_history(request: Request, name: str):
                     continue
                 fv = _sf(model_value)
                 forecasts[str(model_name)] = fv if fv is not None else None
+        forecasts = _merge_missing_history_forecasts_from_snapshots(
+            forecasts,
+            snapshots,
+        )
         mgm = forecasts.get("MGM")
         out.append(
             {
