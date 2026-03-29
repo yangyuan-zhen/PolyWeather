@@ -351,7 +351,7 @@ export const DOCS_PAGES: DocsPage[] = [
     content: {
       "zh-CN": {
         title: "浏览器插件",
-        description: "侧边栏插件是主站的轻量入口，负责监控、基础判断和导流，不承载完整分析链路。",
+        description: "PolyWeather Side Panel 是一个面向天气交易场景的浏览器侧边栏工具，负责自动识别城市、展示简版走势与城市档案，并把用户导回完整分析页面。",
         sections: [
           {
             id: "extension-install",
@@ -372,9 +372,25 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "自动识别当前市场 URL，对应切换城市。",
-                  "展示风险徽章、城市档案、今日日内走势简版和多日预报。",
-                  "提供今日日内分析、历史对账和返回主站的快捷入口。",
+                  "自动识别当前 Polymarket 页面中的城市，也支持手动切换。",
+                  "展示城市档案：结算站点、站点距离、观测更新时间、周边站点数量。",
+                  "展示今日日内走势（简版）：DEB 走势与官方观测（METAR / HKO / CWA）对照，可悬停查看时间与温度。",
+                  "展示多日最高温预报（简版），并提供一键刷新与跳转主站入口。",
+                ],
+              },
+            ],
+          },
+          {
+            id: "extension-permission",
+            title: "权限与隐私",
+            blocks: [
+              {
+                type: "bullets",
+                items: [
+                  "`tabs`：用于识别当前活动标签页 URL 并自动匹配城市。",
+                  "`storage`：用于保存插件配置与本地缓存，仅存储在本地浏览器。",
+                  "`sidePanel`：用于在浏览器侧边栏展示界面。",
+                  "插件不要求用户登录，不收集个人身份信息，不上传浏览历史，仅在必要时请求天气接口数据。",
                 ],
               },
             ],
@@ -409,7 +425,7 @@ export const DOCS_PAGES: DocsPage[] = [
       },
       "en-US": {
         title: "Browser Extension",
-        description: "The side-panel extension is a lightweight lead-in to the main site. It focuses on monitoring, basic bias, and traffic flow back to the full dashboard.",
+        description: "PolyWeather Side Panel is a browser side-panel tool for weather trading workflows. It auto-detects cities, shows compact intraday and city-profile context, and routes users back to the full dashboard.",
         sections: [
           {
             id: "extension-install",
@@ -430,9 +446,25 @@ export const DOCS_PAGES: DocsPage[] = [
               {
                 type: "bullets",
                 items: [
-                  "Auto-detects the current market URL and switches the side panel to the matching city.",
-                  "Shows risk badges, city profile, a compact intraday chart, and multi-day forecast.",
-                  "Provides quick links into the main intraday analysis and history reconciliation views.",
+                  "Auto-detects the current Polymarket page city, with manual switching also available.",
+                  "Shows a city profile with settlement station, station distance, observation timestamp, and nearby station count.",
+                  "Shows a compact intraday chart with DEB versus official observations (METAR / HKO / CWA), including hoverable time and temperature.",
+                  "Shows a compact multi-day daily-high forecast, plus refresh and jump-to-site actions.",
+                ],
+              },
+            ],
+          },
+          {
+            id: "extension-permission",
+            title: "Permissions and privacy",
+            blocks: [
+              {
+                type: "bullets",
+                items: [
+                  "`tabs`: used to inspect the active tab URL and match the current city.",
+                  "`storage`: used for local configuration and local cache only.",
+                  "`sidePanel`: used to render the browser side panel UI.",
+                  "The extension does not require login, does not collect personally identifiable information, and does not upload browsing history. It only requests weather endpoints when needed to render the panel.",
                 ],
               },
             ],

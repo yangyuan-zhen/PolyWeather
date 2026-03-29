@@ -11,6 +11,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { getCityScenery } from "@/lib/dashboard-scenery";
 import { CityDetail } from "@/lib/dashboard-types";
+import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
 import {
   getCityProfileStats,
   getRiskBadgeLabel,
@@ -167,6 +168,10 @@ export function DetailPanel() {
     () => (detail ? getOfficialSourceLinks(detail) : []),
     [detail],
   );
+  const marketUrl = useMemo(
+    () => getTodayPolymarketUrl(detail, locale),
+    [detail, locale],
+  );
   const scenery = getCityScenery(detail?.name);
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -280,6 +285,21 @@ export function DetailPanel() {
               {getRiskBadgeLabel(panelRiskLevel, locale)}
             </span>
             <div className="relative group">
+              {marketUrl ? (
+                <a
+                  className="history-btn"
+                  href={marketUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={
+                    locale === "en-US"
+                      ? "Open today's Polymarket market"
+                      : "打开今日 Polymarket 题目页"
+                  }
+                >
+                  {locale === "en-US" ? "Open Market" : "打开 Polymarket"}
+                </a>
+              ) : null}
               <button
                 type="button"
                 className={clsx("history-btn", !isPro && "pro-locked")}
