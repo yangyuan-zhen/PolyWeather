@@ -850,7 +850,13 @@ export function pickMapNearbyStations(detail: CityDetail) {
   }
 
   if (city === "istanbul" && Number.isFinite(detail.lat) && Number.isFinite(detail.lon)) {
-    const preferredTokens = ["havalimani", "havalimanı", "arnavutkoy", "arnavutköy"];
+    const preferredTokens = [
+      "havalimani",
+      "havalimanı",
+      "arnavutkoy",
+      "arnavutköy",
+      "liman feneri",
+    ];
     const scored = stations
       .map((station) => {
         const lat = Number(station.lat);
@@ -873,12 +879,12 @@ export function pickMapNearbyStations(detail: CityDetail) {
     }>;
 
     const closePreferred = scored
-      .filter((row) => row.preferred && row.km <= 20)
+      .filter((row) => row.preferred && row.km <= 18)
       .sort((a, b) => a.km - b.km)
       .map((row) => row.station);
 
     const closeFallback = scored
-      .filter((row) => row.km <= 12)
+      .filter((row) => row.km <= 8)
       .sort((a, b) => a.km - b.km)
       .map((row) => row.station);
 
@@ -892,7 +898,7 @@ export function pickMapNearbyStations(detail: CityDetail) {
         ) === index,
     );
 
-    return merged.slice(0, 5);
+    return merged.slice(0, 3);
   }
 
   return stations;
