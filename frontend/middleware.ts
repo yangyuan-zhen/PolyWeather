@@ -50,6 +50,7 @@ function isPublicPage(pathname: string) {
 function isPublicApi(pathname: string) {
   return (
     pathname === "/api/auth/me" ||
+    pathname === "/api/analytics/events" ||
     pathname === "/api/cities" ||
     pathname === "/api/vitals" ||
     /^\/api\/city\/[^/]+$/i.test(pathname) ||

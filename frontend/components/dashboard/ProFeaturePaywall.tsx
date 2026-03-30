@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/hooks/useI18n";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
+import { trackAppEvent } from "@/lib/app-analytics";
 
 const TELEGRAM_GROUP_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
@@ -62,6 +63,14 @@ export function ProFeaturePaywall({
     : isEn
       ? "Sign In to Unlock Pro"
       : "先登录再开通 Pro";
+
+  useEffect(() => {
+    trackAppEvent("paywall_viewed", {
+      entry: "feature_gate",
+      feature,
+      user_state: isAuthenticated ? "logged_in" : "guest",
+    });
+  }, [feature, isAuthenticated]);
 
   return (
     <div className="flex w-full flex-col items-center justify-center py-6 md:py-10 z-30 p-4">

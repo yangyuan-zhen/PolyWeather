@@ -435,6 +435,7 @@ export interface HistoryState {
 export interface ProAccessState {
   loading: boolean;
   authenticated: boolean;
+  userId: string | null;
   subscriptionActive: boolean;
   subscriptionPlanCode: string | null;
   subscriptionExpiresAt: string | null;

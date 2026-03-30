@@ -21,6 +21,7 @@ from web.analysis_service import (
     _build_city_summary_payload,
 )
 from web.core import (
+    AnalyticsEventRequest,
     CITIES,
     CITY_REGISTRY,
     CITY_RISK_PROFILES,
@@ -50,6 +51,15 @@ from web.core import (
 )
 
 router = APIRouter()
+
+TRACKABLE_ANALYTICS_EVENTS = {
+    "signup_completed",
+    "dashboard_active",
+    "paywall_feature_clicked",
+    "paywall_viewed",
+    "checkout_started",
+    "checkout_succeeded",
+}
 
 
 def _parse_snapshot_dt(value: object) -> Optional[datetime]:
@@ -377,6 +387,32 @@ async def auth_me(request: Request):
     }
 
 
+@router.post("/api/analytics/events")
+async def analytics_track(request: Request, body: AnalyticsEventRequest):
+    _bind_optional_supabase_identity(request)
+    event_type = str(body.event_type or "").strip().lower()
+    if event_type not in TRACKABLE_ANALYTICS_EVENTS:
+        raise HTTPException(status_code=400, detail="unsupported_event_type")
+
+    payload = body.payload if isinstance(body.payload, dict) else {}
+    normalized_payload = {
+        key: value
+        for key, value in payload.items()
+        if isinstance(key, str) and len(key) <= 64
+    }
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    db.append_app_analytics_event(
+        event_type,
+        normalized_payload,
+        user_id=getattr(request.state, "auth_user_id", None),
+        client_id=body.client_id,
+        session_id=body.session_id,
+    )
+    return {"ok": True}
+
+
 @router.get("/api/ops/users")
 async def ops_search_users(request: Request, q: str = "", limit: int = 20):
     _assert_entitlement(request)
@@ -507,6 +543,16 @@ async def ops_grant_points(request: Request, body: GrantPointsRequest):
         status_code = 404 if reason == "user_not_found" else 400
         raise HTTPException(status_code=status_code, detail=result)
     return result
+
+
+@router.get("/api/ops/analytics/funnel")
+async def ops_analytics_funnel(request: Request, days: int = 30):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+    from src.database.db_manager import DBManager
+
+    db = DBManager()
+    return db.get_app_analytics_funnel_summary(days=days)
 
 
 @router.get("/api/payments/config")

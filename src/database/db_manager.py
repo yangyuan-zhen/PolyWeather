@@ -105,6 +105,23 @@ class DBManager:
                 "CREATE INDEX IF NOT EXISTS idx_payment_audit_events_created_at ON payment_audit_events(created_at DESC)"
             )
             conn.execute("""
+                CREATE TABLE IF NOT EXISTS app_analytics_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    event_type TEXT NOT NULL,
+                    user_id TEXT,
+                    client_id TEXT,
+                    session_id TEXT,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_app_analytics_events_created_at ON app_analytics_events(created_at DESC)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_app_analytics_events_type_created_at ON app_analytics_events(event_type, created_at DESC)"
+            )
+            conn.execute("""
                 CREATE TABLE IF NOT EXISTS supabase_bindings (
                     supabase_user_id TEXT PRIMARY KEY,
                     telegram_id INTEGER NOT NULL,
@@ -196,6 +213,164 @@ class DBManager:
                 (kind, json.dumps(body, ensure_ascii=False), datetime.now().isoformat()),
             )
             conn.commit()
+
+    def append_app_analytics_event(
+        self,
+        event_type: str,
+        payload: Dict[str, Any],
+        *,
+        user_id: Optional[str] = None,
+        client_id: Optional[str] = None,
+        session_id: Optional[str] = None,
+    ) -> None:
+        kind = str(event_type or "").strip().lower()
+        if not kind:
+            return
+        body = payload if isinstance(payload, dict) else {}
+        normalized_user_id = str(user_id or "").strip().lower() or None
+        normalized_client_id = str(client_id or "").strip() or None
+        normalized_session_id = str(session_id or "").strip() or None
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO app_analytics_events (
+                    event_type,
+                    user_id,
+                    client_id,
+                    session_id,
+                    payload_json,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    kind,
+                    normalized_user_id,
+                    normalized_client_id,
+                    normalized_session_id,
+                    json.dumps(body, ensure_ascii=False),
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+
+    def list_app_analytics_events(
+        self,
+        *,
+        limit: int = 200,
+        event_type: Optional[str] = None,
+        since_iso: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        safe_limit = max(1, min(int(limit or 200), 2000))
+        kind = str(event_type or "").strip().lower()
+        params: List[Any] = []
+        clauses: List[str] = []
+        if kind:
+            clauses.append("event_type = ?")
+            params.append(kind)
+        since_text = str(since_iso or "").strip()
+        if since_text:
+            clauses.append("created_at >= ?")
+            params.append(since_text)
+        where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(safe_limit)
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                f"""
+                SELECT id, event_type, user_id, client_id, session_id, payload_json, created_at
+                FROM app_analytics_events
+                {where_sql}
+                ORDER BY id DESC
+                LIMIT ?
+                """,
+                tuple(params),
+            ).fetchall()
+            out: List[Dict[str, Any]] = []
+            for row in rows:
+                try:
+                    payload = json.loads(str(row["payload_json"] or "{}"))
+                except Exception:
+                    payload = {}
+                out.append(
+                    {
+                        "id": int(row["id"]),
+                        "event_type": str(row["event_type"] or ""),
+                        "user_id": str(row["user_id"] or "") or None,
+                        "client_id": str(row["client_id"] or "") or None,
+                        "session_id": str(row["session_id"] or "") or None,
+                        "payload": payload if isinstance(payload, dict) else {},
+                        "created_at": row["created_at"],
+                    }
+                )
+            return out
+
+    def get_app_analytics_funnel_summary(self, *, days: int = 30) -> Dict[str, Any]:
+        safe_days = max(1, min(int(days or 30), 365))
+        since_dt = datetime.now() - timedelta(days=safe_days)
+        rows = self.list_app_analytics_events(limit=5000, since_iso=since_dt.isoformat())
+        event_names = [
+            "signup_completed",
+            "dashboard_active",
+            "paywall_feature_clicked",
+            "paywall_viewed",
+            "checkout_started",
+            "checkout_succeeded",
+        ]
+        summary: Dict[str, Dict[str, Any]] = {
+            name: {
+                "total": 0,
+                "unique_users": 0,
+                "unique_actors": 0,
+            }
+            for name in event_names
+        }
+        actor_sets: Dict[str, set[str]] = {name: set() for name in event_names}
+        user_sets: Dict[str, set[str]] = {name: set() for name in event_names}
+
+        for row in rows:
+            event_type = str(row.get("event_type") or "").strip().lower()
+            if event_type not in summary:
+                continue
+            summary[event_type]["total"] += 1
+            user_id = str(row.get("user_id") or "").strip().lower()
+            client_id = str(row.get("client_id") or "").strip()
+            session_id = str(row.get("session_id") or "").strip()
+            actor_key = ""
+            if user_id:
+                actor_key = f"user:{user_id}"
+                user_sets[event_type].add(user_id)
+            elif client_id:
+                actor_key = f"client:{client_id}"
+            elif session_id:
+                actor_key = f"session:{session_id}"
+            else:
+                actor_key = f"event:{row.get('id')}"
+            actor_sets[event_type].add(actor_key)
+
+        for name in event_names:
+            summary[name]["unique_users"] = len(user_sets[name])
+            summary[name]["unique_actors"] = len(actor_sets[name])
+
+        def _rate(numerator_key: str, denominator_key: str) -> Optional[float]:
+            denominator = int(summary[denominator_key]["unique_actors"] or 0)
+            numerator = int(summary[numerator_key]["unique_actors"] or 0)
+            if denominator <= 0:
+                return None
+            return round((numerator / denominator) * 100, 1)
+
+        return {
+            "window_days": safe_days,
+            "since": since_dt.isoformat(),
+            "events": summary,
+            "rates": {
+                "login_active_rate": _rate("dashboard_active", "signup_completed"),
+                "paywall_click_rate": _rate("paywall_feature_clicked", "dashboard_active"),
+                "paywall_view_rate": _rate("paywall_viewed", "paywall_feature_clicked"),
+                "checkout_start_rate": _rate("checkout_started", "paywall_viewed"),
+                "checkout_success_rate": _rate("checkout_succeeded", "checkout_started"),
+            },
+        }
 
     def list_payment_audit_events(
         self,

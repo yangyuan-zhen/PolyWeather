@@ -341,6 +341,13 @@ class ConfirmPaymentTxRequest(BaseModel):
     tx_hash: Optional[str] = None
 
 
+class AnalyticsEventRequest(BaseModel):
+    event_type: str = Field(..., min_length=3, max_length=64)
+    client_id: Optional[str] = Field(default=None, max_length=128)
+    session_id: Optional[str] = Field(default=None, max_length=128)
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class GrantPointsRequest(BaseModel):
     email: str = Field(..., min_length=3)
     points: int = Field(..., gt=0, le=100000)

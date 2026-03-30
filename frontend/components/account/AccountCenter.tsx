@@ -46,6 +46,7 @@ import {
   getCurrentPaymentHost,
   isPaymentHostAllowed,
 } from "@/lib/payment-host";
+import { trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 
 const UnlockProOverlay = dynamic(
@@ -1439,6 +1440,24 @@ export function AccountCenter() {
       ? `${formatTime(expiryInfo.raw, locale)} · ${copy.daysLeft.replace("{days}", String(Math.max(expiryInfo.daysLeft, 0)))}`
       : "";
 
+  useEffect(() => {
+    if (!showOverlay || isSubscribed) return;
+    trackAppEvent("paywall_viewed", {
+      entry: "account_center",
+      user_state: isAuthenticated ? "logged_in" : "guest",
+      expired: showExpiredReminder,
+      expiring_soon: showExpiringSoon,
+      subscription_plan_code: planCode || null,
+    });
+  }, [
+    isAuthenticated,
+    isSubscribed,
+    planCode,
+    showExpiredReminder,
+    showExpiringSoon,
+    showOverlay,
+  ]);
+
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
   const metadataPointsRaw = Number(
@@ -1670,6 +1689,12 @@ export function AccountCenter() {
         if (status === "confirmed") {
           setPaymentError("");
           setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHash)}`);
+          trackAppEvent("checkout_succeeded", {
+            entry: "account_center",
+            plan_code: selectedPlan?.plan_code || "pro_monthly",
+            intent_id: intentId,
+            tx_hash: txHash || null,
+          });
           await loadSnapshot();
           await loadPaymentSnapshot();
           return;
@@ -1688,7 +1713,7 @@ export function AccountCenter() {
       }
       throw new Error("payment pending timeout");
     },
-    [loadPaymentSnapshot, loadSnapshot],
+    [loadPaymentSnapshot, loadSnapshot, selectedPlan?.plan_code],
   );
 
   const signBindMessage = async (
@@ -2062,6 +2087,13 @@ export function AccountCenter() {
       const txPayload = created.tx_payload;
       if (!intentId || !txPayload?.to || !txPayload?.data)
         throw new Error("intent payload invalid");
+      trackAppEvent("checkout_started", {
+        entry: "account_center",
+        plan_code: selectedPlan?.plan_code || "pro_monthly",
+        intent_id: intentId,
+        use_points: billing.canRedeem && usePoints,
+        pay_amount_usd: billing.payAmount,
+      });
       const intentReceiver = String(txPayload.to || "").toLowerCase();
       if (intentReceiver !== expectedReceiver) {
         throw new Error(
@@ -2197,6 +2229,12 @@ export function AccountCenter() {
       }
 
       setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
+      trackAppEvent("checkout_succeeded", {
+        entry: "account_center",
+        plan_code: selectedPlan?.plan_code || "pro_monthly",
+        intent_id: intentId,
+        tx_hash: txHashNorm,
+      });
       await loadSnapshot();
       await loadPaymentSnapshot();
     } catch (error) {

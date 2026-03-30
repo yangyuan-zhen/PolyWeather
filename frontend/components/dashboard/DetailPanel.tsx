@@ -11,6 +11,7 @@ import { useI18n } from "@/hooks/useI18n";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { getCityScenery } from "@/lib/dashboard-scenery";
 import { CityDetail } from "@/lib/dashboard-types";
+import { trackAppEvent } from "@/lib/app-analytics";
 import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
 import {
   getCityProfileStats,
@@ -182,6 +183,15 @@ export function DetailPanel() {
   };
   const handleFeatureAccess = (feature: "today" | "history") => {
     blurActiveElement();
+
+    if (!isPro) {
+      trackAppEvent("paywall_feature_clicked", {
+        entry: "detail_panel",
+        feature,
+        city: store.selectedCity,
+        user_state: isAuthenticated ? "logged_in" : "guest",
+      });
+    }
 
     if (isPro) {
       if (feature === "today") {

@@ -13,6 +13,7 @@ import {
   getCityRevision,
   toCitySummary,
 } from "@/lib/dashboard-client";
+import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import {
   CityDetail,
   CityListItem,
@@ -71,6 +72,7 @@ function getInitialProAccessState(): ProAccessState {
   return {
     loading: true,
     authenticated: false,
+    userId: null,
     subscriptionActive: false,
     subscriptionPlanCode: null,
     subscriptionExpiresAt: null,
@@ -408,6 +410,7 @@ export function DashboardStoreProvider({
       }
       const payload = (await response.json()) as {
         authenticated?: boolean;
+        user_id?: string | null;
         subscription_active?: boolean | null;
         subscription_plan_code?: string | null;
         subscription_expires_at?: string | null;
@@ -416,6 +419,7 @@ export function DashboardStoreProvider({
       setProAccess({
         loading: false,
         authenticated: Boolean(payload.authenticated),
+        userId: payload.user_id ?? null,
         subscriptionActive: payload.subscription_active === true,
         subscriptionPlanCode: payload.subscription_plan_code ?? null,
         subscriptionExpiresAt: payload.subscription_expires_at ?? null,
@@ -426,6 +430,7 @@ export function DashboardStoreProvider({
       setProAccess({
         loading: false,
         authenticated: false,
+        userId: null,
         subscriptionActive: false,
         subscriptionPlanCode: null,
         subscriptionExpiresAt: null,
@@ -442,6 +447,39 @@ export function DashboardStoreProvider({
   useEffect(() => {
     void refreshProAccess();
   }, []);
+
+  useEffect(() => {
+    if (proAccess.loading || !proAccess.authenticated || !proAccess.userId) {
+      return;
+    }
+    if (
+      markAnalyticsOnce(`dashboard-active:${proAccess.userId}`, "session")
+    ) {
+      trackAppEvent("dashboard_active", {
+        subscription_active: proAccess.subscriptionActive,
+        subscription_plan_code: proAccess.subscriptionPlanCode,
+      });
+    }
+
+    const isTrialPlan = /trial/i.test(
+      String(proAccess.subscriptionPlanCode || ""),
+    );
+    if (
+      isTrialPlan &&
+      markAnalyticsOnce(`signup-completed:${proAccess.userId}`, "local")
+    ) {
+      trackAppEvent("signup_completed", {
+        source: "auth_me_trial",
+        subscription_plan_code: proAccess.subscriptionPlanCode,
+      });
+    }
+  }, [
+    proAccess.authenticated,
+    proAccess.loading,
+    proAccess.subscriptionActive,
+    proAccess.subscriptionPlanCode,
+    proAccess.userId,
+  ]);
 
   useEffect(() => {
     if (!cities.length) return;
