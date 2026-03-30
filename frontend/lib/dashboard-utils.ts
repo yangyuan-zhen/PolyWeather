@@ -822,6 +822,82 @@ export function pickAnkaraNearbyStations(stations: NearbyStation[]) {
   return picks.length ? picks : stations;
 }
 
+function distanceKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number,
+) {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export function pickMapNearbyStations(detail: CityDetail) {
+  const stations = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const city = String(detail.name || detail.display_name || "")
+    .trim()
+    .toLowerCase();
+
+  if (city === "ankara") {
+    return pickAnkaraNearbyStations(stations);
+  }
+
+  if (city === "istanbul" && Number.isFinite(detail.lat) && Number.isFinite(detail.lon)) {
+    const preferredTokens = ["havalimani", "havalimanı", "arnavutkoy", "arnavutköy"];
+    const scored = stations
+      .map((station) => {
+        const lat = Number(station.lat);
+        const lon = Number(station.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return null;
+        }
+        const name = String(station.name || "").toLowerCase();
+        const preferred = preferredTokens.some((token) => name.includes(token));
+        return {
+          preferred,
+          station,
+          km: distanceKm(Number(detail.lat), Number(detail.lon), lat, lon),
+        };
+      })
+      .filter(Boolean) as Array<{
+      preferred: boolean;
+      station: NearbyStation;
+      km: number;
+    }>;
+
+    const closePreferred = scored
+      .filter((row) => row.preferred && row.km <= 20)
+      .sort((a, b) => a.km - b.km)
+      .map((row) => row.station);
+
+    const closeFallback = scored
+      .filter((row) => row.km <= 12)
+      .sort((a, b) => a.km - b.km)
+      .map((row) => row.station);
+
+    const merged = [...closePreferred, ...closeFallback].filter(
+      (station, index, list) =>
+        list.findIndex(
+          (row) =>
+            row.name === station.name &&
+            row.lat === station.lat &&
+            row.lon === station.lon,
+        ) === index,
+    );
+
+    return merged.slice(0, 5);
+  }
+
+  return stations;
+}
+
 export function getFutureSlice(detail: CityDetail, dateStr: string) {
   const hourly = detail.hourly_next_48h || {};
   const times = hourly.times || [];

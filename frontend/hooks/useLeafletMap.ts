@@ -8,7 +8,7 @@ import {
   CitySummary,
   NearbyStation,
 } from "@/lib/dashboard-types";
-import { pickAnkaraNearbyStations } from "@/lib/dashboard-utils";
+import { pickMapNearbyStations } from "@/lib/dashboard-utils";
 
 interface UseLeafletMapArgs {
   cities: CityListItem[];
@@ -325,13 +325,7 @@ export function useLeafletMap({
     function renderNearbyStations(detail: CityDetail, preserveView = false) {
       layer.clearLayers();
 
-      const allNearby = Array.isArray(detail.mgm_nearby)
-        ? detail.mgm_nearby
-        : [];
-      const nearbyStations =
-        String(detail.name || "").toLowerCase() === "ankara"
-          ? pickAnkaraNearbyStations(allNearby)
-          : allNearby;
+      const nearbyStations = pickMapNearbyStations(detail);
 
       if (!nearbyStations.length) {
         if (!preserveView && detail.lat != null && detail.lon != null) {
