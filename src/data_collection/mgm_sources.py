@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import unicodedata
 from datetime import datetime, timedelta
 from typing import Dict, Optional
 
@@ -9,6 +10,11 @@ from src.utils.metrics import record_source_call
 
 
 class MgmSourceMixin:
+    @staticmethod
+    def _normalize_mgm_text(value: str) -> str:
+        text = unicodedata.normalize("NFD", str(value or ""))
+        return "".join(ch for ch in text if unicodedata.category(ch) != "Mn").lower()
+
     def fetch_from_mgm(self, istno: str) -> Optional[Dict]:
         """
         从土耳其气象局 (MGM) 获取实时数据和预测 (由用户提供其内部 API)
@@ -76,7 +82,7 @@ class MgmSourceMixin:
                         "station_name": latest.get("istasyonAd")
                         or latest.get("adi")
                         or latest.get("merkezAd")
-                        or "Ankara Bölge",
+                        or f"MGM Station {istno}",
                     }
 
             # 2. 每日预报
@@ -251,10 +257,10 @@ class MgmSourceMixin:
             metadata = getattr(self, "mgm_stations_meta", {})
             
             # 2. 找出属于该省份的所有站点 istNo
-            province_upper = province.upper()
+            province_normalized = self._normalize_mgm_text(province)
             province_ist_nos = [
                 ist_no for ist_no, s in metadata.items() 
-                if (s.get("il") or "").upper() == province_upper
+                if self._normalize_mgm_text(s.get("il") or "") == province_normalized
             ]
 
             if not province_ist_nos:

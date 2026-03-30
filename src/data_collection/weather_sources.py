@@ -97,7 +97,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
     TURKISH_PROVINCES = {
         "ankara": ("17128", "Ankara"),
-        "istanbul": ("17060", "Istanbul"),
+        "istanbul": ("17058", "Istanbul"),
     }
 
     def __init__(self, config: dict):
