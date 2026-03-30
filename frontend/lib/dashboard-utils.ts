@@ -44,6 +44,13 @@ function containsCjk(text: string) {
   return /[\u3400-\u9fff]/.test(text);
 }
 
+function isTurkishMgmCity(detail: CityDetail) {
+  const city = String(detail.name || detail.display_name || "")
+    .trim()
+    .toLowerCase();
+  return city === "ankara" || city === "istanbul";
+}
+
 function getObservationSourceCode(detail: CityDetail): string {
   const source = String(detail.current?.settlement_source || "")
     .trim()
@@ -182,8 +189,7 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   const current = detail.current || {};
   const parts: string[] = [];
   const sourceTag = getObservationSourceTag(detail);
-  const suppressAnkaraMgmObservation =
-    String(detail.name || "").trim().toLowerCase() === "ankara";
+  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (current.obs_time) {
     const ageText =
@@ -253,8 +259,7 @@ export function getTemperatureChartData(
   const hourly = detail.hourly || {};
   const times = hourly.times || [];
   const temps = hourly.temps || [];
-  const suppressAnkaraMgmObservation =
-    String(detail.name || "").trim().toLowerCase() === "ankara";
+  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (!times.length) return null;
 
@@ -2070,7 +2075,7 @@ export function getShortTermNowcastLines(
   const nearby = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
   const nearbySource = String(detail.nearby_source || "").toLowerCase();
   const sourceLabel =
-    nearbySource === "mgm" || detail.name === "ankara"
+    nearbySource === "mgm" || isTurkishMgmCity(detail)
       ? isEnglish(locale)
         ? "MGM nearby stations"
         : "MGM 周边站"
@@ -2435,11 +2440,11 @@ export function getSettlementRiskNarrative(
     }
   }
 
-  if (detail.name === "ankara") {
+  if (isTurkishMgmCity(detail)) {
     lines.push(
       isEnglish(locale)
-        ? "For Ankara, focus on LTAC / Esenboğa plus MGM nearby-station linkage, not urban sensation alone."
-        : "Ankara 需要重点看 LTAC / Esenboğa 与 MGM 周边站联动，不能只看城区体感。",
+        ? "For Turkish MGM-supported cities, focus on the airport station plus MGM nearby-station linkage, not urban sensation alone."
+        : "对接入 MGM 的土耳其城市，需要重点看机场站与 MGM 周边站联动，不能只看城区体感。",
     );
   }
 

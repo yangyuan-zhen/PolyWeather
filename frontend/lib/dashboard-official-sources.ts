@@ -77,6 +77,11 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   istanbul: [
     {
+      label: "MGM",
+      href: "https://www.mgm.gov.tr/",
+      kind: "agency",
+    },
+    {
       label: "NOAA LTFM Timeseries",
       href: "https://www.weather.gov/wrh/timeseries?site=LTFM",
       kind: "agency",
@@ -89,6 +94,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     {
       label: "LTFM METAR",
       href: "https://aviationweather.gov/data/metar/?id=LTFM&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  moscow: [
+    {
+      label: "NOAA UUWW Timeseries",
+      href: "https://www.weather.gov/wrh/timeseries?site=UUWW",
+      kind: "agency",
+    },
+    {
+      label: "Vnukovo International Airport",
+      href: "https://vnukovo.ru/en/",
+      kind: "airport",
+    },
+    {
+      label: "UUWW METAR",
+      href: "https://metar-taf.com/UUWW",
       kind: "metar",
     },
   ],

@@ -33,6 +33,23 @@ CITY_REGISTRY = {
         "distance_km": 34.0,
         "warning": "市场现按 NOAA LTFM 整度°C口径结算；以 weather.gov Temp 列当天最终完成质控后的最高整度摄氏值为准。",
     },
+    "moscow": {
+        "name": "Moscow",
+        "lat": 55.5915,
+        "lon": 37.2615,
+        "icao": "UUWW",
+        "settlement_source": "noaa",
+        "settlement_station_code": "UUWW",
+        "settlement_station_label": "Vnukovo International Airport",
+        "tz_offset": 10800,
+        "use_fahrenheit": False,
+        "is_major": True,
+        "risk_level": "medium",
+        "risk_emoji": "🟡",
+        "airport_name": "Vnukovo International Airport",
+        "distance_km": 29.0,
+        "warning": "市场现按 NOAA UUWW 整度°C口径结算；以 weather.gov Temp 列在当日全部小时最终完成后的最高整度摄氏值为准。",
+    },
     "london": {
         "name": "London",
         "lat": 51.5048,
@@ -541,7 +558,7 @@ CITY_REGISTRY = {
 
 ALIASES = {
     # English shortcuts
-    "ank": "ankara", "ist": "istanbul", "ltfm": "istanbul", "lon": "london", "par": "paris",
+    "ank": "ankara", "ist": "istanbul", "ltfm": "istanbul", "mos": "moscow", "mow": "moscow", "uuww": "moscow", "vnukovo": "moscow", "lon": "london", "par": "paris",
     "nyc": "new york", "ny": "new york", "chi": "chicago", 
     "la": "los angeles", "lax": "los angeles", "losangeles": "los angeles",
     "sf": "san francisco", "sfo": "san francisco", "sanfrancisco": "san francisco",
@@ -564,6 +581,7 @@ ALIASES = {
     # Chinese names
     "安卡拉": "ankara",
     "伊斯坦布尔": "istanbul",
+    "莫斯科": "moscow",
     "伦敦": "london",
     "巴黎": "paris",
     "纽约": "new york",

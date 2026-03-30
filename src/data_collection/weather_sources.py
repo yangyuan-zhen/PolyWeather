@@ -33,6 +33,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     CITY_METAR_CLUSTERS = {
         "buenos aires": ["SAEZ", "SABE", "SADP", "SADF", "SADL", "SADJ"],
         "istanbul": ["LTFM", "LTBA", "LTFJ"],
+        "moscow": ["UUWW", "UUEE", "UUDD"],
         "london": ["EGLL", "EGLC", "EGKK", "EGSS", "EGGW"],
         "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
         "los angeles": ["KLAX", "KBUR", "KLGB", "KSNA", "KVNY"],
@@ -435,6 +436,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "istanbul": "Istanbul",
             "ist": "Istanbul",
             "ltfm": "Istanbul",
+            "moscow": "Moscow",
+            "mos": "Moscow",
+            "mow": "Moscow",
+            "uuww": "Moscow",
+            "vnukovo": "Moscow",
+            "莫斯科": "Moscow",
             "伊斯坦布尔": "Istanbul",
             "seoul": "Seoul",
             "首尔": "Seoul",
@@ -607,6 +614,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not mgm_data:
             return
         results["mgm"] = mgm_data
+        results["nearby_source"] = "mgm"
         nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
         if nearby:
             results["mgm_nearby"] = nearby

@@ -26,6 +26,8 @@ from src.analysis.metar_narrator import describe_metar_report
 from src.data_collection.city_registry import ALIASES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
+TURKISH_MGM_CITIES = {"ankara", "istanbul"}
+
 
 def _interpolate_hourly_value(
     times: list,
@@ -773,7 +775,7 @@ def _build_taf_signal(
 def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
-    ttl = CACHE_TTL_ANKARA if city.lower() == "ankara" else CACHE_TTL
+    ttl = CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
     
     if not force_refresh:
         cached = _cache.get(city)
@@ -1344,7 +1346,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             if not mc.get("wx_desc"):
                 cloud_desc = "晴朗"
 
-    # ── 14. MGM data (Ankara-specific) ──
+    # ── 14. MGM data (Turkish MGM-supported cities) ──
     mgm_data = {}
     if mgm:
         mgc = mgm.get("current", {})
@@ -1511,7 +1513,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         },
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
-        "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() == "ankara" else "metar_cluster"),
+        "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() in TURKISH_MGM_CITIES else "metar_cluster"),
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,
@@ -1724,7 +1726,7 @@ def _build_city_detail_payload(
             "weather_gov": {},
             "mgm": data.get("mgm") or {},
             "mgm_nearby": data.get("mgm_nearby") or [],
-            "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),
+            "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
         },
         "timeseries": {
             "metar_recent_obs": data.get("metar_recent_obs") or [],
@@ -1746,7 +1748,7 @@ def _build_city_detail_payload(
         "market_scan": market_scan,
         "risk": data.get("risk"),
         "airport_current": data.get("airport_current") or {},
-        "nearby_source": data.get("nearby_source") or ("mgm" if data.get("name") == "ankara" else "metar_cluster"),
+        "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
         "ai_analysis": data.get("ai_analysis") or "",
         "errors": {},
     }
