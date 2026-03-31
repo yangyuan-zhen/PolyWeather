@@ -4,6 +4,8 @@ import hashlib
 import json
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
+
+import requests
 from loguru import logger
 
 
@@ -21,6 +23,93 @@ class DBManager:
 
     def _get_connection(self):
         return sqlite3.connect(self.db_path)
+
+    def _supabase_profiles_endpoint(self) -> str:
+        supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        if not supabase_url:
+            return ""
+        return f"{supabase_url}/rest/v1/profiles"
+
+    def _supabase_service_headers(self) -> Dict[str, str]:
+        service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+        if not service_role_key:
+            return {}
+        return {
+            "apikey": service_role_key,
+            "Authorization": f"Bearer {service_role_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Prefer": "return=minimal",
+        }
+
+    def _sync_supabase_profile_telegram_fields(
+        self,
+        *,
+        supabase_user_id: str,
+        telegram_id: Optional[int],
+        telegram_username: Optional[str],
+    ) -> bool:
+        normalized_uid = str(supabase_user_id or "").strip().lower()
+        endpoint = self._supabase_profiles_endpoint()
+        headers = self._supabase_service_headers()
+        if not normalized_uid or not endpoint or not headers:
+            return False
+
+        payload = {
+            "telegram_user_id": int(telegram_id) if telegram_id is not None else None,
+            "telegram_username": str(telegram_username or "").strip() or None,
+            "updated_at": datetime.now().isoformat(),
+        }
+        try:
+            response = requests.patch(
+                endpoint,
+                params={"id": f"eq.{normalized_uid}"},
+                json=payload,
+                headers=headers,
+                timeout=8,
+            )
+            if response.status_code not in {200, 204}:
+                logger.warning(
+                    "supabase profiles telegram sync failed user_id={} status={} body={}",
+                    normalized_uid,
+                    response.status_code,
+                    (response.text or "")[:240],
+                )
+                return False
+            return True
+        except Exception as exc:
+            logger.warning(
+                "supabase profiles telegram sync error user_id={}: {}",
+                normalized_uid,
+                exc,
+            )
+            return False
+
+    def _sync_bound_supabase_profiles_for_telegram(
+        self,
+        *,
+        telegram_id: int,
+        telegram_username: Optional[str],
+    ) -> None:
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT supabase_user_id
+                FROM supabase_bindings
+                WHERE telegram_id = ?
+                """,
+                (int(telegram_id),),
+            ).fetchall()
+        for row in rows:
+            user_id = str((row["supabase_user_id"] if row else "") or "").strip().lower()
+            if not user_id:
+                continue
+            self._sync_supabase_profile_telegram_fields(
+                supabase_user_id=user_id,
+                telegram_id=telegram_id,
+                telegram_username=telegram_username,
+            )
 
     def _init_db(self):
         """Create tables if they don't exist."""
@@ -746,6 +835,10 @@ class DBManager:
                 username = excluded.username
             """, (telegram_id, username))
             conn.commit()
+        self._sync_bound_supabase_profiles_for_telegram(
+            telegram_id=int(telegram_id),
+            telegram_username=username,
+        )
 
     def bind_supabase_identity(
         self,
@@ -831,7 +924,21 @@ class DBManager:
                     """,
                     (normalized_email, telegram_id),
                 )
+                user_row = conn.execute(
+                    """
+                    SELECT username
+                    FROM users
+                    WHERE telegram_id = ?
+                    LIMIT 1
+                    """,
+                    (telegram_id,),
+                ).fetchone()
                 conn.commit()
+                self._sync_supabase_profile_telegram_fields(
+                    supabase_user_id=normalized_uid,
+                    telegram_id=int(telegram_id),
+                    telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
+                )
                 return {"ok": True, "reason": "already_bound_same"}
 
             conn.execute(
@@ -842,7 +949,21 @@ class DBManager:
                 """,
                 (normalized_uid, normalized_email, telegram_id),
             )
+            user_row = conn.execute(
+                """
+                SELECT username
+                FROM users
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (telegram_id,),
+            ).fetchone()
             conn.commit()
+            self._sync_supabase_profile_telegram_fields(
+                supabase_user_id=normalized_uid,
+                telegram_id=int(telegram_id),
+                telegram_username=str((user_row["username"] if user_row else "") or "").strip(),
+            )
             return {"ok": True, "reason": "bound"}
 
     def unbind_supabase_identity(self, telegram_id: int) -> Dict[str, Any]:
@@ -863,11 +984,17 @@ class DBManager:
                 SELECT supabase_user_id
                 FROM supabase_bindings
                 WHERE telegram_id = ?
-                LIMIT 1
                 """,
                 (int(telegram_id),),
-            ).fetchone()
-            if not current_uid and not links:
+            ).fetchall()
+            linked_user_ids = {
+                str((row["supabase_user_id"] if row else "") or "").strip().lower()
+                for row in links
+            }
+            if current_uid:
+                linked_user_ids.add(current_uid.lower())
+            linked_user_ids = {item for item in linked_user_ids if item}
+            if not current_uid and not linked_user_ids:
                 return {"ok": True, "reason": "not_bound"}
 
             conn.execute(
@@ -886,6 +1013,12 @@ class DBManager:
                 (telegram_id,),
             )
             conn.commit()
+            for user_id in linked_user_ids:
+                self._sync_supabase_profile_telegram_fields(
+                    supabase_user_id=user_id,
+                    telegram_id=None,
+                    telegram_username=None,
+                )
             return {"ok": True, "reason": "unbound", "previous_supabase_user_id": current_uid}
 
     def add_message_activity(

@@ -810,6 +810,7 @@ export function OpsDashboard() {
                   <div className="font-semibold text-slate-100">{item.email || "-"}</div>
                   <div className="mt-1 text-xs text-slate-500">{item.username || "-"}</div>
                   <div className="mt-3 grid gap-2">
+                    <MobileField label="User ID" value={item.user_id || "-"} mono />
                     <MobileField label="注册时间" value={formatDateTime(item.registered_at)} />
                     <MobileField label="到期时间" value={formatDateTime(item.expires_at)} />
                   </div>
@@ -827,6 +828,7 @@ export function OpsDashboard() {
                   <tr>
                     <th className="px-4 py-3">邮箱</th>
                     <th className="px-4 py-3">用户名</th>
+                    <th className="px-4 py-3">User ID</th>
                     <th className="px-4 py-3">注册时间</th>
                     <th className="px-4 py-3">到期时间</th>
                   </tr>
@@ -836,13 +838,14 @@ export function OpsDashboard() {
                     <tr key={`${item.user_id}-${item.expires_at || ""}`}>
                       <td className="px-4 py-3">{item.email || "-"}</td>
                       <td className="px-4 py-3">{item.username || "-"}</td>
+                      <td className="px-4 py-3 font-mono text-xs text-slate-300">{item.user_id || "-"}</td>
                       <td className="px-4 py-3">{formatDateTime(item.registered_at)}</td>
                       <td className="px-4 py-3">{formatDateTime(item.expires_at)}</td>
                     </tr>
                   ))}
                   {!memberships.length ? (
                     <tr>
-                      <td className="px-4 py-4 text-slate-500" colSpan={4}>
+                      <td className="px-4 py-4 text-slate-500" colSpan={5}>
                         暂无有效会员
                       </td>
                     </tr>
