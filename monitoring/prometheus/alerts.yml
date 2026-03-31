@@ -1,0 +1,58 @@
+groups:
+  - name: polyweather-runtime
+    rules:
+      - alert: PolyWeatherWebDown
+        expr: up{job="polyweather-web"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PolyWeather web metrics endpoint is down"
+          description: "/metrics on polyweather_web has been unreachable for more than 2 minutes."
+
+      - alert: PolyWeatherHttp5xxBurst
+        expr: sum(increase(polyweather_http_requests_total{status=~"5.."}[10m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PolyWeather HTTP 5xx burst"
+          description: "More than 10 server errors were observed in the last 10 minutes."
+
+      - alert: PolyWeatherHighSourceErrorRate
+        expr: |
+          (
+            sum(increase(polyweather_source_requests_total{outcome!~"success|cache_hit"}[15m]))
+            /
+            clamp_min(sum(increase(polyweather_source_requests_total[15m])), 1)
+          ) > 0.25
+          and sum(increase(polyweather_source_requests_total[15m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PolyWeather source error rate is high"
+          description: "External weather source errors exceeded 25% over the last 15 minutes."
+
+      - alert: PolyWeatherOpenMeteoCooldownLoop
+        expr: sum(increase(polyweather_source_requests_total{source="open_meteo",outcome=~"cooldown_skip|error"}[15m])) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Open-Meteo is rate-limited or erroring"
+          description: "Open-Meteo has produced repeated cooldown skips or errors in the last 15 minutes."
+
+      - alert: PolyWeatherSlowHttpAverage
+        expr: |
+          (
+            sum(rate(polyweather_http_request_duration_ms_sum[10m]))
+            /
+            clamp_min(sum(rate(polyweather_http_request_duration_ms_count[10m])), 1)
+          ) > 2000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PolyWeather average HTTP latency is high"
+          description: "Average HTTP request duration exceeded 2s over the last 10 minutes."

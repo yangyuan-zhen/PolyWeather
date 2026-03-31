@@ -1,0 +1,15 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: telegram-relay
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: telegram-relay
+    webhook_configs:
+      - url: http://polyweather_alert_relay:9099/alerts
+        send_resolved: true

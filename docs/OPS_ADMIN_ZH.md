@@ -1,6 +1,6 @@
 # Ops 运营后台说明
 
-最后更新：`2026-03-21`
+最后更新：`2026-04-01`
 
 ## 1. 入口
 
@@ -28,6 +28,7 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 当前会员
 - 周榜
 - 支付异常单
+- 漏斗转化面板
 
 ### 写能力
 
@@ -102,3 +103,7 @@ python scripts/reconcile_subscription_by_email.py --email <user_email>
 
 - 让会员、积分、支付事故、系统状态可查
 - 让常见人工操作不必再直接写 SQL
+
+外部监控与告警栈说明见：
+
+- [MONITORING_ZH.md](./MONITORING_ZH.md)

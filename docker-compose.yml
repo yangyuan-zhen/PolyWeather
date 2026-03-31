@@ -33,3 +33,69 @@ services:
       - "8000:8000"
     # UID/GID are mainly useful on Linux hosts to avoid root-owned output files.
     user: "${UID:-1000}:${GID:-1000}"
+
+  polyweather_prometheus:
+    image: prom/prometheus:v3.4.1
+    container_name: polyweather_prometheus
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      - polyweather_web
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}/monitoring/prometheus:/prometheus
+    ports:
+      - "${POLYWEATHER_PROMETHEUS_PORT:-9090}:9090"
+
+  polyweather_alertmanager:
+    image: prom/alertmanager:v0.28.1
+    container_name: polyweather_alertmanager
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      - polyweather_alert_relay
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}/monitoring/alertmanager:/alertmanager
+    ports:
+      - "${POLYWEATHER_ALERTMANAGER_PORT:-9093}:9093"
+
+  polyweather_alert_relay:
+    <<: *polyweather-base
+    container_name: polyweather_alert_relay
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command: python scripts/alertmanager_telegram_relay.py
+    volumes:
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
+    ports:
+      - "${POLYWEATHER_ALERT_RELAY_PORT:-9099}:9099"
+    user: "${UID:-1000}:${GID:-1000}"
+
+  polyweather_grafana:
+    image: grafana/grafana-oss:12.0.2
+    container_name: polyweather_grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      - polyweather_prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: ${POLYWEATHER_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${POLYWEATHER_GRAFANA_ADMIN_PASSWORD:-polyweather}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}/monitoring/grafana:/var/lib/grafana
+    ports:
+      - "${POLYWEATHER_GRAFANA_PORT:-3001}:3000"

@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: PolyWeather Dashboards
+    orgId: 1
+    folder: PolyWeather
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /var/lib/grafana/dashboards
