@@ -88,6 +88,19 @@ type AuthMePayload = {
   points?: number;
 };
 
+type AnalyticsFunnelStep = {
+  total?: number;
+  unique_users?: number;
+  unique_actors?: number;
+};
+
+type AnalyticsFunnelPayload = {
+  window_days?: number;
+  since?: string;
+  events?: Record<string, AnalyticsFunnelStep>;
+  rates?: Record<string, number | null>;
+};
+
 type OpsUser = {
   telegram_id: number;
   username?: string | null;
@@ -164,6 +177,7 @@ export function OpsDashboard() {
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [payments, setPayments] = useState<PaymentRuntimePayload | null>(null);
   const [auth, setAuth] = useState<AuthMePayload | null>(null);
+  const [analyticsFunnel, setAnalyticsFunnel] = useState<AnalyticsFunnelPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<string | null>(null);
@@ -188,17 +202,19 @@ export function OpsDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const [healthData, statusData, paymentData, authData] = await Promise.all([
+      const [healthData, statusData, paymentData, authData, analyticsData] = await Promise.all([
         readJson<HealthPayload>("/api/healthz"),
         readJson<SystemStatusPayload>("/api/system/status"),
         readJson<PaymentRuntimePayload>("/api/payments/runtime"),
         readJson<AuthMePayload>("/api/auth/me"),
+        readJson<AnalyticsFunnelPayload>("/api/ops/analytics/funnel?days=30"),
       ]);
 
       setHealth(healthData);
       setStatus(statusData);
       setPayments(paymentData);
       setAuth(authData);
+      setAnalyticsFunnel(analyticsData);
       setRefreshedAt(new Date().toISOString());
     } catch (loadError) {
       setError(String(loadError));
@@ -297,6 +313,74 @@ export function OpsDashboard() {
   }, [incidentReasonFilter, load, loadPaymentIncidents]);
 
   const rolloutDecision = status?.probability?.rollout?.decision;
+
+  const funnelSteps = useMemo(() => {
+    const events = analyticsFunnel?.events || {};
+    const getStep = (key: string) => events[key] || {};
+    const signups = getStep("signup_completed");
+    const active = getStep("dashboard_active");
+    const featureClicks = getStep("paywall_feature_clicked");
+    const paywallViews = getStep("paywall_viewed");
+    const checkoutStarted = getStep("checkout_started");
+    const checkoutSucceeded = getStep("checkout_succeeded");
+    const base = Math.max(active.unique_actors || 0, signups.unique_actors || 0, 1);
+
+    return [
+      {
+        key: "signup_completed",
+        label: "注册成功",
+        helper: "近 30 天首次试用用户",
+        count: signups.unique_actors || 0,
+        total: signups.total || 0,
+        width: `${Math.max(((signups.unique_actors || 0) / base) * 100, 10)}%`,
+      },
+      {
+        key: "dashboard_active",
+        label: "登录活跃",
+        helper: "进入主面板并产生有效会话",
+        count: active.unique_actors || 0,
+        total: active.total || 0,
+        width: `${Math.max(((active.unique_actors || 0) / base) * 100, 10)}%`,
+        rateLabel: analyticsFunnel?.rates?.login_active_rate,
+      },
+      {
+        key: "paywall_feature_clicked",
+        label: "点击受限功能",
+        helper: "今日日内分析 / 历史对账触发拦截",
+        count: featureClicks.unique_actors || 0,
+        total: featureClicks.total || 0,
+        width: `${Math.max(((featureClicks.unique_actors || 0) / base) * 100, 10)}%`,
+        rateLabel: analyticsFunnel?.rates?.paywall_click_rate,
+      },
+      {
+        key: "paywall_viewed",
+        label: "看到付费入口",
+        helper: "功能弹窗或账户中心升级层",
+        count: paywallViews.unique_actors || 0,
+        total: paywallViews.total || 0,
+        width: `${Math.max(((paywallViews.unique_actors || 0) / base) * 100, 10)}%`,
+        rateLabel: analyticsFunnel?.rates?.paywall_view_rate,
+      },
+      {
+        key: "checkout_started",
+        label: "发起支付",
+        helper: "创建支付 intent",
+        count: checkoutStarted.unique_actors || 0,
+        total: checkoutStarted.total || 0,
+        width: `${Math.max(((checkoutStarted.unique_actors || 0) / base) * 100, 10)}%`,
+        rateLabel: analyticsFunnel?.rates?.checkout_start_rate,
+      },
+      {
+        key: "checkout_succeeded",
+        label: "支付成功",
+        helper: "链上确认并写入权益",
+        count: checkoutSucceeded.unique_actors || 0,
+        total: checkoutSucceeded.total || 0,
+        width: `${Math.max(((checkoutSucceeded.unique_actors || 0) / base) * 100, 10)}%`,
+        rateLabel: analyticsFunnel?.rates?.checkout_success_rate,
+      },
+    ];
+  }, [analyticsFunnel]);
 
   const rolloutVariant = useMemo(() => {
     const decision = rolloutDecision?.decision;
@@ -444,6 +528,82 @@ export function OpsDashboard() {
               <div className="flex justify-between gap-3"><span>email</span><span className="truncate text-right">{auth?.email || "-"}</span></div>
               <div className="flex justify-between gap-3"><span>points</span><span>{auth?.points ?? 0}</span></div>
               <div className="flex justify-between gap-3"><span>weekly_rank</span><span>{auth?.weekly_rank ?? "-"}</span></div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>转化漏斗</CardTitle>
+              <CardDescription>
+                最近 {analyticsFunnel?.window_days || 30} 天从注册、活跃到付费的最小闭环。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {funnelSteps.map((step) => (
+                  <div key={step.key} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{step.label}</div>
+                        <div className="mt-2 text-2xl font-black text-slate-100">{step.count}</div>
+                      </div>
+                      {typeof step.rateLabel === "number" ? (
+                        <Badge variant="secondary">{(step.rateLabel * 100).toFixed(1)}%</Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">{step.helper}</div>
+                    <div className="mt-3 h-2 rounded-full bg-slate-800">
+                      <div
+                        className="h-2 rounded-full bg-gradient-to-r from-cyan-400 via-sky-500 to-emerald-400"
+                        style={{ width: step.width }}
+                      />
+                    </div>
+                    <div className="mt-2 text-xs text-slate-500">
+                      事件 {step.total} 次 · 独立用户 {step.count}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>漏斗速读</CardTitle>
+              <CardDescription>先看哪一层掉得最厉害，再决定改拦截、文案还是支付页。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">窗口起点</div>
+                <div className="mt-2 text-sm text-slate-200">{formatDateTime(analyticsFunnel?.since)}</div>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <span>注册 → 活跃</span>
+                  <span>{((analyticsFunnel?.rates?.login_active_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <span>活跃 → 点受限功能</span>
+                  <span>{((analyticsFunnel?.rates?.paywall_click_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <span>点击 → 看到付费入口</span>
+                  <span>{((analyticsFunnel?.rates?.paywall_view_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <span>付费入口 → 发起支付</span>
+                  <span>{((analyticsFunnel?.rates?.checkout_start_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                  <span>发起支付 → 成功</span>
+                  <span>{((analyticsFunnel?.rates?.checkout_success_rate || 0) * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+                这些数字直接来自 <code>/api/ops/analytics/funnel</code>，后面如果要再拆“试用到期 / Pro 到期 / 游客”漏斗，可以在事件 payload 上继续加维度。
+              </div>
             </CardContent>
           </Card>
         </section>
