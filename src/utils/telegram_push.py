@@ -448,17 +448,34 @@ def _shortlist_focus_payloads(
     payloads: List[Dict[str, Any]],
     *,
     top_n: int,
+    for_push: bool = False,
 ) -> List[Dict[str, Any]]:
     ranked = sorted(
         payloads,
         key=lambda item: _market_monitor_score(item),
         reverse=True,
     )
-    return [
-        item for item in ranked
-        if bool((item.get("market_snapshot") or {}).get("available"))
-        and _market_price_cap_ok(item, require_actionable_quote=True)
-    ][:top_n]
+    shortlisted: List[Dict[str, Any]] = []
+    for item in ranked:
+        if not bool((item.get("market_snapshot") or {}).get("available")):
+            continue
+        if not _market_price_cap_ok(item, require_actionable_quote=True):
+            continue
+        if for_push:
+            peak_context = _local_peak_context(item)
+            local_min = _minute_of_day(peak_context.get("local_time"))
+            minutes_to_peak = peak_context.get("minutes_to_peak")
+            if local_min is not None and local_min < 9 * 60:
+                continue
+            if isinstance(minutes_to_peak, int | float):
+                if minutes_to_peak > 360:
+                    continue
+                if minutes_to_peak < -90:
+                    continue
+        shortlisted.append(item)
+        if len(shortlisted) >= top_n:
+            break
+    return shortlisted
 
 
 def _build_focus_digest_message(
@@ -471,7 +488,7 @@ def _build_focus_digest_message(
     digest_interval = _format_interval_brief(
         _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
     )
-    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
+    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=True)
     if not shortlisted:
         return ""
 
