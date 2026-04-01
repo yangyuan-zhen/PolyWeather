@@ -1,4 +1,5 @@
 from src.analysis.market_alert_engine import build_trading_alerts
+from src.utils.telegram_push import build_market_monitor_digest
 
 
 def _sample_weather_payload():
@@ -173,3 +174,24 @@ def test_peak_passed_guard_suppresses_late_day_cooldown_alerts():
     assert out["rules"]["forecast_breakthrough"]["raw_triggered"] is True
     assert "高温已过（暂停推送）" in out["telegram"]["zh"]
     assert "暂停主动推送" in out["telegram"]["zh"]
+
+
+def test_market_monitor_digest_skips_non_tradable_market(monkeypatch):
+    payload = build_trading_alerts(
+        city_weather=_sample_weather_payload(),
+        map_url="https://example.com/map",
+    )
+    payload["market_snapshot"]["available"] = True
+    payload["market_snapshot"]["market_closed"] = True
+    payload["market_snapshot"]["market_tradable"] = False
+    payload["market_snapshot"]["market_accepting_orders"] = False
+    payload["market_snapshot"]["market_tradable_reason"] = "in_review"
+
+    monkeypatch.setattr(
+        "src.utils.telegram_push.build_trade_alert_for_city",
+        lambda city, config, force_refresh=False: payload,
+    )
+    monkeypatch.setenv("TELEGRAM_ALERT_CITIES", "ankara")
+
+    digest = build_market_monitor_digest({}, slot_label="当前市场概览")
+    assert digest == "ℹ️ 当前没有可用的市场监控摘要。"
