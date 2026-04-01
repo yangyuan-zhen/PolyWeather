@@ -7,12 +7,13 @@ from src.bot.runtime_coordinator import RuntimeStatus
 class DummyBot:
     def __init__(self):
         self.replies = []
+        self.sent_messages = []
 
     def reply_to(self, message, text, parse_mode=None):
         self.replies.append({"text": text, "parse_mode": parse_mode, "chat_id": message.chat.id})
 
     def send_message(self, chat_id, text, parse_mode=None):  # pragma: no cover
-        pass
+        self.sent_messages.append({"chat_id": chat_id, "text": text, "parse_mode": parse_mode})
 
     def message_handler(self, *args, **kwargs):  # pragma: no cover - decorator stub
         def _decorator(func):
@@ -78,11 +79,17 @@ def test_basic_handler_markets_returns_summary(monkeypatch):
         "src.utils.telegram_push.build_market_monitor_digest",
         lambda config, slot_label="当前概览", top_n=None, force_refresh=False: "MARKET DIGEST",
     )
+    monkeypatch.setattr(
+        "src.bot.handlers.basic.threading.Thread",
+        lambda target, name=None, daemon=None: SimpleNamespace(start=target),
+    )
 
     handler.handle_markets(_message("/markets"))
 
     assert len(bot.replies) == 1
-    assert bot.replies[0]["text"] == "MARKET DIGEST"
+    assert "正在生成当前市场概览" in bot.replies[0]["text"]
+    assert len(bot.sent_messages) == 1
+    assert bot.sent_messages[0]["text"] == "MARKET DIGEST"
 
 
 def test_basic_handler_markets_rejects_channel_chat():

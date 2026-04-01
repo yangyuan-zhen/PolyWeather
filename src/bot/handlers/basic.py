@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from typing import Any
 from typing import Callable
 
@@ -256,14 +257,28 @@ class BasicCommandHandler:
                 )
                 trace.set_status("blocked", f"unsupported_chat_type:{chat_type}")
                 return
-            from src.utils.telegram_push import build_market_monitor_digest
+            self.bot.reply_to(message, "⏳ 正在生成当前市场概览，请稍候...")
 
-            summary = build_market_monitor_digest(
-                self.config,
-                slot_label="当前市场概览",
-                force_refresh=False,
-            )
-            self.bot.reply_to(message, summary)
-            trace.set_status("ok")
+            chat_id = getattr(getattr(message, "chat", None), "id", None)
+
+            def _worker() -> None:
+                try:
+                    from src.utils.telegram_push import build_market_monitor_digest
+
+                    summary = build_market_monitor_digest(
+                        self.config,
+                        slot_label="当前市场概览",
+                        force_refresh=False,
+                    )
+                    self.bot.send_message(chat_id, summary)
+                except Exception:
+                    self.bot.send_message(chat_id, "❌ 当前市场概览生成失败，请稍后重试。")
+
+            threading.Thread(
+                target=_worker,
+                name="telegram-markets-manual-query",
+                daemon=True,
+            ).start()
+            trace.set_status("accepted")
         finally:
             trace.emit()
