@@ -9,6 +9,7 @@ from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
 
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
+_BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind", "markets"}
 
 
 class BasicCommandHandler:
@@ -17,10 +18,12 @@ class BasicCommandHandler:
         bot: Any,
         io_layer: BotIOLayer,
         runtime_status_provider: Callable[[], RuntimeStatus],
+        config: dict | None = None,
     ):
         self.bot = bot
         self.io_layer = io_layer
         self.runtime_status_provider = runtime_status_provider
+        self.config = config or {}
 
     def register(self) -> None:
         @self.bot.message_handler(commands=["start", "help"])
@@ -45,6 +48,10 @@ class BasicCommandHandler:
 
         @self.bot.message_handler(commands=["unbind"])
         def _unbind(message):
+            self._dispatch(message)
+
+        @self.bot.message_handler(commands=["markets"])
+        def _markets(message):
             self._dispatch(message)
 
         @self.bot.message_handler(
@@ -86,6 +93,9 @@ class BasicCommandHandler:
             return
         if command == "unbind":
             self.handle_unbind(message)
+            return
+        if command == "markets":
+            self.handle_markets(message)
             return
 
     def handle_start_help(self, message: Any) -> None:
@@ -231,5 +241,20 @@ class BasicCommandHandler:
                 "✅ 已解除当前 Telegram 与网页账号的绑定。",
             )
             trace.set_status("ok", "unbound")
+        finally:
+            trace.emit()
+
+    def handle_markets(self, message: Any) -> None:
+        trace = CommandTrace("/markets", message)
+        try:
+            from src.utils.telegram_push import build_market_monitor_digest
+
+            summary = build_market_monitor_digest(
+                self.config,
+                slot_label="当前市场概览",
+                force_refresh=False,
+            )
+            self.bot.reply_to(message, summary)
+            trace.set_status("ok")
         finally:
             trace.emit()

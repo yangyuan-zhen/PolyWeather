@@ -4,7 +4,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -282,16 +282,75 @@ def _parse_hour_list(raw: Optional[str], default: List[int]) -> List[int]:
     return sorted(out) or default
 
 
-def _resolve_market_timezone(timezone_name: str):
-    normalized = str(timezone_name or "").strip() or "Asia/Shanghai"
-    if normalized == "Asia/Shanghai":
-        return timezone(timedelta(hours=8), name="Asia/Shanghai")
+def _minute_of_day(text: Optional[str]) -> Optional[int]:
+    raw = str(text or "").strip()
+    if not raw or ":" not in raw:
+        return None
     try:
-        from zoneinfo import ZoneInfo
-
-        return ZoneInfo(normalized)
+        hour_s, minute_s = raw.split(":", 1)
+        hour = int(hour_s)
+        minute = int(minute_s[:2])
     except Exception:
-        return timezone.utc
+        return None
+    if not (0 <= hour <= 23 and 0 <= minute <= 59):
+        return None
+    return hour * 60 + minute
+
+
+def _format_minutes_window(delta_minutes: int) -> str:
+    total = abs(int(delta_minutes))
+    hours = total // 60
+    minutes = total % 60
+    if hours > 0 and minutes > 0:
+        text = f"{hours}h{minutes:02d}m"
+    elif hours > 0:
+        text = f"{hours}h"
+    else:
+        text = f"{minutes}m"
+    return text
+
+
+def _local_peak_context(alert_payload: Dict[str, Any]) -> Dict[str, Any]:
+    evidence = alert_payload.get("evidence") or {}
+    generated_local_time = str(evidence.get("generated_local_time") or "").strip()
+    trigger_summary = evidence.get("trigger_summary") or {}
+    suppression_snapshot = trigger_summary.get("suppression_snapshot") or {}
+    peak_time = str(suppression_snapshot.get("max_temp_time") or "").strip()
+
+    local_min = _minute_of_day(generated_local_time)
+    peak_min = _minute_of_day(peak_time)
+    if local_min is None or peak_min is None:
+        return {
+            "local_time": generated_local_time,
+            "peak_time": peak_time,
+            "minutes_to_peak": None,
+            "score_adjustment": 0.0,
+            "window_label": "",
+        }
+
+    delta = peak_min - local_min
+    score = 0.0
+    window_label = ""
+    if 0 <= delta <= 120:
+        score = 18.0
+        window_label = f"峰值前 {_format_minutes_window(delta)}"
+    elif 120 < delta <= 360:
+        score = 10.0
+        window_label = f"距峰值 {_format_minutes_window(delta)}"
+    elif -90 <= delta < 0:
+        score = 6.0
+        window_label = f"峰值后 {_format_minutes_window(delta)}"
+    elif delta < -90:
+        score = -8.0
+        window_label = "峰值已过较久"
+
+    return {
+        "local_time": generated_local_time,
+        "peak_time": peak_time,
+        "minutes_to_peak": delta,
+        "score_adjustment": score,
+        "window_label": window_label,
+    }
 
 
 def _market_monitor_score(alert_payload: Dict[str, Any]) -> float:
@@ -328,8 +387,18 @@ def _market_monitor_score(alert_payload: Dict[str, Any]) -> float:
 
     suppression = alert_payload.get("suppression") or {}
     suppressed_penalty = -20.0 if bool(suppression.get("suppressed")) else 0.0
+    peak_context = _local_peak_context(alert_payload)
 
-    return max(0.0, severity_score + trigger_score + edge_score + pricing_score + confidence_score + suppressed_penalty)
+    return max(
+        0.0,
+        severity_score
+        + trigger_score
+        + edge_score
+        + pricing_score
+        + confidence_score
+        + suppressed_penalty
+        + float(peak_context.get("score_adjustment") or 0.0),
+    )
 
 
 def _priority_label(score: float) -> str:
@@ -367,7 +436,6 @@ def _build_focus_digest_message(
     *,
     slot_label: str,
     top_n: int,
-    timezone_name: str,
 ) -> str:
     ranked = sorted(
         payloads,
@@ -383,7 +451,6 @@ def _build_focus_digest_message(
 
     lines = [
         f"🌐 PolyWeather 市场监控 · {slot_label}",
-        f"时区：{timezone_name}",
         "",
     ]
 
@@ -399,30 +466,36 @@ def _build_focus_digest_message(
             or snapshot.get("top_bucket")
             or "--"
         ).strip()
-        yes_buy = _norm_prob(snapshot.get("yes_buy"))
-        if yes_buy is None:
-            forecast_bucket = snapshot.get("forecast_bucket") or {}
-            if isinstance(forecast_bucket, dict):
-                yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
-        yes_buy_text = _fmt_cents(yes_buy) or "--"
-        edge_percent = _safe_float(snapshot.get("edge_percent"))
         current_temp = _safe_float(inputs.get("current_temp"))
         deb_prediction = _safe_float(inputs.get("deb_prediction"))
         market_url = str(snapshot.get("market_url") or snapshot.get("primary_market_url") or "").strip()
+        peak_context = _local_peak_context(payload)
 
         score = _market_monitor_score(payload)
         lines.append(f"{idx}. {city_name} | {_priority_label(score)}")
-        lines.append(
-            "   "
-            + f"桶 {bucket} | Yes {yes_buy_text} | 偏差 "
-            + (f"{edge_percent:+.1f}%" if edge_percent is not None else "--")
-        )
+        lines.append("   " + f"关注桶 {bucket}")
+        local_time = str(peak_context.get("local_time") or "").strip()
+        peak_time = str(peak_context.get("peak_time") or "").strip()
+        window_label = str(peak_context.get("window_label") or "").strip()
+        if local_time or peak_time or window_label:
+            context_parts: List[str] = []
+            if local_time:
+                context_parts.append(f"当地 {local_time}")
+            if peak_time:
+                context_parts.append(f"峰值参考 {peak_time}")
+            if window_label:
+                context_parts.append(window_label)
+            lines.append("   " + " | ".join(context_parts))
         if current_temp is not None or deb_prediction is not None:
             lines.append(
                 "   "
                 + (f"实测 {current_temp:.1f}°C" if current_temp is not None else "实测 --")
                 + " | "
-                + (f"DEB {deb_prediction:.1f}°C" if deb_prediction is not None else "DEB --")
+                + (
+                    f"DEB 预报 {deb_prediction:.1f}°C"
+                    if deb_prediction is not None
+                    else "DEB 预报 --"
+                )
             )
         lines.append(f"   触发：{_focus_trigger_summary(payload)}")
         if market_url:
@@ -439,7 +512,6 @@ def _maybe_send_focus_digest(
     payloads: List[Dict[str, Any]],
     state: Dict[str, Any],
     *,
-    timezone_name: str,
     digest_hours: List[int],
     top_n: int,
     grace_minutes: int,
@@ -447,11 +519,7 @@ def _maybe_send_focus_digest(
     if not chat_ids or not payloads or not digest_hours:
         return False
 
-    try:
-        local_now = datetime.now(_resolve_market_timezone(timezone_name))
-    except Exception:
-        local_now = datetime.now()
-        timezone_name = "local"
+    local_now = datetime.now().astimezone()
 
     eligible_slot: Optional[datetime] = None
     for hour in sorted(digest_hours, reverse=True):
@@ -474,7 +542,6 @@ def _maybe_send_focus_digest(
         payloads,
         slot_label=slot_label,
         top_n=top_n,
-        timezone_name=timezone_name,
     )
     if not message:
         return False
@@ -496,13 +563,43 @@ def _maybe_send_focus_digest(
 
     digest_slots[slot_key] = int(time.time())
     logger.info(
-        "market focus digest pushed slot={} timezone={} items={} chat_targets={}",
+        "market focus digest pushed slot={} items={} chat_targets={}",
         slot_key,
-        timezone_name,
         min(top_n, len(payloads)),
         sent_count,
     )
     return True
+
+
+def build_market_monitor_digest(
+    config: Dict[str, Any],
+    *,
+    slot_label: str = "当前概览",
+    top_n: Optional[int] = None,
+    force_refresh: bool = False,
+) -> str:
+    cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
+    if not cities:
+        return "⚠️ 当前未配置 TELEGRAM_ALERT_CITIES，无法生成市场监控摘要。"
+
+    digest_top_n = top_n if top_n is not None else max(
+        3,
+        min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)),
+    )
+    payloads: List[Dict[str, Any]] = []
+    for city in cities:
+        try:
+            payloads.append(build_trade_alert_for_city(city, config, force_refresh=force_refresh))
+        except Exception as exc:
+            logger.warning("market monitor digest build skipped city={} error={}", city, exc)
+    message = _build_focus_digest_message(
+        payloads,
+        slot_label=slot_label,
+        top_n=digest_top_n,
+    )
+    if message:
+        return message
+    return "ℹ️ 当前没有可用的市场监控摘要。"
 
 
 def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_count: int) -> bool:
@@ -907,8 +1004,6 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         30,
         min(240, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_GRACE_MINUTES", 180)),
     )
-    market_timezone = str(os.getenv("TELEGRAM_MARKET_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
-
     def _runner() -> None:
         try:
             _save_state(state_path, _load_state(state_path))
@@ -919,7 +1014,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
             f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
             f"focus_digest_enabled={focus_digest_enabled} focus_hours={focus_digest_hours} "
-            f"timezone={market_timezone} state_path={state_path}"
+            f"state_path={state_path}"
         )
         while True:
             cycle_started = time.time()
@@ -957,7 +1052,6 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                         chat_ids=chat_ids,
                         payloads=cycle_payloads,
                         state=state,
-                        timezone_name=market_timezone,
                         digest_hours=focus_digest_hours,
                         top_n=focus_digest_top_n,
                         grace_minutes=focus_digest_grace_minutes,

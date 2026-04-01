@@ -36,6 +36,7 @@ def _register_handlers(
         bot=bot,
         io_layer=io_layer,
         runtime_status_provider=startup_coordinator.get_runtime_status,
+        config=config,
     ).register()
     CityCommandHandler(
         bot=bot,

@@ -53,3 +53,33 @@ def test_basic_handler_diag_returns_html():
     assert len(bot.replies) == 1
     assert bot.replies[0]["parse_mode"] == "HTML"
     assert "Bot 启动诊断" in bot.replies[0]["text"]
+
+
+def test_basic_handler_markets_returns_summary(monkeypatch):
+    bot = DummyBot()
+    io_layer = SimpleNamespace(
+        build_welcome_text=lambda: "WELCOME",
+        build_points_rank_text=lambda _user: "TOP",
+    )
+    handler = BasicCommandHandler(
+        bot=bot,
+        io_layer=io_layer,
+        runtime_status_provider=lambda: RuntimeStatus(
+            started_at="2026-03-12 00:00:00 UTC",
+            loops=[],
+            command_access_mode="group_member",
+            protected_commands=["/city", "/deb"],
+            required_group_chat_id="-1001234567890",
+        ),
+        config={},
+    )
+
+    monkeypatch.setattr(
+        "src.utils.telegram_push.build_market_monitor_digest",
+        lambda config, slot_label="当前概览", top_n=None, force_refresh=False: "MARKET DIGEST",
+    )
+
+    handler.handle_markets(_message("/markets"))
+
+    assert len(bot.replies) == 1
+    assert bot.replies[0]["text"] == "MARKET DIGEST"

@@ -169,7 +169,7 @@ class StartupCoordinator:
             "focus_digest_hours": str(
                 os.getenv("TELEGRAM_MARKET_FOCUS_DIGEST_HOURS") or "11,18"
             ).strip(),
-            "timezone": str(os.getenv("TELEGRAM_MARKET_TIMEZONE") or "Asia/Shanghai").strip(),
+            "schedule_basis": "server_local_time",
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(
