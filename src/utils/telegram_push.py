@@ -616,12 +616,8 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
 
 def _market_price_cap_ok(
     alert_payload: Dict[str, Any],
-    max_yes_buy: float,
     require_actionable_quote: bool = False,
 ) -> bool:
-    if max_yes_buy >= 1.0:
-        return True
-
     market = alert_payload.get("market_snapshot") or {}
     if not isinstance(market, dict) or not market.get("available"):
         if require_actionable_quote:
@@ -730,18 +726,6 @@ def _market_price_cap_ok(
         )
         return False
 
-    if yes_buy >= max_yes_buy:
-        logger.info(
-            "trade alert skipped by mispricing cap city={} bucket={} anchor_model={} anchor_settle={} yes_buy={} cap={}".format(
-                alert_payload.get("city"),
-                bucket_label or "--",
-                anchor_model,
-                settle_ref,
-                round(yes_buy, 4),
-                round(max_yes_buy, 4),
-            )
-        )
-        return False
     return True
 
 
@@ -903,13 +887,8 @@ def _maybe_send_alert(
     last_by_city = state.setdefault("last_by_city", {})
     last_city = last_by_city.get(city) or {}
     is_active = _severity_ok(alert_payload, min_severity, min_trigger_count)
-    max_yes_buy = max(
-        0.0,
-        min(1.0, _env_float("TELEGRAM_ALERT_MISPRICING_MAX_YES_BUY", 0.10)),
-    )
     if not _market_price_cap_ok(
         alert_payload,
-        max_yes_buy,
         require_actionable_quote=mispricing_only,
     ):
         is_active = False
