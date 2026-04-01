@@ -219,6 +219,10 @@ const TELEGRAM_GROUP_URL = String(
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
+const TELEGRAM_MARKET_CHANNEL_URL = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_MARKET_CHANNEL_URL ||
+    "https://t.me/+hGAk7JsjtdhiOTUx",
+).trim();
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 let walletConnectProviderCache: EvmProvider | null = null;
@@ -707,6 +711,9 @@ export function AccountCenter() {
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
       telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
+      telegramMarketChannelLink: isEn
+        ? "Join Market Monitor Channel"
+        : "加入市场监控频道",
       copyCommand: isEn ? "Copy command" : "复制命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
@@ -2657,6 +2664,17 @@ export function AccountCenter() {
                       className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
                     >
                       {copy.telegramBotLink}
+                      <ExternalLink size={12} />
+                    </Link>
+                  ) : null}
+                  {TELEGRAM_MARKET_CHANNEL_URL ? (
+                    <Link
+                      href={TELEGRAM_MARKET_CHANNEL_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
+                    >
+                      {copy.telegramMarketChannelLink}
                       <ExternalLink size={12} />
                     </Link>
                   ) : null}
