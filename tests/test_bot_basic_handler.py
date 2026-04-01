@@ -9,11 +9,31 @@ class DummyBot:
         self.replies = []
         self.sent_messages = []
 
-    def reply_to(self, message, text, parse_mode=None):
-        self.replies.append({"text": text, "parse_mode": parse_mode, "chat_id": message.chat.id})
+    def reply_to(self, message, text, parse_mode=None, disable_web_page_preview=None):
+        self.replies.append(
+            {
+                "text": text,
+                "parse_mode": parse_mode,
+                "chat_id": message.chat.id,
+                "disable_web_page_preview": disable_web_page_preview,
+            }
+        )
 
-    def send_message(self, chat_id, text, parse_mode=None):  # pragma: no cover
-        self.sent_messages.append({"chat_id": chat_id, "text": text, "parse_mode": parse_mode})
+    def send_message(
+        self,
+        chat_id,
+        text,
+        parse_mode=None,
+        disable_web_page_preview=None,
+    ):  # pragma: no cover
+        self.sent_messages.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "parse_mode": parse_mode,
+                "disable_web_page_preview": disable_web_page_preview,
+            }
+        )
 
     def message_handler(self, *args, **kwargs):  # pragma: no cover - decorator stub
         def _decorator(func):
@@ -78,6 +98,10 @@ def test_basic_handler_markets_returns_summary(monkeypatch):
     monkeypatch.setattr(
         "src.utils.telegram_push.build_market_monitor_digest",
         lambda config, slot_label="当前概览", top_n=None, force_refresh=False: "MARKET DIGEST",
+    )
+    monkeypatch.setattr(
+        "src.utils.telegram_push.load_cached_market_monitor_digest",
+        lambda: "",
     )
     monkeypatch.setattr(
         "src.bot.handlers.basic.threading.Thread",

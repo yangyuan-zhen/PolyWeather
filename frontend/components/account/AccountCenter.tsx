@@ -219,10 +219,7 @@ const TELEGRAM_GROUP_URL = String(
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
-const TELEGRAM_MARKET_CHANNEL_URL = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_MARKET_CHANNEL_URL ||
-    "https://t.me/+hGAk7JsjtdhiOTUx",
-).trim();
+const TELEGRAM_MARKET_CHANNEL_URL = "https://t.me/+hGAk7JsjtdhiOTUx";
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 let walletConnectProviderCache: EvmProvider | null = null;
