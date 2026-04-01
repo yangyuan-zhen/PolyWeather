@@ -808,7 +808,7 @@ def _build_advice_cn(
         parts.append("实测已击穿主流模型上沿")
 
     if not parts:
-        return "当前未触发高优先级天气异动，继续观察实测与模型联动。"
+        return "当前未触发高优先级关键信号，继续观察实测与模型联动。"
     return "，".join(parts) + "。"
 
 
@@ -934,8 +934,8 @@ def _build_telegram_messages(
 
     advice = _build_advice_cn(rules, temp_symbol, suppression=suppression)
     final_map = map_url or "https://polyweather-pro.vercel.app/"
-    title_zh = "🚨 PolyWeather 异动预警" if has_active_trigger else "📍 PolyWeather 状态快照"
-    title_en = "🚨 PolyWeather Alert" if has_active_trigger else "📍 PolyWeather Status"
+    title_zh = "🚨 PolyWeather 市场提醒" if has_active_trigger else "📍 PolyWeather 状态快照"
+    title_en = "🚨 PolyWeather Market Alert" if has_active_trigger else "📍 PolyWeather Status"
 
     lines_zh = [
         f"{title_zh} [{city_name}]",
@@ -1139,7 +1139,7 @@ def _build_telegram_messages_mispricing(
     elif snapshot.get("available"):
         title_zh = "📍 PolyWeather 市场观察"
     else:
-        title_zh = "🚨 PolyWeather 异动预警" if (has_active_trigger or suppressed) else "📍 PolyWeather 状态快照"
+        title_zh = "🚨 PolyWeather 市场提醒" if (has_active_trigger or suppressed) else "📍 PolyWeather 状态快照"
 
     lines_zh = [f"{title_zh} [{city_name}]"]
     lines_zh.append("")

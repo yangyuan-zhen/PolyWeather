@@ -961,16 +961,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         logger.warning("telegram market monitor loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
-    mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
-    if mispricing_only:
-        interval_sec = max(
-            300, _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200)
-        )
-    else:
-        interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
-    cooldown_sec = max(interval_sec, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800))
-    min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 2))
-    min_severity = os.getenv("TELEGRAM_ALERT_MIN_SEVERITY", "medium").strip().lower()
+    interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
     focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
@@ -989,9 +980,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         except Exception:
             logger.exception(f"failed to initialize market monitor state path={state_path}")
         logger.info(
-            f"telegram market monitor loop started mode={'mispricing-only' if mispricing_only else 'full'} "
+            f"telegram market monitor loop started mode=focus-digest-only "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
-            f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
             f"focus_digest_enabled={focus_digest_enabled} focus_hours={focus_digest_hours} "
             f"state_path={state_path}"
         )
@@ -1005,21 +995,6 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                 try:
                     alert_payload = build_trade_alert_for_city(city, config)
                     cycle_payloads.append(alert_payload)
-                    if _maybe_send_alert(
-                        bot=bot,
-                        chat_ids=chat_ids,
-                        city=city,
-                        alert_payload=alert_payload,
-                        state=state,
-                        cooldown_sec=cooldown_sec,
-                        min_severity=min_severity,
-                        min_trigger_count=min_trigger_count,
-                        mispricing_only=mispricing_only,
-                    ):
-                        try:
-                            _save_state(state_path, state)
-                        except Exception:
-                            logger.exception(f"failed to save market monitor state city={city}")
                 except Exception:
                     logger.exception(f"telegram market monitor loop failed for city={city}")
                 time.sleep(1)

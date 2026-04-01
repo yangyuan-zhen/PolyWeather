@@ -153,15 +153,10 @@ class StartupCoordinator:
     def _start_trade_alert_loop(self) -> LoopStatus:
         enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
         chat_ids = get_telegram_chat_ids_from_env()
-        mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
-        interval = (
-            max(300, _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200))
-            if mispricing_only
-            else max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
-        )
+        interval = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
         cities_count = _parse_csv_count(os.getenv("TELEGRAM_ALERT_CITIES"))
         details = {
-            "mode": "mispricing-only" if mispricing_only else "full",
+            "mode": "focus-digest-only",
             "interval_sec": interval,
             "cities_count": cities_count,
             "chat_targets": len(chat_ids),
