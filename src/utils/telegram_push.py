@@ -262,24 +262,26 @@ def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400
         last_by_city.pop(city, None)
 
 
-def _parse_hour_list(raw: Optional[str], default: List[int]) -> List[int]:
-    if not raw:
-        return default
-    out: List[int] = []
-    seen: set[int] = set()
-    for part in str(raw).replace(";", ",").split(","):
-        token = str(part).strip()
-        if not token:
-            continue
-        try:
-            hour = int(token)
-        except Exception:
-            continue
-        if not (0 <= hour <= 23) or hour in seen:
-            continue
-        seen.add(hour)
-        out.append(hour)
-    return sorted(out) or default
+def _cache_market_monitor_digest(
+    state: Dict[str, Any],
+    *,
+    message: str,
+    slot_label: str,
+    generated_at_ts: Optional[int] = None,
+) -> None:
+    state["last_market_monitor_digest"] = {
+        "message": str(message or "").strip(),
+        "slot_label": str(slot_label or "").strip(),
+        "generated_at_ts": int(generated_at_ts or time.time()),
+    }
+
+
+def load_cached_market_monitor_digest() -> str:
+    state = _load_state(_state_file())
+    cached = state.get("last_market_monitor_digest") or {}
+    if not isinstance(cached, dict):
+        return ""
+    return str(cached.get("message") or "").strip()
 
 
 def _minute_of_day(text: Optional[str]) -> Optional[int]:
@@ -308,6 +310,17 @@ def _format_minutes_window(delta_minutes: int) -> str:
     else:
         text = f"{minutes}m"
     return text
+
+
+def _format_interval_brief(seconds: int) -> str:
+    total = max(1, int(seconds))
+    if total % 3600 == 0:
+        hours = total // 3600
+        return f"{hours}小时"
+    if total % 60 == 0:
+        minutes = total // 60
+        return f"{minutes}分钟"
+    return f"{total}秒"
 
 
 def _local_peak_context(alert_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -437,6 +450,10 @@ def _build_focus_digest_message(
     slot_label: str,
     top_n: int,
 ) -> str:
+    scan_interval = _format_interval_brief(_env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
+    digest_interval = _format_interval_brief(
+        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
+    )
     ranked = sorted(
         payloads,
         key=lambda item: _market_monitor_score(item),
@@ -502,7 +519,11 @@ def _build_focus_digest_message(
             lines.append(f"   链接：{market_url}")
         lines.append("")
 
-    lines.append("用途：先筛今晚值得盯的市场，真正进入关键窗口时仍会继续推送。")
+    frequency_parts = [
+        f"后台扫描：约每{scan_interval}一次",
+        f"主动推送：约每{digest_interval}一次",
+    ]
+    lines.append("更新频率：" + "；".join(frequency_parts))
     return "\n".join(lines).strip()
 
 
@@ -512,32 +533,25 @@ def _maybe_send_focus_digest(
     payloads: List[Dict[str, Any]],
     state: Dict[str, Any],
     *,
-    digest_hours: List[int],
+    digest_interval_sec: int,
     top_n: int,
-    grace_minutes: int,
 ) -> bool:
-    if not chat_ids or not payloads or not digest_hours:
+    if not chat_ids or not payloads or digest_interval_sec <= 0:
+        return False
+
+    now_ts = int(time.time())
+    last_digest_ts = int(state.get("last_focus_digest_ts") or 0)
+    if last_digest_ts and now_ts - last_digest_ts < digest_interval_sec:
         return False
 
     local_now = datetime.now().astimezone()
-
-    eligible_slot: Optional[datetime] = None
-    for hour in sorted(digest_hours, reverse=True):
-        slot_dt = local_now.replace(hour=hour, minute=0, second=0, microsecond=0)
-        delta_minutes = int((local_now - slot_dt).total_seconds() // 60)
-        if 0 <= delta_minutes <= grace_minutes:
-            eligible_slot = slot_dt
-            break
-
-    if eligible_slot is None:
-        return False
-
-    slot_key = eligible_slot.strftime("%Y-%m-%d@%H")
-    digest_slots = state.setdefault("focus_digest_slots", {})
-    if digest_slots.get(slot_key):
-        return False
-
-    slot_label = "白天关注" if eligible_slot.hour < 15 else "今晚关注"
+    hour = local_now.hour
+    if 6 <= hour < 15:
+        slot_label = "白天关注"
+    elif 15 <= hour < 23:
+        slot_label = "今晚关注"
+    else:
+        slot_label = "夜间关注"
     message = _build_focus_digest_message(
         payloads,
         slot_label=slot_label,
@@ -545,6 +559,12 @@ def _maybe_send_focus_digest(
     )
     if not message:
         return False
+
+    _cache_market_monitor_digest(
+        state,
+        message=message,
+        slot_label=slot_label,
+    )
 
     sent_count = 0
     for chat_id in chat_ids:
@@ -561,10 +581,10 @@ def _maybe_send_focus_digest(
     if sent_count <= 0:
         return False
 
-    digest_slots[slot_key] = int(time.time())
+    state["last_focus_digest_ts"] = now_ts
     logger.info(
-        "market focus digest pushed slot={} items={} chat_targets={}",
-        slot_key,
+        "market focus digest pushed interval_sec={} items={} chat_targets={}",
+        digest_interval_sec,
         min(top_n, len(payloads)),
         sent_count,
     )
@@ -598,6 +618,13 @@ def build_market_monitor_digest(
         top_n=digest_top_n,
     )
     if message:
+        state = _load_state(_state_file())
+        _cache_market_monitor_digest(
+            state,
+            message=message,
+            slot_label=slot_label,
+        )
+        _save_state(_state_file(), state)
         return message
     return "ℹ️ 当前没有可用的市场监控摘要。"
 
@@ -965,14 +992,10 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
     focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
-    focus_digest_hours = _parse_hour_list(
-        os.getenv("TELEGRAM_MARKET_FOCUS_DIGEST_HOURS"),
-        [11, 18],
-    )
     focus_digest_top_n = max(3, min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)))
-    focus_digest_grace_minutes = max(
-        30,
-        min(240, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_GRACE_MINUTES", 180)),
+    focus_digest_interval_sec = max(
+        300,
+        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
     )
     def _runner() -> None:
         try:
@@ -982,7 +1005,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         logger.info(
             f"telegram market monitor loop started mode=focus-digest-only "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
-            f"focus_digest_enabled={focus_digest_enabled} focus_hours={focus_digest_hours} "
+            f"focus_digest_enabled={focus_digest_enabled} focus_interval={focus_digest_interval_sec}s "
             f"state_path={state_path}"
         )
         while True:
@@ -1006,9 +1029,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                         chat_ids=chat_ids,
                         payloads=cycle_payloads,
                         state=state,
-                        digest_hours=focus_digest_hours,
+                        digest_interval_sec=focus_digest_interval_sec,
                         top_n=focus_digest_top_n,
-                        grace_minutes=focus_digest_grace_minutes,
                     ):
                         _save_state(state_path, state)
                 except Exception:

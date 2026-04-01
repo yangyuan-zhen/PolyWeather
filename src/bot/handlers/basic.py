@@ -257,22 +257,31 @@ class BasicCommandHandler:
                 )
                 trace.set_status("blocked", f"unsupported_chat_type:{chat_type}")
                 return
-            self.bot.reply_to(message, "⏳ 正在生成当前市场概览，请稍候...")
 
             chat_id = getattr(getattr(message, "chat", None), "id", None)
+            from src.utils.telegram_push import (
+                build_market_monitor_digest,
+                load_cached_market_monitor_digest,
+            )
+
+            cached_summary = load_cached_market_monitor_digest()
+            if cached_summary:
+                self.bot.reply_to(message, cached_summary)
+            else:
+                self.bot.reply_to(message, "⏳ 正在生成当前市场概览，请稍候...")
 
             def _worker() -> None:
                 try:
-                    from src.utils.telegram_push import build_market_monitor_digest
-
                     summary = build_market_monitor_digest(
                         self.config,
                         slot_label="当前市场概览",
                         force_refresh=False,
                     )
-                    self.bot.send_message(chat_id, summary)
+                    if not cached_summary or summary.strip() != cached_summary.strip():
+                        self.bot.send_message(chat_id, summary)
                 except Exception:
-                    self.bot.send_message(chat_id, "❌ 当前市场概览生成失败，请稍后重试。")
+                    if not cached_summary:
+                        self.bot.send_message(chat_id, "❌ 当前市场概览生成失败，请稍后重试。")
 
             threading.Thread(
                 target=_worker,
