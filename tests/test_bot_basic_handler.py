@@ -25,7 +25,7 @@ def _message(text: str):
     return SimpleNamespace(
         text=text,
         from_user=SimpleNamespace(id=1, username="u", first_name="U"),
-        chat=SimpleNamespace(id=100),
+        chat=SimpleNamespace(id=100, type="private"),
     )
 
 
@@ -83,3 +83,30 @@ def test_basic_handler_markets_returns_summary(monkeypatch):
 
     assert len(bot.replies) == 1
     assert bot.replies[0]["text"] == "MARKET DIGEST"
+
+
+def test_basic_handler_markets_rejects_channel_chat():
+    bot = DummyBot()
+    io_layer = SimpleNamespace(
+        build_welcome_text=lambda: "WELCOME",
+        build_points_rank_text=lambda _user: "TOP",
+    )
+    handler = BasicCommandHandler(
+        bot=bot,
+        io_layer=io_layer,
+        runtime_status_provider=lambda: RuntimeStatus(
+            started_at="2026-03-12 00:00:00 UTC",
+            loops=[],
+            command_access_mode="group_member",
+            protected_commands=["/city", "/deb"],
+            required_group_chat_id="-1001234567890",
+        ),
+        config={},
+    )
+
+    msg = _message("/markets")
+    msg.chat = SimpleNamespace(id=-1001, type="channel")
+    handler.handle_markets(msg)
+
+    assert len(bot.replies) == 1
+    assert "仅支持私聊机器人查询" in bot.replies[0]["text"]

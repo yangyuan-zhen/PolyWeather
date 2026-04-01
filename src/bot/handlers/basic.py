@@ -247,6 +247,15 @@ class BasicCommandHandler:
     def handle_markets(self, message: Any) -> None:
         trace = CommandTrace("/markets", message)
         try:
+            chat_type = str(getattr(getattr(message, "chat", None), "type", "") or "").strip().lower()
+            if chat_type and chat_type != "private":
+                self.bot.reply_to(
+                    message,
+                    "ℹ️ `/markets` 仅支持私聊机器人查询。\n频道继续接收自动推送；如需手动查看当前市场概览，请私聊 bot 发送 `/markets`。",
+                    parse_mode="Markdown",
+                )
+                trace.set_status("blocked", f"unsupported_chat_type:{chat_type}")
+                return
             from src.utils.telegram_push import build_market_monitor_digest
 
             summary = build_market_monitor_digest(
