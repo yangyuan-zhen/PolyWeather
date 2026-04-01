@@ -456,8 +456,7 @@ def _shortlist_focus_payloads(
     )
     return [
         item for item in ranked
-        if _market_monitor_score(item) > 0
-        and bool((item.get("market_snapshot") or {}).get("available"))
+        if bool((item.get("market_snapshot") or {}).get("available"))
         and _market_price_cap_ok(item, require_actionable_quote=True)
     ][:top_n]
 
