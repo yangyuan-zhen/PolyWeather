@@ -6,10 +6,7 @@ from datetime import datetime
 from importlib import import_module
 from typing import Any, Callable, Dict, List, Optional
 
-from src.utils.telegram_chat_ids import (
-    get_polymarket_wallet_activity_chat_ids_from_env,
-    get_telegram_chat_ids_from_env,
-)
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -168,11 +165,16 @@ class StartupCoordinator:
             "interval_sec": interval,
             "cities_count": cities_count,
             "chat_targets": len(chat_ids),
+            "focus_digest_enabled": _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True),
+            "focus_digest_hours": str(
+                os.getenv("TELEGRAM_MARKET_FOCUS_DIGEST_HOURS") or "11,18"
+            ).strip(),
+            "timezone": str(os.getenv("TELEGRAM_MARKET_TIMEZONE") or "Asia/Shanghai").strip(),
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(
             key="trade_alert_push",
-            label="错价雷达推送",
+            label="市场监控推送",
             configured_enabled=enabled,
             details=details,
             validation_error=validation_error,
@@ -213,32 +215,16 @@ class StartupCoordinator:
         )
 
     def _start_polymarket_wallet_activity_loop(self) -> LoopStatus:
-        enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
-        chat_ids = get_polymarket_wallet_activity_chat_ids_from_env()
-        users_count = _parse_csv_count(os.getenv("POLYMARKET_WALLET_ACTIVITY_USERS"))
-        poll = max(5, _env_int("POLYMARKET_WALLET_ACTIVITY_INTERVAL_SEC", 20))
-        details = {
-            "poll_sec": poll,
-            "users_count": users_count,
-            "link_preview": _env_bool("POLYMARKET_WALLET_ACTIVITY_LINK_PREVIEW", True),
-            "chat_targets": len(chat_ids),
-        }
-        validation_error = None
-        if not chat_ids:
-            validation_error = (
-                "missing_POLYMARKET_WALLET_ACTIVITY_CHAT_IDS_or_TELEGRAM_CHAT_IDS"
-            )
-        elif users_count == 0:
-            validation_error = "missing_POLYMARKET_WALLET_ACTIVITY_USERS"
-        return self._start_with_validation(
+        return LoopStatus(
             key="polymarket_wallet_activity",
-            label="Polymarket 钱包异动监听",
-            configured_enabled=enabled,
-            details=details,
-            validation_error=validation_error,
-            starter=lambda: import_module(
-                "src.onchain.polymarket_wallet_activity_watcher"
-            ).start_polymarket_wallet_activity_loop(self.bot),
+            label="Polymarket 钱包异动监听（已停用）",
+            configured_enabled=False,
+            started=False,
+            reason="retired_replaced_by_market_monitor",
+            details={
+                "replacement": "trade_alert_push",
+                "note": "wallet activity watcher retired in favor of market monitor digests and critical alerts",
+            },
         )
 
     def _start_weekly_reward_loop(self) -> LoopStatus:

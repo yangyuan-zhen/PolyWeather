@@ -1135,9 +1135,9 @@ def _build_telegram_messages_mispricing(
                 center_line += f" | 领先 {lead_gap:+.1f}{temp_symbol}"
 
     if snapshot.get("available") and signal_state.get("should_push"):
-        title_zh = "🚨 PolyWeather 错价雷达"
+        title_zh = "🚨 PolyWeather 市场监控"
     elif snapshot.get("available"):
-        title_zh = "📍 PolyWeather 错价观察"
+        title_zh = "📍 PolyWeather 市场观察"
     else:
         title_zh = "🚨 PolyWeather 异动预警" if (has_active_trigger or suppressed) else "📍 PolyWeather 状态快照"
 
@@ -1175,9 +1175,9 @@ def _build_telegram_messages_mispricing(
     lines_zh.append(f"地图：{final_map}")
 
     title_en = (
-        "🚨 PolyWeather Mispricing Radar"
+        "🚨 PolyWeather Market Monitor"
         if snapshot.get("available") and signal_state.get("should_push")
-        else "📍 PolyWeather Mispricing Watch"
+        else "📍 PolyWeather Market Watch"
         if snapshot.get("available")
         else "🚨 PolyWeather Alert"
     )

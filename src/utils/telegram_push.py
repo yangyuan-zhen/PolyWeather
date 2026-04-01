@@ -4,7 +4,7 @@ import os
 import re
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from loguru import logger
@@ -65,6 +65,16 @@ def _norm_prob(v: Any) -> Optional[float]:
     if n > 1.0:
         n = n / 100.0
     return max(0.0, min(1.0, n))
+
+
+def _fmt_cents(value: Any) -> Optional[str]:
+    numeric = _norm_prob(value)
+    if numeric is None:
+        return None
+    cents = numeric * 100.0
+    rounded = round(cents, 1)
+    text = f"{rounded:.1f}".rstrip("0").rstrip(".")
+    return f"{text}c"
 
 
 def _safe_float(v: Any) -> Optional[float]:
@@ -230,7 +240,7 @@ def _save_state(path: str, state: Dict[str, Any]) -> None:
 
 
 def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400) -> None:
-    for bucket_name in ("by_signature",):
+    for bucket_name in ("by_signature", "focus_digest_slots"):
         bucket = state.get(bucket_name, {})
         if not isinstance(bucket, dict):
             state[bucket_name] = {}
@@ -250,6 +260,249 @@ def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400
             stale_city.append(city)
     for city in stale_city:
         last_by_city.pop(city, None)
+
+
+def _parse_hour_list(raw: Optional[str], default: List[int]) -> List[int]:
+    if not raw:
+        return default
+    out: List[int] = []
+    seen: set[int] = set()
+    for part in str(raw).replace(";", ",").split(","):
+        token = str(part).strip()
+        if not token:
+            continue
+        try:
+            hour = int(token)
+        except Exception:
+            continue
+        if not (0 <= hour <= 23) or hour in seen:
+            continue
+        seen.add(hour)
+        out.append(hour)
+    return sorted(out) or default
+
+
+def _resolve_market_timezone(timezone_name: str):
+    normalized = str(timezone_name or "").strip() or "Asia/Shanghai"
+    if normalized == "Asia/Shanghai":
+        return timezone(timedelta(hours=8), name="Asia/Shanghai")
+    try:
+        from zoneinfo import ZoneInfo
+
+        return ZoneInfo(normalized)
+    except Exception:
+        return timezone.utc
+
+
+def _market_monitor_score(alert_payload: Dict[str, Any]) -> float:
+    severity = str(alert_payload.get("severity") or "none").lower()
+    severity_score = {"high": 36.0, "medium": 24.0, "none": 0.0}.get(severity, 0.0)
+    trigger_count = int(alert_payload.get("trigger_count") or 0)
+    trigger_score = min(18.0, float(trigger_count) * 9.0)
+
+    snapshot = alert_payload.get("market_snapshot") or {}
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+    if not snapshot.get("available"):
+        return 0.0
+
+    edge_percent = abs(_safe_float(snapshot.get("edge_percent")) or 0.0)
+    edge_score = min(22.0, edge_percent * 2.5)
+
+    yes_buy = _norm_prob(snapshot.get("yes_buy"))
+    if yes_buy is None:
+        forecast_bucket = snapshot.get("forecast_bucket") or {}
+        if isinstance(forecast_bucket, dict):
+            yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
+    pricing_score = 0.0
+    if yes_buy is not None:
+        if yes_buy < 0.10:
+            pricing_score = 14.0
+        elif yes_buy < 0.20:
+            pricing_score = 9.0
+        elif yes_buy < 0.35:
+            pricing_score = 5.0
+
+    confidence = str(snapshot.get("confidence") or "").strip().lower()
+    confidence_score = {"high": 10.0, "medium": 6.0, "low": 2.0}.get(confidence, 0.0)
+
+    suppression = alert_payload.get("suppression") or {}
+    suppressed_penalty = -20.0 if bool(suppression.get("suppressed")) else 0.0
+
+    return max(0.0, severity_score + trigger_score + edge_score + pricing_score + confidence_score + suppressed_penalty)
+
+
+def _priority_label(score: float) -> str:
+    if score >= 72:
+        return "高优先级"
+    if score >= 48:
+        return "重点观察"
+    return "继续观察"
+
+
+def _join_trigger_types_cn_local(rules: Dict[str, Dict[str, Any]]) -> str:
+    label_map = {
+        "ankara_center_deb_hit": "中心站触及 DEB",
+        "momentum_spike": "短时动量异动",
+        "forecast_breakthrough": "实测击穿模型",
+        "advection": "暖平流信号",
+    }
+    parts: List[str] = []
+    for key, label in label_map.items():
+        row = rules.get(key) or {}
+        if row.get("triggered"):
+            parts.append(label)
+    return " + ".join(parts)
+
+
+def _focus_trigger_summary(alert_payload: Dict[str, Any]) -> str:
+    rules = alert_payload.get("rules") or {}
+    if not isinstance(rules, dict):
+        return "市场与天气分歧待观察"
+    return _join_trigger_types_cn_local(rules) or "市场与天气分歧待观察"
+
+
+def _build_focus_digest_message(
+    payloads: List[Dict[str, Any]],
+    *,
+    slot_label: str,
+    top_n: int,
+    timezone_name: str,
+) -> str:
+    ranked = sorted(
+        payloads,
+        key=lambda item: _market_monitor_score(item),
+        reverse=True,
+    )
+    shortlisted = [
+        item for item in ranked
+        if _market_monitor_score(item) > 0 and bool((item.get("market_snapshot") or {}).get("available"))
+    ][:top_n]
+    if not shortlisted:
+        return ""
+
+    lines = [
+        f"🌐 PolyWeather 市场监控 · {slot_label}",
+        f"时区：{timezone_name}",
+        "",
+    ]
+
+    for idx, payload in enumerate(shortlisted, start=1):
+        city = str(payload.get("city") or "").strip().lower()
+        city_name = (CITY_REGISTRY.get(city) or {}).get("display_name") or city.title() or "--"
+        snapshot = payload.get("market_snapshot") or {}
+        evidence = payload.get("evidence") or {}
+        inputs = evidence.get("inputs") or {}
+
+        bucket = str(
+            (snapshot.get("forecast_bucket") or {}).get("label")
+            or snapshot.get("top_bucket")
+            or "--"
+        ).strip()
+        yes_buy = _norm_prob(snapshot.get("yes_buy"))
+        if yes_buy is None:
+            forecast_bucket = snapshot.get("forecast_bucket") or {}
+            if isinstance(forecast_bucket, dict):
+                yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
+        yes_buy_text = _fmt_cents(yes_buy) or "--"
+        edge_percent = _safe_float(snapshot.get("edge_percent"))
+        current_temp = _safe_float(inputs.get("current_temp"))
+        deb_prediction = _safe_float(inputs.get("deb_prediction"))
+        market_url = str(snapshot.get("market_url") or snapshot.get("primary_market_url") or "").strip()
+
+        score = _market_monitor_score(payload)
+        lines.append(f"{idx}. {city_name} | {_priority_label(score)}")
+        lines.append(
+            "   "
+            + f"桶 {bucket} | Yes {yes_buy_text} | 偏差 "
+            + (f"{edge_percent:+.1f}%" if edge_percent is not None else "--")
+        )
+        if current_temp is not None or deb_prediction is not None:
+            lines.append(
+                "   "
+                + (f"实测 {current_temp:.1f}°C" if current_temp is not None else "实测 --")
+                + " | "
+                + (f"DEB {deb_prediction:.1f}°C" if deb_prediction is not None else "DEB --")
+            )
+        lines.append(f"   触发：{_focus_trigger_summary(payload)}")
+        if market_url:
+            lines.append(f"   链接：{market_url}")
+        lines.append("")
+
+    lines.append("用途：先筛今晚值得盯的市场，真正进入关键窗口时仍会继续推送。")
+    return "\n".join(lines).strip()
+
+
+def _maybe_send_focus_digest(
+    bot: Any,
+    chat_ids: List[str],
+    payloads: List[Dict[str, Any]],
+    state: Dict[str, Any],
+    *,
+    timezone_name: str,
+    digest_hours: List[int],
+    top_n: int,
+    grace_minutes: int,
+) -> bool:
+    if not chat_ids or not payloads or not digest_hours:
+        return False
+
+    try:
+        local_now = datetime.now(_resolve_market_timezone(timezone_name))
+    except Exception:
+        local_now = datetime.now()
+        timezone_name = "local"
+
+    eligible_slot: Optional[datetime] = None
+    for hour in sorted(digest_hours, reverse=True):
+        slot_dt = local_now.replace(hour=hour, minute=0, second=0, microsecond=0)
+        delta_minutes = int((local_now - slot_dt).total_seconds() // 60)
+        if 0 <= delta_minutes <= grace_minutes:
+            eligible_slot = slot_dt
+            break
+
+    if eligible_slot is None:
+        return False
+
+    slot_key = eligible_slot.strftime("%Y-%m-%d@%H")
+    digest_slots = state.setdefault("focus_digest_slots", {})
+    if digest_slots.get(slot_key):
+        return False
+
+    slot_label = "白天关注" if eligible_slot.hour < 15 else "今晚关注"
+    message = _build_focus_digest_message(
+        payloads,
+        slot_label=slot_label,
+        top_n=top_n,
+        timezone_name=timezone_name,
+    )
+    if not message:
+        return False
+
+    sent_count = 0
+    for chat_id in chat_ids:
+        try:
+            bot.send_message(chat_id, message)
+            sent_count += 1
+        except Exception as exc:
+            logger.warning(
+                "market focus digest push failed slot={} chat_id={} error={}",
+                slot_key,
+                chat_id,
+                exc,
+            )
+    if sent_count <= 0:
+        return False
+
+    digest_slots[slot_key] = int(time.time())
+    logger.info(
+        "market focus digest pushed slot={} timezone={} items={} chat_targets={}",
+        slot_key,
+        timezone_name,
+        min(top_n, len(payloads)),
+        sent_count,
+    )
+    return True
 
 
 def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_count: int) -> bool:
@@ -572,7 +825,7 @@ def _maybe_send_alert(
                 "active": False,
                 "cleared_ts": now_ts,
             }
-            logger.info(f"trade alert disarmed city={city}")
+            logger.info(f"market monitor disarmed city={city}")
             return True
         return False
 
@@ -601,12 +854,7 @@ def _maybe_send_alert(
             bot.send_message(chat_id, message)
             sent_count += 1
         except Exception as exc:
-            logger.warning(
-                "trade alert push failed city={} chat_id={} error={}",
-                city,
-                chat_id,
-                exc,
-            )
+            logger.warning("market monitor push failed city={} chat_id={} error={}", city, chat_id, exc)
     if sent_count <= 0:
         return False
 
@@ -620,7 +868,7 @@ def _maybe_send_alert(
     }
     state.setdefault("by_signature", {})[signature] = now_ts
     logger.info(
-        f"trade alert pushed city={city} severity={alert_payload.get('severity')} "
+        f"market monitor pushed city={city} severity={alert_payload.get('severity')} "
         f"trigger_count={alert_payload.get('trigger_count')} trigger_key={trigger_key} "
         f"evidence={_evidence_brief(alert_payload)} chat_targets={sent_count}"
     )
@@ -631,10 +879,10 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
     chat_ids = get_telegram_chat_ids_from_env()
     if not enabled:
-        logger.info("telegram alert push loop disabled")
+        logger.info("telegram market monitor loop disabled")
         return None
     if not chat_ids:
-        logger.warning("telegram alert push loop skipped: TELEGRAM_CHAT_IDS is not set")
+        logger.warning("telegram market monitor loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
     mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
@@ -649,26 +897,40 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     min_severity = os.getenv("TELEGRAM_ALERT_MIN_SEVERITY", "medium").strip().lower()
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
+    focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
+    focus_digest_hours = _parse_hour_list(
+        os.getenv("TELEGRAM_MARKET_FOCUS_DIGEST_HOURS"),
+        [11, 18],
+    )
+    focus_digest_top_n = max(3, min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)))
+    focus_digest_grace_minutes = max(
+        30,
+        min(240, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_GRACE_MINUTES", 180)),
+    )
+    market_timezone = str(os.getenv("TELEGRAM_MARKET_TIMEZONE") or "Asia/Shanghai").strip() or "Asia/Shanghai"
 
     def _runner() -> None:
         try:
             _save_state(state_path, _load_state(state_path))
         except Exception:
-            logger.exception(f"failed to initialize telegram push state path={state_path}")
+            logger.exception(f"failed to initialize market monitor state path={state_path}")
         logger.info(
-            f"telegram alert push loop started mode={'mispricing-only' if mispricing_only else 'full'} "
+            f"telegram market monitor loop started mode={'mispricing-only' if mispricing_only else 'full'} "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
             f"cooldown={cooldown_sec}s min_triggers={min_trigger_count} min_severity={min_severity} "
-            f"state_path={state_path}"
+            f"focus_digest_enabled={focus_digest_enabled} focus_hours={focus_digest_hours} "
+            f"timezone={market_timezone} state_path={state_path}"
         )
         while True:
             cycle_started = time.time()
             state = _load_state(state_path)
             _cleanup_state(state, int(cycle_started))
+            cycle_payloads: List[Dict[str, Any]] = []
 
             for city in cities:
                 try:
                     alert_payload = build_trade_alert_for_city(city, config)
+                    cycle_payloads.append(alert_payload)
                     if _maybe_send_alert(
                         bot=bot,
                         chat_ids=chat_ids,
@@ -683,10 +945,26 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                         try:
                             _save_state(state_path, state)
                         except Exception:
-                            logger.exception(f"failed to save telegram push state city={city}")
+                            logger.exception(f"failed to save market monitor state city={city}")
                 except Exception:
-                    logger.exception(f"telegram alert push loop failed for city={city}")
+                    logger.exception(f"telegram market monitor loop failed for city={city}")
                 time.sleep(1)
+
+            if focus_digest_enabled:
+                try:
+                    if _maybe_send_focus_digest(
+                        bot=bot,
+                        chat_ids=chat_ids,
+                        payloads=cycle_payloads,
+                        state=state,
+                        timezone_name=market_timezone,
+                        digest_hours=focus_digest_hours,
+                        top_n=focus_digest_top_n,
+                        grace_minutes=focus_digest_grace_minutes,
+                    ):
+                        _save_state(state_path, state)
+                except Exception:
+                    logger.exception("failed to push market focus digest")
 
             elapsed = time.time() - cycle_started
             sleep_sec = max(5, interval_sec - int(elapsed))
@@ -694,7 +972,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
     thread = threading.Thread(
         target=_runner,
-        name="telegram-trade-alert-pusher",
+        name="telegram-market-monitor-pusher",
         daemon=True,
     )
     thread.start()
