@@ -547,19 +547,54 @@ def _maybe_send_focus_digest(
     top_n: int,
 ) -> bool:
     if not chat_ids or not payloads or digest_interval_sec <= 0:
+        logger.info(
+            "market focus digest skipped reason=invalid_runtime chat_targets={} payloads={} interval_sec={}",
+            len(chat_ids),
+            len(payloads),
+            digest_interval_sec,
+        )
         return False
 
     now_ts = int(time.time())
     last_digest_ts = int(state.get("last_focus_digest_ts") or 0)
+    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
+    high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
+    logger.info(
+        "market focus digest evaluate payloads={} shortlisted={} high_priority={} interval_sec={} top_n={}",
+        len(payloads),
+        len(shortlisted),
+        high_priority_count,
+        digest_interval_sec,
+        top_n,
+    )
     if last_digest_ts and now_ts - last_digest_ts < digest_interval_sec:
+        logger.info(
+            "market focus digest skipped reason=cooldown elapsed_sec={} required_sec={} shortlisted={} high_priority={}",
+            now_ts - last_digest_ts,
+            digest_interval_sec,
+            len(shortlisted),
+            high_priority_count,
+        )
         return False
 
-    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
     if not shortlisted:
+        logger.info(
+            "market focus digest skipped reason=no_candidates payloads={} top_n={}",
+            len(payloads),
+            top_n,
+        )
         return False
-    high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
     # Tighten channel pushes: require either multiple candidates or one truly high-priority market.
     if len(shortlisted) < 2 and high_priority_count < 1:
+        first_city = str(shortlisted[0].get("city") or "--") if shortlisted else "--"
+        first_score = _market_monitor_score(shortlisted[0]) if shortlisted else 0
+        logger.info(
+            "market focus digest skipped reason=too_few_candidates shortlisted={} high_priority={} first_city={} first_score={}",
+            len(shortlisted),
+            high_priority_count,
+            first_city,
+            first_score,
+        )
         return False
 
     local_now = datetime.now().astimezone()
@@ -576,6 +611,11 @@ def _maybe_send_focus_digest(
         top_n=top_n,
     )
     if not message:
+        logger.info(
+            "market focus digest skipped reason=empty_message shortlisted={} slot_label={}",
+            len(shortlisted),
+            slot_label,
+        )
         return False
 
     _cache_market_monitor_digest(
@@ -601,10 +641,12 @@ def _maybe_send_focus_digest(
 
     state["last_focus_digest_ts"] = now_ts
     logger.info(
-        "market focus digest pushed interval_sec={} items={} chat_targets={}",
+        "market focus digest pushed interval_sec={} shortlisted={} payloads={} chat_targets={} slot_label={}",
         digest_interval_sec,
-        min(top_n, len(payloads)),
+        len(shortlisted),
+        len(payloads),
         sent_count,
+        slot_label,
     )
     return True
 
@@ -617,8 +659,6 @@ def build_market_monitor_digest(
     force_refresh: bool = False,
 ) -> str:
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
-    if not cities:
-        return "⚠️ 当前未配置 TELEGRAM_ALERT_CITIES，无法生成市场监控摘要。"
 
     digest_top_n = top_n if top_n is not None else max(
         3,
