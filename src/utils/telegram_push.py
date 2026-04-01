@@ -444,6 +444,24 @@ def _focus_trigger_summary(alert_payload: Dict[str, Any]) -> str:
     return _join_trigger_types_cn_local(rules) or "市场与天气分歧待观察"
 
 
+def _shortlist_focus_payloads(
+    payloads: List[Dict[str, Any]],
+    *,
+    top_n: int,
+) -> List[Dict[str, Any]]:
+    ranked = sorted(
+        payloads,
+        key=lambda item: _market_monitor_score(item),
+        reverse=True,
+    )
+    return [
+        item for item in ranked
+        if _market_monitor_score(item) > 0
+        and bool((item.get("market_snapshot") or {}).get("available"))
+        and _market_price_cap_ok(item, require_actionable_quote=True)
+    ][:top_n]
+
+
 def _build_focus_digest_message(
     payloads: List[Dict[str, Any]],
     *,
@@ -454,17 +472,7 @@ def _build_focus_digest_message(
     digest_interval = _format_interval_brief(
         _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
     )
-    ranked = sorted(
-        payloads,
-        key=lambda item: _market_monitor_score(item),
-        reverse=True,
-    )
-    shortlisted = [
-        item for item in ranked
-        if _market_monitor_score(item) > 0
-        and bool((item.get("market_snapshot") or {}).get("available"))
-        and _market_price_cap_ok(item, require_actionable_quote=True)
-    ][:top_n]
+    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
     if not shortlisted:
         return ""
 
@@ -546,6 +554,14 @@ def _maybe_send_focus_digest(
     if last_digest_ts and now_ts - last_digest_ts < digest_interval_sec:
         return False
 
+    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
+    if not shortlisted:
+        return False
+    high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
+    # Tighten channel pushes: require either multiple candidates or one truly high-priority market.
+    if len(shortlisted) < 2 and high_priority_count < 1:
+        return False
+
     local_now = datetime.now().astimezone()
     hour = local_now.hour
     if 6 <= hour < 15:
@@ -555,7 +571,7 @@ def _maybe_send_focus_digest(
     else:
         slot_label = "夜间关注"
     message = _build_focus_digest_message(
-        payloads,
+        shortlisted,
         slot_label=slot_label,
         top_n=top_n,
     )
@@ -571,7 +587,7 @@ def _maybe_send_focus_digest(
     sent_count = 0
     for chat_id in chat_ids:
         try:
-            bot.send_message(chat_id, message)
+            bot.send_message(chat_id, message, disable_web_page_preview=True)
             sent_count += 1
         except Exception as exc:
             logger.warning(

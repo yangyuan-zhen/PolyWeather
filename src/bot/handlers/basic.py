@@ -266,7 +266,7 @@ class BasicCommandHandler:
 
             cached_summary = load_cached_market_monitor_digest()
             if cached_summary:
-                self.bot.reply_to(message, cached_summary)
+                self.bot.reply_to(message, cached_summary, disable_web_page_preview=True)
             else:
                 self.bot.reply_to(message, "⏳ 正在生成当前市场概览，请稍候...")
 
@@ -278,7 +278,7 @@ class BasicCommandHandler:
                         force_refresh=False,
                     )
                     if not cached_summary or summary.strip() != cached_summary.strip():
-                        self.bot.send_message(chat_id, summary)
+                        self.bot.send_message(chat_id, summary, disable_web_page_preview=True)
                 except Exception:
                     if not cached_summary:
                         self.bot.send_message(chat_id, "❌ 当前市场概览生成失败，请稍后重试。")
