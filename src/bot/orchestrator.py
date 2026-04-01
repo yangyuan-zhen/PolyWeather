@@ -26,6 +26,7 @@ def _project_root() -> str:
 
 def _register_handlers(
     bot: Any,
+    config: dict[str, Any],
     io_layer: BotIOLayer,
     guard: CommandGuard,
     city_service: CityCommandService,
@@ -87,6 +88,7 @@ def start_bot() -> None:
 
     _register_handlers(
         bot=bot,
+        config=config,
         io_layer=io_layer,
         guard=guard,
         city_service=city_service,
