@@ -10,10 +10,10 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from src.database.db_manager import DBManager
-
 
 def main() -> None:
+    from src.database.db_manager import DBManager
+
     parser = argparse.ArgumentParser(
         description="Backfill Supabase public.profiles.telegram_* fields from local SQLite bindings.",
     )
