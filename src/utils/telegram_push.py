@@ -1055,6 +1055,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         300,
         _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
     )
+    focus_digest_batch_size = max(4, min(12, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_BATCH_SIZE", 8)))
     def _runner() -> None:
         try:
             _save_state(state_path, _load_state(state_path))
@@ -1064,6 +1065,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
             f"telegram market monitor loop started mode=focus-digest-only "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
             f"focus_digest_enabled={focus_digest_enabled} focus_interval={focus_digest_interval_sec}s "
+            f"focus_batch_size={focus_digest_batch_size} "
             f"state_path={state_path}"
         )
         while True:
@@ -1078,6 +1080,19 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                     cycle_payloads.append(alert_payload)
                 except Exception:
                     logger.exception(f"telegram market monitor loop failed for city={city}")
+                if focus_digest_enabled and cycle_payloads and len(cycle_payloads) % focus_digest_batch_size == 0:
+                    try:
+                        if _maybe_send_focus_digest(
+                            bot=bot,
+                            chat_ids=chat_ids,
+                            payloads=cycle_payloads,
+                            state=state,
+                            digest_interval_sec=focus_digest_interval_sec,
+                            top_n=focus_digest_top_n,
+                        ):
+                            _save_state(state_path, state)
+                    except Exception:
+                        logger.exception("failed to push market focus digest mid-cycle")
                 time.sleep(1)
 
             if focus_digest_enabled:
