@@ -63,7 +63,7 @@ def test_trading_alerts_all_core_rules_trigger():
     assert out["rules"]["advection"]["triggered"] is True
 
     msg = out["telegram"]["zh"]
-    assert "PolyWeather 异动预警" in msg
+    assert "PolyWeather 市场提醒" in msg
     assert "动量突变" in msg
     assert "https://example.com/map" in msg
 
