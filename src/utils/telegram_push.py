@@ -573,8 +573,8 @@ def _maybe_send_focus_digest(
             sent_count += 1
         except Exception as exc:
             logger.warning(
-                "market focus digest push failed slot={} chat_id={} error={}",
-                slot_key,
+                "market focus digest push failed interval_sec={} chat_id={} error={}",
+                digest_interval_sec,
                 chat_id,
                 exc,
             )
