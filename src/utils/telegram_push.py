@@ -556,11 +556,22 @@ def _maybe_send_focus_digest(
 
     now_ts = int(time.time())
     last_digest_ts = int(state.get("last_focus_digest_ts") or 0)
+    available_count = sum(
+        1 for item in payloads
+        if bool((item.get("market_snapshot") or {}).get("available"))
+    )
+    actionable_count = sum(
+        1 for item in payloads
+        if bool((item.get("market_snapshot") or {}).get("available"))
+        and _market_price_cap_ok(item, require_actionable_quote=True)
+    )
     shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
     high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
     logger.info(
-        "market focus digest evaluate payloads={} shortlisted={} high_priority={} interval_sec={} top_n={}",
+        "market focus digest evaluate payloads={} available={} actionable={} shortlisted={} high_priority={} interval_sec={} top_n={}",
         len(payloads),
+        available_count,
+        actionable_count,
         len(shortlisted),
         high_priority_count,
         digest_interval_sec,
@@ -578,8 +589,10 @@ def _maybe_send_focus_digest(
 
     if not shortlisted:
         logger.info(
-            "market focus digest skipped reason=no_candidates payloads={} top_n={}",
+            "market focus digest skipped reason=no_candidates payloads={} available={} actionable={} top_n={}",
             len(payloads),
+            available_count,
+            actionable_count,
             top_n,
         )
         return False
