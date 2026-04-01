@@ -25,7 +25,7 @@ def test_startup_coordinator_respects_disable_flags(monkeypatch):
     assert loop_map["trade_alert_push"].started is False
     assert loop_map["trade_alert_push"].reason == "disabled_by_env"
     assert loop_map["polygon_wallet_watch"].reason == "disabled_by_env"
-    assert loop_map["polymarket_wallet_activity"].reason == "disabled_by_env"
+    assert loop_map["polymarket_wallet_activity"].reason == "retired_replaced_by_market_monitor"
 
 
 def test_render_runtime_status_html_contains_key_fields():

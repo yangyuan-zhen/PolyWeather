@@ -47,7 +47,7 @@ def test_ensure_signup_trial_grants_three_day_subscription(monkeypatch):
 
     monkeypatch.setattr(entitlement_module.requests, "post", _fake_post)
 
-    starts_at = datetime(2026, 3, 29, 8, 0, tzinfo=timezone.utc)
+    starts_at = datetime.now(timezone.utc) - timedelta(hours=1)
     result = service.ensure_signup_trial(
         "user-1",
         created_at=starts_at.isoformat(),
