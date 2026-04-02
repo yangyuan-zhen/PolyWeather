@@ -57,21 +57,38 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       href: "https://aviationweather.gov/data/metar/?id=VHHH&decoded=1&taf=1",
       kind: "metar",
     },
-  ],
-  taipei: [
     {
-      label: "NOAA RCTP Timeseries",
-      href: "https://www.weather.gov/wrh/timeseries?site=RCTP",
+      label: "流浮山站（HKO）",
+      href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
+      kind: "agency",
+    },
+  ],
+  "lau fau shan": [
+    {
+      label: "香港天文台",
+      href: "https://www.hko.gov.hk/en/index.html",
       kind: "agency",
     },
     {
-      label: "桃园机场",
-      href: "https://www.taoyuan-airport.com/",
+      label: "流浮山站（HKO）",
+      href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
+      kind: "airport",
+    },
+  ],
+  taipei: [
+    {
+      label: "Wunderground RCSS",
+      href: "https://www.wunderground.com/history/daily/tw/taipei/RCSS",
+      kind: "agency",
+    },
+    {
+      label: "台北松山机场",
+      href: "https://www.tsa.gov.tw/?lang=en",
       kind: "airport",
     },
     {
-      label: "RCTP METAR",
-      href: "https://aviationweather.gov/data/metar/?id=RCTP&decoded=1&taf=1",
+      label: "RCSS METAR",
+      href: "https://aviationweather.gov/data/metar/?id=RCSS&decoded=1&taf=1",
       kind: "metar",
     },
   ],
@@ -494,8 +511,8 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   shenzhen: [
     {
-      label: "NOAA ZGSZ Timeseries",
-      href: "https://www.weather.gov/wrh/timeseries?site=ZGSZ",
+      label: "Wunderground ZGSZ",
+      href: "https://www.wunderground.com/history/daily/cn/shenzhen/ZGSZ",
       kind: "agency",
     },
     {

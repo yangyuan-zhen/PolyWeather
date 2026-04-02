@@ -601,7 +601,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if settlement_current:
             results["settlement_current"] = settlement_current
 
-        if city_lower in ["hong_kong", "hong kong", "香港", "hk"]:
+        city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower()) or {}
+        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+        if settlement_source == "hko" or city_lower in ["hong_kong", "hong kong", "香港", "hk"]:
             hko_forecast = self.fetch_hko_forecast()
             if hko_forecast:
                 results["hko_forecast"] = hko_forecast
