@@ -59,6 +59,10 @@ def _send_telegram_message(text: str) -> None:
             continue
 
 
+def _send_alert_notifications(text: str) -> None:
+    _send_telegram_message(text)
+
+
 class _Handler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # noqa: N802
         if self.path.rstrip("/") == "/healthz":
@@ -83,7 +87,7 @@ class _Handler(BaseHTTPRequestHandler):
         if not isinstance(payload, dict):
             self.send_error(400, "invalid payload")
             return
-        _send_telegram_message(_format_alerts(payload))
+        _send_alert_notifications(_format_alerts(payload))
         self.send_response(200)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.end_headers()

@@ -8,7 +8,7 @@
 
 - Prometheus 抓取 `/metrics`
 - Alertmanager 根据规则聚合告警
-- Telegram relay 把告警推到运营频道
+- Relay 把告警推到运营频道
 - Grafana 展示趋势面板
 - 巡检脚本补健康检查
 
