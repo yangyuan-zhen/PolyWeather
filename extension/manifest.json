@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PolyWeather Side Panel",
   "description": "Weather side panel for Polymarket.",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "icons": {
     "16": "icon-16.png",
     "32": "icon-32.png",
