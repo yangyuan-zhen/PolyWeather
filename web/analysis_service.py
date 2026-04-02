@@ -1451,9 +1451,10 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             }
 
     # ── Assemble result ──
+    city_meta = CITIES.get(city, {}) or {}
     result = {
         "name": city,
-        "display_name": city.title(),
+        "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "lat": lat,
         "lon": lon,
         "temp_symbol": sym,

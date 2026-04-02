@@ -46,6 +46,14 @@ def test_metrics_endpoint_returns_prometheus_payload():
     assert 'polyweather_http_requests_total' in response.text
 
 
+def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
+    response = client.get("/api/cities")
+    assert response.status_code == 200
+    payload = response.json()
+    aurora = next(item for item in payload["cities"] if item["name"] == "aurora")
+    assert aurora["display_name"] == "Denver"
+
+
 def test_payment_runtime_endpoint_returns_shape():
     response = client.get('/api/payments/runtime')
     assert response.status_code == 200

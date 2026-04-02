@@ -201,11 +201,12 @@ async def list_cities(request: Request):
         out = []
         for name, info in CITIES.items():
             risk = CITY_RISK_PROFILES.get(name, {})
+            city_meta = CITY_REGISTRY.get(name, {}) or {}
             settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
             out.append(
                 {
                     "name": name,
-                    "display_name": name.title(),
+                    "display_name": str(city_meta.get("display_name") or city_meta.get("name") or name.title()),
                     "lat": info["lat"],
                     "lon": info["lon"],
                     "risk_level": risk.get("risk_level", "low"),
@@ -213,7 +214,7 @@ async def list_cities(request: Request):
                     "airport": risk.get("airport_name", ""),
                     "icao": risk.get("icao", ""),
                     "temp_unit": "fahrenheit" if info["f"] else "celsius",
-                    "is_major": CITY_REGISTRY.get(name, {}).get("is_major", True),
+                    "is_major": city_meta.get("is_major", True),
                     "settlement_source": settlement_source,
                     "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(
                         settlement_source,

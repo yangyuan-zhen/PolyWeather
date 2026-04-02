@@ -239,6 +239,7 @@ export interface MarketPrimary {
   id?: string | null;
   question?: string | null;
   slug?: string | null;
+  market_url?: string | null;
   condition_id?: string | null;
   end_date?: string | null;
   active?: boolean;
@@ -266,6 +267,8 @@ export interface MarketScan {
   available?: boolean;
   reason?: string | null;
   primary_market?: MarketPrimary | null;
+  market_url?: string | null;
+  primary_market_url?: string | null;
   selected_date?: string | null;
   selected_condition_id?: string | null;
   selected_slug?: string | null;

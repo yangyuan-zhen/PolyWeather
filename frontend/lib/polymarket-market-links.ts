@@ -98,6 +98,16 @@ export function getTodayPolymarketUrl(
   detail?: CityDetail | null,
   locale: Locale = "en-US",
 ) {
+  const directMarketUrl = String(
+    detail?.market_scan?.market_url ||
+      detail?.market_scan?.primary_market_url ||
+      detail?.market_scan?.primary_market?.market_url ||
+      "",
+  ).trim();
+  if (directMarketUrl) {
+    return directMarketUrl;
+  }
+
   const cityKey = normalizeCityKey(detail);
   const citySlug = CITY_TO_MARKET_SLUG[cityKey] || slugifyCityName(cityKey);
   const dateParts = normalizeDateParts(detail?.local_date);

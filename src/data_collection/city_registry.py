@@ -288,7 +288,8 @@ CITY_REGISTRY = {
         "warning": "海湾冷空气和平流雾常压制机场升温，SFO 与市区体感差异可快速放大。",
     },
     "aurora": {
-        "name": "Aurora",
+        "name": "Denver",
+        "display_name": "Denver",
         "lat": 39.7017,
         "lon": -104.7518,
         "icao": "KBKF",
