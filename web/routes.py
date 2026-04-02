@@ -14,6 +14,7 @@ from src.analysis.deb_algorithm import (
 )
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.data_collection.city_registry import ALIASES
+from src.database.runtime_state import TruthRecordRepository
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
     _analyze,
@@ -553,6 +554,75 @@ async def ops_analytics_funnel(request: Request, days: int = 30):
 
     db = DBManager()
     return db.get_app_analytics_funnel_summary(days=days)
+
+
+@router.get("/api/ops/truth-history")
+async def ops_truth_history(
+    request: Request,
+    city: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    limit: int = 200,
+):
+    _assert_entitlement(request)
+    _require_ops_admin(request)
+
+    truth_history = TruthRecordRepository().load_all()
+    normalized_city = str(city or "").strip().lower()
+    normalized_from = str(date_from or "").strip()
+    normalized_to = str(date_to or "").strip()
+    max_limit = max(1, min(int(limit or 200), 1000))
+
+    rows = []
+    for row_city, by_date in truth_history.items():
+        if normalized_city and row_city != normalized_city:
+            continue
+        if not isinstance(by_date, dict):
+            continue
+        for target_date, payload in by_date.items():
+            if normalized_from and str(target_date) < normalized_from:
+                continue
+            if normalized_to and str(target_date) > normalized_to:
+                continue
+            if not isinstance(payload, dict):
+                continue
+            rows.append(
+                {
+                    "city": row_city,
+                    "display_name": str((CITY_REGISTRY.get(row_city) or {}).get("name") or row_city),
+                    "target_date": str(target_date),
+                    "actual_high": payload.get("actual_high"),
+                    "settlement_source": payload.get("settlement_source"),
+                    "settlement_station_code": payload.get("settlement_station_code"),
+                    "settlement_station_label": payload.get("settlement_station_label"),
+                    "truth_version": payload.get("truth_version"),
+                    "updated_by": payload.get("updated_by"),
+                    "truth_updated_at": payload.get("truth_updated_at"),
+                    "is_final": payload.get("is_final"),
+                }
+            )
+
+    rows.sort(key=lambda item: (str(item["target_date"]), str(item["city"])), reverse=True)
+    filtered_count = len(rows)
+    rows = rows[:max_limit]
+    available_cities = [
+        {
+            "city": city_id,
+            "name": str(info.get("name") or city_id),
+        }
+        for city_id, info in sorted(CITY_REGISTRY.items(), key=lambda item: str(item[1].get("name") or item[0]))
+    ]
+    return {
+        "items": rows,
+        "available_cities": available_cities,
+        "filters": {
+            "city": normalized_city or None,
+            "date_from": normalized_from or None,
+            "date_to": normalized_to or None,
+            "limit": max_limit,
+        },
+        "filtered_count": filtered_count,
+    }
 
 
 @router.get("/api/payments/config")

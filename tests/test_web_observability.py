@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
+from src.database.runtime_state import TruthRecordRepository
 
 
 client = TestClient(app)
@@ -146,3 +147,31 @@ def test_ops_memberships_prefers_supabase_auth_email(monkeypatch):
     assert response.status_code == 200
     payload = response.json()
     assert payload["memberships"][0]["email"] == "fresh@example.com"
+
+
+def test_ops_truth_history_returns_filtered_rows(monkeypatch):
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+    monkeypatch.setattr(routes, "_require_ops_admin", lambda request: None)
+
+    repo = TruthRecordRepository()
+    repo.upsert_truth(
+        city="taipei",
+        target_date="2026-04-02",
+        actual_high=26.0,
+        settlement_source="wunderground",
+        settlement_station_code="RCSS",
+        settlement_station_label="Taipei Songshan Airport Station",
+        truth_version="v1",
+        updated_by="test",
+        source_payload={"sample": True},
+        is_final=True,
+    )
+
+    response = client.get("/api/ops/truth-history?city=taipei&date_from=2026-04-01&date_to=2026-04-03&limit=10")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert "items" in payload
+    assert payload["filters"]["city"] == "taipei"
+    assert payload["items"][0]["city"] == "taipei"
+    assert payload["items"][0]["settlement_station_code"] == "RCSS"

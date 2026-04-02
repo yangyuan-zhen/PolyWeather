@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Database, RefreshCcw, ShieldCheck, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -558,10 +559,60 @@ export function OpsDashboard() {
     }
   }, [grantEmail, grantPoints, incidentReasonFilter, loadLeaderboard, loadMemberships, loadPaymentIncidents, loadUsers, searchQuery]);
 
+  const opsNav = [
+    { id: "overview", label: "总览" },
+    { id: "funnel", label: "转化漏斗" },
+    { id: "probability", label: "EMOS 门禁" },
+    { id: "training-data", label: "训练数据" },
+    { id: "coverage", label: "覆盖状态" },
+    { id: "payments", label: "支付异常" },
+    { id: "members", label: "会员" },
+    { id: "users", label: "用户与积分" },
+  ];
+
   return (
     <main className="min-h-screen bg-slate-950 px-3 py-6 text-slate-100 sm:px-6 sm:py-8 lg:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:gap-6">
-        <section className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-6 lg:flex-row lg:items-end lg:justify-between">
+      <div className="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[240px_minmax(0,1fr)] lg:gap-6">
+        <aside className="hidden lg:block">
+          <div className="sticky top-6 space-y-4 rounded-3xl border border-slate-800 bg-slate-900/80 p-4 shadow-2xl backdrop-blur-xl">
+            <div>
+              <div className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Ops Console</div>
+              <div className="mt-2 text-lg font-black text-slate-100">PolyWeather Admin</div>
+              <div className="mt-1 text-xs text-slate-500">后台化视图：先看总览，再看数据、模型、支付与会员。</div>
+            </div>
+            <div className="space-y-2">
+              {opsNav.map((item) => (
+                <a
+                  key={item.id}
+                  href={`#${item.id}`}
+                  className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-950/60 px-3 py-2 text-sm text-slate-300 transition hover:border-cyan-400/40 hover:text-white"
+                >
+                  <span>{item.label}</span>
+                  <span className="text-[11px] text-slate-500">#{item.id}</span>
+                </a>
+              ))}
+              <Link
+                href="/ops/truth-history"
+                className="flex items-center justify-between rounded-2xl border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100 transition hover:border-cyan-400/60 hover:bg-cyan-500/15 hover:text-white"
+              >
+                <span>真值历史表</span>
+                <span className="text-[11px] text-cyan-200/80">/ops/truth-history</span>
+              </Link>
+            </div>
+            <div className="grid gap-2">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">Health</div>
+                <div className="mt-1 text-sm text-slate-200">{health?.status || "unknown"}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2">
+                <div className="text-[11px] font-bold uppercase tracking-[0.16em] text-slate-500">EMOS</div>
+                <div className="mt-1 text-sm text-slate-200">{rolloutDecision?.decision || "hold"}</div>
+              </div>
+            </div>
+          </div>
+        </aside>
+        <div className="flex min-w-0 flex-col gap-5 sm:gap-6">
+        <section id="overview" className="flex flex-col gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-4 shadow-2xl backdrop-blur-xl sm:rounded-3xl sm:p-6">
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-3">
               <Badge variant="secondary">Ops</Badge>
@@ -578,7 +629,7 @@ export function OpsDashboard() {
               <div>
                 <h1 className="text-2xl font-black tracking-tight sm:text-3xl">PolyWeather Ops</h1>
                 <p className="mt-2 max-w-3xl text-sm text-slate-400">
-                  直接挂在现有域名下的轻量运营页。先做只读运维视图，把系统状态、支付运行态和当前登录态聚合起来。
+                  用后台管理系统的方式组织运营视图，把系统状态、训练数据、模型覆盖、支付与会员放到一页里。
                 </p>
               </div>
             </div>
@@ -588,6 +639,24 @@ export function OpsDashboard() {
                 <RefreshCcw className="h-4 w-4" />
                 {loading ? "加载中" : "刷新"}
               </Button>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Health</div>
+                <div className="mt-2 text-2xl font-black text-slate-100">{health?.status || "unknown"}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Truth Rows</div>
+                <div className="mt-2 text-2xl font-black text-slate-100">{truthRecords?.row_count ?? 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">EMOS Samples</div>
+                <div className="mt-2 text-2xl font-black text-slate-100">{trainingArtifacts?.emos_training_samples ?? 0}</div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">LGBM Samples</div>
+                <div className="mt-2 text-2xl font-black text-slate-100">{trainingArtifacts?.lgbm_sample_count ?? 0}</div>
+              </div>
             </div>
         </section>
 
@@ -662,7 +731,7 @@ export function OpsDashboard() {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+        <section id="funnel" className="grid gap-4 xl:grid-cols-[1.3fr_0.7fr]">
           <Card>
             <CardHeader>
               <CardTitle>转化漏斗</CardTitle>
@@ -738,7 +807,7 @@ export function OpsDashboard() {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+        <section id="probability" className="grid gap-4 xl:grid-cols-[1.4fr_1fr]">
           <Card>
             <CardHeader>
               <CardTitle>EMOS 上线门禁</CardTitle>
@@ -812,13 +881,22 @@ export function OpsDashboard() {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1.2fr_1.2fr_1fr]">
+        <section id="training-data" className="grid gap-4 xl:grid-cols-[1.2fr_1.2fr_1fr]">
           <Card>
             <CardHeader>
               <CardTitle>历史真值主表</CardTitle>
               <CardDescription>永久监督真值，不再受 14 天运行态缓存裁剪影响。</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4 text-sm text-slate-300">
+              <div className="flex items-center justify-between gap-3 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2">
+                <div>
+                  <div className="text-xs font-bold uppercase tracking-[0.16em] text-cyan-300">Truth Viewer</div>
+                  <div className="mt-1 text-xs text-slate-400">按城市和日期直接查看历史真值、来源站点与更新记录。</div>
+                </div>
+                <Button asChild variant="secondary" className="shrink-0">
+                  <Link href="/ops/truth-history">打开表格</Link>
+                </Button>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 <MobileField label="truth rows" value={String(truthRecords?.row_count ?? 0)} mono />
                 <MobileField label="cities" value={String(truthRecords?.cities_count ?? 0)} mono />
@@ -902,7 +980,7 @@ export function OpsDashboard() {
           </Card>
         </section>
 
-        <section className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
+        <section id="coverage" className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
           <Card>
             <CardHeader>
               <CardTitle>Wunderground 回填观察</CardTitle>
@@ -1038,7 +1116,7 @@ export function OpsDashboard() {
           </Card>
         </section>
 
-        <Card>
+        <Card id="payments">
           <CardHeader>
             <CardTitle>城市覆盖矩阵</CardTitle>
             <CardDescription>把 truth / feature / EMOS / LGBM 放到一张表里，快速判断哪些城市还只能靠 DEB。</CardDescription>
@@ -1113,7 +1191,7 @@ export function OpsDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="members">
           <CardHeader>
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -1287,7 +1365,7 @@ export function OpsDashboard() {
           </CardContent>
         </Card>
 
-        <section className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+        <section id="users" className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
           <Card>
             <CardHeader>
               <CardTitle>用户查询</CardTitle>
@@ -1381,6 +1459,7 @@ export function OpsDashboard() {
             </CardContent>
           </Card>
         </section>
+        </div>
       </div>
     </main>
   );
