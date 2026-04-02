@@ -17,55 +17,57 @@
       "max_delta_bucket_brier_observe": 0.15
     },
     "evaluation": {
-      "sample_count": 105,
-      "delta_crps": -0.093663,
+      "sample_count": 54,
+      "delta_crps": -0.086732,
       "delta_mae": 0.0,
       "delta_bucket_hit_rate": 0.0
     },
     "shadow": {
-      "sample_count": 103,
-      "delta_mae": 0.012708,
-      "delta_bucket_hit_rate": 0.009709,
-      "delta_bucket_brier": 0.293835
+      "sample_count": 48,
+      "delta_mae": 0.0,
+      "delta_bucket_hit_rate": 0.041666,
+      "delta_bucket_brier": 0.123252
     },
     "blocking_reasons": [
-      "shadow bucket brier 退化超限：delta=0.293835"
+      "离线评估样本不足：54 < 80",
+      "shadow 样本不足：48 < 50",
+      "shadow bucket brier 退化超限：delta=0.123252"
     ],
     "worst_shadow_regressions": [
       {
         "city": "dallas",
-        "samples": 4,
-        "delta_mae": 0.114807,
+        "samples": 1,
+        "delta_mae": 0.0,
         "delta_bucket_hit_rate": 0.0,
-        "delta_bucket_brier": 0.778678
+        "delta_bucket_brier": 0.792585
       },
       {
         "city": "chicago",
-        "samples": 4,
-        "delta_mae": 0.075265,
+        "samples": 1,
+        "delta_mae": 0.0,
         "delta_bucket_hit_rate": 0.0,
-        "delta_bucket_brier": 0.746156
+        "delta_bucket_brier": 0.791878
       },
       {
         "city": "seattle",
-        "samples": 4,
-        "delta_mae": 0.11262,
+        "samples": 1,
+        "delta_mae": 0.0,
         "delta_bucket_hit_rate": 0.0,
-        "delta_bucket_brier": 0.692003
+        "delta_bucket_brier": 0.61609
       },
       {
-        "city": "atlanta",
-        "samples": 4,
-        "delta_mae": 0.293028,
-        "delta_bucket_hit_rate": -0.25,
-        "delta_bucket_brier": 0.601425
+        "city": "wellington",
+        "samples": 2,
+        "delta_mae": 0.0,
+        "delta_bucket_hit_rate": 0.0,
+        "delta_bucket_brier": 0.509203
       },
       {
-        "city": "miami",
-        "samples": 4,
-        "delta_mae": 0.241559,
-        "delta_bucket_hit_rate": -0.5,
-        "delta_bucket_brier": 0.478245
+        "city": "tel aviv",
+        "samples": 2,
+        "delta_mae": 0.0,
+        "delta_bucket_hit_rate": 0.0,
+        "delta_bucket_brier": 0.439879
       }
     ]
   }

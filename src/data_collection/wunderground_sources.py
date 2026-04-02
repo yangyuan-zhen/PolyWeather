@@ -5,8 +5,10 @@ import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
+import requests
 from loguru import logger
 from src.data_collection.city_registry import CITY_REGISTRY
+from src.analysis.settlement_rounding import apply_city_settlement
 
 
 class WundergroundSourceMixin:
@@ -502,3 +504,92 @@ class WundergroundSourceMixin:
         }
         self._set_settlement_cache(cache_key, payload)
         return payload
+
+
+def _normalize_wu_history_date_url(url: str, target_date: str) -> str:
+    normalized = str(url or "").strip().rstrip("/")
+    normalized = re.sub(r"/date/\d{4}-\d{2}-\d{2}$", "", normalized, flags=re.IGNORECASE)
+    return f"{normalized}/date/{target_date}"
+
+
+def fetch_wunderground_historical_high(
+    city: str,
+    target_date: str,
+    *,
+    url: Optional[str] = None,
+    timeout: int = 15,
+    session: Optional[requests.Session] = None,
+) -> Dict[str, Any]:
+    city_key = str(city or "").strip().lower()
+    city_meta = CITY_REGISTRY.get(city_key) or {}
+    history_url = _normalize_wu_history_date_url(
+        url or str(city_meta.get("settlement_url") or "").strip(),
+        target_date,
+    )
+    if not history_url:
+        return {"ok": False, "reason": "missing_history_url", "city": city_key, "date": target_date}
+
+    requester = session or requests.Session()
+    try:
+        response = requester.get(
+            history_url,
+            headers={
+                "User-Agent": "Mozilla/5.0",
+                "Referer": history_url,
+            },
+            timeout=timeout,
+        )
+        response.raise_for_status()
+        html = str(response.text or "")
+    except Exception as exc:
+        logger.warning(f"Wunderground history fetch failed city={city_key} date={target_date}: {exc}")
+        return {
+            "ok": False,
+            "reason": "fetch_failed",
+            "city": city_key,
+            "date": target_date,
+            "history_url": history_url,
+            "error": str(exc),
+        }
+
+    app_state = WundergroundSourceMixin._wu_extract_app_state(html)
+    if not isinstance(app_state, dict):
+        return {
+            "ok": False,
+            "reason": "missing_app_state",
+            "city": city_key,
+            "date": target_date,
+            "history_url": history_url,
+        }
+
+    utc_offset_seconds = int(city_meta.get("tz_offset") or 0)
+    obs = WundergroundSourceMixin._wu_extract_history_observations(
+        app_state,
+        utc_offset_seconds=utc_offset_seconds,
+    )
+    if not obs:
+        return {
+            "ok": False,
+            "reason": "missing_observations",
+            "city": city_key,
+            "date": target_date,
+            "history_url": history_url,
+        }
+
+    raw_max_temp_c = max(float(point.get("temp")) for point in obs if point.get("temp") is not None)
+    settled_actual_high = apply_city_settlement(city_key, raw_max_temp_c)
+    station_code = str(city_meta.get("settlement_station_code") or "").strip().upper() or None
+    station_label = str(city_meta.get("settlement_station_label") or "").strip() or None
+    return {
+        "ok": True,
+        "city": city_key,
+        "date": target_date,
+        "history_url": history_url,
+        "raw_max_temp_c": round(raw_max_temp_c, 1),
+        "actual_high": float(settled_actual_high),
+        "settlement_source": "wunderground",
+        "settlement_station_code": station_code,
+        "settlement_station_label": station_label,
+        "observation_count": len(obs),
+        "observations": obs,
+    }

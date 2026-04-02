@@ -7,6 +7,9 @@ from src.database.runtime_state import (
     ProbabilitySnapshotRepository,
     RuntimeStateDB,
     TelegramAlertStateRepository,
+    TrainingFeatureRecordRepository,
+    TruthRecordRepository,
+    TruthRevisionRepository,
 )
 
 
@@ -72,3 +75,64 @@ def test_open_meteo_cache_repository_roundtrip(tmp_path, monkeypatch):
     loaded = repo.load_payload(86400)
     assert loaded['forecast']['ankara']['temp'] == 15
     assert loaded['ensemble']['ankara']['spread'] == 1.5
+
+
+def test_truth_record_repository_tracks_revisions(tmp_path, monkeypatch):
+    monkeypatch.setenv('POLYWEATHER_DB_PATH', str(tmp_path / 'polyweather.db'))
+    db = RuntimeStateDB(str(tmp_path / 'polyweather.db'))
+    truth_repo = TruthRecordRepository(db)
+    revision_repo = TruthRevisionRepository(db)
+
+    changed = truth_repo.upsert_truth(
+        city='taipei',
+        target_date='2026-04-01',
+        actual_high=18.0,
+        settlement_source='wunderground',
+        settlement_station_code='RCSS',
+        settlement_station_label='Taipei Songshan Airport Station',
+        truth_version='v1',
+        updated_by='test:first',
+        source_payload={'raw_max_temp_c': 18.4},
+        reason='initial',
+    )
+    assert changed is True
+    assert revision_repo.load_revisions('taipei', '2026-04-01') == []
+
+    changed = truth_repo.upsert_truth(
+        city='taipei',
+        target_date='2026-04-01',
+        actual_high=19.0,
+        settlement_source='wunderground',
+        settlement_station_code='RCSS',
+        settlement_station_label='Taipei Songshan Airport Station',
+        truth_version='v1',
+        updated_by='test:second',
+        source_payload={'raw_max_temp_c': 19.1},
+        reason='correction',
+    )
+    assert changed is True
+    loaded = truth_repo.get_record('taipei', '2026-04-01')
+    assert loaded['actual_high'] == 19.0
+    revisions = revision_repo.load_revisions('taipei', '2026-04-01')
+    assert len(revisions) == 1
+    assert revisions[0]['previous_actual_high'] == 18.0
+    assert revisions[0]['next_actual_high'] == 19.0
+
+
+def test_training_feature_record_repository_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv('POLYWEATHER_DB_PATH', str(tmp_path / 'polyweather.db'))
+    db = RuntimeStateDB(str(tmp_path / 'polyweather.db'))
+    repo = TrainingFeatureRecordRepository(db)
+    repo.upsert_record(
+        'ankara',
+        '2026-03-20',
+        {
+            'forecasts': {'ECMWF': 12.3},
+            'deb_prediction': 12.1,
+            'mu': 12.0,
+            'probability_features': {'ens_median': 12.2},
+        },
+    )
+    loaded = repo.get_record('ankara', '2026-03-20')
+    assert loaded['forecasts']['ECMWF'] == 12.3
+    assert loaded['deb_prediction'] == 12.1

@@ -15,9 +15,12 @@ from src.analysis.probability_calibration import (  # noqa: E402
 )
 from src.analysis.deb_algorithm import load_history  # noqa: E402
 from src.database.runtime_state import (  # noqa: E402
+    DailyRecordRepository,
     ProbabilitySnapshotRepository,
     STATE_STORAGE_FILE,
     STATE_STORAGE_SQLITE,
+    TrainingFeatureRecordRepository,
+    TruthRecordRepository,
     get_state_storage_mode,
 )
 
@@ -56,10 +59,32 @@ def _default_snapshot_arg():
 
 
 def _load_history_with_fallback(path):
+    if not path:
+        if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+            return DailyRecordRepository().load_all()
+        return {}
     data = load_history(path)
     if data:
         return data
     return _load_json_if_exists(path)
+
+
+def _load_truth_history():
+    if get_state_storage_mode() != STATE_STORAGE_SQLITE:
+        return {}
+    try:
+        return TruthRecordRepository().load_all()
+    except Exception:
+        return {}
+
+
+def _load_training_feature_history():
+    if get_state_storage_mode() != STATE_STORAGE_SQLITE:
+        return {}
+    try:
+        return TrainingFeatureRecordRepository().load_all()
+    except Exception:
+        return {}
 
 
 def _load_snapshot_rows(path):
@@ -82,18 +107,28 @@ def _load_snapshot_rows(path):
     return rows
 
 
-def _actual_high_for(history, settlement_history, city, date_str):
+def _actual_high_for(history, truth_history, settlement_history, city, date_str):
     city_rows = (history or {}).get(city) or {}
     record = city_rows.get(date_str) or {}
     actual_high = _sf(record.get("actual_high")) if isinstance(record, dict) else None
+    truth_record = ((truth_history.get(city) or {}).get(date_str) or {})
+    if actual_high is None and isinstance(truth_record, dict):
+        actual_high = _sf(truth_record.get("actual_high"))
     filled = False
     if actual_high is None:
         actual_high = _sf(((settlement_history.get(city) or {}).get(date_str) or {}).get("max_temp"))
         filled = actual_high is not None
-    return actual_high, filled
+    metadata = {
+        "settlement_source": truth_record.get("settlement_source"),
+        "settlement_station_code": truth_record.get("settlement_station_code"),
+        "truth_version": truth_record.get("truth_version"),
+        "truth_updated_by": truth_record.get("updated_by"),
+        "truth_updated_at": truth_record.get("truth_updated_at"),
+    }
+    return actual_high, filled, metadata
 
 
-def _extract_snapshot_samples(history, snapshot_rows, settlement_history=None):
+def _extract_snapshot_samples(history, truth_history=None, snapshot_rows=None, settlement_history=None):
     samples = []
     filled_actual_from_history = 0
     today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -105,7 +140,13 @@ def _extract_snapshot_samples(history, snapshot_rows, settlement_history=None):
         if not city or not date_str or date_str == today:
             continue
 
-        actual_high, filled = _actual_high_for(history, settlement_history, city, date_str)
+        actual_high, filled, truth_meta = _actual_high_for(
+            history,
+            truth_history or {},
+            settlement_history,
+            city,
+            date_str,
+        )
         if actual_high is None:
             continue
         if filled:
@@ -167,13 +208,20 @@ def _extract_snapshot_samples(history, snapshot_rows, settlement_history=None):
                 "max_so_far_gap": max_so_far_gap,
                 "peak_flag": peak_flag,
                 "sample_source": "snapshot",
+                **truth_meta,
             }
         )
 
     return samples, filled_actual_from_history
 
 
-def _extract_daily_record_samples(history, settlement_history=None, excluded_keys=None):
+def _extract_daily_record_samples(
+    history,
+    training_feature_history=None,
+    truth_history=None,
+    settlement_history=None,
+    excluded_keys=None,
+):
     samples = []
     filled_actual_from_history = 0
     today = datetime.utcnow().strftime("%Y-%m-%d")
@@ -189,13 +237,18 @@ def _extract_daily_record_samples(history, settlement_history=None, excluded_key
             if (city, date_str) in excluded_keys:
                 continue
             actual_high = _sf(record.get("actual_high"))
+            truth_meta = ((truth_history or {}).get(city) or {}).get(date_str) or {}
+            if actual_high is None:
+                actual_high = _sf(truth_meta.get("actual_high"))
             if actual_high is None:
                 actual_high = _sf((city_settlement.get(date_str) or {}).get("max_temp"))
                 if actual_high is not None:
                     filled_actual_from_history += 1
-            deb_prediction = _sf(record.get("deb_prediction"))
-            raw_mu = _sf(record.get("mu")) or deb_prediction
-            forecasts = record.get("forecasts") or {}
+            feature_record = ((training_feature_history or {}).get(city) or {}).get(date_str) or {}
+            source_record = feature_record if isinstance(feature_record, dict) and feature_record else record
+            deb_prediction = _sf(source_record.get("deb_prediction"))
+            raw_mu = _sf(source_record.get("mu")) or deb_prediction
+            forecasts = source_record.get("forecasts") or {}
             if not isinstance(forecasts, dict):
                 forecasts = {}
             forecast_values = [val for val in (_sf(v) for v in forecasts.values()) if val is not None]
@@ -203,7 +256,7 @@ def _extract_daily_record_samples(history, settlement_history=None, excluded_key
             forecast_median = (
                 forecast_values[len(forecast_values) // 2] if forecast_values else None
             )
-            feature_snapshot = record.get("probability_features") or {}
+            feature_snapshot = source_record.get("probability_features") or {}
             if not isinstance(feature_snapshot, dict):
                 feature_snapshot = {}
 
@@ -243,15 +296,21 @@ def _extract_daily_record_samples(history, settlement_history=None, excluded_key
                     "max_so_far_gap": max_so_far_gap,
                     "peak_flag": peak_flag,
                     "sample_source": "daily_record",
+                    "settlement_source": truth_meta.get("settlement_source"),
+                    "settlement_station_code": truth_meta.get("settlement_station_code"),
+                    "truth_version": truth_meta.get("truth_version"),
+                    "truth_updated_by": truth_meta.get("updated_by"),
+                    "truth_updated_at": truth_meta.get("truth_updated_at"),
                 }
             )
     return samples, filled_actual_from_history
 
 
-def _extract_samples(history, settlement_history=None, snapshot_rows=None):
+def _extract_samples(history, training_feature_history=None, truth_history=None, settlement_history=None, snapshot_rows=None):
     snapshot_samples, snapshot_filled = _extract_snapshot_samples(
         history,
-        snapshot_rows or [],
+        truth_history=truth_history,
+        snapshot_rows=snapshot_rows or [],
         settlement_history=settlement_history,
     )
     excluded_keys = {
@@ -260,6 +319,8 @@ def _extract_samples(history, settlement_history=None, snapshot_rows=None):
     }
     daily_samples, daily_filled = _extract_daily_record_samples(
         history,
+        training_feature_history=training_feature_history,
+        truth_history=truth_history,
         settlement_history=settlement_history,
         excluded_keys=excluded_keys,
     )
@@ -301,10 +362,14 @@ def main():
     args = parser.parse_args()
 
     history = _load_history_with_fallback(args.history_file)
+    training_feature_history = _load_training_feature_history()
+    truth_history = _load_truth_history()
     settlement_history = _load_json_if_exists(args.settlement_history)
     snapshot_rows = _load_snapshot_rows(args.snapshot_file)
     samples, filled_actual_from_history = _extract_samples(
         history,
+        training_feature_history=training_feature_history,
+        truth_history=truth_history,
         settlement_history=settlement_history,
         snapshot_rows=snapshot_rows,
     )

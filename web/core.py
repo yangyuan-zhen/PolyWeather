@@ -2,6 +2,7 @@
 PolyWeather Web Core Context
 """
 
+import json
 import os
 import sqlite3
 import time
@@ -134,6 +135,18 @@ _PROBABILITY_SHADOW_REPORT = os.path.join(
     "artifacts",
     "probability_calibration",
     "shadow_report.json",
+)
+_PROBABILITY_TRAINING_SAMPLES = os.path.join(
+    _PROJECT_ROOT,
+    "artifacts",
+    "probability_calibration",
+    "training_samples.json",
+)
+_LGBM_SCHEMA_REPORT = os.path.join(
+    _PROJECT_ROOT,
+    "artifacts",
+    "models",
+    "lgbm_daily_high_schema.json",
 )
 
 
@@ -436,6 +449,282 @@ def _probability_summary() -> Dict[str, Any]:
     }
 
 
+def _read_json_file(path: str) -> Optional[Dict[str, Any]]:
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            payload = json.load(fh)
+        if isinstance(payload, dict):
+            return payload
+    except Exception:
+        return None
+    return None
+
+
+def _table_date_summary(conn: sqlite3.Connection, table_name: str) -> Dict[str, Any]:
+    try:
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS row_count,
+                   COUNT(DISTINCT city) AS cities_count,
+                   MIN(target_date) AS min_date,
+                   MAX(target_date) AS max_date
+            FROM {table_name}
+            """
+        ).fetchone()
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "row_count": 0, "cities_count": 0}
+
+    return {
+        "ok": True,
+        "row_count": int(row["row_count"] or 0),
+        "cities_count": int(row["cities_count"] or 0),
+        "min_date": row["min_date"],
+        "max_date": row["max_date"],
+    }
+
+
+def _truth_source_counts(conn: sqlite3.Connection) -> Dict[str, int]:
+    try:
+        rows = conn.execute(
+            """
+            SELECT COALESCE(NULLIF(TRIM(settlement_source), ''), 'unknown') AS settlement_source,
+                   COUNT(*) AS row_count
+            FROM truth_records_store
+            GROUP BY COALESCE(NULLIF(TRIM(settlement_source), ''), 'unknown')
+            ORDER BY row_count DESC, settlement_source ASC
+            """
+        ).fetchall()
+    except Exception:
+        return {}
+    return {str(row["settlement_source"]): int(row["row_count"] or 0) for row in rows}
+
+
+def _truth_revisions_summary(conn: sqlite3.Connection) -> Dict[str, Any]:
+    try:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS row_count,
+                   MAX(updated_at) AS last_updated_at
+            FROM truth_revisions_store
+            """
+        ).fetchone()
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "row_count": 0}
+    return {
+        "ok": True,
+        "row_count": int(row["row_count"] or 0),
+        "last_updated_at": row["last_updated_at"],
+    }
+
+
+def _city_coverage_summary(conn: sqlite3.Connection) -> Dict[str, Any]:
+    truth_rows = conn.execute(
+        """
+        SELECT city, COUNT(*) AS row_count, MIN(target_date) AS min_date, MAX(target_date) AS max_date
+        FROM truth_records_store
+        GROUP BY city
+        """
+    ).fetchall()
+    feature_rows = conn.execute(
+        """
+        SELECT city, COUNT(*) AS row_count, MIN(target_date) AS min_date, MAX(target_date) AS max_date
+        FROM training_feature_records_store
+        GROUP BY city
+        """
+    ).fetchall()
+
+    truth_index = {
+        str(row["city"]): {
+            "truth_rows": int(row["row_count"] or 0),
+            "truth_min_date": row["min_date"],
+            "truth_max_date": row["max_date"],
+        }
+        for row in truth_rows
+    }
+    feature_index = {
+        str(row["city"]): {
+            "feature_rows": int(row["row_count"] or 0),
+            "feature_min_date": row["min_date"],
+            "feature_max_date": row["max_date"],
+        }
+        for row in feature_rows
+    }
+
+    entries = []
+    for city, meta in CITY_REGISTRY.items():
+        truth_payload = truth_index.get(city, {})
+        feature_payload = feature_index.get(city, {})
+        entries.append(
+            {
+                "city": city,
+                "name": str(meta.get("name") or city),
+                "settlement_source": str(meta.get("settlement_source") or "metar"),
+                "settlement_station_code": str(meta.get("settlement_station_code") or meta.get("icao") or ""),
+                "truth_rows": int(truth_payload.get("truth_rows") or 0),
+                "feature_rows": int(feature_payload.get("feature_rows") or 0),
+                "truth_min_date": truth_payload.get("truth_min_date"),
+                "truth_max_date": truth_payload.get("truth_max_date"),
+                "feature_min_date": feature_payload.get("feature_min_date"),
+                "feature_max_date": feature_payload.get("feature_max_date"),
+            }
+        )
+
+    highlighted = [
+        entry
+        for entry in entries
+        if entry["city"] in {"taipei", "shenzhen"}
+    ]
+    gaps = sorted(
+        entries,
+        key=lambda entry: (
+            entry["feature_rows"] > 0,
+            entry["truth_rows"] > 0,
+            entry["truth_rows"],
+            entry["feature_rows"],
+            entry["city"],
+        ),
+    )[:10]
+    return {
+        "total_cities": len(entries),
+        "with_truth_rows": sum(1 for entry in entries if entry["truth_rows"] > 0),
+        "with_feature_rows": sum(1 for entry in entries if entry["feature_rows"] > 0),
+        "entries": entries,
+        "highlighted": highlighted,
+        "top_gaps": gaps,
+    }
+
+
+def _model_city_coverage_summary(
+    city_entries: Any,
+    training_samples_payload: Dict[str, Any],
+    evaluation_report: Dict[str, Any],
+) -> Dict[str, Any]:
+    training_samples = training_samples_payload.get("samples") or []
+    emos_training_counts: Dict[str, int] = {}
+    emos_snapshot_counts: Dict[str, int] = {}
+    for item in training_samples:
+        if not isinstance(item, dict):
+            continue
+        city = str(item.get("city") or "").strip().lower()
+        if not city:
+            continue
+        emos_training_counts[city] = emos_training_counts.get(city, 0) + 1
+        if str(item.get("sample_source") or "").strip().lower() == "snapshot":
+            emos_snapshot_counts[city] = emos_snapshot_counts.get(city, 0) + 1
+
+    evaluation_by_city = (evaluation_report.get("by_city") or {}) if isinstance(evaluation_report, dict) else {}
+    rows = []
+    for entry in city_entries or []:
+        city = str(entry.get("city") or "").strip().lower()
+        emos_eval = evaluation_by_city.get(city) or {}
+        rows.append(
+            {
+                "city": city,
+                "name": entry.get("name") or city,
+                "settlement_source": entry.get("settlement_source"),
+                "truth_rows": int(entry.get("truth_rows") or 0),
+                "feature_rows": int(entry.get("feature_rows") or 0),
+                "emos_training_samples": int(emos_training_counts.get(city, 0)),
+                "emos_snapshot_samples": int(emos_snapshot_counts.get(city, 0)),
+                "emos_evaluation_samples": int(emos_eval.get("samples") or 0),
+                "emos_delta_crps": emos_eval.get("emos_mean_crps"),
+                "lgbm_candidate_rows": int(entry.get("feature_rows") or 0),
+            }
+        )
+
+    weakest = sorted(
+        rows,
+        key=lambda row: (
+            row["emos_training_samples"] > 0,
+            row["lgbm_candidate_rows"] > 0,
+            row["truth_rows"] > 0,
+            row["emos_training_samples"],
+            row["lgbm_candidate_rows"],
+            row["truth_rows"],
+            row["city"],
+        ),
+    )[:12]
+    strongest = sorted(
+        rows,
+        key=lambda row: (
+            -row["emos_training_samples"],
+            -row["lgbm_candidate_rows"],
+            -row["truth_rows"],
+            row["city"],
+        ),
+    )[:8]
+    return {
+        "cities_with_emos_training": sum(1 for row in rows if row["emos_training_samples"] > 0),
+        "cities_with_lgbm_candidates": sum(1 for row in rows if row["lgbm_candidate_rows"] > 0),
+        "weakest": weakest,
+        "strongest": strongest,
+    }
+
+
+def _training_data_summary() -> Dict[str, Any]:
+    db_path = _account_db.db_path
+    truth_records = {"ok": False, "row_count": 0, "cities_count": 0}
+    truth_revisions = {"ok": False, "row_count": 0}
+    training_features = {"ok": False, "row_count": 0, "cities_count": 0}
+    try:
+        with sqlite3.connect(db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            truth_records = _table_date_summary(conn, "truth_records_store")
+            if truth_records.get("ok"):
+                truth_records["source_counts"] = _truth_source_counts(conn)
+            truth_revisions = _truth_revisions_summary(conn)
+            training_features = _table_date_summary(conn, "training_feature_records_store")
+            city_coverage = _city_coverage_summary(conn)
+    except Exception as exc:
+        return {
+            "db_path": db_path,
+            "db_ok": False,
+            "error": str(exc),
+            "truth_records": truth_records,
+            "truth_revisions": truth_revisions,
+            "training_features": training_features,
+            "city_coverage": {},
+            "artifacts": {},
+        }
+
+    evaluation_report = _read_json_file(_PROBABILITY_EVALUATION_REPORT) or {}
+    shadow_report = _read_json_file(_PROBABILITY_SHADOW_REPORT) or {}
+    training_samples = _read_json_file(_PROBABILITY_TRAINING_SAMPLES) or {}
+    lgbm_report = _read_json_file(_LGBM_SCHEMA_REPORT) or {}
+    evaluation_summary = (evaluation_report.get("summary") or {}) if isinstance(evaluation_report, dict) else {}
+    shadow_summary = shadow_report.get("summary") or {}
+    lgbm_validation = ((lgbm_report.get("metrics") or {}).get("validation") or {})
+
+    return {
+        "db_path": db_path,
+        "db_ok": True,
+        "truth_records": truth_records,
+        "truth_revisions": truth_revisions,
+        "training_features": training_features,
+        "city_coverage": city_coverage,
+        "model_city_coverage": _model_city_coverage_summary(
+            city_coverage.get("entries") or [],
+            training_samples,
+            evaluation_report,
+        ),
+        "artifacts": {
+            "emos_training_samples": training_samples.get("sample_count"),
+            "emos_snapshot_samples": training_samples.get("snapshot_sample_count"),
+            "emos_daily_record_samples": training_samples.get("daily_record_sample_count"),
+            "emos_evaluation_samples": evaluation_summary.get("sample_count"),
+            "emos_shadow_samples": shadow_summary.get("sample_count"),
+            "emos_delta_crps": (evaluation_summary.get("delta") or {}).get("crps"),
+            "lgbm_sample_count": lgbm_report.get("sample_count"),
+            "lgbm_train_count": lgbm_report.get("train_count"),
+            "lgbm_validation_count": lgbm_report.get("validation_count"),
+            "lgbm_validation_mae": lgbm_validation.get("lgbm_mae"),
+            "lgbm_validation_deb_mae": lgbm_validation.get("deb_mae"),
+        },
+    }
+
+
 def build_health_payload() -> Dict[str, Any]:
     db = _sqlite_health()
     return {
@@ -451,11 +740,13 @@ def build_system_status_payload() -> Dict[str, Any]:
     return {
         "status": build_health_payload()["status"],
         "time_utc": datetime.now(timezone.utc).isoformat(),
+        "state_storage_mode": get_state_storage_mode(),
         "db": _sqlite_health(),
         "features": _feature_flags_summary(),
         "integrations": _integration_summary(),
         "cache": _cache_summary(),
         "metrics": build_metrics_summary(),
         "probability": _probability_summary(),
+        "training_data": _training_data_summary(),
         "cities_count": len(CITIES),
     }

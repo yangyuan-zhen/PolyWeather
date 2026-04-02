@@ -1,4 +1,4 @@
-from src.models.lgbm_features import build_runtime_feature_map
+from src.models.lgbm_features import build_runtime_feature_map, build_training_samples
 
 
 def test_build_runtime_feature_map_derives_history_and_model_summary():
@@ -59,3 +59,35 @@ def test_build_runtime_feature_map_returns_none_without_history():
 
     assert feature_map is None
     assert meta["reason"] == "no_history"
+
+
+def test_build_training_samples_prefers_truth_history_for_target():
+    history_data = {
+        "ankara": {
+            "2026-03-20": {"actual_high": 10.0},
+            "2026-03-21": {"actual_high": 11.0},
+            "2026-03-22": {"actual_high": 13.0},
+            "2026-03-23": {
+                "actual_high": 12.0,
+                "deb_prediction": 12.3,
+                "forecasts": {"Open-Meteo": 12.4, "ECMWF": 12.1},
+            },
+        }
+    }
+    snapshot_index = {
+        ("ankara", "2026-03-23"): {
+            "city": "ankara",
+            "date": "2026-03-23",
+            "timestamp": "2026-03-23T10:00:00+03:00",
+            "raw_mu": 12.2,
+            "deb_prediction": 12.3,
+            "max_so_far": 11.8,
+            "peak_status": "before",
+            "multi_model": {"Open-Meteo": 12.4, "ECMWF": 12.1},
+            "observation": {"current_temp": 11.5, "humidity": 60.0, "wind_speed_kt": 8.0, "local_hour": 10},
+        }
+    }
+
+    samples = build_training_samples(history_data=history_data, snapshot_index=snapshot_index)
+    assert len(samples) == 1
+    assert samples[0]["sample_source"] == "snapshot"

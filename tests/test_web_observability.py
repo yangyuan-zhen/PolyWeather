@@ -23,12 +23,19 @@ def test_system_status_returns_summary_shape():
     assert response.status_code == 200
     payload = response.json()
     assert 'db' in payload
+    assert 'state_storage_mode' in payload
     assert 'features' in payload
     assert 'integrations' in payload
     assert 'cache' in payload
     assert 'probability' in payload
     assert 'rollout' in payload['probability']
     assert payload['probability']['rollout']['decision']['decision'] in {'hold', 'observe', 'promote'}
+    assert 'training_data' in payload
+    assert 'truth_records' in payload['training_data']
+    assert 'training_features' in payload['training_data']
+    assert 'city_coverage' in payload['training_data']
+    assert 'model_city_coverage' in payload['training_data']
+    assert 'artifacts' in payload['training_data']
     assert 'cities_count' in payload
 
 

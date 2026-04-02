@@ -8,7 +8,7 @@
       "city": "shenzhen",
       "date": "2026-03-25",
       "timestamp": "2026-03-25T08:57:11.783182+00:00",
-      "actual_high": 29.0,
+      "actual_high": 28.0,
       "raw_mu": 26.7,
       "raw_sigma": 0.18016764322916676,
       "deb_prediction": 28.1,
@@ -16,7 +16,12 @@
       "ensemble_spread": 0.5078125000000002,
       "max_so_far_gap": 1.4000000000000021,
       "peak_flag": 1.0,
-      "sample_source": "snapshot"
+      "sample_source": "snapshot",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "ankara",
@@ -29,7 +34,12 @@
       "ensemble_spread": 1.2000000000000002,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "ankara",
@@ -42,7 +52,12 @@
       "ensemble_spread": 2.05,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "ankara",
@@ -55,7 +70,12 @@
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "atlanta",
@@ -68,7 +88,12 @@
       "ensemble_spread": 4.0,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "atlanta",
@@ -81,7 +106,12 @@
       "ensemble_spread": 1.5500000000000007,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "buenos aires",
@@ -94,7 +124,12 @@
       "ensemble_spread": 2.0,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "buenos aires",
@@ -107,7 +142,12 @@
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "chicago",
@@ -120,7 +160,12 @@
       "ensemble_spread": 5.350000000000001,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "dallas",
@@ -133,7 +178,12 @@
       "ensemble_spread": 9.299999999999997,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "hong kong",
@@ -146,7 +196,12 @@
       "ensemble_spread": 1.9000000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "hong kong",
@@ -159,7 +214,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "hong kong",
@@ -172,7 +232,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "hong kong",
@@ -185,7 +250,12 @@
       "ensemble_spread": 1.6999999999999993,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "london",
@@ -198,7 +268,12 @@
       "ensemble_spread": 1.299999999999999,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "london",
@@ -211,7 +286,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "lucknow",
@@ -224,7 +304,12 @@
       "ensemble_spread": 1.3000000000000007,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "lucknow",
@@ -237,7 +322,12 @@
       "ensemble_spread": 1.75,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "madrid",
@@ -250,7 +340,12 @@
       "ensemble_spread": 1.8499999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "madrid",
@@ -263,7 +358,12 @@
       "ensemble_spread": 1.8999999999999995,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "miami",
@@ -276,7 +376,12 @@
       "ensemble_spread": 2.8999999999999986,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "miami",
@@ -289,7 +394,12 @@
       "ensemble_spread": 2.5500000000000043,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "milan",
@@ -302,7 +412,12 @@
       "ensemble_spread": 9.1,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "milan",
@@ -315,7 +430,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "milan",
@@ -328,7 +448,12 @@
       "ensemble_spread": 1.25,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "munich",
@@ -341,7 +466,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "munich",
@@ -354,7 +484,12 @@
       "ensemble_spread": 1.3000000000000007,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "new york",
@@ -367,7 +502,12 @@
       "ensemble_spread": 2.25,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "paris",
@@ -380,7 +520,12 @@
       "ensemble_spread": 0.9000000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "paris",
@@ -393,7 +538,12 @@
       "ensemble_spread": 0.6,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "sao paulo",
@@ -406,7 +556,12 @@
       "ensemble_spread": 2.450000000000001,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "sao paulo",
@@ -419,7 +574,12 @@
       "ensemble_spread": 1.200000000000001,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "seattle",
@@ -432,7 +592,12 @@
       "ensemble_spread": 1.3500000000000014,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "seoul",
@@ -445,7 +610,12 @@
       "ensemble_spread": 0.7999999999999998,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "seoul",
@@ -458,7 +628,12 @@
       "ensemble_spread": 1.7999999999999998,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "shanghai",
@@ -471,7 +646,12 @@
       "ensemble_spread": 1.1500000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "shanghai",
@@ -484,7 +664,12 @@
       "ensemble_spread": 0.7999999999999998,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "shanghai",
@@ -497,7 +682,12 @@
       "ensemble_spread": 1.6999999999999993,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "singapore",
@@ -510,7 +700,12 @@
       "ensemble_spread": 0.9500000000000011,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "singapore",
@@ -523,7 +718,12 @@
       "ensemble_spread": 1.3499999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "taipei",
@@ -536,7 +736,12 @@
       "ensemble_spread": 2.25,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "taipei",
@@ -549,12 +754,17 @@
       "ensemble_spread": 1.0500000000000007,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "taipei",
       "date": "2026-03-19",
-      "actual_high": 21.4,
+      "actual_high": 22.0,
       "raw_mu": 21.7,
       "raw_sigma": 1.1500000000000004,
       "deb_prediction": 21.5,
@@ -562,7 +772,12 @@
       "ensemble_spread": 1.1500000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "tel aviv",
@@ -575,7 +790,12 @@
       "ensemble_spread": 2.1500000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "tel aviv",
@@ -588,7 +808,12 @@
       "ensemble_spread": 1.5,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "tokyo",
@@ -601,7 +826,12 @@
       "ensemble_spread": 1.5499999999999998,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "tokyo",
@@ -614,7 +844,12 @@
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "toronto",
@@ -627,7 +862,12 @@
       "ensemble_spread": 0.8,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "toronto",
@@ -640,7 +880,12 @@
       "ensemble_spread": 2.1500000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "warsaw",
@@ -653,7 +898,12 @@
       "ensemble_spread": 0.6499999999999995,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "warsaw",
@@ -666,7 +916,12 @@
       "ensemble_spread": 1.4000000000000004,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "warsaw",
@@ -679,7 +934,12 @@
       "ensemble_spread": 1.5999999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "wellington",
@@ -692,7 +952,12 @@
       "ensemble_spread": 0.9500000000000011,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     },
     {
       "city": "wellington",
@@ -705,7 +970,12 @@
       "ensemble_spread": 2.0999999999999996,
       "max_so_far_gap": null,
       "peak_flag": 0.0,
-      "sample_source": "daily_record"
+      "sample_source": "daily_record",
+      "settlement_source": null,
+      "settlement_station_code": null,
+      "truth_version": null,
+      "truth_updated_by": null,
+      "truth_updated_at": null
     }
   ]
 }

@@ -1,13 +1,17 @@
 import os
 import json
 from datetime import datetime, timedelta
+from typing import Optional
 import requests
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.data_collection.wunderground_sources import fetch_wunderground_historical_high
 from loguru import logger
 from src.database.runtime_state import (
     DailyRecordRepository,
     STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
+    TrainingFeatureRecordRepository,
+    TruthRecordRepository,
     get_state_storage_mode,
 )
 
@@ -44,6 +48,9 @@ else:
 _history_cache = {}
 _history_mtime = 0
 _daily_record_repo = DailyRecordRepository()
+_training_feature_repo = TrainingFeatureRecordRepository()
+_truth_record_repo = TruthRecordRepository()
+_TRUTH_VERSION = "v1"
 
 
 def _sf(value):
@@ -168,6 +175,80 @@ def _resolve_city_history_context(city_name: str):
     return city_key, city_meta
 
 
+def _truth_meta_for_city(city_meta: dict) -> dict:
+    if not isinstance(city_meta, dict):
+        city_meta = {}
+    return {
+        "settlement_source": str(city_meta.get("settlement_source") or "metar").strip().lower(),
+        "settlement_station_code": str(city_meta.get("settlement_station_code") or city_meta.get("icao") or "").strip().upper() or None,
+        "settlement_station_label": str(
+            city_meta.get("settlement_station_label")
+            or city_meta.get("airport_name")
+            or city_meta.get("name")
+            or ""
+        ).strip()
+        or None,
+    }
+
+
+def _persist_truth_record(
+    city_name: str,
+    date_str: str,
+    actual_high: float,
+    *,
+    city_meta: Optional[dict] = None,
+    updated_by: str,
+    reason: str,
+    source_payload: Optional[dict] = None,
+    is_final: bool = True,
+) -> None:
+    city_key, resolved_meta = _resolve_city_history_context(city_name)
+    meta = city_meta if isinstance(city_meta, dict) else resolved_meta
+    if not city_key or not isinstance(meta, dict):
+        return
+    truth_meta = _truth_meta_for_city(meta)
+    _truth_record_repo.upsert_truth(
+        city=city_key,
+        target_date=date_str,
+        actual_high=float(actual_high),
+        settlement_source=truth_meta["settlement_source"],
+        settlement_station_code=truth_meta["settlement_station_code"],
+        settlement_station_label=truth_meta["settlement_station_label"],
+        truth_version=_TRUTH_VERSION,
+        updated_by=updated_by,
+        source_payload=source_payload,
+        is_final=is_final,
+        reason=reason,
+    )
+
+
+def _persist_training_feature_record(
+    city_name: str,
+    date_str: str,
+    *,
+    forecasts: Optional[dict],
+    deb_prediction: Optional[float],
+    mu: Optional[float],
+    probability_features: Optional[dict],
+    probabilities: Optional[list],
+    shadow_probabilities: Optional[list],
+    probability_calibration: Optional[dict],
+) -> None:
+    city_key, _ = _resolve_city_history_context(city_name)
+    if not city_key:
+        return
+    payload = {
+        "forecasts": forecasts or {},
+        "deb_prediction": deb_prediction,
+        "mu": mu,
+        "probability_features": probability_features or {},
+        "prob_snapshot": probabilities or [],
+        "shadow_prob_snapshot": shadow_probabilities or [],
+        "probability_calibration": probability_calibration or {},
+    }
+    _training_feature_repo.upsert_record(city_key, date_str, payload)
+
+
 def _parse_hko_ryes_max_temp(payload):
     if not isinstance(payload, dict):
         return None
@@ -275,6 +356,15 @@ def _reconcile_recent_metar_actual_highs(city_name: str, lookback_days: int = 7)
             if t_c is None:
                 continue
             corrected = round(t_c * 9 / 5 + 32, 1) if use_fahrenheit else round(t_c, 1)
+            _persist_truth_record(
+                city_key,
+                d,
+                corrected,
+                city_meta=city_meta,
+                updated_by="backfill:metar_history",
+                reason="reconcile_recent_actual_highs",
+                source_payload={"icao": icao, "actual_high": corrected, "source": "metar"},
+            )
             rec = city_data.get(d) or {}
             old = rec.get("actual_high")
             try:
@@ -366,6 +456,19 @@ def _reconcile_recent_hko_actual_highs(city_name: str, lookback_days: int = 14):
                 round(max_temp_c * 9 / 5 + 32, 1)
                 if use_fahrenheit
                 else round(max_temp_c, 1)
+            )
+            _persist_truth_record(
+                city_key,
+                date_str,
+                corrected,
+                city_meta=city_meta,
+                updated_by="backfill:hko_history",
+                reason="reconcile_recent_actual_highs",
+                source_payload={
+                    "station_code": station_code,
+                    "actual_high": corrected,
+                    "source": "hko",
+                },
             )
             rec = city_data.get(date_str) or {}
             old = rec.get("actual_high")
@@ -486,6 +589,19 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
                 if use_fahrenheit
                 else int(corrected)
             )
+            _persist_truth_record(
+                city_key,
+                date_key,
+                next_value,
+                city_meta=city_meta,
+                updated_by="backfill:noaa_history",
+                reason="reconcile_recent_actual_highs",
+                source_payload={
+                    "station_code": station_code,
+                    "actual_high": next_value,
+                    "source": "noaa",
+                },
+            )
             rec = city_data.get(date_key) or {}
             old = rec.get("actual_high")
             try:
@@ -513,6 +629,79 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
         return {"ok": False, "reason": str(e), "updated": 0}
 
 
+def _reconcile_recent_wunderground_actual_highs(city_name: str, lookback_days: int = 14):
+    try:
+        city_key, city_meta = _resolve_city_history_context(city_name)
+        if not city_key or not isinstance(city_meta, dict):
+            return {"ok": False, "reason": "unknown_city", "updated": 0}
+
+        settlement_url = str(city_meta.get("settlement_url") or "").strip()
+        if not settlement_url:
+            return {"ok": False, "reason": "missing_settlement_url", "updated": 0}
+
+        tz_offset = int(city_meta.get("tz_offset") or 0)
+        history_file = _get_history_file_path()
+        data = load_history(history_file)
+        city_data = data.get(city_key) or {}
+        if not isinstance(city_data, dict) or not city_data:
+            return {"ok": True, "reason": "no_city_history", "updated": 0}
+
+        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
+        local_today = local_now.strftime("%Y-%m-%d")
+        cutoff = (local_now - timedelta(days=max(lookback_days, 1) + 1)).strftime(
+            "%Y-%m-%d"
+        )
+        target_dates = sorted(
+            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
+        )
+        if not target_dates:
+            return {"ok": True, "reason": "no_target_dates", "updated": 0}
+
+        updated = 0
+        scanned_dates = 0
+        for date_str in target_dates:
+            result = fetch_wunderground_historical_high(city_key, date_str, url=settlement_url)
+            if not result.get("ok"):
+                continue
+            scanned_dates += 1
+            corrected = _sf(result.get("actual_high"))
+            if corrected is None:
+                continue
+            rec = city_data.get(date_str) or {}
+            old = rec.get("actual_high")
+            try:
+                old_val = float(old) if old is not None else None
+            except Exception:
+                old_val = None
+            if old_val is None or abs(old_val - corrected) >= 0.1:
+                rec["actual_high"] = corrected
+                city_data[date_str] = rec
+                updated += 1
+            _persist_truth_record(
+                city_key,
+                date_str,
+                corrected,
+                city_meta=city_meta,
+                updated_by="backfill:wunderground_history",
+                reason="reconcile_recent_actual_highs",
+                source_payload=result,
+            )
+
+        if updated > 0:
+            data[city_key] = city_data
+            save_history(history_file, data)
+
+        return {
+            "ok": True,
+            "updated": updated,
+            "scanned_dates": scanned_dates,
+            "station_code": city_meta.get("settlement_station_code"),
+            "source": "wunderground",
+        }
+    except Exception as e:
+        return {"ok": False, "reason": str(e), "updated": 0}
+
+
 def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
     """
     Reconcile recent `actual_high` values using the city's official settlement source.
@@ -526,6 +715,8 @@ def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
         return _reconcile_recent_hko_actual_highs(city_key, lookback_days=lookback_days)
     if settlement_source == "noaa":
         return _reconcile_recent_noaa_actual_highs(city_key, lookback_days=lookback_days)
+    if settlement_source == "wunderground":
+        return _reconcile_recent_wunderground_actual_highs(city_key, lookback_days=lookback_days)
     return _reconcile_recent_metar_actual_highs(city_key, lookback_days=lookback_days)
 
 
@@ -541,14 +732,14 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
             return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
 
         settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
-        if settlement_source not in {"metar", "hko", "noaa"}:
+        if settlement_source not in {"metar", "hko", "noaa", "wunderground"}:
             return {"ok": True, "reason": "unsupported_settlement_source", "seeded": 0, "updated": 0}
 
         icao = str(city_meta.get("icao") or "").strip().upper()
         station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
         if settlement_source == "metar" and not icao:
             return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
-        if settlement_source in {"hko", "noaa"} and not station_code:
+        if settlement_source in {"hko", "noaa", "wunderground"} and not station_code:
             return {"ok": False, "reason": "missing_station_code", "seeded": 0, "updated": 0}
 
         tz_offset = int(city_meta.get("tz_offset") or 0)
@@ -725,6 +916,37 @@ def update_daily_record(
         existing["shadow_prob_snapshot"] = compact_shadow_probs
     if compact_calibration is not None:
         existing["probability_calibration"] = compact_calibration
+
+    if actual_high is not None:
+        try:
+            _persist_truth_record(
+                city_name,
+                date_str,
+                float(actual_high),
+                updated_by="runtime:update_daily_record",
+                reason="update_daily_record",
+                source_payload={
+                    "actual_high": actual_high,
+                    "deb_prediction": deb_prediction,
+                    "mu": next_mu,
+                },
+            )
+        except Exception as e:
+            logger.error(f"Error persisting truth record city={city_name} date={date_str}: {e}")
+    try:
+        _persist_training_feature_record(
+            city_name,
+            date_str,
+            forecasts=merged_forecasts,
+            deb_prediction=existing.get("deb_prediction"),
+            mu=existing.get("mu"),
+            probability_features=existing.get("probability_features"),
+            probabilities=existing.get("prob_snapshot"),
+            shadow_probabilities=existing.get("shadow_prob_snapshot"),
+            probability_calibration=existing.get("probability_calibration"),
+        )
+    except Exception as e:
+        logger.error(f"Error persisting training feature record city={city_name} date={date_str}: {e}")
 
     # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
     cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")

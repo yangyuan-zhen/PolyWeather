@@ -76,6 +76,48 @@ class RuntimeStateDB:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS truth_records_store (
+                    city TEXT NOT NULL,
+                    target_date TEXT NOT NULL,
+                    actual_high REAL NOT NULL,
+                    settlement_source TEXT,
+                    settlement_station_code TEXT,
+                    settlement_station_label TEXT,
+                    truth_version TEXT,
+                    updated_by TEXT,
+                    updated_at REAL NOT NULL,
+                    source_payload_json TEXT,
+                    is_final INTEGER NOT NULL DEFAULT 1,
+                    PRIMARY KEY (city, target_date)
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS truth_revisions_store (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    city TEXT NOT NULL,
+                    target_date TEXT NOT NULL,
+                    previous_actual_high REAL,
+                    next_actual_high REAL NOT NULL,
+                    previous_source TEXT,
+                    next_source TEXT,
+                    truth_version TEXT,
+                    updated_by TEXT,
+                    updated_at REAL NOT NULL,
+                    reason TEXT,
+                    payload_json TEXT
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_truth_records_city_date ON truth_records_store(city, target_date)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_truth_revisions_city_date ON truth_revisions_store(city, target_date, id DESC)"
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS telegram_alert_last_by_city (
                     city TEXT PRIMARY KEY,
                     signature TEXT,
@@ -116,6 +158,20 @@ class RuntimeStateDB:
             )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_probability_snapshot_city_date ON probability_training_snapshots_store(city, target_date, id DESC)"
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS training_feature_records_store (
+                    city TEXT NOT NULL,
+                    target_date TEXT NOT NULL,
+                    updated_at REAL NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    PRIMARY KEY (city, target_date)
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_training_feature_records_city_date ON training_feature_records_store(city, target_date)"
             )
             conn.execute(
                 """
@@ -236,6 +292,251 @@ class DailyRecordRepository:
             )
             conn.commit()
             return int(cur.rowcount or 0)
+
+
+class TruthRecordRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def load_all(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT city, target_date, actual_high, settlement_source, settlement_station_code,
+                       settlement_station_label, truth_version, updated_by, updated_at,
+                       source_payload_json, is_final
+                FROM truth_records_store
+                ORDER BY city, target_date
+                """
+            ).fetchall()
+        for row in rows:
+            payload: Dict[str, Any] = {
+                "actual_high": float(row["actual_high"]),
+                "settlement_source": row["settlement_source"],
+                "settlement_station_code": row["settlement_station_code"],
+                "settlement_station_label": row["settlement_station_label"],
+                "truth_version": row["truth_version"],
+                "updated_by": row["updated_by"],
+                "truth_updated_at": float(row["updated_at"]),
+                "is_final": bool(row["is_final"]),
+            }
+            if row["source_payload_json"]:
+                try:
+                    payload["source_payload"] = json.loads(row["source_payload_json"])
+                except Exception:
+                    pass
+            out.setdefault(str(row["city"]), {})[str(row["target_date"])] = payload
+        return out
+
+    def get_record(self, city: str, target_date: str) -> Optional[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT actual_high, settlement_source, settlement_station_code,
+                       settlement_station_label, truth_version, updated_by, updated_at,
+                       source_payload_json, is_final
+                FROM truth_records_store
+                WHERE city = ? AND target_date = ?
+                """,
+                (city, target_date),
+            ).fetchone()
+        if not row:
+            return None
+        payload: Dict[str, Any] = {
+            "actual_high": float(row["actual_high"]),
+            "settlement_source": row["settlement_source"],
+            "settlement_station_code": row["settlement_station_code"],
+            "settlement_station_label": row["settlement_station_label"],
+            "truth_version": row["truth_version"],
+            "updated_by": row["updated_by"],
+            "truth_updated_at": float(row["updated_at"]),
+            "is_final": bool(row["is_final"]),
+        }
+        if row["source_payload_json"]:
+            try:
+                payload["source_payload"] = json.loads(row["source_payload_json"])
+            except Exception:
+                pass
+        return payload
+
+    def upsert_truth(
+        self,
+        *,
+        city: str,
+        target_date: str,
+        actual_high: float,
+        settlement_source: Optional[str],
+        settlement_station_code: Optional[str],
+        settlement_station_label: Optional[str],
+        truth_version: str,
+        updated_by: str,
+        source_payload: Optional[Dict[str, Any]] = None,
+        is_final: bool = True,
+        reason: Optional[str] = None,
+    ) -> bool:
+        updated_at = time.time()
+        payload_json = (
+            json.dumps(source_payload, ensure_ascii=False) if source_payload is not None else None
+        )
+        with self.db.connect() as conn:
+            current = conn.execute(
+                """
+                SELECT actual_high, settlement_source, source_payload_json
+                FROM truth_records_store
+                WHERE city = ? AND target_date = ?
+                """,
+                (city, target_date),
+            ).fetchone()
+            changed = True
+            if current:
+                prev_actual = float(current["actual_high"])
+                prev_source = str(current["settlement_source"] or "")
+                next_source = str(settlement_source or "")
+                changed = (
+                    abs(prev_actual - float(actual_high)) >= 0.0001
+                    or prev_source != next_source
+                    or str(current["source_payload_json"] or "") != str(payload_json or "")
+                )
+                if changed:
+                    conn.execute(
+                        """
+                        INSERT INTO truth_revisions_store (
+                            city, target_date, previous_actual_high, next_actual_high,
+                            previous_source, next_source, truth_version, updated_by,
+                            updated_at, reason, payload_json
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            city,
+                            target_date,
+                            prev_actual,
+                            float(actual_high),
+                            prev_source or None,
+                            next_source or None,
+                            truth_version,
+                            updated_by,
+                            updated_at,
+                            reason,
+                            payload_json,
+                        ),
+                    )
+            conn.execute(
+                """
+                INSERT INTO truth_records_store (
+                    city, target_date, actual_high, settlement_source,
+                    settlement_station_code, settlement_station_label, truth_version,
+                    updated_by, updated_at, source_payload_json, is_final
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(city, target_date) DO UPDATE SET
+                    actual_high = excluded.actual_high,
+                    settlement_source = excluded.settlement_source,
+                    settlement_station_code = excluded.settlement_station_code,
+                    settlement_station_label = excluded.settlement_station_label,
+                    truth_version = excluded.truth_version,
+                    updated_by = excluded.updated_by,
+                    updated_at = excluded.updated_at,
+                    source_payload_json = excluded.source_payload_json,
+                    is_final = excluded.is_final
+                """,
+                (
+                    city,
+                    target_date,
+                    float(actual_high),
+                    settlement_source,
+                    settlement_station_code,
+                    settlement_station_label,
+                    truth_version,
+                    updated_by,
+                    updated_at,
+                    payload_json,
+                    1 if is_final else 0,
+                ),
+            )
+            conn.commit()
+        return changed
+
+    def replace_all(self, rows: Dict[str, Dict[str, Dict[str, Any]]]) -> int:
+        count = 0
+        with self.db.connect() as conn:
+            conn.execute("DELETE FROM truth_records_store")
+            conn.execute("DELETE FROM truth_revisions_store")
+            for city, city_rows in (rows or {}).items():
+                if not isinstance(city_rows, dict):
+                    continue
+                for target_date, record in city_rows.items():
+                    if not isinstance(record, dict):
+                        continue
+                    actual_high = record.get("actual_high")
+                    if actual_high is None:
+                        continue
+                    payload_json = (
+                        json.dumps(record.get("source_payload"), ensure_ascii=False)
+                        if record.get("source_payload") is not None
+                        else None
+                    )
+                    conn.execute(
+                        """
+                        INSERT INTO truth_records_store (
+                            city, target_date, actual_high, settlement_source,
+                            settlement_station_code, settlement_station_label, truth_version,
+                            updated_by, updated_at, source_payload_json, is_final
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            city,
+                            target_date,
+                            float(actual_high),
+                            record.get("settlement_source"),
+                            record.get("settlement_station_code"),
+                            record.get("settlement_station_label"),
+                            record.get("truth_version") or "v1",
+                            record.get("updated_by") or "replace_all",
+                            float(record.get("truth_updated_at") or time.time()),
+                            payload_json,
+                            1 if record.get("is_final", True) else 0,
+                        ),
+                    )
+                    count += 1
+            conn.commit()
+        return count
+
+
+class TruthRevisionRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def load_revisions(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT previous_actual_high, next_actual_high, previous_source, next_source,
+                       truth_version, updated_by, updated_at, reason, payload_json
+                FROM truth_revisions_store
+                WHERE city = ? AND target_date = ?
+                ORDER BY id ASC
+                """,
+                (city, target_date),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            entry: Dict[str, Any] = {
+                "previous_actual_high": row["previous_actual_high"],
+                "next_actual_high": row["next_actual_high"],
+                "previous_source": row["previous_source"],
+                "next_source": row["next_source"],
+                "truth_version": row["truth_version"],
+                "updated_by": row["updated_by"],
+                "updated_at": float(row["updated_at"]),
+                "reason": row["reason"],
+            }
+            if row["payload_json"]:
+                try:
+                    entry["payload"] = json.loads(row["payload_json"])
+                except Exception:
+                    pass
+            out.append(entry)
+        return out
 
 
 class TelegramAlertStateRepository:
@@ -427,6 +728,66 @@ class ProbabilitySnapshotRepository:
                 count += 1
             conn.commit()
         return count
+
+
+class TrainingFeatureRecordRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def upsert_record(self, city: str, target_date: str, payload: Dict[str, Any]) -> None:
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO training_feature_records_store (
+                    city, target_date, updated_at, payload_json
+                ) VALUES (?, ?, ?, ?)
+                ON CONFLICT(city, target_date) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    payload_json = excluded.payload_json
+                """,
+                (
+                    city,
+                    target_date,
+                    time.time(),
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+
+    def load_all(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        out: Dict[str, Dict[str, Dict[str, Any]]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT city, target_date, payload_json
+                FROM training_feature_records_store
+                ORDER BY city, target_date
+                """
+            ).fetchall()
+        for row in rows:
+            try:
+                payload = json.loads(row["payload_json"])
+            except Exception:
+                continue
+            out.setdefault(str(row["city"]), {})[str(row["target_date"])] = payload
+        return out
+
+    def get_record(self, city: str, target_date: str) -> Optional[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT payload_json
+                FROM training_feature_records_store
+                WHERE city = ? AND target_date = ?
+                """,
+                (city, target_date),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["payload_json"])
+        except Exception:
+            return None
 
 
 class OpenMeteoCacheRepository:

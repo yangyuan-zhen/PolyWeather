@@ -31,9 +31,22 @@ def test_extract_samples_prefers_snapshot_rows_for_same_city_day():
             "peak_status": "in_window",
         }
     ]
+    truth_history = {
+        "ankara": {
+            "2026-03-19": {
+                "actual_high": 11.0,
+                "settlement_source": "metar",
+                "settlement_station_code": "LTAC",
+                "truth_version": "v1",
+                "updated_by": "test",
+                "truth_updated_at": 123.0,
+            }
+        }
+    }
 
     samples, filled = _extract_samples(
         history,
+        truth_history=truth_history,
         settlement_history={},
         snapshot_rows=snapshot_rows,
     )
@@ -43,3 +56,6 @@ def test_extract_samples_prefers_snapshot_rows_for_same_city_day():
     assert samples[0]["sample_source"] == "snapshot"
     assert samples[0]["raw_mu"] == 11.2
     assert samples[0]["peak_flag"] == 0.5
+    assert samples[0]["settlement_source"] == "metar"
+    assert samples[0]["settlement_station_code"] == "LTAC"
+    assert samples[0]["truth_version"] == "v1"

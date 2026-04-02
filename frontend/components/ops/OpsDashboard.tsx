@@ -31,6 +31,96 @@ type SystemStatusPayload = {
     };
   };
   integrations?: Record<string, unknown>;
+  training_data?: {
+    db_ok?: boolean;
+    db_path?: string;
+    error?: string;
+    truth_records?: {
+      row_count?: number;
+      cities_count?: number;
+      min_date?: string | null;
+      max_date?: string | null;
+      source_counts?: Record<string, number>;
+    };
+    truth_revisions?: {
+      row_count?: number;
+      last_updated_at?: number | null;
+    };
+    training_features?: {
+      row_count?: number;
+      cities_count?: number;
+      min_date?: string | null;
+      max_date?: string | null;
+    };
+    city_coverage?: {
+      total_cities?: number;
+      with_truth_rows?: number;
+      with_feature_rows?: number;
+      highlighted?: Array<{
+        city: string;
+        name?: string;
+        settlement_source?: string;
+        settlement_station_code?: string;
+        truth_rows?: number;
+        feature_rows?: number;
+        truth_min_date?: string | null;
+        truth_max_date?: string | null;
+        feature_min_date?: string | null;
+        feature_max_date?: string | null;
+      }>;
+      top_gaps?: Array<{
+        city: string;
+        name?: string;
+        settlement_source?: string;
+        settlement_station_code?: string;
+        truth_rows?: number;
+        feature_rows?: number;
+        truth_min_date?: string | null;
+        truth_max_date?: string | null;
+        feature_min_date?: string | null;
+        feature_max_date?: string | null;
+      }>;
+    };
+    model_city_coverage?: {
+      cities_with_emos_training?: number;
+      cities_with_lgbm_candidates?: number;
+      weakest?: Array<{
+        city: string;
+        name?: string;
+        settlement_source?: string;
+        truth_rows?: number;
+        feature_rows?: number;
+        emos_training_samples?: number;
+        emos_snapshot_samples?: number;
+        emos_evaluation_samples?: number;
+        lgbm_candidate_rows?: number;
+      }>;
+      strongest?: Array<{
+        city: string;
+        name?: string;
+        settlement_source?: string;
+        truth_rows?: number;
+        feature_rows?: number;
+        emos_training_samples?: number;
+        emos_snapshot_samples?: number;
+        emos_evaluation_samples?: number;
+        lgbm_candidate_rows?: number;
+      }>;
+    };
+    artifacts?: {
+      emos_training_samples?: number;
+      emos_snapshot_samples?: number;
+      emos_daily_record_samples?: number;
+      emos_evaluation_samples?: number;
+      emos_shadow_samples?: number;
+      emos_delta_crps?: number | null;
+      lgbm_sample_count?: number;
+      lgbm_train_count?: number;
+      lgbm_validation_count?: number;
+      lgbm_validation_mae?: number | null;
+      lgbm_validation_deb_mae?: number | null;
+    };
+  };
 };
 
 type PaymentRuntimePayload = {
@@ -138,6 +228,16 @@ function formatDateTime(value?: string | null) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatUnixDateTime(value?: number | null) {
+  if (!value) return "-";
+  return formatDateTime(new Date(value * 1000).toISOString());
+}
+
+function formatMetric(value?: number | null, digits = 3) {
+  if (value === null || value === undefined || Number.isNaN(value)) return "-";
+  return Number(value).toFixed(digits);
 }
 
 function maskUrl(value?: string | null) {
@@ -313,6 +413,36 @@ export function OpsDashboard() {
   }, [incidentReasonFilter, load, loadPaymentIncidents]);
 
   const rolloutDecision = status?.probability?.rollout?.decision;
+  const trainingData = status?.training_data;
+  const truthRecords = trainingData?.truth_records;
+  const truthRevisions = trainingData?.truth_revisions;
+  const trainingFeatures = trainingData?.training_features;
+  const cityCoverage = trainingData?.city_coverage;
+  const modelCityCoverage = trainingData?.model_city_coverage;
+  const trainingArtifacts = trainingData?.artifacts;
+  const truthSources = Object.entries(truthRecords?.source_counts || {});
+  const cityCoverageRows = useMemo(() => {
+    const modelIndex = new Map(
+      [...(modelCityCoverage?.strongest || []), ...(modelCityCoverage?.weakest || [])].map((entry) => [entry.city, entry]),
+    );
+    const rows: Array<Record<string, unknown>> = [];
+    for (const entry of [...(cityCoverage?.top_gaps || []), ...(cityCoverage?.highlighted || [])]) {
+      if (!entry || rows.some((row) => row.city === entry.city)) continue;
+      const modelEntry = modelIndex.get(entry.city);
+      rows.push({
+        ...entry,
+        emos_training_samples: modelEntry?.emos_training_samples ?? 0,
+        emos_evaluation_samples: modelEntry?.emos_evaluation_samples ?? 0,
+        lgbm_candidate_rows: modelEntry?.lgbm_candidate_rows ?? entry.feature_rows ?? 0,
+      });
+    }
+    rows.sort((a, b) => {
+      const aScore = Number(a.truth_rows || 0) + Number(a.feature_rows || 0) + Number(a.emos_training_samples || 0);
+      const bScore = Number(b.truth_rows || 0) + Number(b.feature_rows || 0) + Number(b.emos_training_samples || 0);
+      return aScore - bScore || String(a.city || "").localeCompare(String(b.city || ""));
+    });
+    return rows;
+  }, [cityCoverage?.highlighted, cityCoverage?.top_gaps, modelCityCoverage?.strongest, modelCityCoverage?.weakest]);
 
   const funnelSteps = useMemo(() => {
     const events = analyticsFunnel?.events || {};
@@ -681,6 +811,307 @@ export function OpsDashboard() {
             </CardContent>
           </Card>
         </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1.2fr_1.2fr_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>历史真值主表</CardTitle>
+              <CardDescription>永久监督真值，不再受 14 天运行态缓存裁剪影响。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-300">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MobileField label="truth rows" value={String(truthRecords?.row_count ?? 0)} mono />
+                <MobileField label="cities" value={String(truthRecords?.cities_count ?? 0)} mono />
+                <MobileField label="min date" value={truthRecords?.min_date || "-"} mono />
+                <MobileField label="max date" value={truthRecords?.max_date || "-"} mono />
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">来源分布</div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {truthSources.length ? (
+                    truthSources.map(([source, count]) => (
+                      <Badge key={source} variant="secondary">
+                        {source}: {count}
+                      </Badge>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-500">暂无来源统计</span>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="flex justify-between gap-3">
+                  <span>revision rows</span>
+                  <span>{truthRevisions?.row_count ?? 0}</span>
+                </div>
+                <div className="mt-2 flex justify-between gap-3 text-xs text-slate-500">
+                  <span>last revision</span>
+                  <span>{formatUnixDateTime(truthRevisions?.last_updated_at)}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>长期训练特征</CardTitle>
+              <CardDescription>概率快照与训练特征长期归档，避免未来样本继续被裁掉。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-300">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MobileField label="feature rows" value={String(trainingFeatures?.row_count ?? 0)} mono />
+                <MobileField label="cities" value={String(trainingFeatures?.cities_count ?? 0)} mono />
+                <MobileField label="min date" value={trainingFeatures?.min_date || "-"} mono />
+                <MobileField label="max date" value={trainingFeatures?.max_date || "-"} mono />
+              </div>
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+                当前这张表代表“从现在开始不再继续丢训练特征”。如果历史样本仍偏少，通常说明旧日期本身没有被长期归档，而不是现在的写入链坏了。
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3 text-xs text-slate-500">
+                DB: {trainingData?.db_ok ? "ok" : "error"} · {trainingData?.db_path || "-"}
+                {trainingData?.error ? <div className="mt-2 text-rose-300">{trainingData.error}</div> : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>模型样本状态</CardTitle>
+              <CardDescription>直接看当前 EMOS / LGBM 可用样本与最新验证结果。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">EMOS</div>
+                <div className="mt-2 space-y-2">
+                  <div className="flex justify-between gap-3"><span>training samples</span><span>{trainingArtifacts?.emos_training_samples ?? 0}</span></div>
+                  <div className="flex justify-between gap-3"><span>evaluation samples</span><span>{trainingArtifacts?.emos_evaluation_samples ?? 0}</span></div>
+                  <div className="flex justify-between gap-3"><span>shadow samples</span><span>{trainingArtifacts?.emos_shadow_samples ?? 0}</span></div>
+                  <div className="flex justify-between gap-3"><span>delta CRPS</span><span>{formatMetric(trainingArtifacts?.emos_delta_crps)}</span></div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">LGBM</div>
+                <div className="mt-2 space-y-2">
+                  <div className="flex justify-between gap-3"><span>sample count</span><span>{trainingArtifacts?.lgbm_sample_count ?? 0}</span></div>
+                  <div className="flex justify-between gap-3"><span>train / val</span><span>{trainingArtifacts?.lgbm_train_count ?? 0} / {trainingArtifacts?.lgbm_validation_count ?? 0}</span></div>
+                  <div className="flex justify-between gap-3"><span>val mae</span><span>{formatMetric(trainingArtifacts?.lgbm_validation_mae)}</span></div>
+                  <div className="flex justify-between gap-3"><span>DEB val mae</span><span>{formatMetric(trainingArtifacts?.lgbm_validation_deb_mae)}</span></div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>Wunderground 回填观察</CardTitle>
+              <CardDescription>先盯已经切到 WU 结算的关键城市，确认真值和特征都在持续积累。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">truth cities {cityCoverage?.with_truth_rows ?? 0}/{cityCoverage?.total_cities ?? 0}</Badge>
+                <Badge variant="secondary">feature cities {cityCoverage?.with_feature_rows ?? 0}/{cityCoverage?.total_cities ?? 0}</Badge>
+              </div>
+              {(cityCoverage?.highlighted || []).map((entry) => (
+                <div key={entry.city} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-semibold text-slate-100">{entry.name || entry.city}</div>
+                    <Badge variant="secondary">{entry.settlement_source || "-"}</Badge>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                    <MobileField label="station" value={entry.settlement_station_code || "-"} mono />
+                    <MobileField label="truth rows" value={String(entry.truth_rows ?? 0)} mono />
+                    <MobileField label="truth max" value={entry.truth_max_date || "-"} mono />
+                    <MobileField label="feature rows" value={String(entry.feature_rows ?? 0)} mono />
+                  </div>
+                </div>
+              ))}
+              {!(cityCoverage?.highlighted || []).length ? (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-500">暂无 Wunderground 重点城市状态。</div>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>城市覆盖缺口</CardTitle>
+              <CardDescription>按 truth / feature 覆盖从弱到强排序，优先看哪些城市还没形成长期训练样本。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              {(cityCoverage?.top_gaps || []).length ? (
+                <div className="space-y-2">
+                  {(cityCoverage?.top_gaps || []).map((entry) => (
+                    <div key={entry.city} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-slate-100">{entry.name || entry.city}</div>
+                          <div className="mt-1 text-xs text-slate-500">
+                            {entry.city} · {entry.settlement_source || "-"} · {entry.settlement_station_code || "-"}
+                          </div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant={entry.truth_rows ? "success" : "warning"}>truth {entry.truth_rows ?? 0}</Badge>
+                          <Badge variant={entry.feature_rows ? "success" : "warning"}>feature {entry.feature_rows ?? 0}</Badge>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2 text-xs text-slate-500">
+                        <div>truth range: {entry.truth_min_date || "-"} → {entry.truth_max_date || "-"}</div>
+                        <div>feature range: {entry.feature_min_date || "-"} → {entry.feature_max_date || "-"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-500">当前无城市覆盖缺口摘要。</div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="grid gap-4 xl:grid-cols-[1fr_1.4fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>模型城市覆盖</CardTitle>
+              <CardDescription>直接看当前哪些城市已经开始积累 EMOS 训练样本，哪些城市只有真值没有特征。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary">EMOS cities {modelCityCoverage?.cities_with_emos_training ?? 0}</Badge>
+                <Badge variant="secondary">LGBM candidate cities {modelCityCoverage?.cities_with_lgbm_candidates ?? 0}</Badge>
+              </div>
+              <div className="space-y-2">
+                {(modelCityCoverage?.strongest || []).map((entry) => (
+                  <div key={entry.city} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="font-semibold text-slate-100">{entry.name || entry.city}</div>
+                        <div className="mt-1 text-xs text-slate-500">{entry.city} · {entry.settlement_source || "-"}</div>
+                      </div>
+                      <div className="flex gap-2 text-xs">
+                        <Badge variant="success">EMOS {entry.emos_training_samples ?? 0}</Badge>
+                        <Badge variant="success">LGBM {entry.lgbm_candidate_rows ?? 0}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!(modelCityCoverage?.strongest || []).length ? (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-500">暂无模型覆盖摘要。</div>
+                ) : null}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>模型样本缺口</CardTitle>
+              <CardDescription>优先处理长期真值有了但 EMOS/LGBM 样本仍然很薄的城市。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              {(modelCityCoverage?.weakest || []).length ? (
+                <div className="space-y-2">
+                  {(modelCityCoverage?.weakest || []).map((entry) => (
+                    <div key={entry.city} className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <div className="font-semibold text-slate-100">{entry.name || entry.city}</div>
+                          <div className="mt-1 text-xs text-slate-500">{entry.city} · {entry.settlement_source || "-"}</div>
+                        </div>
+                        <div className="flex gap-2 text-xs">
+                          <Badge variant={entry.truth_rows ? "secondary" : "warning"}>truth {entry.truth_rows ?? 0}</Badge>
+                          <Badge variant={entry.emos_training_samples ? "secondary" : "warning"}>EMOS {entry.emos_training_samples ?? 0}</Badge>
+                          <Badge variant={entry.lgbm_candidate_rows ? "secondary" : "warning"}>LGBM {entry.lgbm_candidate_rows ?? 0}</Badge>
+                        </div>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3 text-xs text-slate-500">
+                        <div>feature rows: {entry.feature_rows ?? 0}</div>
+                        <div>snapshot rows: {entry.emos_snapshot_samples ?? 0}</div>
+                        <div>eval rows: {entry.emos_evaluation_samples ?? 0}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-800 bg-slate-950/70 px-3 py-2 text-slate-500">当前无模型样本缺口摘要。</div>
+              )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>城市覆盖矩阵</CardTitle>
+            <CardDescription>把 truth / feature / EMOS / LGBM 放到一张表里，快速判断哪些城市还只能靠 DEB。</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 md:hidden">
+              {cityCoverageRows.map((entry) => (
+                <div key={String(entry.city)} className="rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                  <div className="mb-3 flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-slate-100">{String(entry.name || entry.city || "-")}</div>
+                      <div className="mt-1 text-xs text-slate-500">
+                        {String(entry.city || "-")} · {String(entry.settlement_source || "-")} · {String(entry.settlement_station_code || "-")}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <MobileField label="truth" value={String(entry.truth_rows || 0)} mono />
+                    <MobileField label="feature" value={String(entry.feature_rows || 0)} mono />
+                    <MobileField label="EMOS" value={String(entry.emos_training_samples || 0)} mono />
+                    <MobileField label="LGBM" value={String(entry.lgbm_candidate_rows || 0)} mono />
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-800 bg-slate-950/70 md:block">
+              <table className="min-w-full divide-y divide-slate-800 text-left text-sm">
+                <thead className="bg-slate-900/80 text-xs uppercase tracking-[0.14em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3">City</th>
+                    <th className="px-4 py-3">Source</th>
+                    <th className="px-4 py-3">Station</th>
+                    <th className="px-4 py-3">Truth</th>
+                    <th className="px-4 py-3">Feature</th>
+                    <th className="px-4 py-3">EMOS</th>
+                    <th className="px-4 py-3">LGBM</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {cityCoverageRows.map((entry) => (
+                    <tr key={String(entry.city)}>
+                      <td className="px-4 py-3">
+                        <div className="font-semibold text-slate-100">{String(entry.name || entry.city || "-")}</div>
+                        <div className="mt-1 text-xs text-slate-500">{String(entry.city || "-")}</div>
+                      </td>
+                      <td className="px-4 py-3">{String(entry.settlement_source || "-")}</td>
+                      <td className="px-4 py-3">{String(entry.settlement_station_code || "-")}</td>
+                      <td className="px-4 py-3">
+                        <Badge variant={Number(entry.truth_rows || 0) > 0 ? "success" : "warning"}>{String(entry.truth_rows || 0)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={Number(entry.feature_rows || 0) > 0 ? "success" : "warning"}>{String(entry.feature_rows || 0)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={Number(entry.emos_training_samples || 0) > 0 ? "success" : "warning"}>{String(entry.emos_training_samples || 0)}</Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant={Number(entry.lgbm_candidate_rows || 0) > 0 ? "success" : "warning"}>{String(entry.lgbm_candidate_rows || 0)}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                  {!cityCoverageRows.length ? (
+                    <tr>
+                      <td className="px-4 py-4 text-slate-500" colSpan={7}>
+                        暂无城市覆盖矩阵数据
+                      </td>
+                    </tr>
+                  ) : null}
+                </tbody>
+              </table>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>

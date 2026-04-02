@@ -13,6 +13,8 @@ from src.database.runtime_state import (
     ProbabilitySnapshotRepository,
     STATE_STORAGE_FILE,
     STATE_STORAGE_SQLITE,
+    TrainingFeatureRecordRepository,
+    TruthRecordRepository,
     get_state_storage_mode,
 )
 
@@ -288,23 +290,93 @@ def build_training_samples(
     snapshot_index: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
     if isinstance(history_data, dict):
-        data = history_data
+        runtime_history = history_data
     elif get_state_storage_mode() == STATE_STORAGE_SQLITE:
-        data = DailyRecordRepository().load_all()
+        runtime_history = DailyRecordRepository().load_all()
     else:
-        data = load_history(_history_file_path())
+        runtime_history = load_history(_history_file_path())
+    if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+        truth_history = TruthRecordRepository().load_all()
+        training_feature_history = TrainingFeatureRecordRepository().load_all()
+    else:
+        truth_history = runtime_history
+        training_feature_history = {}
     snapshots = snapshot_index if isinstance(snapshot_index, dict) else load_snapshot_index()
     samples: List[Dict[str, Any]] = []
+    excluded_keys: set[tuple[str, str]] = set()
 
-    for city_name, city_records in (data or {}).items():
+    for (city_name, date_str), snapshot in (snapshots or {}).items():
+        if not isinstance(snapshot, dict):
+            continue
+        truth_row = ((truth_history.get(city_name) or {}).get(str(date_str)) or {})
+        target = _sf(truth_row.get("actual_high"))
+        if target is None:
+            runtime_record = ((runtime_history.get(city_name) or {}).get(str(date_str)) or {})
+            target = _sf(runtime_record.get("actual_high"))
+        if target is None:
+            continue
+        observation = snapshot.get("observation") if isinstance(snapshot.get("observation"), dict) else {}
+        current_forecasts = snapshot.get("multi_model") if isinstance(snapshot.get("multi_model"), dict) else {}
+        local_hour = _sf(observation.get("local_hour"))
+        if local_hour is None:
+            timestamp = _parse_timestamp(snapshot.get("timestamp"))
+            local_hour = float(timestamp.hour) if timestamp is not None else 12.0
+        feature_map, meta = build_runtime_feature_map(
+            city_name=city_name,
+            current_forecasts=current_forecasts,
+            deb_prediction=_sf(snapshot.get("deb_prediction")) or _sf(snapshot.get("raw_mu")),
+            current_temp=_sf(observation.get("current_temp")),
+            max_so_far=_sf(snapshot.get("max_so_far")),
+            humidity=_sf(observation.get("humidity")),
+            wind_speed_kt=_sf(observation.get("wind_speed_kt")),
+            visibility_mi=_sf(observation.get("visibility_mi")),
+            local_hour=int(local_hour),
+            local_date=str(date_str),
+            peak_status=str(snapshot.get("peak_status") or "before"),
+            history_data=truth_history,
+        )
+        if not feature_map:
+            continue
+        samples.append(
+            {
+                "city": _normalized_city_key(city_name),
+                "date": str(date_str),
+                "target": float(target),
+                "features": feature_map,
+                "vector": _features_to_vector(feature_map),
+                "history_count": int(meta.get("history_count") or 0),
+                "deb_prediction": _sf(snapshot.get("deb_prediction")) or _sf(snapshot.get("raw_mu")),
+                "forecasts": {
+                    key: _sf(value)
+                    for key, value in current_forecasts.items()
+                    if _sf(value) is not None
+                },
+                "sample_source": "snapshot",
+                "settlement_source": truth_row.get("settlement_source"),
+                "settlement_station_code": truth_row.get("settlement_station_code"),
+                "truth_version": truth_row.get("truth_version"),
+                "truth_updated_by": truth_row.get("updated_by"),
+                "truth_updated_at": truth_row.get("truth_updated_at"),
+            }
+        )
+        excluded_keys.add((_normalized_city_key(city_name), str(date_str)))
+
+    training_source = training_feature_history or runtime_history or {}
+    for city_name, city_records in training_source.items():
         if not isinstance(city_records, dict):
             continue
         ordered_dates = sorted(city_records.keys())
         for date_str in ordered_dates:
+            normalized_city = _normalized_city_key(city_name)
+            if (normalized_city, str(date_str)) in excluded_keys:
+                continue
             record = city_records.get(date_str)
             if not isinstance(record, dict):
                 continue
-            target = _sf(record.get("actual_high"))
+            truth_row = ((truth_history.get(normalized_city) or {}).get(str(date_str)) or {})
+            target = _sf(truth_row.get("actual_high"))
+            if target is None:
+                target = _sf(((runtime_history.get(normalized_city) or {}).get(str(date_str)) or {}).get("actual_high"))
             forecasts = record.get("forecasts") if isinstance(record.get("forecasts"), dict) else {}
             if target is None or not forecasts:
                 continue
@@ -321,7 +393,7 @@ def build_training_samples(
                 local_hour=12,
                 local_date=str(date_str),
                 peak_status="before",
-                history_data=data,
+                history_data=truth_history,
             )
             if not feature_map:
                 continue
@@ -361,6 +433,12 @@ def build_training_samples(
                         for key, value in forecasts.items()
                         if _sf(value) is not None
                     },
+                    "sample_source": "daily_record",
+                    "settlement_source": truth_row.get("settlement_source"),
+                    "settlement_station_code": truth_row.get("settlement_station_code"),
+                    "truth_version": truth_row.get("truth_version"),
+                    "truth_updated_by": truth_row.get("updated_by"),
+                    "truth_updated_at": truth_row.get("truth_updated_at"),
                 }
             )
     samples.sort(key=lambda row: (row["date"], row["city"]))

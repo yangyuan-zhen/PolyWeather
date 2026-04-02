@@ -9,6 +9,7 @@ from src.database.runtime_state import (
     ProbabilitySnapshotRepository,
     STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
+    TrainingFeatureRecordRepository,
     get_state_storage_mode,
 )
 
@@ -17,6 +18,7 @@ MU_THRESHOLD = 0.2
 SIGMA_THRESHOLD = 0.15
 MAX_SO_FAR_THRESHOLD = 0.2
 _snapshot_repo = ProbabilitySnapshotRepository()
+_training_feature_repo = TrainingFeatureRecordRepository()
 
 
 def _sf(value: Any) -> Optional[float]:
@@ -260,6 +262,36 @@ def append_probability_snapshot(
     mode = get_state_storage_mode()
     if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
         _snapshot_repo.append_snapshot(payload)
+        _training_feature_repo.upsert_record(
+            city_key,
+            local_date,
+            {
+                "forecasts": payload.get("multi_model") or {},
+                "deb_prediction": payload.get("deb_prediction"),
+                "mu": payload.get("raw_mu"),
+                "probability_features": {
+                    "raw_mu": payload.get("raw_mu"),
+                    "raw_sigma": payload.get("raw_sigma"),
+                    "deb_prediction": payload.get("deb_prediction"),
+                    "ens_median": (payload.get("ensemble") or {}).get("median"),
+                    "ensemble_spread": None,
+                    "max_so_far": payload.get("max_so_far"),
+                    "peak_status": payload.get("peak_status"),
+                },
+                "prob_snapshot": payload.get("prob_snapshot") or [],
+                "shadow_prob_snapshot": payload.get("shadow_prob_snapshot") or [],
+                "probability_calibration": {
+                    "engine": payload.get("probability_engine"),
+                    "mode": payload.get("probability_mode"),
+                    "calibration_version": payload.get("calibration_version"),
+                    "calibration_source": payload.get("calibration_source"),
+                    "calibrated_mu": payload.get("calibrated_mu"),
+                    "calibrated_sigma": payload.get("calibrated_sigma"),
+                },
+                "observation": payload.get("observation") or {},
+                "snapshot_timestamp": payload.get("timestamp"),
+            },
+        )
 
     if mode != STATE_STORAGE_SQLITE:
         with open(path, "a", encoding="utf-8") as fh:

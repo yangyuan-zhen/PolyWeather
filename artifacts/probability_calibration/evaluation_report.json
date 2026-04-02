@@ -3,17 +3,17 @@
     "sample_count": 54,
     "filled_actual_from_history": 2,
     "legacy": {
-      "mean_crps": 4.287017,
-      "mean_mae": 4.488148,
+      "mean_crps": 4.300621,
+      "mean_mae": 4.502963,
       "bucket_hit_rate": 0.537037
     },
     "emos": {
-      "mean_crps": 4.201116,
-      "mean_mae": 4.488148,
+      "mean_crps": 4.213889,
+      "mean_mae": 4.502963,
       "bucket_hit_rate": 0.537037
     },
     "delta": {
-      "crps": -0.085901,
+      "crps": -0.086732,
       "mae": 0.0,
       "bucket_hit_rate": 0.0
     }
@@ -183,12 +183,12 @@
     },
     "shenzhen": {
       "samples": 1,
-      "legacy_mean_crps": 0.063696,
-      "emos_mean_crps": 0.073016,
-      "legacy_mean_mae": 0.1,
-      "emos_mean_mae": 0.1,
-      "legacy_bucket_hit_rate": 1.0,
-      "emos_bucket_hit_rate": 1.0
+      "legacy_mean_crps": 0.798351,
+      "emos_mean_crps": 0.762787,
+      "legacy_mean_mae": 0.9,
+      "emos_mean_mae": 0.9,
+      "legacy_bucket_hit_rate": 0.0,
+      "emos_bucket_hit_rate": 0.0
     },
     "singapore": {
       "samples": 2,
@@ -205,8 +205,8 @@
       "emos_mean_crps": 0.472738,
       "legacy_mean_mae": 0.1,
       "emos_mean_mae": 0.1,
-      "legacy_bucket_hit_rate": 0.666667,
-      "emos_bucket_hit_rate": 0.666667
+      "legacy_bucket_hit_rate": 1.0,
+      "emos_bucket_hit_rate": 1.0
     },
     "tel aviv": {
       "samples": 2,

@@ -1,16 +1,16 @@
 {
-  "generated_at": "2026-04-02T15:13:02.010825Z",
+  "generated_at": "2026-04-02T16:23:24.376528Z",
   "summary": {
     "samples": 48,
     "legacy_mean_mae": 3.04125,
     "shadow_mean_mae": 3.04125,
-    "legacy_bucket_hit_rate": 0.479167,
-    "shadow_bucket_hit_rate": 0.520833,
-    "legacy_bucket_brier": 0.688077,
-    "shadow_bucket_brier": 0.811329,
+    "legacy_bucket_hit_rate": 0.5,
+    "shadow_bucket_hit_rate": 0.5,
+    "legacy_bucket_brier": 0.68666,
+    "shadow_bucket_brier": 0.814079,
     "delta_mae": 0.0,
-    "delta_bucket_hit_rate": 0.041666,
-    "delta_bucket_brier": 0.123252
+    "delta_bucket_hit_rate": 0.0,
+    "delta_bucket_brier": 0.127419
   },
   "by_city": {
     "ankara": {
@@ -245,13 +245,13 @@
       "samples": 3,
       "legacy_mean_mae": 0.1,
       "shadow_mean_mae": 0.1,
-      "legacy_bucket_hit_rate": 0.666667,
-      "shadow_bucket_hit_rate": 0.666667,
-      "legacy_bucket_brier": 0.217927,
-      "shadow_bucket_brier": 0.640998,
+      "legacy_bucket_hit_rate": 1.0,
+      "shadow_bucket_hit_rate": 0.333333,
+      "legacy_bucket_brier": 0.195261,
+      "shadow_bucket_brier": 0.684998,
       "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.0,
-      "delta_bucket_brier": 0.423071
+      "delta_bucket_hit_rate": -0.666667,
+      "delta_bucket_brier": 0.489737
     },
     "tel aviv": {
       "samples": 2,
@@ -343,13 +343,13 @@
       "samples": 19,
       "legacy_mean_mae": 4.299474,
       "shadow_mean_mae": 4.299474,
-      "legacy_bucket_hit_rate": 0.315789,
-      "shadow_bucket_hit_rate": 0.473684,
-      "legacy_bucket_brier": 0.85177,
-      "shadow_bucket_brier": 0.928731,
+      "legacy_bucket_hit_rate": 0.368421,
+      "shadow_bucket_hit_rate": 0.421053,
+      "legacy_bucket_brier": 0.848191,
+      "shadow_bucket_brier": 0.935678,
       "delta_mae": 0.0,
-      "delta_bucket_hit_rate": 0.157895,
-      "delta_bucket_brier": 0.076961
+      "delta_bucket_hit_rate": 0.052632,
+      "delta_bucket_brier": 0.087487
     }
   },
   "recent_observations": [
@@ -416,8 +416,8 @@
     {
       "city": "taipei",
       "date": "2026-03-19",
-      "actual_high": 21.4,
-      "actual_bucket": 21,
+      "actual_high": 22.0,
+      "actual_bucket": 22,
       "legacy_mu": 21.7,
       "shadow_mu": 21.7,
       "legacy_top_bucket": 22,

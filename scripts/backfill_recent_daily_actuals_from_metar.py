@@ -25,12 +25,12 @@ def _target_dates(city_info: dict, lookback_days: int) -> list[str]:
 
 def _is_metar_city(city_info: dict) -> bool:
     source = str(city_info.get("settlement_source") or "metar").strip().lower()
-    return source == "metar"
+    return source in {"metar", "hko", "noaa", "wunderground"}
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Seed recent daily_records rows and backfill actual_high from aviationweather METAR history."
+        description="Seed recent runtime daily_records rows and backfill actual_high from the city's settlement source."
     )
     parser.add_argument(
         "--cities",
