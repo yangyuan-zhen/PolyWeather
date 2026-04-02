@@ -20,7 +20,8 @@ const I18N = {
     settlementAirport: "结算机场",
     hko: "香港天文台 (HKO)",
     cwa: "交通部中央气象署 (CWA)",
-    noaa: "NOAA RCTP（台湾桃园国际机场）",
+    noaa: "NOAA 官方时序",
+    wunderground: "Wunderground 结算站",
     city: "城市",
     refresh: "刷新数据",
     cityProfile: "城市档案",
@@ -38,9 +39,12 @@ const I18N = {
     nearbyMonitoringSuffix: "个参与监控",
     today: "今天",
     omSeries: "OM预测",
-    noaaSettlementRef: "NOAA RCTP 结算参考",
+    noaaSettlementRef: "NOAA 结算参考",
     noaaSettlementLegend:
-      "台北按 NOAA RCTP 最终完成质控后的最高整度摄氏值结算；图中曲线仅作结算参考。",
+      "该城市按 NOAA 最终完成质控后的最高整度读数结算；图中曲线仅作结算参考。",
+    wundergroundSettlementRef: "Wunderground 结算参考",
+    wundergroundSettlementLegend:
+      "该城市按配置的 Wunderground 站点结算；图中曲线仅作结算参考。",
     loadCityDetailFailed: "加载城市详情失败",
     refreshFailed: "刷新温度数据失败",
     initFailed: "初始化失败",
@@ -81,7 +85,8 @@ const I18N = {
     settlementAirport: "Settlement Airport",
     hko: "Hong Kong Observatory (HKO)",
     cwa: "Central Weather Administration (CWA)",
-    noaa: "NOAA RCTP (Taiwan Taoyuan International Airport)",
+    noaa: "NOAA official timeseries",
+    wunderground: "Wunderground settlement station",
     city: "City",
     refresh: "Refresh data",
     cityProfile: "City Profile",
@@ -99,9 +104,12 @@ const I18N = {
     nearbyMonitoringSuffix: " stations monitored",
     today: "Today",
     omSeries: "OM Forecast",
-    noaaSettlementRef: "NOAA RCTP Settlement Reference",
+    noaaSettlementRef: "NOAA Settlement Reference",
     noaaSettlementLegend:
-      "Taipei settles on NOAA RCTP using the finalized highest rounded whole-degree Celsius reading; the plotted line is only a settlement reference.",
+      "This city settles on NOAA using the finalized highest rounded reading; the plotted line is only a settlement reference.",
+    wundergroundSettlementRef: "Wunderground Settlement Reference",
+    wundergroundSettlementLegend:
+      "This city settles on the configured Wunderground station; the plotted line is only a settlement reference.",
     loadCityDetailFailed: "Failed to load city detail",
     refreshFailed: "Failed to refresh weather data",
     initFailed: "Initialization failed",
@@ -471,6 +479,7 @@ function riskText(level) {
 
 function getSettlementSourceDisplay(detail) {
   const source = String(detail?.current?.settlement_source || "").toLowerCase();
+  const sourceLabel = String(detail?.current?.settlement_source_label || "").trim();
   if (source === "hko") {
     return {
       label: t("settlementSource"),
@@ -487,6 +496,14 @@ function getSettlementSourceDisplay(detail) {
     return {
       label: t("settlementSource"),
       value: t("noaa")
+    };
+  }
+  if (source === "wunderground") {
+    const stationLabel = sourceLabel || t("wunderground");
+    const station = String(detail?.current?.station_code || detail?.risk?.icao || "").trim();
+    return {
+      label: t("settlementSource"),
+      value: station ? `${stationLabel} (${station})` : stationLabel
     };
   }
   const airport = detail?.risk?.airport || "--";
@@ -727,7 +744,9 @@ function drawTrendChart(detail) {
   const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
   const obsSeriesLabel = sourceCode === "noaa"
     ? t("noaaSettlementRef")
-    : String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
+    : sourceCode === "wunderground"
+      ? t("wundergroundSettlementRef")
+      : String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
   if (!points.length) {
     setChartHover([], tempSymbol);
     ctx.fillStyle = "#8ba0be";
@@ -987,6 +1006,7 @@ function renderDetail(detail) {
   state.detail = detail;
   renderRiskBadge(detail);
   renderFreshness(detail);
+  const tempSymbol = detail?.temp_symbol || "°C";
 
   const profile = getSettlementSourceDisplay(detail);
   els.settlementLabel.textContent = profile.label;
@@ -1007,6 +1027,8 @@ function renderDetail(detail) {
   const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
   const sourceTag = sourceCode === "noaa"
     ? t("noaaSettlementRef")
+    : sourceCode === "wunderground"
+      ? t("wundergroundSettlementRef")
     : String(detail?.current?.settlement_source_label || "").toUpperCase() || "OBS";
   const obs = getObservationRows(detail);
   if (obs.length >= 2) {
@@ -1014,12 +1036,16 @@ function renderDetail(detail) {
     const last = obs[obs.length - 1];
     els.chartLegend.textContent =
       sourceCode === "noaa"
-        ? `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time} | ${t("noaaSettlementLegend")}`
-        : `${sourceTag}: ${first.temp}°C@${first.time} -> ${last.temp}°C@${last.time}`;
+        ? `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time} | ${t("noaaSettlementLegend")}`
+        : sourceCode === "wunderground"
+          ? `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time} | ${t("wundergroundSettlementLegend")}`
+        : `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time}`;
   } else {
     els.chartLegend.textContent =
       sourceCode === "noaa"
         ? `${sourceTag}: ${t("noContinuousObs")} | ${t("noaaSettlementLegend")}`
+        : sourceCode === "wunderground"
+          ? `${sourceTag}: ${t("noContinuousObs")} | ${t("wundergroundSettlementLegend")}`
         : `${sourceTag}: ${t("noContinuousObs")}`;
   }
 }
