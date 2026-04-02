@@ -11,6 +11,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.analysis.deb_algorithm import load_history  # noqa: E402
 from src.analysis.settlement_rounding import apply_city_settlement  # noqa: E402
+from scripts.fit_probability_calibration import _default_history_arg  # noqa: E402
 
 
 def _sf(value):
@@ -112,7 +113,7 @@ def main():
     parser = argparse.ArgumentParser(description="Build live shadow probability report from daily records.")
     parser.add_argument(
         "--history-file",
-        default=os.path.join(PROJECT_ROOT, "data", "daily_records.json"),
+        default=_default_history_arg(),
     )
     parser.add_argument(
         "--output",

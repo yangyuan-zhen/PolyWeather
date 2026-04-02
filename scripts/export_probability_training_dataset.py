@@ -8,6 +8,8 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from scripts.fit_probability_calibration import (  # noqa: E402
+    _default_history_arg,
+    _default_snapshot_arg,
     _extract_samples,
     _load_history_with_fallback,
     _load_json_if_exists,
@@ -19,7 +21,7 @@ def main():
     parser = argparse.ArgumentParser(description="Export normalized probability calibration training samples.")
     parser.add_argument(
         "--history-file",
-        default=os.path.join(PROJECT_ROOT, "data", "daily_records.json"),
+        default=_default_history_arg(),
     )
     parser.add_argument(
         "--settlement-history",
@@ -41,7 +43,7 @@ def main():
     )
     parser.add_argument(
         "--snapshot-file",
-        default=os.path.join(PROJECT_ROOT, "data", "probability_training_snapshots.jsonl"),
+        default=_default_snapshot_arg(),
     )
     args = parser.parse_args()
 

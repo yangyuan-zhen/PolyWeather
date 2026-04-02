@@ -24,7 +24,7 @@
 - 已上线轻量运营后台：`/ops`（会员、周榜、补分、支付异常单）。
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
-- 运行态状态与缓存已支持 SQLite 渐进迁移：`file / dual / sqlite`。
+- 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
 - 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
 
 ## 许可证与商用边界（重要）
@@ -64,7 +64,7 @@ flowchart LR
     ANA --> PAY["支付状态（Intent + Event + Confirm Loop）"]
     ANA --> PM["Polymarket 只读层"]
     API --> OBS["healthz / system status / metrics"]
-    ANA --> STATE["SQLite runtime state + dual fallback"]
+    ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
 ## 监控城市（30）
@@ -98,7 +98,7 @@ npm run dev
 ```env
 POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
 POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
-POLYWEATHER_STATE_STORAGE_MODE=dual
+POLYWEATHER_STATE_STORAGE_MODE=sqlite
 ```
 
 ## 运维验收

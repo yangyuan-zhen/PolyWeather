@@ -16,6 +16,7 @@ from src.analysis.probability_calibration import (  # noqa: E402
 from src.analysis.deb_algorithm import load_history  # noqa: E402
 from src.database.runtime_state import (  # noqa: E402
     ProbabilitySnapshotRepository,
+    STATE_STORAGE_FILE,
     STATE_STORAGE_SQLITE,
     get_state_storage_mode,
 )
@@ -36,6 +37,22 @@ def _load_json_if_exists(path):
     with open(path, "r", encoding="utf-8") as fh:
         data = json.load(fh)
     return data if isinstance(data, dict) else {}
+
+
+def _legacy_history_path():
+    return os.path.join(PROJECT_ROOT, "data", "daily_records.json")
+
+
+def _legacy_snapshot_path():
+    return os.path.join(PROJECT_ROOT, "data", "probability_training_snapshots.jsonl")
+
+
+def _default_history_arg():
+    return _legacy_history_path() if get_state_storage_mode() == STATE_STORAGE_FILE else None
+
+
+def _default_snapshot_arg():
+    return _legacy_snapshot_path() if get_state_storage_mode() == STATE_STORAGE_FILE else None
 
 
 def _load_history_with_fallback(path):
@@ -253,8 +270,8 @@ def main():
     parser = argparse.ArgumentParser(description="Fit PolyWeather probability calibration parameters.")
     parser.add_argument(
         "--history-file",
-        default=os.path.join(PROJECT_ROOT, "data", "daily_records.json"),
-        help="Path to the historical daily_records.json file.",
+        default=_default_history_arg(),
+        help="Optional legacy daily_records.json path. In sqlite mode this defaults to the runtime database.",
     )
     parser.add_argument(
         "--output",
@@ -273,8 +290,8 @@ def main():
     )
     parser.add_argument(
         "--snapshot-file",
-        default=os.path.join(PROJECT_ROOT, "data", "probability_training_snapshots.jsonl"),
-        help="Optional JSONL file with archived probability snapshots.",
+        default=_default_snapshot_arg(),
+        help="Optional legacy JSONL snapshot archive path. In sqlite mode this defaults to the runtime database.",
     )
     parser.add_argument(
         "--version",

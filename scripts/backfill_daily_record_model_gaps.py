@@ -16,6 +16,7 @@ from src.analysis.probability_snapshot_archive import (  # noqa: E402
     load_snapshot_rows_for_day,
 )
 from src.database.runtime_state import STATE_STORAGE_FILE, get_state_storage_mode  # noqa: E402
+from scripts.fit_probability_calibration import _default_history_arg  # noqa: E402
 
 
 def _load_daily_records(path: Path) -> Dict[str, Dict[str, Dict[str, Any]]]:
@@ -53,8 +54,8 @@ def main() -> int:
     )
     parser.add_argument(
         "--history-file",
-        default=str(Path("data") / "daily_records.json"),
-        help="Path to daily_records.json",
+        default=_default_history_arg(),
+        help="Optional legacy daily_records.json path. In sqlite mode this defaults to the runtime database.",
     )
     parser.add_argument("--city", help="Optional city filter, e.g. ankara")
     parser.add_argument("--date", help="Optional YYYY-MM-DD filter")
@@ -70,8 +71,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    history_path = Path(args.history_file)
-    data = _load_daily_records(history_path)
+    history_path = Path(args.history_file) if args.history_file else None
+    data = _load_daily_records(history_path or Path())
     model_name = str(args.model or "").strip()
     city_filter = str(args.city or "").strip().lower() or None
     date_filter = str(args.date or "").strip() or None
@@ -133,8 +134,8 @@ def main() -> int:
     if changed:
         previous_mode = get_state_storage_mode()
         # Reuse existing save path semantics. In sqlite-only mode, save_history would skip file write.
-        save_history(str(history_path), data)
-        if previous_mode == STATE_STORAGE_FILE and not history_path.exists():
+        save_history(str(history_path or ""), data)
+        if previous_mode == STATE_STORAGE_FILE and (history_path is None or not history_path.exists()):
             raise FileNotFoundError(history_path)
 
     return 0

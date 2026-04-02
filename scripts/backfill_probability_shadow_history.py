@@ -13,6 +13,7 @@ from src.analysis.probability_calibration import (  # noqa: E402
     apply_probability_calibration,
     build_probability_features,
 )
+from scripts.fit_probability_calibration import _default_history_arg  # noqa: E402
 
 
 def _sample_to_features(sample):
@@ -44,7 +45,7 @@ def main():
     parser = argparse.ArgumentParser(description="Backfill shadow probability snapshots into daily records.")
     parser.add_argument(
         "--history-file",
-        default=os.path.join(PROJECT_ROOT, "data", "daily_records.json"),
+        default=_default_history_arg(),
     )
     parser.add_argument(
         "--training-samples",

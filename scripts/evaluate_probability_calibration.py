@@ -16,6 +16,7 @@ from src.analysis.probability_calibration import (  # noqa: E402
 )
 from src.analysis.settlement_rounding import apply_city_settlement  # noqa: E402
 from scripts.fit_probability_calibration import (  # noqa: E402
+    _default_history_arg,
     _extract_samples,
     _load_json_if_exists,
 )
@@ -61,7 +62,7 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate legacy vs EMOS probability calibration.")
     parser.add_argument(
         "--history-file",
-        default=os.path.join(PROJECT_ROOT, "data", "daily_records.json"),
+        default=_default_history_arg(),
     )
     parser.add_argument(
         "--settlement-history",

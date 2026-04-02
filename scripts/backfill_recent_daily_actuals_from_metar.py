@@ -9,6 +9,7 @@ if PROJECT_ROOT not in sys.path:
 
 from src.analysis.deb_algorithm import load_history, reconcile_recent_actual_highs, save_history  # noqa: E402
 from src.data_collection.city_registry import CITY_REGISTRY  # noqa: E402
+from scripts.fit_probability_calibration import _default_history_arg  # noqa: E402
 
 
 def _target_dates(city_info: dict, lookback_days: int) -> list[str]:
@@ -50,7 +51,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    history_file = os.path.join(PROJECT_ROOT, "data", "daily_records.json")
+    history_file = _default_history_arg() or ""
     data = load_history(history_file)
 
     selected = {str(item).strip().lower() for item in args.cities if str(item).strip()}

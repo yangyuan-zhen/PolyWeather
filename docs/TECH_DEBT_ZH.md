@@ -29,8 +29,7 @@ flowchart TD
     end
 
     subgraph S["状态与概率"]
-        S1["SQLite 第二阶段收口（离线脚本统一数据源）"]
-        S2["EMOS shadow -> primary 门禁稳定化"]
+        S1["EMOS shadow -> primary 门禁稳定化"]
     end
 
     A --> P
@@ -48,7 +47,7 @@ flowchart TD
 - 钱包绑定支持浏览器钱包 + WalletConnect。
 - 账户中心与 Pro 权限展示链路打通。
 - 钱包异动支持独立频道路由。
-- 运行态状态/缓存已完成 SQLite 主读切换。
+- 运行态状态/缓存与核心离线训练、评估、回填链路已完成 SQLite 主路径收口。
 - 轻量可观测性已上线（`/healthz`、`/api/system/status`、`/metrics`）。
 - EMOS/CRPS 校准链路已上线 shadow 模式。
 
@@ -56,7 +55,6 @@ flowchart TD
 
 | 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| SQLite 第二阶段收口 | 线上主链路已切到 `sqlite`，但离线脚本仍有文件默认输入 | 训练、回填、报表脚本统一改成 SQLite 优先，文件参数仅保留显式回退 |
 | EMOS 上线门禁 | 当前 `hold`，不能切 primary | 继续积累样本，重点压 `bucket_brier` |
 | 外部监控与告警 | 只有轻量指标，无外部抓取 | 接 Prometheus/Grafana 或最小巡检 |
 | 退款与售后链路 | 商业闭环不完整 | 增加退款状态机与工单系统 |
@@ -78,7 +76,6 @@ flowchart TD
 
 ## 6. 下阶段里程碑
 
-1. 完成 SQLite 第二阶段收口，统一离线脚本与训练输入到 SQLite 优先。
-2. 稳定 EMOS shadow，达到 rollout `observe/promote` 条件。
-3. 补外部监控抓取与告警阈值。
-4. 评估并推进支付合约 V2 升级。
+1. 稳定 EMOS shadow，达到 rollout `observe/promote` 条件。
+2. 补外部监控抓取与告警阈值。
+3. 评估并推进支付合约 V2 升级。

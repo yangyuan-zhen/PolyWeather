@@ -4,13 +4,18 @@ import os
 from datetime import datetime as _dt
 from datetime import timedelta as _td
 
+from src.database.runtime_state import STATE_STORAGE_FILE, get_state_storage_mode
+
 
 class DebAnalysisService:
     """DEB analytics adapter with lazy imports to trim cold startup."""
 
     def __init__(self, project_root: str):
         self.project_root = project_root
-        self.history_file = os.path.join(project_root, "data", "daily_records.json")
+        if get_state_storage_mode() == STATE_STORAGE_FILE:
+            self.history_file = os.path.join(project_root, "data", "daily_records.json")
+        else:
+            self.history_file = ""
 
     @staticmethod
     def _load_aliases() -> dict[str, str]:

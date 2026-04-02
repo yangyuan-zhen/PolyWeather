@@ -8,6 +8,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from src.analysis.deb_algorithm import load_history
 from src.data_collection.city_registry import ALIASES
+from src.database.runtime_state import (
+    DailyRecordRepository,
+    ProbabilitySnapshotRepository,
+    STATE_STORAGE_FILE,
+    STATE_STORAGE_SQLITE,
+    get_state_storage_mode,
+)
 
 
 BASE_MODEL_COLUMNS: List[Tuple[str, str]] = [
@@ -82,12 +89,16 @@ def _parse_timestamp(value: Any) -> Optional[datetime]:
 
 def _history_file_path() -> str:
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(root, "data", "daily_records.json")
+    if get_state_storage_mode() == STATE_STORAGE_FILE:
+        return os.path.join(root, "data", "daily_records.json")
+    return ""
 
 
 def _snapshot_archive_path() -> str:
     root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(root, "data", "probability_training_snapshots.jsonl")
+    if get_state_storage_mode() == STATE_STORAGE_FILE:
+        return os.path.join(root, "data", "probability_training_snapshots.jsonl")
+    return ""
 
 
 def _normalized_city_key(city_name: str) -> str:
@@ -125,8 +136,26 @@ def _compute_model_summary(features: Dict[str, Optional[float]]) -> Tuple[Option
 
 
 def load_snapshot_index(archive_path: Optional[str] = None) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    mode = get_state_storage_mode()
+    if mode == STATE_STORAGE_SQLITE:
+        latest_rows: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for row in ProbabilitySnapshotRepository().load_all_rows():
+            if not isinstance(row, dict):
+                continue
+            city = _normalized_city_key(str(row.get("city") or ""))
+            date_str = str(row.get("date") or "").strip()
+            if not city or not date_str:
+                continue
+            key = (city, date_str)
+            current_best = latest_rows.get(key)
+            if current_best is None or str(row.get("timestamp") or "") >= str(
+                current_best.get("timestamp") or ""
+            ):
+                latest_rows[key] = row
+        return latest_rows
+
     path = archive_path or _snapshot_archive_path()
-    if not os.path.exists(path):
+    if not path or not os.path.exists(path):
         return {}
 
     latest_rows: Dict[Tuple[str, str], Dict[str, Any]] = {}
@@ -258,7 +287,12 @@ def build_training_samples(
     history_data: Optional[Dict[str, Any]] = None,
     snapshot_index: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
-    data = history_data if isinstance(history_data, dict) else load_history(_history_file_path())
+    if isinstance(history_data, dict):
+        data = history_data
+    elif get_state_storage_mode() == STATE_STORAGE_SQLITE:
+        data = DailyRecordRepository().load_all()
+    else:
+        data = load_history(_history_file_path())
     snapshots = snapshot_index if isinstance(snapshot_index, dict) else load_snapshot_index()
     samples: List[Dict[str, Any]] = []
 

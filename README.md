@@ -25,7 +25,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
-- Runtime state supports gradual SQLite migration (`file / dual / sqlite`).
+- Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
 - EMOS/CRPS pipeline is integrated in `shadow` mode with rollout gating.
 - Intraday structural signal is now peak-window aware and bilingual (`zh-CN` / `en-US`).
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
@@ -101,7 +101,8 @@ npm run dev
 
 ## Recent Highlights
 
-- Taipei settlement is aligned to `NOAA RCTP` and rounded whole-degree Celsius logic.
+- Taipei settlement is aligned to `Wunderground RCSS` with whole-degree Celsius resolution logic.
+- Shenzhen settlement is aligned to `Wunderground ZGSZ`.
 - Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
 - Intraday analysis now separates:
   - `Surface Structure`
@@ -117,6 +118,7 @@ Use external runtime storage to avoid SQLite/git conflicts:
 ```env
 POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
 POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
+POLYWEATHER_STATE_STORAGE_MODE=sqlite
 ```
 
 ## Ops Verification

@@ -3,9 +3,9 @@
 ## 执行摘要
 
 PolyWeather（仓库：`yangyuan-zhen/PolyWeather`）定位为**面向温度类结算预测市场（如 Polymarket 的温度结算合约）**的“生产级气象情报系统”，核心在于把多源天气观测/预报转化为**结算导向的概率桶（μ + bucket distribution）**，并进一步映射到市场报价完成**错价扫描**；同时提供 Web 仪表盘与 Telegram Bot 两套交互入口，并包含 Polygon 链上 USDC/USDC.e 支付、自动补单与订阅/积分体系。项目 README 现明确仓库代码采用 `AGPL-3.0-only`，同时将品牌、商标、生产私有数据与运营阈值保留在代码许可证之外。
-从工程实现看，截至 `2026-03-21`，项目已经完成一轮明确的工程化收口：多源天气采集仍保持现有业务能力，同时已完成采集层与 Web API 大文件拆分、CI 质量门禁、配置分级（`.env.example` / `.env.secrets.example` / 中文部署文档）、EMOS/CRPS 校准链路、运行态状态与缓存向 SQLite 的渐进迁移，以及基础可观测性接口（`/healthz`、`/api/system/status`、`/metrics`）。
+从工程实现看，截至 `2026-04-02`，项目已经完成一轮明确的工程化收口：多源天气采集仍保持现有业务能力，同时已完成采集层与 Web API 大文件拆分、CI 质量门禁、配置分级（`.env.example` / `.env.secrets.example` / 中文部署文档）、EMOS/CRPS 校准链路、运行态状态与缓存迁移到 SQLite 主路径，以及基础可观测性接口（`/healthz`、`/api/system/status`、`/metrics`）。
 这意味着报告里最初最突出的“工程地基缺失”问题，已经有一部分被关闭：`src/data_collection/weather_sources.py` 与 `web/app.py` 不再是原来的超大单文件；GitHub Actions 已覆盖 Python、前端和 Docker build；配置与密钥治理已成体系；运行态状态不再只能依赖 JSON/JSONL 文件；EMOS 也不再只是概念，而是进入了可训练、可评估、可 shadow、可门禁判断的阶段。
-但项目仍处在“从可用走向稳态”的中段，而不是终局。当前真正的高优先级问题已收敛为三类：第一，**运行态 SQLite 已经完成主读切换，但离线训练/回填脚本仍存在 legacy JSON/JSONL 默认输入**，需要继续把数据科学与运维脚本统一到单一数据源；第二，**可观测性只完成了轻量级指标层**，还没有形成完整的外部监控、阈值告警与趋势面板；第三，**EMOS 仍未达到生产切换标准**，当前门禁结论明确为 `hold`，阻塞原因是 shadow bucket brier 明显退化。支付链路方面，链下审计与容灾已明显增强：事件重放、SQLite 审计事件、RPC 多节点容灾、合约静态检查、`/ops` 支付异常单、按邮箱恢复脚本都已补齐；当前剩余风险主要集中在**链上合约本身仍是最小实现**，尚未升级到 SafeERC20、Pausable、链上套餐绑定等更强防护版本。
+但项目仍处在“从可用走向稳态”的中段，而不是终局。当前真正的高优先级问题已收敛为两类：第一，**可观测性只完成了轻量级指标层**，还没有形成完整的外部监控、阈值告警与趋势面板；第二，**EMOS 仍未达到生产切换标准**，当前门禁结论明确为 `hold`，阻塞原因是 shadow bucket brier 明显退化。SQLite 迁移方面，运行态主读切换和核心离线训练/回填链路已经完成验收：在移除 `data/*.json` / `data/*.jsonl` 后，训练、评估、shadow report 与关键 backfill 脚本仍可仅依赖运行时数据库正常执行；当前保留的 legacy 文件路径主要用于迁移、导出、校验和显式回退输入。支付链路方面，链下审计与容灾已明显增强：事件重放、SQLite 审计事件、RPC 多节点容灾、合约静态检查、`/ops` 支付异常单、按邮箱恢复脚本都已补齐；当前剩余风险主要集中在**链上合约本身仍是最小实现**，尚未升级到 SafeERC20、Pausable、链上套餐绑定等更强防护版本。
 因此，当前阶段最正确的策略已经不是继续做“大范围基础重构”，而是围绕**迁移验收、可观测性补全、EMOS 上线门禁稳定化**这三条线持续收口。短中期内更高 ROI 的方向依然不是引入新的大模型，而是把现有“采集→后处理→市场映射→支付/订阅”的链路做成**状态一致、指标可见、发布可控、回退明确**的生产平台。
 ## 项目概览
 
@@ -58,7 +58,7 @@ flowchart TB
  WX[WeatherDataCollector]
  CITY[CITY_REGISTRY]
  HIST[(SQLite runtime state<br/>daily_records / cache / snapshots)]
- JSON[Legacy JSON files<br/>dual-mode fallback]
+JSON[Legacy JSON files<br/>migration/export/explicit fallback only]
  end
 
  subgraph ExternalAPIs
@@ -122,7 +122,7 @@ flowchart TB
 **推理流水线（在线）**：
 Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引擎输出结构化结果（μ、概率桶、趋势、死盘/窗口判定、DEB 预测、市场扫描）→ 前端渲染或 bot 消息格式化。
 **检查点（checkpoints）**：传统 ML checkpoint 不适用；但项目现已形成两类“业务状态 checkpoint”：
-（a）SQLite 运行态存储（当前线上主路径）；（b）legacy JSON/JSONL 文件（主要保留给迁移回滚与部分离线脚本默认输入）。当前设计仍支持 `POLYWEATHER_STATE_STORAGE_MODE=file|dual|sqlite`，但对线上部署而言，推荐目标状态已经是 `sqlite`。
+（a）SQLite 运行态存储（当前线上与核心离线链路主路径）；（b）legacy JSON/JSONL 文件（主要保留给迁移回滚、导出比对与显式回退输入）。当前设计仍支持 `POLYWEATHER_STATE_STORAGE_MODE=file|dual|sqlite`，但对线上部署与离线训练/回填而言，推荐目标状态都已经是 `sqlite`。
 ### 测试、CI/CD 与运维验证
 
 **测试**：仓库存在 `tests/test_trend_engine.py`，覆盖 μ 计算、死盘判定、预报崩盘提示、趋势方向等核心逻辑（通过 patch 隔离外部依赖）。
@@ -142,7 +142,7 @@ Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引
 **核心文件过大问题已明显缓解，但边界仍需继续稳定**：`WeatherDataCollector` 与 `web/app.py` 的超大文件问题已完成第一阶段拆分；当前风险已从“文件过大”转为“跨模块兼容与边界稳定性”，例如旧调用路径、兼容导出、跨层 helper 仍需持续清理。
 **可复现性已从“缺模板”进入“模板与生产对齐”的阶段**：`.env.example`、`.env.secrets.example`、中文配置文档、前端部署文档、运行时配置校验器都已存在；当前风险主要在于线上历史 `.env` 与新模板并存、旧变量命名残留、以及密钥轮换与分层是否真正落实。
 **CI 已建立，但组织级质量门禁未必完全收口**：CI 现已覆盖 Python、前端与 Docker build。当前问题不再是“缺 CI”，而是是否把这些 status check 绑定到 `main` 保护策略，以及是否逐步引入更严格的 pre-merge 审查。
-**运行态状态/缓存迁移已完成主切换，但离线脚本仍待收口**：`daily_records`、`telegram_alert_state`、`probability_training_snapshots`、`open_meteo` 缓存已经支持并可在生产中主读 SQLite，迁移/校验脚本也已验证可用；当前残留问题不再是线上是否能切，而是部分训练、回填、报表脚本仍默认读取 `data/*.json` / `data/*.jsonl`，容易形成“线上一套数据、离线一套输入”的维护成本。
+**运行态状态/缓存与核心离线链路的 SQLite 收口已完成**：`daily_records`、`telegram_alert_state`、`probability_training_snapshots`、`open_meteo` 缓存已经支持并在生产中主读 SQLite，迁移/校验脚本可用；进一步地，在临时移除 `data/*.json` / `data/*.jsonl` 后，训练集导出、概率拟合、评估报告、shadow report 和关键 backfill 脚本已验证仍可运行。当前 legacy 文件路径主要是显式回退入口，而不再是默认主输入。
 **第三方服务合规与稳定性风险**：
 项目强依赖外部 API（Open-Meteo、AviationWeather、NWS、HKO、CWA、Polymarket、Supabase）。其中 AviationWeather Data API 有明确速率限制；Polymarket 官方说明 Gamma/Data/CLOB 三套 API 分属不同域，CLOB 交易端点需鉴权且策略可能变化；Supabase 明确强调 `service_role`/secret keys 绝不可暴露。若缺乏集中治理（重试/退避/熔断/降级/配额监控/密钥轮换），稳定性与合规不可控。
 **可观测性已起步，但仍不构成完整监控体系**：项目现在已有 `/healthz`、`/api/system/status`、`/metrics`，并为 HTTP 与关键第三方源增加了轻量指标；但仍缺少 Prometheus/Grafana 级别的外部抓取、告警阈值、趋势面板和运行日报。这部分现在属于“已开始，不算完成”。
@@ -172,7 +172,6 @@ Web/Telegram 请求 → FastAPI 调用采集器抓取/复用缓存 → 分析引
 下表按截至 `2026-03-21` 的真实状态重排优先级。已完成项不再继续列为“待做”，只保留当前仍需推进的事项。
 | 优先级 | 改进项 | 预估工作量 | 主要收益 | 主要风险 | 可执行步骤（建议顺序） |
 | ------ | --------------------------------------------------------------------------------------------------------------------------------- | -------------------: | ------------------------------------------------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 高 | **完成 SQLite 迁移的“第二阶段收口”**：把离线脚本、训练与回填链路统一成 SQLite 优先 | 2–5 天 | 彻底形成单一数据源，避免线上 SQLite 与离线 JSON/JSONL 双轨漂移 | 训练脚本行为变化可能影响既有报表或回填输出 | 1) 盘点所有默认读取 `data/*.json` / `data/*.jsonl` 的脚本 → 2) 改为按 `state_storage_mode` 自动优先读 SQLite → 3) 保留显式 `--history-file/--snapshot-file` 作为回退输入 → 4) 用同一批数据对比训练与报表结果 |
 | 高 | **把轻量可观测性接入外部监控与告警**：围绕 `/metrics` 建立抓取、阈值与巡检 | 3–7 天 | 不再只靠日志定位问题；可以监控第三方源错误率、缓存命中与 HTTP 延迟 | 指标不分层会导致噪音高、告警无用 | 1) 抓取 `/metrics` → 2) 先围绕 HTTP、Open-Meteo、MGM、METAR 建立最小仪表板 → 3) 为 429/403/error/stale_cache 设阈值 → 4) 增加巡检脚本或告警通道 |
 | 高 | **稳定 EMOS shadow 并收紧上线门禁** | 1–2 周 | 让概率引擎升级具备明确发布条件，避免拍脑袋切换 | 当前 shadow bucket brier 退化明显，存在误上线风险 | 1) 持续积累 snapshot 样本 → 2) 定期重训与生成 `evaluation_report` / `shadow_report` / `rollout_report` → 3) 重点压 `bucket_brier` 退化 → 4) 只有门禁从 `hold` 进入 `observe/promote` 后才考虑上线 |
 | 中 | **市场层升级为 async + 类型安全**：引入 `aiopolymarket` 或在现有层加重试/backoff/连接池 | 4–7 天 | 行情层更稳，减少短时网络抖动；更易扩展更多市场/分页 | 依赖升级带来的行为差异 | 1) 把 requests.Session 替换为 aiohttp/httpx → 2) 在 Gamma/CLOB 调用侧实现指数退避 → 3) 引入 typed models，减少解析失败 |
