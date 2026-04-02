@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCcw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +102,12 @@ export function TruthHistoryDashboard() {
               <div className="flex flex-wrap items-center gap-3">
                 <Badge variant="secondary">Ops</Badge>
                 <Badge variant="secondary">Truth History</Badge>
+                <Link
+                  href="/ops"
+                  className="inline-flex items-center rounded-full border border-slate-700 bg-slate-950/70 px-3 py-1 text-xs font-semibold text-slate-300 transition hover:border-cyan-400/50 hover:text-white"
+                >
+                  返回 /ops
+                </Link>
               </div>
               <div>
                 <h1 className="text-2xl font-black tracking-tight sm:text-3xl">真值历史浏览</h1>
