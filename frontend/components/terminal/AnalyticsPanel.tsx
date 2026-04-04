@@ -4,7 +4,6 @@ import React from "react";
 import {
   BarChart2,
   Target,
-  ShieldAlert,
   Zap,
   Info,
   Activity,
@@ -23,7 +22,7 @@ export function AnalyticsPanel({
   data,
   t = {}, // Default empty for now, can be expanded via context or props
 }: AnalyticsPanelProps) {
-  const { overview, market_scan, models, ai_analysis } = data;
+  const { overview, market_scan, models } = data;
 
   const modelEntries = Object.entries(models)
     .filter(([_, v]) => v !== undefined && v !== null)
@@ -222,25 +221,6 @@ export function AnalyticsPanel({
             ))}
           </div>
         </section>
-
-        {ai_analysis && (
-          <section className="pt-2">
-            <div className="flex items-center gap-2 mb-3">
-              <Activity className="h-3 w-3 text-amber-500" />
-              <span className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-400">
-                AI COGNITIVE ANALYSIS
-              </span>
-            </div>
-            <div className="rounded-lg border border-zinc-800 bg-zinc-900/30 p-4 relative overflow-hidden group">
-              <div className="absolute top-0 right-0 p-2 opacity-20">
-                <ShieldAlert className="w-8 h-8 text-amber-500" />
-              </div>
-              <p className="text-[11px] leading-relaxed text-zinc-400 relative z-10 font-medium">
-                {ai_analysis}
-              </p>
-            </div>
-          </section>
-        )}
       </div>
 
       {/* Execute Scan Footer */}

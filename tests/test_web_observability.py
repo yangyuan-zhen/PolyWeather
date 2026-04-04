@@ -52,6 +52,8 @@ def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     payload = response.json()
     aurora = next(item for item in payload["cities"] if item["name"] == "aurora")
     assert aurora["display_name"] == "Denver"
+    assert aurora["deb_recent_tier"] in {"high", "medium", "low", "other"}
+    assert "deb_recent_sample_count" in aurora
 
 
 def test_cities_endpoint_includes_new_wunderground_cities():

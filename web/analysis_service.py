@@ -22,7 +22,6 @@ from web.core import (
 )
 from src.analysis.deb_algorithm import calculate_dynamic_weights
 from src.analysis.settlement_rounding import apply_city_settlement
-from src.analysis.metar_narrator import describe_metar_report
 from src.data_collection.city_registry import ALIASES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
@@ -1166,7 +1165,6 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     probability_raw_sigma = None
     probability_calibrated_mu = None
     probability_calibrated_sigma = None
-    ai_text = ""
     dynamic_commentary = {"summary": "", "notes": []}
     try:
         _, _ai_context, sd = _trend_analyze(raw, sym, city)
@@ -1195,21 +1193,6 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     except Exception as e:
         logger.warning(f"Structured analysis skipped for {city}: {e}")
-
-    ai_text = describe_metar_report(
-        raw_metar=str(primary_current.get("raw_metar") or mc.get("raw_metar") or ""),
-        temp_symbol=sym,
-        fallback={
-            "icao": metar.get("icao"),
-            "station_name": metar.get("station_name"),
-            "temp": cur_temp,
-            "wind_speed_kt": _sf(primary_current.get("wind_speed_kt")),
-            "wind_dir": _sf(primary_current.get("wind_dir")),
-            "altimeter": _sf(primary_current.get("altimeter")),
-            "wx_desc": primary_current.get("wx_desc"),
-            "clouds": primary_current.get("clouds", []) or mc.get("clouds", []),
-        },
-    )
 
     # ── 12. Hourly data (today only, for chart) ──
     today_hourly: Dict[str, list] = {"times": [], "temps": [], "radiation": []}
@@ -1562,7 +1545,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "metar_today_obs": metar_today_obs_payload,
         "metar_recent_obs": metar_recent_obs_payload,
         "settlement_today_obs": settlement_today_obs,
-        "ai_analysis": ai_text,
+        "ai_analysis": "",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
 

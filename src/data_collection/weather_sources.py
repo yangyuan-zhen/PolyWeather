@@ -10,10 +10,9 @@ from src.data_collection.settlement_sources import SettlementSourceMixin
 from src.data_collection.metar_sources import MetarSourceMixin
 from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
-from src.data_collection.wunderground_sources import WundergroundSourceMixin
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, NwsOpenMeteoSourceMixin, WundergroundSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, NwsOpenMeteoSourceMixin):
     """
     Multi-source weather data collector
 
@@ -108,8 +107,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
     def __init__(self, config: dict):
         self.config = config
-        weather_cfg = config.get("weather", {})
-        self.wunderground_key = weather_cfg.get("wunderground_api_key")
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
         self.session = requests.Session()

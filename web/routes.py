@@ -13,6 +13,7 @@ from src.analysis.deb_algorithm import (
     load_history,
 )
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
+from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.city_registry import ALIASES
 from src.database.runtime_state import TruthRecordRepository
 from src.utils.metrics import export_prometheus_metrics
@@ -52,6 +53,9 @@ from web.core import (
 )
 
 router = APIRouter()
+
+_DEB_RECENT_LOOKBACK = 7
+_DEB_RECENT_MIN_SAMPLES = 3
 
 TRACKABLE_ANALYTICS_EVENTS = {
     "signup_completed",
@@ -174,6 +178,69 @@ def _normalize_city_or_404(name: str) -> str:
     return city
 
 
+def _history_file_path() -> str:
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(project_root, "data", "daily_records.json")
+
+
+def _build_recent_deb_performance_index(
+    history_data: Optional[dict] = None,
+    *,
+    lookback: int = _DEB_RECENT_LOOKBACK,
+    min_samples: int = _DEB_RECENT_MIN_SAMPLES,
+) -> dict[str, dict[str, object]]:
+    data = history_data if isinstance(history_data, dict) else load_history(_history_file_path())
+    index: dict[str, dict[str, object]] = {}
+    if not isinstance(data, dict):
+        return index
+
+    today = datetime.utcnow().strftime("%Y-%m-%d")
+    for city_name, rows in data.items():
+        if not isinstance(rows, dict):
+            continue
+        settled: list[tuple[str, float, float]] = []
+        for date_key in sorted(rows.keys(), reverse=True):
+            if date_key >= today:
+                continue
+            record = rows.get(date_key) or {}
+            if not isinstance(record, dict):
+                continue
+            actual = _sf(record.get("actual_high"))
+            deb_prediction = _sf(record.get("deb_prediction"))
+            if actual is None or deb_prediction is None:
+                continue
+            settled.append((date_key, actual, deb_prediction))
+            if len(settled) >= max(lookback, 1):
+                break
+
+        hit_count = 0
+        abs_errors: list[float] = []
+        for _, actual, deb_prediction in settled:
+            abs_errors.append(abs(deb_prediction - actual))
+            if apply_city_settlement(city_name, actual) == apply_city_settlement(city_name, deb_prediction):
+                hit_count += 1
+
+        sample_count = len(settled)
+        hit_rate = (hit_count / sample_count) if sample_count > 0 else None
+        if sample_count < min_samples:
+            tier = "other"
+        elif hit_rate is not None and hit_rate >= 0.67:
+            tier = "high"
+        elif hit_rate is not None and hit_rate >= 0.34:
+            tier = "medium"
+        else:
+            tier = "low"
+
+        index[str(city_name).strip().lower()] = {
+            "tier": tier,
+            "sample_count": sample_count,
+            "hit_rate": round(hit_rate, 4) if hit_rate is not None else None,
+            "mae": round(sum(abs_errors) / sample_count, 3) if sample_count > 0 else None,
+            "last_date": settled[0][0] if settled else None,
+        }
+    return index
+
+
 @router.get("/healthz")
 async def healthz():
     payload = build_health_payload()
@@ -199,9 +266,11 @@ async def metrics():
 async def list_cities(request: Request):
     try:
         out = []
+        deb_recent_index = _build_recent_deb_performance_index()
         for name, info in CITIES.items():
             risk = CITY_RISK_PROFILES.get(name, {})
             city_meta = CITY_REGISTRY.get(name, {}) or {}
+            deb_recent = deb_recent_index.get(name, {})
             settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
             out.append(
                 {
@@ -220,6 +289,11 @@ async def list_cities(request: Request):
                         settlement_source,
                         settlement_source.upper(),
                     ),
+                    "deb_recent_tier": deb_recent.get("tier", "other"),
+                    "deb_recent_hit_rate": deb_recent.get("hit_rate"),
+                    "deb_recent_sample_count": deb_recent.get("sample_count", 0),
+                    "deb_recent_mae": deb_recent.get("mae"),
+                    "deb_recent_last_date": deb_recent.get("last_date"),
                 }
             )
         return {"cities": out}

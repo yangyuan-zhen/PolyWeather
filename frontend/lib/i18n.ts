@@ -26,10 +26,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.currentTemp": "当前 {temp}",
     "sidebar.peakTempAt": "峰值 {temp} @ {time}",
     "sidebar.peakAt": "峰值 @ {time}",
-    "sidebar.group.high": "高风险",
-    "sidebar.group.medium": "中风险",
-    "sidebar.group.low": "低风险",
-    "sidebar.group.other": "其他",
+    "sidebar.group.high": "近期强势",
+    "sidebar.group.medium": "近期一般",
+    "sidebar.group.low": "近期偏弱",
+    "sidebar.group.other": "样本不足",
 
     "dashboard.loading": "正在同步站点观测与结算源，请稍候...",
 
@@ -189,10 +189,10 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.currentTemp": "Current {temp}",
     "sidebar.peakTempAt": "Peak {temp} @ {time}",
     "sidebar.peakAt": "Peak @ {time}",
-    "sidebar.group.high": "High Risk",
-    "sidebar.group.medium": "Medium Risk",
-    "sidebar.group.low": "Low Risk",
-    "sidebar.group.other": "Others",
+    "sidebar.group.high": "Recent Strong",
+    "sidebar.group.medium": "Recent Mixed",
+    "sidebar.group.low": "Recent Weak",
+    "sidebar.group.other": "Low Sample",
 
     "dashboard.loading":
       "Synchronizing station observations and settlement feeds...",

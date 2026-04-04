@@ -4,7 +4,6 @@ from datetime import datetime, timedelta
 from typing import Optional
 import requests
 from src.analysis.settlement_rounding import apply_city_settlement
-from src.data_collection.wunderground_sources import fetch_wunderground_historical_high
 from loguru import logger
 from src.database.runtime_state import (
     DailyRecordRepository,
@@ -630,76 +629,13 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
 
 
 def _reconcile_recent_wunderground_actual_highs(city_name: str, lookback_days: int = 14):
-    try:
-        city_key, city_meta = _resolve_city_history_context(city_name)
-        if not city_key or not isinstance(city_meta, dict):
-            return {"ok": False, "reason": "unknown_city", "updated": 0}
-
-        settlement_url = str(city_meta.get("settlement_url") or "").strip()
-        if not settlement_url:
-            return {"ok": False, "reason": "missing_settlement_url", "updated": 0}
-
-        tz_offset = int(city_meta.get("tz_offset") or 0)
-        history_file = _get_history_file_path()
-        data = load_history(history_file)
-        city_data = data.get(city_key) or {}
-        if not isinstance(city_data, dict) or not city_data:
-            return {"ok": True, "reason": "no_city_history", "updated": 0}
-
-        local_now = datetime.utcnow() + timedelta(seconds=tz_offset)
-        local_today = local_now.strftime("%Y-%m-%d")
-        cutoff = (local_now - timedelta(days=max(lookback_days, 1) + 1)).strftime(
-            "%Y-%m-%d"
-        )
-        target_dates = sorted(
-            d for d in city_data.keys() if isinstance(d, str) and cutoff <= d < local_today
-        )
-        if not target_dates:
-            return {"ok": True, "reason": "no_target_dates", "updated": 0}
-
-        updated = 0
-        scanned_dates = 0
-        for date_str in target_dates:
-            result = fetch_wunderground_historical_high(city_key, date_str, url=settlement_url)
-            if not result.get("ok"):
-                continue
-            scanned_dates += 1
-            corrected = _sf(result.get("actual_high"))
-            if corrected is None:
-                continue
-            rec = city_data.get(date_str) or {}
-            old = rec.get("actual_high")
-            try:
-                old_val = float(old) if old is not None else None
-            except Exception:
-                old_val = None
-            if old_val is None or abs(old_val - corrected) >= 0.1:
-                rec["actual_high"] = corrected
-                city_data[date_str] = rec
-                updated += 1
-            _persist_truth_record(
-                city_key,
-                date_str,
-                corrected,
-                city_meta=city_meta,
-                updated_by="backfill:wunderground_history",
-                reason="reconcile_recent_actual_highs",
-                source_payload=result,
-            )
-
-        if updated > 0:
-            data[city_key] = city_data
-            save_history(history_file, data)
-
-        return {
-            "ok": True,
-            "updated": updated,
-            "scanned_dates": scanned_dates,
-            "station_code": city_meta.get("settlement_station_code"),
-            "source": "wunderground",
-        }
-    except Exception as e:
-        return {"ok": False, "reason": str(e), "updated": 0}
+    return {
+        "ok": True,
+        "reason": "wunderground_crawler_removed",
+        "updated": 0,
+        "scanned_dates": 0,
+        "source": "wunderground",
+    }
 
 
 def reconcile_recent_actual_highs(city_name: str, lookback_days: int = 7):
@@ -732,14 +668,14 @@ def bootstrap_recent_daily_history_if_missing(city_name: str, lookback_days: int
             return {"ok": False, "reason": "unknown_city", "seeded": 0, "updated": 0}
 
         settlement_source = str(city_meta.get("settlement_source") or "metar").strip().lower()
-        if settlement_source not in {"metar", "hko", "noaa", "wunderground"}:
+        if settlement_source not in {"metar", "hko", "noaa"}:
             return {"ok": True, "reason": "unsupported_settlement_source", "seeded": 0, "updated": 0}
 
         icao = str(city_meta.get("icao") or "").strip().upper()
         station_code = str(city_meta.get("settlement_station_code") or "").strip().upper()
         if settlement_source == "metar" and not icao:
             return {"ok": False, "reason": "missing_icao", "seeded": 0, "updated": 0}
-        if settlement_source in {"hko", "noaa", "wunderground"} and not station_code:
+        if settlement_source in {"hko", "noaa"} and not station_code:
             return {"ok": False, "reason": "missing_station_code", "seeded": 0, "updated": 0}
 
         tz_offset = int(city_meta.get("tz_offset") or 0)

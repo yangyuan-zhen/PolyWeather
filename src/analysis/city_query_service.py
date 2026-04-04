@@ -335,7 +335,7 @@ def build_city_query_report(
         sc_current = {}
     city_meta = CITY_REGISTRY.get(city_name.lower(), {})
     settlement_source, settlement_source_label = _resolve_settlement_source(city_meta)
-    use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_current)
+    use_settlement_current = settlement_source in {"hko", "cwa", "noaa"} and bool(sc_current)
     fallback_utc_offset = int(city_meta.get("tz_offset", 0))
     nws_periods = ((weather_data.get("nws") or {}).get("forecast_periods") or [])
     if nws_periods:

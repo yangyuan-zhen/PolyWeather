@@ -21,6 +21,10 @@ function toRiskGroup(level?: string): RiskGroupKey {
   return "other";
 }
 
+function toPerformanceGroup(city: CityListItem): RiskGroupKey {
+  return toRiskGroup(city.deb_recent_tier);
+}
+
 function normalizeExpandedGroups(
   value: unknown,
 ): Record<RiskGroupKey, boolean> {
@@ -60,11 +64,17 @@ export function CitySidebar() {
   const sortedCities = useMemo(
     () =>
       [...store.cities].sort((a, b) => {
-        const aGroup = toRiskGroup(a.risk_level);
-        const bGroup = toRiskGroup(b.risk_level);
+        const aGroup = toPerformanceGroup(a);
+        const bGroup = toPerformanceGroup(b);
+        const aHitRate = Number(a.deb_recent_hit_rate ?? -1);
+        const bHitRate = Number(b.deb_recent_hit_rate ?? -1);
+        const aSamples = Number(a.deb_recent_sample_count ?? 0);
+        const bSamples = Number(b.deb_recent_sample_count ?? 0);
         return (
           (riskOrder[aGroup] ?? 3) -
             (riskOrder[bGroup] ?? 3) ||
+          bHitRate - aHitRate ||
+          bSamples - aSamples ||
           a.display_name.localeCompare(b.display_name)
         );
       }),
@@ -79,7 +89,7 @@ export function CitySidebar() {
       other: [],
     };
     sortedCities.forEach((city) => {
-      groups[toRiskGroup(city.risk_level)].push(city);
+      groups[toPerformanceGroup(city)].push(city);
     });
     return groups;
   }, [sortedCities]);
@@ -88,7 +98,7 @@ export function CitySidebar() {
     if (!selectedCity) return;
     const selected = store.cities.find((city) => city.name === selectedCity);
     if (!selected) return;
-    const groupKey = toRiskGroup(selected.risk_level);
+    const groupKey = toPerformanceGroup(selected);
     setExpandedGroups((current) =>
       current[groupKey] ? current : { ...current, [groupKey]: true },
     );
@@ -200,6 +210,7 @@ export function CitySidebar() {
                   const deviationSeverity =
                     snapshot?.deviation_monitor?.severity || "normal";
                   const secondaryText = deviationText || peakTempText;
+                  const performanceTier = toPerformanceGroup(city);
 
                   return (
                     <button
@@ -213,7 +224,7 @@ export function CitySidebar() {
                       }
                     >
                       <div className="city-item-main">
-                        <span className={clsx("risk-dot", city.risk_level)} />
+                        <span className={clsx("risk-dot", performanceTier)} />
                         <span className="city-name-text">{city.display_name}</span>
                         <span
                           className={clsx(

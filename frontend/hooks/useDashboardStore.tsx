@@ -81,96 +81,6 @@ function getInitialProAccessState(): ProAccessState {
   };
 }
 
-const AI_EMPTY_PATTERNS = [
-  /暂无\s*AI\s*分析/i,
-  /当前以结构化气象与模型数据为主/i,
-  /No\s*AI\s*analysis\s*available/i,
-  /Structured\s+meteorological\s+and\s+model\s+data/i,
-];
-
-function normalizeText(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function extractAiPayload(analysis: CityDetail["ai_analysis"]) {
-  if (!analysis) {
-    return {
-      bullets: [] as string[],
-      summary: "",
-    };
-  }
-
-  if (typeof analysis === "string") {
-    return {
-      bullets: [] as string[],
-      summary: normalizeText(analysis),
-    };
-  }
-
-  const summary =
-    normalizeText(analysis.summary) ||
-    normalizeText(analysis.text) ||
-    normalizeText(analysis.message);
-  const bulletsSource = Array.isArray(analysis.highlights)
-    ? analysis.highlights
-    : Array.isArray(analysis.points)
-      ? analysis.points
-      : [];
-
-  return {
-    bullets: bulletsSource.map((item) => normalizeText(item)).filter(Boolean),
-    summary,
-  };
-}
-
-function hasMeaningfulAiAnalysis(analysis: CityDetail["ai_analysis"]) {
-  const parsed = extractAiPayload(analysis);
-  const hasBullets = parsed.bullets.length > 0;
-  const hasSummary =
-    Boolean(parsed.summary) &&
-    !AI_EMPTY_PATTERNS.some((pattern) => pattern.test(parsed.summary));
-  return hasBullets || hasSummary;
-}
-
-function normalizeMetarSignature(detail?: CityDetail) {
-  if (!detail) return "";
-  const metar = normalizeText(detail.current?.raw_metar)
-    .replace(/\s+/g, " ")
-    .toUpperCase();
-  const obsTime = normalizeText(detail.current?.obs_time);
-  return [metar, obsTime].filter(Boolean).join("|");
-}
-
-function mergeAiAnalysisIfStable(
-  previousDetail: CityDetail | undefined,
-  nextDetail: CityDetail,
-) {
-  if (!previousDetail) return nextDetail;
-  if (hasMeaningfulAiAnalysis(nextDetail.ai_analysis)) return nextDetail;
-  if (!hasMeaningfulAiAnalysis(previousDetail.ai_analysis)) return nextDetail;
-
-  const prevTemp = Number(previousDetail.current?.temp);
-  const nextTemp = Number(nextDetail.current?.temp);
-  const tempUnchanged =
-    Number.isFinite(prevTemp) &&
-    Number.isFinite(nextTemp) &&
-    prevTemp === nextTemp;
-
-  const prevMetar = normalizeMetarSignature(previousDetail);
-  const nextMetar = normalizeMetarSignature(nextDetail);
-  const metarUnchanged =
-    Boolean(prevMetar) && Boolean(nextMetar) && prevMetar === nextMetar;
-
-  if (!tempUnchanged && !metarUnchanged) {
-    return nextDetail;
-  }
-
-  return {
-    ...nextDetail,
-    ai_analysis: previousDetail.ai_analysis,
-  };
-}
-
 function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
   const normalizedDate = String(targetDate || "").trim() || "local";
   return `${cityName}::${normalizedDate}`;
@@ -286,7 +196,7 @@ export function DashboardStoreProvider({
         const latestDetail = await dashboardClient.getCityDetail(cityName, {
           force: false,
         });
-        const detail = mergeAiAnalysisIfStable(cached, latestDetail);
+        const detail = latestDetail;
 
         setCityDetailsByName((current) => ({
           ...current,
@@ -337,7 +247,7 @@ export function DashboardStoreProvider({
     const latestDetail = await dashboardClient.getCityDetail(cityName, {
       force,
     });
-    const detail = mergeAiAnalysisIfStable(cached, latestDetail);
+    const detail = latestDetail;
     setCityDetailsByName((current) => ({
       ...current,
       [cityName]: detail,
@@ -608,10 +518,7 @@ export function DashboardStoreProvider({
         const latestDetail = await dashboardClient.getCityDetail(selectedCity, {
           force: true,
         });
-        const detail = mergeAiAnalysisIfStable(
-          previousSelectedDetail,
-          latestDetail,
-        );
+        const detail = latestDetail;
         setCityDetailsByName({ [selectedCity]: detail });
         setCitySummariesByName((current) => ({
           ...current,

@@ -600,14 +600,8 @@ class SettlementSourceMixin:
             city_meta = CITY_REGISTRY.get(normalized) or {}
             settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
             if settlement_source == "wunderground":
-                settlement_url = str(city_meta.get("settlement_url") or "").strip()
-                if settlement_url:
-                    return self.fetch_wunderground_settlement_current(
-                        normalized,
-                        url=settlement_url,
-                        station_label=str(city_meta.get("settlement_station_label") or "").strip() or None,
-                        icao=str(city_meta.get("icao") or "").strip() or None,
-                    )
+                logger.info("Settlement current skipped city={} source=wunderground reason=crawler_removed", city)
+                return None
             if settlement_source == "hko":
                 raw_candidates = city_meta.get("settlement_station_candidates") or []
                 if isinstance(raw_candidates, str):

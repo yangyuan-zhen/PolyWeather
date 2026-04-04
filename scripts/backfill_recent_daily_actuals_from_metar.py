@@ -25,7 +25,7 @@ def _target_dates(city_info: dict, lookback_days: int) -> list[str]:
 
 def _is_metar_city(city_info: dict) -> bool:
     source = str(city_info.get("settlement_source") or "metar").strip().lower()
-    return source in {"metar", "hko", "noaa", "wunderground"}
+    return source in {"metar", "hko", "noaa"}
 
 
 def main() -> None:

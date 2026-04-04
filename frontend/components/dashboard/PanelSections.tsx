@@ -19,7 +19,6 @@ import {
   getRiskBadgeLabel,
   getTemperatureChartData,
   getWeatherSummary,
-  parseAiAnalysis,
 } from "@/lib/dashboard-utils";
 
 function EmptyState({ text }: { text: string }) {
@@ -754,35 +753,6 @@ export function ForecastTable() {
               </button>
             );
           })
-        )}
-      </div>
-    </section>
-  );
-}
-
-export function AiAnalysis() {
-  const { data } = useCityData();
-  const { t } = useI18n();
-  if (!data) return null;
-  const ai = parseAiAnalysis(data.ai_analysis);
-
-  return (
-    <section className="ai-section">
-      <h3>{t("section.ai")}</h3>
-      <div className="ai-box">
-        {!ai.summary && ai.bullets.length === 0 ? (
-          <span className="ai-placeholder">{t("section.aiEmpty")}</span>
-        ) : (
-          <>
-            {ai.summary && <div className="ai-summary">{ai.summary}</div>}
-            {ai.bullets.length > 0 && (
-              <ul className="ai-list">
-                {ai.bullets.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-            )}
-          </>
         )}
       </div>
     </section>

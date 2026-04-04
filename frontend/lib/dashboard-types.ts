@@ -6,6 +6,11 @@ export interface CityListItem {
   lat: number;
   lon: number;
   risk_level: RiskLevel;
+  deb_recent_tier?: RiskLevel;
+  deb_recent_hit_rate?: number | null;
+  deb_recent_sample_count?: number;
+  deb_recent_mae?: number | null;
+  deb_recent_last_date?: string | null;
   risk_emoji?: string;
   airport: string;
   icao: string;

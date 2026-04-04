@@ -22,7 +22,6 @@ def load_config():
     config = {
         "weather": {
             "openweather_api_key": get_env_or_none("OPENWEATHER_API_KEY"),
-            "wunderground_api_key": get_env_or_none("WUNDERGROUND_API_KEY"),
             "visualcrossing_api_key": get_env_or_none("VISUALCROSSING_API_KEY"),
             "proxy": os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY"),
         },
