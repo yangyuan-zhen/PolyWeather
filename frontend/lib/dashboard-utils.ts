@@ -288,8 +288,10 @@ export function getTemperatureChartData(
     observationCode === "cwa" ||
     observationCode === "noaa" ||
     observationCode === "wunderground";
+  const useSettlementObservationSource =
+    settlementSource && observationCode !== "wunderground";
   const officialObservationSource =
-    settlementSource
+    useSettlementObservationSource
       ? detail.settlement_today_obs?.length
         ? detail.settlement_today_obs
         : detail.current?.obs_time && detail.current?.temp != null
@@ -299,36 +301,28 @@ export function getTemperatureChartData(
   const metarObservationSource = detail.metar_today_obs?.length
     ? detail.metar_today_obs
     : detail.trend?.recent || [];
-  const allowMetarFallback =
-    settlementSource &&
-    observationCode !== "hko" &&
-    observationCode !== "wunderground";
+  const allowMetarFallback = settlementSource && observationCode !== "hko";
   const shouldUseMetarFallback =
     allowMetarFallback &&
     officialObservationSource.length > 0 &&
     officialObservationSource.length < 3 &&
     metarObservationSource.length >= 3;
-  const observationSource = settlementSource
+  const observationSource = useSettlementObservationSource
     ? shouldUseMetarFallback
       ? metarObservationSource
       : officialObservationSource
     : metarObservationSource;
-  const airportMetarSource =
-    settlementSource && observationCode === "wunderground"
-      ? metarObservationSource
-      : [];
+  const airportMetarSource: Array<{ time?: string; temp?: number | null }> = [];
   const metarFallbackTag = (() => {
     const icao = String(detail.risk?.icao || "").trim().toUpperCase();
     if (!icao) return "METAR";
     return `${icao} METAR`;
   })();
   const observationDisplayTag =
-    settlementSource && shouldUseMetarFallback
+    useSettlementObservationSource && shouldUseMetarFallback
       ? metarFallbackTag
       : observationCode === "noaa"
         ? `NOAA ${getNoaaStationCode(detail)}`
-        : observationCode === "wunderground"
-          ? "Wunderground"
         : observationTag;
 
   const metarPoints = new Array(times.length).fill(null);
@@ -617,12 +611,6 @@ export function getTemperatureChartData(
         ? `This city settles on NOAA ${noaaCode} using the finalized highest rounded whole-degree Celsius Temp reading; the plotted line is a settlement reference.`
         : `该城市按 NOAA ${noaaCode} 最终完成质控后的最高整度摄氏 Temp 读数结算；图中曲线仅作为结算参考线。`,
     );
-  } else if (observationCode === "wunderground") {
-    legendParts.push(
-      isEnglish(locale)
-        ? "This city settles on the configured Wunderground station; the plotted observation points follow that settlement source."
-        : "该城市按配置的 Wunderground 站点结算；图中实测点位按该结算源展示。",
-    );
   }
   if (tafMarkers.length) {
     const primaryTafMarker = currentTafMarker || nextTafMarker;
@@ -663,7 +651,7 @@ export function getTemperatureChartData(
       temps,
     },
     observationLabel:
-    (observationCode === "noaa" || observationCode === "wunderground") &&
+    observationCode === "noaa" &&
     !shouldUseMetarFallback
         ? isEnglish(locale)
           ? `${observationDisplayTag} Settlement Reference`
