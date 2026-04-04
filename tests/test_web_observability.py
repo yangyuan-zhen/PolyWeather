@@ -54,6 +54,21 @@ def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     assert aurora["display_name"] == "Denver"
 
 
+def test_cities_endpoint_includes_new_wunderground_cities():
+    response = client.get("/api/cities")
+    assert response.status_code == 200
+    payload = response.json()
+    names = {item["name"] for item in payload["cities"]}
+    assert {
+        "busan",
+        "panama city",
+        "kuala lumpur",
+        "jakarta",
+        "helsinki",
+        "amsterdam",
+    }.issubset(names)
+
+
 def test_payment_runtime_endpoint_returns_shape():
     response = client.get('/api/payments/runtime')
     assert response.status_code == 200

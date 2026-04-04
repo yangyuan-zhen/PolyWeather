@@ -92,6 +92,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
+  busan: [
+    {
+      label: "Wunderground RKPK",
+      href: "https://www.wunderground.com/history/daily/kr/busan/RKPK",
+      kind: "agency",
+    },
+    {
+      label: "金海国际机场",
+      href: "https://www.airport.co.kr/gimhaeeng/index.do",
+      kind: "airport",
+    },
+    {
+      label: "RKPK METAR",
+      href: "https://aviationweather.gov/data/metar/?id=RKPK&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
   istanbul: [
     {
       label: "MGM",
@@ -523,6 +540,91 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     {
       label: "ZGSZ METAR",
       href: "https://aviationweather.gov/data/metar/?id=ZGSZ&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "kuala lumpur": [
+    {
+      label: "Wunderground WMKK",
+      href: "https://www.wunderground.com/history/daily/my/sepang-district/WMKK",
+      kind: "agency",
+    },
+    {
+      label: "吉隆坡国际机场",
+      href: "https://airports.malaysiaairports.com.my/klia",
+      kind: "airport",
+    },
+    {
+      label: "WMKK METAR",
+      href: "https://aviationweather.gov/data/metar/?id=WMKK&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  jakarta: [
+    {
+      label: "Wunderground WIHH",
+      href: "https://www.wunderground.com/history/daily/id/jakarta/WIHH",
+      kind: "agency",
+    },
+    {
+      label: "Halim Perdanakusuma Airport",
+      href: "https://www.angkasapura2.co.id/en/airport/read/HLP",
+      kind: "airport",
+    },
+    {
+      label: "WIHH METAR",
+      href: "https://aviationweather.gov/data/metar/?id=WIHH&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  helsinki: [
+    {
+      label: "Wunderground EFHK",
+      href: "https://www.wunderground.com/history/daily/fi/vantaa/EFHK",
+      kind: "agency",
+    },
+    {
+      label: "Helsinki Airport",
+      href: "https://www.finavia.fi/en/airports/helsinki-airport",
+      kind: "airport",
+    },
+    {
+      label: "EFHK METAR",
+      href: "https://aviationweather.gov/data/metar/?id=EFHK&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  amsterdam: [
+    {
+      label: "Wunderground EHAM",
+      href: "https://www.wunderground.com/history/daily/nl/schiphol/EHAM",
+      kind: "agency",
+    },
+    {
+      label: "Amsterdam Airport Schiphol",
+      href: "https://www.schiphol.nl/en/",
+      kind: "airport",
+    },
+    {
+      label: "EHAM METAR",
+      href: "https://aviationweather.gov/data/metar/?id=EHAM&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "panama city": [
+    {
+      label: "Wunderground MPMG",
+      href: "https://www.wunderground.com/history/daily/pa/panama-city/MPMG",
+      kind: "agency",
+    },
+    {
+      label: "Marcos A. Gelabert Airport",
+      href: "https://www.aeropuertos.net/aeropuerto-internacional-marcos-a-gelabert/",
+      kind: "airport",
+    },
+    {
+      label: "MPMG METAR",
+      href: "https://aviationweather.gov/data/metar/?id=MPMG&decoded=1&taf=1",
       kind: "metar",
     },
   ],
