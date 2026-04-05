@@ -564,7 +564,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     },
     {
       label: "NMC 深圳天气",
-      href: "https://m.nmc.cn/publish/forecast/AGD/shenzhen.html",
+      href: "https://m.nmc.cn/publish/forecast/AGD/shenzuo.html",
       kind: "agency",
     },
     {

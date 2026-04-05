@@ -38,8 +38,8 @@ NMC_CITY_REFERENCES: Dict[str, Dict[str, Any]] = {
     },
     "shenzhen": {
         "region_label": "深圳",
-        "page_url": "https://m.nmc.cn/publish/forecast/AGD/shenzhen.html",
-        "station_code": "59493",
+        "page_url": "https://m.nmc.cn/publish/forecast/AGD/shenzuo.html",
+        "station_code": "AhpEU",
     },
 }
 
