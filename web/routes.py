@@ -13,7 +13,6 @@ from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRecordRepository
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.city_registry import ALIASES
-from src.database.runtime_state import TruthRecordRepository
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
     _analyze,
