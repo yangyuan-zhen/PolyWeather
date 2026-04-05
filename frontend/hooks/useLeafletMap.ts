@@ -111,6 +111,43 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   `;
 }
 
+function getNearbyMarkerDisplayOffset(
+  detail: CityDetail,
+  station: NearbyStation,
+  index: number,
+) {
+  const cityLat = Number(detail.lat);
+  const cityLon = Number(detail.lon);
+  const stationLat = Number(station.lat);
+  const stationLon = Number(station.lon);
+
+  if (
+    !Number.isFinite(cityLat) ||
+    !Number.isFinite(cityLon) ||
+    !Number.isFinite(stationLat) ||
+    !Number.isFinite(stationLon)
+  ) {
+    return { x: 0, y: 0 };
+  }
+
+  const latDiff = Math.abs(cityLat - stationLat);
+  const lonDiff = Math.abs(cityLon - stationLon);
+  const isNearCityAnchor = latDiff < 0.02 && lonDiff < 0.02;
+
+  if (!isNearCityAnchor) {
+    return { x: 0, y: 0 };
+  }
+
+  const presets = [
+    { x: 54, y: -26 },
+    { x: -54, y: -26 },
+    { x: 54, y: 24 },
+    { x: -54, y: 24 },
+  ];
+
+  return presets[index % presets.length];
+}
+
 export function useLeafletMap({
   cities,
   cityDetailsByName,
@@ -348,11 +385,21 @@ export function useLeafletMap({
         const sLon = Number(station.lon);
         // Ignore invalid (0,0) or null coordinates which cause global zoom-out
         if (!Number.isFinite(sLat) || !Number.isFinite(sLon)) return;
-        if (Math.abs(sLat) < 0.1 && Math.abs(sLon) < 0.1) return;
+      if (Math.abs(sLat) < 0.1 && Math.abs(sLon) < 0.1) return;
+
+        const displayOffset = getNearbyMarkerDisplayOffset(detail, station, latLngs.length);
+        const styleAttr =
+          displayOffset.x || displayOffset.y
+            ? ` style="transform: translate(${displayOffset.x}px, ${displayOffset.y}px);"`
+            : "";
 
         const icon = L.divIcon({
           className: "",
-          html: buildNearbyIconHtml(detail, station),
+          html: `
+            <div class="nearby-marker-shell"${styleAttr}>
+              ${buildNearbyIconHtml(detail, station)}
+            </div>
+          `,
           iconAnchor: [16, 19],
           iconSize: [240, 38],
         });

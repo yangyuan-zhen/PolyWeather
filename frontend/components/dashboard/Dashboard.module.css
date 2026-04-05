@@ -1665,6 +1665,11 @@
   white-space: nowrap;
 }
 
+.root :global(.nearby-marker-shell) {
+  display: inline-block;
+  will-change: transform;
+}
+
 @keyframes nearby-fade-in {
   from {
     opacity: 0;
