@@ -22,6 +22,7 @@ from web.core import (
 )
 from src.analysis.deb_algorithm import calculate_dynamic_weights
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
@@ -817,6 +818,7 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if not isinstance(mm, dict):
         mm = {}
     risk = CITY_RISK_PROFILES.get(city, {})
+    network_snapshot = build_country_network_snapshot(city, raw)
 
     # ── 2. Current conditions (city-specific settlement source first, then METAR/MGM fallback) ──
     mc = metar.get("current", {}) if metar else {}
@@ -1495,6 +1497,16 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "raw_metar": mc.get("raw_metar"),
             "source_label": "METAR",
         },
+        "settlement_station": network_snapshot.get("settlement_station") or {},
+        "airport_primary": network_snapshot.get("airport_primary_current") or {},
+        "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs") or [],
+        "official_nearby": network_snapshot.get("official_nearby") or [],
+        "official_network_source": network_snapshot.get("official_network_source"),
+        "official_network_status": network_snapshot.get("official_network_status") or {},
+        "network_lead_signal": network_snapshot.get("network_lead_signal") or {},
+        "network_spread_signal": network_snapshot.get("network_spread_signal") or {},
+        "center_station_candidate": network_snapshot.get("center_station_candidate"),
+        "airport_vs_network_delta": network_snapshot.get("airport_vs_network_delta"),
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
         "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() in TURKISH_MGM_CITIES else "metar_cluster"),
@@ -1691,6 +1703,7 @@ def _build_city_detail_payload(
             "current_temp": data.get("current", {}).get("temp"),
             "settlement_source": data.get("current", {}).get("settlement_source"),
             "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
+            "settlement_station": data.get("settlement_station") or {},
             "deb_prediction": data.get("deb", {}).get("prediction"),
             "risk_level": data.get("risk", {}).get("level"),
             "risk_warning": data.get("risk", {}).get("warning"),
@@ -1711,6 +1724,15 @@ def _build_city_detail_payload(
             "mgm": data.get("mgm") or {},
             "mgm_nearby": data.get("mgm_nearby") or [],
             "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
+            "airport_primary": data.get("airport_primary") or {},
+            "airport_primary_today_obs": data.get("airport_primary_today_obs") or [],
+            "official_nearby": data.get("official_nearby") or [],
+            "official_network_source": data.get("official_network_source"),
+            "official_network_status": data.get("official_network_status") or {},
+            "network_lead_signal": data.get("network_lead_signal") or {},
+            "network_spread_signal": data.get("network_spread_signal") or {},
+            "center_station_candidate": data.get("center_station_candidate"),
+            "airport_vs_network_delta": data.get("airport_vs_network_delta"),
         },
         "timeseries": {
             "metar_recent_obs": data.get("metar_recent_obs") or [],
@@ -1731,6 +1753,15 @@ def _build_city_detail_payload(
         "taf": data.get("taf") or {},
         "market_scan": market_scan,
         "risk": data.get("risk"),
+        "settlement_station": data.get("settlement_station") or {},
+        "airport_primary": data.get("airport_primary") or {},
+        "official_nearby": data.get("official_nearby") or [],
+        "official_network_source": data.get("official_network_source"),
+        "official_network_status": data.get("official_network_status") or {},
+        "network_lead_signal": data.get("network_lead_signal") or {},
+        "network_spread_signal": data.get("network_spread_signal") or {},
+        "center_station_candidate": data.get("center_station_candidate"),
+        "airport_vs_network_delta": data.get("airport_vs_network_delta"),
         "airport_current": data.get("airport_current") or {},
         "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
         "ai_analysis": data.get("ai_analysis") or "",

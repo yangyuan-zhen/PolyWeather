@@ -328,6 +328,16 @@ export interface CityDetail {
     local_date: string;
     temp_symbol: string;
     current_temp: number | null;
+    settlement_station?: {
+      provider_code?: string | null;
+      settlement_source?: string | null;
+      settlement_station_code?: string | null;
+      settlement_station_label?: string | null;
+      airport_code?: string | null;
+      airport_name?: string | null;
+      is_airport_anchor?: boolean;
+      is_official_station_anchor?: boolean;
+    };
     deb_prediction: number | null;
     risk_level: string;
     risk_warning: string;
@@ -340,6 +350,15 @@ export interface CityDetail {
     mgm: any;
     mgm_nearby: any[];
     nearby_source?: string;
+    airport_primary?: any;
+    airport_primary_today_obs?: any[];
+    official_nearby?: any[];
+    official_network_source?: string;
+    official_network_status?: any;
+    network_lead_signal?: any;
+    network_spread_signal?: any;
+    center_station_candidate?: any;
+    airport_vs_network_delta?: number | null;
   };
   timeseries: {
     metar_recent_obs: any[];
@@ -356,6 +375,15 @@ export interface CityDetail {
   };
   market_scan: MarketScan;
   risk: any;
+  settlement_station?: any;
+  airport_primary?: any;
+  official_nearby?: any[];
+  official_network_source?: string;
+  official_network_status?: any;
+  network_lead_signal?: any;
+  network_spread_signal?: any;
+  center_station_candidate?: any;
+  airport_vs_network_delta?: number | null;
   ai_analysis: string;
   errors: Record<string, string>;
 }

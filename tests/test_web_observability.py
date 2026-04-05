@@ -32,6 +32,7 @@ def test_system_status_returns_summary_shape():
     assert 'rollout' in payload['probability']
     assert payload['probability']['rollout']['decision']['decision'] in {'hold', 'observe', 'promote'}
     assert 'training_data' in payload
+    assert 'station_networks' in payload
     assert 'truth_records' in payload['training_data']
     assert 'training_features' in payload['training_data']
     assert 'city_coverage' in payload['training_data']
@@ -52,6 +53,7 @@ def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     payload = response.json()
     aurora = next(item for item in payload["cities"] if item["name"] == "aurora")
     assert aurora["display_name"] == "Denver"
+    assert aurora["network_provider"] == "global_metar"
     assert aurora["deb_recent_tier"] in {"high", "medium", "low", "other"}
     assert "deb_recent_sample_count" in aurora
 
@@ -244,3 +246,5 @@ def test_city_history_is_read_only_and_uses_sqlite_truth_and_features(monkeypatc
     assert row["deb"] == 16.4
     assert row["mu"] == 16.2
     assert row["forecasts"]["Open-Meteo"] == 15.8
+    assert row["settlement_station_code"] == "LTAC"
+    assert row["truth_version"] == "v1"

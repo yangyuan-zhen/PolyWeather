@@ -12,6 +12,7 @@ from src.analysis.deb_algorithm import load_history
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRecordRepository
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.data_collection.country_networks import get_country_network_provider
 from src.data_collection.city_registry import ALIASES
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
@@ -271,6 +272,7 @@ async def list_cities(request: Request):
             city_meta = CITY_REGISTRY.get(name, {}) or {}
             deb_recent = deb_recent_index.get(name, {})
             settlement_source = str(info.get("settlement_source") or "metar").strip().lower() or "metar"
+            provider = get_country_network_provider(name)
             out.append(
                 {
                     "name": name,
@@ -288,6 +290,10 @@ async def list_cities(request: Request):
                         settlement_source,
                         settlement_source.upper(),
                     ),
+                    "settlement_station_code": city_meta.get("settlement_station_code") or city_meta.get("icao"),
+                    "settlement_station_label": city_meta.get("settlement_station_label") or city_meta.get("airport_name"),
+                    "network_provider": provider.provider_code,
+                    "network_provider_label": provider.provider_label,
                     "deb_recent_tier": deb_recent.get("tier", "other"),
                     "deb_recent_hit_rate": deb_recent.get("hit_rate"),
                     "deb_recent_sample_count": deb_recent.get("sample_count", 0),
@@ -329,6 +335,12 @@ async def city_history(request: Request, name: str):
             features = feature_rows.get(day) or {}
             if truth.get("actual_high") is not None:
                 record["actual_high"] = truth.get("actual_high")
+                record["settlement_source"] = truth.get("settlement_source")
+                record["settlement_station_code"] = truth.get("settlement_station_code")
+                record["settlement_station_label"] = truth.get("settlement_station_label")
+                record["truth_version"] = truth.get("truth_version")
+                record["updated_by"] = truth.get("updated_by")
+                record["truth_updated_at"] = truth.get("truth_updated_at")
             if isinstance(features, dict):
                 if features.get("deb_prediction") is not None:
                     record["deb_prediction"] = features.get("deb_prediction")
@@ -379,6 +391,12 @@ async def city_history(request: Request, name: str):
                 "mu": float(mu) if mu is not None else None,
                 "mgm": float(mgm) if mgm is not None else None,
                 "forecasts": forecasts,
+                "settlement_source": rec.get("settlement_source"),
+                "settlement_station_code": rec.get("settlement_station_code"),
+                "settlement_station_label": rec.get("settlement_station_label"),
+                "truth_version": rec.get("truth_version"),
+                "updated_by": rec.get("updated_by"),
+                "truth_updated_at": rec.get("truth_updated_at"),
                 "actual_peak_time": peak_ref.get("actual_peak_time"),
                 "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
                 "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),

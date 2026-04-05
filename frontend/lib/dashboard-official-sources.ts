@@ -312,9 +312,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   shanghai: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
       kind: "agency",
+    },
+    {
+      label: "NMC 浦东天气",
+      href: "https://m.nmc.cn/publish/forecast/ASH/pudong.html",
+      kind: "agency",
+    },
+    {
+      label: "上海浦东国际机场",
+      href: "https://www.shanghai-airport.com/",
+      kind: "airport",
     },
     {
       label: "ZSPD METAR",
@@ -504,9 +514,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   chengdu: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
       kind: "agency",
+    },
+    {
+      label: "NMC 双流天气",
+      href: "https://m.nmc.cn/publish/forecast/ASC/shuangliu.html",
+      kind: "agency",
+    },
+    {
+      label: "成都双流国际机场",
+      href: "https://www.cdairport.com/",
+      kind: "airport",
     },
     {
       label: "ZUUU METAR",
@@ -516,9 +536,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   chongqing: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
       kind: "agency",
+    },
+    {
+      label: "NMC 渝北天气",
+      href: "https://m.nmc.cn/publish/forecast/ACQ/yubei.html",
+      kind: "agency",
+    },
+    {
+      label: "重庆江北国际机场",
+      href: "https://www.cqa.cn/",
+      kind: "airport",
     },
     {
       label: "ZUCK METAR",
@@ -528,8 +558,13 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   shenzhen: [
     {
-      label: "Wunderground ZGSZ",
-      href: "https://www.wunderground.com/history/daily/cn/shenzhen/ZGSZ",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
+      kind: "agency",
+    },
+    {
+      label: "NMC 深圳天气",
+      href: "https://m.nmc.cn/publish/forecast/AGD/shenzhen.html",
       kind: "agency",
     },
     {
@@ -630,9 +665,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   beijing: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
       kind: "agency",
+    },
+    {
+      label: "NMC 顺义天气",
+      href: "https://m.nmc.cn/publish/forecast/ABJ/shunyi.html",
+      kind: "agency",
+    },
+    {
+      label: "北京首都国际机场",
+      href: "https://www.bcia.com.cn/",
+      kind: "airport",
     },
     {
       label: "ZBAA METAR",
@@ -642,9 +687,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   wuhan: [
     {
-      label: "中国天气网",
-      href: "https://www.weather.com.cn/",
+      label: "NMC 全国主要机场天气预报",
+      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
       kind: "agency",
+    },
+    {
+      label: "NMC 武汉天气",
+      href: "https://m.nmc.cn/publish/forecast/AHB/wuhan.html",
+      kind: "agency",
+    },
+    {
+      label: "武汉天河国际机场",
+      href: "https://www.whairport.com/",
+      kind: "airport",
     },
     {
       label: "ZHHH METAR",

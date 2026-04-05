@@ -18,6 +18,10 @@ export interface CityListItem {
   is_major?: boolean;
   settlement_source?: string;
   settlement_source_label?: string;
+  settlement_station_code?: string;
+  settlement_station_label?: string;
+  network_provider?: string;
+  network_provider_label?: string;
 }
 
 export interface ProbabilityBucket {
@@ -90,17 +94,29 @@ export interface AirportCurrentConditions {
   wx_desc?: string | null;
   raw_metar?: string | null;
   source_label?: string | null;
+  station_code?: string | null;
+  station_label?: string | null;
+  is_airport_station?: boolean;
+  is_official?: boolean;
+  is_settlement_anchor?: boolean;
 }
 
 export interface NearbyStation {
   name?: string;
   icao?: string;
+  station_code?: string | null;
+  station_label?: string | null;
   lat: number;
   lon: number;
   temp: number | null;
   wind_dir?: number | null;
   wind_speed?: number | null;
   wind_speed_kt?: number | null;
+  source_code?: string | null;
+  source_label?: string | null;
+  is_official?: boolean;
+  is_airport_station?: boolean;
+  is_settlement_anchor?: boolean;
 }
 
 export interface HourlyTrendPoint {
@@ -316,10 +332,49 @@ export interface CityDetail {
   local_date: string;
   risk: DashboardRisk;
   current: CurrentConditions;
+  settlement_station?: {
+    provider_code?: string | null;
+    settlement_source?: string | null;
+    settlement_station_code?: string | null;
+    settlement_station_label?: string | null;
+    airport_code?: string | null;
+    airport_name?: string | null;
+    is_airport_anchor?: boolean;
+    is_official_station_anchor?: boolean;
+  };
   airport_current?: AirportCurrentConditions;
+  airport_primary?: AirportCurrentConditions;
+  airport_primary_today_obs?: Array<{
+    time?: string;
+    temp?: number | null;
+  }>;
   mgm?: MgmData;
   mgm_nearby?: NearbyStation[];
+  official_nearby?: NearbyStation[];
   nearby_source?: string;
+  official_network_source?: string;
+  official_network_status?: {
+    provider_code?: string | null;
+    provider_label?: string | null;
+    available?: boolean;
+    mode?: string | null;
+    row_count?: number | null;
+  };
+  network_lead_signal?: {
+    available?: boolean;
+    delta?: number | null;
+    leader_station_code?: string | null;
+    leader_station_label?: string | null;
+    leader_temp?: number | null;
+  };
+  network_spread_signal?: {
+    available?: boolean;
+    spread?: number | null;
+    hottest_station_code?: string | null;
+    coolest_station_code?: string | null;
+  };
+  center_station_candidate?: NearbyStation | null;
+  airport_vs_network_delta?: number | null;
   forecast?: ForecastData;
   multi_model?: Record<string, number | null>;
   deb?: DebForecast;
@@ -419,6 +474,12 @@ export interface HistoryPoint {
   mu?: number | null;
   mgm?: number | null;
   forecasts?: Record<string, number | null>;
+  settlement_source?: string | null;
+  settlement_station_code?: string | null;
+  settlement_station_label?: string | null;
+  truth_version?: string | null;
+  updated_by?: string | null;
+  truth_updated_at?: number | null;
   actual_peak_time?: string | null;
   deb_at_peak_minus_12h?: number | null;
   deb_at_peak_minus_12h_time?: string | null;

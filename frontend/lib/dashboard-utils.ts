@@ -828,7 +828,11 @@ function distanceKm(
 }
 
 export function pickMapNearbyStations(detail: CityDetail) {
-  const stations = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const stations = Array.isArray(detail.official_nearby)
+    ? detail.official_nearby
+    : Array.isArray(detail.mgm_nearby)
+      ? detail.mgm_nearby
+      : [];
   const city = String(detail.name || detail.display_name || "")
     .trim()
     .toLowerCase();

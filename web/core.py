@@ -17,6 +17,7 @@ from loguru import logger
 from src.utils.config_loader import load_config
 from src.utils.config_validation import validate_runtime_env
 from src.data_collection.weather_sources import WeatherDataCollector
+from src.data_collection.country_networks import provider_coverage_summary
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES  # noqa: F401
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT, extract_bearer_token
@@ -748,5 +749,6 @@ def build_system_status_payload() -> Dict[str, Any]:
         "metrics": build_metrics_summary(),
         "probability": _probability_summary(),
         "training_data": _training_data_summary(),
+        "station_networks": provider_coverage_summary(),
         "cities_count": len(CITIES),
     }

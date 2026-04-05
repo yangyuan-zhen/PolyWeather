@@ -122,6 +122,17 @@ type SystemStatusPayload = {
       lgbm_validation_deb_mae?: number | null;
     };
   };
+  station_networks?: {
+    airport_anchor_coverage?: number;
+    official_station_anchor_coverage?: number;
+    providers?: Record<
+      string,
+      {
+        cities?: string[];
+        cities_count?: number;
+      }
+    >;
+  };
 };
 
 type PaymentRuntimePayload = {
@@ -421,7 +432,19 @@ export function OpsDashboard() {
   const cityCoverage = trainingData?.city_coverage;
   const modelCityCoverage = trainingData?.model_city_coverage;
   const trainingArtifacts = trainingData?.artifacts;
+  const stationNetworks = status?.station_networks;
   const truthSources = Object.entries(truthRecords?.source_counts || {});
+  const providerRows = useMemo(
+    () =>
+      Object.entries(stationNetworks?.providers || {})
+        .map(([code, value]) => ({
+          code,
+          cities: value?.cities || [],
+          citiesCount: value?.cities_count ?? 0,
+        }))
+        .sort((a, b) => b.citiesCount - a.citiesCount || a.code.localeCompare(b.code)),
+    [stationNetworks?.providers],
+  );
   const cityCoverageRows = useMemo(() => {
     const modelIndex = new Map(
       [...(modelCityCoverage?.strongest || []), ...(modelCityCoverage?.weakest || [])].map((entry) => [entry.city, entry]),
@@ -561,6 +584,7 @@ export function OpsDashboard() {
 
   const opsNav = [
     { id: "overview", label: "总览" },
+    { id: "station-networks", label: "站网覆盖" },
     { id: "funnel", label: "转化漏斗" },
     { id: "probability", label: "EMOS 门禁" },
     { id: "training-data", label: "训练数据" },
@@ -658,6 +682,68 @@ export function OpsDashboard() {
                 <div className="mt-2 text-2xl font-black text-slate-100">{trainingArtifacts?.lgbm_sample_count ?? 0}</div>
               </div>
             </div>
+        </section>
+
+        <section
+          id="station-networks"
+          className="grid gap-4 xl:grid-cols-[1.1fr_1.4fr]"
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle>站网协议覆盖</CardTitle>
+              <CardDescription>
+                统一查看机场锚点覆盖、官方站锚点覆盖，以及新的国家 provider 分布。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm text-slate-300">
+              <div className="flex justify-between gap-3">
+                <span>机场锚点覆盖</span>
+                <span>{stationNetworks?.airport_anchor_coverage ?? 0}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span>官方站锚点覆盖</span>
+                <span>{stationNetworks?.official_station_anchor_coverage ?? 0}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span>国家 provider 数</span>
+                <span>{providerRows.length}</span>
+              </div>
+              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3 text-xs text-slate-400">
+                规则固定为“机场主站 + 官方增强 + 模型层”。官方站网只做增强，除明确官方结算站外不会替代机场锚点。
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>国家 Provider 分布</CardTitle>
+              <CardDescription>
+                这些 provider 已进入统一协议层，业务侧不再直接按国家写分支。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {providerRows.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-800 p-4 text-sm text-slate-500">
+                  暂无站网 provider 数据。
+                </div>
+              ) : (
+                providerRows.map((provider) => (
+                  <div
+                    key={provider.code}
+                    className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-slate-100">{provider.code}</div>
+                      <Badge variant="secondary">{provider.citiesCount} 城</Badge>
+                    </div>
+                    <div className="mt-2 text-xs leading-6 text-slate-400">
+                      {provider.cities.length > 0 ? provider.cities.join(", ") : "无城市"}
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
         </section>
 
         {error ? (

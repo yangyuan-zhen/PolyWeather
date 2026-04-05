@@ -1014,33 +1014,55 @@ export function FutureForecastModal() {
       ? "Settlement station"
       : "结算站点"
     : t("section.airport");
+  const settlementStationLabel =
+    detail.settlement_station?.settlement_station_label ||
+    detail.current?.station_name ||
+    risk.airport ||
+    noaaStationName;
+  const settlementStationCode =
+    detail.settlement_station?.settlement_station_code ||
+    detail.current?.station_code ||
+    risk.icao ||
+    noaaStationCode;
   const settlementProfileValue =
-    settlementSourceCode === "noaa"
-      ? locale === "en-US"
-        ? `${noaaStationName}${noaaStationCode ? ` (${noaaStationCode})` : ""}`
-        : `${noaaStationName}${noaaStationCode ? `（${noaaStationCode}）` : ""}`
-      : detail.current?.station_name
-        ? `${detail.current.station_name}${
-            detail.current?.station_code ? ` (${detail.current.station_code})` : ""
-          }`
-        : risk.airport
-          ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
-          : "--";
+    settlementStationLabel
+      ? `${settlementStationLabel}${settlementStationCode ? ` (${settlementStationCode})` : ""}`
+      : "--";
+  const airportPrimary = detail.airport_primary || detail.airport_current;
   const airportCurrentText =
-    detail.airport_current?.temp != null
-      ? `${detail.airport_current.temp}${detail.temp_symbol}${
-          detail.airport_current?.obs_time
-            ? ` @${detail.airport_current.obs_time}`
+    airportPrimary?.temp != null
+      ? `${airportPrimary.temp}${detail.temp_symbol}${
+          airportPrimary?.obs_time
+            ? ` @${airportPrimary.obs_time}`
             : ""
         }`
       : "--";
   const airportMaxText =
-    detail.airport_current?.max_so_far != null
-      ? `${detail.airport_current.max_so_far}${detail.temp_symbol}${
-          detail.airport_current?.max_temp_time
-            ? ` @${detail.airport_current.max_temp_time}`
+    airportPrimary?.max_so_far != null
+      ? `${airportPrimary.max_so_far}${detail.temp_symbol}${
+          airportPrimary?.max_temp_time
+            ? ` @${airportPrimary.max_temp_time}`
             : ""
         }`
+      : "--";
+  const officialNearbyCount = Array.isArray(detail.official_nearby)
+    ? detail.official_nearby.length
+    : Array.isArray(detail.mgm_nearby)
+      ? detail.mgm_nearby.length
+      : 0;
+  const officialNetworkSourceText =
+    detail.official_network_status?.provider_label ||
+    detail.official_network_source ||
+    "--";
+  const officialNetworkStatusText =
+    detail.official_network_status?.mode ||
+    "--";
+  const airportVsNetworkDeltaText =
+    detail.airport_vs_network_delta != null &&
+    Number.isFinite(Number(detail.airport_vs_network_delta))
+      ? `${Number(detail.airport_vs_network_delta) > 0 ? "+" : ""}${Number(
+          detail.airport_vs_network_delta,
+        ).toFixed(1)}${detail.temp_symbol}`
       : "--";
   const displayedUpperAirSummary =
     marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
@@ -1389,6 +1411,40 @@ export function FutureForecastModal() {
                                   {settlementProfileLabel}
                                 </span>
                                 <span>{settlementProfileValue}</span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {locale === "en-US" ? "Airport primary" : "机场主站"}
+                                </span>
+                                <span>{airportCurrentText}</span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {locale === "en-US" ? "Airport max today" : "机场今日最高"}
+                                </span>
+                                <span>{airportMaxText}</span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {locale === "en-US" ? "Official nearby" : "官方周边站"}
+                                </span>
+                                <span>
+                                  {officialNearbyCount} · {officialNetworkSourceText}
+                                </span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {locale === "en-US" ? "Network mode" : "站网模式"}
+                                </span>
+                                <span>{officialNetworkStatusText}</span>
+                              </div>
+                              <div className="risk-row">
+                                <span className="risk-label">
+                                  {locale === "en-US"
+                                    ? "Airport vs network"
+                                    : "机场相对站网偏差"}
+                                </span>
+                                <span>{airportVsNetworkDeltaText}</span>
                               </div>
                               <div className="risk-row">
                                 <span className="risk-label">
