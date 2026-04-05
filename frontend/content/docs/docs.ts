@@ -48,14 +48,14 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "PolyWeather 是什么",
             blocks: [
               { type: "paragraph", text: "PolyWeather 不是通用天气 App。它面向天气衍生品和温度市场，重点回答三个问题：今天最高温大概会落在哪个区间、机场或官方结算站会不会被压温、市场有没有明显错定价。" },
-              { type: "callout", tone: "info", title: "产品定位", text: "主站的核心价值不是报天气，而是把模型、实况、机场预报和结算规则整合成交易可用的信息。" },
+              { type: "callout", tone: "info", title: "产品定位", text: "主站的核心价值不是报天气，而是把模型、机场主站实况、官方增强站网、机场预报和结算规则整合成交易可用的信息。" },
             ],
           },
           {
             id: "core-modules",
             title: "你会在页面上看到什么",
             blocks: [
-              { type: "bullets", items: ["今日日内分析：围绕今日峰值窗口，解释近地面信号、高空结构和机场 TAF。", "多模型预报：展示 DEB 与多模型最高温预测，帮助判断市场当前最热桶是否合理。", "历史对账：查看近 15 天已结算样本、DEB MAE 与最佳单模型表现。", "机场报文解读：把 METAR / TAF 缩写翻成普通用户能理解的话。"] },
+              { type: "bullets", items: ["今日日内分析：围绕今日峰值窗口，解释近地面信号、高空结构和机场 TAF。", "多模型预报：展示 DEB 与多模型最高温预测，帮助判断市场当前最热桶是否合理。", "历史对账：查看近 15 天已结算样本、DEB MAE 与最佳单模型表现。", "站点结构：明确区分结算站点、机场主站和官方增强站网。"] },
             ],
           },
           {
@@ -76,14 +76,14 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "What PolyWeather is",
             blocks: [
               { type: "paragraph", text: "PolyWeather is not a generic weather app. It is built for weather derivatives and temperature markets, with one job: estimate the likely high-temperature bucket, explain whether the airport or official settlement site may get capped, and surface whether the market is mispricing that outcome." },
-              { type: "callout", tone: "info", title: "Product focus", text: "The core value is not raw weather reporting. It is the conversion of models, observations, airport forecasts, and settlement rules into usable trading context." },
+              { type: "callout", tone: "info", title: "Product focus", text: "The core value is not raw weather reporting. It is the conversion of models, airport-primary observations, official nearby networks, airport forecasts, and settlement rules into usable trading context." },
             ],
           },
           {
             id: "core-modules",
             title: "What you see on the site",
             blocks: [
-              { type: "bullets", items: ["Intraday analysis: peak-window focused reading of surface structure, upper-air structure, and airport TAF.", "Multi-model forecast: DEB versus major model highs, useful for checking whether the hottest market bucket is justified.", "History reconciliation: settled-sample MAE and hit-rate over the last 15 days.", "Airport narrative: plain-language translation of METAR / TAF shorthand."] },
+              { type: "bullets", items: ["Intraday analysis: peak-window focused reading of surface structure, upper-air structure, and airport TAF.", "Multi-model forecast: DEB versus major model highs, useful for checking whether the hottest market bucket is justified.", "History reconciliation: settled-sample MAE and hit-rate over the last 15 days.", "Station structure: a clear split between the settlement station, airport primary observation, and official nearby network."] },
             ],
           },
           {
@@ -188,7 +188,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "什么叫机场端压温风险偏高",
             blocks: [
               { type: "paragraph", text: "它的意思不是整座城市一定更冷，而是作为结算依据的机场站点，在峰值窗口里更可能因为云、阵雨或雷暴扰动，冲不到本来可能达到的更高温度。" },
-              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA 指定站点、Wunderground 指定站点等实际结算站点读数。" },
+              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看实际结算站点读数；页面上的官方增强站网只负责领先、偏移和空间分布判断，不会替代机场主站或官方结算站本身。" },
             ],
           },
         ],
@@ -216,7 +216,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "What airport-side suppression risk means",
             blocks: [
               { type: "paragraph", text: "It does not mean the entire city must run cooler. It means the airport station used for settlement is more likely to get capped by clouds, showers, or thunderstorm disruption during the peak window and fail to reach the next warmer bucket." },
-              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement station reading, such as METAR, HKO, MGM, a designated NOAA station, or a designated Wunderground station." },
+              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement station reading, while the official nearby network is only an enhancement layer for lead/lag and spread, not a replacement anchor." },
             ],
           },
         ],
@@ -242,14 +242,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数欧美机场市场：按机场 METAR 或机场主站实况结算。", "香港：按香港天文台 HKO 主口径，不接机场 TAF 作为主结算逻辑。", "台北、伊斯坦布尔、深圳等 NOAA 市场：按 weather.gov / NOAA 指定站点最终完成质控后的最高整度摄氏值结算，机场观测和市区体感不可混用。", "Ankara：结算主站以 LTAC / Esenboğa 为准，同时保留 Turkish MGM 作为领先结构参考。"] },
+              { type: "bullets", items: ["多数机场市场：按机场 METAR 或机场主站实况结算。", "土耳其机场市场：机场主站仍以 METAR 为锚点，同时保留 Turkish MGM 作为领先结构参考。", "中国内地机场市场：机场主站仍以 METAR 为锚点，NMC 当前实况作为官方增强层，不直接替代机场结算站。", "香港 / 流浮山 / 台湾等明确官方站点市场：按规则指定的官方结算站点结算，不能拿机场 TAF 或城区体感替代。"] },
             ],
           },
           {
             id: "common-mistakes",
             title: "最常见的误解",
             blocks: [
-              { type: "bullets", items: ["TAF 不是结算站点，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "NOAA 市场要优先看 weather.gov 指定站点的最终 Temp 列，不要拿其他站或第三方页面替代。", "香港和台北不能简单套用机场 TAF / METAR 主链逻辑。"] },
+              { type: "bullets", items: ["TAF 不是结算站点，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "官方增强站网是领先参考层，不等于它可以替代机场主站做结算锚点。", "香港、流浮山、台湾等明确官方站点市场，不能简单套用通用机场 TAF / METAR 主链逻辑。"] },
             ],
           },
         ],
@@ -269,14 +269,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked Western markets: settle on airport METAR or the airport primary observing site.", "Hong Kong: settles on HKO, not on airport TAF as the main settlement logic.", "NOAA markets such as Taipei, Istanbul, and Shenzhen settle against the designated weather.gov / NOAA station using the finalized highest rounded whole-degree Celsius reading; airport observations and downtown feel should not be mixed.", "Ankara: settlement centers on LTAC / Esenboğa, with Turkish MGM retained as a leading-structure reference."] },
+              { type: "bullets", items: ["Most airport-linked markets settle on airport METAR or the airport primary observing site.", "Turkish airport markets keep METAR as the airport anchor, with Turkish MGM retained as a leading-structure reference.", "Mainland China airport markets keep METAR as the airport anchor, while NMC current observations act as an official enhancement layer rather than a direct replacement anchor.", "Markets with explicitly designated official sites, such as Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts, should be anchored to those official settlement stations rather than generic airport logic."] },
             ],
           },
           {
             id: "common-mistakes",
             title: "Common mistakes",
             blocks: [
-              { type: "bullets", items: ["TAF is not the settlement station. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "NOAA markets should anchor to the designated weather.gov Temp column once the date is finalized, not to a nearby third-party station page.", "Hong Kong and Taipei should not be forced into the generic airport TAF / METAR chain."] },
+              { type: "bullets", items: ["TAF is not the settlement station. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "The official nearby network is a lead/lag and spread layer. It should not be mistaken for the final settlement anchor unless the market explicitly names that station.", "Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts should not be forced into the generic airport TAF / METAR chain."] },
             ],
           },
         ],
@@ -374,7 +374,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "自动识别当前 Polymarket 页面中的城市，也支持手动切换。",
                   "展示城市档案：结算站点、站点距离、观测更新时间、周边站点数量。",
-                  "展示今日日内走势（简版）：DEB 走势与官方观测（METAR / HKO / CWA）对照，可悬停查看时间与温度。",
+                  "展示今日日内走势（简版）：DEB 走势与机场主站实况 / 官方增强站网对照，可悬停查看时间与温度。",
                   "展示多日最高温预报（简版），并提供一键刷新与跳转主站入口。",
                 ],
               },
@@ -448,7 +448,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 items: [
                   "Auto-detects the current Polymarket page city, with manual switching also available.",
                   "Shows a city profile with settlement station, station distance, observation timestamp, and nearby station count.",
-                  "Shows a compact intraday chart with DEB versus official observations (METAR / HKO / CWA), including hoverable time and temperature.",
+                  "Shows a compact intraday chart with DEB versus airport-primary observations and official nearby-network observations, including hoverable time and temperature.",
                   "Shows a compact multi-day daily-high forecast, plus refresh and jump-to-site actions.",
                 ],
               },

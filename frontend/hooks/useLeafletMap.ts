@@ -100,7 +100,7 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
         <div class="pulse-core"></div>
       </div>
       <div class="nearby-content">
-        <span class="nearby-label">${station.name || station.icao || "OBS"}</span>
+        <span class="nearby-label">${station.name || station.icao || "实测 (OBS)"}</span>
         <div class="nearby-stats">
           <span class="nearby-temp-val">${station.temp ?? "--"}</span>
           <span class="nearby-temp-unit">${symbol}</span>
