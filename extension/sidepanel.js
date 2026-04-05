@@ -42,9 +42,6 @@ const I18N = {
     noaaSettlementRef: "NOAA 结算参考",
     noaaSettlementLegend:
       "该城市按 NOAA 最终完成质控后的最高整度读数结算；图中曲线仅作结算参考。",
-    wundergroundSettlementRef: "Wunderground 结算参考",
-    wundergroundSettlementLegend:
-      "该城市按配置的 Wunderground 站点结算；图中曲线仅作结算参考。",
     loadCityDetailFailed: "加载城市详情失败",
     refreshFailed: "刷新温度数据失败",
     initFailed: "初始化失败",
@@ -107,9 +104,6 @@ const I18N = {
     noaaSettlementRef: "NOAA Settlement Reference",
     noaaSettlementLegend:
       "This city settles on NOAA using the finalized highest rounded reading; the plotted line is only a settlement reference.",
-    wundergroundSettlementRef: "Wunderground Settlement Reference",
-    wundergroundSettlementLegend:
-      "This city settles on the configured Wunderground station; the plotted line is only a settlement reference.",
     loadCityDetailFailed: "Failed to load city detail",
     refreshFailed: "Failed to refresh weather data",
     initFailed: "Initialization failed",
@@ -578,7 +572,9 @@ function parseTimeToMinute(value) {
 }
 
 function getObservationRows(detail) {
-  const obsSource = Array.isArray(detail?.settlement_today_obs) && detail.settlement_today_obs.length
+  const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
+  const useSettlementSource = sourceCode && sourceCode !== "wunderground";
+  const obsSource = useSettlementSource && Array.isArray(detail?.settlement_today_obs) && detail.settlement_today_obs.length
     ? detail.settlement_today_obs
     : Array.isArray(detail?.metar_today_obs)
       ? detail.metar_today_obs
@@ -744,9 +740,7 @@ function drawTrendChart(detail) {
   const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
   const obsSeriesLabel = sourceCode === "noaa"
     ? t("noaaSettlementRef")
-    : sourceCode === "wunderground"
-      ? t("wundergroundSettlementRef")
-      : String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
+    : String(detail?.current?.settlement_source_label || "OBS").toUpperCase();
   if (!points.length) {
     setChartHover([], tempSymbol);
     ctx.fillStyle = "#8ba0be";
@@ -1027,8 +1021,6 @@ function renderDetail(detail) {
   const sourceCode = String(detail?.current?.settlement_source || "").toLowerCase();
   const sourceTag = sourceCode === "noaa"
     ? t("noaaSettlementRef")
-    : sourceCode === "wunderground"
-      ? t("wundergroundSettlementRef")
     : String(detail?.current?.settlement_source_label || "").toUpperCase() || "OBS";
   const obs = getObservationRows(detail);
   if (obs.length >= 2) {
@@ -1037,15 +1029,11 @@ function renderDetail(detail) {
     els.chartLegend.textContent =
       sourceCode === "noaa"
         ? `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time} | ${t("noaaSettlementLegend")}`
-        : sourceCode === "wunderground"
-          ? `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time} | ${t("wundergroundSettlementLegend")}`
         : `${sourceTag}: ${first.temp}${tempSymbol}@${first.time} -> ${last.temp}${tempSymbol}@${last.time}`;
   } else {
     els.chartLegend.textContent =
       sourceCode === "noaa"
         ? `${sourceTag}: ${t("noContinuousObs")} | ${t("noaaSettlementLegend")}`
-        : sourceCode === "wunderground"
-          ? `${sourceTag}: ${t("noContinuousObs")} | ${t("wundergroundSettlementLegend")}`
         : `${sourceTag}: ${t("noContinuousObs")}`;
   }
 }
