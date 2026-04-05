@@ -8,11 +8,9 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from src.analysis.deb_algorithm import (
-    bootstrap_recent_daily_history_if_missing,
-    load_history,
-)
+from src.analysis.deb_algorithm import load_history
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
+from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRecordRepository
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.city_registry import ALIASES
 from src.database.runtime_state import TruthRecordRepository
@@ -56,6 +54,8 @@ router = APIRouter()
 
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3
+_truth_record_repo = TruthRecordRepository()
+_training_feature_repo = TrainingFeatureRecordRepository()
 
 TRACKABLE_ANALYTICS_EVENTS = {
     "signup_completed",
@@ -312,16 +312,34 @@ async def city_detail(request: Request, name: str, force_refresh: bool = False):
 async def city_history(request: Request, name: str):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
+    source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
+    truth_rows = _truth_record_repo.load_city(city)
+    feature_rows = _training_feature_repo.load_city(city)
 
-    bootstrap_recent_daily_history_if_missing(city, lookback_days=14)
+    if not truth_rows and not feature_rows:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        history_file = os.path.join(project_root, "data", "daily_records.json")
+        data = load_history(history_file)
+        city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
+    else:
+        all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
+        city_data = {}
+        for day in all_dates:
+            record: dict[str, object] = {}
+            truth = truth_rows.get(day) or {}
+            features = feature_rows.get(day) or {}
+            if truth.get("actual_high") is not None:
+                record["actual_high"] = truth.get("actual_high")
+            if isinstance(features, dict):
+                if features.get("deb_prediction") is not None:
+                    record["deb_prediction"] = features.get("deb_prediction")
+                if features.get("mu") is not None:
+                    record["mu"] = features.get("mu")
+                if isinstance(features.get("forecasts"), dict):
+                    record["forecasts"] = features.get("forecasts")
+            city_data[day] = record
 
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    history_file = os.path.join(project_root, "data", "daily_records.json")
-    data = load_history(history_file)
-
-    city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
     if not city_data:
-        source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
         return {
             "history": [],
             "settlement_source": source,
@@ -369,7 +387,6 @@ async def city_history(request: Request, name: str):
             }
         )
 
-    source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
     return {
         "history": out,
         "settlement_source": source,

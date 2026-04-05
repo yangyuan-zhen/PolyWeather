@@ -360,6 +360,39 @@ class TruthRecordRepository:
                 pass
         return payload
 
+    def load_city(self, city: str) -> Dict[str, Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT target_date, actual_high, settlement_source, settlement_station_code,
+                       settlement_station_label, truth_version, updated_by, updated_at,
+                       source_payload_json, is_final
+                FROM truth_records_store
+                WHERE city = ?
+                ORDER BY target_date
+                """,
+                (city,),
+            ).fetchall()
+        for row in rows:
+            payload: Dict[str, Any] = {
+                "actual_high": float(row["actual_high"]),
+                "settlement_source": row["settlement_source"],
+                "settlement_station_code": row["settlement_station_code"],
+                "settlement_station_label": row["settlement_station_label"],
+                "truth_version": row["truth_version"],
+                "updated_by": row["updated_by"],
+                "truth_updated_at": float(row["updated_at"]),
+                "is_final": bool(row["is_final"]),
+            }
+            if row["source_payload_json"]:
+                try:
+                    payload["source_payload"] = json.loads(row["source_payload_json"])
+                except Exception:
+                    pass
+            out[str(row["target_date"])] = payload
+        return out
+
     def upsert_truth(
         self,
         *,
@@ -788,6 +821,25 @@ class TrainingFeatureRecordRepository:
             return json.loads(row["payload_json"])
         except Exception:
             return None
+
+    def load_city(self, city: str) -> Dict[str, Dict[str, Any]]:
+        out: Dict[str, Dict[str, Any]] = {}
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT target_date, payload_json
+                FROM training_feature_records_store
+                WHERE city = ?
+                ORDER BY target_date
+                """,
+                (city,),
+            ).fetchall()
+        for row in rows:
+            try:
+                out[str(row["target_date"])] = json.loads(row["payload_json"])
+            except Exception:
+                continue
+        return out
 
 
 class OpenMeteoCacheRepository:

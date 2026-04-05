@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
-from src.database.runtime_state import TruthRecordRepository
+from src.database.runtime_state import TruthRecordRepository, TrainingFeatureRecordRepository
 
 
 client = TestClient(app)
@@ -200,3 +200,47 @@ def test_ops_truth_history_returns_filtered_rows(monkeypatch):
     assert payload["filters"]["city"] == "taipei"
     assert payload["items"][0]["city"] == "taipei"
     assert payload["items"][0]["settlement_station_code"] == "RCSS"
+
+
+def test_city_history_is_read_only_and_uses_sqlite_truth_and_features(monkeypatch):
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+
+    def _fail_bootstrap(*args, **kwargs):
+        raise AssertionError("bootstrap should not be called by /api/history")
+
+    monkeypatch.setattr(routes, "bootstrap_recent_daily_history_if_missing", _fail_bootstrap, raising=False)
+
+    truth_repo = TruthRecordRepository()
+    truth_repo.upsert_truth(
+        city="ankara",
+        target_date="2026-04-02",
+        actual_high=16.0,
+        settlement_source="metar",
+        settlement_station_code="LTAC",
+        settlement_station_label="Ankara Esenboga Airport",
+        truth_version="v1",
+        updated_by="test",
+        source_payload={"sample": True},
+        is_final=True,
+    )
+    feature_repo = TrainingFeatureRecordRepository()
+    feature_repo.upsert_record(
+        "ankara",
+        "2026-04-02",
+        {
+            "deb_prediction": 16.4,
+            "mu": 16.2,
+            "forecasts": {"Open-Meteo": 15.8, "ECMWF": 16.1},
+        },
+    )
+
+    response = client.get("/api/history/ankara")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["history"]
+    row = next(item for item in payload["history"] if item["date"] == "2026-04-02")
+    assert row["actual"] == 16.0
+    assert row["deb"] == 16.4
+    assert row["mu"] == 16.2
+    assert row["forecasts"]["Open-Meteo"] == 15.8
