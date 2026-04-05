@@ -34,6 +34,8 @@ export function HeaderBar() {
   const supabaseReady = hasSupabasePublicEnv();
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
+  const trialPromoLabel =
+    locale === "en-US" ? "New users get 3-day Pro trial" : "新用户可免费体验 3 天 Pro";
 
   useEffect(() => {
     let mounted = true;
@@ -133,6 +135,15 @@ export function HeaderBar() {
           aria-label={t("header.docsAria")}
         >
           {t("header.docs")}
+        </Link>
+
+        <Link
+          href="/account"
+          className="trial-promo-badge"
+          title={trialPromoLabel}
+          aria-label={trialPromoLabel}
+        >
+          <span>{trialPromoLabel}</span>
         </Link>
 
         <Link

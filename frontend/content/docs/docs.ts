@@ -188,7 +188,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "什么叫机场端压温风险偏高",
             blocks: [
               { type: "paragraph", text: "它的意思不是整座城市一定更冷，而是作为结算依据的机场站点，在峰值窗口里更可能因为云、阵雨或雷暴扰动，冲不到本来可能达到的更高温度。" },
-              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA 指定站点、Wunderground 指定站点等实际结算源。" },
+              { type: "callout", tone: "warning", title: "重点区别", text: "TAF 负责告诉你机场侧未来几个小时会不会出现压温扰动，不直接等于结算温度本身。结算仍然看 METAR、HKO、MGM、NOAA 指定站点、Wunderground 指定站点等实际结算站点读数。" },
             ],
           },
         ],
@@ -216,7 +216,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "What airport-side suppression risk means",
             blocks: [
               { type: "paragraph", text: "It does not mean the entire city must run cooler. It means the airport station used for settlement is more likely to get capped by clouds, showers, or thunderstorm disruption during the peak window and fail to reach the next warmer bucket." },
-              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement source such as METAR, HKO, MGM, a designated NOAA station, or a designated Wunderground station." },
+              { type: "callout", tone: "warning", title: "Important distinction", text: "TAF explains whether the airport side may face suppressive weather over the next few hours. Settlement still comes from the actual settlement station reading, such as METAR, HKO, MGM, a designated NOAA station, or a designated Wunderground station." },
             ],
           },
         ],
@@ -228,12 +228,12 @@ export const DOCS_PAGES: DocsPage[] = [
     group: "settlement",
     content: {
       "zh-CN": {
-        title: "结算来源说明",
-        description: "不同城市的结算口径不同。理解结算源，比单纯看模型曲线更重要。",
+        title: "结算站点说明",
+        description: "不同城市的结算口径不同。理解结算站点，比单纯看模型曲线更重要。",
         sections: [
           {
             id: "why-settlement-matters",
-            title: "为什么先看结算源",
+            title: "为什么先看结算站点",
             blocks: [
               { type: "paragraph", text: "同样是“城市最高温”，市场真正结算看的往往不是城区平均温度，而是规则指定的机场或官方站点。交易上最常见的错觉，是把城市体感温度当成结算温度。" },
             ],
@@ -249,18 +249,18 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "common-mistakes",
             title: "最常见的误解",
             blocks: [
-              { type: "bullets", items: ["TAF 不是结算源，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "NOAA 市场要优先看 weather.gov 指定站点的最终 Temp 列，不要拿其他站或第三方页面替代。", "香港和台北不能简单套用机场 TAF / METAR 主链逻辑。"] },
+              { type: "bullets", items: ["TAF 不是结算站点，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "NOAA 市场要优先看 weather.gov 指定站点的最终 Temp 列，不要拿其他站或第三方页面替代。", "香港和台北不能简单套用机场 TAF / METAR 主链逻辑。"] },
             ],
           },
         ],
       },
       "en-US": {
-        title: "Settlement Sources",
-        description: "Settlement rules differ by city. Understanding the settlement source matters more than staring only at model curves.",
+        title: "Settlement Stations",
+        description: "Settlement rules differ by city. Understanding the settlement station matters more than staring only at model curves.",
         sections: [
           {
             id: "why-settlement-matters",
-            title: "Why settlement source comes first",
+            title: "Why the settlement station comes first",
             blocks: [
               { type: "paragraph", text: "A market may say “city high”, but the true settlement often comes from a designated airport or official site rather than the broader urban feel. One of the most common mistakes is to trade the city feel instead of the actual settlement station." },
             ],
@@ -276,7 +276,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "common-mistakes",
             title: "Common mistakes",
             blocks: [
-              { type: "bullets", items: ["TAF is not a settlement source. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "NOAA markets should anchor to the designated weather.gov Temp column once the date is finalized, not to a nearby third-party station page.", "Hong Kong and Taipei should not be forced into the generic airport TAF / METAR chain."] },
+              { type: "bullets", items: ["TAF is not the settlement station. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "NOAA markets should anchor to the designated weather.gov Temp column once the date is finalized, not to a nearby third-party station page.", "Hong Kong and Taipei should not be forced into the generic airport TAF / METAR chain."] },
             ],
           },
         ],

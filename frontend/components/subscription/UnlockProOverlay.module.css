@@ -156,6 +156,21 @@
   max-width: 420px;
 }
 
+.trialPromo {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  background: rgba(34, 211, 238, 0.08);
+  color: #a5f3fc;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
 /* ── Card grid ── */
 .grid {
   position: relative;

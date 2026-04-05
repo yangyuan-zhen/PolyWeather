@@ -31,7 +31,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.group.low": "近期偏弱",
     "sidebar.group.other": "样本不足",
 
-    "dashboard.loading": "正在同步站点观测与结算源，请稍候...",
+    "dashboard.loading": "正在同步站点观测与结算站点信息，请稍候...",
 
     "detail.closeAria": "关闭城市详情面板",
     "detail.waitSelect": "等待选择城市",
@@ -195,7 +195,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.group.other": "Low Sample",
 
     "dashboard.loading":
-      "Synchronizing station observations and settlement feeds...",
+      "Synchronizing station observations and settlement station data...",
 
     "detail.closeAria": "Close city detail panel",
     "detail.waitSelect": "Waiting for city selection",

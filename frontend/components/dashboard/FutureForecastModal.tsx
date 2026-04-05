@@ -1011,27 +1011,19 @@ export function FutureForecastModal() {
     settlementSourceCode === "wunderground";
   const settlementProfileLabel = isOfficialSettlementSource
     ? locale === "en-US"
-      ? "Settlement source"
-      : "结算源"
+      ? "Settlement station"
+      : "结算站点"
     : t("section.airport");
   const settlementProfileValue =
-    settlementSourceCode === "hko"
+    settlementSourceCode === "noaa"
       ? locale === "en-US"
-        ? "Hong Kong Observatory (HKO)"
-        : "香港天文台 (HKO)"
-      : settlementSourceCode === "noaa"
-        ? locale === "en-US"
-          ? `NOAA ${noaaStationCode} (${noaaStationName})`
-          : `NOAA ${noaaStationCode}（${noaaStationName}）`
-        : settlementSourceCode === "cwa"
-          ? locale === "en-US"
-            ? "Central Weather Administration (CWA)"
-            : "交通部中央气象署 (CWA)"
-          : settlementSourceCode === "wunderground"
-            ? locale === "en-US"
-              ? `${detail.current?.settlement_source_label || risk.airport || "Wunderground"}`
-              : `${detail.current?.settlement_source_label || risk.airport || "Wunderground"}`
-          : risk.airport
+        ? `${noaaStationName}${noaaStationCode ? ` (${noaaStationCode})` : ""}`
+        : `${noaaStationName}${noaaStationCode ? `（${noaaStationCode}）` : ""}`
+      : detail.current?.station_name
+        ? `${detail.current.station_name}${
+            detail.current?.station_code ? ` (${detail.current.station_code})` : ""
+          }`
+        : risk.airport
           ? `${risk.airport}${risk.icao ? ` (${risk.icao})` : ""}`
           : "--";
   const airportCurrentText =
@@ -1398,26 +1390,6 @@ export function FutureForecastModal() {
                                 </span>
                                 <span>{settlementProfileValue}</span>
                               </div>
-                              {settlementSourceCode === "wunderground" ? (
-                                <div className="risk-row">
-                                  <span className="risk-label">
-                                    {locale === "en-US"
-                                      ? "Airport METAR"
-                                      : "机场 METAR"}
-                                  </span>
-                                  <span>{airportCurrentText}</span>
-                                </div>
-                              ) : null}
-                              {settlementSourceCode === "wunderground" ? (
-                                <div className="risk-row">
-                                  <span className="risk-label">
-                                    {locale === "en-US"
-                                      ? "Airport high"
-                                      : "机场目前最高温"}
-                                  </span>
-                                  <span>{airportMaxText}</span>
-                                </div>
-                              ) : null}
                               <div className="risk-row">
                                 <span className="risk-label">
                                   {t("section.distance")}

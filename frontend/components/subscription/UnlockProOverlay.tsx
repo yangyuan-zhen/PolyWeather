@@ -141,6 +141,11 @@ export function UnlockProOverlay({
             ? "High-precision weather intelligence, delivered everywhere."
             : "全球最精准的高精度气象推送，全平台覆盖"}
         </p>
+        <div className={s.trialPromo}>
+          {isEn
+            ? "New users get a free 3-day Pro trial before billing."
+            : "新用户可先免费体验 3 天 Pro，再决定是否付费。"}
+        </div>
       </div>
 
       {/* ── Cards ── */}

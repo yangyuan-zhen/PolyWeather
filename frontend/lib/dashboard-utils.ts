@@ -2392,18 +2392,17 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       const noaaCode = getNoaaStationCode(detail);
       const noaaName = getNoaaStationName(detail);
       return isEnglish(locale)
-        ? `NOAA ${noaaCode} (${noaaName})`
-        : `NOAA ${noaaCode}（${noaaName}）`;
+        ? `${noaaName}${noaaCode ? ` (${noaaCode})` : ""}`
+        : `${noaaName}${noaaCode ? `（${noaaCode}）` : ""}`;
     }
-    if (sourceCode === "wunderground") {
-      const stationName = String(
-        detail.current?.settlement_source_label ||
-          detail.risk?.airport ||
-          "Wunderground",
-      ).trim();
-      return isEnglish(locale)
-        ? `${stationName} (Wunderground)`
-        : `${stationName}（Wunderground）`;
+    const stationName = String(
+      detail.current?.station_name || detail.risk?.airport || "",
+    ).trim();
+    const stationCode = String(
+      detail.current?.station_code || detail.risk?.icao || "",
+    ).trim();
+    if (stationName) {
+      return `${stationName}${stationCode ? ` (${stationCode})` : ""}`;
     }
     const tag = getObservationSourceTag(detail);
     if (sourceCode === "mgm") {
@@ -2418,8 +2417,8 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
     {
       label: isOfficialSource
         ? isEnglish(locale)
-          ? "Settlement source"
-          : "结算源"
+          ? "Settlement station"
+          : "结算站点"
         : isEnglish(locale)
           ? "Settlement airport"
           : "结算机场",
