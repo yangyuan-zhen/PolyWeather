@@ -95,5 +95,6 @@ def test_fetch_nmc_official_nearby_returns_normalized_row():
     assert len(rows) == 1
     assert rows[0]["source"] == "nmc"
     assert rows[0]["temp"] == 17.9
-    assert rows[0]["name"] == "浦东 (NMC)"
+    assert rows[0]["name"] == "浦东区域实况 (NMC)"
+    assert rows[0]["station_label"] == "浦东区域实况 (NMC)"
     assert rows[0]["lat"] == 31.1434

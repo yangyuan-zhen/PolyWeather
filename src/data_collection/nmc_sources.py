@@ -168,7 +168,8 @@ class NmcSourceMixin:
         city_meta = self.CITY_REGISTRY.get(str(city or "").strip().lower()) or {}
         return [
             {
-                "name": f"{meta.get('region_label') or current.get('station_name')} (NMC)",
+                "name": f"{meta.get('region_label') or current.get('station_name')}区域实况 (NMC)",
+                "station_label": f"{meta.get('region_label') or current.get('station_name')}区域实况 (NMC)",
                 "lat": city_meta.get("lat"),
                 "lon": city_meta.get("lon"),
                 "temp": current.get("current", {}).get("temp"),

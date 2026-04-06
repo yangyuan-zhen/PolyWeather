@@ -62,7 +62,7 @@ def test_china_provider_prefers_nmc_rows_when_available():
         },
         "nmc_official_nearby": [
             {
-                "name": "浦东 (NMC)",
+                "name": "浦东区域实况 (NMC)",
                 "icao": "atcMf",
                 "lat": 31.14,
                 "lon": 121.80,
