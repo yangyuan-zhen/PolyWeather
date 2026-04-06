@@ -5,6 +5,9 @@ import {
   recordVitalsSample,
 } from "@/lib/vitals-store";
 
+const WEB_VITALS_ENABLED =
+  process.env.NEXT_PUBLIC_POLYWEATHER_WEB_VITALS === "true";
+
 type VitalsPayload = {
   id?: string;
   metric?: string;
@@ -15,6 +18,10 @@ type VitalsPayload = {
 };
 
 export async function POST(request: Request) {
+  if (!WEB_VITALS_ENABLED) {
+    return new NextResponse(null, { status: 204 });
+  }
+
   try {
     const payload = (await request.json()) as VitalsPayload;
     const metric = normalizeMetricName(payload.metric);
@@ -56,6 +63,16 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
+  if (!WEB_VITALS_ENABLED) {
+    return NextResponse.json({
+      ok: true,
+      disabled: true,
+      generatedAt: Date.now(),
+      sampleCount: 0,
+      routes: {},
+    });
+  }
+
   const { searchParams } = new URL(request.url);
   const targetRoute = String(searchParams.get("route") || "").trim();
   const summary = getVitalsSummary();

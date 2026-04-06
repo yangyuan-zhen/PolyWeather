@@ -24,9 +24,12 @@ export async function GET(
 
   try {
     const auth = await buildBackendRequestHeaders(req);
-    const res = await fetch(url, {
+    const fetchOptions = {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 60 },
+    } as const;
+    const res = await fetch(url, {
+      ...fetchOptions,
     });
     if (!res.ok) {
       const raw = await res.text();

@@ -12,8 +12,6 @@
     "@radix-ui/react-slot": "^1.1.2",
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.57.2",
-    "@vercel/analytics": "^1.6.1",
-    "@vercel/speed-insights": "^2.0.0",
     "@walletconnect/ethereum-provider": "^2.23.8",
     "chart.js": "^4.5.1",
     "class-variance-authority": "^0.7.1",

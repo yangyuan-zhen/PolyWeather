@@ -18,10 +18,15 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
-    const res = await fetch(`${API_BASE}/api/cities`, {
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
+    const fetchOptions = {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 300 },
+    } as const;
+    const res = await fetch(`${API_BASE}/api/cities`, {
+      ...fetchOptions,
     });
     if (!res.ok) {
       const raw = await res.text();

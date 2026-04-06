@@ -15,7 +15,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const res = await fetch(`${API_BASE}/healthz`, {
       headers: auth.headers,
       cache: "no-store",

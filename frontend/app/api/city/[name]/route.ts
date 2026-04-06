@@ -23,7 +23,9 @@ export async function GET(
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}?force_refresh=${forceRefresh}`;
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const res = await fetch(url, {
       headers: auth.headers,
       cache: "no-store",

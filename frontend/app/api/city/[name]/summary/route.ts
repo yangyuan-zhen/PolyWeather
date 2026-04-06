@@ -25,10 +25,21 @@ export async function GET(
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/summary?force_refresh=${forceRefresh}`;
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
+    const fetchOptions =
+      bypassCache
+        ? {
+            headers: auth.headers,
+            cache: "no-store" as const,
+          }
+        : {
+            headers: auth.headers,
+            next: { revalidate: 20 },
+          };
     const res = await fetch(url, {
-      headers: auth.headers,
-      cache: "no-store",
+      ...fetchOptions,
     });
     if (!res.ok) {
       const raw = await res.text();

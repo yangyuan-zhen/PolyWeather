@@ -4,9 +4,15 @@ import { usePathname } from "next/navigation";
 import { useReportWebVitals } from "next/web-vitals";
 
 const TRACKED_METRICS = new Set(["INP", "LCP", "FCP"]);
+const WEB_VITALS_ENABLED =
+  process.env.NEXT_PUBLIC_POLYWEATHER_WEB_VITALS === "true";
 
 export function WebVitalsReporter() {
   const pathname = usePathname();
+
+  if (!WEB_VITALS_ENABLED) {
+    return null;
+  }
 
   useReportWebVitals((metric) => {
     if (!TRACKED_METRICS.has(metric.name)) {

@@ -1,5 +1,8 @@
 "use client";
 
+const ANALYTICS_ENABLED =
+  process.env.NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true";
+
 type TrackableAnalyticsEvent =
   | "signup_completed"
   | "dashboard_active"
@@ -68,7 +71,7 @@ export function trackAppEvent(
   eventType: TrackableAnalyticsEvent,
   payload: Record<string, unknown> = {},
 ) {
-  if (!isClient()) return;
+  if (!isClient() || !ANALYTICS_ENABLED) return;
   const body = {
     event_type: eventType,
     client_id: getAnalyticsClientId() || undefined,

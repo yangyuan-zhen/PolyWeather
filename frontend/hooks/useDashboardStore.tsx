@@ -88,6 +88,8 @@ function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
 const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
+const EAGER_CITY_SUMMARIES_ENABLED =
+  process.env.NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES === "true";
 
 export function DashboardStoreProvider({
   children,
@@ -392,6 +394,7 @@ export function DashboardStoreProvider({
   ]);
 
   useEffect(() => {
+    if (!EAGER_CITY_SUMMARIES_ENABLED) return;
     if (!cities.length) return;
 
     const queue = cities

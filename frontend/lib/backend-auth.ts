@@ -11,6 +11,10 @@ type HeaderBuildResult = {
   response: NextResponse | null;
 };
 
+type HeaderBuildOptions = {
+  includeSupabaseIdentity?: boolean;
+};
+
 function extractBearerToken(headerValue: string | null) {
   if (!headerValue) return "";
   const parts = headerValue.trim().split(/\s+/);
@@ -22,6 +26,7 @@ function extractBearerToken(headerValue: string | null) {
 
 export async function buildBackendRequestHeaders(
   request: NextRequest,
+  options?: HeaderBuildOptions,
 ): Promise<HeaderBuildResult> {
   const headers = new Headers({
     Accept: "application/json",
@@ -32,7 +37,8 @@ export async function buildBackendRequestHeaders(
   }
 
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
-  if (hasSupabaseServerEnv()) {
+  const includeSupabaseIdentity = options?.includeSupabaseIdentity !== false;
+  if (hasSupabaseServerEnv() && includeSupabaseIdentity) {
     const passthroughResponse = new NextResponse(null, { status: 200 });
     const supabase = createSupabaseRouteClient(request, passthroughResponse);
     const {
