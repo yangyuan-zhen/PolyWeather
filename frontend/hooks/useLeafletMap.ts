@@ -145,10 +145,11 @@ function getNearbyMarkerDisplayOffset(
   }
 
   const presets = [
-    { x: 54, y: -26 },
-    { x: -54, y: -26 },
-    { x: 54, y: 24 },
-    { x: -54, y: 24 },
+    { x: 0, y: -58 },
+    { x: 76, y: -34 },
+    { x: -76, y: -34 },
+    { x: 72, y: 34 },
+    { x: -72, y: 34 },
   ];
 
   return presets[index % presets.length];
@@ -409,7 +410,12 @@ export function useLeafletMap({
           iconAnchor: [16, 19],
           iconSize: [240, 38],
         });
-        L.marker([sLat, sLon], { icon }).addTo(layer);
+        L.marker([sLat, sLon], {
+          icon,
+          interactive: false,
+          keyboard: false,
+          bubblingMouseEvents: false,
+        }).addTo(layer);
         latLngs.push([sLat, sLon]);
       });
 

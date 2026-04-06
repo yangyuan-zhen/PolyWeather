@@ -312,11 +312,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   shanghai: [
     {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
-    {
       label: "NMC 浦东天气",
       href: "https://m.nmc.cn/publish/forecast/ASH/pudong.html",
       kind: "agency",
@@ -514,11 +509,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   chengdu: [
     {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
-    {
       label: "NMC 双流天气",
       href: "https://m.nmc.cn/publish/forecast/ASC/shuangliu.html",
       kind: "agency",
@@ -536,11 +526,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   chongqing: [
     {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
-    {
       label: "NMC 渝北天气",
       href: "https://m.nmc.cn/publish/forecast/ACQ/yubei.html",
       kind: "agency",
@@ -557,11 +542,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     },
   ],
   shenzhen: [
-    {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
     {
       label: "NMC 深圳天气",
       href: "https://m.nmc.cn/publish/forecast/AGD/shenzuo.html",
@@ -665,11 +645,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   beijing: [
     {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
-    {
       label: "NMC 顺义天气",
       href: "https://m.nmc.cn/publish/forecast/ABJ/shunyi.html",
       kind: "agency",
@@ -686,11 +661,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
     },
   ],
   wuhan: [
-    {
-      label: "NMC 全国主要机场天气预报",
-      href: "https://www.nmc.cn/publish/weather_forecast/swssr.htm",
-      kind: "agency",
-    },
     {
       label: "NMC 武汉天气",
       href: "https://m.nmc.cn/publish/forecast/AHB/wuhan.html",
