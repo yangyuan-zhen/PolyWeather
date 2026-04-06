@@ -85,6 +85,15 @@ function getObservationSourceTag(detail: CityDetail): string {
   return "METAR";
 }
 
+function getRealtimeObservationTag(detail: CityDetail): string {
+  const code = getObservationSourceCode(detail);
+  if (code === "wunderground") {
+    const icao = String(detail.risk?.icao || "").trim().toUpperCase();
+    return icao ? `${icao} METAR` : "METAR";
+  }
+  return getObservationSourceTag(detail);
+}
+
 function getNoaaStationCode(detail: CityDetail): string {
   return String(detail.current?.station_code || detail.risk?.icao || "NOAA")
     .trim()
@@ -188,7 +197,7 @@ export function getWeatherSummary(detail: CityDetail, locale: Locale = "zh-CN") 
 export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   const current = detail.current || {};
   const parts: string[] = [];
-  const sourceTag = getObservationSourceTag(detail);
+  const sourceTag = getRealtimeObservationTag(detail);
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (current.obs_time) {
@@ -281,7 +290,7 @@ export function getTemperatureChartData(
     currentIndex < 0 || index >= currentIndex ? temp : null,
   );
 
-  const observationTag = getObservationSourceTag(detail);
+  const observationTag = getRealtimeObservationTag(detail);
   const observationCode = getObservationSourceCode(detail);
   const settlementSource =
     observationCode === "hko" ||
@@ -319,7 +328,9 @@ export function getTemperatureChartData(
     return `${icao} METAR`;
   })();
   const observationDisplayTag =
-    useSettlementObservationSource && shouldUseMetarFallback
+    observationCode === "wunderground"
+      ? metarFallbackTag
+      : useSettlementObservationSource && shouldUseMetarFallback
       ? metarFallbackTag
       : observationCode === "noaa"
         ? `NOAA ${getNoaaStationCode(detail)}`
