@@ -205,6 +205,13 @@ type ConnectBindOptions = {
   openOverlayAfterBind?: boolean;
 };
 
+type PaymentRecoveryState = {
+  intentId: string;
+  txHash: string;
+  userId: string;
+  createdAt: number;
+};
+
 const WALLETCONNECT_PROJECT_ID = String(
   process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
 ).trim();
@@ -221,6 +228,8 @@ const TELEGRAM_BOT_URL = String(
 ).trim();
 const TELEGRAM_MARKET_CHANNEL_URL = "https://t.me/+hGAk7JsjtdhiOTUx";
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
+const PAYMENT_RECOVERY_STORAGE_KEY = "polyweather:lastPaymentRecovery";
+const PAYMENT_RECOVERY_TTL_MS = 6 * 60 * 60 * 1000;
 
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
@@ -321,6 +330,11 @@ function shortAddress(address: string) {
   const text = String(address || "");
   if (!text.startsWith("0x") || text.length < 12) return text || "--";
   return `${text.slice(0, 8)}...${text.slice(-6)}`;
+}
+
+function clearStoredPaymentRecovery() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(PAYMENT_RECOVERY_STORAGE_KEY);
 }
 
 function getEvmProvider(): EvmProvider | null {
@@ -743,8 +757,8 @@ export function AccountCenter() {
         ? "Pro entitlement recovered."
         : "Pro 权限已恢复。",
       walletRecoveryFailed: isEn
-        ? "Paid detected but entitlement is still pending. Please refresh in a minute or contact support."
-        : "已检测到支付，但订阅状态仍在同步中。请稍后刷新，或联系管理员处理。",
+        ? "A recent on-chain payment is still syncing to your subscription. Please refresh in a minute or contact support."
+        : "检测到最近的链上支付流程，但订阅状态仍在同步中。请稍后刷新，或联系管理员处理。",
       unbind: isEn ? "Unbind" : "解绑",
       unbindConfirm: isEn
         ? "Unbind wallet {address}? You can bind it again later."
@@ -838,6 +852,7 @@ export function AccountCenter() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
+  const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
 
@@ -848,6 +863,9 @@ export function AccountCenter() {
   const paymentReadyForRecovery = Boolean(
     paymentConfig?.enabled && paymentConfig?.configured,
   );
+  const hasRecentPaymentRecovery =
+    Boolean(lastIntentId && lastTxHash && authUserId && lastPaymentStartedAt) &&
+    Date.now() - lastPaymentStartedAt <= PAYMENT_RECOVERY_TTL_MS;
   const allowedPaymentHosts = useMemo(() => getAllowedPaymentHosts(), []);
   const currentPaymentHost = useMemo(() => getCurrentPaymentHost(), []);
   const paymentHostAllowed = useMemo(
@@ -1283,22 +1301,61 @@ export function AccountCenter() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    if (!lastIntentId) return;
+    if (!(lastIntentId && lastTxHash && authUserId && lastPaymentStartedAt)) {
+      clearStoredPaymentRecovery();
+      return;
+    }
+    const payload: PaymentRecoveryState = {
+      intentId: lastIntentId,
+      txHash: lastTxHash,
+      userId: authUserId,
+      createdAt: lastPaymentStartedAt,
+    };
     window.sessionStorage.setItem(
-      "polyweather:lastPaymentIntentId",
-      lastIntentId,
+      PAYMENT_RECOVERY_STORAGE_KEY,
+      JSON.stringify(payload),
     );
-  }, [lastIntentId]);
+  }, [authUserId, lastIntentId, lastPaymentStartedAt, lastTxHash]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const storedIntentId = window.sessionStorage.getItem(
-      "polyweather:lastPaymentIntentId",
-    );
-    if (storedIntentId && !lastIntentId) {
-      setLastIntentId(storedIntentId);
+    if (!authUserId) return;
+    if (lastIntentId && lastTxHash && lastPaymentStartedAt) return;
+    const raw = window.sessionStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY);
+    if (!raw) return;
+    try {
+      const parsed = JSON.parse(raw) as PaymentRecoveryState;
+      const userId = String(parsed?.userId || "").trim();
+      const intentId = String(parsed?.intentId || "").trim();
+      const txHash = String(parsed?.txHash || "").trim().toLowerCase();
+      const createdAt = Number(parsed?.createdAt || 0);
+      const expired =
+        !createdAt || Date.now() - createdAt > PAYMENT_RECOVERY_TTL_MS;
+      if (
+        expired ||
+        !intentId ||
+        !txHash ||
+        !userId ||
+        userId !== authUserId
+      ) {
+        clearStoredPaymentRecovery();
+        return;
+      }
+      setLastIntentId(intentId);
+      setLastTxHash(txHash);
+      setLastPaymentStartedAt(createdAt);
+    } catch {
+      clearStoredPaymentRecovery();
     }
-  }, [lastIntentId]);
+  }, [authUserId, lastIntentId, lastPaymentStartedAt, lastTxHash]);
+
+  useEffect(() => {
+    if (!backend?.subscription_active) return;
+    setLastIntentId("");
+    setLastTxHash("");
+    setLastPaymentStartedAt(0);
+    clearStoredPaymentRecovery();
+  }, [backend?.subscription_active]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -1350,7 +1407,7 @@ export function AccountCenter() {
     if (!authIsAuthenticated) return;
     if (backend?.subscription_active) return;
     if (!paymentReadyForRecovery) return;
-    if (!lastIntentId) return;
+    if (!hasRecentPaymentRecovery) return;
     let cancelled = false;
     const run = async () => {
       setPaymentInfo(copy.walletRecoveryBusy);
@@ -1370,12 +1427,16 @@ export function AccountCenter() {
     authIsAuthenticated,
     copy.walletRecoveryBusy,
     copy.walletRecoveryFailed,
-    lastIntentId,
+    hasRecentPaymentRecovery,
     paymentReadyForRecovery,
     reconcileLatestPayment,
   ]);
 
   const onSignOut = async () => {
+    setLastIntentId("");
+    setLastTxHash("");
+    setLastPaymentStartedAt(0);
+    clearStoredPaymentRecovery();
     if (walletConnectProviderCache?.disconnect) {
       try {
         await walletConnectProviderCache.disconnect();
@@ -1967,7 +2028,10 @@ export function AccountCenter() {
   const createIntentAndPay = async () => {
     setPaymentError("");
     setPaymentInfo("");
+    setLastIntentId("");
     setLastTxHash("");
+    setLastPaymentStartedAt(0);
+    clearStoredPaymentRecovery();
     if (!paymentHostAllowed) {
       setPaymentError(
         copy.paymentHostBlocked.replace(
@@ -2187,6 +2251,7 @@ export function AccountCenter() {
       })) as string;
       const txHashNorm = String(txHash || "").toLowerCase();
       setLastTxHash(txHashNorm);
+      setLastPaymentStartedAt(Date.now());
 
       const submitRes = await fetch(
         `/api/payments/intents/${intentId}/submit`,
