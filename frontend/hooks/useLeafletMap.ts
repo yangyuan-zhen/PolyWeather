@@ -79,6 +79,12 @@ function createMarkerIcon(
 
 function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const symbol = detail.temp_symbol || "°C";
+  const label =
+    station.station_label ||
+    station.name ||
+    station.station_code ||
+    station.icao ||
+    "实测 (OBS)";
   let windHtml = "";
 
   if (station.wind_dir != null) {
@@ -100,7 +106,7 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
         <div class="pulse-core"></div>
       </div>
       <div class="nearby-content">
-        <span class="nearby-label">${station.name || station.icao || "实测 (OBS)"}</span>
+        <span class="nearby-label">${label}</span>
         <div class="nearby-stats">
           <span class="nearby-temp-val">${station.temp ?? "--"}</span>
           <span class="nearby-temp-unit">${symbol}</span>
