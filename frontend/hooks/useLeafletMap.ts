@@ -79,12 +79,18 @@ function createMarkerIcon(
 
 function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const symbol = detail.temp_symbol || "°C";
-  const label =
+  const rawLabel =
     station.station_label ||
     station.name ||
     station.station_code ||
     station.icao ||
     "实测 (OBS)";
+  const label =
+    String(station.source_code || station.source_label || "").trim().toLowerCase() === "nmc" &&
+    /\(NMC\)$/i.test(String(rawLabel)) &&
+    !String(rawLabel).includes("区域实况")
+      ? String(rawLabel).replace(/\s*\(NMC\)$/i, "区域实况 (NMC)")
+      : rawLabel;
   let windHtml = "";
 
   if (station.wind_dir != null) {
