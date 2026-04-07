@@ -145,7 +145,6 @@ def main() -> int:
                 "action": "subscription_granted",
                 "reason": "manual_admin_grant",
                 "actor": actor,
-                "detail": f"manual grant {plan_code} for {days} days",
                 "payload": {
                     "email": email,
                     "plan_code": plan_code,
