@@ -195,14 +195,15 @@ class SupabaseEntitlementService:
                 return None
 
         try:
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
             params = {
                 "select": "id,user_id,status,plan_code,starts_at,expires_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "expires_at": f"gt.{now_iso}",
                 "order": "expires_at.desc",
-                "limit": "1",
+                "limit": "20",
             }
             response = requests.get(
                 self._subscription_endpoint(),
@@ -219,9 +220,7 @@ class SupabaseEntitlementService:
                 row = None
             else:
                 data = response.json() if response.content else []
-                row = data[0] if isinstance(data, list) and data else None
-                if not isinstance(row, dict):
-                    row = None
+                row = self._pick_latest_current_subscription(data, now=now)
 
             with self._sub_cache_lock:
                 self._sub_cache[user_id] = {
@@ -279,6 +278,34 @@ class SupabaseEntitlementService:
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
+
+    def _is_subscription_started(
+        self,
+        row: Optional[Dict[str, object]],
+        *,
+        now: Optional[datetime] = None,
+    ) -> bool:
+        if not isinstance(row, dict):
+            return False
+        starts_at = self._parse_iso_datetime(str(row.get("starts_at") or ""))
+        if starts_at is None:
+            return True
+        current = now or datetime.now(timezone.utc)
+        return starts_at <= current
+
+    def _pick_latest_current_subscription(
+        self,
+        rows: object,
+        *,
+        now: Optional[datetime] = None,
+    ) -> Optional[Dict[str, object]]:
+        if not isinstance(rows, list):
+            return None
+        current = now or datetime.now(timezone.utc)
+        for row in rows:
+            if isinstance(row, dict) and self._is_subscription_started(row, now=current):
+                return row
+        return None
 
     def _get_trial_lock(self, user_id: str) -> threading.Lock:
         key = str(user_id or "").strip()
@@ -440,8 +467,9 @@ class SupabaseEntitlementService:
             logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
             return []
         try:
+            now = datetime.now(timezone.utc)
             safe_limit = max(1, min(int(limit or 200), 1000))
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_iso = now.isoformat()
             params = {
                 "select": "id,user_id,status,plan_code,starts_at,expires_at",
                 "status": "eq.active",
@@ -464,7 +492,11 @@ class SupabaseEntitlementService:
             data = response.json() if response.content else []
             if not isinstance(data, list):
                 return []
-            return [row for row in data if isinstance(row, dict)]
+            return [
+                row
+                for row in data
+                if isinstance(row, dict) and self._is_subscription_started(row, now=now)
+            ]
         except Exception as exc:
             logger.warning(f"supabase active subscriptions query error: {exc}")
             return []

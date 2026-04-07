@@ -1712,22 +1712,48 @@ class PaymentContractCheckoutService:
             "GET",
             "subscriptions",
             params={
-                "select": "id,expires_at,status",
+                "select": "id,expires_at,status,plan_code,source,starts_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "order": "expires_at.desc",
-                "limit": "1",
+                "limit": "20",
             },
             allowed_status=[200],
         )
         starts = now
-        if isinstance(latest_rows, list) and latest_rows:
-            try:
-                latest_exp = datetime.fromisoformat(str(latest_rows[0].get("expires_at")))
-                if latest_exp > starts:
-                    starts = latest_exp
-            except Exception:
-                pass
+        current_subscription = None
+        if isinstance(latest_rows, list):
+            for row in latest_rows:
+                if not isinstance(row, dict):
+                    continue
+                try:
+                    starts_at = datetime.fromisoformat(
+                        str(row.get("starts_at") or "").replace("Z", "+00:00")
+                    )
+                    if starts_at.tzinfo is None:
+                        starts_at = starts_at.replace(tzinfo=timezone.utc)
+                    starts_at = starts_at.astimezone(timezone.utc)
+                except Exception:
+                    starts_at = None
+                if starts_at is None or starts_at <= now:
+                    current_subscription = row
+                    break
+        if isinstance(current_subscription, dict):
+            current_plan_code = str(current_subscription.get("plan_code") or "").strip().lower()
+            current_source = str(current_subscription.get("source") or "").strip().lower()
+            current_is_trial = "trial" in current_plan_code or "trial" in current_source
+            if not current_is_trial:
+                try:
+                    latest_exp = datetime.fromisoformat(
+                        str(current_subscription.get("expires_at") or "").replace("Z", "+00:00")
+                    )
+                    if latest_exp.tzinfo is None:
+                        latest_exp = latest_exp.replace(tzinfo=timezone.utc)
+                    latest_exp = latest_exp.astimezone(timezone.utc)
+                    if latest_exp > starts:
+                        starts = latest_exp
+                except Exception:
+                    pass
         expires = starts + timedelta(days=max(1, duration_days))
         sub_rows = self._rest(
             "POST",

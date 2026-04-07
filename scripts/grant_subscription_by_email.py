@@ -6,7 +6,6 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict
 
 from dotenv import load_dotenv
 
@@ -93,49 +92,89 @@ def main() -> int:
             "GET",
             "subscriptions",
             params={
-                "select": "id,expires_at,status,plan_code,starts_at",
+                "select": "id,expires_at,status,plan_code,starts_at,source,created_at",
                 "user_id": f"eq.{user_id}",
                 "status": "eq.active",
                 "order": "expires_at.desc",
-                "limit": "1",
+                "limit": "20",
             },
             allowed_status=[200],
         )
-        before = latest_rows[0] if isinstance(latest_rows, list) and latest_rows else None
 
         now = datetime.now(timezone.utc)
+        before = None
+        upcoming = None
+        if isinstance(latest_rows, list):
+            for row in latest_rows:
+                if not isinstance(row, dict):
+                    continue
+                starts_raw = str(row.get("starts_at") or "").strip()
+                starts_dt = None
+                if starts_raw:
+                    try:
+                        starts_dt = datetime.fromisoformat(starts_raw.replace("Z", "+00:00"))
+                        if starts_dt.tzinfo is None:
+                            starts_dt = starts_dt.replace(tzinfo=timezone.utc)
+                        starts_dt = starts_dt.astimezone(timezone.utc)
+                    except Exception:
+                        starts_dt = None
+                if starts_dt is None or starts_dt <= now:
+                    if before is None:
+                        before = row
+                elif upcoming is None and str(row.get("plan_code") or "").strip().lower() == plan_code.lower():
+                    upcoming = row
+
         starts_at = now
         if isinstance(before, dict):
-            expires_raw = str(before.get("expires_at") or "").strip()
-            if expires_raw:
-                try:
-                    latest_exp = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
-                    if latest_exp.tzinfo is None:
-                        latest_exp = latest_exp.replace(tzinfo=timezone.utc)
-                    latest_exp = latest_exp.astimezone(timezone.utc)
-                    if latest_exp > starts_at:
-                        starts_at = latest_exp
-                except Exception:
-                    pass
+            before_plan_code = str(before.get("plan_code") or "").strip().lower()
+            before_source = str(before.get("source") or "").strip().lower()
+            before_is_trial = "trial" in before_plan_code or "trial" in before_source
+            if not before_is_trial:
+                expires_raw = str(before.get("expires_at") or "").strip()
+                if expires_raw:
+                    try:
+                        latest_exp = datetime.fromisoformat(expires_raw.replace("Z", "+00:00"))
+                        if latest_exp.tzinfo is None:
+                            latest_exp = latest_exp.replace(tzinfo=timezone.utc)
+                        latest_exp = latest_exp.astimezone(timezone.utc)
+                        if latest_exp > starts_at:
+                            starts_at = latest_exp
+                    except Exception:
+                        pass
         expires_at = starts_at + timedelta(days=days)
 
-        created = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
-            "POST",
-            "subscriptions",
-            payload={
-                "user_id": user_id,
-                "plan_code": plan_code,
-                "status": "active",
-                "starts_at": starts_at.isoformat(),
-                "expires_at": expires_at.isoformat(),
-                "source": actor,
-                "created_at": now.isoformat(),
-                "updated_at": now.isoformat(),
-            },
-            prefer="return=representation",
-            allowed_status=[201],
-        )
-        subscription = created[0] if isinstance(created, list) and created else {}
+        if isinstance(upcoming, dict) and str(upcoming.get("id") or "").strip():
+            updated = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+                "PATCH",
+                "subscriptions",
+                params={"id": f"eq.{upcoming['id']}"},
+                payload={
+                    "starts_at": starts_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "updated_at": now.isoformat(),
+                },
+                prefer="return=representation",
+                allowed_status=[200],
+            )
+            subscription = updated[0] if isinstance(updated, list) and updated else {}
+        else:
+            created = PAYMENT_CHECKOUT._rest(  # noqa: SLF001
+                "POST",
+                "subscriptions",
+                payload={
+                    "user_id": user_id,
+                    "plan_code": plan_code,
+                    "status": "active",
+                    "starts_at": starts_at.isoformat(),
+                    "expires_at": expires_at.isoformat(),
+                    "source": actor,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                },
+                prefer="return=representation",
+                allowed_status=[201],
+            )
+            subscription = created[0] if isinstance(created, list) and created else {}
 
         PAYMENT_CHECKOUT._rest(  # noqa: SLF001
             "POST",
@@ -151,6 +190,7 @@ def main() -> int:
                     "days": days,
                     "starts_at": starts_at.isoformat(),
                     "expires_at": expires_at.isoformat(),
+                    "mode": "updated_upcoming" if isinstance(upcoming, dict) else "created_new",
                 },
                 "created_at": now.isoformat(),
             },

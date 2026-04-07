@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from src.database.db_manager import DBManager
 from src.payments.contract_checkout import (
     PaymentCheckoutError,
@@ -280,3 +282,55 @@ def test_reconcile_recent_intents_dedupes_users(monkeypatch, tmp_path):
     assert result["processed_users"] == 2
     assert result["repaired_users"] == 2
     assert seen == ["user-1", "user-2"]
+
+
+def test_grant_subscription_starts_immediately_when_only_trial_is_active(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://rpc-1.example")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
+    )
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+
+    service = PaymentContractCheckoutService()
+    trial_end = datetime.now(timezone.utc) + timedelta(days=2)
+    captured_post = {}
+
+    def _fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "subscriptions":
+            return [
+                {
+                    "id": 1,
+                    "status": "active",
+                    "plan_code": "signup_trial_3d",
+                    "source": "signup_trial",
+                    "starts_at": (datetime.now(timezone.utc) - timedelta(days=1)).isoformat(),
+                    "expires_at": trial_end.isoformat(),
+                }
+            ]
+        if method == "POST" and table == "subscriptions":
+            captured_post.update(kwargs.get("payload") or {})
+            return [captured_post]
+        if method == "POST" and table == "entitlement_events":
+            return [{"ok": True}]
+        return []
+
+    monkeypatch.setattr(service, "_rest", _fake_rest)
+
+    before_call = datetime.now(timezone.utc)
+    result = service._grant_subscription(
+        user_id="user-1",
+        plan_code="pro_monthly",
+        duration_days=30,
+        tx_hash="0x" + "1" * 64,
+        payload={"kind": "test"},
+    )
+    after_call = datetime.now(timezone.utc)
+
+    starts_at = datetime.fromisoformat(str(result["starts_at"]).replace("Z", "+00:00"))
+
+    assert starts_at >= before_call - timedelta(seconds=1)
+    assert starts_at <= after_call
