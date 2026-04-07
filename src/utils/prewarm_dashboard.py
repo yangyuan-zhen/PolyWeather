@@ -11,6 +11,8 @@ from typing import Any, Dict, Optional
 import httpx
 from loguru import logger
 
+from src.database.db_manager import DBManager
+
 
 DEFAULT_CITIES = [
     "ankara",
@@ -31,6 +33,8 @@ DEFAULT_CITIES = [
 
 _RUNTIME_LOCK = threading.Lock()
 _WORKER_THREAD: Optional[threading.Thread] = None
+_DB = DBManager()
+_RUNTIME_STATE_KEY = "dashboard_prewarm"
 _RUNTIME_STATE: Dict[str, Any] = {
     "cycle_count": 0,
     "success_count": 0,
@@ -51,6 +55,10 @@ _RUNTIME_STATE: Dict[str, Any] = {
     "last_detail_ok": 0,
     "last_market_ok": 0,
     "last_failed_count": 0,
+    "last_heartbeat_ts": None,
+    "writer_mode": None,
+    "writer_pid": None,
+    "writer_thread_name": None,
 }
 
 
@@ -69,6 +77,43 @@ def _parse_cities(value: str) -> list[str]:
 def _update_runtime_state(**kwargs: Any) -> None:
     with _RUNTIME_LOCK:
         _RUNTIME_STATE.update(kwargs)
+
+
+def _runtime_mode() -> str:
+    current = threading.current_thread()
+    if current.name == "dashboard-prewarm-worker":
+        return "embedded_thread"
+    if str(os.getenv("POLYWEATHER_PREWARM_WORKER_MODE") or "").strip():
+        return str(os.getenv("POLYWEATHER_PREWARM_WORKER_MODE") or "").strip().lower()
+    return "standalone_process"
+
+
+def _snapshot_runtime_state() -> Dict[str, Any]:
+    with _RUNTIME_LOCK:
+        snapshot = dict(_RUNTIME_STATE)
+    snapshot["last_heartbeat_ts"] = time.time()
+    snapshot["writer_mode"] = _runtime_mode()
+    snapshot["writer_pid"] = os.getpid()
+    snapshot["writer_thread_name"] = threading.current_thread().name
+    return snapshot
+
+
+def _persist_runtime_state() -> Dict[str, Any]:
+    snapshot = _snapshot_runtime_state()
+    with _RUNTIME_LOCK:
+        _RUNTIME_STATE.update(
+            {
+                "last_heartbeat_ts": snapshot["last_heartbeat_ts"],
+                "writer_mode": snapshot["writer_mode"],
+                "writer_pid": snapshot["writer_pid"],
+                "writer_thread_name": snapshot["writer_thread_name"],
+            }
+        )
+    try:
+        _DB.set_payment_runtime_state(_RUNTIME_STATE_KEY, snapshot)
+    except Exception as exc:
+        logger.debug("dashboard prewarm runtime persist failed: {}", exc)
+    return snapshot
 
 
 def _record_prewarm_result(
@@ -99,23 +144,70 @@ def _record_prewarm_result(
         _RUNTIME_STATE["last_detail_ok"] = int(detail_ok or 0)
         _RUNTIME_STATE["last_market_ok"] = int(market_ok or 0)
         _RUNTIME_STATE["last_failed_count"] = int(failed_count or 0)
+    _persist_runtime_state()
+
+
+def _parse_iso_timestamp(value: Any) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except Exception:
+        return 0.0
+
+
+def _runtime_sort_key(payload: Dict[str, Any]) -> float:
+    if not isinstance(payload, dict):
+        return 0.0
+    candidates = [
+        float(payload.get("last_heartbeat_ts") or 0.0),
+        _parse_iso_timestamp(payload.get("last_finished_at")),
+        _parse_iso_timestamp(payload.get("last_started_at")),
+    ]
+    return max(candidates)
+
+
+def _load_shared_runtime_state() -> Dict[str, Any]:
+    try:
+        payload = _DB.get_payment_runtime_state(_RUNTIME_STATE_KEY)
+    except Exception as exc:
+        logger.debug("dashboard prewarm runtime load failed: {}", exc)
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def get_prewarm_runtime_summary() -> Dict[str, Any]:
     configured_cities = _parse_cities(str(os.getenv("POLYWEATHER_PREWARM_CITIES") or ",".join(DEFAULT_CITIES)))
     with _RUNTIME_LOCK:
-        runtime = dict(_RUNTIME_STATE)
+        local_runtime = dict(_RUNTIME_STATE)
+    shared_runtime = _load_shared_runtime_state()
+    runtime = local_runtime
+    if _runtime_sort_key(shared_runtime) > _runtime_sort_key(local_runtime):
+        runtime = shared_runtime
+    interval_sec = max(30, int(os.getenv("POLYWEATHER_PREWARM_INTERVAL_SEC", "300")))
+    jitter_sec = max(0, int(os.getenv("POLYWEATHER_PREWARM_JITTER_SEC", "20")))
+    heartbeat_age_sec = None
+    last_heartbeat_ts = float(runtime.get("last_heartbeat_ts") or 0.0)
+    if last_heartbeat_ts > 0:
+        heartbeat_age_sec = max(0.0, time.time() - last_heartbeat_ts)
+    shared_alive = bool(
+        last_heartbeat_ts > 0
+        and heartbeat_age_sec is not None
+        and heartbeat_age_sec <= float(interval_sec + jitter_sec + 90)
+    )
     return {
         "enabled": _truthy_env("POLYWEATHER_DASHBOARD_PREWARM_ENABLED", False),
         "base_url": str(os.getenv("POLYWEATHER_BACKEND_URL") or "http://127.0.0.1:8000").strip(),
         "configured_cities": configured_cities,
         "configured_city_count": len(configured_cities),
-        "interval_sec": max(30, int(os.getenv("POLYWEATHER_PREWARM_INTERVAL_SEC", "300"))),
-        "jitter_sec": max(0, int(os.getenv("POLYWEATHER_PREWARM_JITTER_SEC", "20"))),
+        "interval_sec": interval_sec,
+        "jitter_sec": jitter_sec,
         "include_detail": _truthy_env("POLYWEATHER_PREWARM_INCLUDE_DETAIL", True),
         "include_market": _truthy_env("POLYWEATHER_PREWARM_INCLUDE_MARKET", True),
         "force_refresh": _truthy_env("POLYWEATHER_PREWARM_FORCE_REFRESH", False),
-        "thread_alive": bool(_WORKER_THREAD and _WORKER_THREAD.is_alive()),
+        "thread_alive": bool(_WORKER_THREAD and _WORKER_THREAD.is_alive()) or shared_alive,
+        "heartbeat_age_sec": None if heartbeat_age_sec is None else round(heartbeat_age_sec, 2),
         "runtime": runtime,
     }
 
@@ -141,6 +233,7 @@ def run_prewarm(
         last_error=None,
         last_http_status=None,
     )
+    _persist_runtime_state()
     if not token:
         _record_prewarm_result(
             ok=False,
@@ -244,6 +337,7 @@ def run_worker_loop(
         bool(force_refresh),
         bool(once),
     )
+    _persist_runtime_state()
 
     while True:
         started = time.perf_counter()

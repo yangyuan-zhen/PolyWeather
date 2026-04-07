@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
+from src.database.db_manager import DBManager
 from src.database.runtime_state import TruthRecordRepository, TrainingFeatureRecordRepository
 
 
@@ -45,6 +46,50 @@ def test_system_status_returns_summary_shape():
     assert 'runtime' in payload['prewarm']
     assert 'last_summary_ok' in payload['prewarm']['runtime']
     assert 'cities_count' in payload
+
+
+def test_system_status_reads_shared_prewarm_runtime(monkeypatch):
+    monkeypatch.setenv("POLYWEATHER_DASHBOARD_PREWARM_ENABLED", "true")
+    monkeypatch.setenv("POLYWEATHER_PREWARM_INTERVAL_SEC", "300")
+    monkeypatch.setenv("POLYWEATHER_PREWARM_JITTER_SEC", "20")
+
+    DBManager().set_payment_runtime_state(
+        "dashboard_prewarm",
+        {
+            "cycle_count": 3,
+            "success_count": 3,
+            "failure_count": 0,
+            "last_started_at": "2026-04-08T12:00:00",
+            "last_finished_at": "2026-04-08T12:00:05",
+            "last_duration_sec": 5.0,
+            "last_success": True,
+            "last_http_status": 200,
+            "last_error": None,
+            "last_requested_cities": ["shanghai", "beijing"],
+            "last_requested_city_count": 2,
+            "last_include_detail": True,
+            "last_include_market": True,
+            "last_force_refresh": False,
+            "last_warmed_count": 2,
+            "last_summary_ok": 2,
+            "last_detail_ok": 2,
+            "last_market_ok": 2,
+            "last_failed_count": 0,
+            "last_heartbeat_ts": __import__("time").time(),
+            "writer_mode": "standalone_process",
+            "writer_pid": 12345,
+            "writer_thread_name": "MainThread",
+        },
+    )
+
+    response = client.get('/api/system/status')
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["prewarm"]["enabled"] is True
+    assert payload["prewarm"]["thread_alive"] is True
+    assert payload["prewarm"]["runtime"]["cycle_count"] >= 3
+    assert payload["prewarm"]["runtime"]["last_summary_ok"] == 2
 
 
 def test_metrics_endpoint_returns_prometheus_payload():
