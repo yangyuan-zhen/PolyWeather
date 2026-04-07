@@ -23,6 +23,27 @@ type SystemStatusPayload = {
   db?: { ok?: boolean; db_path?: string };
   features?: Record<string, unknown>;
   metrics?: Record<string, unknown>;
+  cache?: {
+    api_cache_entries?: number;
+    open_meteo_forecast_entries?: number;
+    open_meteo_ensemble_entries?: number;
+    open_meteo_multi_model_entries?: number;
+    metar_entries?: number;
+    taf_entries?: number;
+    nmc_entries?: number;
+    settlement_entries?: number;
+    analysis?: {
+      total_requests?: number;
+      cache_hits?: number;
+      cache_misses?: number;
+      force_refresh_requests?: number;
+      last_cache_hit_at?: string | null;
+      last_cache_miss_at?: string | null;
+      last_city?: string | null;
+      hit_rate?: number | null;
+      miss_rate?: number | null;
+    };
+  };
   probability?: {
     engine_mode?: string;
     rollout?: {
@@ -132,6 +153,39 @@ type SystemStatusPayload = {
         cities_count?: number;
       }
     >;
+  };
+  prewarm?: {
+    enabled?: boolean;
+    base_url?: string;
+    configured_cities?: string[];
+    configured_city_count?: number;
+    interval_sec?: number;
+    jitter_sec?: number;
+    include_detail?: boolean;
+    include_market?: boolean;
+    force_refresh?: boolean;
+    thread_alive?: boolean;
+    runtime?: {
+      cycle_count?: number;
+      success_count?: number;
+      failure_count?: number;
+      last_started_at?: string | null;
+      last_finished_at?: string | null;
+      last_duration_sec?: number | null;
+      last_success?: boolean | null;
+      last_http_status?: number | null;
+      last_error?: string | null;
+      last_requested_cities?: string[];
+      last_requested_city_count?: number;
+      last_include_detail?: boolean;
+      last_include_market?: boolean;
+      last_force_refresh?: boolean;
+      last_warmed_count?: number;
+      last_summary_ok?: number;
+      last_detail_ok?: number;
+      last_market_ok?: number;
+      last_failed_count?: number;
+    };
   };
 };
 
@@ -433,6 +487,10 @@ export function OpsDashboard() {
   const modelCityCoverage = trainingData?.model_city_coverage;
   const trainingArtifacts = trainingData?.artifacts;
   const stationNetworks = status?.station_networks;
+  const cacheSummary = status?.cache;
+  const analysisCache = cacheSummary?.analysis;
+  const prewarm = status?.prewarm;
+  const prewarmRuntime = prewarm?.runtime;
   const truthSources = Object.entries(truthRecords?.source_counts || {});
   const providerRows = useMemo(
     () =>
@@ -585,6 +643,7 @@ export function OpsDashboard() {
   const opsNav = [
     { id: "overview", label: "总览" },
     { id: "station-networks", label: "站网覆盖" },
+    { id: "prewarm", label: "预热缓存" },
     { id: "funnel", label: "转化漏斗" },
     { id: "probability", label: "EMOS 门禁" },
     { id: "training-data", label: "训练数据" },
@@ -742,6 +801,75 @@ export function OpsDashboard() {
                   </div>
                 ))
               )}
+            </CardContent>
+          </Card>
+        </section>
+
+        <section id="prewarm" className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          <Card>
+            <CardHeader>
+              <CardTitle>预热 Worker</CardTitle>
+              <CardDescription>确认后台定向预热是否真的在跑，以及最近一次有没有成功。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-300">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MobileField label="enabled" value={prewarm?.enabled ? "true" : "false"} mono />
+                <MobileField label="thread_alive" value={prewarm?.thread_alive ? "true" : "false"} mono />
+                <MobileField label="interval_sec" value={String(prewarm?.interval_sec ?? 0)} mono />
+                <MobileField label="configured cities" value={String(prewarm?.configured_city_count ?? 0)} mono />
+              </div>
+              <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="flex justify-between gap-3"><span>最近开始</span><span>{formatDateTime(prewarmRuntime?.last_started_at)}</span></div>
+                <div className="flex justify-between gap-3"><span>最近结束</span><span>{formatDateTime(prewarmRuntime?.last_finished_at)}</span></div>
+                <div className="flex justify-between gap-3"><span>最近耗时</span><span>{prewarmRuntime?.last_duration_sec ?? "-"} s</span></div>
+                <div className="flex justify-between gap-3"><span>最近结果</span><span>{prewarmRuntime?.last_success === true ? "success" : prewarmRuntime?.last_success === false ? "failed" : "-"}</span></div>
+                <div className="flex justify-between gap-3"><span>最近 HTTP</span><span>{prewarmRuntime?.last_http_status ?? "-"}</span></div>
+                <div className="flex justify-between gap-3"><span>最近预热城市</span><span>{prewarmRuntime?.last_requested_city_count ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>最近命中结果</span><span>{prewarmRuntime?.last_warmed_count ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>summary / detail / market</span><span>{prewarmRuntime?.last_summary_ok ?? 0} / {prewarmRuntime?.last_detail_ok ?? 0} / {prewarmRuntime?.last_market_ok ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>最近失败数</span><span>{prewarmRuntime?.last_failed_count ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>累计 cycle</span><span>{prewarmRuntime?.cycle_count ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>success / failed</span><span>{prewarmRuntime?.success_count ?? 0} / {prewarmRuntime?.failure_count ?? 0}</span></div>
+              </div>
+              {prewarmRuntime?.last_error ? (
+                <div className="rounded-2xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                  最近错误：{prewarmRuntime.last_error}
+                </div>
+              ) : null}
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+                当前预热目标：{(prewarmRuntime?.last_requested_cities || prewarm?.configured_cities || []).slice(0, 12).join(", ") || "未配置"}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>缓存桶状态</CardTitle>
+              <CardDescription>观察热点数据是不是已经被打热，避免每次请求都现场抓取。</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-sm text-slate-300">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <MobileField label="api cache" value={String(cacheSummary?.api_cache_entries ?? 0)} mono />
+                <MobileField label="metar" value={String(cacheSummary?.metar_entries ?? 0)} mono />
+                <MobileField label="taf" value={String(cacheSummary?.taf_entries ?? 0)} mono />
+                <MobileField label="nmc" value={String(cacheSummary?.nmc_entries ?? 0)} mono />
+                <MobileField label="settlement" value={String(cacheSummary?.settlement_entries ?? 0)} mono />
+                <MobileField label="om forecast" value={String(cacheSummary?.open_meteo_forecast_entries ?? 0)} mono />
+                <MobileField label="om ensemble" value={String(cacheSummary?.open_meteo_ensemble_entries ?? 0)} mono />
+                <MobileField label="om multi" value={String(cacheSummary?.open_meteo_multi_model_entries ?? 0)} mono />
+              </div>
+              <div className="space-y-2 rounded-2xl border border-slate-800 bg-slate-950/70 p-3">
+                <div className="flex justify-between gap-3"><span>summary 请求总数</span><span>{analysisCache?.total_requests ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>cache hit / miss</span><span>{analysisCache?.cache_hits ?? 0} / {analysisCache?.cache_misses ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>hit rate</span><span>{typeof analysisCache?.hit_rate === "number" ? `${(analysisCache.hit_rate * 100).toFixed(1)}%` : "-"}</span></div>
+                <div className="flex justify-between gap-3"><span>force refresh</span><span>{analysisCache?.force_refresh_requests ?? 0}</span></div>
+                <div className="flex justify-between gap-3"><span>最近 hit</span><span>{formatDateTime(analysisCache?.last_cache_hit_at)}</span></div>
+                <div className="flex justify-between gap-3"><span>最近 miss</span><span>{formatDateTime(analysisCache?.last_cache_miss_at)}</span></div>
+                <div className="flex justify-between gap-3"><span>最近城市</span><span>{analysisCache?.last_city || "-"}</span></div>
+              </div>
+              <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 px-3 py-2 text-xs text-slate-500">
+                这里同时展示桶内条目数和 summary 层 cache hit/miss。detail / market 目前仍以最近一次预热结果为准。
+              </div>
             </CardContent>
           </Card>
         </section>

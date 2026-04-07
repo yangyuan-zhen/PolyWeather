@@ -1,7 +1,8 @@
 import os
-import requests
+import httpx
 import re
 import threading
+import time
 from typing import Optional, Dict, List
 from datetime import datetime, timedelta
 from loguru import logger
@@ -110,7 +111,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.config = config
 
         self.timeout = 30  # 增加超时以支持高延迟 VPS
-        self.session = requests.Session()
+        self.http_retry_count = max(
+            0, int(os.getenv("POLYWEATHER_HTTP_RETRY_COUNT", "1"))
+        )
+        self.http_retry_backoff_sec = max(
+            0.0, float(os.getenv("POLYWEATHER_HTTP_RETRY_BACKOFF_SEC", "0.35"))
+        )
+        self.session = httpx.Client(
+            timeout=self.timeout,
+            follow_redirects=True,
+            limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+        )
         self.open_meteo_cache_ttl_sec = int(
             os.getenv("OPEN_METEO_CACHE_TTL_SEC", "900")
         )
@@ -186,10 +197,72 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if proxy:
             if not proxy.startswith("http"):
                 proxy = f"http://{proxy}"
-            self.session.proxies = {"http": proxy, "https": proxy}
+            self.session = httpx.Client(
+                timeout=self.timeout,
+                follow_redirects=True,
+                proxy=proxy,
+                limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+            )
             logger.info(f"正在使用天气数据代理: {proxy}")
 
         logger.info("天气数据采集器初始化完成。")
+
+    @staticmethod
+    def _is_retryable_status(status_code: int) -> bool:
+        return status_code in {408, 500, 502, 503, 504}
+
+    def _http_get(self, url: str, **kwargs) -> httpx.Response:
+        if "timeout" not in kwargs:
+            kwargs["timeout"] = self.timeout
+        last_exc: Optional[Exception] = None
+        last_response: Optional[httpx.Response] = None
+        attempts = self.http_retry_count + 1
+        for attempt in range(attempts):
+            try:
+                response = self.session.get(url, **kwargs)
+                last_response = response
+                if (
+                    attempt < attempts - 1
+                    and self._is_retryable_status(response.status_code)
+                ):
+                    wait_for = self.http_retry_backoff_sec * (attempt + 1)
+                    logger.debug(
+                        "HTTP GET retrying url={} status={} attempt={}/{} wait={}s",
+                        url,
+                        response.status_code,
+                        attempt + 1,
+                        attempts,
+                        round(wait_for, 2),
+                    )
+                    if wait_for > 0:
+                        time.sleep(wait_for)
+                    continue
+                return response
+            except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                last_exc = exc
+                if attempt >= attempts - 1:
+                    break
+                wait_for = self.http_retry_backoff_sec * (attempt + 1)
+                logger.debug(
+                    "HTTP GET retrying url={} error={} attempt={}/{} wait={}s",
+                    url,
+                    type(exc).__name__,
+                    attempt + 1,
+                    attempts,
+                    round(wait_for, 2),
+                )
+                if wait_for > 0:
+                    time.sleep(wait_for)
+        if last_exc is not None:
+            raise last_exc
+        if last_response is not None:
+            return last_response
+        raise RuntimeError(f"HTTP GET failed without response: {url}")
+
+    def _http_get_json(self, url: str, **kwargs):
+        response = self._http_get(url, **kwargs)
+        response.raise_for_status()
+        return response.json()
 
     def fetch_from_openweather(self, city: str, country: str = None) -> Optional[Dict]:
         """
@@ -210,7 +283,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         try:
             # Current weather
             current_url = "https://api.openweathermap.org/data/2.5/weather"
-            current_response = self.session.get(
+            current_response = self._http_get(
                 current_url,
                 params={"q": query, "appid": self.openweather_key, "units": "metric"},
                 timeout=self.timeout,
@@ -220,7 +293,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
             # 5-day forecast
             forecast_url = "https://api.openweathermap.org/data/2.5/forecast"
-            forecast_response = self.session.get(
+            forecast_response = self._http_get(
                 forecast_url,
                 params={"q": query, "appid": self.openweather_key, "units": "metric"},
                 timeout=self.timeout,
@@ -245,7 +318,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 "forecast": self._parse_openweather_forecast(forecast_data),
             }
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"OpenWeatherMap request failed: {e}")
             return None
 
@@ -290,7 +363,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
         try:
             url = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{city}/{start_date}/{end_date}"
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params={
                     "unitGroup": "metric",
@@ -322,7 +395,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 ],
             }
 
-        except requests.exceptions.RequestException as e:
+        except httpx.HTTPError as e:
             logger.error(f"Visual Crossing request failed: {e}")
             return None
 
@@ -399,7 +472,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
         try:
             url = "https://geocoding-api.open-meteo.com/v1/search"
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params={"name": city, "count": 1, "language": "en", "format": "json"},
                 timeout=15,  # 增加超时时间到 15s

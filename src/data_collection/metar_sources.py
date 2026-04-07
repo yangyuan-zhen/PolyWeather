@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
-import requests
+import httpx
 from loguru import logger
 
 from src.utils.metrics import record_source_call
@@ -209,7 +209,7 @@ class MetarSourceMixin:
             record_source_call("metar", "current", "success", (time.perf_counter() - started) * 1000.0)
             return result
 
-        except requests.exceptions.RequestException as exc:
+        except httpx.HTTPError as exc:
             logger.error(f"METAR 请求失败 ({icao}): {exc}")
             with self._metar_cache_lock:
                 stale = self._metar_cache.get(cache_key)
@@ -269,7 +269,7 @@ class MetarSourceMixin:
                 self._taf_cache[cache_key] = {"d": result, "t": now_ts}
             record_source_call("taf", "current", "success", (time.perf_counter() - started) * 1000.0)
             return result
-        except requests.exceptions.RequestException as exc:
+        except httpx.HTTPError as exc:
             logger.error(f"TAF 请求失败 ({icao}): {exc}")
             with self._taf_cache_lock:
                 stale = self._taf_cache.get(cache_key)

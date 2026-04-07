@@ -21,7 +21,7 @@ class NwsOpenMeteoSourceMixin:
             points_url = f"https://api.weather.gov/points/{lat},{lon}"
             headers = {"User-Agent": "PolyWeather/1.0 (weather-bot)"}
 
-            points_resp = self.session.get(
+            points_resp = self._http_get(
                 points_url, headers=headers, timeout=self.timeout
             )
             points_resp.raise_for_status()
@@ -35,7 +35,7 @@ class NwsOpenMeteoSourceMixin:
                 return None
 
             # 2. 获取预报
-            forecast_resp = self.session.get(
+            forecast_resp = self._http_get(
                 forecast_url, headers=headers, timeout=self.timeout
             )
             forecast_resp.raise_for_status()
@@ -48,7 +48,7 @@ class NwsOpenMeteoSourceMixin:
 
             hourly_periods = []
             if hourly_url:
-                hourly_resp = self.session.get(
+                hourly_resp = self._http_get(
                     hourly_url, headers=headers, timeout=self.timeout
                 )
                 hourly_resp.raise_for_status()
@@ -57,7 +57,7 @@ class NwsOpenMeteoSourceMixin:
 
             active_alerts = []
             try:
-                alerts_resp = self.session.get(
+                alerts_resp = self._http_get(
                     "https://api.weather.gov/alerts/active",
                     params={"point": f"{lat},{lon}"},
                     headers=headers,
@@ -205,7 +205,7 @@ class NwsOpenMeteoSourceMixin:
                 params["temperature_unit"] = "celsius"
 
             self._wait_open_meteo_slot("forecast")
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params=params,
                 timeout=self.timeout,
@@ -366,7 +366,7 @@ class NwsOpenMeteoSourceMixin:
                 params["temperature_unit"] = "celsius"
 
             self._wait_open_meteo_slot("ensemble")
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params=params,
                 timeout=self.timeout,
@@ -523,7 +523,7 @@ class NwsOpenMeteoSourceMixin:
                 params["temperature_unit"] = "fahrenheit"
 
             self._wait_open_meteo_slot("multi-model")
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params=params,
                 timeout=self.timeout,

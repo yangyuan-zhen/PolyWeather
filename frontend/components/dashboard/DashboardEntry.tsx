@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { DashboardShellSkeleton } from "@/components/dashboard/DashboardShellSkeleton";
 
 const PolyWeatherDashboard = dynamic(
   () =>
@@ -9,6 +10,7 @@ const PolyWeatherDashboard = dynamic(
     ),
   {
     ssr: false,
+    loading: () => <DashboardShellSkeleton />,
   },
 );
 

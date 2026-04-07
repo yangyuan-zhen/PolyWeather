@@ -34,6 +34,17 @@ services:
     # UID/GID are mainly useful on Linux hosts to avoid root-owned output files.
     user: "${UID:-1000}:${GID:-1000}"
 
+  polyweather_prewarm:
+    <<: *polyweather-base
+    container_name: polyweather_prewarm
+    restart: unless-stopped
+    profiles: ["workers"]
+    command: python scripts/prewarm_dashboard_worker.py --include-detail --include-market
+    volumes:
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
+      - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
+    user: "${UID:-1000}:${GID:-1000}"
+
   polyweather_prometheus:
     image: prom/prometheus:v3.4.1
     container_name: polyweather_prometheus

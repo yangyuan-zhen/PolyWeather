@@ -21,6 +21,7 @@ from src.data_collection.country_networks import provider_coverage_summary
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES  # noqa: F401
 from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT, extract_bearer_token
+from src.utils.prewarm_dashboard import get_prewarm_runtime_summary
 from src.utils.metrics import (
     build_metrics_summary,
     counter_inc,
@@ -391,24 +392,34 @@ def _sqlite_health() -> Dict[str, Any]:
 
 
 def _cache_summary() -> Dict[str, Any]:
+    from web.analysis_service import get_analysis_cache_stats
+
+    open_meteo_forecast_entries = len(getattr(_weather, "_open_meteo_cache", {}) or {})
+    open_meteo_ensemble_entries = len(getattr(_weather, "_ensemble_cache", {}) or {})
+    open_meteo_multi_model_entries = len(getattr(_weather, "_multi_model_cache", {}) or {})
+    metar_entries = len(getattr(_weather, "_metar_cache", {}) or {})
+    taf_entries = len(getattr(_weather, "_taf_cache", {}) or {})
+    nmc_entries = len(getattr(_weather, "_nmc_cache", {}) or {})
+    settlement_entries = len(getattr(_weather, "_settlement_cache", {}) or {})
+
     gauge_set("polyweather_api_cache_entries", len(_cache))
-    gauge_set(
-        "polyweather_open_meteo_forecast_cache_entries",
-        len(getattr(_weather, "_open_meteo_cache", {}) or {}),
-    )
-    gauge_set(
-        "polyweather_open_meteo_ensemble_cache_entries",
-        len(getattr(_weather, "_ensemble_cache", {}) or {}),
-    )
-    gauge_set(
-        "polyweather_open_meteo_multi_model_cache_entries",
-        len(getattr(_weather, "_multi_model_cache", {}) or {}),
-    )
+    gauge_set("polyweather_open_meteo_forecast_cache_entries", open_meteo_forecast_entries)
+    gauge_set("polyweather_open_meteo_ensemble_cache_entries", open_meteo_ensemble_entries)
+    gauge_set("polyweather_open_meteo_multi_model_cache_entries", open_meteo_multi_model_entries)
+    gauge_set("polyweather_metar_cache_entries", metar_entries)
+    gauge_set("polyweather_taf_cache_entries", taf_entries)
+    gauge_set("polyweather_nmc_cache_entries", nmc_entries)
+    gauge_set("polyweather_settlement_cache_entries", settlement_entries)
     return {
         "api_cache_entries": len(_cache),
-        "open_meteo_forecast_entries": len(getattr(_weather, "_open_meteo_cache", {}) or {}),
-        "open_meteo_ensemble_entries": len(getattr(_weather, "_ensemble_cache", {}) or {}),
-        "open_meteo_multi_model_entries": len(getattr(_weather, "_multi_model_cache", {}) or {}),
+        "open_meteo_forecast_entries": open_meteo_forecast_entries,
+        "open_meteo_ensemble_entries": open_meteo_ensemble_entries,
+        "open_meteo_multi_model_entries": open_meteo_multi_model_entries,
+        "metar_entries": metar_entries,
+        "taf_entries": taf_entries,
+        "nmc_entries": nmc_entries,
+        "settlement_entries": settlement_entries,
+        "analysis": get_analysis_cache_stats(),
     }
 
 
@@ -750,5 +761,6 @@ def build_system_status_payload() -> Dict[str, Any]:
         "probability": _probability_summary(),
         "training_data": _training_data_summary(),
         "station_networks": provider_coverage_summary(),
+        "prewarm": get_prewarm_runtime_summary(),
         "cities_count": len(CITIES),
     }

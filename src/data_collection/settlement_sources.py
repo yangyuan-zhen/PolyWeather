@@ -226,13 +226,13 @@ class SettlementSourceMixin:
 
         try:
             base = "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
-            temp_csv = self.session.get(f"{base}/latest_1min_temperature.csv", timeout=self.timeout)
+            temp_csv = self._http_get(f"{base}/latest_1min_temperature.csv", timeout=self.timeout)
             temp_csv.raise_for_status()
-            maxmin_csv = self.session.get(f"{base}/latest_since_midnight_maxmin.csv", timeout=self.timeout)
+            maxmin_csv = self._http_get(f"{base}/latest_since_midnight_maxmin.csv", timeout=self.timeout)
             maxmin_csv.raise_for_status()
-            humidity_csv = self.session.get(f"{base}/latest_1min_humidity.csv", timeout=self.timeout)
+            humidity_csv = self._http_get(f"{base}/latest_1min_humidity.csv", timeout=self.timeout)
             humidity_csv.raise_for_status()
-            wind_csv = self.session.get(f"{base}/latest_10min_wind.csv", timeout=self.timeout)
+            wind_csv = self._http_get(f"{base}/latest_10min_wind.csv", timeout=self.timeout)
             wind_csv.raise_for_status()
 
             temp_rows = self._csv_rows(temp_csv.text)
@@ -302,7 +302,7 @@ class SettlementSourceMixin:
 
         try:
             url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001"
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params={"Authorization": self.cwa_open_data_auth, "format": "JSON", "StationId": "466920"},
                 timeout=self.timeout,
@@ -361,7 +361,7 @@ class SettlementSourceMixin:
     def fetch_hko_forecast(self) -> Optional[float]:
         try:
             url = "https://data.weather.gov.hk/weatherAPI/opendata/weather.php?dataType=fnd&lang=tc"
-            res = self.session.get(url, timeout=self.timeout).json()
+            res = self._http_get_json(url, timeout=self.timeout)
             return float(res["weatherForecast"][0]["forecastMaxtemp"]["value"])
         except Exception as exc:
             logger.warning(f"HKO Forecast request failed: {exc}")
@@ -372,11 +372,11 @@ class SettlementSourceMixin:
             if not self.cwa_open_data_auth:
                 return None
             url = "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-061"
-            res = self.session.get(
+            res = self._http_get_json(
                 url,
                 params={"Authorization": self.cwa_open_data_auth, "format": "JSON", "elementName": "MaxT"},
                 timeout=self.timeout,
-            ).json()
+            )
             locs = res.get("records", {}).get("Locations", [])[0].get("Location", [])
             if not locs:
                 return None
@@ -402,7 +402,7 @@ class SettlementSourceMixin:
             return cached
 
         try:
-            response = self.session.get(
+            response = self._http_get(
                 "https://api.synopticdata.com/v2/stations/timeseries",
                 params={
                     "STID": normalized_station_code,
@@ -519,7 +519,7 @@ class SettlementSourceMixin:
             query = {"token": self.IMGW_METEO_API_TOKEN}
             if isinstance(params, dict):
                 query.update(params)
-            response = self.session.get(
+            response = self._http_get(
                 f"{self.IMGW_METEO_API_BASE}/{path}",
                 params=query,
                 timeout=self.timeout,

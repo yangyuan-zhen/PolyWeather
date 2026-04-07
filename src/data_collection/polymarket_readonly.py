@@ -19,7 +19,7 @@ import unicodedata
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-import requests
+import httpx
 from loguru import logger
 
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
@@ -383,7 +383,10 @@ class PolymarketReadOnlyLayer:
         )
         self.edge_threshold = _safe_float(os.getenv("POLYMARKET_SIGNAL_EDGE_PCT")) or 2.0
 
-        self._session = requests.Session()
+        self._session = httpx.Client(
+            timeout=self.http_timeout,
+            follow_redirects=True,
+        )
         self._markets_cache: Dict[str, Dict[str, Any]] = {}
         self._active_markets_cache: Dict[str, Any] = {"data": [], "t": 0.0}
         self._broad_markets_cache: Dict[str, Any] = {"data": [], "t": 0.0}

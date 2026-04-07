@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import time as _time
+import threading
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
@@ -27,6 +28,44 @@ from src.data_collection.city_registry import ALIASES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
+_ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
+_ANALYSIS_CACHE_STATS: Dict[str, Any] = {
+    "total_requests": 0,
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "force_refresh_requests": 0,
+    "last_cache_hit_at": None,
+    "last_cache_miss_at": None,
+    "last_city": None,
+}
+
+
+def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    with _ANALYSIS_CACHE_STATS_LOCK:
+        _ANALYSIS_CACHE_STATS["total_requests"] = int(_ANALYSIS_CACHE_STATS.get("total_requests") or 0) + 1
+        _ANALYSIS_CACHE_STATS["last_city"] = str(city or "")
+        if force_refresh:
+            _ANALYSIS_CACHE_STATS["force_refresh_requests"] = int(_ANALYSIS_CACHE_STATS.get("force_refresh_requests") or 0) + 1
+        if hit:
+            _ANALYSIS_CACHE_STATS["cache_hits"] = int(_ANALYSIS_CACHE_STATS.get("cache_hits") or 0) + 1
+            _ANALYSIS_CACHE_STATS["last_cache_hit_at"] = now
+        else:
+            _ANALYSIS_CACHE_STATS["cache_misses"] = int(_ANALYSIS_CACHE_STATS.get("cache_misses") or 0) + 1
+            _ANALYSIS_CACHE_STATS["last_cache_miss_at"] = now
+
+
+def get_analysis_cache_stats() -> Dict[str, Any]:
+    with _ANALYSIS_CACHE_STATS_LOCK:
+        stats = dict(_ANALYSIS_CACHE_STATS)
+    hits = int(stats.get("cache_hits") or 0)
+    misses = int(stats.get("cache_misses") or 0)
+    eligible = hits + misses
+    hit_rate = (hits / eligible) if eligible > 0 else None
+    miss_rate = (misses / eligible) if eligible > 0 else None
+    stats["hit_rate"] = round(hit_rate, 4) if hit_rate is not None else None
+    stats["miss_rate"] = round(miss_rate, 4) if miss_rate is not None else None
+    return stats
 
 
 def _interpolate_hourly_value(
@@ -780,7 +819,9 @@ def _analyze(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if not force_refresh:
         cached = _cache.get(city)
         if cached and _time.time() - cached["t"] < ttl:
+            _record_analysis_cache_event(city=city, hit=True, force_refresh=False)
             return cached["d"]
+    _record_analysis_cache_event(city=city, hit=False, force_refresh=force_refresh)
 
     info = CITIES[city]
     lat, lon, is_f = info["lat"], info["lon"], info["f"]

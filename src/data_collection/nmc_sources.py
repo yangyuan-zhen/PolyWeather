@@ -45,6 +45,20 @@ NMC_CITY_REFERENCES: Dict[str, Dict[str, Any]] = {
 
 
 class NmcSourceMixin:
+    def _nmc_http_get(self, url: str):
+        getter = getattr(self, "_http_get", None)
+        if callable(getter):
+            return getter(url)
+        return self.session.get(url, timeout=self.timeout)
+
+    def _nmc_http_get_json(self, url: str):
+        getter = getattr(self, "_http_get_json", None)
+        if callable(getter):
+            return getter(url)
+        response = self.session.get(url, timeout=self.timeout)
+        response.raise_for_status()
+        return response.json()
+
     @staticmethod
     def _nmc_optional_text(value: Any) -> Optional[str]:
         text = str(value or "").strip()
@@ -73,7 +87,7 @@ class NmcSourceMixin:
             return None
 
         try:
-            resp = self.session.get(page_url, timeout=self.timeout)
+            resp = self._nmc_http_get(page_url)
             resp.raise_for_status()
             match = re.search(
                 r"renderWeatherRealPanel\('([^']+)',\s*'([^']+)'\)",
@@ -116,9 +130,7 @@ class NmcSourceMixin:
 
         try:
             url = f"https://www.nmc.cn/rest/real/{station_code}"
-            resp = self.session.get(url, timeout=self.timeout)
-            resp.raise_for_status()
-            payload = resp.json()
+            payload = self._nmc_http_get_json(url)
             if not isinstance(payload, dict) or not isinstance(payload.get("weather"), dict):
                 record_source_call("nmc", "current", "empty", (time.perf_counter() - started) * 1000.0)
                 return None

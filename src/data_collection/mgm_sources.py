@@ -32,7 +32,7 @@ class MgmSourceMixin:
             # 1. 实时数据 (添加时间戳防止 CDN 缓存)
             import time
 
-            obs_resp = self.session.get(
+            obs_resp = self._http_get(
                 f"{base_url}/sondurumlar?istno={istno}&_={int(time.time() * 1000)}",
                 headers=headers,
                 timeout=self.timeout,
@@ -95,7 +95,7 @@ class MgmSourceMixin:
             ]
             for forecast_url in forecast_urls:
                 try:
-                    daily_resp = self.session.get(
+                    daily_resp = self._http_get(
                         forecast_url, headers=headers, timeout=self.timeout
                     )
                     if daily_resp.status_code == 200:
@@ -132,7 +132,7 @@ class MgmSourceMixin:
 
             # 3. 小时预报
             try:
-                hourly_resp = self.session.get(
+                hourly_resp = self._http_get(
                     f"{base_url}/tahminler/saatlik?istno={istno}",
                     headers=headers,
                     timeout=self.timeout
@@ -246,7 +246,11 @@ class MgmSourceMixin:
         try:
             # 1. 加载测站元数据 (缓存到实例中)，用于过滤属于该省份的站点
             if not getattr(self, "mgm_stations_meta", None):
-                meta_resp = self.session.get(f"{base_url}/istasyonlar", headers=headers, timeout=self.timeout)
+                meta_resp = self._http_get(
+                    f"{base_url}/istasyonlar",
+                    headers=headers,
+                    timeout=self.timeout,
+                )
                 if meta_resp.status_code == 200:
                     meta_json = meta_resp.json()
                     if isinstance(meta_json, list):
@@ -293,7 +297,7 @@ class MgmSourceMixin:
                 try:
                     # sondurumlar?istno={ist_no} 是目前最稳的获取多站数据的办法
                     url = f"{base_url}/sondurumlar?istno={ist_no}&_={int(time.time() * 1000)}"
-                    resp = self.session.get(url, headers=headers, timeout=5)
+                    resp = self._http_get(url, headers=headers, timeout=5)
                     if resp.status_code == 200:
                         obs_list = resp.json()
                         if obs_list:

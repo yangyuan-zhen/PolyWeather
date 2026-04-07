@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import time
 from datetime import datetime, timedelta
 from typing import Optional
 
+from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from loguru import logger
@@ -65,6 +67,23 @@ TRACKABLE_ANALYTICS_EVENTS = {
     "checkout_started",
     "checkout_succeeded",
 }
+
+DEFAULT_PREWARM_CITIES = [
+    "ankara",
+    "istanbul",
+    "shanghai",
+    "beijing",
+    "shenzhen",
+    "wuhan",
+    "chengdu",
+    "chongqing",
+    "hong kong",
+    "taipei",
+    "london",
+    "paris",
+    "new york",
+    "los angeles",
+]
 
 
 def _parse_snapshot_dt(value: object) -> Optional[datetime]:
@@ -178,6 +197,20 @@ def _normalize_city_or_404(name: str) -> str:
     return city
 
 
+def _normalize_city_list(raw: Optional[str]) -> list[str]:
+    if not raw:
+        return list(DEFAULT_PREWARM_CITIES)
+    out: list[str] = []
+    for part in str(raw).split(","):
+        city = str(part or "").strip().lower().replace("-", " ")
+        if not city:
+            continue
+        city = ALIASES.get(city, city)
+        if city in CITIES and city not in out:
+            out.append(city)
+    return out
+
+
 def _history_file_path() -> str:
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(project_root, "data", "daily_records.json")
@@ -251,7 +284,85 @@ async def healthz():
 
 @router.get("/api/system/status")
 async def system_status():
-    return build_system_status_payload()
+    return await run_in_threadpool(build_system_status_payload)
+
+
+@router.post("/api/system/prewarm")
+async def system_prewarm(
+    request: Request,
+    cities: Optional[str] = None,
+    force_refresh: bool = False,
+    include_detail: bool = False,
+    include_market: bool = False,
+):
+    _assert_entitlement(request)
+    selected = _normalize_city_list(cities)
+    if not selected:
+        raise HTTPException(status_code=400, detail="No valid cities to prewarm")
+
+    started = time.perf_counter()
+    warmed: list[dict[str, object]] = []
+    failed: list[dict[str, object]] = []
+    summary_ok = 0
+    detail_ok = 0
+    market_ok = 0
+
+    for city in selected:
+        city_started = time.perf_counter()
+        try:
+            data = _analyze(city, force_refresh=force_refresh)
+            entry: dict[str, object] = {
+                "city": city,
+                "summary": True,
+                "duration_ms": round((time.perf_counter() - city_started) * 1000.0, 1),
+            }
+            summary_ok += 1
+            if include_detail:
+                _build_city_summary_payload(data)
+                _build_city_detail_payload(
+                    data,
+                    target_date=str(data.get("local_date") or "").strip() or None,
+                )
+                entry["detail"] = True
+                detail_ok += 1
+            if include_market:
+                _build_city_detail_payload(
+                    data,
+                    target_date=str(data.get("local_date") or "").strip() or None,
+                )
+                entry["market"] = True
+                market_ok += 1
+            warmed.append(entry)
+        except Exception as exc:
+            failed.append(
+                {
+                    "city": city,
+                    "error": str(exc),
+                    "duration_ms": round((time.perf_counter() - city_started) * 1000.0, 1),
+                }
+            )
+
+    total_ms = round((time.perf_counter() - started) * 1000.0, 1)
+    logger.info(
+        "system prewarm finished count={} failed={} force_refresh={} include_detail={} include_market={} duration_ms={}",
+        len(warmed),
+        len(failed),
+        force_refresh,
+        include_detail,
+        include_market,
+        total_ms,
+    )
+    return {
+        "ok": len(failed) == 0,
+        "cities": selected,
+        "warmed": warmed,
+        "failed": failed,
+        "summary_ok": summary_ok,
+        "detail_ok": detail_ok,
+        "market_ok": market_ok,
+        "failed_count": len(failed),
+        "duration_ms": total_ms,
+    }
 
 
 @router.get("/metrics", response_class=PlainTextResponse)
@@ -264,7 +375,7 @@ async def metrics():
 
 @router.get("/api/cities")
 async def list_cities(request: Request):
-    try:
+    def _build_payload():
         out = []
         deb_recent_index = _build_recent_deb_performance_index()
         for name, info in CITIES.items():
@@ -302,6 +413,9 @@ async def list_cities(request: Request):
                 }
             )
         return {"cities": out}
+
+    try:
+        return await run_in_threadpool(_build_payload)
     except Exception as exc:
         logger.error(f"Error in list_cities: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -310,105 +424,110 @@ async def list_cities(request: Request):
 @router.get("/api/city/{name}")
 async def city_detail(request: Request, name: str, force_refresh: bool = False):
     _assert_entitlement(request)
-    return _analyze(_normalize_city_or_404(name), force_refresh=force_refresh)
+    city = _normalize_city_or_404(name)
+    return await run_in_threadpool(_analyze, city, force_refresh)
 
 
 @router.get("/api/history/{name}")
 async def city_history(request: Request, name: str):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
-    source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
-    truth_rows = _truth_record_repo.load_city(city)
-    feature_rows = _training_feature_repo.load_city(city)
 
-    if not truth_rows and not feature_rows:
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        history_file = os.path.join(project_root, "data", "daily_records.json")
-        data = load_history(history_file)
-        city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
-    else:
-        all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
-        city_data = {}
-        for day in all_dates:
-            record: dict[str, object] = {}
-            truth = truth_rows.get(day) or {}
-            features = feature_rows.get(day) or {}
-            if truth.get("actual_high") is not None:
-                record["actual_high"] = truth.get("actual_high")
-                record["settlement_source"] = truth.get("settlement_source")
-                record["settlement_station_code"] = truth.get("settlement_station_code")
-                record["settlement_station_label"] = truth.get("settlement_station_label")
-                record["truth_version"] = truth.get("truth_version")
-                record["updated_by"] = truth.get("updated_by")
-                record["truth_updated_at"] = truth.get("truth_updated_at")
-            if isinstance(features, dict):
-                if features.get("deb_prediction") is not None:
-                    record["deb_prediction"] = features.get("deb_prediction")
-                if features.get("mu") is not None:
-                    record["mu"] = features.get("mu")
-                if isinstance(features.get("forecasts"), dict):
-                    record["forecasts"] = features.get("forecasts")
-            city_data[day] = record
+    def _build_history_payload():
+        source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
+        truth_rows = _truth_record_repo.load_city(city)
+        feature_rows = _training_feature_repo.load_city(city)
 
-    if not city_data:
+        if not truth_rows and not feature_rows:
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            history_file = os.path.join(project_root, "data", "daily_records.json")
+            data = load_history(history_file)
+            city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
+        else:
+            all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
+            city_data = {}
+            for day in all_dates:
+                record: dict[str, object] = {}
+                truth = truth_rows.get(day) or {}
+                features = feature_rows.get(day) or {}
+                if truth.get("actual_high") is not None:
+                    record["actual_high"] = truth.get("actual_high")
+                    record["settlement_source"] = truth.get("settlement_source")
+                    record["settlement_station_code"] = truth.get("settlement_station_code")
+                    record["settlement_station_label"] = truth.get("settlement_station_label")
+                    record["truth_version"] = truth.get("truth_version")
+                    record["updated_by"] = truth.get("updated_by")
+                    record["truth_updated_at"] = truth.get("truth_updated_at")
+                if isinstance(features, dict):
+                    if features.get("deb_prediction") is not None:
+                        record["deb_prediction"] = features.get("deb_prediction")
+                    if features.get("mu") is not None:
+                        record["mu"] = features.get("mu")
+                    if isinstance(features.get("forecasts"), dict):
+                        record["forecasts"] = features.get("forecasts")
+                city_data[day] = record
+
+        if not city_data:
+            return {
+                "history": [],
+                "settlement_source": source,
+                "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+            }
+
+        out = []
+        for day, rec in sorted(city_data.items()):
+            if not isinstance(rec, dict):
+                rec = {}
+
+            act = rec.get("actual_high")
+            deb = rec.get("deb_prediction")
+            mu = rec.get("mu")
+            snapshots = load_snapshot_rows_for_day(city, day)
+            peak_ref = _build_peak_minus_12h_reference(
+                actual_high=act,
+                snapshots=snapshots,
+            )
+            forecasts_raw = rec.get("forecasts", {}) or {}
+            forecasts = {}
+            if isinstance(forecasts_raw, dict):
+                for model_name, model_value in forecasts_raw.items():
+                    if _is_excluded_model_name(str(model_name)):
+                        continue
+                    fv = _sf(model_value)
+                    forecasts[str(model_name)] = fv if fv is not None else None
+            forecasts = _merge_missing_history_forecasts_from_snapshots(
+                forecasts,
+                snapshots,
+            )
+            mgm = forecasts.get("MGM")
+            out.append(
+                {
+                    "date": day,
+                    "actual": float(act) if act is not None else None,
+                    "deb": float(deb) if deb is not None else None,
+                    "mu": float(mu) if mu is not None else None,
+                    "mgm": float(mgm) if mgm is not None else None,
+                    "forecasts": forecasts,
+                    "settlement_source": rec.get("settlement_source"),
+                    "settlement_station_code": rec.get("settlement_station_code"),
+                    "settlement_station_label": rec.get("settlement_station_label"),
+                    "truth_version": rec.get("truth_version"),
+                    "updated_by": rec.get("updated_by"),
+                    "truth_updated_at": rec.get("truth_updated_at"),
+                    "actual_peak_time": peak_ref.get("actual_peak_time"),
+                    "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
+                    "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
+                    "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
+                }
+            )
+
         return {
-            "history": [],
+            "history": out,
             "settlement_source": source,
             "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
         }
 
-    out = []
-    for day, rec in sorted(city_data.items()):
-        if not isinstance(rec, dict):
-            rec = {}
-
-        act = rec.get("actual_high")
-        deb = rec.get("deb_prediction")
-        mu = rec.get("mu")
-        snapshots = load_snapshot_rows_for_day(city, day)
-        peak_ref = _build_peak_minus_12h_reference(
-            actual_high=act,
-            snapshots=snapshots,
-        )
-        forecasts_raw = rec.get("forecasts", {}) or {}
-        forecasts = {}
-        if isinstance(forecasts_raw, dict):
-            for model_name, model_value in forecasts_raw.items():
-                if _is_excluded_model_name(str(model_name)):
-                    continue
-                fv = _sf(model_value)
-                forecasts[str(model_name)] = fv if fv is not None else None
-        forecasts = _merge_missing_history_forecasts_from_snapshots(
-            forecasts,
-            snapshots,
-        )
-        mgm = forecasts.get("MGM")
-        out.append(
-            {
-                "date": day,
-                "actual": float(act) if act is not None else None,
-                "deb": float(deb) if deb is not None else None,
-                "mu": float(mu) if mu is not None else None,
-                "mgm": float(mgm) if mgm is not None else None,
-                "forecasts": forecasts,
-                "settlement_source": rec.get("settlement_source"),
-                "settlement_station_code": rec.get("settlement_station_code"),
-                "settlement_station_label": rec.get("settlement_station_label"),
-                "truth_version": rec.get("truth_version"),
-                "updated_by": rec.get("updated_by"),
-                "truth_updated_at": rec.get("truth_updated_at"),
-                "actual_peak_time": peak_ref.get("actual_peak_time"),
-                "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
-                "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
-                "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
-            }
-        )
-
-    return {
-        "history": out,
-        "settlement_source": source,
-        "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
-    }
+    return await run_in_threadpool(_build_history_payload)
 
 
 @router.get("/api/auth/me")
@@ -898,8 +1017,9 @@ async def payment_reconcile_latest(request: Request):
 
 @router.get("/api/city/{name}/summary")
 async def city_summary(request: Request, name: str, force_refresh: bool = False):
-    data = _analyze(_normalize_city_or_404(name), force_refresh=force_refresh)
-    return _build_city_summary_payload(data)
+    city = _normalize_city_or_404(name)
+    data = await run_in_threadpool(_analyze, city, force_refresh)
+    return await run_in_threadpool(_build_city_summary_payload, data)
 
 
 @router.get("/api/city/{name}/detail")
@@ -911,9 +1031,11 @@ async def city_detail_aggregate(
     target_date: Optional[str] = None,
 ):
     _assert_entitlement(request)
-    data = _analyze(_normalize_city_or_404(name), force_refresh=force_refresh)
-    return _build_city_detail_payload(
+    city = _normalize_city_or_404(name)
+    data = await run_in_threadpool(_analyze, city, force_refresh)
+    return await run_in_threadpool(
+        _build_city_detail_payload,
         data,
-        market_slug=market_slug,
-        target_date=target_date,
+        market_slug,
+        target_date,
     )

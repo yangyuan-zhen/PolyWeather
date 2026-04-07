@@ -84,6 +84,7 @@ class StartupCoordinator:
     def start_all(self) -> RuntimeStatus:
         loops = [
             self._start_trade_alert_loop(),
+            self._start_dashboard_prewarm_loop(),
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
             self._start_weekly_reward_loop(),
@@ -177,6 +178,32 @@ class StartupCoordinator:
                 self.bot,
                 self.config,
             ),
+        )
+
+    def _start_dashboard_prewarm_loop(self) -> LoopStatus:
+        enabled = _env_bool("POLYWEATHER_DASHBOARD_PREWARM_ENABLED", False)
+        interval = max(30, _env_int("POLYWEATHER_PREWARM_INTERVAL_SEC", 300))
+        jitter = max(0, _env_int("POLYWEATHER_PREWARM_JITTER_SEC", 20))
+        cities_count = _parse_csv_count(os.getenv("POLYWEATHER_PREWARM_CITIES")) or 14
+        details = {
+            "interval_sec": interval,
+            "jitter_sec": jitter,
+            "cities_count": cities_count,
+            "include_detail": _env_bool("POLYWEATHER_PREWARM_INCLUDE_DETAIL", True),
+            "include_market": _env_bool("POLYWEATHER_PREWARM_INCLUDE_MARKET", True),
+            "force_refresh": _env_bool("POLYWEATHER_PREWARM_FORCE_REFRESH", False),
+            "base_url": str(os.getenv("POLYWEATHER_BACKEND_URL") or "http://127.0.0.1:8000").strip(),
+        }
+        validation_error = None
+        if not str(os.getenv("POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN") or "").strip():
+            validation_error = "missing_POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN"
+        return self._start_with_validation(
+            key="dashboard_prewarm",
+            label="站点面板预热",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module("src.utils.prewarm_dashboard").start_prewarm_worker_thread(),
         )
 
     def _start_polygon_wallet_loop(self) -> LoopStatus:
