@@ -46,6 +46,13 @@ NMC_CITY_REFERENCES: Dict[str, Dict[str, Any]] = {
 
 class NmcSourceMixin:
     @staticmethod
+    def _nmc_optional_text(value: Any) -> Optional[str]:
+        text = str(value or "").strip()
+        if text in ("", "9999"):
+            return None
+        return text
+
+    @staticmethod
     def _nmc_optional_float(value: Any) -> Optional[float]:
         if value in (None, "", "9999", 9999, 9999.0):
             return None
@@ -138,8 +145,8 @@ class NmcSourceMixin:
                     "rain": self._nmc_optional_float(weather.get("rain")),
                     "airpressure": self._nmc_optional_float(weather.get("airpressure")),
                     "wx_desc": weather.get("info"),
-                    "wind_direction": (payload.get("wind") or {}).get("direct"),
-                    "wind_power": (payload.get("wind") or {}).get("power"),
+                    "wind_direction": self._nmc_optional_text((payload.get("wind") or {}).get("direct")),
+                    "wind_power": self._nmc_optional_text((payload.get("wind") or {}).get("power")),
                 },
             }
             with self._nmc_cache_lock:

@@ -78,6 +78,11 @@ function createMarkerIcon(
 }
 
 function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
+  const sanitizeWindText = (value?: string | null) => {
+    const text = String(value || "").trim();
+    if (!text || text === "9999") return "";
+    return text;
+  };
   const symbol = detail.temp_symbol || "°C";
   const rawLabel =
     station.station_label ||
@@ -92,8 +97,8 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
       ? String(rawLabel).replace(/\s*\(NMC\)$/i, "区域实况 (NMC)")
       : rawLabel;
   let windHtml = "";
-  const windDirectionText = String(station.wind_direction_text || "").trim();
-  const windPowerText = String(station.wind_power_text || "").trim();
+  const windDirectionText = sanitizeWindText(station.wind_direction_text);
+  const windPowerText = sanitizeWindText(station.wind_power_text);
 
   if (station.wind_dir != null) {
     const rotation = (Number(station.wind_dir) + 180) % 360;
