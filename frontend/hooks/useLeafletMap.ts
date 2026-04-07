@@ -92,6 +92,8 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
       ? String(rawLabel).replace(/\s*\(NMC\)$/i, "区域实况 (NMC)")
       : rawLabel;
   let windHtml = "";
+  const windDirectionText = String(station.wind_direction_text || "").trim();
+  const windPowerText = String(station.wind_power_text || "").trim();
 
   if (station.wind_dir != null) {
     const rotation = (Number(station.wind_dir) + 180) % 360;
@@ -101,6 +103,13 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
       <div class="nearby-wind">
         <span class="wind-arrow" style="transform: rotate(${rotation}deg)">↑</span>
         <span class="wind-val">${speed}</span>
+      </div>
+    `;
+  } else if (windDirectionText || windPowerText) {
+    const windText = [windDirectionText, windPowerText].filter(Boolean).join(" ");
+    windHtml = `
+      <div class="nearby-wind">
+        <span class="wind-val">${windText}</span>
       </div>
     `;
   }

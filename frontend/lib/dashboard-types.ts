@@ -117,6 +117,8 @@ export interface NearbyStation {
   is_official?: boolean;
   is_airport_station?: boolean;
   is_settlement_anchor?: boolean;
+  wind_direction_text?: string | null;
+  wind_power_text?: string | null;
 }
 
 export interface HourlyTrendPoint {

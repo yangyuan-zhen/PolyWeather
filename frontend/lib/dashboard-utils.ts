@@ -1870,8 +1870,8 @@ export function computeFrontTrendSignal(
         : "云量回落且温度抬升，白天增温效率在改善。";
     }
     return isEnglish(locale)
-      ? "Read cloud-cover change together with temperature, dew point, wind, and precipitation; cloud change alone does not define the regime."
-      : "云量变化需要结合温度、露点、风向和降水一起看，不能单独决定天气形势。";
+      ? "Read forecast cloud-cover increase together with temperature, dew point, wind, and precipitation; it does not override the current observed sky condition."
+      : "这里显示的是预测窗口内的云量增幅，需要结合温度、露点、风向和降水一起看，不能覆盖当前实况的天空状况。";
   })();
   const dewNote = (() => {
     if (dewDelta >= 1.2 && tempDelta >= 0.8) {
@@ -1982,7 +1982,7 @@ export function computeFrontTrendSignal(
       value: `${Math.round(precipMax)}%`,
     },
     {
-      label: isEnglish(locale) ? "Cloud-cover delta" : "云量变化",
+      label: isEnglish(locale) ? "Forecast cloud-cover delta" : "预测云量增幅",
       note: cloudNote,
       tone:
         cloudDelta >= 15 && tempDelta >= 0
