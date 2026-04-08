@@ -1018,7 +1018,7 @@ async def payment_reconcile_latest(request: Request):
 @router.get("/api/city/{name}/summary")
 async def city_summary(request: Request, name: str, force_refresh: bool = False):
     city = _normalize_city_or_404(name)
-    data = await run_in_threadpool(_analyze, city, force_refresh)
+    data = await run_in_threadpool(_analyze, city, force_refresh, False)
     return await run_in_threadpool(_build_city_summary_payload, data)
 
 
@@ -1032,7 +1032,7 @@ async def city_detail_aggregate(
 ):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
-    data = await run_in_threadpool(_analyze, city, force_refresh)
+    data = await run_in_threadpool(_analyze, city, force_refresh, True)
     return await run_in_threadpool(
         _build_city_detail_payload,
         data,

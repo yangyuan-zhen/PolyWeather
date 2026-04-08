@@ -407,6 +407,11 @@ export interface CityDetail {
   dynamic_commentary?: {
     summary?: string | null;
     notes?: string[] | null;
+    headline_zh?: string | null;
+    headline_en?: string | null;
+    bullets_zh?: string[] | null;
+    bullets_en?: string[] | null;
+    source?: string | null;
   };
   taf?: {
     source?: string | null;

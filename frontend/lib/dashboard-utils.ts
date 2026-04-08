@@ -44,6 +44,32 @@ function containsCjk(text: string) {
   return /[\u3400-\u9fff]/.test(text);
 }
 
+function getLocalizedDynamicCommentary(
+  detail: CityDetail,
+  locale: Locale,
+): { headline: string; bullets: string[]; source: string } {
+  const commentary = detail.dynamic_commentary || {};
+  const preferEnglish = isEnglish(locale);
+  const rawHeadline = preferEnglish
+    ? String(commentary.headline_en || "").trim()
+    : String(commentary.headline_zh || "").trim();
+  const rawBullets = preferEnglish
+    ? commentary.bullets_en
+    : commentary.bullets_zh;
+  const bullets = Array.isArray(rawBullets)
+    ? rawBullets.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  const fallbackHeadline = String(commentary.summary || "").trim();
+  const fallbackBullets = Array.isArray(commentary.notes)
+    ? commentary.notes.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+  return {
+    headline: rawHeadline || fallbackHeadline,
+    bullets: bullets.length > 0 ? bullets : fallbackBullets,
+    source: String(commentary.source || "").trim(),
+  };
+}
+
 function isTurkishMgmCity(detail: CityDetail) {
   const city = String(detail.name || detail.display_name || "")
     .trim()
@@ -1327,21 +1353,16 @@ export function computeFrontTrendSignal(
     tone?: string;
     value: string;
   }> = [];
-  const rawBackendSummary =
+  const localizedCommentary =
     dateStr === detail.local_date
-      ? String(detail.dynamic_commentary?.summary || "").trim()
-      : "";
+      ? getLocalizedDynamicCommentary(detail, locale)
+      : { headline: "", bullets: [], source: "" };
   const backendSummary =
-    rawBackendSummary &&
-    (!isEnglish(locale) || !containsCjk(rawBackendSummary))
-      ? rawBackendSummary
+    localizedCommentary.headline &&
+    (!isEnglish(locale) || !containsCjk(localizedCommentary.headline))
+      ? localizedCommentary.headline
       : "";
-  const rawBackendNotes = Array.isArray(detail.dynamic_commentary?.notes)
-    ? detail.dynamic_commentary?.notes
-        ?.map((item) => String(item || "").trim())
-        .filter(Boolean) || []
-    : [];
-  const backendNotes = rawBackendNotes.filter(
+  const backendNotes = localizedCommentary.bullets.filter(
     (note) => !isEnglish(locale) || !containsCjk(note),
   );
   const slice = getFutureSlice(detail, dateStr);

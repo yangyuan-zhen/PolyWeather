@@ -19,7 +19,6 @@ import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
-import { IntradaySignalScene } from "@/components/dashboard/IntradaySignalScene";
 import {
   ModelForecast,
   ProbabilityDistribution,
@@ -29,7 +28,6 @@ import {
   getModelView,
   getProbabilityView,
   getTodayPaceView,
-  parseAiAnalysis,
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
@@ -63,39 +61,11 @@ function formatMarketPercent(value?: number | null) {
   return `${(normalized * 100).toFixed(1)}%`;
 }
 
-function formatMarketPriceCents(value?: number | null) {
-  const normalized = normalizeMarketValue(value);
-  if (normalized == null) return "--";
-  const cents = normalized * 100;
-  const rounded = Math.round(cents * 10) / 10;
-  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}¢`;
-}
-
 function formatSignedPercent(value?: number | null) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return "--";
   const sign = numeric > 0 ? "+" : "";
   return `${sign}${numeric.toFixed(1)}%`;
-}
-
-function formatSpreadPercent(low?: number | null, high?: number | null) {
-  const a = normalizeMarketValue(low);
-  const b = normalizeMarketValue(high);
-  if (a == null || b == null) return "--";
-  const spreadCents = Math.abs((b - a) * 100);
-  const rounded = Math.round(spreadCents * 10) / 10;
-  return `${Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1)}¢`;
-}
-
-function resolveCounterPrice(
-  directValue?: number | null,
-  mirrorValue?: number | null,
-) {
-  const direct = normalizeMarketValue(directValue);
-  if (direct != null) return direct;
-  const mirror = normalizeMarketValue(mirrorValue);
-  if (mirror == null) return null;
-  return Math.max(0, Math.min(1, 1 - mirror));
 }
 
 function formatBucketLabel(
@@ -124,62 +94,6 @@ function formatBucketLabel(
   const temp = Number(bucket.value ?? bucket.temp);
   if (Number.isFinite(temp)) {
     return `${Math.round(temp)}℃`;
-  }
-  return "--";
-}
-
-function parseMetarSignedInt(token: string) {
-  if (!token) return null;
-  const normalized = token.toUpperCase();
-  if (!/^[M]?\d{2}$/.test(normalized)) return null;
-  const value = Number(normalized.replace("M", ""));
-  if (!Number.isFinite(value)) return null;
-  return normalized.startsWith("M") ? -value : value;
-}
-
-function parseMetarTempDew(rawMetar?: string | null) {
-  const text = String(rawMetar || "").toUpperCase();
-  if (!text)
-    return { tempC: null as number | null, dewC: null as number | null };
-  const match = text.match(/\s(M?\d{2})\/(M?\d{2})(?:\s|$)/);
-  if (!match)
-    return { tempC: null as number | null, dewC: null as number | null };
-  return {
-    tempC: parseMetarSignedInt(match[1]),
-    dewC: parseMetarSignedInt(match[2]),
-  };
-}
-
-function estimateHumidityFromTempDew(
-  tempC?: number | null,
-  dewC?: number | null,
-) {
-  const t = Number(tempC);
-  const d = Number(dewC);
-  if (!Number.isFinite(t) || !Number.isFinite(d)) return null;
-  const es = Math.exp((17.625 * t) / (243.04 + t));
-  const ed = Math.exp((17.625 * d) / (243.04 + d));
-  const rh = (ed / es) * 100;
-  if (!Number.isFinite(rh)) return null;
-  return Math.max(0, Math.min(100, rh));
-}
-
-function parseVisibilityText(
-  rawMetar?: string | null,
-  visibilityMi?: number | null,
-) {
-  const direct = Number(visibilityMi);
-  if (Number.isFinite(direct)) {
-    return `${direct} mi`;
-  }
-
-  const text = String(rawMetar || "").toUpperCase();
-  if (!text) return "--";
-  if (text.includes("CAVOK")) return ">=6 mi";
-
-  const sm = text.match(/\s(\d{1,2}(?:\/\d)?)SM(?:\s|$)/);
-  if (sm) {
-    return `${sm[1]} mi`;
   }
   return "--";
 }
@@ -238,15 +152,6 @@ function parseClockMinutes(value?: string | null) {
   return hours * 60 + minutes;
 }
 
-function parseVisibilityMiles(value?: string | null) {
-  const text = String(value || "").trim();
-  if (!text || text === "--") return null;
-  const match = text.match(/(\d+(?:\.\d+)?)/);
-  if (!match) return null;
-  const numeric = Number(match[1]);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
 function parseLeadingNumber(value?: string | number | null) {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   const text = String(value || "").trim();
@@ -254,73 +159,6 @@ function parseLeadingNumber(value?: string | number | null) {
   if (!match) return null;
   const numeric = Number(match[0]);
   return Number.isFinite(numeric) ? numeric : null;
-}
-
-function getCurrentMetricDescriptor(
-  kind: "humidity" | "dewpoint" | "wind" | "visibility",
-  value: string,
-  numeric: number | null,
-  aux?: number | null,
-) {
-  if (kind === "humidity") {
-    const percent = numeric != null ? clamp(numeric, 0, 100) : null;
-    const hint =
-      percent == null
-        ? "--"
-        : percent >= 75
-          ? "偏湿"
-          : percent >= 45
-            ? "适中"
-            : "偏干";
-    const tone =
-      percent == null ? "neutral" : percent >= 75 ? "cyan" : percent >= 45 ? "blue" : "amber";
-    return { fill: percent, hint, tone, value };
-  }
-
-  if (kind === "dewpoint") {
-    const spread = aux != null && numeric != null ? aux - numeric : null;
-    const closeness =
-      spread != null ? clamp(100 - spread * 12, 0, 100) : null;
-    const hint =
-      spread == null
-        ? "--"
-        : spread <= 2
-          ? "近饱和"
-          : spread <= 6
-            ? "偏湿"
-            : "偏干";
-    const tone =
-      spread == null ? "neutral" : spread <= 2 ? "cyan" : spread <= 6 ? "blue" : "amber";
-    return { fill: closeness, hint, tone, value };
-  }
-
-  if (kind === "wind") {
-    const percent = numeric != null ? clamp((numeric / 25) * 100, 0, 100) : null;
-    const hint =
-      numeric == null
-        ? "--"
-        : numeric >= 18
-          ? "偏强"
-          : numeric >= 8
-            ? "中等"
-            : "较弱";
-    const tone =
-      numeric == null ? "neutral" : numeric >= 18 ? "amber" : numeric >= 8 ? "blue" : "cyan";
-    return { fill: percent, hint, tone, value };
-  }
-
-  const percent = numeric != null ? clamp((numeric / 10) * 100, 0, 100) : null;
-  const hint =
-    numeric == null
-      ? "--"
-      : numeric >= 6
-        ? "通透"
-        : numeric >= 3
-          ? "一般"
-          : "受限";
-  const tone =
-    numeric == null ? "neutral" : numeric >= 6 ? "cyan" : numeric >= 3 ? "blue" : "amber";
-  return { fill: percent, hint, tone, value };
 }
 
 function getTrendMetricVisual(metric: {
@@ -913,23 +751,6 @@ export function FutureForecastModal() {
     String(detail.current?.station_name || "").trim() ||
     String(detail.risk?.airport || "").trim() ||
     noaaStationCode;
-  const marketMidpoint = formatMarketPercent(
-    marketScan?.market_price ?? marketScan?.yes_token?.implied_probability,
-  );
-  const modelProbability = formatMarketPercent(marketScan?.model_probability);
-  const marketYesBuy = formatMarketPriceCents(marketScan?.yes_buy);
-  const marketYesSell = formatMarketPriceCents(marketScan?.yes_sell);
-  const marketNoBuy = formatMarketPriceCents(
-    resolveCounterPrice(marketScan?.no_buy, marketScan?.yes_buy),
-  );
-  const marketNoSell = formatMarketPriceCents(
-    resolveCounterPrice(marketScan?.no_sell, marketScan?.yes_sell),
-  );
-  const marketEdge = formatSignedPercent(marketScan?.edge_percent);
-  const marketSpread = formatSpreadPercent(
-    marketScan?.yes_buy,
-    marketScan?.yes_sell,
-  );
   const topBucket = Array.isArray(marketScan?.top_buckets)
     ? [...marketScan.top_buckets]
         .map((item) => ({
@@ -950,36 +771,7 @@ export function FutureForecastModal() {
         )
         .sort((a, b) => b.probability - a.probability)[0]
     : null;
-  const settlementBucketLabel = formatBucketLabel(
-    marketScan?.temperature_bucket,
-  );
   const hottestBucketLabel = formatBucketLabel(topBucket);
-  const hottestBucketProb = formatMarketPercent(topBucket?.probability);
-  const marketSignal = marketScan?.signal_label
-    ? `${marketScan.signal_label}${
-        marketScan.confidence ? ` / ${marketScan.confidence}` : ""
-      }`
-    : "--";
-  const marketExecutionSummary = (() => {
-    if (!marketScan?.available) {
-      return locale === "en-US"
-        ? "Market scan is unavailable right now; keep the trade read anchored to station pace and bracket risk."
-        : "当前暂时拿不到市场扫描结果，先以站点节奏和边界风险为主。";
-    }
-    if (marketScan?.signal_label?.toUpperCase() === "BUY YES") {
-      return locale === "en-US"
-        ? `Model side is hotter than the tape by ${marketEdge}. If pace stays constructive, the Yes side still has room.`
-        : `模型侧当前比盘口更热 ${marketEdge}，如果盘中节奏不掉，Yes 侧仍有空间。`;
-    }
-    if (marketScan?.signal_label?.toUpperCase() === "BUY NO") {
-      return locale === "en-US"
-        ? `Model side is cooler than the tape by ${marketEdge}. If pace keeps lagging, the No side stays cleaner.`
-        : `模型侧当前比盘口更冷 ${marketEdge}，如果节奏继续落后，No 侧会更干净。`;
-    }
-    return locale === "en-US"
-      ? "Model and market are broadly balanced; let pace and boundary risk break the tie."
-      : "模型和市场当前大体均衡，接下来主要看节奏和边界风险来决定站边。";
-  })();
   const probabilitySummary = (() => {
     if (!topProbabilityBucket) {
       return locale === "en-US"
@@ -1008,8 +800,8 @@ export function FutureForecastModal() {
   const numericEdge = Number(marketScan?.edge_percent);
   const hottestMatchesSettlement =
     hottestBucketLabel !== "--" &&
-    settlementBucketLabel !== "--" &&
-    hottestBucketLabel === settlementBucketLabel;
+    formatBucketLabel(marketScan?.temperature_bucket) !== "--" &&
+    hottestBucketLabel === formatBucketLabel(marketScan?.temperature_bucket);
   const marketAwareUpperAirCue = useMemo(() => {
     if (!isToday || (!upperAirSignal.source && !tafSignal.available)) return null;
 
@@ -1155,19 +947,6 @@ export function FutureForecastModal() {
     upperAirSignal.heating_setup,
     upperAirSignal.source,
   ]);
-  const metarParsed = parseMetarTempDew(detail.current?.raw_metar);
-  const fallbackDewpoint =
-    detail.current?.dewpoint ??
-    metarParsed.dewC ??
-    (Array.isArray(detail.hourly_next_48h?.dew_point)
-      ? detail.hourly_next_48h?.dew_point?.[0]
-      : null);
-  const fallbackHumidity =
-    detail.current?.humidity ??
-    estimateHumidityFromTempDew(
-      detail.current?.temp ?? metarParsed.tempC,
-      fallbackDewpoint,
-    );
   const topObservedTemp =
     detail.current?.max_so_far != null
       ? detail.current.max_so_far
@@ -1176,27 +955,6 @@ export function FutureForecastModal() {
     detail.current?.temp != null
       ? `${detail.current.temp}${detail.temp_symbol}`
       : "--";
-  const humidityText =
-    fallbackHumidity != null ? `${Math.round(fallbackHumidity)}%` : "--";
-  const dewpointText =
-    fallbackDewpoint != null
-      ? `${fallbackDewpoint}${detail.temp_symbol}`
-      : "--";
-  const windText =
-    detail.current?.wind_speed_kt != null
-      ? `${detail.current.wind_speed_kt} kt`
-      : "--";
-  const visibilityText = parseVisibilityText(
-    detail.current?.raw_metar,
-    detail.current?.visibility_mi,
-  );
-  const humidityValue =
-    fallbackHumidity != null ? Math.round(fallbackHumidity) : null;
-  const windValue =
-    detail.current?.wind_speed_kt != null
-      ? Number(detail.current.wind_speed_kt)
-      : null;
-  const visibilityValue = parseVisibilityMiles(visibilityText);
   const daylightProgress = (() => {
     const now = parseClockMinutes(detail.current?.obs_time);
     const sunrise = parseClockMinutes(detail.forecast?.sunrise);
@@ -1211,60 +969,6 @@ export function FutureForecastModal() {
       phase,
       percent,
     };
-  })();
-  const currentMetricVisuals = [
-    {
-      key: "humidity",
-      label: locale === "en-US" ? "Humidity" : "湿度",
-      ...getCurrentMetricDescriptor("humidity", humidityText, humidityValue),
-    },
-    {
-      key: "dewpoint",
-      label: locale === "en-US" ? "Dew Point" : "露点",
-      ...getCurrentMetricDescriptor(
-        "dewpoint",
-        dewpointText,
-        fallbackDewpoint != null ? Number(fallbackDewpoint) : null,
-        detail.current?.temp != null ? Number(detail.current.temp) : null,
-      ),
-    },
-    {
-      key: "wind",
-      label: locale === "en-US" ? "Wind" : "风速",
-      ...getCurrentMetricDescriptor("wind", windText, windValue),
-    },
-    {
-      key: "visibility",
-      label: locale === "en-US" ? "Visibility" : "能见度",
-      ...getCurrentMetricDescriptor("visibility", visibilityText, visibilityValue),
-    },
-  ];
-  const tradeMetricVisuals = currentMetricVisuals.filter((metric) =>
-    ["dewpoint", "wind", "humidity"].includes(metric.key),
-  );
-  const tradeMetricSummary = (() => {
-    const dewSpread =
-      detail.current?.temp != null && fallbackDewpoint != null
-        ? Number(detail.current.temp) - Number(fallbackDewpoint)
-        : null;
-    if (dewSpread != null && dewSpread <= 2) {
-      return locale === "en-US"
-        ? "Near-saturation air is still in play. If cloud builds into the peak window, upside can get capped quickly."
-        : "露点差已经很窄，空气接近饱和。如果云层在峰值窗口内长起来，上冲会更容易被压住。";
-    }
-    if (windValue != null && windValue >= 18) {
-      return locale === "en-US"
-        ? "Surface wind is still strong. Mixing support is better, but it can also make the tape noisier intraday."
-        : "近地面风速仍偏强，混合作用会更充分，但盘中波动也会更大。";
-    }
-    if (humidityValue != null && humidityValue <= 40) {
-      return locale === "en-US"
-        ? "Air mass is still relatively dry. Unless cloud/rain arrives, the surface layer is not the main cap right now."
-        : "空气仍偏干，除非后续云雨快速起来，否则近地面层目前不是主要压温来源。";
-    }
-    return locale === "en-US"
-      ? "Surface readings are broadly neutral. Keep the main decision anchored to pace, boundary risk, and the peak window."
-      : "近地面指标整体偏中性，主判断仍然要看当前节奏、边界风险和峰值窗口。";
   })();
   const displayedUpperAirSummary =
     marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
@@ -1281,40 +985,56 @@ export function FutureForecastModal() {
           }
         : metric,
   );
+  const localizedAiCommentaryLines = useMemo(() => {
+    const commentary = detail.dynamic_commentary || {};
+    const headline = String(
+      locale === "en-US" ? commentary.headline_en || "" : commentary.headline_zh || "",
+    ).trim();
+    const bullets = (
+      locale === "en-US" ? commentary.bullets_en : commentary.bullets_zh
+    ) as string[] | null | undefined;
+    const cleanedBullets = Array.isArray(bullets)
+      ? bullets.map((item) => String(item || "").trim()).filter(Boolean)
+      : [];
+    return [headline, ...cleanedBullets].filter(Boolean).slice(0, 3);
+  }, [detail.dynamic_commentary, locale]);
   const todayTradeSummaryLines = useMemo(() => {
     if (!isToday) return [] as string[];
+    if (localizedAiCommentaryLines.length > 0) {
+      return localizedAiCommentaryLines;
+    }
     const lines: string[] = [];
     if (paceView) {
       const headline =
         paceView.biasTone === "warm"
           ? locale === "en-US"
-            ? `Intraday pace is running hot by ${paceView.deltaText}; the day high still has room to lean above the base curve.`
-            : `日内节奏当前偏热 ${paceView.deltaText}，日高仍有机会落在基础曲线之上。`
+            ? `Pace is running hot by ${paceView.deltaText}; the day high still leans above the base curve.`
+            : `节奏偏热 ${paceView.deltaText}，日高仍偏向落在基础曲线之上。`
           : paceView.biasTone === "cold"
             ? locale === "en-US"
-              ? `Intraday pace is trailing by ${paceView.deltaText}; higher buckets need more caution.`
-              : `日内节奏当前落后 ${paceView.deltaText}，继续追更高温区间要更谨慎。`
+              ? `Pace is trailing by ${paceView.deltaText}; chasing higher buckets needs caution.`
+              : `节奏落后 ${paceView.deltaText}，继续追更高温区间要更谨慎。`
             : locale === "en-US"
-              ? "Intraday pace is still tracking the curve; the next move depends on the peak-window push."
-              : "日内节奏当前基本贴着曲线运行，下一步主要看峰值窗口内还有没有上冲。";
+              ? "Pace is still on curve; the next move depends on the peak-window push."
+              : "节奏目前贴着曲线走，下一步主要看峰值窗口还有没有上冲。";
       lines.push(headline);
     }
     if (boundaryRiskView) {
       lines.push(
         locale === "en-US"
-          ? `${boundaryRiskView.label}: ${boundaryRiskView.status}. ${boundaryRiskView.note}`
-          : `${boundaryRiskView.label}：${boundaryRiskView.status}。${boundaryRiskView.note}`,
+          ? `${boundaryRiskView.label}: ${boundaryRiskView.note}`
+          : `${boundaryRiskView.label}：${boundaryRiskView.note}`,
       );
     }
     if (networkLeadView) {
       lines.push(
         locale === "en-US"
-          ? `${networkLeadView.label}: ${networkLeadView.status}. ${networkLeadView.note}`
-          : `${networkLeadView.label}：${networkLeadView.status}。${networkLeadView.note}`,
+          ? `${networkLeadView.label}: ${networkLeadView.note}`
+          : `${networkLeadView.label}：${networkLeadView.note}`,
       );
     }
-    return lines;
-  }, [boundaryRiskView, isToday, locale, networkLeadView, paceView]);
+    return lines.slice(0, 3);
+  }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView]);
 
   return (
     <div
@@ -1642,220 +1362,6 @@ export function FutureForecastModal() {
                     </section>
                   ) : null}
 
-                  <section className="future-v2-card future-v2-support-card">
-                    <div className="future-v2-card-head">
-                      <h4 className="future-v2-card-title">
-                        {locale === "en-US" ? "Trade-Sensitive Metrics" : "交易关键指标"}
-                      </h4>
-                      <div className="future-v2-card-kicker">
-                        {locale === "en-US"
-                          ? "Only the surface readings that still matter"
-                          : "只保留仍会影响峰值判断的近地面项"}
-                      </div>
-                    </div>
-                    <div className="future-v2-pace-summary" style={{ marginTop: "12px" }}>
-                      {tradeMetricSummary}
-                    </div>
-                    <div className="future-v2-mini-grid future-v2-mini-grid-tight">
-                      {tradeMetricVisuals.map((metric) => (
-                        <div key={metric.key} className="future-v2-mini-item future-v2-signal-item">
-                          <div className="future-v2-signal-head">
-                            <span>{metric.label}</span>
-                            <em
-                              className={clsx(
-                                "future-v2-signal-tag",
-                                metric.tone === "cyan" && "cyan",
-                                metric.tone === "blue" && "blue",
-                                metric.tone === "amber" && "amber",
-                              )}
-                            >
-                              {metric.hint}
-                            </em>
-                          </div>
-                          <strong>{metric.value}</strong>
-                          <div className="future-v2-signal-meter">
-                            <div
-                              className={clsx(
-                                "future-v2-signal-fill",
-                                metric.tone === "cyan" && "cyan",
-                                metric.tone === "blue" && "blue",
-                                metric.tone === "amber" && "amber",
-                              )}
-                              style={{
-                                width:
-                                  metric.fill != null ? `${metric.fill}%` : "18%",
-                              }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className="future-v2-card future-v2-market-card future-v2-focus-card">
-                    <div className="future-v2-card-head">
-                      <h4 className="future-v2-card-title">
-                        {locale === "en-US" ? "Market Alignment" : "市场对照"}
-                      </h4>
-                      <div className="future-v2-card-kicker">
-                        {locale === "en-US"
-                          ? "Model, tape, and execution in one view"
-                          : "把模型、盘口和执行价放到一张卡里"}
-                      </div>
-                    </div>
-                    <div className="future-v2-market-v3">
-                      {/* Loading Overlay */}
-                      {store.loadingState.marketScan && (
-                        <div className="market-layer-loading-overlay">
-                          <div
-                            className="loading-spinner"
-                            style={{
-                              marginBottom: "8px",
-                              width: "24px",
-                              height: "24px",
-                              borderWidth: "2px",
-                            }}
-                          />
-                          {locale === "en-US"
-                            ? "Crunching Polymarket Edges..."
-                            : "正在计算市场对手盘..."}
-                        </div>
-                      )}
-
-                      {/* Layer 1: Target & Edge */}
-                      <div className="market-layer-target">
-                        <div className="market-target-header">
-                          <span>
-                            {locale === "en-US"
-                              ? "Target Bucket:"
-                              : "结算温度区间："}
-                          </span>
-                          <strong className="market-target-bucket">
-                            {settlementBucketLabel}
-                          </strong>
-                        </div>
-                        <div className="market-edge-box">
-                          <div className="market-edge-header">
-                            <span>
-                              {locale === "en-US" ? "Current edge" : "当前 edge"}
-                            </span>
-                            <strong
-                              className={clsx(
-                                "market-edge-val",
-                                Number(marketScan?.edge_percent) > 0
-                                  ? "positive"
-                                  : "negative",
-                              )}
-                            >
-                              {marketEdge}
-                            </strong>
-                          </div>
-                          <div className="market-edge-compare">
-                            <div className="edge-stat">
-                              <span className="edge-label">
-                                {locale === "en-US" ? "Model prob" : "模型概率"}
-                              </span>
-                              <span className="edge-value">{modelProbability}</span>
-                            </div>
-                            <div className="edge-stat">
-                              <span className="edge-label">
-                                {locale === "en-US" ? "Market mid" : "市场中位"}
-                              </span>
-                              <span className="edge-value">{marketMidpoint}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="market-layer-book">
-                        <div className="market-sub-title">
-                          💸 {locale === "en-US" ? "Execution" : "盘口执行"}
-                        </div>
-                        <div className="market-book-row">
-                          <span className="book-label">
-                            {locale === "en-US" ? "Yes bid / ask" : "Yes 买 / 卖"}
-                          </span>
-                          <div className="book-quote">
-                            <strong>{marketYesBuy}</strong>
-                            <span> / {marketYesSell}</span>
-                          </div>
-                        </div>
-                        <div className="market-book-row">
-                          <span className="book-label">
-                            {locale === "en-US" ? "No bid / ask" : "No 买 / 卖"}
-                          </span>
-                          <div className="book-quote">
-                            <strong>{marketNoBuy}</strong>
-                            <span> / {marketNoSell}</span>
-                          </div>
-                        </div>
-                        <div className="market-book-row">
-                          <span className="book-label">
-                            {locale === "en-US" ? "Spread" : "价差"}
-                          </span>
-                          <div className="book-quote">
-                            <strong>{marketSpread}</strong>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Layer 3: Context */}
-                      <div className="market-layer-context">
-                        <div className="market-sub-title">
-                          👀 {locale === "en-US" ? "Market Radar" : "情绪雷达"}
-                        </div>
-                        <div className="market-context-row">
-                          <span>
-                            {locale === "en-US"
-                              ? "Top Volume Bucket:"
-                              : "市场当前押注最热:"}
-                          </span>
-                          <strong>
-                            {hottestBucketLabel}{" "}
-                            {hottestBucketProb !== "--"
-                              ? `(${hottestBucketProb})`
-                              : ""}
-                          </strong>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="future-v2-market-signal mt-3">
-                      {locale === "en-US" ? "Signal" : "信号"}:{" "}
-                      <strong>{marketSignal}</strong>
-                    </div>
-                    <div className="future-v2-pace-summary" style={{ marginTop: "10px" }}>
-                      {marketExecutionSummary}
-                    </div>
-                  </section>
-
-                  <section className="future-v2-card">
-                    <h4 className="future-v2-card-title">
-                      {locale === "en-US"
-                        ? "Trade Snapshot"
-                        : "交易快照"}
-                    </h4>
-                    <div className="future-v2-mini-grid future-v2-mini-grid-tight">
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Day high so far" : "日内已见高点"}</span>
-                        <strong>
-                          {topObservedTemp ?? "--"}
-                          {detail.temp_symbol}
-                        </strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Current obs" : "当前观测"}</span>
-                        <strong>{currentTempText}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Market signal" : "市场信号"}</span>
-                        <strong>{marketSignal}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>{locale === "en-US" ? "Current edge" : "当前 edge"}</span>
-                        <strong>{marketEdge}</strong>
-                      </div>
-                    </div>
-                  </section>
                 </aside>
 
                 <main className="future-v2-right">
@@ -1947,18 +1453,11 @@ export function FutureForecastModal() {
                           {Math.round(view.front.precipMax)}%
                         </span>
                       </div>
-                      {todayTradeSummaryLines.length > 0 || view.front.summary ? (
+                      {todayTradeSummaryLines.length > 0 ? (
                         <div className="future-trend-summary">
-                          {[
-                            ...todayTradeSummaryLines,
-                            ...(Array.isArray(view.front.summaryLines)
-                              ? view.front.summaryLines
-                              : view.front.summary
-                                ? [view.front.summary]
-                                : []),
-                          ].map((line, index) => (
-                                <div key={`${index}-${line}`}>{line}</div>
-                              ))}
+                          {todayTradeSummaryLines.map((line, index) => (
+                            <div key={`${index}-${line}`}>{line}</div>
+                          ))}
                         </div>
                       ) : null}
                     </div>
