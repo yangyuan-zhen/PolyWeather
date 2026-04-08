@@ -344,6 +344,39 @@ export function DashboardStoreProvider({
     return detail;
   };
 
+  useEffect(() => {
+    if (proAccess.loading) return;
+    if (!selectedCity) return;
+    if (!isPanelOpen) return;
+    if (!proAccess.authenticated || !proAccess.subscriptionActive) return;
+    if (cityDetailsByName[selectedCity]) return;
+
+    let cancelled = false;
+    setLoadingState((current) => ({ ...current, cityDetail: true }));
+    void ensureCityDetail(selectedCity, false)
+      .then((detail) => {
+        if (cancelled) return;
+        setSelectedForecastDate(detail.local_date);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (cancelled) return;
+        setLoadingState((current) => ({ ...current, cityDetail: false }));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    cityDetailsByName,
+    ensureCityDetail,
+    isPanelOpen,
+    proAccess.authenticated,
+    proAccess.loading,
+    proAccess.subscriptionActive,
+    selectedCity,
+  ]);
+
   const ensureCityMarketScan = async (
     cityName: string,
     force = false,
@@ -526,6 +559,19 @@ export function DashboardStoreProvider({
       await refreshProAccess();
     }
     const access = proAccessRef.current;
+    if (!access.authenticated || !access.subscriptionActive) {
+      if (!citySummariesRef.current[cityName]) {
+        try {
+          const summary = await dashboardClient.getCitySummary(cityName);
+          setCitySummariesByName((current) => ({
+            ...current,
+            [cityName]: summary,
+          }));
+        } catch {}
+      }
+      return;
+    }
+
     const cachedDetail = cityDetailsByName[cityName];
     const needsDetailRefresh = hasSparseDetailCoverage(
       cachedDetail,

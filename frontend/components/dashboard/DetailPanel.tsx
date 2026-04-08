@@ -142,6 +142,13 @@ export function DetailPanel() {
         : null,
     [store.cities, store.selectedCity],
   );
+  const selectedSummary = useMemo(
+    () =>
+      store.selectedCity
+        ? store.citySummariesByName[store.selectedCity] || null
+        : null,
+    [store.citySummariesByName, store.selectedCity],
+  );
   const isPro = store.proAccess.subscriptionActive;
   const isAuthenticated = store.proAccess.authenticated;
   const panelRef = useRef<HTMLElement | null>(null);
@@ -153,12 +160,20 @@ export function DetailPanel() {
     store.isPanelOpen &&
     Boolean(store.selectedCity) &&
     !isOverlayOpen;
+  const hasBasicPanelContent = Boolean(
+    detail || selectedSummary || selectedCityItem,
+  );
   const panelDisplayName =
     detail?.display_name ||
+    selectedSummary?.display_name ||
     selectedCityItem?.display_name ||
     store.selectedCity ||
     "...";
-  const panelRiskLevel = detail?.risk?.level || selectedCityItem?.risk_level || "low";
+  const panelRiskLevel =
+    detail?.risk?.level ||
+    selectedSummary?.risk?.level ||
+    selectedCityItem?.risk_level ||
+    "low";
   const profileStats = useMemo(
     () => (detail ? getCityProfileStats(detail, locale) : []),
     [detail, locale],
@@ -172,6 +187,18 @@ export function DetailPanel() {
     [detail, locale],
   );
   const scenery = getCityScenery(detail?.name);
+  const basicCurrentTemp = selectedSummary?.current?.temp;
+  const basicObsTime = selectedSummary?.current?.obs_time;
+  const basicDeb = selectedSummary?.deb?.prediction;
+  const basicSettlementLabel =
+    selectedSummary?.current?.settlement_source_label ||
+    selectedCityItem?.settlement_source_label ||
+    selectedCityItem?.settlement_source ||
+    (locale === "en-US" ? "Settlement source pending" : "结算口径待确认");
+  const basicAirportLabel =
+    selectedCityItem?.airport ||
+    selectedSummary?.icao ||
+    (locale === "en-US" ? "Airport pending" : "机场待确认");
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
     const active = document.activeElement;
@@ -340,7 +367,7 @@ export function DetailPanel() {
       </div>
 
       <div className="panel-body">
-        {!detail ? (
+        {!hasBasicPanelContent ? (
           <section>
             <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
               {store.loadingState.cityDetail
@@ -348,6 +375,69 @@ export function DetailPanel() {
                 : t("detail.emptyHint")}
             </div>
           </section>
+        ) : !detail ? (
+          <>
+            <section className="detail-section">
+              <h3>{locale === "en-US" ? "City Snapshot" : "城市概览"}</h3>
+              <div className="detail-grid">
+                <div className="detail-card">
+                  <span className="detail-label">
+                    {locale === "en-US" ? "Current temp" : "当前温度"}
+                  </span>
+                  <span className="detail-value">
+                    {basicCurrentTemp != null
+                      ? `${basicCurrentTemp}${selectedSummary?.temp_symbol || ""}`
+                      : locale === "en-US"
+                        ? "--"
+                        : "--"}
+                  </span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">
+                    {locale === "en-US" ? "Observed" : "观测时间"}
+                  </span>
+                  <span className="detail-value">
+                    {basicObsTime || (locale === "en-US" ? "Pending" : "待更新")}
+                  </span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">DEB</span>
+                  <span className="detail-value">
+                    {basicDeb != null
+                      ? `${basicDeb}${selectedSummary?.temp_symbol || ""}`
+                      : locale === "en-US"
+                        ? "Pending"
+                        : "待更新"}
+                  </span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">
+                    {locale === "en-US" ? "Settlement" : "结算口径"}
+                  </span>
+                  <span className="detail-value">{basicSettlementLabel}</span>
+                </div>
+                <div className="detail-card">
+                  <span className="detail-label">
+                    {locale === "en-US" ? "Airport" : "结算机场"}
+                  </span>
+                  <span className="detail-value">{basicAirportLabel}</span>
+                </div>
+              </div>
+            </section>
+
+            <section className="detail-section">
+              <div className="detail-card">
+                <span className="detail-label">
+                  {locale === "en-US" ? "Pro features" : "Pro 功能"}
+                </span>
+                <span className="detail-value" style={{ fontSize: "15px" }}>
+                  {locale === "en-US"
+                    ? "Intraday analysis, history reconciliation, and deeper structure signals require Pro."
+                    : "今日日内分析、历史对账和更深入的结构信号需要 Pro。"}
+                </span>
+              </div>
+            </section>
+          </>
         ) : (
           <>
             <section className="detail-scenery-card">
