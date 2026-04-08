@@ -77,7 +77,6 @@ function DashboardScreen() {
   // Avoid full-page flashing on initial load; only show this overlay for manual refresh.
   const showLoading =
     store.loadingState.cities ||
-    store.loadingState.cityDetail ||
     store.loadingState.refresh;
 
   return (

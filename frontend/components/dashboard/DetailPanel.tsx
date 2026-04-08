@@ -152,8 +152,6 @@ export function DetailPanel() {
   const isVisible =
     store.isPanelOpen &&
     Boolean(store.selectedCity) &&
-    Boolean(detail) &&
-    !store.loadingState.cityDetail &&
     !isOverlayOpen;
   const panelDisplayName =
     detail?.display_name ||
