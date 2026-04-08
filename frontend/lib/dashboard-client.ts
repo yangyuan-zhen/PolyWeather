@@ -52,11 +52,24 @@ function normalizeRevisionPart(value: unknown) {
 
 export function getCityRevision(source?: CityDetail | CitySummary | null) {
   if (!source) return "";
+  const modelDaily =
+    "multi_model_daily" in source && source.multi_model_daily
+      ? source.multi_model_daily?.[source.local_date || ""]
+      : null;
+  const modelFootprint = modelDaily?.models || ("multi_model" in source ? source.multi_model : null);
   return [
     normalizeRevisionPart(source.updated_at),
     normalizeRevisionPart(source.current?.obs_time),
     normalizeRevisionPart(source.current?.temp),
     normalizeRevisionPart(source.deb?.prediction),
+    normalizeRevisionPart(
+      modelFootprint && typeof modelFootprint === "object"
+        ? Object.keys(modelFootprint)
+            .sort()
+            .map((key) => `${key}:${normalizeRevisionPart(modelFootprint[key])}`)
+            .join("|")
+        : "",
+    ),
   ].join("|");
 }
 

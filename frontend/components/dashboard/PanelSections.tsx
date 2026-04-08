@@ -609,6 +609,7 @@ export function ModelForecast({
     ([, value]) =>
       value !== null && value !== undefined && Number.isFinite(Number(value)),
   );
+  const hasSingleModelOnly = modelEntries.length === 1;
 
   // 如果没有任何数值，给出提示
   if (modelEntries.length === 0) {
@@ -637,6 +638,19 @@ export function ModelForecast({
     <section className="models-section">
       {!hideTitle && <h3>{t("section.models")}</h3>}
       <div className="model-bars">
+        {hasSingleModelOnly && (
+          <div
+            style={{
+              color: "var(--text-secondary)",
+              fontSize: "11px",
+              marginBottom: "8px",
+            }}
+          >
+            {locale === "en-US"
+              ? "Single-model fallback: waiting for the rest of the model cluster."
+              : "当前处于单模型回退，其他模型结果还没回传。"}
+          </div>
+        )}
         {modelEntries
           .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
           .map(([name, value]) => {

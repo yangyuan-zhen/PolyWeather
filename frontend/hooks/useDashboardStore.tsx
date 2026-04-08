@@ -91,6 +91,28 @@ const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
 const EAGER_CITY_SUMMARIES_ENABLED =
   process.env.NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES === "true";
 
+function countAvailableModels(
+  detail?: CityDetail | null,
+  targetDate?: string | null,
+): number {
+  if (!detail) return 0;
+  const date = String(targetDate || detail.local_date || "").trim();
+  const dailyModels = detail.multi_model_daily?.[date]?.models;
+  const models = dailyModels && typeof dailyModels === "object"
+    ? dailyModels
+    : detail.multi_model || {};
+  return Object.values(models).filter((value) =>
+    Number.isFinite(Number(value)),
+  ).length;
+}
+
+function hasSparseModelCoverage(
+  detail?: CityDetail | null,
+  targetDate?: string | null,
+): boolean {
+  return countAvailableModels(detail, targetDate) <= 1;
+}
+
 export function DashboardStoreProvider({
   children,
 }: {
@@ -598,6 +620,12 @@ export function DashboardStoreProvider({
         mapStopMotionRef.current();
         setFutureModalDate(dateStr);
         if (!selectedCity || !proAccess.subscriptionActive) return;
+        const cachedDetail = cityDetailsByName[selectedCity];
+        const needsModelRefresh =
+          !forceRefresh && hasSparseModelCoverage(cachedDetail, dateStr);
+        if (needsModelRefresh) {
+          void ensureCityDetail(selectedCity, true).catch(() => {});
+        }
         const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
         setLoadingState((current) => ({ ...current, marketScan: true }));
         void ensureCityMarketScan(
@@ -624,6 +652,8 @@ export function DashboardStoreProvider({
           setFutureModalDate(cachedDetail.local_date);
         }
         if (!proAccess.subscriptionActive) return;
+        const needsModelRefresh =
+          !forceRefresh && hasSparseModelCoverage(cachedDetail, cachedDetail?.local_date);
 
         setLoadingState((current) => ({
           ...current,
@@ -634,7 +664,7 @@ export function DashboardStoreProvider({
         try {
           const detail = await ensureCityDetail(
             selectedCity,
-            Boolean(forceRefresh),
+            Boolean(forceRefresh || needsModelRefresh),
           );
           setSelectedForecastDate(detail.local_date);
           setFutureModalDate(detail.local_date);

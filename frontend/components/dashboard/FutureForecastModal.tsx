@@ -609,6 +609,7 @@ export function FutureForecastModal() {
     const max = Math.max(...values);
     const spread = max - min;
     return {
+      count: values.length,
       max,
       min,
       spread,
@@ -789,6 +790,15 @@ export function FutureForecastModal() {
       return locale === "en-US"
         ? "Model spread is unavailable right now."
         : "当前拿不到可用的模型分歧。";
+    }
+    const modelEntries = Object.entries(modelView?.models || {}).filter(
+      ([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)),
+    );
+    if (modelEntries.length === 1) {
+      const [singleModelName, singleModelValue] = modelEntries[0];
+      return locale === "en-US"
+        ? `Only ${singleModelName} is available right now at ${Number(singleModelValue).toFixed(1)}${detail.temp_symbol}; multi-model spread is temporarily unavailable.`
+        : `当前只收到 ${singleModelName} ${Number(singleModelValue).toFixed(1)}${detail.temp_symbol}，其他多模型暂未回传，所以这里先不判断模型分歧。`;
     }
     return locale === "en-US"
       ? `Model range runs from ${modelSpreadView.min.toFixed(1)}${detail.temp_symbol} to ${modelSpreadView.max.toFixed(1)}${detail.temp_symbol}; spread ${modelSpreadView.spread.toFixed(1)}${detail.temp_symbol}.`
