@@ -26,6 +26,8 @@ import {
 } from "@/components/dashboard/PanelSections";
 import {
   getFutureModalView,
+  getModelView,
+  getProbabilityView,
   getTodayPaceView,
   parseAiAnalysis,
   getTemperatureChartData,
@@ -180,6 +182,46 @@ function parseVisibilityText(
     return `${sm[1]} mi`;
   }
   return "--";
+}
+
+function parseBucketBoundaries(
+  bucket?: {
+    label?: string | null;
+    bucket?: string | null;
+    range?: string | null;
+    value?: number | null;
+    temp?: number | null;
+  } | null,
+) {
+  if (!bucket) return null;
+  const raw =
+    String(bucket.label || "").trim() ||
+    String(bucket.bucket || "").trim() ||
+    String(bucket.range || "").trim();
+  if (!raw) return null;
+  const numbers = Array.from(raw.matchAll(/-?\d+(?:\.\d+)?/g)).map((match) =>
+    Number(match[0]),
+  );
+  if (!numbers.length) return null;
+  if (raw.includes("+")) {
+    return {
+      lower: numbers[0] ?? null,
+      upper: null as number | null,
+      boundaryLabel: `${numbers[0]}°C`,
+    };
+  }
+  if (numbers.length >= 2) {
+    return {
+      lower: numbers[0],
+      upper: numbers[1],
+      boundaryLabel: null as string | null,
+    };
+  }
+  return {
+    lower: numbers[0],
+    upper: null as number | null,
+    boundaryLabel: `${numbers[0]}°C`,
+  };
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -707,6 +749,158 @@ export function FutureForecastModal() {
     () => (isToday ? getTodayPaceView(detail, locale) : null),
     [detail, isToday, locale],
   );
+  const probabilityView = useMemo(
+    () => getProbabilityView(detail, dateStr),
+    [dateStr, detail],
+  );
+  const modelView = useMemo(() => getModelView(detail, dateStr), [dateStr, detail]);
+  const topProbabilityBucket = useMemo(() => {
+    const buckets = Array.isArray(probabilityView?.probabilities)
+      ? probabilityView.probabilities
+      : [];
+    return [...buckets]
+      .filter((bucket) => Number.isFinite(Number(bucket?.probability)))
+      .sort((a, b) => Number(b?.probability) - Number(a?.probability))[0];
+  }, [probabilityView]);
+  const modelSpreadView = useMemo(() => {
+    const values = Object.values(modelView?.models || {})
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    if (!values.length) return null;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const spread = max - min;
+    return {
+      max,
+      min,
+      spread,
+    };
+  }, [modelView]);
+  const boundaryRiskView = useMemo(() => {
+    if (!isToday || !paceView) return null;
+    const selectedBucket = marketScan?.temperature_bucket || null;
+    const bounds = parseBucketBoundaries(selectedBucket);
+    if (!bounds) return null;
+    const projected =
+      paceView.paceAdjustedHigh ??
+      (detail.deb?.prediction != null ? Number(detail.deb.prediction) : null);
+    if (projected == null || !Number.isFinite(projected)) return null;
+
+    const distances = [bounds.lower, bounds.upper]
+      .filter((value): value is number => value != null && Number.isFinite(value))
+      .map((value) => ({
+        boundary: value,
+        gap: Math.abs(projected - value),
+      }))
+      .sort((a, b) => a.gap - b.gap);
+    if (!distances.length) return null;
+
+    const nearest = distances[0];
+    const tone =
+      nearest.gap <= 0.4 ? "amber" : nearest.gap <= 0.8 ? "blue" : "cyan";
+    const status =
+      nearest.gap <= 0.4
+        ? locale === "en-US"
+          ? "High boundary risk"
+          : "边界风险高"
+        : nearest.gap <= 0.8
+          ? locale === "en-US"
+            ? "Watch boundary"
+            : "边界需观察"
+          : locale === "en-US"
+            ? "Boundary buffer"
+            : "边界缓冲";
+    const note =
+      locale === "en-US"
+        ? `${projected.toFixed(1)}${detail.temp_symbol} is ${nearest.gap.toFixed(1)}${detail.temp_symbol} from the nearest boundary ${nearest.boundary.toFixed(1)}°C.`
+        : `${projected.toFixed(1)}${detail.temp_symbol} 距最近边界 ${nearest.boundary.toFixed(1)}°C 还有 ${nearest.gap.toFixed(1)}${detail.temp_symbol}。`;
+    return {
+      label: locale === "en-US" ? "Boundary risk" : "边界风险",
+      note,
+      status,
+      tone,
+      value: `${nearest.gap.toFixed(1)}${detail.temp_symbol}`,
+    };
+  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, marketScan?.temperature_bucket, paceView]);
+  const peakWindowStateView = useMemo(() => {
+    if (!isToday || !paceView) return null;
+    const firstHour = Number(detail.peak?.first_h);
+    const lastHour = Number(detail.peak?.last_h);
+    if (
+      !Number.isFinite(firstHour) ||
+      !Number.isFinite(lastHour) ||
+      firstHour < 0 ||
+      lastHour < firstHour
+    ) {
+      return null;
+    }
+    const currentMinutes = parseClockMinutes(detail.local_time);
+    const startMinutes = firstHour * 60;
+    const endMinutes = (lastHour + 1) * 60;
+    let status = locale === "en-US" ? "Awaiting peak" : "未进入峰值";
+    let tone: "amber" | "blue" | "cyan" = "blue";
+    if (currentMinutes != null && currentMinutes >= endMinutes) {
+      status = locale === "en-US" ? "Past peak" : "已过峰值";
+      tone = "cyan";
+    } else if (currentMinutes != null && currentMinutes >= startMinutes) {
+      status = locale === "en-US" ? "Peak window live" : "峰值窗口进行中";
+      tone = "amber";
+    }
+    const note =
+      locale === "en-US"
+        ? `Primary peak window ${paceView.peakWindowText}.`
+        : `核心峰值窗口 ${paceView.peakWindowText}。`;
+    return {
+      label: locale === "en-US" ? "Peak window" : "峰值窗口状态",
+      note,
+      status,
+      tone,
+      value: paceView.peakWindowText,
+    };
+  }, [detail.local_time, detail.peak?.first_h, detail.peak?.last_h, isToday, locale, paceView]);
+  const networkLeadView = useMemo(() => {
+    if (!isToday) return null;
+    const delta = Number(detail.airport_vs_network_delta);
+    const leadSignal = detail.network_lead_signal;
+    if (!Number.isFinite(delta)) return null;
+    const leaderLabel =
+      String(leadSignal?.leader_station_label || "").trim() ||
+      String(leadSignal?.leader_station_code || "").trim();
+    const absDelta = Math.abs(delta);
+    const status =
+      delta <= -0.4
+        ? locale === "en-US"
+          ? "Airport trailing"
+          : "机场落后"
+        : delta >= 0.4
+          ? locale === "en-US"
+            ? "Airport leading"
+            : "机场领先"
+          : locale === "en-US"
+            ? "Tracking network"
+            : "与站网齐平";
+    const tone =
+      delta <= -0.4 ? "amber" : delta >= 0.4 ? "cyan" : "blue";
+    const note =
+      delta <= -0.4
+        ? locale === "en-US"
+          ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} cooler than the nearby official network${leaderLabel ? `, led by ${leaderLabel}` : ""}.`
+          : `机场主站当前比周边官方站网低 ${absDelta.toFixed(1)}${detail.temp_symbol}${leaderLabel ? `，领先点位是 ${leaderLabel}` : ""}。`
+        : delta >= 0.4
+          ? locale === "en-US"
+            ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} hotter than the nearby official network.`
+            : `机场主站当前比周边官方站网高 ${absDelta.toFixed(1)}${detail.temp_symbol}。`
+          : locale === "en-US"
+            ? "Airport anchor and nearby official network are broadly aligned."
+            : "机场主站与周边官方站网当前大体齐平。";
+    return {
+      label: locale === "en-US" ? "Airport vs network" : "机场 vs 周边站",
+      note,
+      status,
+      tone,
+      value: `${delta > 0 ? "+" : ""}${delta.toFixed(1)}${detail.temp_symbol}`,
+    };
+  }, [detail.airport_vs_network_delta, detail.network_lead_signal, detail.temp_symbol, isToday, locale]);
   const isNoaaSettlement =
     detail.current?.settlement_source === "noaa" ||
     detail.current?.settlement_source_label === "NOAA";
@@ -766,6 +960,48 @@ export function FutureForecastModal() {
         marketScan.confidence ? ` / ${marketScan.confidence}` : ""
       }`
     : "--";
+  const marketExecutionSummary = (() => {
+    if (!marketScan?.available) {
+      return locale === "en-US"
+        ? "Market scan is unavailable right now; keep the trade read anchored to station pace and bracket risk."
+        : "当前暂时拿不到市场扫描结果，先以站点节奏和边界风险为主。";
+    }
+    if (marketScan?.signal_label?.toUpperCase() === "BUY YES") {
+      return locale === "en-US"
+        ? `Model side is hotter than the tape by ${marketEdge}. If pace stays constructive, the Yes side still has room.`
+        : `模型侧当前比盘口更热 ${marketEdge}，如果盘中节奏不掉，Yes 侧仍有空间。`;
+    }
+    if (marketScan?.signal_label?.toUpperCase() === "BUY NO") {
+      return locale === "en-US"
+        ? `Model side is cooler than the tape by ${marketEdge}. If pace keeps lagging, the No side stays cleaner.`
+        : `模型侧当前比盘口更冷 ${marketEdge}，如果节奏继续落后，No 侧会更干净。`;
+    }
+    return locale === "en-US"
+      ? "Model and market are broadly balanced; let pace and boundary risk break the tie."
+      : "模型和市场当前大体均衡，接下来主要看节奏和边界风险来决定站边。";
+  })();
+  const probabilitySummary = (() => {
+    if (!topProbabilityBucket) {
+      return locale === "en-US"
+        ? "Probability mass is still too dispersed; avoid over-reading a single bracket."
+        : "当前概率还比较分散，不要只盯单一区间。";
+    }
+    const bucketLabel = formatBucketLabel(topProbabilityBucket);
+    const bucketProb = formatMarketPercent(topProbabilityBucket.probability);
+    return locale === "en-US"
+      ? `Highest current hit probability is ${bucketLabel} at ${bucketProb}. Treat this as the base case, not the final settlement.`
+      : `当前命中概率最高的是 ${bucketLabel}（${bucketProb}），可把它当作基准情形，但不要直接等同于最终结算。`;
+  })();
+  const modelSummary = (() => {
+    if (!modelSpreadView) {
+      return locale === "en-US"
+        ? "Model spread is unavailable right now."
+        : "当前拿不到可用的模型分歧。";
+    }
+    return locale === "en-US"
+      ? `Model range runs from ${modelSpreadView.min.toFixed(1)}${detail.temp_symbol} to ${modelSpreadView.max.toFixed(1)}${detail.temp_symbol}; spread ${modelSpreadView.spread.toFixed(1)}${detail.temp_symbol}.`
+      : `当前模型区间在 ${modelSpreadView.min.toFixed(1)}${detail.temp_symbol} 到 ${modelSpreadView.max.toFixed(1)}${detail.temp_symbol}，分歧 ${modelSpreadView.spread.toFixed(1)}${detail.temp_symbol}。`;
+  })();
   const upperAirSignal = detail.vertical_profile_signal || {};
   const tafSignal = detail.taf?.signal || {};
   const topBucketProbability = normalizeMarketValue(topBucket?.probability);
@@ -1003,6 +1239,33 @@ export function FutureForecastModal() {
       ...getCurrentMetricDescriptor("visibility", visibilityText, visibilityValue),
     },
   ];
+  const tradeMetricVisuals = currentMetricVisuals.filter((metric) =>
+    ["dewpoint", "wind", "humidity"].includes(metric.key),
+  );
+  const tradeMetricSummary = (() => {
+    const dewSpread =
+      detail.current?.temp != null && fallbackDewpoint != null
+        ? Number(detail.current.temp) - Number(fallbackDewpoint)
+        : null;
+    if (dewSpread != null && dewSpread <= 2) {
+      return locale === "en-US"
+        ? "Near-saturation air is still in play. If cloud builds into the peak window, upside can get capped quickly."
+        : "露点差已经很窄，空气接近饱和。如果云层在峰值窗口内长起来，上冲会更容易被压住。";
+    }
+    if (windValue != null && windValue >= 18) {
+      return locale === "en-US"
+        ? "Surface wind is still strong. Mixing support is better, but it can also make the tape noisier intraday."
+        : "近地面风速仍偏强，混合作用会更充分，但盘中波动也会更大。";
+    }
+    if (humidityValue != null && humidityValue <= 40) {
+      return locale === "en-US"
+        ? "Air mass is still relatively dry. Unless cloud/rain arrives, the surface layer is not the main cap right now."
+        : "空气仍偏干，除非后续云雨快速起来，否则近地面层目前不是主要压温来源。";
+    }
+    return locale === "en-US"
+      ? "Surface readings are broadly neutral. Keep the main decision anchored to pace, boundary risk, and the peak window."
+      : "近地面指标整体偏中性，主判断仍然要看当前节奏、边界风险和峰值窗口。";
+  })();
   const displayedUpperAirSummary =
     marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
   const displayedUpperAirMetrics = (view.front.upperAirMetrics || []).map(
@@ -1018,6 +1281,40 @@ export function FutureForecastModal() {
           }
         : metric,
   );
+  const todayTradeSummaryLines = useMemo(() => {
+    if (!isToday) return [] as string[];
+    const lines: string[] = [];
+    if (paceView) {
+      const headline =
+        paceView.biasTone === "warm"
+          ? locale === "en-US"
+            ? `Intraday pace is running hot by ${paceView.deltaText}; the day high still has room to lean above the base curve.`
+            : `日内节奏当前偏热 ${paceView.deltaText}，日高仍有机会落在基础曲线之上。`
+          : paceView.biasTone === "cold"
+            ? locale === "en-US"
+              ? `Intraday pace is trailing by ${paceView.deltaText}; higher buckets need more caution.`
+              : `日内节奏当前落后 ${paceView.deltaText}，继续追更高温区间要更谨慎。`
+            : locale === "en-US"
+              ? "Intraday pace is still tracking the curve; the next move depends on the peak-window push."
+              : "日内节奏当前基本贴着曲线运行，下一步主要看峰值窗口内还有没有上冲。";
+      lines.push(headline);
+    }
+    if (boundaryRiskView) {
+      lines.push(
+        locale === "en-US"
+          ? `${boundaryRiskView.label}: ${boundaryRiskView.status}. ${boundaryRiskView.note}`
+          : `${boundaryRiskView.label}：${boundaryRiskView.status}。${boundaryRiskView.note}`,
+      );
+    }
+    if (networkLeadView) {
+      lines.push(
+        locale === "en-US"
+          ? `${networkLeadView.label}: ${networkLeadView.status}. ${networkLeadView.note}`
+          : `${networkLeadView.label}：${networkLeadView.status}。${networkLeadView.note}`,
+      );
+    }
+    return lines;
+  }, [boundaryRiskView, isToday, locale, networkLeadView, paceView]);
 
   return (
     <div
@@ -1134,11 +1431,18 @@ export function FutureForecastModal() {
               <div className="future-v2-layout">
                 <aside className="future-v2-left">
                   <section className="future-v2-card future-v2-hero-card">
-                    <h3 className="future-v2-hero-title">
-                      {locale === "en-US"
-                        ? "Current Conditions"
-                        : "实况与气象特征"}
-                    </h3>
+                    <div className="future-v2-card-head">
+                      <h3 className="future-v2-hero-title">
+                        {locale === "en-US"
+                          ? "Anchor Status"
+                          : "锚点状态"}
+                      </h3>
+                      <div className="future-v2-card-kicker">
+                        {locale === "en-US"
+                          ? "Settlement anchor and current clock"
+                          : "结算锚点与当前时钟"}
+                      </div>
+                    </div>
                     <div className="future-v2-hero-main">
                       <div className="future-v2-hero-temp">
                         {currentTempText}
@@ -1188,12 +1492,18 @@ export function FutureForecastModal() {
                     <div className="future-v2-mini-grid">
                       <div className="future-v2-mini-item">
                         <span>
-                          {locale === "en-US" ? "High So Far" : "目前最高温"}
+                          {locale === "en-US" ? "High so far" : "日内已见高点"}
                         </span>
                         <strong>
                           {topObservedTemp ?? "--"}
                           {detail.temp_symbol}
                         </strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Anchor clock" : "锚点时钟"}
+                        </span>
+                        <strong>{detail.current?.obs_time || "--"}</strong>
                       </div>
                       <div className="future-v2-mini-item">
                         <span>
@@ -1205,26 +1515,25 @@ export function FutureForecastModal() {
                         <span>
                           {locale === "en-US" ? "Sunset" : "日落时间"}
                         </span>
-                        <strong>{detail.forecast?.sunset || "--"}</strong>
-                      </div>
-                      <div className="future-v2-mini-item">
-                        <span>
-                          {locale === "en-US" ? "Sunshine" : "日照时长"}
-                        </span>
                         <strong>
-                          {detail.forecast?.sunshine_hours != null
-                            ? `${detail.forecast.sunshine_hours}h`
-                            : "--"}
+                          {detail.forecast?.sunset || "--"}
                         </strong>
                       </div>
                     </div>
                   </section>
 
                   {paceView ? (
-                    <section className="future-v2-card future-v2-pace-card">
-                      <h4 className="future-v2-card-title">
-                        {locale === "en-US" ? "Current Pace" : "当前节奏 Pace"}
-                      </h4>
+                    <section className="future-v2-card future-v2-pace-card future-v2-focus-card">
+                      <div className="future-v2-card-head">
+                        <h4 className="future-v2-card-title">
+                          {locale === "en-US" ? "Current Pace" : "当前节奏"}
+                        </h4>
+                        <div className="future-v2-card-kicker">
+                          {locale === "en-US"
+                            ? "Expected now vs airport anchor"
+                            : "此刻应到 vs 机场锚点"}
+                        </div>
+                      </div>
                       <div className="future-v2-pace-head">
                         <span className="future-v2-pace-kicker">
                           {paceView.kicker}
@@ -1305,19 +1614,50 @@ export function FutureForecastModal() {
                           <strong>{paceView.peakWindowText}</strong>
                         </div>
                       </div>
+                      <div className="future-v2-pace-signal-grid">
+                        {[boundaryRiskView, peakWindowStateView, networkLeadView]
+                          .filter((item) => item != null)
+                          .map((item) => (
+                            <div key={item.label} className="future-v2-pace-signal-card">
+                              <div className="future-v2-signal-head">
+                                <span>{item.label}</span>
+                                <em
+                                  className={clsx(
+                                    "future-v2-signal-tag",
+                                    item.tone === "cyan" && "cyan",
+                                    item.tone === "blue" && "blue",
+                                    item.tone === "amber" && "amber",
+                                  )}
+                                >
+                                  {item.status}
+                                </em>
+                              </div>
+                              <strong>{item.value}</strong>
+                              <div className="future-v2-pace-signal-note">
+                                {item.note}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
                     </section>
                   ) : null}
 
-                  <section className="future-v2-card">
-                    <h4 className="future-v2-card-title">
-                      {locale === "en-US" ? "Current Metrics" : "当前指标"}
-                    </h4>
-                    <IntradaySignalScene
-                      metrics={currentMetricVisuals}
-                      score={view.front.score}
-                    />
+                  <section className="future-v2-card future-v2-support-card">
+                    <div className="future-v2-card-head">
+                      <h4 className="future-v2-card-title">
+                        {locale === "en-US" ? "Trade-Sensitive Metrics" : "交易关键指标"}
+                      </h4>
+                      <div className="future-v2-card-kicker">
+                        {locale === "en-US"
+                          ? "Only the surface readings that still matter"
+                          : "只保留仍会影响峰值判断的近地面项"}
+                      </div>
+                    </div>
+                    <div className="future-v2-pace-summary" style={{ marginTop: "12px" }}>
+                      {tradeMetricSummary}
+                    </div>
                     <div className="future-v2-mini-grid future-v2-mini-grid-tight">
-                      {currentMetricVisuals.map((metric) => (
+                      {tradeMetricVisuals.map((metric) => (
                         <div key={metric.key} className="future-v2-mini-item future-v2-signal-item">
                           <div className="future-v2-signal-head">
                             <span>{metric.label}</span>
@@ -1352,10 +1692,17 @@ export function FutureForecastModal() {
                     </div>
                   </section>
 
-                  <section className="future-v2-card">
-                    <h4 className="future-v2-card-title">
-                      {locale === "en-US" ? "Market Alignment" : "市场对照"}
-                    </h4>
+                  <section className="future-v2-card future-v2-market-card future-v2-focus-card">
+                    <div className="future-v2-card-head">
+                      <h4 className="future-v2-card-title">
+                        {locale === "en-US" ? "Market Alignment" : "市场对照"}
+                      </h4>
+                      <div className="future-v2-card-kicker">
+                        {locale === "en-US"
+                          ? "Model, tape, and execution in one view"
+                          : "把模型、盘口和执行价放到一张卡里"}
+                      </div>
+                    </div>
                     <div className="future-v2-market-v3">
                       {/* Loading Overlay */}
                       {store.loadingState.marketScan && (
@@ -1387,6 +1734,69 @@ export function FutureForecastModal() {
                             {settlementBucketLabel}
                           </strong>
                         </div>
+                        <div className="market-edge-box">
+                          <div className="market-edge-header">
+                            <span>
+                              {locale === "en-US" ? "Current edge" : "当前 edge"}
+                            </span>
+                            <strong
+                              className={clsx(
+                                "market-edge-val",
+                                Number(marketScan?.edge_percent) > 0
+                                  ? "positive"
+                                  : "negative",
+                              )}
+                            >
+                              {marketEdge}
+                            </strong>
+                          </div>
+                          <div className="market-edge-compare">
+                            <div className="edge-stat">
+                              <span className="edge-label">
+                                {locale === "en-US" ? "Model prob" : "模型概率"}
+                              </span>
+                              <span className="edge-value">{modelProbability}</span>
+                            </div>
+                            <div className="edge-stat">
+                              <span className="edge-label">
+                                {locale === "en-US" ? "Market mid" : "市场中位"}
+                              </span>
+                              <span className="edge-value">{marketMidpoint}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="market-layer-book">
+                        <div className="market-sub-title">
+                          💸 {locale === "en-US" ? "Execution" : "盘口执行"}
+                        </div>
+                        <div className="market-book-row">
+                          <span className="book-label">
+                            {locale === "en-US" ? "Yes bid / ask" : "Yes 买 / 卖"}
+                          </span>
+                          <div className="book-quote">
+                            <strong>{marketYesBuy}</strong>
+                            <span> / {marketYesSell}</span>
+                          </div>
+                        </div>
+                        <div className="market-book-row">
+                          <span className="book-label">
+                            {locale === "en-US" ? "No bid / ask" : "No 买 / 卖"}
+                          </span>
+                          <div className="book-quote">
+                            <strong>{marketNoBuy}</strong>
+                            <span> / {marketNoSell}</span>
+                          </div>
+                        </div>
+                        <div className="market-book-row">
+                          <span className="book-label">
+                            {locale === "en-US" ? "Spread" : "价差"}
+                          </span>
+                          <div className="book-quote">
+                            <strong>{marketSpread}</strong>
+                          </div>
+                        </div>
                       </div>
 
                       {/* Layer 3: Context */}
@@ -1413,13 +1823,16 @@ export function FutureForecastModal() {
                       {locale === "en-US" ? "Signal" : "信号"}:{" "}
                       <strong>{marketSignal}</strong>
                     </div>
+                    <div className="future-v2-pace-summary" style={{ marginTop: "10px" }}>
+                      {marketExecutionSummary}
+                    </div>
                   </section>
 
                   <section className="future-v2-card">
                     <h4 className="future-v2-card-title">
                       {locale === "en-US"
-                        ? "Current Metrics"
-                        : "当前指标补充"}
+                        ? "Trade Snapshot"
+                        : "交易快照"}
                     </h4>
                     <div className="future-v2-mini-grid future-v2-mini-grid-tight">
                       <div className="future-v2-mini-item">
@@ -1432,6 +1845,14 @@ export function FutureForecastModal() {
                       <div className="future-v2-mini-item">
                         <span>{locale === "en-US" ? "Current obs" : "当前观测"}</span>
                         <strong>{currentTempText}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Market signal" : "市场信号"}</span>
+                        <strong>{marketSignal}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Current edge" : "当前 edge"}</span>
+                        <strong>{marketEdge}</strong>
                       </div>
                     </div>
                   </section>
@@ -1449,7 +1870,12 @@ export function FutureForecastModal() {
 
                   <div className="future-modal-grid">
                     <section className="future-modal-section">
-                      <h3>{t("future.probability")}</h3>
+                      <h3>
+                        {locale === "en-US" ? "Current Hit Odds" : "当前命中胜率"}
+                      </h3>
+                      <div className="future-text-block" style={{ marginBottom: "12px" }}>
+                        {probabilitySummary}
+                      </div>
                       <div style={{ position: "relative", minHeight: "120px" }}>
                         {/* Loading Overlay */}
                         {store.loadingState.marketScan && (
@@ -1477,7 +1903,12 @@ export function FutureForecastModal() {
                       </div>
                     </section>
                     <section className="future-modal-section">
-                      <h3>{t("future.models")}</h3>
+                      <h3>
+                        {locale === "en-US" ? "Model Range & Spread" : "模型区间与分歧"}
+                      </h3>
+                      <div className="future-text-block" style={{ marginBottom: "12px" }}>
+                        {modelSummary}
+                      </div>
                       <ModelForecast
                         detail={detail}
                         targetDate={dateStr}
@@ -1516,14 +1947,18 @@ export function FutureForecastModal() {
                           {Math.round(view.front.precipMax)}%
                         </span>
                       </div>
-                      {view.front.summary ? (
+                      {todayTradeSummaryLines.length > 0 || view.front.summary ? (
                         <div className="future-trend-summary">
-                          {Array.isArray(view.front.summaryLines) &&
-                          view.front.summaryLines.length > 0
-                            ? view.front.summaryLines.map((line, index) => (
+                          {[
+                            ...todayTradeSummaryLines,
+                            ...(Array.isArray(view.front.summaryLines)
+                              ? view.front.summaryLines
+                              : view.front.summary
+                                ? [view.front.summary]
+                                : []),
+                          ].map((line, index) => (
                                 <div key={`${index}-${line}`}>{line}</div>
-                              ))
-                            : view.front.summary}
+                              ))}
                         </div>
                       ) : null}
                     </div>

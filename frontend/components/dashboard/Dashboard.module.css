@@ -2772,6 +2772,36 @@
   padding: 14px;
 }
 
+.root :global(.future-v2-card-head) {
+  display: grid;
+  gap: 6px;
+}
+
+.root :global(.future-v2-card-kicker) {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.root :global(.future-v2-focus-card) {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(34, 211, 238, 0.08) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+}
+
+.root :global(.future-v2-support-card) {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(148, 163, 184, 0.08) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+}
+
 .root :global(.future-v2-hero-card) {
   background: linear-gradient(
     180deg,
@@ -3075,6 +3105,27 @@
   line-height: 1.55;
 }
 
+.root :global(.future-v2-pace-signal-grid) {
+  margin-top: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.root :global(.future-v2-pace-signal-card) {
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.025);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.root :global(.future-v2-pace-signal-note) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .root :global(.future-v2-pace-meter) {
   position: relative;
   height: 10px;
@@ -3226,6 +3277,20 @@
   flex-direction: column;
   gap: 16px;
   position: relative;
+}
+
+.root :global(.future-v2-market-card) {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(34, 197, 94, 0.08) 0%,
+      rgba(15, 23, 42, 0) 40%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(7, 16, 26, 0.96) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
 }
 
 .root :global(.market-layer-loading-overlay) {
