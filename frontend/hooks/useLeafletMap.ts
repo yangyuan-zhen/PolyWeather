@@ -77,6 +77,20 @@ function createMarkerIcon(
   });
 }
 
+function getMarkerSignature(
+  city: CityListItem,
+  snapshot?: Pick<CityDetail, "current" | "temp_symbol"> | CitySummary,
+) {
+  return [
+    city.display_name,
+    city.risk_level,
+    city.temp_unit,
+    city.lat,
+    city.lon,
+    snapshot?.current?.temp ?? "",
+  ].join("|");
+}
+
 function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const sanitizeWindText = (value?: string | null) => {
     const text = String(value || "").trim();
@@ -295,7 +309,7 @@ export function useLeafletMap({
   }, [cities]);
 
   const lastCityDataRef = useRef<
-    Record<string, { temp?: number | null; risk?: string }>
+    Record<string, string>
   >({});
 
   // Handle marker synchronization
@@ -309,29 +323,32 @@ export function useLeafletMap({
             if (canceled) return;
 
             const currentMarkers = markersRef.current;
-            const nextMarkers: typeof currentMarkers = {};
-            const nextLastData: typeof lastCityDataRef.current = {};
+            const cityNames = new Set(cities.map((city) => city.name));
+
+            Object.entries(currentMarkers).forEach(([name, entry]) => {
+              if (cityNames.has(name)) return;
+              map.removeLayer(entry.marker);
+              delete currentMarkers[name];
+              delete lastCityDataRef.current[name];
+            });
 
             cities.forEach((city) => {
               const detail = cityDetailsByName[city.name];
               const summary = citySummariesByName[city.name];
               const snapshot = detail || summary;
               const existing = currentMarkers[city.name];
-
-              const currentTemp = snapshot?.current?.temp;
-              const currentRisk = city.risk_level;
-              const lastData = lastCityDataRef.current[city.name];
-              const dataChanged =
-                !lastData ||
-                lastData.temp !== currentTemp ||
-                lastData.risk !== currentRisk;
+              const signature = getMarkerSignature(city, snapshot);
+              const previousSignature = lastCityDataRef.current[city.name];
 
               if (existing) {
-                if (dataChanged) {
+                if (existing.city.lat !== city.lat || existing.city.lon !== city.lon) {
+                  existing.marker.setLatLng([city.lat, city.lon]);
+                }
+                if (previousSignature !== signature) {
                   existing.marker.setIcon(createMarkerIcon(city, snapshot));
                 }
-                nextMarkers[city.name] = { city, marker: existing.marker };
-                nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+                currentMarkers[city.name] = { city, marker: existing.marker };
+                lastCityDataRef.current[city.name] = signature;
                 return;
               }
 
@@ -357,19 +374,9 @@ export function useLeafletMap({
                 onSelectCityRef.current(city.name);
               });
 
-              nextMarkers[city.name] = { city, marker };
-              nextLastData[city.name] = { temp: currentTemp, risk: currentRisk };
+              currentMarkers[city.name] = { city, marker };
+              lastCityDataRef.current[city.name] = signature;
             });
-
-            // Cleanup removed markers
-            Object.entries(currentMarkers).forEach(([name, entry]) => {
-              if (!nextMarkers[name]) {
-                map.removeLayer(entry.marker);
-              }
-            });
-
-            markersRef.current = nextMarkers;
-            lastCityDataRef.current = nextLastData;
           })
         : null;
 

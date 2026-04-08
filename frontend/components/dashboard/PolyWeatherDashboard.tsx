@@ -1,7 +1,6 @@
 "use client";
-
-import { useEffect } from "react";
 import dynamic from "next/dynamic";
+import { useEffect } from "react";
 import styles from "./Dashboard.module.css";
 import {
   DashboardStoreProvider,
@@ -46,11 +45,6 @@ const FutureForecastModal = dynamic(
 function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
-
-  useEffect(() => {
-    void import("@/components/dashboard/HistoryModal");
-    void import("@/components/dashboard/FutureForecastModal");
-  }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {

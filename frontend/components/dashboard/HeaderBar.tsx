@@ -1,16 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import { LogIn, UserRound } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
-import {
-  getSupabaseBrowserClient,
-  hasSupabasePublicEnv,
-} from "@/lib/supabase/client";
 
 function parseExpiryInfo(raw?: string | null) {
   const text = String(raw || "").trim();
@@ -30,40 +25,11 @@ export function HeaderBar() {
   const store = useDashboardStore();
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const supabaseReady = hasSupabasePublicEnv();
+  const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
   const trialPromoLabel =
     locale === "en-US" ? "New users get 3-day Pro trial" : "新用户可免费体验 3 天 Pro";
-
-  useEffect(() => {
-    let mounted = true;
-
-    if (!supabaseReady) {
-      setIsAuthenticated(false);
-      return;
-    }
-
-    const supabase = getSupabaseBrowserClient();
-
-    void supabase.auth.getSession().then(({ data }) => {
-      if (!mounted) return;
-      setIsAuthenticated(Boolean(data.session?.user?.id));
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (!mounted) return;
-      setIsAuthenticated(Boolean(session?.user?.id));
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [supabaseReady]);
 
   const accountHref = isAuthenticated
     ? "/account"

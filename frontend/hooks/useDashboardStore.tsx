@@ -133,24 +133,19 @@ export function DashboardStoreProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const initialCache = dashboardClient.readCityDetailCacheBundle();
+  const initialCacheRef = useRef<ReturnType<
+    typeof dashboardClient.readCityDetailCacheBundle
+  > | null>(null);
   const [cities, setCities] = useState<CityListItem[]>([]);
   const [cityDetailsByName, setCityDetailsByName] = useState<
     Record<string, CityDetail>
-  >(() => initialCache.details);
+  >({});
   const [citySummariesByName, setCitySummariesByName] = useState<
     Record<string, CitySummary>
-  >(() =>
-    Object.fromEntries(
-      Object.entries(initialCache.details).map(([cityName, detail]) => [
-        cityName,
-        toCitySummary(detail),
-      ]),
-    ),
-  );
+  >({});
   const [cityDetailMetaByName, setCityDetailMetaByName] = useState<
     Record<string, { cachedAt: number; revision: string }>
-  >(() => initialCache.meta);
+  >({});
   const [marketScanByCityName, setMarketScanByCityName] = useState<
     Record<string, MarketScan>
   >({});
@@ -173,15 +168,9 @@ export function DashboardStoreProvider({
 
   const mapStopMotionRef = useRef<() => void>(() => {});
   const hydratedSelectionRef = useRef(false);
+  const hydratedProCacheRef = useRef(false);
   const backgroundSummaryCheckAtRef = useRef<Record<string, number>>({});
-  const citySummariesRef = useRef<Record<string, CitySummary>>(
-    Object.fromEntries(
-      Object.entries(initialCache.details).map(([cityName, detail]) => [
-        cityName,
-        toCitySummary(detail),
-      ]),
-    ),
-  );
+  const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedDetail =
     selectedCity && proAccess.subscriptionActive
       ? cityDetailsByName[selectedCity] || null
@@ -200,11 +189,22 @@ export function DashboardStoreProvider({
       : null;
 
   useEffect(() => {
+    if (proAccess.loading) return;
+    if (!proAccess.authenticated || !proAccess.subscriptionActive) {
+      dashboardClient.clearCityDetailCache();
+      return;
+    }
     dashboardClient.writeCityDetailCacheBundle(
       cityDetailsByName,
       cityDetailMetaByName,
     );
-  }, [cityDetailMetaByName, cityDetailsByName]);
+  }, [
+    cityDetailMetaByName,
+    cityDetailsByName,
+    proAccess.authenticated,
+    proAccess.loading,
+    proAccess.subscriptionActive,
+  ]);
 
   useEffect(() => {
     citySummariesRef.current = citySummariesByName;
@@ -213,6 +213,34 @@ export function DashboardStoreProvider({
   useEffect(() => {
     proAccessRef.current = proAccess;
   }, [proAccess]);
+
+  useEffect(() => {
+    if (proAccess.loading) return;
+    if (!proAccess.authenticated || !proAccess.subscriptionActive) {
+      hydratedProCacheRef.current = false;
+      initialCacheRef.current = null;
+      return;
+    }
+    if (hydratedProCacheRef.current) return;
+
+    hydratedProCacheRef.current = true;
+    const cached =
+      initialCacheRef.current || dashboardClient.readCityDetailCacheBundle();
+    initialCacheRef.current = cached;
+    if (!Object.keys(cached.details).length) return;
+
+    setCityDetailsByName(cached.details);
+    setCityDetailMetaByName(cached.meta);
+    setCitySummariesByName((current) => ({
+      ...Object.fromEntries(
+        Object.entries(cached.details).map(([cityName, detail]) => [
+          cityName,
+          toCitySummary(detail),
+        ]),
+      ),
+      ...current,
+    }));
+  }, [proAccess.authenticated, proAccess.loading, proAccess.subscriptionActive]);
 
   useEffect(() => {
     if (proAccess.loading) return;
@@ -636,31 +664,39 @@ export function DashboardStoreProvider({
   };
 
   const refreshAll = async () => {
-    const previousSelectedDetail = selectedCity
-      ? cityDetailsByName[selectedCity]
-      : undefined;
     dashboardClient.clearCityDetailCache();
     setCityDetailsByName({});
     setCityDetailMetaByName({});
     if (selectedCity) {
+      const access = proAccessRef.current;
       setLoadingState((current) => ({ ...current, refresh: true }));
       try {
-        const latestDetail = await dashboardClient.getCityDetail(selectedCity, {
-          force: true,
-        });
-        const detail = latestDetail;
-        setCityDetailsByName({ [selectedCity]: detail });
-        setCitySummariesByName((current) => ({
-          ...current,
-          [selectedCity]: toCitySummary(detail),
-        }));
-        setCityDetailMetaByName({
-          [selectedCity]: {
-            cachedAt: Date.now(),
-            revision: getCityRevision(detail),
-          },
-        });
-        setSelectedForecastDate(detail.local_date);
+        if (access.authenticated && access.subscriptionActive) {
+          const latestDetail = await dashboardClient.getCityDetail(selectedCity, {
+            force: true,
+          });
+          const detail = latestDetail;
+          setCityDetailsByName({ [selectedCity]: detail });
+          setCitySummariesByName((current) => ({
+            ...current,
+            [selectedCity]: toCitySummary(detail),
+          }));
+          setCityDetailMetaByName({
+            [selectedCity]: {
+              cachedAt: Date.now(),
+              revision: getCityRevision(detail),
+            },
+          });
+          setSelectedForecastDate(detail.local_date);
+        } else {
+          const summary = await dashboardClient.getCitySummary(selectedCity, {
+            force: true,
+          });
+          setCitySummariesByName((current) => ({
+            ...current,
+            [selectedCity]: summary,
+          }));
+        }
       } finally {
         setLoadingState((current) => ({ ...current, refresh: false }));
       }
