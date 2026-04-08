@@ -588,6 +588,7 @@ export function DashboardStoreProvider({
     }
     const access = proAccessRef.current;
     if (!access.authenticated || !access.subscriptionActive) {
+      setLoadingState((current) => ({ ...current, cityDetail: true }));
       if (!citySummariesRef.current[cityName]) {
         try {
           const summary = await dashboardClient.getCitySummary(cityName);
@@ -595,7 +596,12 @@ export function DashboardStoreProvider({
             ...current,
             [cityName]: summary,
           }));
-        } catch {}
+        } catch {
+        } finally {
+          setLoadingState((current) => ({ ...current, cityDetail: false }));
+        }
+      } else {
+        setLoadingState((current) => ({ ...current, cityDetail: false }));
       }
       return;
     }

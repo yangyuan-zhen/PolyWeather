@@ -199,6 +199,8 @@ export function DetailPanel() {
     selectedCityItem?.airport ||
     selectedSummary?.icao ||
     (locale === "en-US" ? "Airport pending" : "机场待确认");
+  const isBasicSummaryLoading =
+    !detail && !selectedSummary && store.loadingState.cityDetail;
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
     const active = document.activeElement;
@@ -379,6 +381,13 @@ export function DetailPanel() {
           <>
             <section className="detail-section">
               <h3>{locale === "en-US" ? "City Snapshot" : "城市概览"}</h3>
+              {isBasicSummaryLoading ? (
+                <div className="detail-mini-meta">
+                  {locale === "en-US"
+                    ? "Syncing public city snapshot..."
+                    : "正在同步城市基础信息..."}
+                </div>
+              ) : null}
               <div className="detail-grid">
                 <div className="detail-card">
                   <span className="detail-label">
@@ -406,8 +415,12 @@ export function DetailPanel() {
                     {basicDeb != null
                       ? `${basicDeb}${selectedSummary?.temp_symbol || ""}`
                       : locale === "en-US"
-                        ? "Pending"
-                        : "待更新"}
+                        ? isBasicSummaryLoading
+                          ? "Syncing..."
+                          : "Pending"
+                        : isBasicSummaryLoading
+                          ? "同步中..."
+                          : "待更新"}
                   </span>
                 </div>
                 <div className="detail-card">
