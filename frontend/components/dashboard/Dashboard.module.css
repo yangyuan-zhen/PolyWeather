@@ -961,6 +961,10 @@
   gap: 8px;
 }
 
+.root :global(.forecast-inline-note) {
+  line-height: 1.45;
+}
+
 .root :global(.forecast-day) {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border-subtle);
@@ -998,6 +1002,31 @@
 }
 .root :global(.forecast-day.selected .f-date) {
   color: var(--accent-cyan);
+}
+
+@media (max-width: 720px) {
+  .root :global(.forecast-table) {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+  }
+
+  .root :global(.forecast-table::-webkit-scrollbar) {
+    height: 6px;
+  }
+
+  .root :global(.forecast-table::-webkit-scrollbar-thumb) {
+    background: rgba(148, 163, 184, 0.32);
+    border-radius: 999px;
+  }
+
+  .root :global(.forecast-day) {
+    flex: 0 0 112px;
+    min-width: 112px;
+    scroll-snap-align: start;
+  }
 }
 
 .root :global(.sun-info) {

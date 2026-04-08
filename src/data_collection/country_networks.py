@@ -16,6 +16,10 @@ CHINA_CMA_CITIES = {
 }
 
 
+def _japan_jma_cities() -> set[str]:
+    return {"tokyo"}
+
+
 def _safe_float(value: Any) -> Optional[float]:
     try:
         if value is None or value == "":
@@ -39,6 +43,8 @@ def _provider_code_for_city(city: str) -> str:
         return "hongkong_hko"
     if settlement_source == "cwa":
         return "taiwan_cwa"
+    if normalized in _japan_jma_cities():
+        return "japan_jma"
     if normalized in CHINA_CMA_CITIES:
         return "china_cma"
     return "global_metar"
@@ -170,6 +176,30 @@ def _nmc_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                     "wind_direction_text": row.get("wind_direction_text"),
                     "wind_power_text": row.get("wind_power_text"),
                 },
+            )
+        )
+    return out
+
+
+def _jma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
+    rows = raw.get("jma_official_nearby") or []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            _normalize_station_row(
+                station_code=row.get("icao") or row.get("istNo"),
+                station_label=row.get("name"),
+                temp=row.get("temp"),
+                lat=row.get("lat"),
+                lon=row.get("lon"),
+                obs_time=row.get("obs_time"),
+                source_code="jma",
+                source_label="JMA",
+                is_official=True,
+                is_airport_station=False,
+                is_settlement_anchor=False,
             )
         )
     return out
@@ -393,6 +423,28 @@ class ChinaCmaNetworkProvider(CountryNetworkProvider):
         }
 
 
+class JapanJmaNetworkProvider(CountryNetworkProvider):
+    def __init__(self) -> None:
+        super().__init__("japan_jma", "JMA")
+
+    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        rows = _jma_rows(raw, city)
+        if rows:
+            return rows
+        return _metar_cluster_rows(raw)
+
+    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        rows = self.official_nearby_current(city, raw)
+        has_jma = bool(_jma_rows(raw, city))
+        return {
+            "provider_code": self.provider_code,
+            "provider_label": self.provider_label,
+            "available": has_jma,
+            "mode": "official_active" if has_jma else ("fallback_metar_cluster" if rows else "reference_only"),
+            "row_count": len(rows),
+        }
+
+
 class HongKongHkoNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("hongkong_hko", "HKO")
@@ -415,6 +467,8 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
     provider_code = _provider_code_for_city(city)
     if provider_code == "turkey_mgm":
         return TurkeyMgmNetworkProvider()
+    if provider_code == "japan_jma":
+        return JapanJmaNetworkProvider()
     if provider_code == "china_cma":
         return ChinaCmaNetworkProvider()
     if provider_code == "hongkong_hko":

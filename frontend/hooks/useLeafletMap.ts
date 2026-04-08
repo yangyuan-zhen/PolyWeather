@@ -342,9 +342,18 @@ export function useLeafletMap({
               }).addTo(map);
 
               marker.on("click", () => {
-                map.stop();
-                // Reset lastMovedCity so we can re-fly if needed
-                lastMovedCityRef.current = null;
+                const currentMap = mapRef.current;
+                currentMap?.stop();
+                if (currentMap && !suspendMotion) {
+                  currentMap.flyTo([city.lat, city.lon], 11, {
+                    animate: true,
+                    duration: 1.05,
+                    easeLinearity: 0.22,
+                  });
+                  lastMovedCityRef.current = city.name;
+                } else {
+                  lastMovedCityRef.current = null;
+                }
                 onSelectCityRef.current(city.name);
               });
 

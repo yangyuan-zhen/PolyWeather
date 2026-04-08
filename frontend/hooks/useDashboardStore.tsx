@@ -106,11 +106,26 @@ function countAvailableModels(
   ).length;
 }
 
+function countForecastDays(detail?: CityDetail | null): number {
+  const daily = detail?.forecast?.daily;
+  return Array.isArray(daily) ? daily.length : 0;
+}
+
 function hasSparseModelCoverage(
   detail?: CityDetail | null,
   targetDate?: string | null,
 ): boolean {
   return countAvailableModels(detail, targetDate) <= 1;
+}
+
+function hasSparseDetailCoverage(
+  detail?: CityDetail | null,
+  targetDate?: string | null,
+): boolean {
+  if (!detail) return true;
+  return (
+    hasSparseModelCoverage(detail, targetDate) || countForecastDays(detail) <= 1
+  );
 }
 
 export function DashboardStoreProvider({
@@ -244,7 +259,13 @@ export function DashboardStoreProvider({
   const ensureCityDetail = async (cityName: string, force = false) => {
     const cached = cityDetailsByName[cityName];
     const cachedMeta = cityDetailMetaByName[cityName];
-    if (!force && cached && dashboardClient.isCityDetailFresh(cachedMeta)) {
+    const cachedIsSparse = hasSparseDetailCoverage(cached, cached?.local_date);
+    if (
+      !force &&
+      cached &&
+      !cachedIsSparse &&
+      dashboardClient.isCityDetailFresh(cachedMeta)
+    ) {
       scheduleBackgroundDetailRefresh(cityName, cached, cachedMeta);
       return cached;
     }
@@ -254,6 +275,28 @@ export function DashboardStoreProvider({
         const summary = await dashboardClient.getCitySummary(cityName);
         const revision = getCityRevision(summary);
         if (revision && revision === cachedMeta?.revision) {
+          if (cachedIsSparse) {
+            const latestDetail = await dashboardClient.getCityDetail(cityName, {
+              force: true,
+            });
+            const detail = latestDetail;
+            setCityDetailsByName((current) => ({
+              ...current,
+              [cityName]: detail,
+            }));
+            setCitySummariesByName((current) => ({
+              ...current,
+              [cityName]: toCitySummary(detail),
+            }));
+            setCityDetailMetaByName((current) => ({
+              ...current,
+              [cityName]: {
+                cachedAt: Date.now(),
+                revision: getCityRevision(detail),
+              },
+            }));
+            return detail;
+          }
           setCityDetailMetaByName((current) => ({
             ...current,
             [cityName]: {
@@ -472,9 +515,14 @@ export function DashboardStoreProvider({
       await refreshProAccess();
     }
     const access = proAccessRef.current;
+    const cachedDetail = cityDetailsByName[cityName];
+    const needsDetailRefresh = hasSparseDetailCoverage(
+      cachedDetail,
+      cachedDetail?.local_date,
+    );
     setLoadingState((current) => ({ ...current, cityDetail: true }));
     try {
-      const detail = await ensureCityDetail(cityName);
+      const detail = await ensureCityDetail(cityName, needsDetailRefresh);
       setSelectedForecastDate(detail.local_date);
       if (access.authenticated && access.subscriptionActive) {
         // 预热市场数据，不做 await 阻塞，后台静默拉取
@@ -621,9 +669,9 @@ export function DashboardStoreProvider({
         setFutureModalDate(dateStr);
         if (!selectedCity || !proAccess.subscriptionActive) return;
         const cachedDetail = cityDetailsByName[selectedCity];
-        const needsModelRefresh =
-          !forceRefresh && hasSparseModelCoverage(cachedDetail, dateStr);
-        if (needsModelRefresh) {
+        const needsDetailRefresh =
+          !forceRefresh && hasSparseDetailCoverage(cachedDetail, dateStr);
+        if (needsDetailRefresh) {
           void ensureCityDetail(selectedCity, true).catch(() => {});
         }
         const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
@@ -652,8 +700,9 @@ export function DashboardStoreProvider({
           setFutureModalDate(cachedDetail.local_date);
         }
         if (!proAccess.subscriptionActive) return;
-        const needsModelRefresh =
-          !forceRefresh && hasSparseModelCoverage(cachedDetail, cachedDetail?.local_date);
+        const needsDetailRefresh =
+          !forceRefresh &&
+          hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
 
         setLoadingState((current) => ({
           ...current,
@@ -664,7 +713,7 @@ export function DashboardStoreProvider({
         try {
           const detail = await ensureCityDetail(
             selectedCity,
-            Boolean(forceRefresh || needsModelRefresh),
+            Boolean(forceRefresh || needsDetailRefresh),
           );
           setSelectedForecastDate(detail.local_date);
           setFutureModalDate(detail.local_date);

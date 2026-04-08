@@ -57,6 +57,12 @@ export function getCityRevision(source?: CityDetail | CitySummary | null) {
       ? source.multi_model_daily?.[source.local_date || ""]
       : null;
   const modelFootprint = modelDaily?.models || ("multi_model" in source ? source.multi_model : null);
+  const forecastFootprint =
+    "forecast" in source && Array.isArray(source.forecast?.daily)
+      ? source.forecast.daily
+          .map((item) => `${normalizeRevisionPart(item?.date)}:${normalizeRevisionPart(item?.max_temp)}`)
+          .join("|")
+      : "";
   return [
     normalizeRevisionPart(source.updated_at),
     normalizeRevisionPart(source.current?.obs_time),
@@ -70,6 +76,7 @@ export function getCityRevision(source?: CityDetail | CitySummary | null) {
             .join("|")
         : "",
     ),
+    normalizeRevisionPart(forecastFootprint),
   ].join("|");
 }
 
