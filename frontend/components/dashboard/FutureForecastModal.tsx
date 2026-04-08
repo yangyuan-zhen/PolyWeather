@@ -26,7 +26,6 @@ import {
 } from "@/components/dashboard/PanelSections";
 import {
   getFutureModalView,
-  getAirportNarrative,
   getTodayPaceView,
   parseAiAnalysis,
   getTemperatureChartData,
@@ -1004,71 +1003,6 @@ export function FutureForecastModal() {
       ...getCurrentMetricDescriptor("visibility", visibilityText, visibilityValue),
     },
   ];
-  const ai = getAirportNarrative(detail, locale);
-  const risk = detail.risk || {};
-  const settlementSourceCode = String(
-    detail.current?.settlement_source || "",
-  ).toLowerCase();
-  const isOfficialSettlementSource =
-    settlementSourceCode === "hko" ||
-    settlementSourceCode === "cwa" ||
-    settlementSourceCode === "noaa" ||
-    settlementSourceCode === "wunderground";
-  const settlementProfileLabel = isOfficialSettlementSource
-    ? locale === "en-US"
-      ? "Settlement station"
-      : "结算站点"
-    : t("section.airport");
-  const settlementStationLabel =
-    detail.settlement_station?.settlement_station_label ||
-    detail.current?.station_name ||
-    risk.airport ||
-    noaaStationName;
-  const settlementStationCode =
-    detail.settlement_station?.settlement_station_code ||
-    detail.current?.station_code ||
-    risk.icao ||
-    noaaStationCode;
-  const settlementProfileValue =
-    settlementStationLabel
-      ? `${settlementStationLabel}${settlementStationCode ? ` (${settlementStationCode})` : ""}`
-      : "--";
-  const airportPrimary = detail.airport_primary || detail.airport_current;
-  const airportCurrentText =
-    airportPrimary?.temp != null
-      ? `${airportPrimary.temp}${detail.temp_symbol}${
-          airportPrimary?.obs_time
-            ? ` @${airportPrimary.obs_time}`
-            : ""
-        }`
-      : "--";
-  const airportMaxText =
-    airportPrimary?.max_so_far != null
-      ? `${airportPrimary.max_so_far}${detail.temp_symbol}${
-          airportPrimary?.max_temp_time
-            ? ` @${airportPrimary.max_temp_time}`
-            : ""
-        }`
-      : "--";
-  const officialNearbyCount = Array.isArray(detail.official_nearby)
-    ? detail.official_nearby.length
-    : Array.isArray(detail.mgm_nearby)
-      ? detail.mgm_nearby.length
-      : 0;
-  const officialNetworkSourceText =
-    detail.official_network_status?.provider_label ||
-    detail.official_network_source ||
-    "--";
-  const officialNetworkStatusText =
-    detail.official_network_status?.mode ||
-    "--";
-  const airportVsNetworkDeltaText =
-    detail.airport_vs_network_delta != null &&
-    Number.isFinite(Number(detail.airport_vs_network_delta))
-      ? `${Number(detail.airport_vs_network_delta) > 0 ? "+" : ""}${Number(
-          detail.airport_vs_network_delta,
-        ).toFixed(1)}${detail.temp_symbol}`
-      : "--";
   const displayedUpperAirSummary =
     marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
   const displayedUpperAirMetrics = (view.front.upperAirMetrics || []).map(
@@ -1484,103 +1418,20 @@ export function FutureForecastModal() {
                   <section className="future-v2-card">
                     <h4 className="future-v2-card-title">
                       {locale === "en-US"
-                        ? "City Risk Profile & Airport Narrative"
-                        : "城市风险档案与机场报文解读"}
+                        ? "Current Metrics"
+                        : "当前指标补充"}
                     </h4>
-                    <div className="future-v2-stack">
-                      <div className="future-v2-subpanel">
-                        <h5 className="future-v2-subpanel-title">
-                          {locale === "en-US" ? "City Risk Profile" : "城市风险档案"}
-                        </h5>
-                        <div className="risk-info" style={{ marginTop: "10px" }}>
-                          {!risk.airport ? (
-                            <span style={{ color: "var(--text-muted)" }}>
-                              {t("section.noRiskProfile")}
-                            </span>
-                          ) : (
-                            <>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {settlementProfileLabel}
-                                </span>
-                                <span>{settlementProfileValue}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {locale === "en-US" ? "Airport primary" : "机场主站"}
-                                </span>
-                                <span>{airportCurrentText}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {locale === "en-US" ? "Airport max today" : "机场今日最高"}
-                                </span>
-                                <span>{airportMaxText}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {locale === "en-US" ? "Official nearby" : "官方周边站"}
-                                </span>
-                                <span>
-                                  {officialNearbyCount} · {officialNetworkSourceText}
-                                </span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {locale === "en-US" ? "Network mode" : "站网模式"}
-                                </span>
-                                <span>{officialNetworkStatusText}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {locale === "en-US"
-                                    ? "Airport vs network"
-                                    : "机场相对站网偏差"}
-                                </span>
-                                <span>{airportVsNetworkDeltaText}</span>
-                              </div>
-                              <div className="risk-row">
-                                <span className="risk-label">
-                                  {t("section.distance")}
-                                </span>
-                                <span>{risk.distance_km ?? "--"}km</span>
-                              </div>
-                              {risk.warning ? (
-                                <div className="risk-row">
-                                  <span className="risk-label">
-                                    {t("section.note")}
-                                  </span>
-                                  <span>{risk.warning}</span>
-                                </div>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
+                    <div className="future-v2-mini-grid future-v2-mini-grid-tight">
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Day high so far" : "日内已见高点"}</span>
+                        <strong>
+                          {topObservedTemp ?? "--"}
+                          {detail.temp_symbol}
+                        </strong>
                       </div>
-                      <div className="future-v2-subpanel">
-                        <h5 className="future-v2-subpanel-title">
-                          {locale === "en-US" ? "Airport Narrative" : "机场报文解读"}
-                        </h5>
-                        <div className="ai-box" style={{ marginTop: "10px" }}>
-                          {!ai.summary && ai.bullets.length === 0 ? (
-                            <span className="ai-placeholder">
-                              {t("future.noAi")}
-                            </span>
-                          ) : (
-                            <>
-                              {ai.summary ? (
-                                <div className="ai-summary">{ai.summary}</div>
-                              ) : null}
-                              {ai.bullets.length > 0 ? (
-                                <ul className="ai-list">
-                                  {ai.bullets.map((item) => (
-                                    <li key={item}>{item}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </>
-                          )}
-                        </div>
+                      <div className="future-v2-mini-item">
+                        <span>{locale === "en-US" ? "Current obs" : "当前观测"}</span>
+                        <strong>{currentTempText}</strong>
                       </div>
                     </div>
                   </section>
