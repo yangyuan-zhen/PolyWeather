@@ -3019,6 +3019,110 @@
   background: linear-gradient(90deg, #b45309 0%, #f59e0b 100%);
 }
 
+.root :global(.future-v2-pace-card) {
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(34, 211, 238, 0.12) 0%,
+      rgba(15, 23, 42, 0) 42%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(8, 15, 28, 0.96) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+}
+
+.root :global(.future-v2-pace-head) {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.root :global(.future-v2-pace-kicker) {
+  color: var(--text-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.root :global(.future-v2-pace-delta) {
+  margin-top: 10px;
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+}
+
+.root :global(.future-v2-pace-delta.warm) {
+  color: #fbbf24;
+}
+
+.root :global(.future-v2-pace-delta.cold) {
+  color: #67e8f9;
+}
+
+.root :global(.future-v2-pace-delta.neutral) {
+  color: #e2e8f0;
+}
+
+.root :global(.future-v2-pace-summary) {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.root :global(.future-v2-pace-meter) {
+  position: relative;
+  height: 10px;
+  margin-top: 12px;
+  border-radius: 999px;
+  overflow: hidden;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(34, 211, 238, 0.12) 0%,
+      rgba(255, 255, 255, 0.06) 46%,
+      rgba(255, 255, 255, 0.06) 54%,
+      rgba(251, 191, 36, 0.12) 100%
+    );
+}
+
+.root :global(.future-v2-pace-meter-midline) {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  transform: translateX(-50%);
+  z-index: 1;
+}
+
+.root :global(.future-v2-pace-meter-fill) {
+  position: absolute;
+  top: 0;
+  left: var(--pace-left, 46%);
+  width: var(--pace-width, 8%);
+  bottom: 0;
+  border-radius: inherit;
+}
+
+.root :global(.future-v2-pace-meter-fill.warm) {
+  background: linear-gradient(90deg, #b45309 0%, #fbbf24 100%);
+}
+
+.root :global(.future-v2-pace-meter-fill.cold) {
+  background: linear-gradient(90deg, #0f766e 0%, #67e8f9 100%);
+}
+
+.root :global(.future-v2-pace-meter-fill.neutral) {
+  background: linear-gradient(90deg, #475569 0%, #cbd5e1 100%);
+}
+
 .root :global(.intraday-scene-shell) {
   margin-top: 12px;
   margin-bottom: 10px;

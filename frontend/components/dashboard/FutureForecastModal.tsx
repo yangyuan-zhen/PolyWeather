@@ -27,6 +27,7 @@ import {
 import {
   getFutureModalView,
   getAirportNarrative,
+  getTodayPaceView,
   parseAiAnalysis,
   getTemperatureChartData,
   getWeatherSummary,
@@ -703,6 +704,10 @@ export function FutureForecastModal() {
     "--score-position": scorePosition,
   } as CSSProperties & { "--score-position": string };
   const weatherSummary = getWeatherSummary(detail, locale);
+  const paceView = useMemo(
+    () => (isToday ? getTodayPaceView(detail, locale) : null),
+    [detail, isToday, locale],
+  );
   const isNoaaSettlement =
     detail.current?.settlement_source === "noaa" ||
     detail.current?.settlement_source_label === "NOAA";
@@ -1280,6 +1285,94 @@ export function FutureForecastModal() {
                       </div>
                     </div>
                   </section>
+
+                  {paceView ? (
+                    <section className="future-v2-card future-v2-pace-card">
+                      <h4 className="future-v2-card-title">
+                        {locale === "en-US" ? "Current Pace" : "当前节奏 Pace"}
+                      </h4>
+                      <div className="future-v2-pace-head">
+                        <span className="future-v2-pace-kicker">
+                          {paceView.kicker}
+                        </span>
+                        <em
+                          className={clsx(
+                            "future-v2-signal-tag",
+                            paceView.biasTone === "cold" && "cyan",
+                            paceView.biasTone === "neutral" && "blue",
+                            paceView.biasTone === "warm" && "amber",
+                          )}
+                        >
+                          {paceView.badge}
+                        </em>
+                      </div>
+                      <div
+                        className={clsx(
+                          "future-v2-pace-delta",
+                          paceView.biasTone === "cold" && "cold",
+                          paceView.biasTone === "neutral" && "neutral",
+                          paceView.biasTone === "warm" && "warm",
+                        )}
+                      >
+                        {paceView.deltaText}
+                      </div>
+                      <div className="future-v2-pace-summary">
+                        {paceView.summary}
+                      </div>
+                      <div className="future-v2-pace-meter">
+                        <span className="future-v2-pace-meter-midline" />
+                        <span
+                          className={clsx(
+                            "future-v2-pace-meter-fill",
+                            paceView.biasTone === "cold" && "cold",
+                            paceView.biasTone === "neutral" && "neutral",
+                            paceView.biasTone === "warm" && "warm",
+                          )}
+                          style={
+                            {
+                              "--pace-left": `${paceView.meterLeft}%`,
+                              "--pace-width": `${paceView.meterWidth}%`,
+                            } as CSSProperties & {
+                              "--pace-left": string;
+                              "--pace-width": string;
+                            }
+                          }
+                        />
+                      </div>
+                      <div className="future-v2-mini-grid future-v2-mini-grid-tight">
+                        <div className="future-v2-mini-item">
+                          <span>
+                            {locale === "en-US" ? "Expected now" : "预期此刻"}
+                          </span>
+                          <strong>
+                            {paceView.expectedNow.toFixed(1)}
+                            {detail.temp_symbol}
+                          </strong>
+                        </div>
+                        <div className="future-v2-mini-item">
+                          <span>{paceView.observedLabel}</span>
+                          <strong>
+                            {paceView.observedNow.toFixed(1)}
+                            {detail.temp_symbol}
+                          </strong>
+                        </div>
+                        <div className="future-v2-mini-item">
+                          <span>{paceView.paceAdjustedLabel}</span>
+                          <strong>
+                            {paceView.paceAdjustedHigh != null
+                              ? `${paceView.paceAdjustedHigh.toFixed(1)}${detail.temp_symbol}`
+                              : "--"}
+                          </strong>
+                        </div>
+                        <div className="future-v2-mini-item">
+                          <span>
+                            {locale === "en-US" ? "Peak window" : "峰值窗口"}
+                          </span>
+                          <strong>{paceView.peakWindowText}</strong>
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
 
                   <section className="future-v2-card">
                     <h4 className="future-v2-card-title">
