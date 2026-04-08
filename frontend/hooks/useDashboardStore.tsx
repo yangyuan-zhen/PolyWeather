@@ -182,9 +182,10 @@ export function DashboardStoreProvider({
       ]),
     ),
   );
-  const selectedDetail = selectedCity
-    ? cityDetailsByName[selectedCity] || null
-    : null;
+  const selectedDetail =
+    selectedCity && proAccess.subscriptionActive
+      ? cityDetailsByName[selectedCity] || null
+      : null;
   const selectedMarketDate =
     futureModalDate ||
     selectedForecastDate ||
@@ -193,9 +194,10 @@ export function DashboardStoreProvider({
   const selectedMarketScanKey = selectedCity
     ? getMarketScanCacheKey(selectedCity, selectedMarketDate)
     : null;
-  const selectedMarketScan = selectedCity
-    ? marketScanByCityName[selectedMarketScanKey || ""] || null
-    : null;
+  const selectedMarketScan =
+    selectedCity && proAccess.subscriptionActive
+      ? marketScanByCityName[selectedMarketScanKey || ""] || null
+      : null;
 
   useEffect(() => {
     dashboardClient.writeCityDetailCacheBundle(
@@ -210,6 +212,15 @@ export function DashboardStoreProvider({
 
   useEffect(() => {
     proAccessRef.current = proAccess;
+  }, [proAccess]);
+
+  useEffect(() => {
+    if (proAccess.loading) return;
+    if (proAccess.authenticated && proAccess.subscriptionActive) return;
+    dashboardClient.clearCityDetailCache();
+    setCityDetailsByName({});
+    setCityDetailMetaByName({});
+    setMarketScanByCityName({});
   }, [proAccess]);
 
   const scheduleBackgroundDetailRefresh = (
