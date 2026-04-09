@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 import time
 from datetime import datetime
-from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
@@ -266,4 +265,3 @@ class KmaStationSourceMixin:
                 (time.perf_counter() - started) * 1000.0,
             )
             return []
-
