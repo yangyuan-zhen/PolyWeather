@@ -45,6 +45,11 @@ const FutureForecastModal = dynamic(
 function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
+  const activeCityName =
+    store.selectedDetail?.display_name ||
+    store.cities.find((city) => city.name === store.selectedCity)?.display_name ||
+    store.selectedCity ||
+    "";
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -79,6 +84,14 @@ function DashboardScreen() {
       <HeaderBar />
       <CitySidebar />
       <DetailPanel />
+      {store.loadingState.cityDetail && activeCityName ? (
+        <div className="city-loading-toast" role="status" aria-live="polite">
+          <span className="city-loading-dot" aria-hidden="true" />
+          <span className="city-loading-copy">
+            {t("dashboard.loading")} {activeCityName}
+          </span>
+        </div>
+      ) : null}
       {store.historyState.isOpen && <HistoryModal />}
       {store.futureModalDate && <FutureForecastModal />}
       {showLoading && (

@@ -317,6 +317,16 @@ export function DetailPanel() {
         </button>
         <div className="panel-title-area">
           <h2>{panelDisplayName.toUpperCase()}</h2>
+          {store.loadingState.cityDetail && (
+            <div className="panel-loading-hint" role="status" aria-live="polite">
+              <span className="panel-loading-spinner" aria-hidden="true" />
+              <span>
+                {locale === "en-US"
+                  ? `Syncing ${panelDisplayName}...`
+                  : `正在同步 ${panelDisplayName}...`}
+              </span>
+            </div>
+          )}
           <div className="panel-meta">
             <span className={clsx("risk-badge", panelRiskLevel)}>
               {getRiskBadgeLabel(panelRiskLevel, locale)}
