@@ -2624,6 +2624,7 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const risk = detail.risk || {};
   const current = detail.current || {};
   const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
+  const nearbySource = String(detail.nearby_source || "").trim().toLowerCase();
   const sourceCode = getObservationSourceCode(detail);
   const isOfficialSource =
     sourceCode === "hko" ||
@@ -2667,7 +2668,7 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
     return isEnglish(locale) ? "No profile" : "暂无档案";
   })();
 
-  return [
+  const rows = [
     {
       label: isOfficialSource
         ? isEnglish(locale)
@@ -2712,6 +2713,63 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
             : "暂无周边站",
     },
   ];
+
+  if (nearbyCount > 0) {
+    rows.push({
+      label: isEnglish(locale) ? "Nearby source" : "周边站来源",
+      value:
+        nearbySource === "kma"
+          ? isEnglish(locale)
+            ? "KMA official stations"
+            : "KMA 官方站"
+          : nearbySource === "official_cluster"
+            ? isEnglish(locale)
+              ? "Official station cluster"
+              : "官方站簇"
+            : nearbySource === "mgm"
+              ? "MGM"
+              : isEnglish(locale)
+                ? "Airport / METAR network"
+                : "机场 / METAR 网络",
+    });
+  }
+
+  if (nearbySource === "kma" && detail.airport_current?.temp != null) {
+    const airportLabel =
+      String(
+        detail.airport_current.station_label ||
+          detail.airport_current.station_code ||
+          detail.risk?.airport ||
+          "",
+      ).trim() ||
+      (isEnglish(locale) ? "Airport station" : "机场主站");
+    const airportObsTime =
+      String(detail.airport_current.obs_time || "").trim() ||
+      (isEnglish(locale) ? "pending" : "待更新");
+    const airportHigh =
+      detail.airport_current.max_so_far != null
+        ? `${detail.airport_current.max_so_far}${detail.temp_symbol || ""}${
+            detail.airport_current.max_temp_time
+              ? ` @ ${detail.airport_current.max_temp_time}`
+              : ""
+          }`
+        : isEnglish(locale)
+          ? "Unavailable"
+          : "未提供";
+
+    rows.push({
+      label: isEnglish(locale) ? "Airport reference" : "机场主站参考",
+      value: `${airportLabel}: ${detail.airport_current.temp}${
+        detail.temp_symbol || ""
+      } @ ${airportObsTime}`,
+    });
+    rows.push({
+      label: isEnglish(locale) ? "Airport high" : "机场目前最高温",
+      value: airportHigh,
+    });
+  }
+
+  return rows;
 }
 
 export function getSettlementRiskNarrative(

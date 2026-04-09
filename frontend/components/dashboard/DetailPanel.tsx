@@ -151,6 +151,7 @@ export function DetailPanel() {
   );
   const isPro = store.proAccess.subscriptionActive;
   const isAuthenticated = store.proAccess.authenticated;
+  const isProStateLoading = store.proAccess.loading;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
@@ -201,6 +202,9 @@ export function DetailPanel() {
     (locale === "en-US" ? "Airport pending" : "机场待确认");
   const isBasicSummaryLoading =
     !detail && !selectedSummary && store.loadingState.cityDetail;
+  const shouldShowSyncCard =
+    !detail &&
+    (store.loadingState.cityDetail || isProStateLoading || isAuthenticated);
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
     const active = document.activeElement;
@@ -451,7 +455,7 @@ export function DetailPanel() {
             <section className="detail-section">
               <div className="detail-card">
                 <span className="detail-label">
-                  {isPro
+                  {shouldShowSyncCard
                     ? locale === "en-US"
                       ? "Detail sync"
                       : "详情同步"
@@ -460,7 +464,7 @@ export function DetailPanel() {
                       : "Pro 功能"}
                 </span>
                 <span className="detail-value" style={{ fontSize: "15px" }}>
-                  {isPro
+                  {shouldShowSyncCard
                     ? locale === "en-US"
                       ? "Full city detail is still syncing. The deeper panel will appear automatically."
                       : "完整城市详情仍在同步中，深度面板会自动补齐。"
