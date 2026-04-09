@@ -451,12 +451,22 @@ export function DetailPanel() {
             <section className="detail-section">
               <div className="detail-card">
                 <span className="detail-label">
-                  {locale === "en-US" ? "Pro features" : "Pro 功能"}
+                  {isPro
+                    ? locale === "en-US"
+                      ? "Detail sync"
+                      : "详情同步"
+                    : locale === "en-US"
+                      ? "Pro features"
+                      : "Pro 功能"}
                 </span>
                 <span className="detail-value" style={{ fontSize: "15px" }}>
-                  {locale === "en-US"
-                    ? "Intraday analysis, history reconciliation, and deeper structure signals require Pro."
-                    : "今日日内分析、历史对账和更深入的结构信号需要 Pro。"}
+                  {isPro
+                    ? locale === "en-US"
+                      ? "Full city detail is still syncing. The deeper panel will appear automatically."
+                      : "完整城市详情仍在同步中，深度面板会自动补齐。"
+                    : locale === "en-US"
+                      ? "Intraday analysis, history reconciliation, and deeper structure signals require Pro."
+                      : "今日日内分析、历史对账和更深入的结构信号需要 Pro。"}
                 </span>
               </div>
             </section>
