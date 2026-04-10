@@ -108,6 +108,44 @@ def test_hko_provider_marks_explicit_official_station_as_anchor():
     assert snapshot["official_nearby"][0]["station_code"] == "LFS"
 
 
+def test_russia_provider_prefers_official_web_rows_when_available():
+    raw = {
+        "metar": {
+            "observation_time": "2026-04-06T10:00:00.000Z",
+            "current": {"temp": 11.0},
+        },
+        "ru_official_nearby": [
+            {
+                "station_code": "27524",
+                "station_label": "Vnukovo",
+                "lat": 55.5870,
+                "lon": 37.2500,
+                "temp": 12.3,
+                "obs_time": "2026-04-06T09:00:00+00:00",
+                "is_airport_station": True,
+                "page_url": "https://www.pogodaiklimat.ru/weather.php?id=27524",
+            }
+        ],
+        "mgm_nearby": [
+            {
+                "name": "Sheremetyevo",
+                "icao": "UUEE",
+                "lat": 55.97,
+                "lon": 37.41,
+                "temp": 12.0,
+            }
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("moscow", raw)
+
+    assert snapshot["provider_code"] == "russia_station_web"
+    assert snapshot["official_network_status"]["available"] is True
+    assert snapshot["official_network_status"]["mode"] == "official_web_crawl"
+    assert snapshot["official_nearby"][0]["source_code"] == "ru_station_web"
+    assert snapshot["official_nearby"][0]["is_official"] is True
+
+
 def test_city_detail_payload_exposes_airport_and_official_network_layers():
     payload = _build_city_detail_payload(
         {

@@ -41,6 +41,8 @@ def _provider_code_for_city(city: str) -> str:
         return "turkey_mgm"
     if normalized in {"busan", "seoul"}:
         return "korea_kma"
+    if normalized == "moscow":
+        return "russia_station_web"
     if settlement_source == "hko":
         return "hongkong_hko"
     if settlement_source == "cwa":
@@ -229,6 +231,34 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                 extra={
                     "distance_km": _safe_float(row.get("distance_km")),
                     "network_type": row.get("network_type"),
+                },
+            )
+        )
+    return out
+
+
+def _ru_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
+    rows = raw.get("ru_official_nearby") or []
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            _normalize_station_row(
+                station_code=row.get("station_code") or row.get("icao") or row.get("istNo"),
+                station_label=row.get("station_label") or row.get("name"),
+                temp=row.get("temp"),
+                lat=row.get("lat"),
+                lon=row.get("lon"),
+                obs_time=row.get("obs_time"),
+                source_code="ru_station_web",
+                source_label="Russia station web",
+                is_official=True,
+                is_airport_station=_bool(row.get("is_airport_station")),
+                is_settlement_anchor=False,
+                extra={
+                    "distance_km": _safe_float(row.get("distance_km")),
+                    "page_url": row.get("page_url"),
                 },
             )
         )
@@ -497,6 +527,28 @@ class KoreaKmaNetworkProvider(CountryNetworkProvider):
         }
 
 
+class RussiaStationWebNetworkProvider(CountryNetworkProvider):
+    def __init__(self) -> None:
+        super().__init__("russia_station_web", "Russia station web")
+
+    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        rows = _ru_rows(raw, city)
+        if rows:
+            return rows
+        return _metar_cluster_rows(raw)
+
+    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        rows = self.official_nearby_current(city, raw)
+        has_ru = bool(_ru_rows(raw, city))
+        return {
+            "provider_code": self.provider_code,
+            "provider_label": self.provider_label,
+            "available": has_ru,
+            "mode": "official_web_crawl" if has_ru else ("fallback_metar_cluster" if rows else "reference_only"),
+            "row_count": len(rows),
+        }
+
+
 class HongKongHkoNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("hongkong_hko", "HKO")
@@ -521,6 +573,8 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return TurkeyMgmNetworkProvider()
     if provider_code == "korea_kma":
         return KoreaKmaNetworkProvider()
+    if provider_code == "russia_station_web":
+        return RussiaStationWebNetworkProvider()
     if provider_code == "japan_jma":
         return JapanJmaNetworkProvider()
     if provider_code == "china_cma":
