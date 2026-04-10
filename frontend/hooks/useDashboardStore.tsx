@@ -584,8 +584,24 @@ export function DashboardStoreProvider({
     setFutureModalDate(null);
 
     if (proAccessRef.current.loading) {
-      await refreshProAccess();
+      setLoadingState((current) => ({ ...current, cityDetail: true }));
+      if (!citySummariesRef.current[cityName]) {
+        try {
+          const summary = await dashboardClient.getCitySummary(cityName);
+          setCitySummariesByName((current) => ({
+            ...current,
+            [cityName]: summary,
+          }));
+        } catch {
+        } finally {
+          setLoadingState((current) => ({ ...current, cityDetail: false }));
+        }
+      } else {
+        setLoadingState((current) => ({ ...current, cityDetail: false }));
+      }
+      return;
     }
+
     const access = proAccessRef.current;
     if (!access.authenticated || !access.subscriptionActive) {
       setLoadingState((current) => ({ ...current, cityDetail: true }));
