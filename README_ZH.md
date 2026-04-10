@@ -14,7 +14,7 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-03-21）
+## 当前产品状态（2026-04-10）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
 - 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
@@ -26,6 +26,18 @@
 - 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
 - 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
+- 官方增强站网已统一接入：
+  - `MGM`（土耳其）
+  - `CMA/NMC`（中国内地）
+  - `JMA AMeDAS`（日本）
+  - `KMA`（韩国）
+  - `HKO`（香港）
+  - `CWA`（台湾）
+- 东京现已接入羽田 `JMA AMeDAS` 10 分钟温度作为官方增强层。
+- 已支持 Dashboard 定向预热 worker / cron 路径，运行态在 `/api/system/status` 与 `/ops` 可见。
+- `/ops` 现已展示缓存桶数量、summary cache hit/miss 与 prewarm heartbeat。
+- 今日日内结构解读已支持可选 `Groq` 改写层，失败时自动回退规则文案。
+- 前端部署文档已补充 Vercel 节流建议，包括 analytics 关闭、eager fetch 开关与扫描流量防火墙规则。
 
 ## 许可证与商用边界（重要）
 
@@ -39,12 +51,14 @@
 
 ## 核心能力
 
-- 聚合 30 个监控城市的实测与预报数据。
+- 聚合 45 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 输出结算导向概率分布（`mu` + 温度桶）。
 - 将模型观点映射到 Polymarket 行情，做错价扫描。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
 - 支付链路具备事件重放、SQLite 审计事件与 RPC 容灾能力。
+- 官方增强层支持按国家 provider 统一接入，但不替代机场主站或明确官方结算站。
+- 支持后台预热热点城市，降低用户点击城市后的冷启动成本。
 
 ## 参考架构
 
@@ -58,22 +72,26 @@ flowchart LR
     API --> WX["Weather Collector"]
     WX --> METAR["Aviation Weather（METAR）"]
     WX --> MGM["MGM（土耳其站网）"]
+    WX --> JMA["JMA AMeDAS（日本）"]
+    WX --> KMA["KMA（韩国）"]
     WX --> OM["Open-Meteo"]
+    WX --> HKO["HKO / CWA / NOAA 等官方结算源"]
 
     API --> ANA["DEB + 趋势 + 概率 + 市场扫描"]
     ANA --> PAY["支付状态（Intent + Event + Confirm Loop）"]
     ANA --> PM["Polymarket 只读层"]
     API --> OBS["healthz / system status / metrics"]
+    API --> PREWARM["Dashboard 预热接口 / Worker"]
+    ANA --> LLM["可选 Groq 文案改写层"]
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
-## 监控城市（30）
+## 监控城市（45）
 
-- 欧洲/中东：Ankara、London、Paris、Munich、Tel Aviv、Milan、Warsaw、Madrid
-- 亚太：Seoul、Hong Kong、Taipei、Shanghai、Singapore、Tokyo、Wellington
-- 美洲：Toronto、New York、Chicago、Dallas、Miami、Atlanta、Seattle、Buenos Aires、Sao Paulo
+- 欧洲/中东：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki
+- 亚太：Seoul、Busan、Hong Kong、Lau Fau Shan、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen、Singapore、Tokyo、Kuala Lumpur、Jakarta、Wellington
+- 美洲：Toronto、New York、Los Angeles、San Francisco、Denver、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
 - 南亚：Lucknow
-- 中国扩展：Chengdu、Chongqing、Shenzhen、Beijing、Wuhan
 
 ## 快速启动
 
@@ -87,7 +105,7 @@ docker compose up -d --build
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -110,6 +128,20 @@ curl http://127.0.0.1:8000/healthz
 curl http://127.0.0.1:8000/api/system/status
 curl http://127.0.0.1:8000/metrics
 ```
+
+### Dashboard 预热 Worker
+
+```bash
+docker compose --profile workers up -d polyweather_prewarm
+curl http://127.0.0.1:8000/api/system/status
+```
+
+重点关注：
+
+- `prewarm.thread_alive`
+- `prewarm.runtime.cycle_count`
+- `prewarm.runtime.last_summary_ok`
+- `cache.analysis.hit_rate`
 
 ### 前端缓存头
 
@@ -196,5 +228,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## 当前版本
 
-- 版本：`v1.5.1`
-- 文档最后更新：`2026-03-21`
+- 版本：`v1.5.3`
+- 文档最后更新：`2026-04-10`

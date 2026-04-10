@@ -41,7 +41,7 @@ export const DOCS_PAGES: DocsPage[] = [
     content: {
       "zh-CN": {
         title: "简介",
-        description: "PolyWeather 文档中心解释核心产品概念、结算口径和日内结构信号，帮助用户把天气分析转成可执行判断。",
+        description: "PolyWeather 文档中心解释核心产品概念、结算口径和日内结构信号，帮助用户把机场锚点、官方增强层和模型判断转成可执行判断。",
         sections: [
           {
             id: "what-is-polyweather",
@@ -55,21 +55,21 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "你会在页面上看到什么",
             blocks: [
-              { type: "bullets", items: ["今日日内分析：围绕今日峰值窗口，解释近地面信号、高空结构和机场 TAF。", "多模型预报：展示 DEB 与多模型最高温预测，帮助判断市场当前最热桶是否合理。", "历史对账：查看近 15 天已结算样本、DEB MAE 与最佳单模型表现。", "站点结构：明确区分结算站点、机场主站和官方增强站网。"] },
+              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "当前命中胜率 / 模型区间与分歧：快速看最可能命中的温度桶，以及多模型当前分歧。", "今日日内结构信号：用近地面结构、高空结构、机场 TAF 和官方增强层解释今天还会不会继续冲高。", "历史对账：查看近 15 天已结算样本、DEB MAE 与最佳单模型表现。"] },
             ],
           },
           {
             id: "how-to-read",
             title: "如何快速读懂主站",
             blocks: [
-              { type: "steps", items: ["先看今日气温预测图，确认当前实测、DEB 预测和峰值窗口。", "再看今日日内结构信号，判断现在是偏支持继续升温、偏压制，还是先观察。", "最后看市场对照与概率分布，判断市场是否已经把天气结构计入价格。"] },
+              { type: "steps", items: ["先看锚点状态和今日气温预测图，确认当前机场实测、DEB 预测和峰值窗口。", "再看当前节奏，判断今天是偏热、偏冷，还是基本按预期在走。", "接着看今日日内结构信号，确认边界风险、机场 vs 周边站，以及 TAF 有没有压温扰动。", "最后看当前命中胜率与模型区间，判断最热桶是不是已经被市场充分计价。"] },
             ],
           },
         ],
       },
       "en-US": {
         title: "Introduction",
-        description: "The PolyWeather docs explain the product's core concepts, settlement logic, and intraday structural signals so users can turn weather context into actionable decisions.",
+        description: "The PolyWeather docs explain the product's core concepts, settlement logic, and intraday structural signals so users can turn airport anchors, official nearby networks, and model context into actionable decisions.",
         sections: [
           {
             id: "what-is-polyweather",
@@ -83,14 +83,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "What you see on the site",
             blocks: [
-              { type: "bullets", items: ["Intraday analysis: peak-window focused reading of surface structure, upper-air structure, and airport TAF.", "Multi-model forecast: DEB versus major model highs, useful for checking whether the hottest market bucket is justified.", "History reconciliation: settled-sample MAE and hit-rate over the last 15 days.", "Station structure: a clear split between the settlement station, airport primary observation, and official nearby network."] },
+              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Current hit odds / model spread: the likeliest bucket now and how far the model family is split.", "Intraday structural signal: surface structure, upper-air structure, airport TAF, and official nearby-network context around the peak window.", "History reconciliation: settled-sample MAE and hit-rate over the last 15 days."] },
             ],
           },
           {
             id: "how-to-read",
             title: "How to read the dashboard quickly",
             blocks: [
-              { type: "steps", items: ["Start with the intraday temperature chart to anchor current observations, DEB, and the expected peak window.", "Read the structural signal next to see whether the setup still supports further warming, leans suppressive, or remains mixed.", "Then compare that weather structure against market buckets and settlement probabilities."] },
+              { type: "steps", items: ["Start with anchor status and the intraday chart to anchor current observations, DEB, and the expected peak window.", "Read the current pace card to see whether the airport is running hot, cold, or roughly on schedule.", "Use the structural signal to check boundary risk, airport versus nearby stations, and whether TAF introduces suppression risk.", "Then compare that weather structure against hit odds and the model spread."] },
             ],
           },
         ],
@@ -242,7 +242,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数机场市场：按机场 METAR 或机场主站实况结算。", "土耳其机场市场：机场主站仍以 METAR 为锚点，同时保留 Turkish MGM 作为领先结构参考。", "中国内地机场市场：机场主站仍以 METAR 为锚点，NMC 当前实况作为官方增强层，不直接替代机场结算站。", "香港 / 流浮山 / 台湾等明确官方站点市场：按规则指定的官方结算站点结算，不能拿机场 TAF 或城区体感替代。"] },
+              { type: "bullets", items: ["多数机场市场：按机场 METAR 或机场主站实况结算。", "土耳其机场市场：机场主站仍以 METAR 为锚点，同时保留 Turkish MGM 作为领先结构参考。", "中国内地机场市场：机场主站仍以 METAR 为锚点，NMC 当前实况作为官方增强层，不直接替代机场结算站。", "日本 / 韩国机场市场：机场主站仍以 METAR 为锚点，同时可接入 JMA / KMA 官方增强层做领先结构参考。", "香港 / 流浮山 / 台湾等明确官方站点市场：按规则指定的官方结算站点结算，不能拿机场 TAF 或城区体感替代。"] },
             ],
           },
           {
@@ -269,7 +269,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked markets settle on airport METAR or the airport primary observing site.", "Turkish airport markets keep METAR as the airport anchor, with Turkish MGM retained as a leading-structure reference.", "Mainland China airport markets keep METAR as the airport anchor, while NMC current observations act as an official enhancement layer rather than a direct replacement anchor.", "Markets with explicitly designated official sites, such as Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts, should be anchored to those official settlement stations rather than generic airport logic."] },
+              { type: "bullets", items: ["Most airport-linked markets settle on airport METAR or the airport primary observing site.", "Turkish airport markets keep METAR as the airport anchor, with Turkish MGM retained as a leading-structure reference.", "Mainland China airport markets keep METAR as the airport anchor, while NMC current observations act as an official enhancement layer rather than a direct replacement anchor.", "Japanese and Korean airport markets can keep METAR as the anchor while using JMA / KMA nearby-network observations as an official enhancement layer.", "Markets with explicitly designated official sites, such as Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts, should be anchored to those official settlement stations rather than generic airport logic."] },
             ],
           },
           {

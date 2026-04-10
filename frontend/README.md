@@ -24,21 +24,26 @@ PolyWeather Pro 的生产前端工程。
 - 主站 Dashboard 支持地图、城市详情、今日日内分析、历史准确率对账和账户中心
 - `/docs` 已提供公开双语产品文档中心，解释日内结构信号、TAF、结算来源和历史对账
 - 今日日内分析支持：
-  - 峰值窗口感知的近地面结构信号
-  - 高空结构信号
-  - 交易动作卡
+  - `锚点状态`
+  - `当前节奏`
+  - `当前命中胜率`
+  - `模型区间与分歧`
+  - `今日日内结构信号`
   - 非香港机场城市的 `TAF` 时段提示与走势图联动
 - 历史对账支持：
   - `DEB / 最佳单模型 / 实测最高温` 对比
   - 峰值前 12 小时 `DEB` 参考（近似）
 - `/ops` 已支持桌面表格 + 手机端卡片化视图
+- 点击城市图标后会显示地图顶部同步提醒与详情面板内同步徽标，避免用户误判为卡住
+- 城市详情会自动识别“单模型 / 单日”的稀疏缓存并主动刷新，避免误把残缺 detail 当作完整结果
+- `/ops` 现已展示 prewarm worker 运行态、缓存桶状态与 summary cache hit/miss
 
 ## 本地开发
 
 ```bash
 cd frontend
 cp .env.example .env.local
-npm install
+npm ci
 npm run dev
 ```
 
@@ -86,6 +91,11 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 # 社群入口
 NEXT_PUBLIC_TELEGRAM_GROUP_URL=https://t.me/<your_group>
 NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
+
+# 推荐默认关闭的前端观测 / 预热开关
+NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS=false
+NEXT_PUBLIC_POLYWEATHER_WEB_VITALS=false
+NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES=false
 ```
 
 更完整的 Vercel 配置说明见：
@@ -136,6 +146,8 @@ Ops：
 
 - 系统状态
 - SQLite / rollout / 支付运行态
+- prewarm worker 运行态
+- 缓存桶状态与 summary cache hit/miss
 - 用户查询
 - 当前会员
 - 本周积分榜
@@ -169,6 +181,13 @@ Ops：
 - `cities` / `summary` / `history`：`ETag + Cache-Control`
 - `summary?force_refresh=true`：`no-store`
 - 支付相关路由：`no-store`
+- 当 detail 缓存只返回单模型或单日 forecast 时，前端会自动强刷完整 detail
+
+## Vercel 节流建议
+
+- 生产环境建议关闭 `Web Analytics` 和 `Speed Insights`
+- 建议把自建 `app analytics / web vitals / eager city summaries` 默认保持关闭
+- 如果你部署在 Vercel，可在 Firewall 中加一条 `WordPress / php scanner` 拦截规则，避免无效扫描白白触发 middleware
 
 ## AGPL 与商用边界说明
 
@@ -177,4 +196,4 @@ Ops：
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-03-24`
+最后更新：`2026-04-10`

@@ -23,7 +23,7 @@
 - Framework Preset: `Next.js`
 - Root Directory: `frontend`
 - Build Command: `npm run build`
-- Install Command: `npm install`
+- Install Command: `npm ci`
 
 如果仓库已经连接过 Vercel，通常只需要确认 `Root Directory` 仍然是 `frontend`。
 
@@ -97,6 +97,20 @@ NEXT_PUBLIC_TELEGRAM_BOT_URL=https://t.me/WeatherQuant_bot
 ```
 
 只影响按钮跳转，不影响核心页面加载。
+
+### 6. 前端观测与预热开关（推荐默认关闭）
+
+```env
+NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS=false
+NEXT_PUBLIC_POLYWEATHER_WEB_VITALS=false
+NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES=false
+```
+
+说明：
+
+- `NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS=false`：关闭前端自建埋点。
+- `NEXT_PUBLIC_POLYWEATHER_WEB_VITALS=false`：关闭前端 Web Vitals 上报。
+- `NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES=false`：关闭首页全量城市 summary 预热，避免白白消耗 Vercel function / edge 成本。
 
 ## 五、支付配置与旧部署治理
 
@@ -209,3 +223,33 @@ NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
 ```
 
 这是钱包连接的必需项。
+
+## 十、Vercel 成本与节流建议
+
+### 1. 建议先关闭的项目级能力
+
+- `Web Analytics`
+- `Speed Insights`
+
+它们对排查前端体验有价值，但在 Hobby / 低预算阶段会额外消耗数据点和边缘资源。
+
+### 2. 建议加的 Firewall 自定义规则
+
+如果你的 Next.js 项目根本不提供 WordPress / PHP 路径，建议在 Vercel Firewall 里先 `Log` 再 `Deny` 这条规则：
+
+```regex
+(^/(wp-admin|wp-includes|wp-content|wp-login|wordpress|xmlrpc\.php))|\.php($|\?)
+```
+
+目的：
+
+- 在边缘层提前拦截 WordPress / PHP 扫描流量
+- 避免无效请求继续触发 middleware 与 route handler
+
+### 3. 建议的上线前检查
+
+除了功能本身，额外确认：
+
+1. `Web Analytics` 和 `Speed Insights` 是否真的关闭
+2. `NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS` / `NEXT_PUBLIC_POLYWEATHER_WEB_VITALS` / `NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES` 是否保持关闭
+3. Firewall 自定义规则是否已从 `Log` 切到 `Deny`

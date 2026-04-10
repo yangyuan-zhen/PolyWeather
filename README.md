@@ -17,7 +17,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## Product Status (2026-03-24)
+## Product Status (2026-04-10)
 
 - Subscription live: `Pro Monthly 5 USDC`.
 - Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
@@ -32,6 +32,12 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
+- Official nearby-network layer now covers `MGM` (Turkey), `CMA/NMC` (Mainland China), `JMA AMeDAS` (Japan), `KMA` (Korea), `HKO` (Hong Kong), and `CWA` (Taiwan).
+- Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
+- Dashboard prewarm is now supported through a dedicated worker / cron path, with runtime status exposed in `/api/system/status` and `/ops`.
+- `/ops` now exposes cache bucket counts, summary cache hit / miss rate, and prewarm runtime heartbeat.
+- Intraday commentary can optionally use `Groq` as a bilingual rewrite layer, while rule-based commentary remains the fallback.
+- Vercel frontend guidance now includes cost controls for analytics, eager fetches, and edge-side scanner blocking.
 
 ## License & Commercial Boundary
 
@@ -45,7 +51,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 30 monitored cities.
+- Aggregates observations and forecasts for 45 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Generates settlement-oriented probability buckets (`mu` + bucket distribution).
 - Maps weather view to Polymarket quotes for mispricing scan.
@@ -53,6 +59,8 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
 - Adds peak-window-oriented intraday structure cards for surface + upper-air analysis.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
+- Adds official nearby-network enhancement layers for China, Japan, Korea, Hong Kong, Taiwan, and Turkey without replacing airport settlement anchors.
+- Adds optional dashboard prewarm worker so hot cities can be refreshed before user clicks.
 
 ## Reference Architecture
 
@@ -68,20 +76,23 @@ flowchart LR
     WX --> TAF["Aviation Weather (TAF)"]
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
-    WX --> HKO["HKO / NOAA / Official settlement sources"]
+    WX --> JMA["JMA AMeDAS (Japan)"]
+    WX --> KMA["KMA (Korea)"]
+    WX --> HKO["HKO / CWA / NOAA / Official settlement sources"]
 
     API --> ANA["DEB + Trend + Probability + Market Scan"]
     ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
     ANA --> PM["Polymarket Read-only Layer"]
+    ANA --> LLM["Optional Groq Commentary Rewrite"]
+    API --> PREWARM["Dashboard Prewarm API / Worker"]
 ```
 
-## Monitored Cities (30)
+## Monitored Cities (45)
 
-- Europe / Middle East: Ankara, London, Paris, Munich, Tel Aviv, Milan, Warsaw, Madrid
-- APAC: Seoul, Hong Kong, Taipei, Shanghai, Singapore, Tokyo, Wellington
-- Americas: Toronto, New York, Chicago, Dallas, Miami, Atlanta, Seattle, Buenos Aires, Sao Paulo
+- Europe / Middle East: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki
+- APAC: Seoul, Busan, Hong Kong, Lau Fau Shan, Taipei, Shanghai, Beijing, Wuhan, Chengdu, Chongqing, Shenzhen, Singapore, Tokyo, Kuala Lumpur, Jakarta, Wellington
+- Americas: Toronto, New York, Los Angeles, San Francisco, Denver, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
 - South Asia: Lucknow
-- China extension: Chengdu, Chongqing, Shenzhen, Beijing, Wuhan
 
 ## Quick Start
 
@@ -95,7 +106,7 @@ docker compose up -d --build
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
@@ -130,6 +141,20 @@ curl http://127.0.0.1:8000/healthz
 curl http://127.0.0.1:8000/api/system/status
 curl http://127.0.0.1:8000/metrics
 ```
+
+### Dashboard prewarm worker
+
+```bash
+docker compose --profile workers up -d polyweather_prewarm
+curl http://127.0.0.1:8000/api/system/status
+```
+
+Check:
+
+- `prewarm.thread_alive`
+- `prewarm.runtime.cycle_count`
+- `cache.analysis.hit_rate`
+- `cache.open_meteo_forecast_entries`
 
 ### Frontend cache headers
 
@@ -190,5 +215,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## Version
 
-- Version: `v1.5.1`
-- Last Updated: `2026-03-24`
+- Version: `v1.5.3`
+- Last Updated: `2026-04-10`

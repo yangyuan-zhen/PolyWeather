@@ -1,6 +1,6 @@
 # 外部监控与告警说明
 
-最后更新：`2026-04-01`
+最后更新：`2026-04-10`
 
 ## 1. 目标
 
@@ -105,7 +105,39 @@ python scripts/check_ops_health.py --base-url http://127.0.0.1:8000
 
 任何一项失败都会非零退出，适合挂到 crontab 或 systemd timer。
 
-## 8. 备注
+## 8. 当前内置运行态观测
+
+除了 Prometheus / Grafana 这套外部监控，当前后端还内置了更贴业务的只读运行态：
+
+- `/api/system/status`
+- `/ops`
+
+目前已覆盖：
+
+- `prewarm` worker 是否启用、线程 / heartbeat 是否活着
+- 最近一轮 prewarm 的：
+  - `cycle_count`
+  - `success_count / failure_count`
+  - `last_started_at / last_finished_at`
+  - `last_summary_ok / last_detail_ok / last_market_ok`
+- 缓存桶条目数：
+  - `api_cache`
+  - `metar`
+  - `taf`
+  - `nmc`
+  - `settlement`
+  - `open_meteo forecast / ensemble / multi-model`
+- `summary` 分析缓存命中率：
+  - `total_requests`
+  - `cache_hits / cache_misses`
+  - `hit_rate / miss_rate`
+
+这意味着：
+
+- 外部监控负责“服务活没活、错误有没有暴增”
+- `/ops` 和 `/api/system/status` 负责“预热有没有真的跑、缓存有没有真的被打热”
+
+## 9. 备注
 
 这套监控现在已经具备：
 

@@ -1,6 +1,6 @@
 # Ops 运营后台说明
 
-最后更新：`2026-04-01`
+最后更新：`2026-04-10`
 
 ## 1. 入口
 
@@ -25,6 +25,8 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 系统健康
 - SQLite / rollout / metrics 摘要
 - 支付运行态
+- prewarm worker 运行态
+- 缓存桶状态与 summary cache hit/miss
 - 当前会员
 - 周榜
 - 支付异常单
@@ -98,6 +100,31 @@ python scripts/reconcile_subscription_by_email.py --email <user_email>
 - `resolved_by`
 
 ## 7. 备注
+
+### 7.1 当前 prewarm / 缓存观测项
+
+`/ops` 里的系统状态卡目前已额外展示：
+
+- `prewarm` 是否启用
+- `thread_alive` / `heartbeat_age_sec`
+- 最近一轮：
+  - `cycle_count`
+  - `success_count / failure_count`
+  - `last_started_at / last_finished_at`
+  - `last_summary_ok / last_detail_ok / last_market_ok`
+- 缓存桶数量：
+  - `api_cache`
+  - `metar`
+  - `taf`
+  - `nmc`
+  - `settlement`
+  - `open_meteo forecast / ensemble / multi-model`
+- `summary` 层缓存命中率：
+  - `total_requests`
+  - `cache_hits / cache_misses`
+  - `hit_rate / miss_rate`
+
+### 7.2 当前用途边界
 
 `/ops` 是运营后台最小版，不是完整 Admin 平台。当前目标是：
 
