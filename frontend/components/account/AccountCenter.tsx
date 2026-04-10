@@ -1482,6 +1482,11 @@ export function AccountCenter() {
   const showExpiringSoon =
     Boolean(isSubscribed && expiryInfo && !expiryInfo.expired && expiryInfo.daysLeft <= 3);
   const showExpiredReminder = Boolean(!isSubscribed && expiryInfo && expiryInfo.expired);
+  const paymentFeatureReady = paymentReadyForRecovery;
+  const canOpenCheckoutOverlay = Boolean(
+    paymentFeatureReady &&
+      (!isSubscribed || showExpiringSoon || showExpiredReminder),
+  );
   const subscriptionStatusTitle = showExpiredReminder
     ? isTrialPlan
       ? copy.trialExpiredTitle
@@ -1506,7 +1511,7 @@ export function AccountCenter() {
       : "";
 
   useEffect(() => {
-    if (!showOverlay || isSubscribed) return;
+    if (!showOverlay || !canOpenCheckoutOverlay) return;
     trackAppEvent("paywall_viewed", {
       entry: "account_center",
       user_state: isAuthenticated ? "logged_in" : "guest",
@@ -1516,12 +1521,12 @@ export function AccountCenter() {
     });
   }, [
     isAuthenticated,
-    isSubscribed,
-    planCode,
-    showExpiredReminder,
-    showExpiringSoon,
-    showOverlay,
-  ]);
+      canOpenCheckoutOverlay,
+      planCode,
+      showExpiredReminder,
+      showExpiringSoon,
+      showOverlay,
+    ]);
 
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
@@ -1615,9 +1620,6 @@ export function AccountCenter() {
     (resolvedSelectedTokenAddress.startsWith("0x")
       ? shortAddress(resolvedSelectedTokenAddress)
       : "USDC");
-  const paymentFeatureReady = Boolean(
-    paymentConfig?.enabled && paymentConfig?.configured,
-  );
   const paymentReceiverAddress = String(
     selectedPaymentToken?.receiver_contract ||
       paymentConfig?.receiver_contract ||
@@ -2397,15 +2399,17 @@ export function AccountCenter() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!isSubscribed && !showOverlay && paymentFeatureReady && (
-            <button
-              onClick={() => setShowOverlay(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
-            >
-              <Crown size={16} />{" "}
-              {showExpiredReminder ? copy.renewNow : copy.upgradePro}
-            </button>
-          )}
+            {!showOverlay && canOpenCheckoutOverlay && (
+              <button
+                onClick={() => setShowOverlay(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
+              >
+                <Crown size={16} />{" "}
+                {showExpiringSoon || showExpiredReminder
+                  ? copy.renewNow
+                  : copy.upgradePro}
+              </button>
+            )}
           <button
             type="button"
             onClick={() => void onRefresh()}
@@ -2452,6 +2456,12 @@ export function AccountCenter() {
                 {subscriptionStatusMeta ? (
                   <p className="mt-1 text-xs text-amber-200/80">
                     {subscriptionStatusMeta}
+                  </p>
+                ) : null}
+                {billing.canRedeem ? (
+                  <p className="mt-2 text-xs text-emerald-200/90">
+                    当前可用 {billing.pointsUsed} 积分抵扣 ${billing.discountAmount.toFixed(2)}，
+                    续费时会自动生效。
                   </p>
                 ) : null}
               </div>
@@ -2605,9 +2615,9 @@ export function AccountCenter() {
 
         {/* Subscription Info & Paywall */}
         <div className="lg:col-span-12 relative">
-          <div
-            className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${!isSubscribed && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
-          >
+            <div
+            className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${canOpenCheckoutOverlay && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
+            >
             <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
               <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
                 {copy.membershipDetails}
@@ -2670,7 +2680,7 @@ export function AccountCenter() {
           </div>
 
           {/* Paywall Mask */}
-          {!isSubscribed && showOverlay && (
+          {canOpenCheckoutOverlay && showOverlay && (
             <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
               <UnlockProOverlay
                 points={totalPoints}
