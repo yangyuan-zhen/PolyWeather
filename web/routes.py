@@ -79,10 +79,13 @@ DEFAULT_PREWARM_CITIES = [
     "chongqing",
     "hong kong",
     "taipei",
+    "singapore",
+    "tokyo",
+    "seoul",
+    "busan",
     "london",
     "paris",
-    "new york",
-    "los angeles",
+    "madrid",
 ]
 
 
