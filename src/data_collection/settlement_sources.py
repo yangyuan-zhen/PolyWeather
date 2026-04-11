@@ -4,6 +4,7 @@ import csv
 import math
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
@@ -226,19 +227,31 @@ class SettlementSourceMixin:
 
         try:
             base = "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
-            temp_csv = self._http_get(f"{base}/latest_1min_temperature.csv", timeout=self.timeout)
-            temp_csv.raise_for_status()
-            maxmin_csv = self._http_get(f"{base}/latest_since_midnight_maxmin.csv", timeout=self.timeout)
-            maxmin_csv.raise_for_status()
-            humidity_csv = self._http_get(f"{base}/latest_1min_humidity.csv", timeout=self.timeout)
-            humidity_csv.raise_for_status()
-            wind_csv = self._http_get(f"{base}/latest_10min_wind.csv", timeout=self.timeout)
-            wind_csv.raise_for_status()
+            csv_urls = {
+                "temp": f"{base}/latest_1min_temperature.csv",
+                "maxmin": f"{base}/latest_since_midnight_maxmin.csv",
+                "humidity": f"{base}/latest_1min_humidity.csv",
+                "wind": f"{base}/latest_10min_wind.csv",
+            }
 
-            temp_rows = self._csv_rows(temp_csv.text)
-            maxmin_rows = self._csv_rows(maxmin_csv.text)
-            humidity_rows = self._csv_rows(humidity_csv.text)
-            wind_rows = self._csv_rows(wind_csv.text)
+            def _fetch_csv(url: str):
+                response = self._http_get(url, timeout=self.timeout)
+                response.raise_for_status()
+                return response
+
+            fetched_csv = {}
+            with ThreadPoolExecutor(max_workers=4) as executor:
+                future_map = {
+                    executor.submit(_fetch_csv, url): key
+                    for key, url in csv_urls.items()
+                }
+                for future, key in future_map.items():
+                    fetched_csv[key] = future.result()
+
+            temp_rows = self._csv_rows(fetched_csv["temp"].text)
+            maxmin_rows = self._csv_rows(fetched_csv["maxmin"].text)
+            humidity_rows = self._csv_rows(fetched_csv["humidity"].text)
+            wind_rows = self._csv_rows(fetched_csv["wind"].text)
 
             temp_row = self._pick_station_row(temp_rows, candidate_names)
             maxmin_row = self._pick_station_row(maxmin_rows, candidate_names)
@@ -626,6 +639,8 @@ class SettlementSourceMixin:
                     station_name=station_name,
                     station_candidates=station_candidates,
                 )
+            if settlement_source == "cwa":
+                return self.fetch_cwa_taipei_settlement_current()
             if settlement_source == "noaa":
                 station_code = (
                     str(city_meta.get("settlement_station_code") or "").strip()
@@ -643,8 +658,5 @@ class SettlementSourceMixin:
         except Exception as exc:
             logger.warning(f"Settlement source dispatch failed city={city}: {exc}")
         if normalized == "taipei":
-            return self.fetch_noaa_station_settlement_current(
-                station_code="RCTP",
-                station_name="Taiwan Taoyuan International Airport",
-            )
+            return self.fetch_cwa_taipei_settlement_current()
         return None

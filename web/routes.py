@@ -19,6 +19,7 @@ from src.data_collection.city_registry import ALIASES
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
     _analyze,
+    _analyze_summary,
     _build_city_detail_payload,
     _build_city_summary_payload,
 )
@@ -425,10 +426,17 @@ async def list_cities(request: Request):
 
 
 @router.get("/api/city/{name}")
-async def city_detail(request: Request, name: str, force_refresh: bool = False):
+async def city_detail(
+    request: Request,
+    name: str,
+    force_refresh: bool = False,
+    depth: str = "panel",
+):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
-    return await run_in_threadpool(_analyze, city, force_refresh)
+    normalized_depth = str(depth or "panel").strip().lower()
+    detail_mode = "full" if normalized_depth == "full" else "panel"
+    return await run_in_threadpool(_analyze, city, force_refresh, False, detail_mode)
 
 
 @router.get("/api/history/{name}")
@@ -1021,7 +1029,7 @@ async def payment_reconcile_latest(request: Request):
 @router.get("/api/city/{name}/summary")
 async def city_summary(request: Request, name: str, force_refresh: bool = False):
     city = _normalize_city_or_404(name)
-    data = await run_in_threadpool(_analyze, city, force_refresh, False)
+    data = await run_in_threadpool(_analyze_summary, city, force_refresh)
     return await run_in_threadpool(_build_city_summary_payload, data)
 
 

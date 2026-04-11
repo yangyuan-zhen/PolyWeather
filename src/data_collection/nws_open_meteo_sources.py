@@ -208,7 +208,7 @@ class NwsOpenMeteoSourceMixin:
             response = self._http_get(
                 url,
                 params=params,
-                timeout=self.timeout,
+                timeout=getattr(self, "open_meteo_timeout_sec", self.timeout),
             )
             response.raise_for_status()
             data = response.json()
@@ -369,7 +369,7 @@ class NwsOpenMeteoSourceMixin:
             response = self._http_get(
                 url,
                 params=params,
-                timeout=self.timeout,
+                timeout=getattr(self, "open_meteo_timeout_sec", self.timeout),
             )
             response.raise_for_status()
             data = response.json()
@@ -526,7 +526,7 @@ class NwsOpenMeteoSourceMixin:
             response = self._http_get(
                 url,
                 params=params,
-                timeout=self.timeout,
+                timeout=getattr(self, "open_meteo_timeout_sec", self.timeout),
             )
             response.raise_for_status()
             data = response.json()

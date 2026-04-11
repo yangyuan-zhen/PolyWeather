@@ -327,6 +327,7 @@ export interface AiAnalysisStructured {
 export interface CityDetail {
   name: string;
   display_name: string;
+  detail_depth?: "panel" | "full";
   lat: number;
   lon: number;
   temp_symbol: string;

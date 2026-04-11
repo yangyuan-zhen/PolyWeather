@@ -20,7 +20,8 @@ export async function GET(
 
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
-  const url = `${API_BASE}/api/city/${encodeURIComponent(name)}?force_refresh=${forceRefresh}`;
+  const depth = req.nextUrl.searchParams.get("depth") ?? "panel";
+  const url = `${API_BASE}/api/city/${encodeURIComponent(name)}?force_refresh=${forceRefresh}&depth=${encodeURIComponent(depth)}`;
 
   try {
     const auth = await buildBackendRequestHeaders(req, {

@@ -45,8 +45,12 @@ const FutureForecastModal = dynamic(
 function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
+  const activeSummary = store.selectedCity
+    ? store.citySummariesByName[store.selectedCity] || null
+    : null;
   const activeCityName =
     store.selectedDetail?.display_name ||
+    activeSummary?.display_name ||
     store.cities.find((city) => city.name === store.selectedCity)?.display_name ||
     store.selectedCity ||
     "";
@@ -77,6 +81,11 @@ function DashboardScreen() {
   const showLoading =
     store.loadingState.cities ||
     store.loadingState.refresh;
+  const showCitySyncToast =
+    store.loadingState.cityDetail &&
+    activeCityName &&
+    !store.selectedDetail &&
+    !activeSummary;
 
   return (
     <div className={styles.root}>
@@ -84,7 +93,7 @@ function DashboardScreen() {
       <HeaderBar />
       <CitySidebar />
       <DetailPanel />
-      {store.loadingState.cityDetail && activeCityName ? (
+      {showCitySyncToast ? (
         <div className="city-loading-toast" role="status" aria-live="polite">
           <span className="city-loading-dot" aria-hidden="true" />
           <span className="city-loading-copy">

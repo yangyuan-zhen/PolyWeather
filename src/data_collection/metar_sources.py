@@ -248,7 +248,11 @@ class MetarSourceMixin:
                 "hours": 24,
                 "_t": int(time.time()),
             }
-            response = self.session.get(url, params=params, timeout=self.timeout)
+            response = self.session.get(
+                url,
+                params=params,
+                timeout=getattr(self, "metar_timeout_sec", self.timeout),
+            )
             response.raise_for_status()
             data = response.json()
             if not data:
@@ -295,7 +299,11 @@ class MetarSourceMixin:
             headers = {
                 "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             }
-            resp = self.session.get(url, headers=headers, timeout=self.timeout)
+            resp = self.session.get(
+                url,
+                headers=headers,
+                timeout=getattr(self, "metar_cluster_timeout_sec", self.timeout),
+            )
             if resp.status_code != 200:
                 logger.warning(f"METAR cluster fetch HTTP {resp.status_code} for {icaos}")
                 return []

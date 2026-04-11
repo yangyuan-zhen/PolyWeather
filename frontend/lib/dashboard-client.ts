@@ -29,6 +29,10 @@ function normalizeCityName(cityName: string) {
   return encodeURIComponent(String(cityName).replace(/\s/g, "-"));
 }
 
+function normalizeDetailDepth(depth?: "panel" | "full") {
+  return depth === "full" ? "full" : "panel";
+}
+
 async function fetchJson<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -155,17 +159,21 @@ export const dashboardClient = {
     return request;
   },
 
-  async getCityDetail(cityName: string, options?: { force?: boolean }) {
+  async getCityDetail(
+    cityName: string,
+    options?: { force?: boolean; depth?: "panel" | "full" },
+  ) {
     const force = options?.force ?? false;
+    const depth = normalizeDetailDepth(options?.depth);
     if (!force) {
-      const requestKey = `${cityName}::cached`;
+      const requestKey = `${cityName}::${depth}::cached`;
       const existing = pendingCityDetailRequests.get(requestKey);
       if (existing) {
         return existing;
       }
 
       const request = fetchJson<CityDetail>(
-        `/api/city/${normalizeCityName(cityName)}?force_refresh=false`,
+        `/api/city/${normalizeCityName(cityName)}?force_refresh=false&depth=${depth}`,
       ).finally(() => {
         pendingCityDetailRequests.delete(requestKey);
       });
@@ -176,6 +184,7 @@ export const dashboardClient = {
 
     const params = new URLSearchParams({
       force_refresh: "true",
+      depth,
       _ts: String(Date.now()),
     });
     return fetchJson<CityDetail>(

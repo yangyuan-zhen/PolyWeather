@@ -113,12 +113,24 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def __init__(self, config: dict):
         self.config = config
 
-        self.timeout = 30  # 增加超时以支持高延迟 VPS
+        # Keep external calls short so one degraded source cannot block the whole city pipeline.
+        self.timeout = max(
+            2.0, float(os.getenv("POLYWEATHER_HTTP_TIMEOUT_SEC", "8"))
+        )
         self.http_retry_count = max(
-            0, int(os.getenv("POLYWEATHER_HTTP_RETRY_COUNT", "1"))
+            0, int(os.getenv("POLYWEATHER_HTTP_RETRY_COUNT", "0"))
         )
         self.http_retry_backoff_sec = max(
-            0.0, float(os.getenv("POLYWEATHER_HTTP_RETRY_BACKOFF_SEC", "0.35"))
+            0.0, float(os.getenv("POLYWEATHER_HTTP_RETRY_BACKOFF_SEC", "0.2"))
+        )
+        self.open_meteo_timeout_sec = max(
+            2.0, float(os.getenv("POLYWEATHER_OPEN_METEO_TIMEOUT_SEC", "5"))
+        )
+        self.metar_timeout_sec = max(
+            2.0, float(os.getenv("POLYWEATHER_METAR_TIMEOUT_SEC", "4"))
+        )
+        self.metar_cluster_timeout_sec = max(
+            2.0, float(os.getenv("POLYWEATHER_METAR_CLUSTER_TIMEOUT_SEC", "3.5"))
         )
         self.session = httpx.Client(
             timeout=self.timeout,
@@ -151,7 +163,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._open_meteo_rl_lock = threading.Lock()
         # Open-Meteo burst control: avoid hammering API with many cities at once.
         self._open_meteo_min_interval_sec: float = float(
-            os.getenv("OPEN_METEO_MIN_CALL_INTERVAL_SEC", "3")
+            os.getenv("OPEN_METEO_MIN_CALL_INTERVAL_SEC", "1")
         )
         self._open_meteo_last_call_ts: float = 0.0
         self._open_meteo_call_lock = threading.Lock()
@@ -728,8 +740,18 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             hko_forecast = self.fetch_hko_forecast()
             if hko_forecast:
                 results["hko_forecast"] = hko_forecast
+        elif settlement_source == "cwa":
+            cwa_forecast = self.fetch_cwa_taipei_forecast()
+            if cwa_forecast is not None:
+                results["cwa_forecast"] = cwa_forecast
 
-    def _attach_turkish_mgm_data(self, results: Dict, city_lower: str) -> None:
+    def _attach_turkish_mgm_data(
+        self,
+        results: Dict,
+        city_lower: str,
+        *,
+        include_nearby: bool = True,
+    ) -> None:
         if city_lower not in self.TURKISH_PROVINCES:
             return
         istno, province = self.TURKISH_PROVINCES[city_lower]
@@ -737,15 +759,22 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not mgm_data:
             return
         results["mgm"] = mgm_data
-        results["nearby_source"] = "mgm"
-        nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
-        if nearby:
-            results["mgm_nearby"] = nearby
+        if include_nearby:
+            results["nearby_source"] = "mgm"
+            nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)
+            if nearby:
+                results["mgm_nearby"] = nearby
 
     def _attach_global_nearby_cluster(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
-        if city_lower not in self.CITY_METAR_CLUSTERS or "mgm_nearby" in results:
+        city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower()) or {}
+        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+        if (
+            city_lower not in self.CITY_METAR_CLUSTERS
+            or "mgm_nearby" in results
+            or settlement_source in {"hko", "cwa"}
+        ):
             return
         cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
         cluster_data = self.fetch_metar_nearby_cluster(
@@ -854,21 +883,26 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         lat: float,
         lon: float,
         use_fahrenheit: bool,
+        *,
+        include_ensemble: bool = True,
+        include_multi_model: bool = True,
     ) -> None:
         if use_fahrenheit:
             nws_data = self.fetch_nws(lat, lon)
             if nws_data:
                 results["nws"] = nws_data
 
-        ensemble_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
-        if ensemble_data:
-            results["ensemble"] = ensemble_data
+        if include_ensemble:
+            ensemble_data = self.fetch_ensemble(lat, lon, use_fahrenheit=use_fahrenheit)
+            if ensemble_data:
+                results["ensemble"] = ensemble_data
 
-        multi_model_data = self.fetch_multi_model(
-            lat, lon, city=city, use_fahrenheit=use_fahrenheit
-        )
-        if multi_model_data:
-            results["multi_model"] = multi_model_data
+        if include_multi_model:
+            multi_model_data = self.fetch_multi_model(
+                lat, lon, city=city, use_fahrenheit=use_fahrenheit
+            )
+            if multi_model_data:
+                results["multi_model"] = multi_model_data
 
     def fetch_all_sources(
         self,
@@ -877,6 +911,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         lon: float = None,
         country: str = None,
         force_refresh: bool = False,
+        include_taf: bool = True,
+        include_nearby: bool = True,
+        include_ensemble: bool = True,
+        include_multi_model: bool = True,
     ) -> Dict:
         """
         Fetch weather data from all available sources
@@ -910,23 +948,34 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                     if metar_data:
                         results["metar"] = metar_data
-                if supports_aviationweather and city_lower != "hong kong":
+                if include_taf and supports_aviationweather and city_lower != "hong kong":
                     taf_data = self.fetch_taf(city, utc_offset=utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
 
-                self._attach_turkish_mgm_data(results, city_lower)
-                self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
-                if city_lower == "warsaw":
-                    self._attach_warsaw_official_nearby(results, use_fahrenheit)
-                self._attach_global_nearby_cluster(
-                    results, city_lower, use_fahrenheit
+                self._attach_turkish_mgm_data(
+                    results,
+                    city_lower,
+                    include_nearby=include_nearby,
                 )
+                if include_nearby:
+                    self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
+                    if city_lower == "warsaw":
+                        self._attach_warsaw_official_nearby(results, use_fahrenheit)
+                    self._attach_global_nearby_cluster(
+                        results, city_lower, use_fahrenheit
+                    )
                 self._attach_nws_and_models(
-                    results, city, lat, lon, use_fahrenheit
+                    results,
+                    city,
+                    lat,
+                    lon,
+                    use_fahrenheit,
+                    include_ensemble=include_ensemble,
+                    include_multi_model=include_multi_model,
                 )
             else:
                 fallback_utc_offset = int(
@@ -940,30 +989,41 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                     if metar_data:
                         results["metar"] = metar_data
-                if supports_aviationweather and city_lower != "hong kong":
+                if include_taf and supports_aviationweather and city_lower != "hong kong":
                     taf_data = self.fetch_taf(city, utc_offset=fallback_utc_offset)
                     if taf_data:
                         results["taf"] = taf_data
 
-                self._attach_turkish_mgm_data(results, city_lower)
-                self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
-                self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
-                if city_lower == "warsaw":
-                    self._attach_warsaw_official_nearby(results, use_fahrenheit)
-                self._attach_global_nearby_cluster(
-                    results, city_lower, use_fahrenheit
+                self._attach_turkish_mgm_data(
+                    results,
+                    city_lower,
+                    include_nearby=include_nearby,
                 )
+                if include_nearby:
+                    self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
+                    if city_lower == "warsaw":
+                        self._attach_warsaw_official_nearby(results, use_fahrenheit)
+                    self._attach_global_nearby_cluster(
+                        results, city_lower, use_fahrenheit
+                    )
                 self._attach_nws_and_models(
-                    results, city, lat, lon, use_fahrenheit
+                    results,
+                    city,
+                    lat,
+                    lon,
+                    use_fahrenheit,
+                    include_ensemble=include_ensemble,
+                    include_multi_model=include_multi_model,
                 )
         else:
             if supports_aviationweather:
                 metar_data = self.fetch_metar(city, use_fahrenheit=use_fahrenheit)
                 if metar_data:
                     results["metar"] = metar_data
-            if supports_aviationweather and city_lower != "hong kong":
+            if include_taf and supports_aviationweather and city_lower != "hong kong":
                 taf_data = self.fetch_taf(city)
                 if taf_data:
                     results["taf"] = taf_data
