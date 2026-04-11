@@ -1854,6 +1854,107 @@ export function computeFrontTrendSignal(
     (max, point) => Math.max(max, Number(point.precipProb) || 0),
     0,
   );
+  const precipWindowSource =
+    futureSlice.length >= 2 ? futureSlice : slice;
+  const precipCandidates = precipWindowSource
+    .map((point) => ({
+      label: normalizeHm(point.label),
+      minute: pointMinutes(point),
+      precip: Number(point.precipProb) || 0,
+    }))
+    .filter(
+      (point): point is { label: string; minute: number; precip: number } =>
+        point.label != null && point.minute != null,
+    );
+  const precipThreshold = precipMax >= 70 ? 50 : precipMax >= 40 ? 40 : 0;
+  const precipWindows: Array<{
+    start: number;
+    end: number;
+    startLabel: string;
+    endLabel: string;
+    peak: number;
+  }> = [];
+  if (precipThreshold > 0) {
+    let active:
+      | {
+          start: number;
+          end: number;
+          startLabel: string;
+          endLabel: string;
+          peak: number;
+        }
+      | null = null;
+    for (const point of precipCandidates) {
+      if (point.precip >= precipThreshold) {
+        if (!active) {
+          active = {
+            start: point.minute,
+            end: point.minute,
+            startLabel: point.label,
+            endLabel: point.label,
+            peak: point.precip,
+          };
+        } else {
+          active.end = point.minute;
+          active.endLabel = point.label;
+          active.peak = Math.max(active.peak, point.precip);
+        }
+      } else if (active) {
+        precipWindows.push(active);
+        active = null;
+      }
+    }
+    if (active) precipWindows.push(active);
+  }
+  const primaryPrecipWindow =
+    precipWindows.length > 0
+      ? [...precipWindows].sort((left, right) => {
+          if (right.peak !== left.peak) return right.peak - left.peak;
+          return (right.end - right.start) - (left.end - left.start);
+        })[0]
+      : null;
+  const precipWindowLabel = primaryPrecipWindow
+    ? `${primaryPrecipWindow.startLabel}-${primaryPrecipWindow.endLabel}`
+    : "";
+  const precipPeakOverlap =
+    primaryPrecipWindow &&
+    peakWindowStartMinutes != null &&
+    peakWindowEndMinutes != null
+      ? Math.max(
+          0,
+          Math.min(primaryPrecipWindow.end, peakWindowEndMinutes) -
+            Math.max(primaryPrecipWindow.start, peakWindowStartMinutes),
+        )
+      : 0;
+  const precipOverlapLevel =
+    primaryPrecipWindow && peakWindowStartMinutes != null && peakWindowEndMinutes != null
+      ? precipPeakOverlap >= 120
+        ? "high"
+        : precipPeakOverlap > 0
+          ? "medium"
+          : "low"
+      : "unknown";
+  const precipWindowSummary = (() => {
+    if (!primaryPrecipWindow) {
+      return isEnglish(locale)
+        ? "No concentrated model precipitation window is visible yet."
+        : "模型里暂时还看不出明显集中的降水窗口。";
+    }
+    const overlapText = isEnglish(locale)
+      ? precipOverlapLevel === "high"
+        ? "It overlaps heavily with the peak window."
+        : precipOverlapLevel === "medium"
+          ? "It overlaps part of the peak window."
+          : "It sits mostly outside the peak window."
+      : precipOverlapLevel === "high"
+        ? "与峰值窗口重叠较高。"
+        : precipOverlapLevel === "medium"
+          ? "与峰值窗口部分重叠。"
+          : "主要落在峰值窗口之外。";
+    return isEnglish(locale)
+      ? `Model precipitation window is ${precipWindowLabel}, peaking near ${Math.round(primaryPrecipWindow.peak)}%. ${overlapText}`
+      : `模型降水窗口在 ${precipWindowLabel}，峰值约 ${Math.round(primaryPrecipWindow.peak)}%。${overlapText}`;
+  })();
   const firstBucket = trendBucketFromDir(first.windDir);
   const lastBucket = trendBucketFromDir(last.windDir);
   const weatherGovPeriods = getForecastTextForDate(detail, dateStr);
@@ -1981,7 +2082,11 @@ export function computeFrontTrendSignal(
       }
 
       if (precipMax >= 50) {
-        parts.push("Precipitation risk is high enough to watch for cloud/rain suppression.");
+        parts.push(
+          primaryPrecipWindow
+            ? `Model precipitation risk concentrates in ${precipWindowLabel}.`
+            : "Precipitation risk is high enough to watch for cloud/rain suppression.",
+        );
       }
 
       if (!parts.length) {
@@ -2023,7 +2128,11 @@ export function computeFrontTrendSignal(
       }
 
       if (precipMax >= 50) {
-        parts.push("降水概率已足以关注云雨压温。");
+        parts.push(
+          primaryPrecipWindow
+            ? `模型降水窗口主要落在 ${precipWindowLabel}。`
+            : "降水概率已足以关注云雨压温。",
+        );
       }
 
       if (!parts.length) {
@@ -2175,13 +2284,13 @@ export function computeFrontTrendSignal(
   const precipNote = (() => {
     if (precipMax >= 60) {
       return isEnglish(locale)
-        ? "Precipitation risk is high enough that cloud/rain suppression can materially change the peak outcome."
-        : "降水概率已高到足以显著改变峰值兑现结果，需要重点防压温。";
+        ? `${precipWindowSummary} Cloud/rain suppression can materially change the peak outcome.`
+        : `${precipWindowSummary} 降水风险已高到足以显著改变峰值兑现结果，需要重点防压温。`;
     }
     if (precipMax >= 40) {
       return isEnglish(locale)
-        ? "Precipitation risk is meaningful; watch whether cloud and showers interrupt daytime heating."
-        : "降水概率已有存在感，需要关注云系和阵雨是否打断白天增温。";
+        ? `${precipWindowSummary} Watch whether cloud and showers interrupt daytime heating.`
+        : `${precipWindowSummary} 需要关注云系和阵雨是否打断白天增温。`;
     }
     return isEnglish(locale)
       ? "Precipitation risk remains limited and is used mainly as a suppression check."
@@ -2215,10 +2324,12 @@ export function computeFrontTrendSignal(
       value: `${bucketLabel(firstBucket, locale)} -> ${bucketLabel(lastBucket, locale)}`,
     },
     {
-      label: isEnglish(locale) ? "Precip probability" : "降水概率",
+      label: isEnglish(locale) ? "Precip window" : "降水窗口",
       note: precipNote,
       tone: precipMax >= 50 ? "cold" : "",
-      value: `${Math.round(precipMax)}%`,
+      value: primaryPrecipWindow
+        ? `${precipWindowLabel} · ${Math.round(precipMax)}%`
+        : `${Math.round(precipMax)}%`,
     },
     {
       label: isEnglish(locale) ? "Forecast cloud-cover delta" : "预测云量增幅",
@@ -2253,6 +2364,8 @@ export function computeFrontTrendSignal(
     metrics,
     upperAirMetrics,
     upperAirSummary,
+    precipOverlapLevel,
+    precipWindowLabel,
     precipMax,
     score,
     summary: combinedSummary || backendSummary || summary,
