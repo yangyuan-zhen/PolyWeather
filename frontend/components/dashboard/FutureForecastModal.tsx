@@ -161,6 +161,19 @@ function parseLeadingNumber(value?: string | number | null) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function parsePercentFromText(value?: string | number | null) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return clamp(value, 0, 100);
+  }
+  const text = String(value || "").trim();
+  const percentMatch = text.match(/([-+]?\d+(?:\.\d+)?)\s*%/);
+  if (percentMatch) {
+    const numeric = Number(percentMatch[1]);
+    return Number.isFinite(numeric) ? clamp(numeric, 0, 100) : null;
+  }
+  return parseLeadingNumber(text);
+}
+
 function getTrendMetricVisual(metric: {
   label?: string;
   value?: string;
@@ -170,15 +183,17 @@ function getTrendMetricVisual(metric: {
   const value = String(metric.value || "");
   const numeric = parseLeadingNumber(value);
 
-  if (numeric == null) return null;
-
   if (label.includes("降水") || label.includes("precip")) {
+    const precipPercent = parsePercentFromText(value);
+    if (precipPercent == null) return null;
     return {
       mode: "fill" as const,
-      percent: clamp(numeric, 0, 100),
+      percent: precipPercent,
       tone: "cold" as const,
     };
   }
+
+  if (numeric == null) return null;
 
   if (label.includes("温度") || label.includes("temp")) {
     return {
