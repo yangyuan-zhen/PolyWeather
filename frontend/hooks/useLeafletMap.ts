@@ -31,6 +31,8 @@ interface UseLeafletMapArgs {
 
 const AUTO_NEARBY_MIN_ZOOM = 8;
 const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
+const AUTO_NEARBY_IDLE_REFRESH_DELAY_MS = 20_000;
+const AUTO_NEARBY_MIN_REFRESH_INTERVAL_MS = 90_000;
 const MAP_MAX_ZOOM = 19;
 const CITY_MARKER_DISPLAY_OFFSETS: Record<
   string,
@@ -225,6 +227,10 @@ export function useLeafletMap({
   const interactionIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  const nearbyRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const lastNearbyRefreshAtRef = useRef<Record<string, number>>({});
 
   useEffect(() => {
     onClosePanelRef.current = onClosePanel;
@@ -294,6 +300,10 @@ export function useLeafletMap({
         clearTimeout(interactionIdleTimerRef.current);
         interactionIdleTimerRef.current = null;
       }
+      if (nearbyRefreshTimerRef.current) {
+        clearTimeout(nearbyRefreshTimerRef.current);
+        nearbyRefreshTimerRef.current = null;
+      }
       onMapInteractionChangeRef.current(true);
     };
 
@@ -318,6 +328,10 @@ export function useLeafletMap({
       if (interactionIdleTimerRef.current) {
         clearTimeout(interactionIdleTimerRef.current);
         interactionIdleTimerRef.current = null;
+      }
+      if (nearbyRefreshTimerRef.current) {
+        clearTimeout(nearbyRefreshTimerRef.current);
+        nearbyRefreshTimerRef.current = null;
       }
       onMapInteractionChangeRef.current(false);
       map.off("movestart", markInteracting);
@@ -446,6 +460,12 @@ export function useLeafletMap({
     if (!mapRef.current || !nearbyLayerRef.current) return;
     const map = mapRef.current;
     const layer = nearbyLayerRef.current;
+    const clearNearbyRefreshTimer = () => {
+      if (nearbyRefreshTimerRef.current) {
+        clearTimeout(nearbyRefreshTimerRef.current);
+        nearbyRefreshTimerRef.current = null;
+      }
+    };
 
     function renderNearbyStations(detail: CityDetail, preserveView = false) {
       layer.clearLayers();
@@ -506,6 +526,39 @@ export function useLeafletMap({
       // This section is primarily for auto-discovery movement if needed.
     }
 
+    function scheduleIdleNearbyRefresh(targetCity: string | null) {
+      clearNearbyRefreshTimer();
+      if (!targetCity || suspendMotion) return;
+      if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) return;
+
+      nearbyRefreshTimerRef.current = setTimeout(async () => {
+        nearbyRefreshTimerRef.current = null;
+        if (loadingAutoNearbyRef.current || handlingAutoNearbyRef.current) return;
+        if (!mapRef.current || mapRef.current.getZoom() < AUTO_NEARBY_MIN_ZOOM) return;
+        if (autoNearbyCityRef.current !== targetCity) return;
+
+        const lastRefreshAt = lastNearbyRefreshAtRef.current[targetCity] || 0;
+        if (Date.now() - lastRefreshAt < AUTO_NEARBY_MIN_REFRESH_INTERVAL_MS) {
+          return;
+        }
+
+        loadingAutoNearbyRef.current = true;
+        lastNearbyRefreshAtRef.current[targetCity] = Date.now();
+        try {
+          const detail = await onEnsureCityDetailRef.current(
+            targetCity,
+            true,
+            "nearby",
+          );
+          if (autoNearbyCityRef.current !== targetCity) return;
+          renderNearbyStations(detail, true);
+        } catch {
+        } finally {
+          loadingAutoNearbyRef.current = false;
+        }
+      }, AUTO_NEARBY_IDLE_REFRESH_DELAY_MS);
+    }
+
     async function maybeAutoShowNearbyStations() {
       if (handlingAutoNearbyRef.current) {
         return;
@@ -517,11 +570,14 @@ export function useLeafletMap({
           if (selectedNearbyStations.length) {
             // Just render stations, no camera move from here
             renderNearbyStations(selectedDetail, true);
+            autoNearbyCityRef.current = selectedCity || selectedDetail.name || null;
+            scheduleIdleNearbyRefresh(autoNearbyCityRef.current);
             return;
           }
         }
 
         if (suspendMotion) {
+          clearNearbyRefreshTimer();
           return;
         }
 
@@ -530,6 +586,7 @@ export function useLeafletMap({
 
         if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
           autoNearbyCityRef.current = null;
+          clearNearbyRefreshTimer();
           layer.clearLayers();
           return;
         }
@@ -550,6 +607,7 @@ export function useLeafletMap({
         const targetCity = selectedCity || best?.cityName || null;
         if (!targetCity) {
           autoNearbyCityRef.current = null;
+          clearNearbyRefreshTimer();
           layer.clearLayers();
           return;
         }
@@ -558,6 +616,7 @@ export function useLeafletMap({
           autoNearbyCityRef.current === targetCity &&
           layer.getLayers().length > 0
         ) {
+          scheduleIdleNearbyRefresh(targetCity);
           return;
         }
 
@@ -565,6 +624,7 @@ export function useLeafletMap({
         const cachedDetail = cityDetailsByName[targetCity];
         if (cachedDetail && pickMapNearbyStations(cachedDetail).length) {
           renderNearbyStations(cachedDetail, true);
+          scheduleIdleNearbyRefresh(targetCity);
           return;
         }
 
@@ -577,6 +637,7 @@ export function useLeafletMap({
             "nearby",
           );
           renderNearbyStations(detail, true);
+          scheduleIdleNearbyRefresh(targetCity);
         } catch {
         } finally {
           loadingAutoNearbyRef.current = false;
@@ -602,6 +663,7 @@ export function useLeafletMap({
     map.on("moveend", maybeAutoShowNearbyStations);
 
     return () => {
+      clearNearbyRefreshTimer();
       map.off("zoomend", syncVisibility);
       map.off("moveend", maybeAutoShowNearbyStations);
     };
