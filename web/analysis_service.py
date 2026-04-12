@@ -84,6 +84,36 @@ def _analysis_ttl_for_city(city: str) -> int:
     return CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
 
 
+def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
+    normalized_mode = "panel" if str(detail_mode or "").strip().lower() == "panel" else "full"
+    return f"{city}::{normalized_mode}"
+
+
+def _get_cached_analysis(
+    city: str,
+    ttl: int,
+    detail_modes: tuple[str, ...] = ("panel", "full"),
+) -> Optional[Dict[str, Any]]:
+    now_ts = _time.time()
+    freshest_payload: Optional[Dict[str, Any]] = None
+    freshest_ts = 0.0
+    for detail_mode in detail_modes:
+        cached = _cache.get(_analysis_cache_key(city, detail_mode))
+        if not cached:
+            continue
+        cached_ts = float(cached.get("t", 0))
+        payload = cached.get("d")
+        if (
+            cached_ts
+            and now_ts - cached_ts < ttl
+            and isinstance(payload, dict)
+            and cached_ts >= freshest_ts
+        ):
+            freshest_payload = payload
+            freshest_ts = cached_ts
+    return freshest_payload
+
+
 def _get_cached_summary(city: str, ttl: int) -> Optional[Dict[str, Any]]:
     now_ts = _time.time()
     with _SUMMARY_CACHE_LOCK:
@@ -1055,9 +1085,11 @@ def _analyze(
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
     ttl = CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
+    normalized_detail_mode = "panel" if str(detail_mode or "full").strip().lower() == "panel" else "full"
+    cache_key = _analysis_cache_key(city, normalized_detail_mode)
     
     if not force_refresh:
-        cached = _cache.get(city)
+        cached = _cache.get(cache_key)
         if cached and _time.time() - cached["t"] < ttl:
             if include_llm_commentary:
                 cached_payload = cached["d"]
@@ -1081,7 +1113,7 @@ def _analyze(
     )
 
     # ── 1. Fetch raw data ──
-    is_panel_mode = str(detail_mode or "full").strip().lower() == "panel"
+    is_panel_mode = normalized_detail_mode == "panel"
 
     raw = _weather.fetch_all_sources(
         city,
@@ -1875,7 +1907,7 @@ def _analyze(
             result,
         )
 
-    _cache[city] = {"t": _time.time(), "d": result}
+    _cache[cache_key] = {"t": _time.time(), "d": result}
     return result
 
 
@@ -1891,9 +1923,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     ttl = _analysis_ttl_for_city(city)
 
     if not force_refresh:
-        cached_detail = _cache.get(city)
-        if cached_detail and _time.time() - cached_detail["t"] < ttl:
-            return cached_detail["d"]
+        cached_detail = _get_cached_analysis(city, ttl)
+        if cached_detail:
+            return cached_detail
         cached_summary = _get_cached_summary(city, ttl)
         if cached_summary:
             return cached_summary

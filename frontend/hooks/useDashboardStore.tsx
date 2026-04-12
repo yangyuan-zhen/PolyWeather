@@ -92,8 +92,38 @@ function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
 const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
-const EAGER_CITY_SUMMARIES_ENABLED =
-  process.env.NEXT_PUBLIC_POLYWEATHER_EAGER_CITY_SUMMARIES === "true";
+const EAGER_CITY_SUMMARIES_DISABLED =
+  process.env.NEXT_PUBLIC_POLYWEATHER_DISABLE_EAGER_SUMMARIES === "true";
+const EAGER_SUMMARY_PRIORITY_CONCURRENCY = 3;
+const EAGER_SUMMARY_BACKGROUND_CONCURRENCY = 2;
+const EAGER_SUMMARY_BACKGROUND_IDLE_TIMEOUT_MS = 1200;
+const EAGER_SUMMARY_PRIORITY_CITY_ORDER = [
+  "hong kong",
+  "taipei",
+  "shanghai",
+  "beijing",
+  "wuhan",
+  "shenzhen",
+  "chengdu",
+  "chongqing",
+  "seoul",
+  "busan",
+  "tokyo",
+  "singapore",
+  "kuala lumpur",
+  "jakarta",
+  "tel aviv",
+  "jeddah",
+  "istanbul",
+  "moscow",
+  "helsinki",
+  "warsaw",
+  "amsterdam",
+  "london",
+  "paris",
+  "milan",
+  "madrid",
+] as const;
 type CityDetailDepth = "panel" | "full";
 
 function countAvailableModels(
@@ -146,6 +176,57 @@ function detailSatisfiesDepth(
   return normalizeDetailDepth(detail) === "full";
 }
 
+function getStoredSelectedCityName(cities: CityListItem[]) {
+  if (typeof window === "undefined") return null;
+  const stored = String(
+    window.localStorage.getItem(SELECTED_CITY_STORAGE_KEY) || "",
+  )
+    .trim()
+    .toLowerCase();
+  if (!stored) return null;
+  if (!cities.some((city) => city.name === stored)) return null;
+  return stored;
+}
+
+function getPriorityPreloadCities(cities: CityListItem[]) {
+  const citySet = new Set(cities.map((city) => city.name));
+  return EAGER_SUMMARY_PRIORITY_CITY_ORDER.filter((cityName) =>
+    citySet.has(cityName)
+  );
+}
+
+function scheduleWhenBrowserIdle(callback: () => void) {
+  if (typeof window === "undefined") {
+    callback();
+    return () => {};
+  }
+
+  const browserWindow = window as Window & {
+    requestIdleCallback?: (
+      cb: IdleRequestCallback,
+      options?: IdleRequestOptions,
+    ) => number;
+    cancelIdleCallback?: (handle: number) => void;
+  };
+
+  if (typeof browserWindow.requestIdleCallback === "function") {
+    const handle = browserWindow.requestIdleCallback(
+      () => callback(),
+      { timeout: EAGER_SUMMARY_BACKGROUND_IDLE_TIMEOUT_MS },
+    );
+    return () => {
+      if (typeof browserWindow.cancelIdleCallback === "function") {
+        browserWindow.cancelIdleCallback(handle);
+      }
+    };
+  }
+
+  const timeoutId = window.setTimeout(callback, 400);
+  return () => {
+    window.clearTimeout(timeoutId);
+  };
+}
+
 export function DashboardStoreProvider({
   children,
 }: {
@@ -188,6 +269,9 @@ export function DashboardStoreProvider({
   const hydratedSelectionRef = useRef(false);
   const hydratedProCacheRef = useRef(false);
   const backgroundSummaryCheckAtRef = useRef<Record<string, number>>({});
+  const summaryInflightByCityRef = useRef<Record<string, Promise<CitySummary>>>(
+    {},
+  );
   const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedCityRef = useRef<string | null>(null);
   const selectedDetail =
@@ -529,6 +613,54 @@ export function DashboardStoreProvider({
     void refreshProAccess();
   }, []);
 
+  const ensureCitySummary = async (cityName: string, force = false) => {
+    const existing = citySummariesRef.current[cityName];
+    if (!force && existing) {
+      return existing;
+    }
+
+    const inflight = summaryInflightByCityRef.current[cityName];
+    if (inflight) {
+      const settled = await inflight;
+      if (!force) {
+        return settled;
+      }
+    }
+
+    const request = dashboardClient
+      .getCitySummary(cityName, { force })
+      .then((summary) => {
+        setCitySummariesByName((current) => {
+          const currentSummary = current[cityName];
+          const currentRevision = getCityRevision(currentSummary);
+          const nextRevision = getCityRevision(summary);
+          if (
+            currentSummary &&
+            currentRevision &&
+            nextRevision &&
+            currentRevision === nextRevision
+          ) {
+            return current;
+          }
+          const next = {
+            ...current,
+            [cityName]: summary,
+          };
+          citySummariesRef.current = next;
+          return next;
+        });
+        return summary;
+      })
+      .finally(() => {
+        if (summaryInflightByCityRef.current[cityName] === request) {
+          delete summaryInflightByCityRef.current[cityName];
+        }
+      });
+
+    summaryInflightByCityRef.current[cityName] = request;
+    return request;
+  };
+
   useEffect(() => {
     if (proAccess.loading || !proAccess.authenticated || !proAccess.userId) {
       return;
@@ -563,64 +695,72 @@ export function DashboardStoreProvider({
   ]);
 
   useEffect(() => {
-    if (!EAGER_CITY_SUMMARIES_ENABLED) return;
+    if (EAGER_CITY_SUMMARIES_DISABLED) return;
     if (!cities.length) return;
+    if (loadingState.refresh) return;
 
-    const queue = cities
-      .map((city) => city.name)
-      .filter((cityName) => !citySummariesRef.current[cityName]);
-    if (!queue.length) return;
-
-    let active = true;
-    const concurrency = 4;
-    let cursor = 0;
-
-    const worker = async () => {
-      while (active && cursor < queue.length) {
-        const cityName = queue[cursor];
-        cursor += 1;
-        if (citySummariesRef.current[cityName]) continue;
-
-        try {
-          const summary = await dashboardClient.getCitySummary(cityName);
-          if (!active) return;
-
-          setCitySummariesByName((current) => {
-            if (current[cityName]) return current;
-            const next = {
-              ...current,
-              [cityName]: summary,
-            };
-            citySummariesRef.current = next;
-            return next;
-          });
-        } catch {}
+    const priorityQueue: string[] = [];
+    const backgroundQueue: string[] = [];
+    const queued = new Set<string>();
+    const enqueue = (cityName: string | null, queue: string[]) => {
+      if (!cityName || queued.has(cityName) || citySummariesRef.current[cityName]) {
+        return;
       }
+      queued.add(cityName);
+      queue.push(cityName);
     };
 
-    void Promise.all(
-      Array.from({ length: Math.min(concurrency, queue.length) }, () =>
-        worker(),
-      ),
-    );
+    enqueue(getStoredSelectedCityName(cities), priorityQueue);
+    getPriorityPreloadCities(cities).forEach((cityName) => {
+      enqueue(cityName, priorityQueue);
+    });
+    cities.forEach((city) => {
+      enqueue(city.name, backgroundQueue);
+    });
+
+    if (!priorityQueue.length && !backgroundQueue.length) return;
+
+    let active = true;
+    let cancelIdleSchedule = () => {};
+    const runQueue = async (queue: string[], concurrency: number) => {
+      if (!queue.length) return;
+      let cursor = 0;
+      const worker = async () => {
+        while (active && cursor < queue.length) {
+          const cityName = queue[cursor];
+          cursor += 1;
+          if (citySummariesRef.current[cityName]) continue;
+
+          try {
+            await ensureCitySummary(cityName);
+          } catch {}
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(concurrency, queue.length) }, () =>
+          worker()
+        ),
+      );
+    };
+
+    void (async () => {
+      await runQueue(priorityQueue, EAGER_SUMMARY_PRIORITY_CONCURRENCY);
+      if (!active) return;
+      cancelIdleSchedule = scheduleWhenBrowserIdle(() => {
+        if (!active) return;
+        void runQueue(
+          backgroundQueue,
+          EAGER_SUMMARY_BACKGROUND_CONCURRENCY,
+        );
+      });
+    })();
 
     return () => {
       active = false;
+      cancelIdleSchedule();
     };
-  }, [cities]);
-
-  const ensureCitySummary = async (cityName: string, force = false) => {
-    const existing = citySummariesRef.current[cityName];
-    if (!force && existing) {
-      return existing;
-    }
-    const summary = await dashboardClient.getCitySummary(cityName, { force });
-    setCitySummariesByName((current) => ({
-      ...current,
-      [cityName]: summary,
-    }));
-    return summary;
-  };
+  }, [cities, loadingState.refresh]);
 
   const selectCity = async (cityName: string) => {
     setSelectedCity(cityName);
@@ -753,9 +893,7 @@ export function DashboardStoreProvider({
           });
           setSelectedForecastDate(detail.local_date);
         } else {
-          const summary = await dashboardClient.getCitySummary(selectedCity, {
-            force: true,
-          });
+          const summary = await ensureCitySummary(selectedCity, true);
           setCitySummariesByName((current) => ({
             ...current,
             [selectedCity]: summary,
