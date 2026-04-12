@@ -435,7 +435,12 @@ async def city_detail(
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
     normalized_depth = str(depth or "panel").strip().lower()
-    detail_mode = "full" if normalized_depth == "full" else "panel"
+    if normalized_depth == "full":
+        detail_mode = "full"
+    elif normalized_depth == "nearby":
+        detail_mode = "nearby"
+    else:
+        detail_mode = "panel"
     return await run_in_threadpool(_analyze, city, force_refresh, False, detail_mode)
 
 

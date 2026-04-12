@@ -85,14 +85,20 @@ def _analysis_ttl_for_city(city: str) -> int:
 
 
 def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
-    normalized_mode = "panel" if str(detail_mode or "").strip().lower() == "panel" else "full"
+    normalized_raw = str(detail_mode or "").strip().lower()
+    if normalized_raw == "panel":
+        normalized_mode = "panel"
+    elif normalized_raw == "nearby":
+        normalized_mode = "nearby"
+    else:
+        normalized_mode = "full"
     return f"{city}::{normalized_mode}"
 
 
 def _get_cached_analysis(
     city: str,
     ttl: int,
-    detail_modes: tuple[str, ...] = ("panel", "full"),
+    detail_modes: tuple[str, ...] = ("panel", "nearby", "full"),
 ) -> Optional[Dict[str, Any]]:
     now_ts = _time.time()
     freshest_payload: Optional[Dict[str, Any]] = None
@@ -1085,7 +1091,13 @@ def _analyze(
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
     ttl = CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
-    normalized_detail_mode = "panel" if str(detail_mode or "full").strip().lower() == "panel" else "full"
+    normalized_detail_mode_raw = str(detail_mode or "full").strip().lower()
+    if normalized_detail_mode_raw == "panel":
+        normalized_detail_mode = "panel"
+    elif normalized_detail_mode_raw == "nearby":
+        normalized_detail_mode = "nearby"
+    else:
+        normalized_detail_mode = "full"
     cache_key = _analysis_cache_key(city, normalized_detail_mode)
     
     if not force_refresh:
@@ -1114,16 +1126,17 @@ def _analyze(
 
     # ── 1. Fetch raw data ──
     is_panel_mode = normalized_detail_mode == "panel"
+    is_nearby_mode = normalized_detail_mode == "nearby"
 
     raw = _weather.fetch_all_sources(
         city,
         lat=lat,
         lon=lon,
         force_refresh=force_refresh,
-        include_taf=not is_panel_mode,
+        include_taf=not is_panel_mode and not is_nearby_mode,
         include_nearby=not is_panel_mode,
-        include_ensemble=not is_panel_mode,
-        include_multi_model=not is_panel_mode,
+        include_ensemble=not is_panel_mode and not is_nearby_mode,
+        include_multi_model=not is_panel_mode and not is_nearby_mode,
     )
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
@@ -1615,7 +1628,7 @@ def _analyze(
             first_peak_h,
             last_peak_h,
         )
-        if not is_panel_mode
+        if not is_panel_mode and not is_nearby_mode
         else {}
     )
     taf_signal = (
@@ -1627,7 +1640,7 @@ def _analyze(
             first_peak_h,
             last_peak_h,
         )
-        if not is_panel_mode
+        if not is_panel_mode and not is_nearby_mode
         else {"available": False}
     )
 
@@ -1777,7 +1790,7 @@ def _analyze(
     # ── Assemble result ──
     city_meta = CITIES.get(city, {}) or {}
     result = {
-        "detail_depth": "panel" if is_panel_mode else "full",
+        "detail_depth": "panel" if is_panel_mode else "nearby" if is_nearby_mode else "full",
         "name": city,
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "lat": lat,

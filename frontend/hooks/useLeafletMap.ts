@@ -18,6 +18,7 @@ interface UseLeafletMapArgs {
   onEnsureCityDetail: (
     cityName: string,
     force?: boolean,
+    depth?: "panel" | "nearby" | "full",
   ) => Promise<CityDetail>;
   onMapInteractionChange: (active: boolean) => void;
   onRegisterStopMotion: (stopMotion: () => void) => void;
@@ -512,9 +513,12 @@ export function useLeafletMap({
       handlingAutoNearbyRef.current = true;
       try {
         if (selectedDetail) {
-          // Just render stations, no camera move from here
-          renderNearbyStations(selectedDetail, true);
-          return;
+          const selectedNearbyStations = pickMapNearbyStations(selectedDetail);
+          if (selectedNearbyStations.length) {
+            // Just render stations, no camera move from here
+            renderNearbyStations(selectedDetail, true);
+            return;
+          }
         }
 
         if (suspendMotion) {
@@ -543,7 +547,7 @@ export function useLeafletMap({
           }
         }
 
-        const targetCity = best?.cityName || null;
+        const targetCity = selectedCity || best?.cityName || null;
         if (!targetCity) {
           autoNearbyCityRef.current = null;
           layer.clearLayers();
@@ -559,7 +563,7 @@ export function useLeafletMap({
 
         autoNearbyCityRef.current = targetCity;
         const cachedDetail = cityDetailsByName[targetCity];
-        if (cachedDetail) {
+        if (cachedDetail && pickMapNearbyStations(cachedDetail).length) {
           renderNearbyStations(cachedDetail, true);
           return;
         }
@@ -567,7 +571,11 @@ export function useLeafletMap({
         if (loadingAutoNearbyRef.current) return;
         loadingAutoNearbyRef.current = true;
         try {
-          const detail = await onEnsureCityDetailRef.current(targetCity, false);
+          const detail = await onEnsureCityDetailRef.current(
+            targetCity,
+            false,
+            "nearby",
+          );
           renderNearbyStations(detail, true);
         } catch {
         } finally {

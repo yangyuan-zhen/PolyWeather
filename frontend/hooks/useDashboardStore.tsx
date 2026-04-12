@@ -33,7 +33,7 @@ interface DashboardStoreValue extends DashboardState {
   ensureCityDetail: (
     cityName: string,
     force?: boolean,
-    depth?: "panel" | "full",
+    depth?: "panel" | "nearby" | "full",
   ) => Promise<CityDetail>;
   futureModalDate: string | null;
   loadCities: () => Promise<void>;
@@ -125,7 +125,7 @@ const EAGER_SUMMARY_PRIORITY_CITY_ORDER = [
   "milan",
   "madrid",
 ] as const;
-type CityDetailDepth = "panel" | "full";
+type CityDetailDepth = "panel" | "nearby" | "full";
 
 function countAvailableModels(
   detail?: CityDetail | null,
@@ -165,7 +165,9 @@ function hasSparseDetailCoverage(
 }
 
 function normalizeDetailDepth(detail?: CityDetail | null): CityDetailDepth {
-  return detail?.detail_depth === "panel" ? "panel" : "full";
+  if (detail?.detail_depth === "nearby") return "nearby";
+  if (detail?.detail_depth === "panel") return "panel";
+  return "full";
 }
 
 function detailSatisfiesDepth(
@@ -174,7 +176,15 @@ function detailSatisfiesDepth(
 ) {
   if (!detail) return false;
   if (depth === "panel") return true;
+  if (depth === "nearby") {
+    const normalized = normalizeDetailDepth(detail);
+    return normalized === "nearby" || normalized === "full";
+  }
   return normalizeDetailDepth(detail) === "full";
+}
+
+function shouldCheckSparseCoverageForDepth(depth: CityDetailDepth) {
+  return depth === "panel" || depth === "full";
 }
 
 function getStoredSelectedCityName(cities: CityListItem[]) {
@@ -413,7 +423,9 @@ export function DashboardStoreProvider({
     const cached = cityDetailsByName[cityName];
     const cachedMeta = cityDetailMetaByName[cityName];
     const hasRequestedDepth = detailSatisfiesDepth(cached, depth);
-    const cachedIsSparse = hasSparseDetailCoverage(cached, cached?.local_date);
+    const cachedIsSparse =
+      shouldCheckSparseCoverageForDepth(depth) &&
+      hasSparseDetailCoverage(cached, cached?.local_date);
     if (
       !force &&
       cached &&

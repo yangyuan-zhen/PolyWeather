@@ -29,8 +29,10 @@ function normalizeCityName(cityName: string) {
   return encodeURIComponent(String(cityName).replace(/\s/g, "-"));
 }
 
-function normalizeDetailDepth(depth?: "panel" | "full") {
-  return depth === "full" ? "full" : "panel";
+function normalizeDetailDepth(depth?: "panel" | "nearby" | "full") {
+  if (depth === "full") return "full";
+  if (depth === "nearby") return "nearby";
+  return "panel";
 }
 
 async function fetchJson<T>(url: string): Promise<T> {
@@ -161,7 +163,7 @@ export const dashboardClient = {
 
   async getCityDetail(
     cityName: string,
-    options?: { force?: boolean; depth?: "panel" | "full" },
+    options?: { force?: boolean; depth?: "panel" | "nearby" | "full" },
   ) {
     const force = options?.force ?? false;
     const depth = normalizeDetailDepth(options?.depth);
