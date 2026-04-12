@@ -13,6 +13,7 @@ export function MapCanvas() {
     citySummariesByName: store.citySummariesByName,
     onClosePanel: store.closePanel,
     onEnsureCityDetail: store.ensureCityDetail,
+    onMapInteractionChange: store.setMapInteractionActive,
     onRegisterStopMotion: store.registerMapStopMotion,
     onSelectCity: (cityName) => {
       void store.selectCity(cityName);

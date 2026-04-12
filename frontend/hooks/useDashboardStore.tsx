@@ -47,6 +47,7 @@ interface DashboardStoreValue extends DashboardState {
   selectedMarketScan: MarketScan | null;
   selectedDetail: CityDetail | null;
   selectCity: (cityName: string) => Promise<void>;
+  setMapInteractionActive: (active: boolean) => void;
   setForecastDate: (dateStr: string | null) => void;
   marketScanByCityName: Record<string, MarketScan>;
 }
@@ -254,6 +255,7 @@ export function DashboardStoreProvider({
     string | null
   >(null);
   const [futureModalDate, setFutureModalDate] = useState<string | null>(null);
+  const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [loadingState, setLoadingState] = useState<LoadingState>(
     getInitialLoadingState,
   );
@@ -747,8 +749,9 @@ export function DashboardStoreProvider({
     void (async () => {
       await runQueue(priorityQueue, EAGER_SUMMARY_PRIORITY_CONCURRENCY);
       if (!active) return;
+      if (isMapInteracting) return;
       cancelIdleSchedule = scheduleWhenBrowserIdle(() => {
-        if (!active) return;
+        if (!active || isMapInteracting) return;
         void runQueue(
           backgroundQueue,
           EAGER_SUMMARY_BACKGROUND_CONCURRENCY,
@@ -760,7 +763,7 @@ export function DashboardStoreProvider({
       active = false;
       cancelIdleSchedule();
     };
-  }, [cities, loadingState.refresh]);
+  }, [cities, isMapInteracting, loadingState.refresh]);
 
   const selectCity = async (cityName: string) => {
     setSelectedCity(cityName);
@@ -1066,6 +1069,7 @@ export function DashboardStoreProvider({
       selectedDetail,
       selectedForecastDate,
       selectCity,
+      setMapInteractionActive: setIsMapInteracting,
       setForecastDate: (dateStr: string | null) =>
         setSelectedForecastDate(dateStr),
       marketScanByCityName,

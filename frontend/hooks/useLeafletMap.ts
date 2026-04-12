@@ -19,6 +19,7 @@ interface UseLeafletMapArgs {
     cityName: string,
     force?: boolean,
   ) => Promise<CityDetail>;
+  onMapInteractionChange: (active: boolean) => void;
   onRegisterStopMotion: (stopMotion: () => void) => void;
   onSelectCity: (cityName: string) => void;
   selectedCity: string | null;
@@ -195,6 +196,7 @@ export function useLeafletMap({
   citySummariesByName,
   onClosePanel,
   onEnsureCityDetail,
+  onMapInteractionChange,
   onRegisterStopMotion,
   onSelectCity,
   selectedCity,
@@ -218,6 +220,10 @@ export function useLeafletMap({
   const onRegisterStopMotionRef = useRef(onRegisterStopMotion);
   const onSelectCityRef = useRef(onSelectCity);
   const onEnsureCityDetailRef = useRef(onEnsureCityDetail);
+  const onMapInteractionChangeRef = useRef(onMapInteractionChange);
+  const interactionIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   useEffect(() => {
     onClosePanelRef.current = onClosePanel;
@@ -234,6 +240,10 @@ export function useLeafletMap({
   useEffect(() => {
     onEnsureCityDetailRef.current = onEnsureCityDetail;
   }, [onEnsureCityDetail]);
+
+  useEffect(() => {
+    onMapInteractionChangeRef.current = onMapInteractionChange;
+  }, [onMapInteractionChange]);
 
   useEffect(() => {
     suspendMotionRef.current = suspendMotion;
@@ -278,8 +288,42 @@ export function useLeafletMap({
     };
     map.on("click", handleMapClick);
 
+    const markInteracting = () => {
+      if (interactionIdleTimerRef.current) {
+        clearTimeout(interactionIdleTimerRef.current);
+        interactionIdleTimerRef.current = null;
+      }
+      onMapInteractionChangeRef.current(true);
+    };
+
+    const markIdleSoon = () => {
+      if (interactionIdleTimerRef.current) {
+        clearTimeout(interactionIdleTimerRef.current);
+      }
+      interactionIdleTimerRef.current = setTimeout(() => {
+        interactionIdleTimerRef.current = null;
+        onMapInteractionChangeRef.current(false);
+      }, 700);
+    };
+
+    map.on("movestart", markInteracting);
+    map.on("zoomstart", markInteracting);
+    map.on("dragstart", markInteracting);
+    map.on("moveend", markIdleSoon);
+    map.on("zoomend", markIdleSoon);
+
     return () => {
       onRegisterStopMotionRef.current(() => {});
+      if (interactionIdleTimerRef.current) {
+        clearTimeout(interactionIdleTimerRef.current);
+        interactionIdleTimerRef.current = null;
+      }
+      onMapInteractionChangeRef.current(false);
+      map.off("movestart", markInteracting);
+      map.off("zoomstart", markInteracting);
+      map.off("dragstart", markInteracting);
+      map.off("moveend", markIdleSoon);
+      map.off("zoomend", markIdleSoon);
       map.off("click", handleMapClick);
       map.remove();
       mapRef.current = null;
