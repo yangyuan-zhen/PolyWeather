@@ -6,6 +6,23 @@ export type OfficialSourceLink = {
   kind: "agency" | "airport" | "metar";
 };
 
+function buildJmaAmedasTenMinuteUrl(
+  localDate?: string | null,
+  options?: {
+    blockNo?: string;
+    precNo?: string;
+  },
+) {
+  const blockNo = String(options?.blockNo || "0371").trim() || "0371";
+  const precNo = String(options?.precNo || "44").trim() || "44";
+  const match = String(localDate || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const now = new Date();
+  const year = match?.[1] || String(now.getFullYear());
+  const month = match?.[2] || String(now.getMonth() + 1).padStart(2, "0");
+  const day = match?.[3] || String(now.getDate()).padStart(2, "0");
+  return `https://www.data.jma.go.jp/stats/etrn/view/10min_a1.php?prec_no=${encodeURIComponent(precNo)}&block_no=${encodeURIComponent(blockNo)}&year=${encodeURIComponent(year)}&month=${encodeURIComponent(month)}&day=${encodeURIComponent(day)}&view=`;
+}
+
 const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   singapore: [
     {
@@ -329,8 +346,8 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ],
   tokyo: [
     {
-      label: "JMA",
-      href: "https://www.jma.go.jp/jma/indexe.html",
+      label: "JMA 羽田10分钟实况",
+      href: "",
       kind: "agency",
     },
     {
@@ -681,7 +698,18 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
 
 export function getOfficialSourceLinks(detail: CityDetail): OfficialSourceLink[] {
   const cityKey = String(detail.name || "").trim().toLowerCase();
-  const links = [...(CITY_SPECIFIC_SOURCES[cityKey] || [])];
+  const links = [...(CITY_SPECIFIC_SOURCES[cityKey] || [])].map((link) => {
+    if (cityKey === "tokyo" && link.kind === "agency" && link.label === "JMA 羽田10分钟实况") {
+      return {
+        ...link,
+        href: buildJmaAmedasTenMinuteUrl(detail.local_date, {
+          blockNo: "0371",
+          precNo: "44",
+        }),
+      };
+    }
+    return link;
+  });
   const seen = new Set<string>();
   return links.filter((link) => {
     const key = `${link.label}|${link.href}`;

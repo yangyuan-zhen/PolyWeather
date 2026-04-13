@@ -183,7 +183,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._nmc_cache: Dict[str, Dict] = {}
         self._nmc_cache_lock = threading.Lock()
         self.jma_cache_ttl_sec = int(
-            os.getenv("JMA_AMEDAS_CACHE_TTL_SEC", "300")
+            os.getenv("JMA_AMEDAS_CACHE_TTL_SEC", "120")
         )
         self._jma_cache: Dict[str, Dict] = {}
         self._jma_cache_lock = threading.Lock()
@@ -700,6 +700,14 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     if key.startswith(prefix):
                         self._metar_cache.pop(key, None)
         normalized = str(city or "").strip().lower()
+        with self._jma_cache_lock:
+            self._jma_cache.pop(f"{normalized}:{use_fahrenheit}", None)
+        with self._kma_cache_lock:
+            self._kma_cache.pop(f"{normalized}:{use_fahrenheit}", None)
+        with self._nmc_cache_lock:
+            self._nmc_cache.pop(f"{normalized}:{use_fahrenheit}", None)
+        with self._ru_station_cache_lock:
+            self._ru_station_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._settlement_cache_lock:
             city_meta = self.CITY_REGISTRY.get(normalized) or {}
             settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
@@ -717,6 +725,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     or normalized
                 )
                 self._settlement_cache.pop(f"noaa:{station_code.lower()}", None)
+            elif settlement_source == "cwa":
+                station_code = (
+                    str(city_meta.get("settlement_station_code") or "").strip()
+                    or normalized
+                )
+                self._settlement_cache.pop(f"cwa:{station_code.lower()}", None)
 
     def _uses_fahrenheit(self, city_lower: str) -> bool:
         return city_lower in self.US_CITIES
