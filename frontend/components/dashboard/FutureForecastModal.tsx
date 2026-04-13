@@ -14,7 +14,7 @@ import {
 
 import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
-import { CSSProperties, useMemo } from "react";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -626,13 +626,47 @@ export function FutureForecastModal() {
   const dateStr = store.futureModalDate;
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
+  const [showDeferredTodaySections, setShowDeferredTodaySections] = useState(false);
 
   if (!detail || !dateStr) return null;
+
+  useEffect(() => {
+    setShowDeferredTodaySections(false);
+    if (typeof window === "undefined") {
+      setShowDeferredTodaySections(true);
+      return;
+    }
+
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    let idleId: number | null = null;
+    const reveal = () => {
+      if (!cancelled) {
+        setShowDeferredTodaySections(true);
+      }
+    };
+
+    if ("requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(reveal, { timeout: 600 });
+    } else {
+      timeoutId = setTimeout(reveal, 120);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleId != null && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [dateStr, detail]);
 
   const isToday = dateStr === detail.local_date;
   const detailDepth = detail.detail_depth || "full";
   const isFullDetailReady = detailDepth === "full";
-  const isStructureSyncing = store.loadingState.refresh || !isFullDetailReady;
+  const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
   const isMarketSyncing = store.loadingState.marketScan;
   const isAnyLayerSyncing = isStructureSyncing || isMarketSyncing;
   const view = getFutureModalView(detail, dateStr, locale);
@@ -642,8 +676,11 @@ export function FutureForecastModal() {
   } as CSSProperties & { "--score-position": string };
   const weatherSummary = getWeatherSummary(detail, locale);
   const paceView = useMemo(
-    () => (isToday ? getTodayPaceView(detail, locale) : null),
-    [detail, isToday, locale],
+    () =>
+      isToday && showDeferredTodaySections
+        ? getTodayPaceView(detail, locale)
+        : null,
+    [detail, isToday, locale, showDeferredTodaySections],
   );
   const probabilityView = useMemo(
     () => getProbabilityView(detail, dateStr),
@@ -674,6 +711,7 @@ export function FutureForecastModal() {
     };
   }, [modelView]);
   const boundaryRiskView = useMemo(() => {
+    if (!showDeferredTodaySections) return null;
     if (!isToday || !paceView) return null;
     const selectedBucket = marketScan?.temperature_bucket || null;
     const bounds = parseBucketBoundaries(selectedBucket);
@@ -718,8 +756,9 @@ export function FutureForecastModal() {
       tone,
       value: `${nearest.gap.toFixed(1)}${detail.temp_symbol}`,
     };
-  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, marketScan?.temperature_bucket, paceView]);
+  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, marketScan?.temperature_bucket, paceView, showDeferredTodaySections]);
   const peakWindowStateView = useMemo(() => {
+    if (!showDeferredTodaySections) return null;
     if (!isToday || !paceView) return null;
     const firstHour = Number(detail.peak?.first_h);
     const lastHour = Number(detail.peak?.last_h);
@@ -754,8 +793,9 @@ export function FutureForecastModal() {
       tone,
       value: paceView.peakWindowText,
     };
-  }, [detail.local_time, detail.peak?.first_h, detail.peak?.last_h, isToday, locale, paceView]);
+  }, [detail.local_time, detail.peak?.first_h, detail.peak?.last_h, isToday, locale, paceView, showDeferredTodaySections]);
   const networkLeadView = useMemo(() => {
+    if (!showDeferredTodaySections) return null;
     if (!isToday) return null;
     const delta = Number(detail.airport_vs_network_delta);
     const leadSignal = detail.network_lead_signal;
@@ -797,7 +837,7 @@ export function FutureForecastModal() {
       tone,
       value: `${delta > 0 ? "+" : ""}${delta.toFixed(1)}${detail.temp_symbol}`,
     };
-  }, [detail.airport_vs_network_delta, detail.network_lead_signal, detail.temp_symbol, isToday, locale]);
+  }, [detail.airport_vs_network_delta, detail.network_lead_signal, detail.temp_symbol, isToday, locale, showDeferredTodaySections]);
   const isNoaaSettlement =
     detail.current?.settlement_source === "noaa" ||
     detail.current?.settlement_source_label === "NOAA";
@@ -871,6 +911,7 @@ export function FutureForecastModal() {
     formatBucketLabel(marketScan?.temperature_bucket) !== "--" &&
     hottestBucketLabel === formatBucketLabel(marketScan?.temperature_bucket);
   const marketAwareUpperAirCue = useMemo(() => {
+    if (!showDeferredTodaySections) return null;
     if (!isToday || (!upperAirSignal.source && !tafSignal.available)) return null;
 
     const crowded = hottestMatchesSettlement && (topBucketProbability || 0) >= 0.3;
@@ -1014,6 +1055,7 @@ export function FutureForecastModal() {
     topBucketProbability,
     upperAirSignal.heating_setup,
     upperAirSignal.source,
+    showDeferredTodaySections,
   ]);
   const topObservedTemp =
     detail.current?.max_so_far != null
@@ -1038,22 +1080,25 @@ export function FutureForecastModal() {
       percent,
     };
   })();
-  const displayedUpperAirSummary =
-    marketAwareUpperAirCue?.summary || view.front.upperAirSummary;
-  const displayedUpperAirMetrics = (view.front.upperAirMetrics || []).map(
-    (metric, index) =>
-      index === 0 &&
-      (metric.label === "Trade cue" || metric.label === "交易动作") &&
-      marketAwareUpperAirCue
-        ? {
-            ...metric,
-            note: marketAwareUpperAirCue.note,
-            tone: marketAwareUpperAirCue.tone,
-            value: marketAwareUpperAirCue.value,
-          }
-        : metric,
-  );
+  const displayedUpperAirSummary = showDeferredTodaySections
+    ? marketAwareUpperAirCue?.summary || view.front.upperAirSummary
+    : "";
+  const displayedUpperAirMetrics = showDeferredTodaySections
+    ? (view.front.upperAirMetrics || []).map((metric, index) =>
+        index === 0 &&
+        (metric.label === "Trade cue" || metric.label === "交易动作") &&
+        marketAwareUpperAirCue
+          ? {
+              ...metric,
+              note: marketAwareUpperAirCue.note,
+              tone: marketAwareUpperAirCue.tone,
+              value: marketAwareUpperAirCue.value,
+            }
+          : metric,
+      )
+    : [];
   const localizedAiCommentaryLines = useMemo(() => {
+    if (!showDeferredTodaySections) return [] as string[];
     const commentary = detail.dynamic_commentary || {};
     const headline = String(
       locale === "en-US" ? commentary.headline_en || "" : commentary.headline_zh || "",
@@ -1065,8 +1110,9 @@ export function FutureForecastModal() {
       ? bullets.map((item) => String(item || "").trim()).filter(Boolean)
       : [];
     return [headline, ...cleanedBullets].filter(Boolean).slice(0, 3);
-  }, [detail.dynamic_commentary, locale]);
+  }, [detail.dynamic_commentary, locale, showDeferredTodaySections]);
   const todayTradeSummaryLines = useMemo(() => {
+    if (!showDeferredTodaySections) return [] as string[];
     if (!isToday) return [] as string[];
     if (localizedAiCommentaryLines.length > 0) {
       return localizedAiCommentaryLines;
@@ -1102,7 +1148,7 @@ export function FutureForecastModal() {
       );
     }
     return lines.slice(0, 3);
-  }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView]);
+  }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView, showDeferredTodaySections]);
   const syncStatusItems = [
     {
       key: "base",
@@ -1379,7 +1425,7 @@ export function FutureForecastModal() {
                     </div>
                   </section>
 
-                  {paceView ? (
+                  {showDeferredTodaySections && paceView ? (
                     <section className="future-v2-card future-v2-pace-card future-v2-focus-card">
                       <div className="future-v2-card-head">
                         <h4 className="future-v2-card-title">
@@ -1497,6 +1543,24 @@ export function FutureForecastModal() {
                           ))}
                       </div>
                     </section>
+                  ) : isToday ? (
+                    <section className="future-v2-card future-v2-support-card">
+                      <div className="future-v2-card-head">
+                        <h4 className="future-v2-card-title">
+                          {locale === "en-US" ? "Current Pace" : "当前节奏"}
+                        </h4>
+                        <div className="future-v2-card-kicker">
+                          {locale === "en-US"
+                            ? "Backfilling intraday pace context"
+                            : "正在补齐日内节奏上下文"}
+                        </div>
+                      </div>
+                      <div className="future-trend-summary future-trend-summary-muted">
+                        {locale === "en-US"
+                          ? "Expected-now pace, boundary risk, and airport-vs-network cues are loading in the background."
+                          : "预期此刻节奏、边界风险和机场对比站网信号正在后台补齐。"}
+                      </div>
+                    </section>
                   ) : null}
 
                 </aside>
@@ -1560,164 +1624,175 @@ export function FutureForecastModal() {
                     </section>
                   </div>
 
-                  <section className="future-modal-section">
-                    <h3>{t("future.structureToday")}</h3>
-                    <div className="future-front-score">
-                      <div className="future-front-bar" style={barStyle}>
-                        <div
-                          style={{
-                            position: "absolute",
-                            top: 0,
-                            bottom: 0,
-                            left: "50%",
-                            width: "2px",
-                            background: "rgba(255, 255, 255, 0.2)",
-                            transform: "translateX(-50%)",
-                            zIndex: 1,
-                          }}
-                        />
-                      </div>
-                    <div className="future-front-meta">
-                      <span className="future-front-pill">
-                        {t("future.judgement")}: {view.front.label}
-                        </span>
-                        <span className="future-front-pill">
-                          {t("future.confidence")}:{" "}
-                          {t(`confidence.${view.front.confidence}`)}
-                        </span>
-                        <span className="future-front-pill">
-                          {t("future.maxPrecip")}:{" "}
-                          {Math.round(view.front.precipMax)}%
-                        </span>
-                      </div>
-                      {todayTradeSummaryLines.length > 0 ? (
-                        <div className="future-trend-summary">
-                          {todayTradeSummaryLines.map((line, index) => (
-                            <div key={`${index}-${line}`}>{line}</div>
-                          ))}
-                        </div>
-                      ) : null}
-                    </div>
-                    <div className="future-subsection-title">
-                      {locale === "en-US" ? "Surface Structure" : "近地面信号"}
-                    </div>
-                    <div className="future-trend-grid">
-                      {view.front.metrics.slice(0, 6).map((metric) => (
-                        <div key={metric.label} className="future-trend-card">
-                          <div className="future-trend-label">{metric.label}</div>
+                  {showDeferredTodaySections ? (
+                    <section className="future-modal-section">
+                      <h3>{t("future.structureToday")}</h3>
+                      <div className="future-front-score">
+                        <div className="future-front-bar" style={barStyle}>
                           <div
-                            className={clsx(
-                              "future-trend-value",
-                              metric.tone === "warm" && "warm",
-                              metric.tone === "cold" && "cold",
-                            )}
-                          >
-                            {metric.value}
+                            style={{
+                              position: "absolute",
+                              top: 0,
+                              bottom: 0,
+                              left: "50%",
+                              width: "2px",
+                              background: "rgba(255, 255, 255, 0.2)",
+                              transform: "translateX(-50%)",
+                              zIndex: 1,
+                            }}
+                          />
+                        </div>
+                      <div className="future-front-meta">
+                        <span className="future-front-pill">
+                          {t("future.judgement")}: {view.front.label}
+                          </span>
+                          <span className="future-front-pill">
+                            {t("future.confidence")}:{" "}
+                            {t(`confidence.${view.front.confidence}`)}
+                          </span>
+                          <span className="future-front-pill">
+                            {t("future.maxPrecip")}:{" "}
+                            {Math.round(view.front.precipMax)}%
+                          </span>
+                        </div>
+                        {todayTradeSummaryLines.length > 0 ? (
+                          <div className="future-trend-summary">
+                            {todayTradeSummaryLines.map((line, index) => (
+                              <div key={`${index}-${line}`}>{line}</div>
+                            ))}
                           </div>
-                          {getTrendMetricVisual(metric) ? (
+                        ) : null}
+                      </div>
+                      <div className="future-subsection-title">
+                        {locale === "en-US" ? "Surface Structure" : "近地面信号"}
+                      </div>
+                      <div className="future-trend-grid">
+                        {view.front.metrics.slice(0, 6).map((metric) => (
+                          <div key={metric.label} className="future-trend-card">
+                            <div className="future-trend-label">{metric.label}</div>
                             <div
                               className={clsx(
-                                "future-trend-meter",
-                                getTrendMetricVisual(metric)?.mode === "center" &&
-                                  "center",
+                                "future-trend-value",
+                                metric.tone === "warm" && "warm",
+                                metric.tone === "cold" && "cold",
                               )}
                             >
-                              {getTrendMetricVisual(metric)?.mode === "center" ? (
-                                <span className="future-trend-meter-midline" />
-                              ) : null}
-                              <div
-                                className={clsx(
-                                  "future-trend-meter-fill",
-                                  getTrendMetricVisual(metric)?.tone === "warm" &&
-                                    "warm",
-                                  getTrendMetricVisual(metric)?.tone === "cold" &&
-                                    "cold",
-                                )}
-                                style={{
-                                  width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
-                                }}
-                              />
+                              {metric.value}
                             </div>
-                          ) : null}
-                          <div className="future-trend-note">{metric.note}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <>
-                      <div className="future-subsection-title">
-                        {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
-                      </div>
-                      {displayedUpperAirSummary ? (
-                        <div className="future-trend-summary">
-                          {displayedUpperAirSummary}
-                        </div>
-                      ) : (
-                        <div className="future-trend-summary future-trend-summary-muted">
-                          {locale === "en-US"
-                            ? "Upper-air structure is temporarily unavailable for this city. For now, lean on surface structure and TAF timing."
-                            : "该城市当前暂无可用的高空结构数据，先以近地面结构和 TAF 时段作为主判断。"}
-                        </div>
-                      )}
-                      {displayedUpperAirMetrics.length > 0 ? (
-                        <div className="future-trend-grid">
-                          {displayedUpperAirMetrics.map((metric) => (
-                            <div key={metric.label} className="future-trend-card">
-                              <div className="future-trend-label">{metric.label}</div>
+                            {getTrendMetricVisual(metric) ? (
                               <div
                                 className={clsx(
-                                  "future-trend-value",
-                                  metric.tone === "warm" && "warm",
-                                  metric.tone === "cold" && "cold",
+                                  "future-trend-meter",
+                                  getTrendMetricVisual(metric)?.mode === "center" &&
+                                    "center",
                                 )}
                               >
-                                {metric.value}
-                              </div>
-                              {getTrendMetricVisual(metric) ? (
+                                {getTrendMetricVisual(metric)?.mode === "center" ? (
+                                  <span className="future-trend-meter-midline" />
+                                ) : null}
                                 <div
                                   className={clsx(
-                                    "future-trend-meter",
-                                    getTrendMetricVisual(metric)?.mode === "center" &&
-                                      "center",
+                                    "future-trend-meter-fill",
+                                    getTrendMetricVisual(metric)?.tone === "warm" &&
+                                      "warm",
+                                    getTrendMetricVisual(metric)?.tone === "cold" &&
+                                      "cold",
+                                  )}
+                                  style={{
+                                    width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
+                                  }}
+                                />
+                              </div>
+                            ) : null}
+                            <div className="future-trend-note">{metric.note}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <>
+                        <div className="future-subsection-title">
+                          {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
+                        </div>
+                        {displayedUpperAirSummary ? (
+                          <div className="future-trend-summary">
+                            {displayedUpperAirSummary}
+                          </div>
+                        ) : (
+                          <div className="future-trend-summary future-trend-summary-muted">
+                            {locale === "en-US"
+                              ? "Upper-air structure is temporarily unavailable for this city. For now, lean on surface structure and TAF timing."
+                              : "该城市当前暂无可用的高空结构数据，先以近地面结构和 TAF 时段作为主判断。"}
+                          </div>
+                        )}
+                        {displayedUpperAirMetrics.length > 0 ? (
+                          <div className="future-trend-grid">
+                            {displayedUpperAirMetrics.map((metric) => (
+                              <div key={metric.label} className="future-trend-card">
+                                <div className="future-trend-label">{metric.label}</div>
+                                <div
+                                  className={clsx(
+                                    "future-trend-value",
+                                    metric.tone === "warm" && "warm",
+                                    metric.tone === "cold" && "cold",
                                   )}
                                 >
-                                  {getTrendMetricVisual(metric)?.mode === "center" ? (
-                                    <span className="future-trend-meter-midline" />
-                                  ) : null}
+                                  {metric.value}
+                                </div>
+                                {getTrendMetricVisual(metric) ? (
                                   <div
                                     className={clsx(
-                                      "future-trend-meter-fill",
-                                      getTrendMetricVisual(metric)?.tone === "warm" &&
-                                        "warm",
-                                      getTrendMetricVisual(metric)?.tone === "cold" &&
-                                        "cold",
+                                      "future-trend-meter",
+                                      getTrendMetricVisual(metric)?.mode === "center" &&
+                                        "center",
                                     )}
-                                    style={{
-                                      width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
-                                    }}
-                                  />
-                                </div>
-                              ) : null}
-                              <div className="future-trend-note">{metric.note}</div>
+                                  >
+                                    {getTrendMetricVisual(metric)?.mode === "center" ? (
+                                      <span className="future-trend-meter-midline" />
+                                    ) : null}
+                                    <div
+                                      className={clsx(
+                                        "future-trend-meter-fill",
+                                        getTrendMetricVisual(metric)?.tone === "warm" &&
+                                          "warm",
+                                        getTrendMetricVisual(metric)?.tone === "cold" &&
+                                          "cold",
+                                      )}
+                                      style={{
+                                        width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
+                                      }}
+                                    />
+                                  </div>
+                                ) : null}
+                                <div className="future-trend-note">{metric.note}</div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="future-trend-card future-trend-card-empty">
+                            <div className="future-trend-label">
+                              {locale === "en-US" ? "Upper-air source" : "高空数据源"}
                             </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="future-trend-card future-trend-card-empty">
-                          <div className="future-trend-label">
-                            {locale === "en-US" ? "Upper-air source" : "高空数据源"}
+                            <div className="future-trend-value">
+                              {locale === "en-US" ? "Not available" : "暂不可用"}
+                            </div>
+                            <div className="future-trend-note">
+                              {locale === "en-US"
+                                ? "No upper-air diagnostic feed is attached to this city right now."
+                                : "当前该城市未接入可用的高空诊断源，所以这里先保留说明卡片。"}
+                            </div>
                           </div>
-                          <div className="future-trend-value">
-                            {locale === "en-US" ? "Not available" : "暂不可用"}
-                          </div>
-                          <div className="future-trend-note">
-                            {locale === "en-US"
-                              ? "No upper-air diagnostic feed is attached to this city right now."
-                              : "当前该城市未接入可用的高空诊断源，所以这里先保留说明卡片。"}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  </section>
+                        )}
+                      </>
+                    </section>
+                  ) : (
+                    <section className="future-modal-section">
+                      <h3>{t("future.structureToday")}</h3>
+                      <div className="future-trend-summary future-trend-summary-muted">
+                        {locale === "en-US"
+                          ? "Surface structure, upper-air diagnostics, and trade commentary are loading after the primary chart."
+                          : "近地面结构、高空诊断和交易提示会在主图之后继续后台补齐。"}
+                      </div>
+                    </section>
+                  )}
                 </main>
               </div>
             ) : (

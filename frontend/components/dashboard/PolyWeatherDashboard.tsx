@@ -6,10 +6,21 @@ import {
   DashboardStoreProvider,
   useDashboardStore,
 } from "@/hooks/useDashboardStore";
+import { preloadChartJs } from "@/hooks/useChart";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
 import { DetailPanel } from "@/components/dashboard/DetailPanel";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
+
+const loadHistoryModal = () =>
+  import("@/components/dashboard/HistoryModal").then(
+    (module) => module.HistoryModal,
+  );
+
+const loadFutureForecastModal = () =>
+  import("@/components/dashboard/FutureForecastModal").then(
+    (module) => module.FutureForecastModal,
+  );
 
 const MapCanvas = dynamic(
   () =>
@@ -21,10 +32,7 @@ const MapCanvas = dynamic(
 );
 
 const HistoryModal = dynamic(
-  () =>
-    import("@/components/dashboard/HistoryModal").then(
-      (module) => module.HistoryModal,
-    ),
+  loadHistoryModal,
   {
     ssr: false,
     loading: () => null,
@@ -32,10 +40,7 @@ const HistoryModal = dynamic(
 );
 
 const FutureForecastModal = dynamic(
-  () =>
-    import("@/components/dashboard/FutureForecastModal").then(
-      (module) => module.FutureForecastModal,
-    ),
+  loadFutureForecastModal,
   {
     ssr: false,
     loading: () => null,
@@ -76,6 +81,42 @@ function DashboardScreen() {
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [store]);
+
+  useEffect(() => {
+    const browserWindow = window as Window & {
+      requestIdleCallback?: (
+        cb: IdleRequestCallback,
+        options?: IdleRequestOptions,
+      ) => number;
+      cancelIdleCallback?: (handle: number) => void;
+    };
+    if (typeof browserWindow.requestIdleCallback === "function") {
+      const handle = browserWindow.requestIdleCallback(() => {
+        void loadHistoryModal();
+        void loadFutureForecastModal();
+      }, { timeout: 1200 });
+      return () => {
+        if (typeof browserWindow.cancelIdleCallback === "function") {
+          browserWindow.cancelIdleCallback(handle);
+        }
+      };
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadHistoryModal();
+      void loadFutureForecastModal();
+    }, 500);
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!store.selectedCity) return;
+    void preloadChartJs();
+    void loadHistoryModal();
+    void loadFutureForecastModal();
+  }, [store.selectedCity]);
 
   // Avoid full-page flashing on initial load; only show this overlay for manual refresh.
   const showLoading =

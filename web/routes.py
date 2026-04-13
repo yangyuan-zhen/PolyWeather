@@ -21,6 +21,7 @@ from web.analysis_service import (
     _analyze,
     _analyze_summary,
     _build_city_detail_payload,
+    _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
 from web.core import (
@@ -88,6 +89,7 @@ DEFAULT_PREWARM_CITIES = [
     "paris",
     "madrid",
 ]
+HISTORY_PREVIEW_DAY_LIMIT = 21
 
 
 def _parse_snapshot_dt(value: object) -> Optional[datetime]:
@@ -445,7 +447,11 @@ async def city_detail(
 
 
 @router.get("/api/history/{name}")
-async def city_history(request: Request, name: str):
+async def city_history(
+    request: Request,
+    name: str,
+    include_records: bool = False,
+):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
 
@@ -486,12 +492,23 @@ async def city_history(request: Request, name: str):
         if not city_data:
             return {
                 "history": [],
+                "mode": "full" if include_records else "preview",
+                "has_more": False,
+                "full_count": 0,
+                "preview_count": 0,
                 "settlement_source": source,
                 "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
             }
 
+        all_days = sorted(city_data.keys())
+        selected_days = (
+            all_days
+            if include_records
+            else all_days[-HISTORY_PREVIEW_DAY_LIMIT:]
+        )
         out = []
-        for day, rec in sorted(city_data.items()):
+        for day in selected_days:
+            rec = city_data.get(day, {})
             if not isinstance(rec, dict):
                 rec = {}
 
@@ -539,6 +556,10 @@ async def city_history(request: Request, name: str):
 
         return {
             "history": out,
+            "mode": "full" if include_records else "preview",
+            "has_more": len(all_days) > len(selected_days),
+            "full_count": len(all_days),
+            "preview_count": len(out),
             "settlement_source": source,
             "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
         }
@@ -1072,6 +1093,25 @@ async def city_detail_aggregate(
     data = await run_in_threadpool(_analyze, city, force_refresh, True)
     return await run_in_threadpool(
         _build_city_detail_payload,
+        data,
+        market_slug,
+        target_date,
+    )
+
+
+@router.get("/api/city/{name}/market-scan")
+async def city_market_scan(
+    request: Request,
+    name: str,
+    force_refresh: bool = False,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+):
+    _assert_entitlement(request)
+    city = _normalize_city_or_404(name)
+    data = await run_in_threadpool(_analyze, city, force_refresh, False, "market")
+    return await run_in_threadpool(
+        _build_city_market_scan_payload,
         data,
         market_slug,
         target_date,

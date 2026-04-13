@@ -5,7 +5,7 @@ import clsx from "clsx";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ForecastTable } from "@/components/dashboard/PanelSections";
-import { useChart } from "@/hooks/useChart";
+import { preloadChartJs, useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
@@ -360,6 +360,12 @@ export function DetailPanel() {
                     : `${t("detail.todayAnalysis")} (Pro)`
                 }
                 onClick={() => handleFeatureAccess("today")}
+                onFocus={() => {
+                  void preloadChartJs();
+                }}
+                onMouseEnter={() => {
+                  void preloadChartJs();
+                }}
                 disabled={!store.selectedCity}
               >
                 {isPro
@@ -373,6 +379,12 @@ export function DetailPanel() {
                   isPro ? t("detail.history") : `${t("detail.history")} (Pro)`
                 }
                 onClick={() => handleFeatureAccess("history")}
+                onFocus={() => {
+                  void preloadChartJs();
+                }}
+                onMouseEnter={() => {
+                  void preloadChartJs();
+                }}
                 disabled={!store.selectedCity}
               >
                 {isPro ? t("detail.history") : `${t("detail.history")} · Pro`}

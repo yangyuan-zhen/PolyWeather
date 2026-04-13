@@ -88,6 +88,8 @@ def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
     normalized_raw = str(detail_mode or "").strip().lower()
     if normalized_raw == "panel":
         normalized_mode = "panel"
+    elif normalized_raw == "market":
+        normalized_mode = "market"
     elif normalized_raw == "nearby":
         normalized_mode = "nearby"
     else:
@@ -98,7 +100,7 @@ def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
 def _get_cached_analysis(
     city: str,
     ttl: int,
-    detail_modes: tuple[str, ...] = ("panel", "nearby", "full"),
+    detail_modes: tuple[str, ...] = ("panel", "market", "nearby", "full"),
 ) -> Optional[Dict[str, Any]]:
     now_ts = _time.time()
     freshest_payload: Optional[Dict[str, Any]] = None
@@ -1094,6 +1096,8 @@ def _analyze(
     normalized_detail_mode_raw = str(detail_mode or "full").strip().lower()
     if normalized_detail_mode_raw == "panel":
         normalized_detail_mode = "panel"
+    elif normalized_detail_mode_raw == "market":
+        normalized_detail_mode = "market"
     elif normalized_detail_mode_raw == "nearby":
         normalized_detail_mode = "nearby"
     else:
@@ -1126,6 +1130,7 @@ def _analyze(
 
     # ── 1. Fetch raw data ──
     is_panel_mode = normalized_detail_mode == "panel"
+    is_market_mode = normalized_detail_mode == "market"
     is_nearby_mode = normalized_detail_mode == "nearby"
 
     raw = _weather.fetch_all_sources(
@@ -1133,10 +1138,11 @@ def _analyze(
         lat=lat,
         lon=lon,
         force_refresh=force_refresh,
-        include_taf=not is_panel_mode and not is_nearby_mode,
-        include_nearby=not is_panel_mode,
-        include_ensemble=not is_panel_mode and not is_nearby_mode,
+        include_taf=not is_panel_mode and not is_nearby_mode and not is_market_mode,
+        include_nearby=not is_panel_mode and not is_market_mode,
+        include_ensemble=not is_panel_mode and not is_nearby_mode and not is_market_mode,
         include_multi_model=not is_panel_mode and not is_nearby_mode,
+        include_mgm=not is_market_mode,
     )
     om = raw.get("open-meteo", {})
     metar = raw.get("metar", {})
@@ -1160,7 +1166,7 @@ def _analyze(
     risk = CITY_RISK_PROFILES.get(city, {})
     network_snapshot = (
         build_country_network_snapshot(city, raw)
-        if not is_panel_mode
+        if not is_panel_mode and not is_market_mode
         else {}
     )
 
@@ -1628,7 +1634,7 @@ def _analyze(
             first_peak_h,
             last_peak_h,
         )
-        if not is_panel_mode and not is_nearby_mode
+        if not is_panel_mode and not is_nearby_mode and not is_market_mode
         else {}
     )
     taf_signal = (
@@ -1640,7 +1646,7 @@ def _analyze(
             first_peak_h,
             last_peak_h,
         )
-        if not is_panel_mode and not is_nearby_mode
+        if not is_panel_mode and not is_nearby_mode and not is_market_mode
         else {"available": False}
     )
 
@@ -1790,7 +1796,15 @@ def _analyze(
     # ── Assemble result ──
     city_meta = CITIES.get(city, {}) or {}
     result = {
-        "detail_depth": "panel" if is_panel_mode else "nearby" if is_nearby_mode else "full",
+        "detail_depth": (
+            "panel"
+            if is_panel_mode
+            else "market"
+            if is_market_mode
+            else "nearby"
+            if is_nearby_mode
+            else "full"
+        ),
         "name": city,
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "lat": lat,
@@ -2222,7 +2236,7 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _build_city_detail_payload(
+def _build_city_market_scan_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
@@ -2313,6 +2327,24 @@ def _build_city_detail_payload(
         market_scan["anchor_high"] = anchor_temp
         market_scan["anchor_settlement"] = anchor_settlement
         market_scan["open_meteo_settlement"] = anchor_settlement
+    return {
+        "market_scan": market_scan,
+        "selected_date": selected_date or data.get("local_date"),
+        "fetched_at": data.get("updated_at"),
+    }
+
+
+def _build_city_detail_payload(
+    data: Dict[str, Any],
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+) -> Dict[str, Any]:
+    market_payload = _build_city_market_scan_payload(
+        data,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    market_scan = market_payload.get("market_scan")
     return {
         "city": data.get("name"),
         "fetched_at": data.get("updated_at"),

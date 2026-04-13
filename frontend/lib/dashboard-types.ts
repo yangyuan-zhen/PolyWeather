@@ -494,19 +494,42 @@ export interface HistoryPoint {
   deb_at_peak_minus_12h_error?: number | null;
 }
 
+export interface HistoryPayloadMeta {
+  mode: "preview" | "full";
+  hasMore: boolean;
+  fullCount: number;
+  previewCount: number;
+  settlementSource?: string | null;
+  settlementSourceLabel?: string | null;
+}
+
+export interface HistoryPayload {
+  history: HistoryPoint[];
+  has_more?: boolean;
+  full_count?: number;
+  preview_count?: number;
+  mode?: "preview" | "full";
+  settlement_source?: string | null;
+  settlement_source_label?: string | null;
+}
+
 export interface LoadingState {
   cities: boolean;
   cityDetail: boolean;
   refresh: boolean;
   history: boolean;
   marketScan?: boolean;
+  futureDeep?: boolean;
+  historyRecords?: boolean;
 }
 
 export interface HistoryState {
   isOpen: boolean;
   loading: boolean;
+  recordsLoading: boolean;
   error: string | null;
   dataByCity: Record<string, HistoryPoint[]>;
+  metaByCity: Record<string, HistoryPayloadMeta>;
 }
 
 export interface ProAccessState {

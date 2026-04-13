@@ -20,6 +20,8 @@ import {
   CitySummary,
   DashboardState,
   HistoryPoint,
+  HistoryPayload,
+  HistoryPayloadMeta,
   HistoryState,
   LoadingState,
   MarketScan,
@@ -58,7 +60,9 @@ function getInitialLoadingState(): LoadingState {
   return {
     cities: false,
     cityDetail: false,
+    futureDeep: false,
     history: false,
+    historyRecords: false,
     refresh: false,
     marketScan: false,
   };
@@ -70,6 +74,8 @@ function getInitialHistoryState(): HistoryState {
     error: null,
     isOpen: false,
     loading: false,
+    metaByCity: {},
+    recordsLoading: false,
   };
 }
 
@@ -237,6 +243,20 @@ function scheduleWhenBrowserIdle(callback: () => void) {
   const timeoutId = window.setTimeout(callback, 400);
   return () => {
     window.clearTimeout(timeoutId);
+  };
+}
+
+function toHistoryMeta(payload: HistoryPayload): HistoryPayloadMeta {
+  const history = Array.isArray(payload.history) ? payload.history : [];
+  const previewCount = Number(payload.preview_count || history.length || 0);
+  const fullCount = Number(payload.full_count || previewCount || 0);
+  return {
+    mode: payload.mode === "full" ? "full" : "preview",
+    hasMore: payload.has_more === true,
+    fullCount,
+    previewCount,
+    settlementSource: payload.settlement_source ?? null,
+    settlementSourceLabel: payload.settlement_source_label ?? null,
   };
 }
 
@@ -940,30 +960,107 @@ export function DashboardStoreProvider({
         error: null,
         isOpen: true,
         loading: false,
+        recordsLoading: false,
       }));
       return;
     }
+    const cityName = selectedCity;
+    const cachedHistory = historyState.dataByCity[cityName];
+    const cachedMeta = historyState.metaByCity[cityName];
+
+    if (cachedMeta && cachedHistory?.length) {
+      setHistoryState((current) => ({
+        ...current,
+        error: null,
+        isOpen: true,
+        loading: false,
+        recordsLoading: cachedMeta.mode !== "full" && cachedMeta.hasMore,
+      }));
+
+      if (cachedMeta.mode !== "full" && cachedMeta.hasMore) {
+        void dashboardClient
+          .getHistory(cityName, { includeRecords: true })
+          .then((payload) => {
+            if (selectedCityRef.current !== cityName) return;
+            setHistoryState((current) => ({
+              ...current,
+              dataByCity: {
+                ...current.dataByCity,
+                [cityName]: payload.history,
+              },
+              metaByCity: {
+                ...current.metaByCity,
+                [cityName]: toHistoryMeta(payload),
+              },
+              recordsLoading: false,
+            }));
+          })
+          .catch(() => {
+            if (selectedCityRef.current !== cityName) return;
+            setHistoryState((current) => ({
+              ...current,
+              recordsLoading: false,
+            }));
+          });
+      }
+      return;
+    }
+
     setHistoryState((current) => ({
       ...current,
       error: null,
       isOpen: true,
       loading: true,
+      recordsLoading: false,
     }));
     try {
-      const history = await dashboardClient.getHistory(selectedCity);
+      const payload = await dashboardClient.getHistory(cityName);
       setHistoryState((current) => ({
         ...current,
         dataByCity: {
           ...current.dataByCity,
-          [selectedCity]: history,
+          [cityName]: payload.history,
+        },
+        metaByCity: {
+          ...current.metaByCity,
+          [cityName]: toHistoryMeta(payload),
         },
         loading: false,
+        recordsLoading: payload.has_more === true,
       }));
+
+      if (payload.has_more) {
+        void dashboardClient
+          .getHistory(cityName, { includeRecords: true })
+          .then((fullPayload) => {
+            if (selectedCityRef.current !== cityName) return;
+            setHistoryState((current) => ({
+              ...current,
+              dataByCity: {
+                ...current.dataByCity,
+                [cityName]: fullPayload.history,
+              },
+              metaByCity: {
+                ...current.metaByCity,
+                [cityName]: toHistoryMeta(fullPayload),
+              },
+              recordsLoading: false,
+            }));
+          })
+          .catch(() => {
+            if (selectedCityRef.current !== cityName) return;
+            setHistoryState((current) => ({
+              ...current,
+              recordsLoading: false,
+            }));
+          });
+      }
     } catch (error) {
       setHistoryState((current) => ({
         ...current,
         error: String(error),
         loading: false,
+        recordsLoading: false,
       }));
     }
   };
@@ -990,7 +1087,17 @@ export function DashboardStoreProvider({
         mapStopMotionRef.current();
         if (!selectedCity || !proAccess.subscriptionActive) return;
         const cityName = selectedCity;
-        const cachedDetail = cityDetailsByName[selectedCity];
+        let cachedDetail = cityDetailsByName[selectedCity];
+        if (!cachedDetail) {
+          setLoadingState((current) => ({ ...current, cityDetail: true }));
+          try {
+            cachedDetail = await ensureCityDetail(cityName, false, "panel");
+          } finally {
+            if (selectedCityRef.current === cityName) {
+              setLoadingState((current) => ({ ...current, cityDetail: false }));
+            }
+          }
+        }
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, dateStr);
@@ -1001,7 +1108,7 @@ export function DashboardStoreProvider({
         if (!hasFullCachedDetail || forceRefresh) {
           setLoadingState((current) => ({
             ...current,
-            refresh: true,
+            futureDeep: true,
           }));
           void ensureCityDetail(cityName, true, "full")
             .catch(() => {})
@@ -1009,7 +1116,7 @@ export function DashboardStoreProvider({
               if (selectedCityRef.current !== cityName) return;
               setLoadingState((current) => ({
                 ...current,
-                refresh: false,
+                futureDeep: false,
               }));
             });
         }
@@ -1033,7 +1140,17 @@ export function DashboardStoreProvider({
 
         mapStopMotionRef.current();
         const cityName = selectedCity;
-        const cachedDetail = cityDetailsByName[cityName];
+        let cachedDetail = cityDetailsByName[cityName];
+        if (!cachedDetail) {
+          setLoadingState((current) => ({ ...current, cityDetail: true }));
+          try {
+            cachedDetail = await ensureCityDetail(cityName, false, "panel");
+          } finally {
+            if (selectedCityRef.current === cityName) {
+              setLoadingState((current) => ({ ...current, cityDetail: false }));
+            }
+          }
+        }
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
@@ -1051,9 +1168,29 @@ export function DashboardStoreProvider({
 
         setLoadingState((current) => ({
           ...current,
-          refresh: needsDetailRefresh,
+          futureDeep: needsDetailRefresh,
           marketScan: true,
         }));
+        const initialTargetDate =
+          cachedDetail?.local_date || selectedForecastDate || null;
+        const initialMarketKey = getMarketScanCacheKey(
+          cityName,
+          initialTargetDate,
+        );
+        void ensureCityMarketScan(
+          cityName,
+          forceRefresh || !marketScanByCityName[initialMarketKey],
+          null,
+          initialTargetDate,
+        )
+          .catch(() => {})
+          .finally(() => {
+            if (selectedCityRef.current !== cityName) return;
+            setLoadingState((current) => ({
+              ...current,
+              marketScan: false,
+            }));
+          });
         void ensureCityDetail(
           cityName,
           needsDetailRefresh,
@@ -1063,14 +1200,6 @@ export function DashboardStoreProvider({
             if (selectedCityRef.current !== cityName) return;
             setSelectedForecastDate(detail.local_date);
             setFutureModalDate(detail.local_date);
-
-            const marketKey = getMarketScanCacheKey(cityName, detail.local_date);
-            return ensureCityMarketScan(
-              cityName,
-              forceRefresh || !marketScanByCityName[marketKey],
-              null,
-              detail.local_date,
-            );
           })
           .catch(() => {
             if (selectedCityRef.current !== cityName) return;
@@ -1083,8 +1212,7 @@ export function DashboardStoreProvider({
             if (selectedCityRef.current !== cityName) return;
             setLoadingState((current) => ({
               ...current,
-              refresh: false,
-              marketScan: false,
+              futureDeep: false,
             }));
           });
       },
@@ -1160,5 +1288,7 @@ export function useHistoryData(name?: string | null) {
     error: store.historyState.error,
     isLoading: store.historyState.loading,
     isOpen: store.historyState.isOpen,
+    isRecordsLoading: store.historyState.recordsLoading,
+    meta: key ? store.historyState.metaByCity[key] || null : null,
   };
 }

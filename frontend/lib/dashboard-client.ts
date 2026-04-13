@@ -5,13 +5,13 @@ import {
   CityListItem,
   MarketScan,
   CitySummary,
-  HistoryPoint,
+  HistoryPayload,
 } from "@/lib/dashboard-types";
 
 const CACHE_KEY = "polyWeather_v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
-const pendingHistoryRequests = new Map<string, Promise<HistoryPoint[]>>();
+const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
 const pendingMarketScanRequests = new Map<string, Promise<MarketScan | null>>();
 
@@ -225,7 +225,7 @@ export const dashboardClient = {
       }
 
       const request = fetchJson<{ market_scan?: MarketScan }>(
-        `/api/city/${normalizeCityName(cityName)}/detail?${params.toString()}`,
+        `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
       )
         .then((data) => data.market_scan || null)
         .finally(() => {
@@ -248,21 +248,40 @@ export const dashboardClient = {
     }
 
     return fetchJson<{ market_scan?: MarketScan }>(
-      `/api/city/${normalizeCityName(cityName)}/detail?${params.toString()}`,
+      `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
     ).then((data) => data.market_scan || null);
   },
 
-  async getHistory(cityName: string) {
-    const requestKey = normalizeCityName(cityName);
+  async getHistory(cityName: string, options?: { includeRecords?: boolean }) {
+    const includeRecords = options?.includeRecords === true;
+    const requestKey = `${normalizeCityName(cityName)}::${
+      includeRecords ? "full" : "preview"
+    }`;
     const existing = pendingHistoryRequests.get(requestKey);
     if (existing) {
       return existing;
     }
 
-    const request = fetchJson<{ history?: HistoryPoint[] }>(
-      `/api/history/${requestKey}`,
+    const params = new URLSearchParams();
+    if (includeRecords) {
+      params.set("include_records", "true");
+    }
+
+    const request = fetchJson<HistoryPayload>(
+      `/api/history/${normalizeCityName(cityName)}${
+        params.size ? `?${params.toString()}` : ""
+      }`,
     )
-      .then((data) => data.history || [])
+      .then((data) => ({
+        ...data,
+        full_count: Number(data.full_count || 0),
+        has_more: data.has_more === true,
+        history: Array.isArray(data.history) ? data.history : [],
+        mode: (data.mode === "full" ? "full" : "preview") as
+          | "full"
+          | "preview",
+        preview_count: Number(data.preview_count || 0),
+      }))
       .finally(() => {
         pendingHistoryRequests.delete(requestKey);
       });

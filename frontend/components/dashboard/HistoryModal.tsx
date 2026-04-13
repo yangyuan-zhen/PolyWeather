@@ -166,7 +166,7 @@ function HistoryChart() {
 export function HistoryModal() {
   const store = useDashboardStore();
   const { t, locale } = useI18n();
-  const { data, error, isLoading, isOpen } = useHistoryData();
+  const { data, error, isLoading, isOpen, isRecordsLoading, meta } = useHistoryData();
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
   const isNoaaSettlement =
@@ -233,6 +233,25 @@ export function HistoryModal() {
                 city: store.selectedCity?.toUpperCase() || "",
               })}
             </h2>
+            {meta?.mode === "preview" ? (
+              <div
+                style={{
+                  color: "var(--text-muted)",
+                  fontSize: "12px",
+                  marginLeft: "12px",
+                }}
+              >
+                {isRecordsLoading
+                  ? locale === "en-US"
+                    ? "Loading full records in background..."
+                    : "完整历史正在后台补齐..."
+                  : meta.hasMore
+                    ? locale === "en-US"
+                      ? `Preview ${meta.previewCount}/${meta.fullCount}`
+                      : `预览 ${meta.previewCount}/${meta.fullCount}`
+                    : null}
+              </div>
+            ) : null}
             <button
               type="button"
               className="modal-close"

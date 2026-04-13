@@ -3,6 +3,15 @@
 import { useEffect, useRef } from "react";
 import type { Chart as ChartInstance, ChartConfiguration, ChartType } from "chart.js";
 
+let chartModulePromise: Promise<typeof import("chart.js/auto")> | null = null;
+
+export function preloadChartJs() {
+  if (!chartModulePromise) {
+    chartModulePromise = import("chart.js/auto");
+  }
+  return chartModulePromise;
+}
+
 export function useChart<TType extends ChartType>(
   createConfig: () => ChartConfiguration<TType>,
   dependencies: React.DependencyList,
@@ -16,7 +25,7 @@ export function useChart<TType extends ChartType>(
     let disposed = false;
 
     const setupChart = async () => {
-      const { Chart } = await import("chart.js/auto");
+      const { Chart } = await preloadChartJs();
       if (disposed) return;
 
       const config = createConfig();

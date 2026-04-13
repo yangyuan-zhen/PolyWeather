@@ -764,9 +764,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         results: Dict,
         city_lower: str,
         *,
+        include_mgm: bool = True,
         include_nearby: bool = True,
     ) -> None:
-        if city_lower not in self.TURKISH_PROVINCES:
+        if not include_mgm or city_lower not in self.TURKISH_PROVINCES:
             return
         istno, province = self.TURKISH_PROVINCES[city_lower]
         mgm_data = self.fetch_from_mgm(istno)
@@ -929,6 +930,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         include_nearby: bool = True,
         include_ensemble: bool = True,
         include_multi_model: bool = True,
+        include_mgm: bool = True,
     ) -> Dict:
         """
         Fetch weather data from all available sources
@@ -970,6 +972,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 self._attach_turkish_mgm_data(
                     results,
                     city_lower,
+                    include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
                 if include_nearby:
@@ -1011,6 +1014,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 self._attach_turkish_mgm_data(
                     results,
                     city_lower,
+                    include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
                 if include_nearby:
