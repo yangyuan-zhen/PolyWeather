@@ -1988,9 +1988,11 @@ class PaymentContractCheckoutService:
                 "payment": repaired.get("payment"),
                 "subscription": repaired.get("subscription"),
             }
-        if intent.status in {"failed", "cancelled", "expired"}:
+        if intent.status in {"cancelled", "expired"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}")
         tx_hash_text = str(tx_hash or intent.tx_hash or "").strip().lower()
+        if intent.status == "failed" and not tx_hash_text:
+            raise PaymentCheckoutError(409, "intent status is failed and tx_hash is missing")
         if not tx_hash_text:
             raise PaymentCheckoutError(400, "tx_hash required")
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
@@ -2028,7 +2030,20 @@ class PaymentContractCheckoutService:
         )
         if not tx_to or not tx_from:
             raise PaymentCheckoutError(409, "tx indexed partially; retry confirm")
-        if tx_to != intent.receiver_address:
+        block_number = int(receipt.get("blockNumber") or 0)
+        latest_block = int(w3.eth.block_number)
+        confirmations = max(0, latest_block - block_number + 1) if block_number else 0
+        if confirmations < self.confirmations:
+            raise PaymentCheckoutError(
+                409, f"confirmations not enough: {confirmations}/{self.confirmations}"
+            )
+        event_match = self._extract_matching_event(receipt, intent)
+        event_payer = _normalize_address(event_match.get("payer")) if event_match else None
+        effective_payer = event_payer or tx_from
+        routed_via_delegate = bool(
+            event_match and tx_to and tx_to != intent.receiver_address
+        )
+        if tx_to != intent.receiver_address and not event_match:
             self._mark_intent_failed(
                 user_id=user_id,
                 intent=intent,
@@ -2045,29 +2060,24 @@ class PaymentContractCheckoutService:
                 f"tx to mismatch: got={tx_to} expected={intent.receiver_address}",
             )
         if intent.payment_mode == "strict" and intent.allowed_wallet:
-            if tx_from != intent.allowed_wallet:
+            if effective_payer != intent.allowed_wallet:
                 self._mark_intent_failed(
                     user_id=user_id,
                     intent=intent,
                     tx_hash=tx_hash_text,
                     reason="sender_mismatch",
-                    detail=f"tx sender mismatch: got={tx_from} expected={intent.allowed_wallet}",
-                    extra={"from_address": tx_from},
+                    detail=f"tx sender mismatch: got={effective_payer or tx_from} expected={intent.allowed_wallet}",
+                    extra={
+                        "from_address": tx_from,
+                        "event_payer": event_payer,
+                    },
                 )
                 raise PaymentCheckoutError(
                     400,
-                    f"tx sender mismatch: got={tx_from} expected={intent.allowed_wallet}",
+                    f"tx sender mismatch: got={effective_payer or tx_from} expected={intent.allowed_wallet}",
                 )
         else:
-            self._require_user_wallet(user_id, tx_from)
-        block_number = int(receipt.get("blockNumber") or 0)
-        latest_block = int(w3.eth.block_number)
-        confirmations = max(0, latest_block - block_number + 1) if block_number else 0
-        if confirmations < self.confirmations:
-            raise PaymentCheckoutError(
-                409, f"confirmations not enough: {confirmations}/{self.confirmations}"
-            )
-        event_match = self._extract_matching_event(receipt, intent)
+            self._require_user_wallet(user_id, effective_payer)
         if not event_match:
             self._mark_intent_failed(
                 user_id=user_id,
@@ -2091,6 +2101,14 @@ class PaymentContractCheckoutService:
             redemption_meta["points_after"] = points_result.get("points_after")
             redemption_meta["consumed_at"] = now_iso
             confirmed_metadata["points_redemption"] = redemption_meta
+        if routed_via_delegate:
+            confirmed_metadata["tx_envelope"] = {
+                "outer_to": tx_to,
+                "outer_from": tx_from,
+                "event_payer": event_payer,
+                "receiver_expected": intent.receiver_address,
+                "matched_via_event": True,
+            }
         self._rest(
             "PATCH",
             "payment_intents",
@@ -2188,7 +2206,7 @@ class PaymentContractCheckoutService:
                     "amount_units,payment_mode,allowed_wallet,order_id_hex,status,expires_at,tx_hash,metadata"
                 ),
                 "user_id": f"eq.{user_id}",
-                "status": "in.(created,submitted,confirmed)",
+                "status": "in.(created,submitted,confirmed,failed)",
                 "order": "updated_at.desc",
                 "limit": "5",
             },
@@ -2205,9 +2223,15 @@ class PaymentContractCheckoutService:
             status = str(intent.status or "").strip().lower()
             tx_hash_text = str(intent.tx_hash or "").strip().lower()
             try:
-                if status == "submitted" and tx_hash_text:
+                if status in {"submitted", "failed"} and tx_hash_text:
                     result = self.confirm_intent_tx(user_id, intent.intent_id, tx_hash_text)
-                    return {"ok": True, "action": "confirmed_submitted_intent", **result}
+                    return {
+                        "ok": True,
+                        "action": "confirmed_submitted_intent"
+                        if status == "submitted"
+                        else "recovered_failed_intent",
+                        **result,
+                    }
                 if status == "confirmed":
                     repaired = self._ensure_confirm_side_effects(user_id, intent, tx_hash_text)
                     refreshed = self.get_intent(user_id, intent.intent_id)
