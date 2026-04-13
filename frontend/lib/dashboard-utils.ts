@@ -248,6 +248,70 @@ function hmToMinutes(value?: string | null) {
   return hour * 60 + minute;
 }
 
+function findNearestTimeIndex(
+  times: string[],
+  targetTime?: string | null,
+) {
+  const targetMinutes = hmToMinutes(targetTime);
+  if (targetMinutes == null || !times.length) return -1;
+  let nearestIndex = -1;
+  let nearestDelta = Number.POSITIVE_INFINITY;
+  times.forEach((time, index) => {
+    const minute = hmToMinutes(time);
+    if (minute == null) return;
+    const delta = Math.abs(minute - targetMinutes);
+    if (delta < nearestDelta) {
+      nearestDelta = delta;
+      nearestIndex = index;
+    }
+  });
+  return nearestIndex;
+}
+
+function buildTemperatureTickLabels(times: string[]) {
+  const lastIndex = Math.max(0, times.length - 1);
+  return times.map((time, index) => {
+    if (index === 0 || index === lastIndex) return time;
+    const minute = hmToMinutes(time);
+    if (minute == null) return "";
+    const hour = Math.floor(minute / 60);
+    const minutePart = minute % 60;
+    if (minutePart !== 0) return "";
+    return hour % 2 === 0 ? time : "";
+  });
+}
+
+function buildSeriesPoints(
+  times: string[],
+  values: Array<number | null | undefined>,
+) {
+  return times
+    .map((time, index) => {
+      const x = hmToMinutes(time);
+      const y = values[index];
+      return x != null && y != null && Number.isFinite(Number(y))
+        ? { index, labelTime: time, x, y: Number(y) }
+        : null;
+    })
+    .filter(
+      (point): point is { index: number; labelTime: string; x: number; y: number } =>
+        point != null,
+    );
+}
+
+function buildObservationPoints(items: Array<{ time?: string; temp?: number | null }>) {
+  return items
+    .map((item) => {
+      const labelTime = normalizeHm(String(item.time || ""));
+      const x = hmToMinutes(labelTime);
+      const y = item.temp;
+      return x != null && y != null && Number.isFinite(Number(y))
+        ? { labelTime: labelTime || "", x, y: Number(y) }
+        : null;
+    })
+    .filter((point): point is { labelTime: string; x: number; y: number } => point != null);
+}
+
 function interpolateSeriesAtMinutes(
   times: string[],
   values: Array<number | null | undefined>,
@@ -516,10 +580,7 @@ export function getTemperatureChartData(
 
   if (!times.length) return null;
 
-  const currentHour = detail.local_time
-    ? `${detail.local_time.split(":")[0]}:00`
-    : null;
-  const currentIndex = currentHour ? times.indexOf(currentHour) : -1;
+  const currentIndex = findNearestTimeIndex(times, detail.local_time);
   const omMax = detail.forecast?.today_high;
   const debMax = detail.deb?.prediction;
   const offset =
@@ -582,11 +643,7 @@ export function getTemperatureChartData(
 
   const metarPoints = new Array(times.length).fill(null);
   observationSource.forEach((item) => {
-    const parts = String(item.time || "").split(":");
-    let hour = Number.parseInt(parts[0], 10);
-    if (Number.isNaN(hour)) return;
-    const key = `${String(hour).padStart(2, "0")}:00`;
-    const index = times.indexOf(key);
+    const index = findNearestTimeIndex(times, String(item.time || ""));
     const temp = item.temp ?? null;
     if (index >= 0 && temp != null) {
       const existing = metarPoints[index];
@@ -598,11 +655,7 @@ export function getTemperatureChartData(
   });
   const airportMetarPoints = new Array(times.length).fill(null);
   airportMetarSource.forEach((item) => {
-    const parts = String(item.time || "").split(":");
-    const hour = Number.parseInt(parts[0], 10);
-    if (Number.isNaN(hour)) return;
-    const key = `${String(hour).padStart(2, "0")}:00`;
-    const index = times.indexOf(key);
+    const index = findNearestTimeIndex(times, String(item.time || ""));
     const temp = item.temp ?? null;
     if (index >= 0 && temp != null) {
       const existing = airportMetarPoints[index];
@@ -617,24 +670,16 @@ export function getTemperatureChartData(
     detail.mgm?.temp != null &&
     detail.mgm?.time
   ) {
-    const match = detail.mgm.time.match(/T?(\d{2}):(\d{2})/);
-    if (match) {
-      let hour = Number.parseInt(match[1], 10);
-      const key = `${String(hour).padStart(2, "0")}:00`;
-      const index = times.indexOf(key);
-      if (index >= 0) {
-        mgmPoints[index] = detail.mgm.temp;
-      }
+    const index = findNearestTimeIndex(times, detail.mgm.time);
+    if (index >= 0) {
+      mgmPoints[index] = detail.mgm.temp;
     }
   }
 
   const mgmHourlyPoints = new Array(times.length).fill(null);
   let hasMgmHourly = false;
   detail.mgm?.hourly?.forEach((item) => {
-    const match = String(item.time || "").match(/T?(\d{2}):(\d{2})/);
-    if (!match) return;
-    const key = `${match[1]}:00`;
-    const index = times.indexOf(key);
+    const index = findNearestTimeIndex(times, String(item.time || ""));
     if (index >= 0) {
       mgmHourlyPoints[index] = item.temp ?? null;
       hasMgmHourly = true;
@@ -723,7 +768,7 @@ export function getTemperatureChartData(
   const tafMarkers = tafMarkersRaw
     .map((marker) => {
       const labelTime = String(marker?.label_time || "").trim();
-      const index = times.indexOf(labelTime);
+      const index = findNearestTimeIndex(times, labelTime);
       if (index >= 0) {
         tafMarkerPoints[index] = tafMarkerValue;
       }
@@ -890,20 +935,66 @@ export function getTemperatureChartData(
     );
   }
 
+  const debPastSeries = buildSeriesPoints(times, debPast);
+  const debFutureSeries = buildSeriesPoints(times, debFuture);
+  const tempsSeries = buildSeriesPoints(times, temps);
+  const mgmHourlySeries = buildSeriesPoints(times, mgmHourlyPoints);
+  const metarSeries = buildObservationPoints(observationSource);
+  const airportMetarSeries = buildObservationPoints(airportMetarSource);
+  const mgmSeries =
+    !suppressAnkaraMgmObservation && detail.mgm?.temp != null && detail.mgm?.time
+      ? buildObservationPoints([{ time: detail.mgm.time, temp: detail.mgm.temp }])
+      : [];
+  const tafCurrentMarkerSeries = tafMarkers
+    .filter((marker) => marker.isCurrent)
+    .map((marker) => ({
+      marker,
+      x: hmToMinutes(marker.labelTime) ?? 0,
+      y: tafMarkerValue,
+    }))
+    .filter((point) => point.x > 0);
+  const tafPeakWindowMarkerSeries = tafMarkers
+    .filter((marker) => marker.isPeakWindow && !marker.isCurrent)
+    .map((marker) => ({
+      marker,
+      x: hmToMinutes(marker.labelTime) ?? 0,
+      y: tafMarkerValue - 0.15,
+    }))
+    .filter((point) => point.x > 0);
+  const tafMarkerSeries = tafMarkers
+    .map((marker) => ({
+      marker,
+      x: hmToMinutes(marker.labelTime) ?? 0,
+      y: tafMarkerValue,
+    }))
+    .filter((point) => point.x > 0);
+  const xMin = times.length ? hmToMinutes(times[0]) ?? 0 : 0;
+  const xMax = times.length ? hmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
+
   return {
     datasets: {
       airportMetarPoints,
+      airportMetarSeries,
       debFuture,
+      debFutureSeries,
       debPast,
+      debPastSeries,
       hasMgmHourly,
       metarPoints,
+      metarSeries,
       mgmHourlyPoints,
+      mgmHourlySeries,
       mgmPoints,
+      mgmSeries,
       offset,
       tafCurrentMarkerPoints,
+      tafCurrentMarkerSeries,
       tafMarkerPoints,
+      tafMarkerSeries,
       tafPeakWindowMarkerPoints,
+      tafPeakWindowMarkerSeries,
       temps,
+      tempsSeries,
     },
     observationLabel:
     observationCode === "noaa" &&
@@ -918,7 +1009,10 @@ export function getTemperatureChartData(
     max,
     min,
     tafMarkers,
+    tickLabels: buildTemperatureTickLabels(times),
     times,
+    xMax,
+    xMin,
   };
 }
 

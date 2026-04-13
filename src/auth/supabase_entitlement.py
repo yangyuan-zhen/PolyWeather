@@ -233,6 +233,69 @@ class SupabaseEntitlementService:
             logger.warning(f"supabase subscription query error user_id={user_id}: {exc}")
             return None
 
+    def _query_active_subscription_rows(
+        self,
+        user_id: str,
+    ) -> List[Dict[str, object]]:
+        if not user_id:
+            return []
+        if not self.service_role_key:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is missing")
+            return []
+
+        now_ts = time.time()
+        with self._sub_cache_lock:
+            cached = self._sub_cache.get(user_id)
+            if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                rows = cached.get("rows")
+                if isinstance(rows, list):
+                    return [row for row in rows if isinstance(row, dict)]
+                row = cached.get("row")
+                if isinstance(row, dict):
+                    return [row]
+                return []
+
+        try:
+            now = datetime.now(timezone.utc)
+            now_iso = now.isoformat()
+            params = {
+                "select": "id,user_id,status,plan_code,starts_at,expires_at,source,created_at,updated_at",
+                "user_id": f"eq.{user_id}",
+                "status": "eq.active",
+                "expires_at": f"gt.{now_iso}",
+                "order": "expires_at.desc",
+                "limit": "100",
+            }
+            response = requests.get(
+                self._subscription_endpoint(),
+                headers=self._request_headers_for_service_role(),
+                params=params,
+                timeout=self.timeout_sec,
+            )
+            if response.status_code != 200:
+                logger.warning(
+                    "supabase active subscription rows query failed user_id={} status={}",
+                    user_id,
+                    response.status_code,
+                )
+                rows: List[Dict[str, object]] = []
+            else:
+                data = response.json() if response.content else []
+                rows = [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+
+            current_row = self._pick_latest_current_subscription(rows, now=now)
+            with self._sub_cache_lock:
+                self._sub_cache[user_id] = {
+                    "active": bool(current_row),
+                    "row": current_row,
+                    "rows": rows,
+                    "ts": now_ts,
+                }
+            return rows
+        except Exception as exc:
+            logger.warning(f"supabase active subscription rows query error user_id={user_id}: {exc}")
+            return []
+
     def _query_latest_subscription_any_status(
         self,
         user_id: str,
@@ -452,6 +515,51 @@ class SupabaseEntitlementService:
         user_id: str,
     ) -> Optional[Dict[str, object]]:
         return self._query_latest_subscription_any_status(user_id)
+
+    def get_subscription_window(
+        self,
+        user_id: str,
+        respect_requirement: bool = True,
+    ) -> Dict[str, object]:
+        if respect_requirement and not self.require_subscription:
+            return {}
+        rows = self._query_active_subscription_rows(user_id)
+        if not rows:
+            return {}
+
+        now = datetime.now(timezone.utc)
+        current = self._pick_latest_current_subscription(rows, now=now)
+        total_expiry: Optional[datetime] = None
+        current_expiry: Optional[datetime] = None
+        if isinstance(current, dict):
+            current_expiry = self._parse_iso_datetime(str(current.get("expires_at") or ""))
+
+        queued_count = 0
+        for row in rows:
+            exp = self._parse_iso_datetime(str(row.get("expires_at") or ""))
+            if exp is not None and (total_expiry is None or exp > total_expiry):
+                total_expiry = exp
+            if current_expiry is not None:
+                starts = self._parse_iso_datetime(str(row.get("starts_at") or ""))
+                if starts is not None and starts >= current_expiry and row is not current:
+                    queued_count += 1
+
+        queued_days = 0
+        if total_expiry is not None and current_expiry is not None and total_expiry > current_expiry:
+            queued_days = max(
+                0,
+                int(round((total_expiry - current_expiry).total_seconds() / 86_400)),
+            )
+
+        return {
+            "current": current,
+            "current_expires_at": current.get("expires_at") if isinstance(current, dict) else None,
+            "current_starts_at": current.get("starts_at") if isinstance(current, dict) else None,
+            "total_expires_at": total_expiry.isoformat() if total_expiry else None,
+            "queued_days": queued_days,
+            "queued_count": queued_count,
+            "rows": rows,
+        }
 
     def has_active_subscription(
         self,

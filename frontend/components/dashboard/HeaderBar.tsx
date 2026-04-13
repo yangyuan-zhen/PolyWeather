@@ -38,7 +38,11 @@ export function HeaderBar() {
   const accountAria = isAuthenticated
     ? t("header.accountAria")
     : t("header.signInAria");
-  const expiryInfo = parseExpiryInfo(store.proAccess.subscriptionExpiresAt);
+  const effectiveExpiry = store.proAccess.subscriptionActive
+    ? store.proAccess.subscriptionTotalExpiresAt ||
+      store.proAccess.subscriptionExpiresAt
+    : store.proAccess.subscriptionExpiresAt;
+  const expiryInfo = parseExpiryInfo(effectiveExpiry);
   const isTrialPlan = /trial/i.test(
     String(store.proAccess.subscriptionPlanCode || ""),
   );

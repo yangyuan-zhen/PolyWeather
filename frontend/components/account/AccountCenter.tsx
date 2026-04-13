@@ -76,6 +76,9 @@ type AuthMeResponse = {
   subscription_plan_code?: string | null;
   subscription_starts_at?: string | null;
   subscription_expires_at?: string | null;
+  subscription_total_expires_at?: string | null;
+  subscription_queued_days?: number | null;
+  subscription_queued_count?: number | null;
 };
 
 type PaymentPlan = {
@@ -708,6 +711,7 @@ export function AccountCenter() {
       boundEmail: isEn ? "Bound Email" : "绑定邮箱",
       loginMethod: isEn ? "Sign-in Method" : "登录方式",
       renewalDate: isEn ? "Renewal Date" : "续费日期",
+      accessUntil: isEn ? "Access Until" : "可用至",
       authResult: isEn ? "Auth Result" : "鉴权结果",
       passed: isEn ? "Passed" : "通过",
       restricted: isEn ? "Restricted" : "受限",
@@ -820,6 +824,9 @@ export function AccountCenter() {
       renewNow: isEn ? "Renew Now" : "立即续费",
       trialBadge: isEn ? "TRIAL" : "试用中",
       daysLeft: isEn ? "{days} days left" : "剩余 {days} 天",
+      queuedExtensionSummary: isEn
+        ? "Current plan until {current}. Queued extension: +{days} days. Total access until {total}."
+        : "当前订阅至 {current}，已排队延长 +{days} 天，总可用至 {total}。",
     }),
     [isEn],
   );
@@ -1469,15 +1476,30 @@ export function AccountCenter() {
   const isSubscribed = Boolean(backend?.subscription_active);
   const planCode = String(backend?.subscription_plan_code || "").trim();
   const isTrialPlan = /trial/i.test(planCode);
-  const expiryRaw = String(
+  const currentExpiryRaw = String(
     backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
   ).trim();
-  const expiryInfo = parseSubscriptionExpiry(expiryRaw);
-  const expiryFormatted = formatTime(expiryRaw, locale);
+  const totalExpiryRaw = String(
+    backend?.subscription_total_expires_at ||
+      backend?.subscription_expires_at ||
+      user?.user_metadata?.pro_expiry ||
+      "",
+  ).trim();
+  const queuedExtensionDays = Math.max(
+    0,
+    Number(backend?.subscription_queued_days || 0),
+  );
+  const hasQueuedExtension = Boolean(isSubscribed && queuedExtensionDays > 0);
+  const displayExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw;
+  const reminderExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw || totalExpiryRaw;
+  const expiryInfo = parseSubscriptionExpiry(reminderExpiryRaw);
+  const expiryFormatted = formatTime(displayExpiryRaw, locale);
+  const currentExpiryFormatted = formatTime(currentExpiryRaw, locale);
+  const totalExpiryFormatted = formatTime(totalExpiryRaw, locale);
   const proExpiry = isSubscribed
     ? expiryFormatted !== "--"
       ? expiryFormatted
-      : expiryRaw || copy.proPendingSync
+      : displayExpiryRaw || copy.proPendingSync
     : copy.noProSubscription;
   const showExpiringSoon =
     Boolean(isSubscribed && expiryInfo && !expiryInfo.expired && expiryInfo.daysLeft <= 3);
@@ -1509,6 +1531,13 @@ export function AccountCenter() {
     expiryInfo && (showExpiringSoon || showExpiredReminder)
       ? `${formatTime(expiryInfo.raw, locale)} · ${copy.daysLeft.replace("{days}", String(Math.max(expiryInfo.daysLeft, 0)))}`
       : "";
+  const queuedExtensionSummary = hasQueuedExtension
+    ? copy.queuedExtensionSummary
+        .replace("{current}", currentExpiryFormatted)
+        .replace("{days}", String(queuedExtensionDays))
+        .replace("{total}", totalExpiryFormatted)
+    : "";
+  const expiryLabel = hasQueuedExtension ? copy.accessUntil : copy.renewalDate;
 
   useEffect(() => {
     if (!showOverlay || !canOpenCheckoutOverlay) return;
@@ -2667,7 +2696,7 @@ export function AccountCenter() {
               />
               <InfoRow
                 icon={Clock}
-                label={copy.renewalDate}
+                label={expiryLabel}
                 value={proExpiry}
                 isPrimary
               />
@@ -2676,6 +2705,11 @@ export function AccountCenter() {
                 label={copy.authResult}
                 value={backend?.authenticated ? copy.passed : copy.restricted}
               />
+              {queuedExtensionSummary ? (
+                <p className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-xs text-cyan-100">
+                  {queuedExtensionSummary}
+                </p>
+              ) : null}
             </section>
           </div>
 

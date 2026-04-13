@@ -81,6 +81,8 @@ function getInitialProAccessState(): ProAccessState {
     subscriptionActive: false,
     subscriptionPlanCode: null,
     subscriptionExpiresAt: null,
+    subscriptionTotalExpiresAt: null,
+    subscriptionQueuedDays: 0,
     points: 0,
     error: null,
   };
@@ -593,6 +595,8 @@ export function DashboardStoreProvider({
         subscription_active?: boolean | null;
         subscription_plan_code?: string | null;
         subscription_expires_at?: string | null;
+        subscription_total_expires_at?: string | null;
+        subscription_queued_days?: number | null;
         points?: number;
       };
       setProAccess({
@@ -602,6 +606,12 @@ export function DashboardStoreProvider({
         subscriptionActive: payload.subscription_active === true,
         subscriptionPlanCode: payload.subscription_plan_code ?? null,
         subscriptionExpiresAt: payload.subscription_expires_at ?? null,
+        subscriptionTotalExpiresAt:
+          payload.subscription_total_expires_at ?? payload.subscription_expires_at ?? null,
+        subscriptionQueuedDays: Math.max(
+          0,
+          Number(payload.subscription_queued_days ?? 0),
+        ),
         points: payload.points ?? 0,
         error: null,
       });
@@ -613,6 +623,8 @@ export function DashboardStoreProvider({
         subscriptionActive: false,
         subscriptionPlanCode: null,
         subscriptionExpiresAt: null,
+        subscriptionTotalExpiresAt: null,
+        subscriptionQueuedDays: 0,
         points: 0,
         error: String(error),
       });

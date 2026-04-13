@@ -40,6 +40,14 @@ function normalizeMarketValue(value?: number | null) {
   return Math.max(0, Math.min(1, numeric));
 }
 
+function formatMinuteAxisLabel(value: number) {
+  if (!Number.isFinite(value)) return "";
+  const total = Math.max(0, Math.round(value));
+  const hour = Math.floor(total / 60) % 24;
+  const minute = total % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
 function WeatherIcon({ emoji, size = 32 }: { emoji: string; size?: number }) {
   if (emoji === "☀️") return <Sun size={size} color="#facc15" />;
   if (emoji === "⛅" || emoji === "🌤️")
@@ -259,9 +267,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "rgba(234, 179, 8, 0.05)",
           borderColor: "rgba(234, 179, 8, 0.8)",
           borderWidth: 2,
-          data: todayChartData.datasets.mgmHourlyPoints,
+          data: todayChartData.datasets.mgmHourlySeries,
           fill: false,
           label: locale === "en-US" ? "MGM Forecast" : "MGM 预测",
+          parsing: false,
           pointHoverRadius: 6,
           pointRadius: 3,
           spanGaps: true,
@@ -272,9 +281,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "rgba(52, 211, 153, 0.05)",
           borderColor: "rgba(52, 211, 153, 0.6)",
           borderWidth: 1.5,
-          data: todayChartData.datasets.debPast,
+          data: todayChartData.datasets.debPastSeries,
           fill: true,
           label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
+          parsing: false,
           pointHoverRadius: 3,
           pointRadius: 0,
           tension: 0.3,
@@ -283,9 +293,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           borderColor: "rgba(52, 211, 153, 0.35)",
           borderDash: [5, 3],
           borderWidth: 1.5,
-          data: todayChartData.datasets.debFuture,
+          data: todayChartData.datasets.debFutureSeries,
           fill: false,
           label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
+          parsing: false,
           pointRadius: 0,
           tension: 0.3,
         });
@@ -295,43 +306,45 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
         backgroundColor: "#22d3ee",
         borderColor: "#22d3ee",
         borderWidth: 0,
-        data: todayChartData.datasets.metarPoints,
+        data: todayChartData.datasets.metarSeries,
         fill: false,
         label:
           todayChartData.observationLabel ||
           (locale === "en-US" ? "Observation" : "观测实况"),
         order: 0,
+        parsing: false,
         pointHoverRadius: 7,
         pointRadius: 5,
+        showLine: false,
       });
 
-      if (
-        todayChartData.datasets.airportMetarPoints?.some((value) => value != null)
-      ) {
+      if (todayChartData.datasets.airportMetarSeries?.length > 0) {
         datasets.push({
           backgroundColor: "#60a5fa",
           borderColor: "#60a5fa",
           borderWidth: 1,
-          data: todayChartData.datasets.airportMetarPoints,
+          data: todayChartData.datasets.airportMetarSeries,
           fill: false,
           label:
             locale === "en-US" ? "Airport METAR" : "机场 METAR",
           order: 0,
+          parsing: false,
           pointHoverRadius: 6,
           pointRadius: 4,
           showLine: false,
         });
       }
 
-      if (todayChartData.datasets.mgmPoints.some((value) => value != null)) {
+      if (todayChartData.datasets.mgmSeries?.length > 0) {
         datasets.push({
           backgroundColor: "#facc15",
           borderColor: "#facc15",
           borderWidth: 0,
-          data: todayChartData.datasets.mgmPoints,
+          data: todayChartData.datasets.mgmSeries,
           fill: false,
           label: locale === "en-US" ? "MGM Observation" : "MGM 实测",
           order: -1,
+          parsing: false,
           pointHoverRadius: 9,
           pointRadius: 7,
           showLine: false,
@@ -346,9 +359,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           borderColor: "rgba(99, 102, 241, 0.2)",
           borderDash: [2, 4],
           borderWidth: 1,
-          data: todayChartData.datasets.temps,
+          data: todayChartData.datasets.tempsSeries,
           fill: false,
           label: locale === "en-US" ? "OM Raw" : "OM 原始",
+          parsing: false,
           pointRadius: 0,
           tension: 0.3,
         });
@@ -358,10 +372,11 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "#f59e0b",
           borderColor: "#f59e0b",
           borderWidth: 0,
-          data: todayChartData.datasets.tafCurrentMarkerPoints,
+          data: todayChartData.datasets.tafCurrentMarkerSeries,
           fill: false,
           label: locale === "en-US" ? "Current TAF" : "当前 TAF",
           order: -3,
+          parsing: false,
           pointHoverRadius: 8,
           pointRadius: 6,
           showLine: false,
@@ -370,10 +385,11 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "rgba(250, 204, 21, 0.72)",
           borderColor: "rgba(250, 204, 21, 0.72)",
           borderWidth: 0,
-          data: todayChartData.datasets.tafPeakWindowMarkerPoints,
+          data: todayChartData.datasets.tafPeakWindowMarkerSeries,
           fill: false,
           label: locale === "en-US" ? "Peak-window TAF" : "峰值窗口 TAF",
           order: -2,
+          parsing: false,
           pointHoverRadius: 7,
           pointRadius: 4,
           showLine: false,
@@ -382,10 +398,11 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           backgroundColor: "#f59e0b",
           borderColor: "#f59e0b",
           borderWidth: 0,
-          data: todayChartData.datasets.tafMarkerPoints,
+          data: todayChartData.datasets.tafMarkerSeries,
           fill: false,
           label: locale === "en-US" ? "TAF Timing" : "TAF 时段",
           order: -4,
+          parsing: false,
           pointHoverRadius: 0,
           pointRadius: 0,
           showLine: false,
@@ -395,10 +412,10 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
       return {
         data: {
           datasets,
-          labels: todayChartData.times,
+          labels: [],
         },
         options: {
-          interaction: { intersect: false, mode: "index" },
+          interaction: { intersect: false, mode: "nearest" },
           maintainAspectRatio: false,
           plugins: {
             legend: {
@@ -423,8 +440,15 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
               borderColor: "rgba(34, 211, 238, 0.2)",
               borderWidth: 1,
               callbacks: {
+                title: (items) => {
+                  const rawX = items?.[0]?.parsed?.x;
+                  return rawX != null ? formatMinuteAxisLabel(Number(rawX)) : "";
+                },
                 label: (ctx) => {
                   const label = String(ctx.dataset.label || "");
+                  const raw = ctx.raw as
+                    | { marker?: { summary?: string; markerType?: string; displayType?: string; isCurrent?: boolean; isPeakWindow?: boolean } }
+                    | undefined;
                   if (
                     label === "TAF Timing" ||
                     label === "TAF 时段" ||
@@ -433,10 +457,13 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
                     label === "Peak-window TAF" ||
                     label === "峰值窗口 TAF"
                   ) {
-                    const marker = (todayChartData.tafMarkers || []).find(
-                      (item) => item.index === ctx.dataIndex,
-                    );
+                    const marker = raw?.marker;
                     if (!marker) return label;
+                    const markerType = String(marker.markerType || "");
+                    const displayType = String(
+                      marker.displayType || marker.markerType || "",
+                    );
+                    const summary = String(marker.summary || "");
                     const prefix =
                       marker.isCurrent && marker.isPeakWindow
                         ? locale === "en-US"
@@ -451,10 +478,9 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
                               ? "Peak-window TAF"
                               : "峰值窗口 TAF"
                             : label;
-                    return `${prefix}: ${String(marker.summary || "").replace(
-                      marker.markerType,
-                      marker.displayType || marker.markerType,
-                    )}`;
+                    return `${prefix}: ${
+                      markerType ? summary.replace(markerType, displayType) : summary
+                    }`;
                   }
                   const value = ctx.parsed.y;
                   if (value == null) return label;
@@ -466,12 +492,24 @@ function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
           responsive: true,
           scales: {
             x: {
+              max: todayChartData.xMax,
+              min: todayChartData.xMin,
               grid: { color: "rgba(255,255,255,0.04)" },
+              type: "linear",
               ticks: {
-                callback: (_value, index) =>
-                  typeof index === "number" && index % 3 === 0
-                    ? todayChartData.times[index]
-                    : "",
+                callback: (value) => {
+                  const num = Number(value);
+                  if (!Number.isFinite(num)) return "";
+                  const minutes = Math.round(num);
+                  if (
+                    minutes !== todayChartData.xMin &&
+                    minutes !== todayChartData.xMax &&
+                    minutes % 120 !== 0
+                  ) {
+                    return "";
+                  }
+                  return formatMinuteAxisLabel(minutes);
+                },
                 color: "#64748b",
                 font: { family: "Inter", size: 10 },
                 maxRotation: 0,
