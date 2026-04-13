@@ -592,6 +592,11 @@ export function FutureForecastModal() {
   if (!detail || !dateStr) return null;
 
   const isToday = dateStr === detail.local_date;
+  const detailDepth = detail.detail_depth || "full";
+  const isFullDetailReady = detailDepth === "full";
+  const isStructureSyncing = store.loadingState.refresh || !isFullDetailReady;
+  const isMarketSyncing = store.loadingState.marketScan;
+  const isAnyLayerSyncing = isStructureSyncing || isMarketSyncing;
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
@@ -1060,6 +1065,58 @@ export function FutureForecastModal() {
     }
     return lines.slice(0, 3);
   }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView]);
+  const syncStatusItems = [
+    {
+      key: "base",
+      state: "ready",
+      label:
+        locale === "en-US" ? "Base analysis ready" : "基础分析已加载",
+      note:
+        locale === "en-US"
+          ? "Forecast curve, anchor state, and current structure are available."
+          : "预测曲线、锚点状态和当前结构已经可用。",
+    },
+    {
+      key: "market",
+      state: isMarketSyncing ? "syncing" : "ready",
+      label:
+        locale === "en-US"
+          ? isMarketSyncing
+            ? "Syncing market ladder"
+            : "Market ladder ready"
+          : isMarketSyncing
+            ? "市场挂单同步中"
+            : "市场挂单已加载",
+      note:
+        locale === "en-US"
+          ? isMarketSyncing
+            ? "Polymarket buckets and edge are updating in the background."
+            : "Probability buckets and edge are in sync."
+          : isMarketSyncing
+            ? "Polymarket 概率桶和 edge 正在后台更新。"
+            : "概率桶和 edge 已同步完成。",
+    },
+    {
+      key: "structure",
+      state: isStructureSyncing ? "syncing" : "ready",
+      label:
+        locale === "en-US"
+          ? isStructureSyncing
+            ? "Backfilling deep structure"
+            : "Deep structure ready"
+          : isStructureSyncing
+            ? "深度结构补齐中"
+            : "深度结构已加载",
+      note:
+        locale === "en-US"
+          ? isStructureSyncing
+            ? "Upper-air, nearby network, and deeper fusion signals are still coming in."
+            : "Upper-air, nearby network, and deeper fusion signals are ready."
+          : isStructureSyncing
+            ? "高空、周边站网和更深层融合信号还在补齐。"
+            : "高空、周边站网和更深层融合信号已可用。",
+    },
+  ] as const;
 
   return (
     <div
@@ -1107,7 +1164,7 @@ export function FutureForecastModal() {
               <button
                 className={clsx(
                   "future-refresh-btn",
-                  store.loadingState.marketScan && "spinning",
+                  isAnyLayerSyncing && "spinning",
                 )}
                 disabled={!isPro || isProLoading}
                 onClick={() => {
@@ -1154,6 +1211,23 @@ export function FutureForecastModal() {
             </button>
           </div>
           <div className="modal-body future-modal-body">
+            <section className="future-v2-sync-strip" aria-live="polite">
+              {syncStatusItems.map((item) => (
+                <div
+                  key={item.key}
+                  className={clsx(
+                    "future-v2-sync-chip",
+                    item.state === "syncing" && "syncing",
+                  )}
+                >
+                  <span className="future-v2-sync-dot" aria-hidden="true" />
+                  <div className="future-v2-sync-copy">
+                    <strong>{item.label}</strong>
+                    <span>{item.note}</span>
+                  </div>
+                </div>
+              ))}
+            </section>
             {isNoaaSettlement && (
               <div
                 style={{

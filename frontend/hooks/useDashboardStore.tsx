@@ -977,38 +977,39 @@ export function DashboardStoreProvider({
       openFutureModal: async (dateStr: string, forceRefresh = false) => {
         mapStopMotionRef.current();
         if (!selectedCity || !proAccess.subscriptionActive) return;
+        const cityName = selectedCity;
         const cachedDetail = cityDetailsByName[selectedCity];
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, dateStr);
 
+        setFutureModalDate(dateStr);
+        const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
+        setLoadingState((current) => ({ ...current, marketScan: true }));
         if (!hasFullCachedDetail || forceRefresh) {
           setLoadingState((current) => ({
             ...current,
             refresh: true,
           }));
-          try {
-            await ensureCityDetail(selectedCity, true, "full");
-          } catch {
-          } finally {
-            setLoadingState((current) => ({
-              ...current,
-              refresh: false,
-            }));
-          }
+          void ensureCityDetail(cityName, true, "full")
+            .catch(() => {})
+            .finally(() => {
+              if (selectedCityRef.current !== cityName) return;
+              setLoadingState((current) => ({
+                ...current,
+                refresh: false,
+              }));
+            });
         }
-
-        setFutureModalDate(dateStr);
-        const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
-        setLoadingState((current) => ({ ...current, marketScan: true }));
         void ensureCityMarketScan(
-          selectedCity,
+          cityName,
           forceRefresh || !marketScanByCityName[cacheKey],
           null,
           dateStr,
         )
           .catch(() => {})
           .finally(() => {
+            if (selectedCityRef.current !== cityName) return;
             setLoadingState((current) => ({ ...current, marketScan: false }));
           });
       },
@@ -1019,13 +1020,16 @@ export function DashboardStoreProvider({
         }
 
         mapStopMotionRef.current();
-        const cachedDetail = cityDetailsByName[selectedCity];
+        const cityName = selectedCity;
+        const cachedDetail = cityDetailsByName[cityName];
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
-        if (hasFullCachedDetail && cachedDetail?.local_date) {
-          setSelectedForecastDate(cachedDetail.local_date);
-          setFutureModalDate(cachedDetail.local_date);
+        const targetDate =
+          cachedDetail?.local_date || selectedForecastDate || null;
+        if (targetDate) {
+          setSelectedForecastDate(targetDate);
+          setFutureModalDate(targetDate);
         }
         if (!proAccess.subscriptionActive) return;
         const needsDetailRefresh =
@@ -1038,37 +1042,39 @@ export function DashboardStoreProvider({
           refresh: needsDetailRefresh,
           marketScan: true,
         }));
+        void ensureCityDetail(
+          cityName,
+          needsDetailRefresh,
+          "full",
+        )
+          .then((detail) => {
+            if (selectedCityRef.current !== cityName) return;
+            setSelectedForecastDate(detail.local_date);
+            setFutureModalDate(detail.local_date);
 
-        try {
-          const detail = await ensureCityDetail(
-            selectedCity,
-            needsDetailRefresh,
-            "full",
-          );
-          setSelectedForecastDate(detail.local_date);
-          setFutureModalDate(detail.local_date);
-
-          const marketKey = getMarketScanCacheKey(selectedCity, detail.local_date);
-          try {
-            await ensureCityMarketScan(
-              selectedCity,
+            const marketKey = getMarketScanCacheKey(cityName, detail.local_date);
+            return ensureCityMarketScan(
+              cityName,
               forceRefresh || !marketScanByCityName[marketKey],
               null,
               detail.local_date,
             );
-          } catch {}
-        } catch {
-          if (cachedDetail?.local_date) {
-            setSelectedForecastDate(cachedDetail.local_date);
-            setFutureModalDate(cachedDetail.local_date);
-          }
-        } finally {
-          setLoadingState((current) => ({
-            ...current,
-            refresh: false,
-            marketScan: false,
-          }));
-        }
+          })
+          .catch(() => {
+            if (selectedCityRef.current !== cityName) return;
+            if (cachedDetail?.local_date) {
+              setSelectedForecastDate(cachedDetail.local_date);
+              setFutureModalDate(cachedDetail.local_date);
+            }
+          })
+          .finally(() => {
+            if (selectedCityRef.current !== cityName) return;
+            setLoadingState((current) => ({
+              ...current,
+              refresh: false,
+              marketScan: false,
+            }));
+          });
       },
       registerMapStopMotion: (stopMotion: () => void) => {
         mapStopMotionRef.current = stopMotion;
