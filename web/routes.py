@@ -439,6 +439,8 @@ async def city_detail(
     normalized_depth = str(depth or "panel").strip().lower()
     if normalized_depth == "full":
         detail_mode = "full"
+    elif normalized_depth == "market":
+        detail_mode = "market"
     elif normalized_depth == "nearby":
         detail_mode = "nearby"
     else:

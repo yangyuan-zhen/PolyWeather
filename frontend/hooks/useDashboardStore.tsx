@@ -133,7 +133,7 @@ const EAGER_SUMMARY_PRIORITY_CITY_ORDER = [
   "milan",
   "madrid",
 ] as const;
-type CityDetailDepth = "panel" | "nearby" | "full";
+type CityDetailDepth = "panel" | "market" | "nearby" | "full";
 
 function countAvailableModels(
   detail?: CityDetail | null,
@@ -172,7 +172,16 @@ function hasSparseDetailCoverage(
   );
 }
 
+function hasMarketDetailCoverage(
+  detail?: CityDetail | null,
+  targetDate?: string | null,
+): boolean {
+  if (!detail) return false;
+  return countAvailableModels(detail, targetDate) > 1;
+}
+
 function normalizeDetailDepth(detail?: CityDetail | null): CityDetailDepth {
+  if (detail?.detail_depth === "market") return "market";
   if (detail?.detail_depth === "nearby") return "nearby";
   if (detail?.detail_depth === "panel") return "panel";
   return "full";
@@ -181,9 +190,18 @@ function normalizeDetailDepth(detail?: CityDetail | null): CityDetailDepth {
 function detailSatisfiesDepth(
   detail: CityDetail | null | undefined,
   depth: CityDetailDepth,
+  targetDate?: string | null,
 ) {
   if (!detail) return false;
   if (depth === "panel") return true;
+  if (depth === "market") {
+    const normalized = normalizeDetailDepth(detail);
+    return (
+      normalized === "market" ||
+      normalized === "full" ||
+      hasMarketDetailCoverage(detail, targetDate)
+    );
+  }
   if (depth === "nearby") {
     const normalized = normalizeDetailDepth(detail);
     return normalized === "nearby" || normalized === "full";
@@ -192,7 +210,67 @@ function detailSatisfiesDepth(
 }
 
 function shouldCheckSparseCoverageForDepth(depth: CityDetailDepth) {
-  return depth === "panel" || depth === "full";
+  return depth === "panel" || depth === "market" || depth === "full";
+}
+
+function hasMeaningfulModelMap(
+  value: Record<string, number | null> | undefined,
+): value is Record<string, number | null> {
+  return Boolean(
+    value &&
+      Object.values(value).some((entry) => Number.isFinite(Number(entry))),
+  );
+}
+
+function hasMeaningfulDailyModelMap(
+  value: CityDetail["multi_model_daily"] | undefined,
+) {
+  return Boolean(
+    value &&
+      Object.values(value).some((day) =>
+        hasMeaningfulModelMap(day?.models || undefined),
+      ),
+  );
+}
+
+function mergeCityDetail(
+  current: CityDetail | undefined,
+  incoming: CityDetail,
+): CityDetail {
+  if (!current) return incoming;
+  if (incoming.detail_depth !== "market") return incoming;
+
+  const mergedDepth =
+    current.detail_depth === "full" || current.detail_depth === "nearby"
+      ? current.detail_depth
+      : incoming.detail_depth;
+
+  return {
+    ...current,
+    ...incoming,
+    detail_depth: mergedDepth,
+    current: incoming.current || current.current,
+    airport_current: incoming.airport_current || current.airport_current,
+    deb: incoming.deb || current.deb,
+    probabilities: incoming.probabilities || current.probabilities,
+    trend: incoming.trend || current.trend,
+    multi_model: hasMeaningfulModelMap(incoming.multi_model)
+      ? incoming.multi_model
+      : current.multi_model,
+    multi_model_daily: hasMeaningfulDailyModelMap(incoming.multi_model_daily)
+      ? {
+          ...(current.multi_model_daily || {}),
+          ...(incoming.multi_model_daily || {}),
+        }
+      : current.multi_model_daily,
+    forecast: current.forecast || incoming.forecast,
+    official_nearby: current.official_nearby || incoming.official_nearby,
+    mgm_nearby: current.mgm_nearby || incoming.mgm_nearby,
+    network_lead_signal:
+      current.network_lead_signal || incoming.network_lead_signal,
+    airport_vs_network_delta:
+      current.airport_vs_network_delta ?? incoming.airport_vs_network_delta,
+  };
 }
 
 function getStoredSelectedCityName(cities: CityListItem[]) {
@@ -420,7 +498,7 @@ export function DashboardStoreProvider({
 
         setCityDetailsByName((current) => ({
           ...current,
-          [cityName]: detail,
+          [cityName]: mergeCityDetail(current[cityName], detail),
         }));
         setCitySummariesByName((current) => ({
           ...current,
@@ -444,10 +522,18 @@ export function DashboardStoreProvider({
   ) => {
     const cached = cityDetailsByName[cityName];
     const cachedMeta = cityDetailMetaByName[cityName];
-    const hasRequestedDepth = detailSatisfiesDepth(cached, depth);
+    const marketTargetDate =
+      depth === "market" ? selectedForecastDate || cached?.local_date : null;
+    const hasRequestedDepth = detailSatisfiesDepth(
+      cached,
+      depth,
+      marketTargetDate,
+    );
     const cachedIsSparse =
       shouldCheckSparseCoverageForDepth(depth) &&
-      hasSparseDetailCoverage(cached, cached?.local_date);
+      (depth === "market"
+        ? hasSparseModelCoverage(cached, marketTargetDate)
+        : hasSparseDetailCoverage(cached, cached?.local_date));
     if (
       !force &&
       cached &&
@@ -472,7 +558,7 @@ export function DashboardStoreProvider({
             const detail = latestDetail;
             setCityDetailsByName((current) => ({
               ...current,
-              [cityName]: detail,
+              [cityName]: mergeCityDetail(current[cityName], detail),
             }));
             setCitySummariesByName((current) => ({
               ...current,
@@ -508,7 +594,7 @@ export function DashboardStoreProvider({
     const detail = latestDetail;
     setCityDetailsByName((current) => ({
       ...current,
-      [cityName]: detail,
+      [cityName]: mergeCityDetail(current[cityName], detail),
     }));
     setCitySummariesByName((current) => ({
       ...current,
@@ -858,6 +944,7 @@ export function DashboardStoreProvider({
         if (selectedCityRef.current !== cityName) return;
         setSelectedForecastDate(detail.local_date);
         if (access.authenticated && access.subscriptionActive) {
+          void ensureCityDetail(cityName, false, "market").catch(() => {});
           // 预热市场数据，不做 await 阻塞，后台静默拉取
           void ensureCityMarketScan(
             cityName,
@@ -1101,10 +1188,18 @@ export function DashboardStoreProvider({
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, dateStr);
+        const hasMarketCachedDetail = detailSatisfiesDepth(
+          cachedDetail,
+          "market",
+          dateStr,
+        );
 
         setFutureModalDate(dateStr);
         const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
         setLoadingState((current) => ({ ...current, marketScan: true }));
+        if (!hasMarketCachedDetail || forceRefresh) {
+          void ensureCityDetail(cityName, forceRefresh, "market").catch(() => {});
+        }
         if (!hasFullCachedDetail || forceRefresh) {
           setLoadingState((current) => ({
             ...current,
@@ -1154,6 +1249,11 @@ export function DashboardStoreProvider({
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
+        const hasMarketCachedDetail = detailSatisfiesDepth(
+          cachedDetail,
+          "market",
+          cachedDetail?.local_date,
+        );
         const targetDate =
           cachedDetail?.local_date || selectedForecastDate || null;
         if (targetDate) {
@@ -1171,6 +1271,13 @@ export function DashboardStoreProvider({
           futureDeep: needsDetailRefresh,
           marketScan: true,
         }));
+        if (!hasMarketCachedDetail || forceRefresh) {
+          void ensureCityDetail(
+            cityName,
+            Boolean(forceRefresh),
+            "market",
+          ).catch(() => {});
+        }
         const initialTargetDate =
           cachedDetail?.local_date || selectedForecastDate || null;
         const initialMarketKey = getMarketScanCacheKey(
