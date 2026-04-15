@@ -69,13 +69,6 @@ function formatMarketPercent(value?: number | null) {
   return `${(normalized * 100).toFixed(1)}%`;
 }
 
-function formatSignedPercent(value?: number | null) {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return "--";
-  const sign = numeric > 0 ? "+" : "";
-  return `${sign}${numeric.toFixed(1)}%`;
-}
-
 function formatBucketLabel(
   bucket?: {
     label?: string | null;
@@ -622,7 +615,6 @@ export function FutureForecastModal() {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
-  const marketScan = store.selectedMarketScan;
   const dateStr = store.futureModalDate;
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
@@ -667,8 +659,7 @@ export function FutureForecastModal() {
   const detailDepth = detail.detail_depth || "full";
   const isFullDetailReady = detailDepth === "full";
   const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
-  const isMarketSyncing = store.loadingState.marketScan;
-  const isAnyLayerSyncing = isStructureSyncing || isMarketSyncing;
+  const isAnyLayerSyncing = isStructureSyncing;
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
@@ -713,7 +704,7 @@ export function FutureForecastModal() {
   const boundaryRiskView = useMemo(() => {
     if (!showDeferredTodaySections) return null;
     if (!isToday || !paceView) return null;
-    const selectedBucket = marketScan?.temperature_bucket || null;
+    const selectedBucket = topProbabilityBucket || null;
     const bounds = parseBucketBoundaries(selectedBucket);
     if (!bounds) return null;
     const projected =
@@ -756,7 +747,7 @@ export function FutureForecastModal() {
       tone,
       value: `${nearest.gap.toFixed(1)}${detail.temp_symbol}`,
     };
-  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, marketScan?.temperature_bucket, paceView, showDeferredTodaySections]);
+  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, paceView, showDeferredTodaySections, topProbabilityBucket]);
   const peakWindowStateView = useMemo(() => {
     if (!showDeferredTodaySections) return null;
     if (!isToday || !paceView) return null;
@@ -850,27 +841,7 @@ export function FutureForecastModal() {
     String(detail.current?.station_name || "").trim() ||
     String(detail.risk?.airport || "").trim() ||
     noaaStationCode;
-  const topBucket = Array.isArray(marketScan?.top_buckets)
-    ? [...marketScan.top_buckets]
-        .map((item) => ({
-          ...item,
-          probability: normalizeMarketValue(item?.probability),
-        }))
-        .filter(
-          (
-            item,
-          ): item is {
-            label?: string | null;
-            bucket?: string | null;
-            range?: string | null;
-            value?: number | null;
-            temp?: number | null;
-            probability: number;
-          } => item.probability != null,
-        )
-        .sort((a, b) => b.probability - a.probability)[0]
-    : null;
-  const hottestBucketLabel = formatBucketLabel(topBucket);
+  const hottestBucketLabel = formatBucketLabel(topProbabilityBucket);
   const probabilitySummary = (() => {
     if (!topProbabilityBucket) {
       return locale === "en-US"
@@ -904,17 +875,10 @@ export function FutureForecastModal() {
   })();
   const upperAirSignal = detail.vertical_profile_signal || {};
   const tafSignal = detail.taf?.signal || {};
-  const topBucketProbability = normalizeMarketValue(topBucket?.probability);
-  const numericEdge = Number(marketScan?.edge_percent);
-  const hottestMatchesSettlement =
-    hottestBucketLabel !== "--" &&
-    formatBucketLabel(marketScan?.temperature_bucket) !== "--" &&
-    hottestBucketLabel === formatBucketLabel(marketScan?.temperature_bucket);
-  const marketAwareUpperAirCue = useMemo(() => {
+  const upperAirCue = useMemo(() => {
     if (!showDeferredTodaySections) return null;
     if (!isToday || (!upperAirSignal.source && !tafSignal.available)) return null;
 
-    const crowded = hottestMatchesSettlement && (topBucketProbability || 0) >= 0.3;
     const setup = String(upperAirSignal.heating_setup || "neutral").toLowerCase();
     const tafSuppression = String(
       tafSignal.suppression_level || "low",
@@ -922,9 +886,6 @@ export function FutureForecastModal() {
     const tafDisruption = String(
       tafSignal.disruption_level || "low",
     ).toLowerCase();
-    const signalLabel = String(marketScan?.signal_label || "").toUpperCase();
-    const edgeAbs = Number.isFinite(numericEdge) ? Math.abs(numericEdge) : 0;
-    const strongEdge = edgeAbs >= 8;
     const reasons: string[] = [];
     let score = 0;
 
@@ -976,37 +937,12 @@ export function FutureForecastModal() {
       );
     }
 
-    if (strongEdge && signalLabel === "BUY YES") {
-      score += 1;
-      reasons.push(
-        locale === "en-US"
-          ? `market edge still leans hotter (${formatSignedPercent(numericEdge)})`
-          : `市场 edge 仍偏向更热一侧（${formatSignedPercent(numericEdge)}）`,
-      );
-    } else if (strongEdge && signalLabel === "BUY NO") {
-      score -= 1;
-      reasons.push(
-        locale === "en-US"
-          ? `market edge still leans cooler (${formatSignedPercent(numericEdge)})`
-          : `市场 edge 仍偏向更冷一侧（${formatSignedPercent(numericEdge)}）`,
-      );
-    }
-
-    if (crowded && score > 0) {
-      score -= 0.5;
-      reasons.push(
-        locale === "en-US"
-          ? "the target bucket is already getting crowded"
-          : "目标区间已经开始变拥挤",
-      );
-    }
-
     if (score >= 1.5) {
       return {
         summary:
           locale === "en-US"
-            ? "The combined upper-air, TAF, and market read still leans warmer. Do not fade lower buckets too early."
-            : "高空、TAF 和市场三层信号合并后仍偏暖侧，不宜过早做更低温区间。",
+            ? "The combined upper-air and TAF read still leans warmer. Do not fade lower buckets too early."
+            : "高空和 TAF 两层信号合并后仍偏暖侧，不宜过早做更低温区间。",
         note:
           locale === "en-US"
             ? `${reasons.slice(0, 2).join("; ")}.`
@@ -1020,8 +956,8 @@ export function FutureForecastModal() {
       return {
         summary:
           locale === "en-US"
-            ? "The combined upper-air, TAF, and market read leans more defensive. Be more careful chasing higher buckets."
-            : "高空、TAF 和市场三层信号合并后更偏防守，追更高温区间要更谨慎。",
+            ? "The combined upper-air and TAF read leans more defensive. Be more careful chasing higher buckets."
+            : "高空和 TAF 两层信号合并后更偏防守，追更高温区间要更谨慎。",
         note:
           locale === "en-US"
             ? `${reasons.slice(0, 2).join("; ")}.`
@@ -1034,8 +970,8 @@ export function FutureForecastModal() {
     return {
       summary:
         locale === "en-US"
-          ? "The combined upper-air, TAF, and market read is mixed. Let surface structure and price action decide before taking a side."
-          : "高空、TAF 和市场三层信号目前偏混合，先看近地面结构和盘口变化，不急着站边。",
+          ? "The combined upper-air and TAF read is mixed. Let surface structure decide before taking a side."
+          : "高空和 TAF 两层信号目前偏混合，先看近地面结构变化，不急着站边。",
       note:
         locale === "en-US"
           ? `${reasons.slice(0, 2).join("; ") || "No clean edge from the upper-air layer alone"}.`
@@ -1047,12 +983,8 @@ export function FutureForecastModal() {
     tafSignal.available,
     tafSignal.disruption_level,
     tafSignal.suppression_level,
-    marketScan?.signal_label,
-    hottestMatchesSettlement,
     isToday,
     locale,
-    numericEdge,
-    topBucketProbability,
     upperAirSignal.heating_setup,
     upperAirSignal.source,
     showDeferredTodaySections,
@@ -1081,18 +1013,18 @@ export function FutureForecastModal() {
     };
   })();
   const displayedUpperAirSummary = showDeferredTodaySections
-    ? marketAwareUpperAirCue?.summary || view.front.upperAirSummary
+    ? upperAirCue?.summary || view.front.upperAirSummary
     : "";
   const displayedUpperAirMetrics = showDeferredTodaySections
     ? (view.front.upperAirMetrics || []).map((metric, index) =>
         index === 0 &&
         (metric.label === "Trade cue" || metric.label === "交易动作") &&
-        marketAwareUpperAirCue
+        upperAirCue
           ? {
               ...metric,
-              note: marketAwareUpperAirCue.note,
-              tone: marketAwareUpperAirCue.tone,
-              value: marketAwareUpperAirCue.value,
+              note: upperAirCue.note,
+              tone: upperAirCue.tone,
+              value: upperAirCue.value,
             }
           : metric,
       )
@@ -1162,23 +1094,15 @@ export function FutureForecastModal() {
     },
     {
       key: "market",
-      state: isMarketSyncing ? "syncing" : "ready",
+      state: "ready",
       label:
         locale === "en-US"
-          ? isMarketSyncing
-            ? "Syncing market ladder"
-            : "Market ladder ready"
-          : isMarketSyncing
-            ? "市场挂单同步中"
-            : "市场挂单已加载",
+          ? "Probability layer ready"
+          : "概率层已加载",
       note:
         locale === "en-US"
-          ? isMarketSyncing
-            ? "Polymarket buckets and edge are updating in the background."
-            : "Probability buckets and edge are in sync."
-          : isMarketSyncing
-            ? "Polymarket 概率桶和 edge 正在后台更新。"
-            : "概率桶和 edge 已同步完成。",
+          ? "Probability buckets are derived from the local model stack."
+          : "概率桶当前由本地模型栈推导。",
     },
     {
       key: "structure",
@@ -1584,28 +1508,10 @@ export function FutureForecastModal() {
                         {probabilitySummary}
                       </div>
                       <div style={{ position: "relative", minHeight: "120px" }}>
-                        {/* Loading Overlay */}
-                        {store.loadingState.marketScan && (
-                          <div className="market-layer-loading-overlay">
-                            <div
-                              className="loading-spinner"
-                              style={{
-                                marginBottom: "8px",
-                                width: "24px",
-                                height: "24px",
-                                borderWidth: "2px",
-                              }}
-                            />
-                            {locale === "en-US"
-                              ? "Crunching Polymarket Edges..."
-                              : "正在同步市场挂单..."}
-                          </div>
-                        )}
                         <ProbabilityDistribution
                           detail={detail}
                           targetDate={dateStr}
                           hideTitle
-                          marketScan={marketScan}
                         />
                       </div>
                     </section>
@@ -1841,7 +1747,6 @@ export function FutureForecastModal() {
                       detail={detail}
                       targetDate={dateStr}
                       hideTitle
-                      marketScan={marketScan}
                     />
                   </section>
                   <section className="future-modal-section">
@@ -1861,3 +1766,4 @@ export function FutureForecastModal() {
     </div>
   );
 }
+

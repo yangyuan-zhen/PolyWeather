@@ -3,7 +3,6 @@
 import {
   CityDetail,
   CityListItem,
-  MarketScan,
   CitySummary,
   HistoryPayload,
 } from "@/lib/dashboard-types";
@@ -13,7 +12,6 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
-const pendingMarketScanRequests = new Map<string, Promise<MarketScan | null>>();
 
 type CityCacheMeta = {
   cachedAt: number;
@@ -193,64 +191,6 @@ export const dashboardClient = {
     return fetchJson<CityDetail>(
       `/api/city/${normalizeCityName(cityName)}?${params.toString()}`,
     );
-  },
-
-  async getCityMarketScan(
-    cityName: string,
-    options?: {
-      force?: boolean;
-      marketSlug?: string | null;
-      targetDate?: string | null;
-    },
-  ) {
-    const force = options?.force ?? false;
-    const marketSlug = options?.marketSlug || null;
-    const targetDate = options?.targetDate || null;
-    if (!force) {
-      const requestKey = `${cityName}::cached::${marketSlug || "-"}::${
-        targetDate || "-"
-      }`;
-      const existing = pendingMarketScanRequests.get(requestKey);
-      if (existing) {
-        return existing;
-      }
-
-      const params = new URLSearchParams({
-        force_refresh: "false",
-      });
-      if (marketSlug) {
-        params.set("market_slug", marketSlug);
-      }
-      if (targetDate) {
-        params.set("target_date", targetDate);
-      }
-
-      const request = fetchJson<{ market_scan?: MarketScan }>(
-        `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
-      )
-        .then((data) => data.market_scan || null)
-        .finally(() => {
-          pendingMarketScanRequests.delete(requestKey);
-        });
-
-      pendingMarketScanRequests.set(requestKey, request);
-      return request;
-    }
-
-    const params = new URLSearchParams({
-      force_refresh: "true",
-      _ts: String(Date.now()),
-    });
-    if (marketSlug) {
-      params.set("market_slug", marketSlug);
-    }
-    if (targetDate) {
-      params.set("target_date", targetDate);
-    }
-
-    return fetchJson<{ market_scan?: MarketScan }>(
-      `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
-    ).then((data) => data.market_scan || null);
   },
 
   async getHistory(cityName: string, options?: { includeRecords?: boolean }) {

@@ -24,7 +24,6 @@ import {
   HistoryPayloadMeta,
   HistoryState,
   LoadingState,
-  MarketScan,
   ProAccessState,
 } from "@/lib/dashboard-types";
 
@@ -46,12 +45,10 @@ interface DashboardStoreValue extends DashboardState {
   refreshAll: () => Promise<void>;
   refreshProAccess: () => Promise<void>;
   refreshSelectedCity: () => Promise<void>;
-  selectedMarketScan: MarketScan | null;
   selectedDetail: CityDetail | null;
   selectCity: (cityName: string) => Promise<void>;
   setMapInteractionActive: (active: boolean) => void;
   setForecastDate: (dateStr: string | null) => void;
-  marketScanByCityName: Record<string, MarketScan>;
 }
 
 const DashboardStoreContext = createContext<DashboardStoreValue | null>(null);
@@ -92,11 +89,6 @@ function getInitialProAccessState(): ProAccessState {
     points: 0,
     error: null,
   };
-}
-
-function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
-  const normalizedDate = String(targetDate || "").trim() || "local";
-  return `${cityName}::${normalizedDate}`;
 }
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
@@ -291,9 +283,6 @@ export function DashboardStoreProvider({
   const [cityDetailMetaByName, setCityDetailMetaByName] = useState<
     Record<string, { cachedAt: number; revision: string }>
   >({});
-  const [marketScanByCityName, setMarketScanByCityName] = useState<
-    Record<string, MarketScan>
-  >({});
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedForecastDate, setSelectedForecastDate] = useState<
@@ -325,19 +314,6 @@ export function DashboardStoreProvider({
     selectedCity && proAccess.subscriptionActive
       ? cityDetailsByName[selectedCity] || null
       : null;
-  const selectedMarketDate =
-    futureModalDate ||
-    selectedForecastDate ||
-    selectedDetail?.local_date ||
-    null;
-  const selectedMarketScanKey = selectedCity
-    ? getMarketScanCacheKey(selectedCity, selectedMarketDate)
-    : null;
-  const selectedMarketScan =
-    selectedCity && proAccess.subscriptionActive
-      ? marketScanByCityName[selectedMarketScanKey || ""] || null
-      : null;
-
   useEffect(() => {
     if (proAccess.loading) return;
     if (!proAccess.authenticated || !proAccess.subscriptionActive) {
@@ -402,7 +378,6 @@ export function DashboardStoreProvider({
     dashboardClient.clearCityDetailCache();
     setCityDetailsByName({});
     setCityDetailMetaByName({});
-    setMarketScanByCityName({});
   }, [proAccess]);
 
   const scheduleBackgroundDetailRefresh = (
@@ -577,32 +552,6 @@ export function DashboardStoreProvider({
     proAccess.subscriptionActive,
     selectedCity,
   ]);
-
-  const ensureCityMarketScan = async (
-    cityName: string,
-    force = false,
-    marketSlug?: string | null,
-    targetDate?: string | null,
-  ) => {
-    const cacheKey = getMarketScanCacheKey(cityName, targetDate);
-    const cached = marketScanByCityName[cacheKey];
-    if (!force && cached && !marketSlug) {
-      return cached;
-    }
-
-    const latestScan = await dashboardClient.getCityMarketScan(cityName, {
-      force,
-      marketSlug,
-      targetDate,
-    });
-    if (latestScan) {
-      setMarketScanByCityName((current) => ({
-        ...current,
-        [cacheKey]: latestScan,
-      }));
-    }
-    return latestScan;
-  };
 
   const loadCities = async () => {
     setLoadingState((current) => ({ ...current, cities: true }));
@@ -1055,8 +1004,6 @@ export function DashboardStoreProvider({
         );
 
         setFutureModalDate(dateStr);
-        const cacheKey = getMarketScanCacheKey(selectedCity, dateStr);
-        setLoadingState((current) => ({ ...current, marketScan: true }));
         if (!hasMarketCachedDetail || forceRefresh) {
           void ensureCityDetail(cityName, forceRefresh, "market").catch(() => {});
         }
@@ -1075,17 +1022,6 @@ export function DashboardStoreProvider({
               }));
             });
         }
-        void ensureCityMarketScan(
-          cityName,
-          forceRefresh || !marketScanByCityName[cacheKey],
-          null,
-          dateStr,
-        )
-          .catch(() => {})
-          .finally(() => {
-            if (selectedCityRef.current !== cityName) return;
-            setLoadingState((current) => ({ ...current, marketScan: false }));
-          });
       },
       openHistory,
       openTodayModal: async (forceRefresh?: boolean) => {
@@ -1129,7 +1065,6 @@ export function DashboardStoreProvider({
         setLoadingState((current) => ({
           ...current,
           futureDeep: needsDetailRefresh,
-          marketScan: true,
         }));
         if (!hasMarketCachedDetail || forceRefresh) {
           void ensureCityDetail(
@@ -1138,26 +1073,6 @@ export function DashboardStoreProvider({
             "market",
           ).catch(() => {});
         }
-        const initialTargetDate =
-          cachedDetail?.local_date || selectedForecastDate || null;
-        const initialMarketKey = getMarketScanCacheKey(
-          cityName,
-          initialTargetDate,
-        );
-        void ensureCityMarketScan(
-          cityName,
-          forceRefresh || !marketScanByCityName[initialMarketKey],
-          null,
-          initialTargetDate,
-        )
-          .catch(() => {})
-          .finally(() => {
-            if (selectedCityRef.current !== cityName) return;
-            setLoadingState((current) => ({
-              ...current,
-              marketScan: false,
-            }));
-          });
         void ensureCityDetail(
           cityName,
           needsDetailRefresh,
@@ -1189,7 +1104,6 @@ export function DashboardStoreProvider({
       refreshAll,
       refreshProAccess,
       refreshSelectedCity,
-      selectedMarketScan,
       selectedCity,
       selectedDetail,
       selectedForecastDate,
@@ -1197,7 +1111,6 @@ export function DashboardStoreProvider({
       setMapInteractionActive: setIsMapInteracting,
       setForecastDate: (dateStr: string | null) =>
         setSelectedForecastDate(dateStr),
-      marketScanByCityName,
     }),
     [
       cities,
@@ -1208,8 +1121,6 @@ export function DashboardStoreProvider({
       isPanelOpen,
       loadingState,
       proAccess,
-      marketScanByCityName,
-      selectedMarketScan,
       selectedCity,
       selectedDetail,
       selectedForecastDate,
@@ -1259,3 +1170,4 @@ export function useHistoryData(name?: string | null) {
     meta: key ? store.historyState.metaByCity[key] || null : null,
   };
 }
+

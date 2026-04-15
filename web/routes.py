@@ -600,21 +600,7 @@ async def auth_me(request: Request):
                     user_id,
                     respect_requirement=False,
                 )
-            if (
-                not latest_subscription
-                and getattr(PAYMENT_CHECKOUT, "enabled", False)
-            ):
-                try:
-                    PAYMENT_CHECKOUT.reconcile_latest_intent(user_id)
-                    latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
-                        user_id,
-                        respect_requirement=False,
-                    )
-                except Exception:
-                    latest_subscription = SUPABASE_ENTITLEMENT.get_latest_active_subscription(
-                        user_id,
-                        respect_requirement=False,
-                    )
+
             latest_known_subscription = latest_subscription
             if not latest_known_subscription:
                 latest_known_subscription = (
@@ -1119,3 +1105,4 @@ async def city_market_scan(
         market_slug,
         target_date,
     )
+
