@@ -506,38 +506,6 @@ export function DetailPanel() {
           </>
         ) : (
           <>
-            <section className="detail-summary-shell">
-              <div className="detail-summary-main">
-                <article className="detail-card detail-card-hero">
-                  <span className="detail-label">{locale === "en-US" ? "Current reading" : "当前读数"}</span>
-                  <span className="detail-summary-temp">{heroCurrentTempText}</span>
-                  <span className="detail-summary-supporting">@{heroObsTimeLabel}</span>
-                  <span className="detail-summary-supporting">
-                    {heroWeatherIcon ? `${heroWeatherIcon} ` : ""}
-                    {heroWeatherText}
-                  </span>
-                </article>
-                <div className="detail-summary-grid">
-                  <article className="detail-card">
-                    <span className="detail-label">DEB</span>
-                    <span className="detail-value">{heroDebText}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Settlement" : "结算口径"}</span>
-                    <span className="detail-value">{heroSettlementLabel}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Airport" : "结算机场"}</span>
-                    <span className="detail-value">{heroAirportLabel}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Risk level" : "风险等级"}</span>
-                    <span className="detail-value">{getRiskBadgeLabel(panelRiskLevel, locale)}</span>
-                  </article>
-                </div>
-              </div>
-            </section>
-
             <section className="detail-structured-section">
               <div className="detail-section-head">
                 <div>
