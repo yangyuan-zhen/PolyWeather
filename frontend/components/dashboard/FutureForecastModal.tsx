@@ -1089,8 +1089,8 @@ export function FutureForecastModal() {
         locale === "en-US" ? "Base analysis ready" : "基础分析已加载",
       note:
         locale === "en-US"
-          ? "Forecast curve, anchor state, and current structure are available."
-          : "预测曲线、锚点状态和当前结构已经可用。",
+          ? "Forecast curve, anchor state, and the core intraday view are available."
+          : "预测曲线、锚点状态和核心日内视图已经可用。",
     },
     {
       key: "market",
@@ -1103,26 +1103,6 @@ export function FutureForecastModal() {
         locale === "en-US"
           ? "Probability buckets are derived from the local model stack."
           : "概率桶当前由本地模型栈推导。",
-    },
-    {
-      key: "structure",
-      state: isStructureSyncing ? "syncing" : "ready",
-      label:
-        locale === "en-US"
-          ? isStructureSyncing
-            ? "Backfilling deep structure"
-            : "Deep structure ready"
-          : isStructureSyncing
-            ? "深度结构补齐中"
-            : "深度结构已加载",
-      note:
-        locale === "en-US"
-          ? isStructureSyncing
-            ? "Upper-air, nearby network, and deeper fusion signals are still coming in."
-            : "Upper-air, nearby network, and deeper fusion signals are ready."
-          : isStructureSyncing
-            ? "高空、周边站网和更深层融合信号还在补齐。"
-            : "高空、周边站网和更深层融合信号已可用。",
     },
   ] as const;
 
@@ -1216,8 +1196,8 @@ export function FutureForecastModal() {
               <div className="modal-subtitle">
                 {isToday
                   ? locale === "en-US"
-                    ? "Base signal first, market and deep structure follow."
-                    : "先看基础信号，市场层和深度结构随后补齐。"
+                    ? "Base signal first, then probability and model layers."
+                    : "先看基础信号，再看概率层和模型层。"
                   : locale === "en-US"
                     ? "Forward date view with phased model and structure sync."
                     : "未来日期视图，模型层与结构层分阶段补齐。"}
@@ -1239,10 +1219,7 @@ export function FutureForecastModal() {
               {syncStatusItems.map((item) => (
                 <div
                   key={item.key}
-                  className={clsx(
-                    "future-v2-sync-chip",
-                    item.state === "syncing" && "syncing",
-                  )}
+                  className="future-v2-sync-chip"
                 >
                   <span className="future-v2-sync-dot" aria-hidden="true" />
                   <div className="future-v2-sync-copy">
@@ -1550,185 +1527,6 @@ export function FutureForecastModal() {
                     </section>
                   </div>
 
-                  {showDeferredTodaySections ? (
-                    <section className="future-modal-section">
-                      <div className="modal-section-heading">
-                        <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Structure layer" : "结构层"}
-                        </div>
-                        <h3>{t("future.structureToday")}</h3>
-                      </div>
-                      <div className="future-front-score">
-                        <div className="future-front-bar" style={barStyle}>
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: 0,
-                              bottom: 0,
-                              left: "50%",
-                              width: "2px",
-                              background: "rgba(255, 255, 255, 0.2)",
-                              transform: "translateX(-50%)",
-                              zIndex: 1,
-                            }}
-                          />
-                        </div>
-                      <div className="future-front-meta">
-                        <span className="future-front-pill">
-                          {t("future.judgement")}: {view.front.label}
-                          </span>
-                          <span className="future-front-pill">
-                            {t("future.confidence")}:{" "}
-                            {t(`confidence.${view.front.confidence}`)}
-                          </span>
-                          <span className="future-front-pill">
-                            {t("future.maxPrecip")}:{" "}
-                            {Math.round(view.front.precipMax)}%
-                          </span>
-                        </div>
-                        {todayTradeSummaryLines.length > 0 ? (
-                          <div className="future-trend-summary">
-                            {todayTradeSummaryLines.map((line, index) => (
-                              <div key={`${index}-${line}`}>{line}</div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                      <div className="future-subsection-title">
-                        {locale === "en-US" ? "Surface Structure" : "近地面信号"}
-                      </div>
-                      <div className="future-trend-grid">
-                        {view.front.metrics.slice(0, 6).map((metric) => (
-                          <div key={metric.label} className="future-trend-card">
-                            <div className="future-trend-label">{metric.label}</div>
-                            <div
-                              className={clsx(
-                                "future-trend-value",
-                                metric.tone === "warm" && "warm",
-                                metric.tone === "cold" && "cold",
-                              )}
-                            >
-                              {metric.value}
-                            </div>
-                            {getTrendMetricVisual(metric) ? (
-                              <div
-                                className={clsx(
-                                  "future-trend-meter",
-                                  getTrendMetricVisual(metric)?.mode === "center" &&
-                                    "center",
-                                )}
-                              >
-                                {getTrendMetricVisual(metric)?.mode === "center" ? (
-                                  <span className="future-trend-meter-midline" />
-                                ) : null}
-                                <div
-                                  className={clsx(
-                                    "future-trend-meter-fill",
-                                    getTrendMetricVisual(metric)?.tone === "warm" &&
-                                      "warm",
-                                    getTrendMetricVisual(metric)?.tone === "cold" &&
-                                      "cold",
-                                  )}
-                                  style={{
-                                    width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
-                                  }}
-                                />
-                              </div>
-                            ) : null}
-                            <div className="future-trend-note">{metric.note}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <>
-                        <div className="future-subsection-title">
-                          {locale === "en-US" ? "Upper-Air Structure" : "高空结构信号"}
-                        </div>
-                        {displayedUpperAirSummary ? (
-                          <div className="future-trend-summary">
-                            {displayedUpperAirSummary}
-                          </div>
-                        ) : (
-                          <div className="future-trend-summary future-trend-summary-muted">
-                            {locale === "en-US"
-                              ? "Upper-air structure is temporarily unavailable for this city. For now, lean on surface structure and TAF timing."
-                              : "该城市当前暂无可用的高空结构数据，先以近地面结构和 TAF 时段作为主判断。"}
-                          </div>
-                        )}
-                        {displayedUpperAirMetrics.length > 0 ? (
-                          <div className="future-trend-grid">
-                            {displayedUpperAirMetrics.map((metric) => (
-                              <div key={metric.label} className="future-trend-card">
-                                <div className="future-trend-label">{metric.label}</div>
-                                <div
-                                  className={clsx(
-                                    "future-trend-value",
-                                    metric.tone === "warm" && "warm",
-                                    metric.tone === "cold" && "cold",
-                                  )}
-                                >
-                                  {metric.value}
-                                </div>
-                                {getTrendMetricVisual(metric) ? (
-                                  <div
-                                    className={clsx(
-                                      "future-trend-meter",
-                                      getTrendMetricVisual(metric)?.mode === "center" &&
-                                        "center",
-                                    )}
-                                  >
-                                    {getTrendMetricVisual(metric)?.mode === "center" ? (
-                                      <span className="future-trend-meter-midline" />
-                                    ) : null}
-                                    <div
-                                      className={clsx(
-                                        "future-trend-meter-fill",
-                                        getTrendMetricVisual(metric)?.tone === "warm" &&
-                                          "warm",
-                                        getTrendMetricVisual(metric)?.tone === "cold" &&
-                                          "cold",
-                                      )}
-                                      style={{
-                                        width: `${getTrendMetricVisual(metric)?.percent ?? 0}%`,
-                                      }}
-                                    />
-                                  </div>
-                                ) : null}
-                                <div className="future-trend-note">{metric.note}</div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="future-trend-card future-trend-card-empty">
-                            <div className="future-trend-label">
-                              {locale === "en-US" ? "Upper-air source" : "高空数据源"}
-                            </div>
-                            <div className="future-trend-value">
-                              {locale === "en-US" ? "Not available" : "暂不可用"}
-                            </div>
-                            <div className="future-trend-note">
-                              {locale === "en-US"
-                                ? "No upper-air diagnostic feed is attached to this city right now."
-                                : "当前该城市未接入可用的高空诊断源，所以这里先保留说明卡片。"}
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    </section>
-                  ) : (
-                    <section className="future-modal-section">
-                      <div className="modal-section-heading">
-                        <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Structure layer" : "结构层"}
-                        </div>
-                        <h3>{t("future.structureToday")}</h3>
-                      </div>
-                      <div className="future-trend-summary future-trend-summary-muted">
-                        {locale === "en-US"
-                          ? "Surface structure, upper-air diagnostics, and trade commentary are loading after the primary chart."
-                          : "近地面结构、高空诊断和交易提示会在主图之后继续后台补齐。"}
-                      </div>
-                    </section>
-                  )}
                 </main>
               </div>
             ) : (
