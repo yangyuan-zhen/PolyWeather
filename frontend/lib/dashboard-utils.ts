@@ -312,6 +312,17 @@ function buildObservationPoints(items: Array<{ time?: string; temp?: number | nu
     .filter((point): point is { labelTime: string; x: number; y: number } => point != null);
 }
 
+function sortObservationItemsByTime<T extends { time?: string | null }>(items: T[]) {
+  return [...items].sort((left, right) => {
+    const leftMinutes = hmToMinutes(left.time);
+    const rightMinutes = hmToMinutes(right.time);
+    if (leftMinutes == null && rightMinutes == null) return 0;
+    if (leftMinutes == null) return 1;
+    if (rightMinutes == null) return -1;
+    return leftMinutes - rightMinutes;
+  });
+}
+
 function interpolateSeriesAtMinutes(
   times: string[],
   values: Array<number | null | undefined>,
@@ -869,21 +880,20 @@ export function getTemperatureChartData(
     );
   }
   if ((detail.trend?.recent?.length || 0) > 0 || observationSource.length > 0) {
-    const recentData =
+    const recentData = sortObservationItemsByTime(
       observationSource.length > 0
         ? [...observationSource]
-        : [...(detail.trend?.recent || [])];
+        : [...(detail.trend?.recent || [])],
+    );
     const recentText = recentData
-      .slice(0, 4)
-      .reverse()
+      .slice(-4)
       .map((item) => `${item.temp}${detail.temp_symbol}@${item.time}`)
       .join(" -> ");
     legendParts.push(`${observationDisplayTag}: ${recentText}`);
   }
   if (airportMetarSource.length > 0) {
-    const airportRecentText = [...airportMetarSource]
+    const airportRecentText = sortObservationItemsByTime([...airportMetarSource])
       .slice(-4)
-      .reverse()
       .map((item) => `${item.temp}${detail.temp_symbol}@${item.time}`)
       .join(" -> ");
     legendParts.push(
