@@ -101,38 +101,6 @@ function getMarketScanCacheKey(cityName: string, targetDate?: string | null) {
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
 const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
-const EAGER_CITY_SUMMARIES_DISABLED =
-  process.env.NEXT_PUBLIC_POLYWEATHER_DISABLE_EAGER_SUMMARIES === "true";
-const EAGER_SUMMARY_PRIORITY_CONCURRENCY = 3;
-const EAGER_SUMMARY_BACKGROUND_CONCURRENCY = 2;
-const EAGER_SUMMARY_BACKGROUND_IDLE_TIMEOUT_MS = 1200;
-const EAGER_SUMMARY_PRIORITY_CITY_ORDER = [
-  "hong kong",
-  "taipei",
-  "shanghai",
-  "beijing",
-  "wuhan",
-  "shenzhen",
-  "chengdu",
-  "chongqing",
-  "seoul",
-  "busan",
-  "tokyo",
-  "singapore",
-  "kuala lumpur",
-  "jakarta",
-  "tel aviv",
-  "jeddah",
-  "istanbul",
-  "moscow",
-  "helsinki",
-  "warsaw",
-  "amsterdam",
-  "london",
-  "paris",
-  "milan",
-  "madrid",
-] as const;
 type CityDetailDepth = "panel" | "market" | "nearby" | "full";
 
 function countAvailableModels(
@@ -288,57 +256,6 @@ function mergeCityDetail(
       current.network_lead_signal || incoming.network_lead_signal,
     airport_vs_network_delta:
       current.airport_vs_network_delta ?? incoming.airport_vs_network_delta,
-  };
-}
-
-function getStoredSelectedCityName(cities: CityListItem[]) {
-  if (typeof window === "undefined") return null;
-  const stored = String(
-    window.localStorage.getItem(SELECTED_CITY_STORAGE_KEY) || "",
-  )
-    .trim()
-    .toLowerCase();
-  if (!stored) return null;
-  if (!cities.some((city) => city.name === stored)) return null;
-  return stored;
-}
-
-function getPriorityPreloadCities(cities: CityListItem[]) {
-  const citySet = new Set(cities.map((city) => city.name));
-  return EAGER_SUMMARY_PRIORITY_CITY_ORDER.filter((cityName) =>
-    citySet.has(cityName)
-  );
-}
-
-function scheduleWhenBrowserIdle(callback: () => void) {
-  if (typeof window === "undefined") {
-    callback();
-    return () => {};
-  }
-
-  const browserWindow = window as Window & {
-    requestIdleCallback?: (
-      cb: IdleRequestCallback,
-      options?: IdleRequestOptions,
-    ) => number;
-    cancelIdleCallback?: (handle: number) => void;
-  };
-
-  if (typeof browserWindow.requestIdleCallback === "function") {
-    const handle = browserWindow.requestIdleCallback(
-      () => callback(),
-      { timeout: EAGER_SUMMARY_BACKGROUND_IDLE_TIMEOUT_MS },
-    );
-    return () => {
-      if (typeof browserWindow.cancelIdleCallback === "function") {
-        browserWindow.cancelIdleCallback(handle);
-      }
-    };
-  }
-
-  const timeoutId = window.setTimeout(callback, 400);
-  return () => {
-    window.clearTimeout(timeoutId);
   };
 }
 
@@ -844,75 +761,6 @@ export function DashboardStoreProvider({
     proAccess.userId,
   ]);
 
-  useEffect(() => {
-    if (EAGER_CITY_SUMMARIES_DISABLED) return;
-    if (!cities.length) return;
-    if (loadingState.refresh) return;
-
-    const priorityQueue: string[] = [];
-    const backgroundQueue: string[] = [];
-    const queued = new Set<string>();
-    const enqueue = (cityName: string | null, queue: string[]) => {
-      if (!cityName || queued.has(cityName) || citySummariesRef.current[cityName]) {
-        return;
-      }
-      queued.add(cityName);
-      queue.push(cityName);
-    };
-
-    enqueue(getStoredSelectedCityName(cities), priorityQueue);
-    getPriorityPreloadCities(cities).forEach((cityName) => {
-      enqueue(cityName, priorityQueue);
-    });
-    cities.forEach((city) => {
-      enqueue(city.name, backgroundQueue);
-    });
-
-    if (!priorityQueue.length && !backgroundQueue.length) return;
-
-    let active = true;
-    let cancelIdleSchedule = () => {};
-    const runQueue = async (queue: string[], concurrency: number) => {
-      if (!queue.length) return;
-      let cursor = 0;
-      const worker = async () => {
-        while (active && cursor < queue.length) {
-          const cityName = queue[cursor];
-          cursor += 1;
-          if (citySummariesRef.current[cityName]) continue;
-
-          try {
-            await ensureCitySummary(cityName);
-          } catch {}
-        }
-      };
-
-      await Promise.all(
-        Array.from({ length: Math.min(concurrency, queue.length) }, () =>
-          worker()
-        ),
-      );
-    };
-
-    void (async () => {
-      await runQueue(priorityQueue, EAGER_SUMMARY_PRIORITY_CONCURRENCY);
-      if (!active) return;
-      if (isMapInteracting) return;
-      cancelIdleSchedule = scheduleWhenBrowserIdle(() => {
-        if (!active || isMapInteracting) return;
-        void runQueue(
-          backgroundQueue,
-          EAGER_SUMMARY_BACKGROUND_CONCURRENCY,
-        );
-      });
-    })();
-
-    return () => {
-      active = false;
-      cancelIdleSchedule();
-    };
-  }, [cities, isMapInteracting, loadingState.refresh]);
-
   const selectCity = async (cityName: string) => {
     setSelectedCity(cityName);
     setIsPanelOpen(true);
@@ -961,16 +809,6 @@ export function DashboardStoreProvider({
       .then((detail) => {
         if (selectedCityRef.current !== cityName) return;
         setSelectedForecastDate(detail.local_date);
-        if (access.authenticated && access.subscriptionActive) {
-          void ensureCityDetail(cityName, false, "market").catch(() => {});
-          // 预热市场数据，不做 await 阻塞，后台静默拉取
-          void ensureCityMarketScan(
-            cityName,
-            false,
-            null,
-            detail.local_date,
-          ).catch(() => {});
-        }
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
@@ -1002,8 +840,12 @@ export function DashboardStoreProvider({
     )
       .trim()
       .toLowerCase();
-    if (!stored) return;
-    if (!cities.some((city) => city.name === stored)) return;
+    if (!stored) {
+      return;
+    }
+    if (!cities.some((city) => city.name === stored)) {
+      return;
+    }
     void selectCity(stored);
   }, [cities, selectedCity, selectCity]);
 
