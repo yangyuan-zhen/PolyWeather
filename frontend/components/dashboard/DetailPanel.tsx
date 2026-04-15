@@ -17,6 +17,7 @@ import {
   getCityProfileStats,
   getRiskBadgeLabel,
   getTemperatureChartData,
+  getWeatherSummary,
 } from "@/lib/dashboard-utils";
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
@@ -154,16 +155,9 @@ export function DetailPanel() {
   const isProStateLoading = store.proAccess.loading;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
-  const isOverlayOpen =
-    Boolean(store.futureModalDate) ||
-    store.historyState.isOpen;
-  const isVisible =
-    store.isPanelOpen &&
-    Boolean(store.selectedCity) &&
-    !isOverlayOpen;
-  const hasBasicPanelContent = Boolean(
-    detail || selectedSummary || selectedCityItem,
-  );
+  const isOverlayOpen = Boolean(store.futureModalDate) || store.historyState.isOpen;
+  const isVisible = store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
+  const hasBasicPanelContent = Boolean(detail || selectedSummary || selectedCityItem);
   const panelDisplayName =
     detail?.display_name ||
     selectedSummary?.display_name ||
@@ -188,6 +182,9 @@ export function DetailPanel() {
     [detail, locale],
   );
   const scenery = getCityScenery(detail?.name);
+  const weatherSummary = detail
+    ? getWeatherSummary(detail, locale)
+    : { weatherIcon: "", weatherText: "" };
   const basicCurrentTemp = selectedSummary?.current?.temp;
   const basicObsTime = selectedSummary?.current?.obs_time;
   const basicDeb = selectedSummary?.deb?.prediction;
@@ -200,11 +197,35 @@ export function DetailPanel() {
     selectedCityItem?.airport ||
     selectedSummary?.icao ||
     (locale === "en-US" ? "Airport pending" : "机场待确认");
-  const isBasicSummaryLoading =
-    !detail && !selectedSummary && store.loadingState.cityDetail;
+  const activeTempSymbol = detail?.temp_symbol || selectedSummary?.temp_symbol || "°C";
+  const heroCurrentTemp = detail?.current?.temp ?? basicCurrentTemp;
+  const heroCurrentTempText =
+    heroCurrentTemp != null ? `${heroCurrentTemp}${activeTempSymbol}` : "--";
+  const heroObsTimeLabel =
+    detail?.current?.obs_time ||
+    basicObsTime ||
+    (locale === "en-US" ? "Observation pending" : "观测时间待更新");
+  const heroDebValue = detail?.deb?.prediction ?? basicDeb;
+  const heroDebText =
+    heroDebValue != null
+      ? `${heroDebValue}${activeTempSymbol}`
+      : locale === "en-US"
+        ? "Pending"
+        : "待更新";
+  const heroSettlementLabel =
+    detail?.current?.settlement_source_label || basicSettlementLabel;
+  const heroAirportLabel = detail?.risk?.airport || basicAirportLabel;
+  const heroWeatherText = detail
+    ? weatherSummary.weatherText
+    : locale === "en-US"
+      ? "City snapshot"
+      : "城市快照";
+  const heroWeatherIcon = detail ? weatherSummary.weatherIcon : "";
+  const isBasicSummaryLoading = !detail && !selectedSummary && store.loadingState.cityDetail;
   const shouldShowSyncCard =
     !detail &&
     (store.loadingState.cityDetail || isProStateLoading || isAuthenticated);
+
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
     const active = document.activeElement;
@@ -212,6 +233,7 @@ export function DetailPanel() {
       active.blur();
     }
   };
+
   const handleFeatureAccess = (feature: "today" | "history") => {
     blurActiveElement();
 
@@ -251,10 +273,7 @@ export function DetailPanel() {
 
     if (!isVisible) {
       panel.setAttribute("inert", "");
-      if (
-        typeof document !== "undefined" &&
-        panel.contains(document.activeElement)
-      ) {
+      if (typeof document !== "undefined" && panel.contains(document.activeElement)) {
         const active = document.activeElement;
         if (active instanceof HTMLElement) {
           active.blur();
@@ -303,10 +322,7 @@ export function DetailPanel() {
   }, [detail, isVisible]);
 
   return (
-    <aside
-      ref={panelRef}
-      className={clsx("detail-panel", isVisible && "visible")}
-    >
+    <aside ref={panelRef} className={clsx("detail-panel", isVisible && "visible")}>
       <div className="panel-header">
         <button
           type="button"
@@ -320,7 +336,23 @@ export function DetailPanel() {
           ×
         </button>
         <div className="panel-title-area">
-          <h2>{panelDisplayName.toUpperCase()}</h2>
+          <div className="panel-title-stack">
+            <div className="panel-overline">
+              <span>{locale === "en-US" ? "City briefing" : "城市简报"}</span>
+              <span className="panel-overline-sep">•</span>
+              <span>{panelDisplayName.toUpperCase()}</span>
+            </div>
+            <h2>{panelDisplayName}</h2>
+            <div className="panel-subtitle">
+              {detail
+                ? locale === "en-US"
+                  ? "Primary settlement posture and local evidence."
+                  : "先看当前口径，再补结算证据与周边对照。"
+                : locale === "en-US"
+                  ? "Summary first. Deep detail fills in automatically."
+                  : "基础快照先到，深度内容随后补齐。"}
+            </div>
+          </div>
           {store.loadingState.cityDetail && (
             <div className="panel-loading-hint" role="status" aria-live="polite">
               <span className="panel-loading-spinner" aria-hidden="true" />
@@ -335,161 +367,207 @@ export function DetailPanel() {
             <span className={clsx("risk-badge", panelRiskLevel)}>
               {getRiskBadgeLabel(panelRiskLevel, locale)}
             </span>
-            <div className="relative group">
-              {marketUrl ? (
-                <a
-                  className="history-btn"
-                  href={marketUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  title={
-                    locale === "en-US"
-                      ? "Open today's Polymarket market"
-                      : "打开今日 Polymarket 题目页"
-                  }
-                >
-                  {locale === "en-US" ? "Open Market" : "打开 Polymarket"}
-                </a>
-              ) : null}
-              <button
-                type="button"
-                className={clsx("history-btn", !isPro && "pro-locked")}
+            <span className="panel-meta-chip panel-meta-chip-strong">{heroSettlementLabel}</span>
+            <span className="panel-meta-chip panel-meta-chip-muted">{heroAirportLabel}</span>
+          </div>
+          <div className="panel-actions">
+            {marketUrl ? (
+              <a
+                className="panel-action-button panel-action-button-ghost"
+                href={marketUrl}
+                target="_blank"
+                rel="noreferrer"
                 title={
-                  isPro
-                    ? t("detail.todayAnalysis")
-                    : `${t("detail.todayAnalysis")} (Pro)`
+                  locale === "en-US"
+                    ? "Open today's Polymarket market"
+                    : "打开今日 Polymarket 题目页"
                 }
-                onClick={() => handleFeatureAccess("today")}
-                disabled={!store.selectedCity}
               >
-                {isPro
-                  ? t("detail.todayAnalysis")
-                  : `${t("detail.todayAnalysis")} · Pro`}
-              </button>
-              <button
-                type="button"
-                className={clsx("history-btn", !isPro && "pro-locked")}
-                title={
-                  isPro ? t("detail.history") : `${t("detail.history")} (Pro)`
-                }
-                onClick={() => handleFeatureAccess("history")}
-                disabled={!store.selectedCity}
-              >
-                {isPro ? t("detail.history") : `${t("detail.history")} · Pro`}
-              </button>
-            </div>
+                {locale === "en-US" ? "Market" : "市场页"}
+              </a>
+            ) : null}
+            <button
+              type="button"
+              className={clsx(
+                "panel-action-button",
+                "panel-action-button-primary",
+                !isPro && "pro-locked",
+              )}
+              title={
+                isPro ? t("detail.todayAnalysis") : `${t("detail.todayAnalysis")} (Pro)`
+              }
+              onClick={() => handleFeatureAccess("today")}
+              disabled={!store.selectedCity}
+            >
+              {isPro ? t("detail.todayAnalysis") : `${t("detail.todayAnalysis")} · Pro`}
+            </button>
+            <button
+              type="button"
+              className={clsx(
+                "panel-action-button",
+                "panel-action-button-secondary",
+                !isPro && "pro-locked",
+              )}
+              title={isPro ? t("detail.history") : `${t("detail.history")} (Pro)`}
+              onClick={() => handleFeatureAccess("history")}
+              disabled={!store.selectedCity}
+            >
+              {isPro ? t("detail.history") : `${t("detail.history")} · Pro`}
+            </button>
           </div>
         </div>
       </div>
 
       <div className="panel-body">
         {!hasBasicPanelContent ? (
-          <section>
+          <section className="detail-summary-shell detail-empty-state">
+            <div className="detail-section-head">
+              <div>
+                <div className="detail-section-kicker">
+                  {locale === "en-US" ? "No city selected" : "尚未选择城市"}
+                </div>
+                <h3>{locale === "en-US" ? "Pick a city to start." : "先选择一个城市。"}</h3>
+              </div>
+            </div>
             <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
-              {store.loadingState.cityDetail
-                ? t("detail.loading")
-                : t("detail.emptyHint")}
+              {store.loadingState.cityDetail ? t("detail.loading") : t("detail.emptyHint")}
             </div>
           </section>
         ) : !detail ? (
           <>
-            <section className="detail-section">
-              <h3>{locale === "en-US" ? "City Snapshot" : "城市概览"}</h3>
+            <section className="detail-summary-shell">
+              <div className="detail-section-head">
+                <div>
+                  <div className="detail-section-kicker">
+                    {locale === "en-US" ? "Quick read" : "基础快照"}
+                  </div>
+                  <h3>{locale === "en-US" ? "Summary before deep sync." : "先看基础结论，再等深度详情。"}</h3>
+                </div>
+              </div>
               {isBasicSummaryLoading ? (
                 <div className="detail-mini-meta">
-                  {locale === "en-US"
-                    ? "Syncing public city snapshot..."
-                    : "正在同步城市基础信息..."}
+                  {locale === "en-US" ? "Syncing public city snapshot..." : "正在同步城市基础信息..."}
                 </div>
               ) : null}
-              <div className="detail-grid">
-                <div className="detail-card">
-                  <span className="detail-label">
-                    {locale === "en-US" ? "Current temp" : "当前温度"}
-                  </span>
-                  <span className="detail-value">
-                    {basicCurrentTemp != null
-                      ? `${basicCurrentTemp}${selectedSummary?.temp_symbol || ""}`
-                      : locale === "en-US"
-                        ? "--"
-                        : "--"}
-                  </span>
-                </div>
-                <div className="detail-card">
-                  <span className="detail-label">
-                    {locale === "en-US" ? "Observed" : "观测时间"}
-                  </span>
-                  <span className="detail-value">
-                    {basicObsTime || (locale === "en-US" ? "Pending" : "待更新")}
-                  </span>
-                </div>
-                <div className="detail-card">
-                  <span className="detail-label">DEB</span>
-                  <span className="detail-value">
-                    {basicDeb != null
-                      ? `${basicDeb}${selectedSummary?.temp_symbol || ""}`
-                      : locale === "en-US"
-                        ? isBasicSummaryLoading
-                          ? "Syncing..."
-                          : "Pending"
-                        : isBasicSummaryLoading
-                          ? "同步中..."
-                          : "待更新"}
-                  </span>
-                </div>
-                <div className="detail-card">
-                  <span className="detail-label">
-                    {locale === "en-US" ? "Settlement" : "结算口径"}
-                  </span>
-                  <span className="detail-value">{basicSettlementLabel}</span>
-                </div>
-                <div className="detail-card">
-                  <span className="detail-label">
-                    {locale === "en-US" ? "Airport" : "结算机场"}
-                  </span>
-                  <span className="detail-value">{basicAirportLabel}</span>
+              <div className="detail-summary-main">
+                <article className="detail-card detail-card-hero">
+                  <span className="detail-label">{locale === "en-US" ? "Current posture" : "当前态势"}</span>
+                  <span className="detail-summary-temp">{heroCurrentTempText}</span>
+                  <span className="detail-summary-supporting">@{heroObsTimeLabel}</span>
+                  <span className="detail-summary-supporting">{heroWeatherText}</span>
+                </article>
+                <div className="detail-summary-grid">
+                  <article className="detail-card">
+                    <span className="detail-label">DEB</span>
+                    <span className="detail-value">{heroDebText}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Settlement" : "结算口径"}</span>
+                    <span className="detail-value">{heroSettlementLabel}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Airport" : "结算机场"}</span>
+                    <span className="detail-value">{heroAirportLabel}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Sync status" : "同步状态"}</span>
+                    <span className="detail-value-muted">
+                      {locale === "en-US" ? "Deep detail pending" : "深度详情补齐中"}
+                    </span>
+                  </article>
                 </div>
               </div>
             </section>
 
-            <section className="detail-section">
-              <div className="detail-card">
-                <span className="detail-label">
+            <section className="detail-summary-shell detail-summary-shell-live">
+              <div className="detail-section-head">
+                <div>
+                  <div className="detail-section-kicker">
+                    {shouldShowSyncCard
+                      ? locale === "en-US"
+                        ? "Background sync"
+                        : "后台同步"
+                      : locale === "en-US"
+                        ? "Pro workflow"
+                        : "Pro 工作流"}
+                  </div>
+                  <h3>
+                    {shouldShowSyncCard
+                      ? locale === "en-US"
+                        ? "Deep evidence will appear automatically."
+                        : "更深层的结算证据会自动补齐。"
+                      : locale === "en-US"
+                        ? "Intraday and history live behind the analysis flow."
+                        : "今日日内分析和历史对账会在分析流中继续展开。"}
+                  </h3>
+                </div>
+              </div>
+              <div className="detail-callout-card">
+                <span className="detail-value-muted">
                   {shouldShowSyncCard
                     ? locale === "en-US"
-                      ? "Detail sync"
-                      : "详情同步"
+                      ? "Full city detail is still syncing. Nearby stations, source links, and mini trend will land here once ready."
+                      : "完整城市详情仍在同步中。周边站点、官方参考和温度微趋势会在完成后自动出现在这里。"
                     : locale === "en-US"
-                      ? "Pro features"
-                      : "Pro 功能"}
-                </span>
-                <span className="detail-value" style={{ fontSize: "15px" }}>
-                  {shouldShowSyncCard
-                    ? locale === "en-US"
-                      ? "Full city detail is still syncing. The deeper panel will appear automatically."
-                      : "完整城市详情仍在同步中，深度面板会自动补齐。"
-                    : locale === "en-US"
-                      ? "Intraday analysis, history reconciliation, and deeper structure signals require Pro."
-                      : "今日日内分析、历史对账和更深入的结构信号需要 Pro。"}
+                      ? "Intraday analysis, history reconciliation, and deeper structure signals stay available from the action bar."
+                      : "今日日内分析、历史对账和更深层结构信号会从上方操作区继续展开。"}
                 </span>
               </div>
             </section>
           </>
         ) : (
           <>
+            <section className="detail-summary-shell">
+              <div className="detail-section-head">
+                <div>
+                  <div className="detail-section-kicker">
+                    {locale === "en-US" ? "Settlement snapshot" : "结算快照"}
+                  </div>
+                  <h3>{locale === "en-US" ? "Start from the active settlement posture." : "先看当前结算姿态，再判断偏差和风险。"}</h3>
+                </div>
+              </div>
+              <div className="detail-summary-main">
+                <article className="detail-card detail-card-hero">
+                  <span className="detail-label">{locale === "en-US" ? "Current reading" : "当前读数"}</span>
+                  <span className="detail-summary-temp">{heroCurrentTempText}</span>
+                  <span className="detail-summary-supporting">@{heroObsTimeLabel}</span>
+                  <span className="detail-summary-supporting">
+                    {heroWeatherIcon ? `${heroWeatherIcon} ` : ""}
+                    {heroWeatherText}
+                  </span>
+                </article>
+                <div className="detail-summary-grid">
+                  <article className="detail-card">
+                    <span className="detail-label">DEB</span>
+                    <span className="detail-value">{heroDebText}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Settlement" : "结算口径"}</span>
+                    <span className="detail-value">{heroSettlementLabel}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Airport" : "结算机场"}</span>
+                    <span className="detail-value">{heroAirportLabel}</span>
+                  </article>
+                  <article className="detail-card">
+                    <span className="detail-label">{locale === "en-US" ? "Risk level" : "风险等级"}</span>
+                    <span className="detail-value">{getRiskBadgeLabel(panelRiskLevel, locale)}</span>
+                  </article>
+                </div>
+              </div>
+            </section>
+
             <section className="detail-scenery-card">
               {scenery ? (
                 <>
                   <img
                     className="detail-scenery-image"
                     src={scenery.imageUrl}
-                    alt={t("detail.sceneryAlt", { city: detail?.display_name || "" })}
+                    alt={t("detail.sceneryAlt", { city: detail.display_name || "" })}
                   />
                   <div className="detail-scenery-overlay">
                     <div className="detail-scenery-copy">
-                      <span className="detail-scenery-kicker">
-                        {detail?.display_name}
-                      </span>
+                      <span className="detail-scenery-kicker">{detail.display_name}</span>
                     </div>
                     <a
                       className="detail-scenery-credit"
@@ -503,34 +581,40 @@ export function DetailPanel() {
                 </>
               ) : (
                 <div className="detail-scenery-fallback">
-                  <span className="detail-scenery-kicker">
-                    {detail?.display_name}
-                  </span>
-                  <strong className="detail-scenery-title">
-                    {t("detail.sceneryTitle")}
-                  </strong>
-                  <span className="detail-scenery-subtitle">
-                    {t("detail.sceneryFallback")}
-                  </span>
+                  <span className="detail-scenery-kicker">{detail.display_name}</span>
+                  <strong className="detail-scenery-title">{t("detail.sceneryTitle")}</strong>
+                  <span className="detail-scenery-subtitle">{t("detail.sceneryFallback")}</span>
                 </div>
               )}
             </section>
 
-            <section className="detail-section">
-              <h3>{t("detail.profile")}</h3>
+            <section className="detail-structured-section">
+              <div className="detail-section-head">
+                <div>
+                  <div className="detail-section-kicker">{locale === "en-US" ? "Profile" : "城市画像"}</div>
+                  <h3>{t("detail.profile")}</h3>
+                </div>
+              </div>
               <div className="detail-grid">
                 {profileStats.map((item) => (
-                  <div key={item.label} className="detail-card">
+                  <article key={item.label} className="detail-card">
                     <span className="detail-label">{item.label}</span>
                     <span className="detail-value">{item.value}</span>
-                  </div>
+                  </article>
                 ))}
               </div>
             </section>
 
             {officialLinks.length > 0 ? (
-              <section className="detail-section">
-                <h3>{locale === "en-US" ? "Official Sources" : "官方参考"}</h3>
+              <section className="detail-structured-section">
+                <div className="detail-section-head">
+                  <div>
+                    <div className="detail-section-kicker">
+                      {locale === "en-US" ? "Primary references" : "官方参考"}
+                    </div>
+                    <h3>{locale === "en-US" ? "Settlement and observation references" : "结算与观测参考来源"}</h3>
+                  </div>
+                </div>
                 <p className="detail-source-note">
                   {locale === "en-US"
                     ? "AGENCY = national meteorological service, METAR = airport observation, AIRPORT = airport official page."
@@ -545,9 +629,7 @@ export function DetailPanel() {
                       target="_blank"
                       rel="noreferrer"
                     >
-                      <span className="detail-source-kind">
-                        {link.kind.toUpperCase()}
-                      </span>
+                      <span className="detail-source-kind">{link.kind.toUpperCase()}</span>
                       <span className="detail-source-label">{link.label}</span>
                     </a>
                   ))}
@@ -555,10 +637,17 @@ export function DetailPanel() {
               </section>
             ) : null}
 
-            <section className="detail-section rounded-2xl">
-              <h3>{t("detail.todayMiniTrend")}</h3>
+            <section className="detail-structured-section rounded-2xl">
+              <div className="detail-section-head">
+                <div>
+                  <div className="detail-section-kicker">
+                    {locale === "en-US" ? "Mini trend" : "温度微趋势"}
+                  </div>
+                  <h3>{t("detail.todayMiniTrend")}</h3>
+                </div>
+              </div>
               {heavyContentReady ? (
-                <DetailMiniTemperatureChart detail={detail!} />
+                <DetailMiniTemperatureChart detail={detail} />
               ) : (
                 <div className="detail-mini-meta">{t("detail.loading")}</div>
               )}

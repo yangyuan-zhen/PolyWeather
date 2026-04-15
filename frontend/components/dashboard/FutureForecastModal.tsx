@@ -1155,58 +1155,74 @@ export function FutureForecastModal() {
       ) : (
         <div className="modal-content large future-modal">
           <div className="modal-header">
-            <h2
-              id="future-modal-title"
-              className="future-modal-title-with-actions"
-            >
-              <span>
-                {isToday
-                  ? t("future.todayTitle", {
-                      city: detail.display_name.toUpperCase(),
-                    })
-                  : t("future.dateTitle", {
-                      city: detail.display_name.toUpperCase(),
-                      date: dateStr,
-                    })}
-              </span>
-              <button
-                className={clsx(
-                  "future-refresh-btn",
-                  isAnyLayerSyncing && "spinning",
-                )}
-                disabled={!isPro || isProLoading}
-                onClick={() => {
-                  if (isToday) {
-                    void store.openTodayModal(true);
-                    return;
-                  }
-                  store.openFutureModal(dateStr, true);
-                }}
-                title={
-                  !isPro
-                    ? locale === "en-US"
-                      ? "Pro subscription required"
-                      : "需要 Pro 订阅"
-                    : locale === "en-US"
-                      ? "Refresh Data"
-                      : "刷新数据"
-                }
+            <div className="modal-title-stack">
+              <div className="modal-overline">
+                <span>{locale === "en-US" ? "Analysis workspace" : "分析工作台"}</span>
+                <span className="modal-overline-sep">•</span>
+                <span>{detail.display_name.toUpperCase()}</span>
+              </div>
+              <h2
+                id="future-modal-title"
+                className="future-modal-title-with-actions"
               >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <span>
+                  {isToday
+                    ? t("future.todayTitle", {
+                        city: detail.display_name.toUpperCase(),
+                      })
+                    : t("future.dateTitle", {
+                        city: detail.display_name.toUpperCase(),
+                        date: dateStr,
+                      })}
+                </span>
+                <button
+                  className={clsx(
+                    "future-refresh-btn",
+                    isAnyLayerSyncing && "spinning",
+                  )}
+                  disabled={!isPro || isProLoading}
+                  onClick={() => {
+                    if (isToday) {
+                      void store.openTodayModal(true);
+                      return;
+                    }
+                    store.openFutureModal(dateStr, true);
+                  }}
+                  title={
+                    !isPro
+                      ? locale === "en-US"
+                        ? "Pro subscription required"
+                        : "需要 Pro 订阅"
+                      : locale === "en-US"
+                        ? "Refresh Data"
+                        : "刷新数据"
+                  }
                 >
-                  <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                  <path d="M3 3v5h5" />
-                </svg>
-              </button>
-            </h2>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </button>
+              </h2>
+              <div className="modal-subtitle">
+                {isToday
+                  ? locale === "en-US"
+                    ? "Base signal first, market and deep structure follow."
+                    : "先看基础信号，市场层和深度结构随后补齐。"
+                  : locale === "en-US"
+                    ? "Forward date view with phased model and structure sync."
+                    : "未来日期视图，模型层与结构层分阶段补齐。"}
+              </div>
+            </div>
             <button
               type="button"
               className="modal-close"
@@ -1237,18 +1253,7 @@ export function FutureForecastModal() {
               ))}
             </section>
             {isNoaaSettlement && (
-              <div
-                style={{
-                  marginBottom: "16px",
-                  padding: "12px 14px",
-                  border: "1px solid rgba(56, 189, 248, 0.24)",
-                  borderRadius: "12px",
-                  background: "rgba(14, 165, 233, 0.08)",
-                  color: "var(--text-secondary)",
-                  fontSize: "13px",
-                  lineHeight: 1.6,
-                }}
-              >
+              <div className="modal-callout modal-callout-info">
                 {locale === "en-US"
                   ? `${detail.display_name} now settles against NOAA ${noaaStationCode} (${noaaStationName}). The market uses the highest rounded whole-degree Celsius reading in the Temp column after the day is finalized.`
                   : `${detail.display_name} 当前按 NOAA ${noaaStationCode}（${noaaStationName}）结算。市场最终采用该日 Temp 列完成质控后的最高整度摄氏值，不按小数温度结算。`}
@@ -1491,19 +1496,29 @@ export function FutureForecastModal() {
 
                 <main className="future-v2-right">
                   <section className="future-modal-section future-v2-main-chart">
-                    <h3>
-                      {locale === "en-US"
-                        ? "Today's temperature forecast (obs + market)"
-                        : "今日气温预测（观测 + 市场）"}
-                    </h3>
+                    <div className="modal-section-heading">
+                      <div className="modal-section-kicker">
+                        {locale === "en-US" ? "Primary view" : "主视图"}
+                      </div>
+                      <h3>
+                        {locale === "en-US"
+                          ? "Today's temperature forecast (obs + market)"
+                          : "今日气温预测（观测 + 市场）"}
+                      </h3>
+                    </div>
                     <DailyTemperatureChart dateStr={dateStr} />
                   </section>
 
                   <div className="future-modal-grid">
                     <section className="future-modal-section">
-                      <h3>
-                        {locale === "en-US" ? "Current Hit Odds" : "当前命中胜率"}
-                      </h3>
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Probability layer" : "概率层"}
+                        </div>
+                        <h3>
+                          {locale === "en-US" ? "Current Hit Odds" : "当前命中胜率"}
+                        </h3>
+                      </div>
                       <div className="future-text-block" style={{ marginBottom: "12px" }}>
                         {probabilitySummary}
                       </div>
@@ -1516,9 +1531,14 @@ export function FutureForecastModal() {
                       </div>
                     </section>
                     <section className="future-modal-section">
-                      <h3>
-                        {locale === "en-US" ? "Model Range & Spread" : "模型区间与分歧"}
-                      </h3>
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Model layer" : "模型层"}
+                        </div>
+                        <h3>
+                          {locale === "en-US" ? "Model Range & Spread" : "模型区间与分歧"}
+                        </h3>
+                      </div>
                       <div className="future-text-block" style={{ marginBottom: "12px" }}>
                         {modelSummary}
                       </div>
@@ -1532,7 +1552,12 @@ export function FutureForecastModal() {
 
                   {showDeferredTodaySections ? (
                     <section className="future-modal-section">
-                      <h3>{t("future.structureToday")}</h3>
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Structure layer" : "结构层"}
+                        </div>
+                        <h3>{t("future.structureToday")}</h3>
+                      </div>
                       <div className="future-front-score">
                         <div className="future-front-bar" style={barStyle}>
                           <div
@@ -1691,7 +1716,12 @@ export function FutureForecastModal() {
                     </section>
                   ) : (
                     <section className="future-modal-section">
-                      <h3>{t("future.structureToday")}</h3>
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Structure layer" : "结构层"}
+                        </div>
+                        <h3>{t("future.structureToday")}</h3>
+                      </div>
                       <div className="future-trend-summary future-trend-summary-muted">
                         {locale === "en-US"
                           ? "Surface structure, upper-air diagnostics, and trade commentary are loading after the primary chart."

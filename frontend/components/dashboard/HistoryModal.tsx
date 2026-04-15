@@ -228,30 +228,40 @@ export function HistoryModal() {
       ) : (
         <div className="modal-content history-modal">
           <div className="modal-header">
-            <h2 id="history-modal-title">
-              {t("history.title", {
-                city: store.selectedCity?.toUpperCase() || "",
-              })}
-            </h2>
-            {meta?.mode === "preview" ? (
-              <div
-                style={{
-                  color: "var(--text-muted)",
-                  fontSize: "12px",
-                  marginLeft: "12px",
-                }}
-              >
-                {isRecordsLoading
-                  ? locale === "en-US"
-                    ? "Loading full records in background..."
-                    : "完整历史正在后台补齐..."
-                  : meta.hasMore
-                    ? locale === "en-US"
-                      ? `Preview ${meta.previewCount}/${meta.fullCount}`
-                      : `预览 ${meta.previewCount}/${meta.fullCount}`
-                    : null}
+            <div className="modal-title-stack">
+              <div className="modal-overline">
+                <span>{locale === "en-US" ? "Audit workspace" : "对账工作台"}</span>
+                <span className="modal-overline-sep">•</span>
+                <span>{store.selectedCity?.toUpperCase() || ""}</span>
               </div>
-            ) : null}
+              <h2 id="history-modal-title">
+                {t("history.title", {
+                  city: store.selectedCity?.toUpperCase() || "",
+                })}
+              </h2>
+              <div className="modal-subtitle">
+                {locale === "en-US"
+                  ? "Observed highs, DEB path, and historical baseline consistency."
+                  : "查看实测最高温、DEB 路径与历史基线是否一致。"}
+              </div>
+              {meta?.mode === "preview" ? (
+                <div className="modal-header-meta">
+                  <span className="modal-meta-pill">
+                    {isRecordsLoading
+                      ? locale === "en-US"
+                        ? "Full records syncing"
+                        : "完整记录补齐中"
+                      : meta.hasMore
+                        ? locale === "en-US"
+                          ? `Preview ${meta.previewCount}/${meta.fullCount}`
+                          : `预览 ${meta.previewCount}/${meta.fullCount}`
+                        : locale === "en-US"
+                          ? "Full set loaded"
+                          : "完整记录已到齐"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
             <button
               type="button"
               className="modal-close"
@@ -263,18 +273,7 @@ export function HistoryModal() {
           </div>
           <div className="modal-body">
             {isNoaaSettlement && (
-              <div
-                style={{
-                  marginBottom: "16px",
-                  padding: "12px 14px",
-                  border: "1px solid rgba(56, 189, 248, 0.24)",
-                  borderRadius: "12px",
-                  background: "rgba(14, 165, 233, 0.08)",
-                  color: "var(--text-secondary)",
-                  fontSize: "13px",
-                  lineHeight: 1.6,
-                }}
-              >
+              <div className="modal-callout modal-callout-info">
                 {t("lang") === "en-US"
                   ? `${store.selectedDetail?.display_name || store.selectedCity || "This city"} historical actuals are aligned to NOAA ${noaaStationCode} (${noaaStationName}) settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized.`
                   : `${store.selectedDetail?.display_name || store.selectedCity || "该城市"}历史对账已按 NOAA ${noaaStationCode}（${noaaStationName}）结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。`}
@@ -316,6 +315,21 @@ export function HistoryModal() {
               </div>
             ) : (
               <>
+                <div className="modal-section-heading">
+                  <div className="modal-section-kicker">
+                    {locale === "en-US" ? "Performance snapshot" : "表现快照"}
+                  </div>
+                  <h3>
+                    {locale === "en-US"
+                      ? "Recent settlement performance"
+                      : "近期结算表现"}
+                  </h3>
+                  <div className="modal-section-note">
+                    {locale === "en-US"
+                      ? "Hit rate, MAE, and baseline comparison across recent settled days."
+                      : "查看近期已结算样本里的命中率、误差与基线对照。"}
+                  </div>
+                </div>
                 <div className="history-stats">
                   {error ? (
                 <span style={{ color: "var(--accent-red)" }}>
@@ -371,10 +385,20 @@ export function HistoryModal() {
                 {!error && <HistoryChart />}
                 {!error && settledPeakRows.length > 0 && (
               <div className="history-peak-reference">
-                <div className="history-peak-reference-title">
-                  {locale === "en-US"
-                    ? "Peak-12h DEB Reference (Approx.)"
-                    : "峰值前 12 小时 DEB 参考（近似）"}
+                <div className="modal-section-heading">
+                  <div className="modal-section-kicker">
+                    {locale === "en-US" ? "Reference table" : "参考表"}
+                  </div>
+                  <div className="history-peak-reference-title">
+                    {locale === "en-US"
+                      ? "Peak-12h DEB Reference (Approx.)"
+                      : "峰值前 12 小时 DEB 参考（近似）"}
+                  </div>
+                  <div className="modal-section-note">
+                    {locale === "en-US"
+                      ? "Use peak-minus-12h DEB as a fast sanity check for settled highs."
+                      : "用峰值前 12 小时的 DEB 作为历史结算高温的快速校验。"}
+                  </div>
                 </div>
                 <div className="history-peak-reference-scroll">
                   {settledPeakRows.map((row) => (

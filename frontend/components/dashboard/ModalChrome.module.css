@@ -1,0 +1,82 @@
+.root :global(.modal-title-stack) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.modal-overline) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.root :global(.modal-overline-sep) {
+  opacity: 0.5;
+}
+
+.root :global(.modal-subtitle) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.root :global(.modal-header-meta) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.modal-meta-pill) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.root :global(.modal-callout) {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.root :global(.modal-callout-info) {
+  border-color: rgba(56, 189, 248, 0.24);
+  background: rgba(14, 165, 233, 0.08);
+}
+
+.root :global(.modal-section-heading) {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.root :global(.modal-section-kicker) {
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.root :global(.modal-section-note) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+

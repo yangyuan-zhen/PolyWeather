@@ -1,7 +1,10 @@
 "use client";
+import clsx from "clsx";
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import styles from "./Dashboard.module.css";
+import detailChromeStyles from "./DetailPanelChrome.module.css";
+import modalChromeStyles from "./ModalChrome.module.css";
 import {
   DashboardStoreProvider,
   useDashboardStore,
@@ -92,7 +95,13 @@ function DashboardScreen() {
     !activeSummary;
 
   return (
-    <div className={styles.root}>
+    <div
+      className={clsx(
+        styles.root,
+        detailChromeStyles.root,
+        modalChromeStyles.root,
+      )}
+    >
       <MapCanvas />
       <HeaderBar />
       <CitySidebar />
