@@ -53,6 +53,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "taipei": ["RCSS", "RCTP"],
         "chengdu": ["ZUUU", "ZUTF"],
         "chongqing": ["ZUCK", "ZUPS"],
+        "guangzhou": ["ZGGG", "ZGSZ"],
         "shenzhen": ["ZGSZ", "ZGGG"],
         "beijing": ["ZBAA", "ZBAD"],
         "wuhan": ["ZHHH", "ZHES"],

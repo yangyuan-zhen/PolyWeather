@@ -20,6 +20,7 @@ DEFAULT_CITIES = [
     "shanghai",
     "beijing",
     "shenzhen",
+    "guangzhou",
     "wuhan",
     "chengdu",
     "chongqing",

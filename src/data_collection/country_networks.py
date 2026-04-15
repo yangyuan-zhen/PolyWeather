@@ -10,6 +10,7 @@ CHINA_CMA_CITIES = {
     "beijing",
     "chengdu",
     "chongqing",
+    "guangzhou",
     "shanghai",
     "shenzhen",
     "wuhan",

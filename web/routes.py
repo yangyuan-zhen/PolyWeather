@@ -76,6 +76,7 @@ DEFAULT_PREWARM_CITIES = [
     "shanghai",
     "beijing",
     "shenzhen",
+    "guangzhou",
     "wuhan",
     "chengdu",
     "chongqing",

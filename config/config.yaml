@@ -81,6 +81,11 @@ cities:
   country: China
   latitude: 22.6393
   longitude: 113.8107
+- id: guangzhou
+  city: Guangzhou
+  country: China
+  latitude: 23.3924
+  longitude: 113.2988
 - id: beijing
   city: Beijing
   country: China
