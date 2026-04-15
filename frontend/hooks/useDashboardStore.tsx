@@ -233,6 +233,18 @@ function hasMeaningfulDailyModelMap(
   );
 }
 
+function pickPreferredNearbyStations(
+  currentValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
+  incomingValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
+) {
+  const currentList = Array.isArray(currentValue) ? currentValue : [];
+  const incomingList = Array.isArray(incomingValue) ? incomingValue : [];
+  if (incomingList.length > 0) {
+    return incomingList;
+  }
+  return currentList;
+}
+
 function mergeCityDetail(
   current: CityDetail | undefined,
   incoming: CityDetail,
@@ -264,8 +276,14 @@ function mergeCityDetail(
         }
       : current.multi_model_daily,
     forecast: current.forecast || incoming.forecast,
-    official_nearby: current.official_nearby || incoming.official_nearby,
-    mgm_nearby: current.mgm_nearby || incoming.mgm_nearby,
+    official_nearby: pickPreferredNearbyStations(
+      current.official_nearby,
+      incoming.official_nearby,
+    ),
+    mgm_nearby: pickPreferredNearbyStations(
+      current.mgm_nearby,
+      incoming.mgm_nearby,
+    ),
     network_lead_signal:
       current.network_lead_signal || incoming.network_lead_signal,
     airport_vs_network_delta:
