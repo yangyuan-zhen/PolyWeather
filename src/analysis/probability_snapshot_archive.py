@@ -7,7 +7,6 @@ from typing import Any, Dict, List, Optional
 
 from src.database.runtime_state import (
     ProbabilitySnapshotRepository,
-    STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
     TrainingFeatureRecordRepository,
     get_state_storage_mode,
@@ -105,7 +104,7 @@ def load_snapshot_rows_for_day(
     root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     path = archive_path or os.path.join(root_dir, "data", "probability_training_snapshots.jsonl")
     if not os.path.exists(path):
-        if mode == STATE_STORAGE_DUAL:
+        if mode == STATE_STORAGE_SQLITE:
             return _snapshot_repo.load_rows_by_city_date(city_key, date_key)
         return []
 
@@ -260,7 +259,7 @@ def append_probability_snapshot(
         return
 
     mode = get_state_storage_mode()
-    if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+    if mode == STATE_STORAGE_SQLITE:
         _snapshot_repo.append_snapshot(payload)
         _training_feature_repo.upsert_record(
             city_key,

@@ -1,20 +1,20 @@
 {
-  "version": "emos-20260402162744",
-  "trained_at": "2026-04-02T16:27:44.114836+00:00",
+  "version": "emos-20260415164136",
+  "trained_at": "2026-04-15T16:41:36.704829+00:00",
   "global": {
     "mu": {
-      "intercept": 1.54512641,
-      "raw_mu_coef": 2.96105052,
-      "deb_coef": -1.53260815,
-      "ens_median_coef": -0.72849343,
-      "max_so_far_gap_coef": 9.52557689
+      "intercept": -0.39094186,
+      "raw_mu_coef": 0.27476248,
+      "deb_coef": 0.91159557,
+      "ens_median_coef": -0.16959018,
+      "max_so_far_gap_coef": -0.94232523
     },
     "sigma": {
-      "intercept": 0.67432479,
-      "raw_sigma_coef": 0.6936692,
-      "spread_coef": 0.08877484,
-      "peak_flag_coef": -0.58374835,
-      "max_so_far_gap_coef": -0.8172477
+      "intercept": -1.56485068,
+      "raw_sigma_coef": 0.12930442,
+      "spread_coef": 0.15947819,
+      "peak_flag_coef": 0.19328621,
+      "max_so_far_gap_coef": -0.08469752
     }
   },
   "sigma_constraints": {
@@ -29,60 +29,54 @@
     "max_bucket_brier_increase": 0.05
   },
   "blending": {
-    "alpha_mu": 0.0,
-    "alpha_sigma": 0.05
+    "alpha_mu": 1.0,
+    "alpha_sigma": 0.5
   },
   "cities": {
-    "ankara": {
-      "samples": 3,
-      "mu_bias": 1.271844,
-      "sigma_scale": 1.477644,
-      "confidence": 0.375
-    },
-    "hong kong": {
+    "tokyo": {
       "samples": 4,
-      "mu_bias": 1.32008,
-      "sigma_scale": 1.04023,
+      "mu_bias": 0.211244,
+      "sigma_scale": 0.5,
       "confidence": 0.5
     },
-    "milan": {
-      "samples": 3,
-      "mu_bias": -3.935178,
-      "sigma_scale": 2.0,
-      "confidence": 0.375
+    "ankara": {
+      "samples": 11,
+      "mu_bias": 0.027471,
+      "sigma_scale": 0.5,
+      "confidence": 1.0
     },
-    "shanghai": {
-      "samples": 3,
-      "mu_bias": 1.810495,
-      "sigma_scale": 2.0,
-      "confidence": 0.375
+    "istanbul": {
+      "samples": 12,
+      "mu_bias": 0.048913,
+      "sigma_scale": 0.5,
+      "confidence": 1.0
+    },
+    "hong kong": {
+      "samples": 12,
+      "mu_bias": -0.026823,
+      "sigma_scale": 1.020494,
+      "confidence": 1.0
     },
     "taipei": {
-      "samples": 3,
-      "mu_bias": 3.577828,
-      "sigma_scale": 2.0,
-      "confidence": 0.375
-    },
-    "warsaw": {
-      "samples": 3,
-      "mu_bias": -0.625333,
-      "sigma_scale": 1.25968,
-      "confidence": 0.375
+      "samples": 5,
+      "mu_bias": 0.192719,
+      "sigma_scale": 0.5,
+      "confidence": 0.625
     }
   },
   "metrics": {
-    "sample_count": 54,
-    "mean_crps": 3.792563,
-    "legacy_mean_crps": 4.308029,
-    "legacy_mean_mae": 4.51037,
-    "legacy_bucket_hit_rate": 0.537037,
-    "legacy_bucket_brier": 0.833294,
-    "selected_mean_crps": 4.249828,
-    "selected_mean_mae": 4.51037,
-    "selected_bucket_hit_rate": 0.555556,
-    "selected_bucket_brier": 0.831872,
-    "selected_score": 5.991436,
-    "legacy_score": 6.078481,
+    "sample_count": 50,
+    "mean_crps": 0.278798,
+    "legacy_mean_crps": 1.26525,
+    "legacy_mean_mae": 1.4674,
+    "legacy_bucket_hit_rate": 0.54,
+    "legacy_bucket_brier": 0.744518,
+    "selected_mean_crps": 0.278798,
+    "selected_mean_mae": 0.248457,
+    "selected_bucket_hit_rate": 0.82,
+    "selected_bucket_brier": 0.369542,
+    "selected_score": 0.8508,
+    "legacy_score": 2.660378,
     "filled_actual_from_history": 0,
     "settlement_history_city_count": 30
   },

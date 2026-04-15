@@ -12,7 +12,6 @@ from loguru import logger
 
 from src.database.runtime_state import (
     OfficialIntradayObservationRepository,
-    STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
     get_state_storage_mode,
 )
@@ -183,7 +182,7 @@ class SettlementSourceMixin:
         date_str = local_dt.strftime("%Y-%m-%d")
         time_str = local_dt.strftime("%H:%M")
         mode = get_state_storage_mode()
-        if mode not in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+        if mode != STATE_STORAGE_SQLITE:
             return [{"time": time_str, "temp": round(float(current_temp), 1)}]
 
         lock = self._get_settlement_series_lock()

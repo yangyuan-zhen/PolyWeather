@@ -10,7 +10,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from loguru import logger
 
 from src.database.runtime_state import (
-    STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
     TelegramAlertStateRepository,
     get_state_storage_mode,
@@ -208,11 +207,6 @@ def _load_state(path: str) -> Dict[str, Any]:
         except Exception as exc:
             logger.error(f"failed to load telegram push state from sqlite: {exc}")
     if not os.path.exists(path):
-        if mode == STATE_STORAGE_DUAL:
-            try:
-                return _telegram_state_repo.load_state()
-            except Exception:
-                return {"last_by_city": {}, "by_signature": {}}
         return {"last_by_city": {}, "by_signature": {}}
     try:
         with open(path, "r", encoding="utf-8") as fh:
@@ -228,7 +222,7 @@ def _load_state(path: str) -> Dict[str, Any]:
 
 def _save_state(path: str, state: Dict[str, Any]) -> None:
     mode = get_state_storage_mode()
-    if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+    if mode == STATE_STORAGE_SQLITE:
         _telegram_state_repo.save_state(state)
     if mode == STATE_STORAGE_SQLITE:
         return

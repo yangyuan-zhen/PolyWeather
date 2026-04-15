@@ -289,13 +289,14 @@ def build_training_samples(
     history_data: Optional[Dict[str, Any]] = None,
     snapshot_index: Optional[Dict[Tuple[str, str], Dict[str, Any]]] = None,
 ) -> List[Dict[str, Any]]:
+    mode = get_state_storage_mode()
     if isinstance(history_data, dict):
         runtime_history = history_data
-    elif get_state_storage_mode() == STATE_STORAGE_SQLITE:
+    elif mode == STATE_STORAGE_SQLITE:
         runtime_history = DailyRecordRepository().load_all()
     else:
         runtime_history = load_history(_history_file_path())
-    if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+    if mode == STATE_STORAGE_SQLITE:
         truth_history = TruthRecordRepository().load_all()
         training_feature_history = TrainingFeatureRecordRepository().load_all()
     else:

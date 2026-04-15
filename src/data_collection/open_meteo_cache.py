@@ -7,7 +7,6 @@ import time
 from loguru import logger
 from src.database.runtime_state import (
     OpenMeteoCacheRepository,
-    STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
     get_state_storage_mode,
 )
@@ -77,7 +76,7 @@ class OpenMeteoCacheMixin:
             self._disk_cache_last_mtime = current_mtime
             if loaded:
                 logger.info(f"✅ 从磁盘加载 Open-Meteo 缓存 {loaded} 条 ({self._disk_cache_path})")
-            if mode == STATE_STORAGE_DUAL:
+            if mode == STATE_STORAGE_SQLITE:
                 try:
                     _open_meteo_cache_repo.replace_payload(saved, self._disk_cache_max_age_sec)
                 except Exception as exc:
@@ -124,7 +123,7 @@ class OpenMeteoCacheMixin:
                 "multi_model": multi_model_snapshot,
                 "saved_at": time.time(),
             }
-            if mode in {STATE_STORAGE_DUAL, STATE_STORAGE_SQLITE}:
+            if mode == STATE_STORAGE_SQLITE:
                 _open_meteo_cache_repo.replace_payload(payload, self._disk_cache_max_age_sec)
                 self._disk_cache_last_mtime = _open_meteo_cache_repo.latest_updated_at()
             if mode != STATE_STORAGE_SQLITE:

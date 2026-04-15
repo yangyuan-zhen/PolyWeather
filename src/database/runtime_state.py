@@ -16,9 +16,9 @@ from src.database.db_manager import DBManager
 STATE_STORAGE_FILE = "file"
 STATE_STORAGE_DUAL = "dual"
 STATE_STORAGE_SQLITE = "sqlite"
+DEFAULT_STATE_STORAGE_MODE = STATE_STORAGE_SQLITE
 VALID_STATE_STORAGE_MODES = {
     STATE_STORAGE_FILE,
-    STATE_STORAGE_DUAL,
     STATE_STORAGE_SQLITE,
 }
 
@@ -26,12 +26,17 @@ _LOGGED_MODES: set[str] = set()
 
 
 def get_state_storage_mode() -> str:
-    raw = str(os.getenv("POLYWEATHER_STATE_STORAGE_MODE") or STATE_STORAGE_DUAL).strip().lower()
+    raw = str(os.getenv("POLYWEATHER_STATE_STORAGE_MODE") or DEFAULT_STATE_STORAGE_MODE).strip().lower()
+    if raw == STATE_STORAGE_DUAL:
+        logger.warning(
+            f"POLYWEATHER_STATE_STORAGE_MODE={STATE_STORAGE_DUAL!r} is deprecated, normalize to {STATE_STORAGE_SQLITE}"
+        )
+        raw = STATE_STORAGE_SQLITE
     if raw not in VALID_STATE_STORAGE_MODES:
         logger.warning(
-            f"invalid POLYWEATHER_STATE_STORAGE_MODE={raw!r}, fallback to {STATE_STORAGE_DUAL}"
+            f"invalid POLYWEATHER_STATE_STORAGE_MODE={raw!r}, fallback to {DEFAULT_STATE_STORAGE_MODE}"
         )
-        raw = STATE_STORAGE_DUAL
+        raw = DEFAULT_STATE_STORAGE_MODE
     if raw not in _LOGGED_MODES:
         logger.info(f"runtime state storage mode={raw}")
         _LOGGED_MODES.add(raw)

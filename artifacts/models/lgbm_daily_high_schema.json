@@ -42,25 +42,25 @@
     "nws"
   ],
   "model_path": "artifacts\\models\\lgbm_daily_high.txt",
-  "sample_count": 54,
-  "train_count": 42,
+  "sample_count": 18,
+  "train_count": 6,
   "validation_count": 12,
   "metrics": {
     "validation": {
       "sample_count": 12,
-      "lgbm_mae": 1.349,
-      "deb_mae": 0.875,
-      "best_single_mae": 0.325,
-      "median_mae": 0.758
+      "lgbm_mae": 7.992,
+      "deb_mae": 2.375,
+      "best_single_mae": 1.05,
+      "median_mae": 2.292
     },
     "full_sample": {
-      "sample_count": 54,
-      "lgbm_mae": 0.691,
-      "deb_mae": 6.287,
-      "best_single_mae": 5.431,
-      "median_mae": 6.265
+      "sample_count": 18,
+      "lgbm_mae": 3.034,
+      "deb_mae": 1.689,
+      "best_single_mae": 0.822,
+      "median_mae": 1.711
     }
   },
-  "generated_at": "2026-04-02T16:27:44.816882Z",
-  "trained_at": "2026-04-02T16:27:44.816882Z"
+  "generated_at": "2026-04-15T16:41:56.814421Z",
+  "trained_at": "2026-04-15T16:41:56.814421Z"
 }
