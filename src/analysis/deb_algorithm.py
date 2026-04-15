@@ -882,8 +882,8 @@ def update_daily_record(
     except Exception as e:
         logger.error(f"Error persisting training feature record city={city_name} date={date_str}: {e}")
 
-    # 自动清理：只保留最近 14 天的记录（DEB 只用 7 天，14 天留足余量）
-    cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+    # 自动清理：训练特征需要更长窗口，保留最近 180 天的记录
+    cutoff = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
     for city in list(data.keys()):
         old_dates = [d for d in data[city] if d < cutoff]
         for d in old_dates:
@@ -892,7 +892,7 @@ def update_daily_record(
     if mode == STATE_STORAGE_SQLITE:
         try:
             _daily_record_repo.upsert_record(city_name, date_str, existing)
-            cutoff = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
+            cutoff = (datetime.now() - timedelta(days=180)).strftime("%Y-%m-%d")
             _daily_record_repo.delete_older_than(cutoff)
         except Exception as e:
             logger.error(f"Error upserting daily record to sqlite city={city_name} date={date_str}: {e}")

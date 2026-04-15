@@ -18,9 +18,14 @@ from src.analysis.settlement_rounding import apply_city_settlement  # noqa: E402
 from scripts.fit_probability_calibration import (  # noqa: E402
     _default_history_arg,
     _extract_samples,
+    _load_history_with_fallback,
     _load_json_if_exists,
+    _load_legacy_training_samples,
+    _load_snapshot_rows,
+    _load_training_feature_history,
+    _load_truth_history,
+    merge_samples_with_legacy_archive,
 )
-from src.analysis.deb_algorithm import load_history  # noqa: E402
 
 
 def _mean(values):
@@ -93,12 +98,20 @@ def main():
     )
     args = parser.parse_args()
 
-    history = load_history(args.history_file)
+    history = _load_history_with_fallback(args.history_file)
+    training_feature_history = _load_training_feature_history()
+    truth_history = _load_truth_history()
     settlement_history = _load_json_if_exists(args.settlement_history)
+    snapshot_rows = _load_snapshot_rows(None)
+    legacy_training_samples = _load_legacy_training_samples()
     samples, filled_actual_from_history = _extract_samples(
         history,
+        training_feature_history=training_feature_history,
+        truth_history=truth_history,
         settlement_history=settlement_history,
+        snapshot_rows=snapshot_rows,
     )
+    samples = merge_samples_with_legacy_archive(samples, legacy_training_samples)
 
     legacy_crps = []
     emos_crps = []

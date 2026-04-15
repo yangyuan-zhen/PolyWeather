@@ -42,6 +42,15 @@ def _load_json_if_exists(path):
     return data if isinstance(data, dict) else {}
 
 
+def _legacy_training_samples_path():
+    return os.path.join(
+        PROJECT_ROOT,
+        "artifacts",
+        "probability_calibration",
+        "training_samples.json",
+    )
+
+
 def _legacy_history_path():
     return os.path.join(PROJECT_ROOT, "data", "daily_records.json")
 
@@ -105,6 +114,14 @@ def _load_snapshot_rows(path):
             if isinstance(row, dict):
                 rows.append(row)
     return rows
+
+
+def _load_legacy_training_samples(path=None):
+    payload = _load_json_if_exists(path or _legacy_training_samples_path())
+    rows = payload.get("samples") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [row for row in rows if isinstance(row, dict)]
 
 
 def _actual_high_for(history, truth_history, settlement_history, city, date_str):
@@ -327,6 +344,40 @@ def _extract_samples(history, training_feature_history=None, truth_history=None,
     return snapshot_samples + daily_samples, snapshot_filled + daily_filled
 
 
+def merge_samples_with_legacy_archive(samples, legacy_samples=None):
+    merged = []
+    seen = set()
+    for sample in samples or []:
+        if not isinstance(sample, dict):
+            continue
+        key = (
+            str(sample.get("city") or "").strip().lower(),
+            str(sample.get("date") or "").strip(),
+            str(sample.get("sample_source") or "").strip().lower(),
+        )
+        if not key[0] or not key[1]:
+            continue
+        if key in seen:
+            continue
+        merged.append(sample)
+        seen.add(key)
+    for sample in legacy_samples or []:
+        if not isinstance(sample, dict):
+            continue
+        key = (
+            str(sample.get("city") or "").strip().lower(),
+            str(sample.get("date") or "").strip(),
+            str(sample.get("sample_source") or "").strip().lower(),
+        )
+        if not key[0] or not key[1]:
+            continue
+        if key in seen:
+            continue
+        merged.append(sample)
+        seen.add(key)
+    return merged
+
+
 def main():
     parser = argparse.ArgumentParser(description="Fit PolyWeather probability calibration parameters.")
     parser.add_argument(
@@ -366,6 +417,7 @@ def main():
     truth_history = _load_truth_history()
     settlement_history = _load_json_if_exists(args.settlement_history)
     snapshot_rows = _load_snapshot_rows(args.snapshot_file)
+    legacy_training_samples = _load_legacy_training_samples()
     samples, filled_actual_from_history = _extract_samples(
         history,
         training_feature_history=training_feature_history,
@@ -373,6 +425,7 @@ def main():
         settlement_history=settlement_history,
         snapshot_rows=snapshot_rows,
     )
+    samples = merge_samples_with_legacy_archive(samples, legacy_training_samples)
     calibration = fit_calibration(samples, version=args.version)
     if not samples:
         calibration = default_calibration_payload(
@@ -382,6 +435,7 @@ def main():
     calibration.setdefault("metrics", {})
     calibration["metrics"]["filled_actual_from_history"] = filled_actual_from_history
     calibration["metrics"]["settlement_history_city_count"] = len(settlement_history)
+    calibration["metrics"]["legacy_archive_samples"] = len(legacy_training_samples)
     try:
         calibration["source"] = os.path.relpath(args.output, PROJECT_ROOT)
     except ValueError:
