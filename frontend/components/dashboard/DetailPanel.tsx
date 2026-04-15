@@ -9,7 +9,6 @@ import { useChart } from "@/hooks/useChart";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
-import { getCityScenery } from "@/lib/dashboard-scenery";
 import { CityDetail } from "@/lib/dashboard-types";
 import { trackAppEvent } from "@/lib/app-analytics";
 import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
@@ -181,7 +180,6 @@ export function DetailPanel() {
     () => getTodayPolymarketUrl(detail, locale),
     [detail, locale],
   );
-  const scenery = getCityScenery(detail?.name);
   const weatherSummary = detail
     ? getWeatherSummary(detail, locale)
     : { weatherIcon: "", weatherText: "" };
@@ -335,7 +333,7 @@ export function DetailPanel() {
         >
           ×
         </button>
-        <div className="panel-title-area">
+          <div className="panel-title-area">
           <div className="panel-title-stack">
             <div className="panel-overline">
               <span>{locale === "en-US" ? "City briefing" : "城市简报"}</span>
@@ -343,15 +341,6 @@ export function DetailPanel() {
               <span>{panelDisplayName.toUpperCase()}</span>
             </div>
             <h2>{panelDisplayName}</h2>
-            <div className="panel-subtitle">
-              {detail
-                ? locale === "en-US"
-                  ? "Primary settlement posture and local evidence."
-                  : "先看当前口径，再补结算证据与周边对照。"
-                : locale === "en-US"
-                  ? "Summary first. Deep detail fills in automatically."
-                  : "基础快照先到，深度内容随后补齐。"}
-            </div>
           </div>
           {store.loadingState.cityDetail && (
             <div className="panel-loading-hint" role="status" aria-live="polite">
@@ -518,14 +507,6 @@ export function DetailPanel() {
         ) : (
           <>
             <section className="detail-summary-shell">
-              <div className="detail-section-head">
-                <div>
-                  <div className="detail-section-kicker">
-                    {locale === "en-US" ? "Settlement snapshot" : "结算快照"}
-                  </div>
-                  <h3>{locale === "en-US" ? "Start from the active settlement posture." : "先看当前结算姿态，再判断偏差和风险。"}</h3>
-                </div>
-              </div>
               <div className="detail-summary-main">
                 <article className="detail-card detail-card-hero">
                   <span className="detail-label">{locale === "en-US" ? "Current reading" : "当前读数"}</span>
@@ -555,37 +536,6 @@ export function DetailPanel() {
                   </article>
                 </div>
               </div>
-            </section>
-
-            <section className="detail-scenery-card">
-              {scenery ? (
-                <>
-                  <img
-                    className="detail-scenery-image"
-                    src={scenery.imageUrl}
-                    alt={t("detail.sceneryAlt", { city: detail.display_name || "" })}
-                  />
-                  <div className="detail-scenery-overlay">
-                    <div className="detail-scenery-copy">
-                      <span className="detail-scenery-kicker">{detail.display_name}</span>
-                    </div>
-                    <a
-                      className="detail-scenery-credit"
-                      href={scenery.creditUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {scenery.creditLabel}
-                    </a>
-                  </div>
-                </>
-              ) : (
-                <div className="detail-scenery-fallback">
-                  <span className="detail-scenery-kicker">{detail.display_name}</span>
-                  <strong className="detail-scenery-title">{t("detail.sceneryTitle")}</strong>
-                  <span className="detail-scenery-subtitle">{t("detail.sceneryFallback")}</span>
-                </div>
-              )}
             </section>
 
             <section className="detail-structured-section">
