@@ -2,6 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
+import { Clock } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { CityListItem, DeviationMonitor } from "@/lib/dashboard-types";
@@ -71,8 +72,7 @@ export function CitySidebar() {
         const aSamples = Number(a.deb_recent_sample_count ?? 0);
         const bSamples = Number(b.deb_recent_sample_count ?? 0);
         return (
-          (riskOrder[aGroup] ?? 3) -
-            (riskOrder[bGroup] ?? 3) ||
+          (riskOrder[aGroup] ?? 3) - (riskOrder[bGroup] ?? 3) ||
           bHitRate - aHitRate ||
           bSamples - aSamples ||
           a.display_name.localeCompare(b.display_name)
@@ -126,8 +126,7 @@ export function CitySidebar() {
 
   const formatDeviationText = (monitor?: DeviationMonitor | null) => {
     if (!monitor?.available) return "";
-    const label =
-      locale === "en-US" ? monitor.label_en : monitor.label_zh;
+    const label = locale === "en-US" ? monitor.label_en : monitor.label_zh;
     const trendLabel =
       locale === "en-US" ? monitor.trend_label_en : monitor.trend_label_zh;
     if (!label) return "";
@@ -170,10 +169,20 @@ export function CitySidebar() {
                   }))
                 }
               >
-                <span className="city-group-title">{group.label}</span>
+                <span className="city-group-title">
+                  <span
+                    className={clsx("city-group-indicator", group.key)}
+                    aria-hidden="true"
+                  />
+                  {group.label}
+                </span>
                 <span className="city-group-meta">
-                  <span className="city-group-count">{citiesInGroup.length}</span>
-                  <span className={clsx("city-group-arrow", expanded && "expanded")}>
+                  <span className="city-group-count">
+                    {citiesInGroup.length}
+                  </span>
+                  <span
+                    className={clsx("city-group-arrow", expanded && "expanded")}
+                  >
                     ▾
                   </span>
                 </span>
@@ -203,7 +212,9 @@ export function CitySidebar() {
                           time: detail.current.max_temp_time,
                         })
                       : detail?.current?.max_temp_time
-                        ? t("sidebar.peakAt", { time: detail.current.max_temp_time })
+                        ? t("sidebar.peakAt", {
+                            time: detail.current.max_temp_time,
+                          })
                         : "";
                   const deviationDirection =
                     snapshot?.deviation_monitor?.direction || "normal";
@@ -225,7 +236,9 @@ export function CitySidebar() {
                     >
                       <div className="city-item-main">
                         <span className={clsx("risk-dot", performanceTier)} />
-                        <span className="city-name-text">{city.display_name}</span>
+                        <span className="city-name-text">
+                          {city.display_name}
+                        </span>
                         <span
                           className={clsx(
                             "city-temp",
@@ -238,7 +251,18 @@ export function CitySidebar() {
 
                       <div className="city-item-info">
                         <span className="city-local-time">
-                          {snapshot?.local_time ? `🕒 ${snapshot.local_time}` : ""}
+                          {snapshot?.local_time ? (
+                            <>
+                              <Clock
+                                size={10}
+                                strokeWidth={2}
+                                className="city-clock-icon"
+                              />
+                              {snapshot.local_time}
+                            </>
+                          ) : (
+                            ""
+                          )}
                         </span>
                         <span
                           className={clsx(

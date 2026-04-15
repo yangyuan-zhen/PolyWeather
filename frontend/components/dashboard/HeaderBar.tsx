@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LogIn, UserRound } from "lucide-react";
+import { LogIn, UserRound, RotateCw, BookOpen, Sparkles } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -29,12 +29,16 @@ export function HeaderBar() {
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
   const trialPromoLabel =
-    locale === "en-US" ? "New users get 3-day Pro trial" : "新用户可免费体验 3 天 Pro";
+    locale === "en-US"
+      ? "New users get 3-day Pro trial"
+      : "新用户可免费体验 3 天 Pro";
 
   const accountHref = isAuthenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const accountLabel = isAuthenticated ? t("header.account") : t("header.signIn");
+  const accountLabel = isAuthenticated
+    ? t("header.account")
+    : t("header.signIn");
   const accountAria = isAuthenticated
     ? t("header.accountAria")
     : t("header.signInAria");
@@ -49,12 +53,10 @@ export function HeaderBar() {
   const showRenewReminder =
     isAuthenticated &&
     !store.proAccess.loading &&
-    (
-      (store.proAccess.subscriptionActive &&
-        expiryInfo &&
-        expiryInfo.daysLeft <= 3) ||
-      (!store.proAccess.subscriptionActive && Boolean(expiryInfo))
-    );
+    ((store.proAccess.subscriptionActive &&
+      expiryInfo &&
+      expiryInfo.daysLeft <= 3) ||
+      (!store.proAccess.subscriptionActive && Boolean(expiryInfo)));
   const renewReminderLabel = !showRenewReminder
     ? ""
     : !store.proAccess.subscriptionActive
@@ -81,7 +83,11 @@ export function HeaderBar() {
       </div>
 
       <div className="header-right">
-        <div className="lang-switch" role="group" aria-label={t("header.langAria")}>
+        <div
+          className="lang-switch"
+          role="group"
+          aria-label={t("header.langAria")}
+        >
           <button
             type="button"
             className={clsx("lang-btn", locale === "zh-CN" && "active")}
@@ -104,6 +110,7 @@ export function HeaderBar() {
           title={t("header.docsAria")}
           aria-label={t("header.docsAria")}
         >
+          <BookOpen size={14} strokeWidth={2} />
           {t("header.docs")}
         </Link>
 
@@ -113,6 +120,7 @@ export function HeaderBar() {
           title={trialPromoLabel}
           aria-label={trialPromoLabel}
         >
+          <Sparkles size={12} strokeWidth={2} />
           <span>{trialPromoLabel}</span>
         </Link>
 
@@ -147,12 +155,15 @@ export function HeaderBar() {
 
         <button
           type="button"
-          className={clsx("refresh-btn", store.loadingState.refresh && "spinning")}
+          className={clsx(
+            "refresh-btn",
+            store.loadingState.refresh && "spinning",
+          )}
           title={t("header.refreshAria")}
           aria-label={t("header.refreshAria")}
           onClick={() => void store.refreshAll()}
         >
-          ↻
+          <RotateCw size={16} strokeWidth={2} />
         </button>
       </div>
     </header>

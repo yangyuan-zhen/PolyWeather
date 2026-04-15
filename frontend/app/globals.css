@@ -2,13 +2,101 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ══════════════════════════════════════════════════════════════
+   PolyWeather — Unified Design Token System
+   ══════════════════════════════════════════════════════════════ */
+
 @layer base {
   :root {
+    /* ── Background Scale ── */
+    --color-bg-base: #080c14;
+    --color-bg-raised: #0d1321;
+    --color-bg-overlay: #111827;
+    --color-bg-card: rgba(15, 23, 42, 0.72);
+    --color-bg-input: rgba(255, 255, 255, 0.04);
+
+    /* ── Text Scale ── */
+    --color-text-primary: #f1f5f9;
+    --color-text-secondary: #94a3b8;
+    --color-text-muted: #64748b;
+    --color-text-disabled: #475569;
+
+    /* ── Accent Colors ── */
+    --color-accent-primary: #00e5ff;
+    --color-accent-secondary: #6366f1;
+    --color-accent-tertiary: #a78bfa;
+
+    /* ── Signal / Semantic Colors ── */
+    --color-signal-success: #22c55e;
+    --color-signal-warning: #f59e0b;
+    --color-signal-danger: #ef4444;
+    --color-signal-info: #3b82f6;
+
+    /* ── Risk Colors (aliased from signal) ── */
+    --color-risk-high: var(--color-signal-danger);
+    --color-risk-medium: var(--color-signal-warning);
+    --color-risk-low: var(--color-signal-success);
+
+    /* ── Border ── */
+    --color-border-default: rgba(99, 102, 241, 0.12);
+    --color-border-hover: rgba(99, 102, 241, 0.28);
+    --color-border-subtle: rgba(255, 255, 255, 0.06);
+
+    /* ── Shadow / Elevation ── */
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3);
+    --shadow-elevation-2: 0 8px 24px rgba(0, 0, 0, 0.45);
+    --shadow-elevation-3: 0 20px 60px rgba(0, 0, 0, 0.6);
+    --shadow-glow-accent: 0 0 20px rgba(0, 229, 255, 0.2);
+    --shadow-glow-secondary: 0 0 20px rgba(99, 102, 241, 0.25);
+
+    /* ── Typography ── */
+    --font-data:
+      "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-display: "Geist", "Inter", -apple-system, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
+
+    /* ── Spacing (4px grid) ── */
+    --space-1: 4px;
+    --space-2: 8px;
+    --space-3: 12px;
+    --space-4: 16px;
+    --space-5: 20px;
+    --space-6: 24px;
+    --space-8: 32px;
+    --space-10: 40px;
+    --space-12: 48px;
+
+    /* ── Border Radius ── */
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --radius-xl: 20px;
+    --radius-full: 9999px;
+
+    /* ── Glass / Blur ── */
+    --glass-blur-1: blur(10px);
+    --glass-blur-2: blur(16px);
+    --glass-blur-3: blur(24px);
+    --glass-opacity-1: 0.72;
+    --glass-opacity-2: 0.85;
+    --glass-opacity-3: 0.92;
+
+    /* ── Layout ── */
+    --header-height: 52px;
+    --sidebar-width: 260px;
+    --panel-width: 560px;
+
+    /* ── Motion ── */
+    --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+
+    /* ── Legacy Compatibility (shadcn/ui HSL tokens) ── */
     --background: 223 53% 4%;
     --foreground: 210 40% 98%;
     --card: 223 46% 8%;
     --card-foreground: 210 40% 98%;
-    --primary: 190 95% 56%;
+    --primary: 187 100% 50%;
     --primary-foreground: 222 47% 8%;
     --secondary: 224 30% 14%;
     --secondary-foreground: 210 40% 98%;
@@ -22,27 +110,31 @@
   }
 
   body {
-    font-family: "Sora", "Avenir Next", "Segoe UI", sans-serif;
+    font-family: var(--font-data);
     background:
       radial-gradient(
         circle at 10% -10%,
-        rgba(34, 211, 238, 0.2),
+        rgba(0, 229, 255, 0.12),
         transparent 40%
       ),
       radial-gradient(
         circle at 90% 0%,
-        rgba(59, 130, 246, 0.14),
+        rgba(99, 102, 241, 0.1),
         transparent 36%
       ),
       radial-gradient(
         circle at 80% 100%,
-        rgba(8, 47, 73, 0.5),
+        rgba(8, 47, 73, 0.4),
         transparent 48%
       ),
-      hsl(var(--background));
-    color: hsl(var(--foreground));
+      var(--color-bg-base);
+    color: var(--color-text-primary);
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   Map Components (Leaflet overrides + map markers)
+   ══════════════════════════════════════════════════════════════ */
 
 @layer components {
   .leaflet-container {
@@ -52,38 +144,41 @@
   }
 
   .leaflet-control-zoom a {
-    background: rgba(2, 6, 23, 0.82) !important;
-    border-color: rgba(71, 85, 105, 0.5) !important;
-    color: #e2e8f0 !important;
+    background: rgba(8, 12, 20, 0.85) !important;
+    border-color: var(--color-border-default) !important;
+    color: var(--color-text-primary) !important;
   }
 
   .leaflet-control-zoom a:hover {
-    background: rgba(15, 23, 42, 0.95) !important;
+    background: rgba(13, 19, 33, 0.95) !important;
+    border-color: var(--color-border-hover) !important;
   }
 
+  /* ── Map Pill (temperature labels on map) ── */
   .map-pill {
     min-width: 52px;
-    border-radius: 9999px;
+    border-radius: var(--radius-full);
     border: 1px solid rgba(255, 255, 255, 0.2);
     padding: 5px 10px;
-    color: #f8fafc;
+    color: var(--color-text-primary);
     font-size: 11px;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
     line-height: 1;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur-1);
     box-shadow:
       0 2px 14px rgba(2, 6, 23, 0.45),
       inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
   .map-pill.high {
-    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    background: linear-gradient(135deg, var(--color-signal-danger), #b91c1c);
   }
 
   .map-pill.medium {
-    background: linear-gradient(135deg, #f59e0b, #b45309);
+    background: linear-gradient(135deg, var(--color-signal-warning), #b45309);
   }
 
   .map-pill.low {
@@ -93,21 +188,23 @@
   .map-pill.active {
     transform: translateY(-2px) scale(1.05);
     box-shadow:
-      0 8px 24px rgba(34, 211, 238, 0.4),
+      0 8px 24px rgba(0, 229, 255, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.35);
   }
 
+  /* ── Glass utility ── */
   .glass {
     background: linear-gradient(
       180deg,
-      rgba(15, 23, 42, 0.9) 0%,
-      rgba(2, 6, 23, 0.75) 100%
+      rgba(13, 19, 33, 0.88) 0%,
+      rgba(8, 12, 20, 0.75) 100%
     );
-    backdrop-filter: blur(10px);
+    backdrop-filter: var(--glass-blur-1);
   }
 
+  /* ── Fade-up entrance ── */
   .fade-up {
-    animation: fadeUp 450ms ease-out;
+    animation: fadeUp 400ms var(--transition-slow);
   }
 }
 
@@ -124,47 +221,52 @@
   }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Map Marker Components (nearby stations, city bubbles)
+   ══════════════════════════════════════════════════════════════ */
 
 @layer components {
   .nearby-marker {
     display: flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(15, 23, 42, 0.9);
-    color: rgba(226, 232, 240, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 4px 10px;
+    gap: var(--space-2);
+    background: rgba(13, 19, 33, 0.9);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-md);
+    padding: var(--space-1) var(--space-3);
     font-size: 11px;
     font-weight: 600;
-    box-shadow: 0 10px 28px rgba(2, 6, 23, 0.45);
-    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-elevation-2);
+    backdrop-filter: var(--glass-blur-1);
     white-space: nowrap;
   }
 
   .nearby-name {
-    color: rgba(148, 163, 184, 0.95);
+    color: var(--color-text-secondary);
   }
 
   .nearby-temp {
     color: #fff;
     font-weight: 800;
+    font-variant-numeric: tabular-nums;
   }
 
   .nearby-unit {
-    color: rgba(148, 163, 184, 0.85);
+    color: var(--color-text-muted);
     font-size: 9px;
   }
 
   .wind-info {
     display: flex;
     align-items: center;
-    gap: 4px;
-    margin-left: 4px;
-    padding-left: 6px;
-    border-left: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(34, 211, 238, 0.9);
+    gap: var(--space-1);
+    margin-left: var(--space-1);
+    padding-left: var(--space-2);
+    border-left: 1px solid var(--color-border-subtle);
+    color: var(--color-accent-primary);
     font-size: 10px;
+    opacity: 0.9;
   }
 
   .wind-arrow {
@@ -172,6 +274,7 @@
     transform-origin: center;
   }
 
+  /* ── City Marker (bubble on map) ── */
   .city-marker {
     position: relative;
     display: flex;
@@ -184,13 +287,14 @@
     position: relative;
     min-width: 46px;
     padding: 5px 10px;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     font-size: 13px;
     font-weight: 800;
+    font-variant-numeric: tabular-nums;
     text-align: center;
     color: white;
     border: 1px solid transparent;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--shadow-elevation-2);
   }
 
   .marker-bubble::after {
@@ -207,48 +311,63 @@
   }
 
   .marker-bubble.risk-high {
-    background: linear-gradient(135deg, #dc2626, #ef4444);
+    background: linear-gradient(135deg, #dc2626, var(--color-signal-danger));
     border-color: rgba(239, 68, 68, 0.5);
   }
 
-  .marker-bubble.risk-high::after { border-top-color: #ef4444; }
+  .marker-bubble.risk-high::after {
+    border-top-color: var(--color-signal-danger);
+  }
 
   .marker-bubble.risk-medium {
-    background: linear-gradient(135deg, #d97706, #f59e0b);
+    background: linear-gradient(135deg, #d97706, var(--color-signal-warning));
     border-color: rgba(245, 158, 11, 0.5);
   }
 
-  .marker-bubble.risk-medium::after { border-top-color: #f59e0b; }
+  .marker-bubble.risk-medium::after {
+    border-top-color: var(--color-signal-warning);
+  }
 
   .marker-bubble.risk-low {
     background: linear-gradient(135deg, #059669, #10b981);
     border-color: rgba(16, 185, 129, 0.5);
   }
 
-  .marker-bubble.risk-low::after { border-top-color: #10b981; }
+  .marker-bubble.risk-low::after {
+    border-top-color: #10b981;
+  }
 
   .marker-name {
-    margin-top: 8px;
+    margin-top: var(--space-2);
     font-size: 10px;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.88);
-    text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   }
 
   .city-marker.selected .marker-bubble {
     animation: markerGlow 2s ease-in-out infinite;
   }
 
+  /* ── Scrollbar ── */
   .custom-scrollbar::-webkit-scrollbar {
-    width: 8px;
+    width: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(51, 65, 85, 0.75);
-    border-radius: 9999px;
+    background: rgba(99, 102, 241, 0.2);
+    border-radius: var(--radius-full);
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.35);
   }
 }
 
 @keyframes markerGlow {
-  0%, 100% { box-shadow: 0 6px 18px rgba(0,0,0,0.4); }
-  50% { box-shadow: 0 10px 26px rgba(34,211,238,0.35); }
+  0%,
+  100% {
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  }
+  50% {
+    box-shadow: 0 10px 26px rgba(0, 229, 255, 0.3);
+  }
 }
