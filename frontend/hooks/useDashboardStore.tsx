@@ -310,14 +310,10 @@ export function DashboardStoreProvider({
   );
   const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedCityRef = useRef<string | null>(null);
-  const selectedDetail =
-    selectedCity && proAccess.subscriptionActive
-      ? cityDetailsByName[selectedCity] || null
-      : null;
+  const selectedDetail = selectedCity ? cityDetailsByName[selectedCity] || null : null;
   useEffect(() => {
     if (proAccess.loading) return;
     if (!proAccess.authenticated || !proAccess.subscriptionActive) {
-      dashboardClient.clearCityDetailCache();
       return;
     }
     dashboardClient.writeCityDetailCacheBundle(
@@ -376,8 +372,6 @@ export function DashboardStoreProvider({
     if (proAccess.loading) return;
     if (proAccess.authenticated && proAccess.subscriptionActive) return;
     dashboardClient.clearCityDetailCache();
-    setCityDetailsByName({});
-    setCityDetailMetaByName({});
   }, [proAccess]);
 
   const scheduleBackgroundDetailRefresh = (
@@ -524,7 +518,6 @@ export function DashboardStoreProvider({
     if (proAccess.loading) return;
     if (!selectedCity) return;
     if (!isPanelOpen) return;
-    if (!proAccess.authenticated || !proAccess.subscriptionActive) return;
     if (cityDetailsByName[selectedCity]) return;
 
     let cancelled = false;
@@ -724,18 +717,10 @@ export function DashboardStoreProvider({
       setLoadingState((current) => ({ ...current, cityDetail: true }));
       try {
         await summaryPromise;
-      } catch {
-      } finally {
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
-      }
-      return;
-    }
-
-    const access = proAccessRef.current;
-    if (!access.authenticated || !access.subscriptionActive) {
-      setLoadingState((current) => ({ ...current, cityDetail: true }));
-      try {
-        await summaryPromise;
+        const detail = await ensureCityDetail(cityName, false, "panel");
+        if (selectedCityRef.current === cityName) {
+          setSelectedForecastDate(detail.local_date);
+        }
       } catch {
       } finally {
         setLoadingState((current) => ({ ...current, cityDetail: false }));
