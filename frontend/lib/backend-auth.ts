@@ -9,6 +9,8 @@ export const FORWARDED_SUPABASE_EMAIL_HEADER = "x-polyweather-auth-email";
 type HeaderBuildResult = {
   headers: HeadersInit;
   response: NextResponse | null;
+  authUserId?: string | null;
+  authEmail?: string | null;
 };
 
 type HeaderBuildOptions = {
@@ -59,20 +61,20 @@ export async function buildBackendRequestHeaders(
 
     if (incomingAuth) {
       headers.set("Authorization", `Bearer ${incomingAuth}`);
-      return { headers, response: passthroughResponse };
+      return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
     }
     const accessToken = session?.access_token || "";
     if (accessToken) {
       // Fallback to cookie-backed session when request does not carry bearer.
       headers.set("Authorization", `Bearer ${accessToken}`);
     }
-    return { headers, response: passthroughResponse };
+    return { headers, response: passthroughResponse, authUserId: forwardedUserId || null, authEmail: forwardedEmail || null };
   }
 
   if (incomingAuth) {
     headers.set("Authorization", `Bearer ${incomingAuth}`);
   }
-  return { headers, response: null };
+  return { headers, response: null, authUserId: null, authEmail: null };
 }
 
 export function applyAuthResponseCookies(
@@ -87,3 +89,5 @@ export function applyAuthResponseCookies(
   }
   return target;
 }
+
+
