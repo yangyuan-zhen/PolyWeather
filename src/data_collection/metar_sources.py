@@ -51,6 +51,28 @@ class MetarSourceMixin:
             return False
         return True
 
+    def _metar_cache_ttl_for_city(self, city: str, icao: Optional[str] = None) -> int:
+        normalized = str(city or "").strip().lower()
+        city_meta = (getattr(self, "CITY_REGISTRY", {}) or {}).get(normalized) or {}
+        if not city_meta and icao:
+            icao_upper = str(icao or "").strip().upper()
+            for candidate in (getattr(self, "CITY_REGISTRY", {}) or {}).values():
+                if str(candidate.get("icao") or "").strip().upper() == icao_upper:
+                    city_meta = candidate
+                    break
+
+        raw_ttl = city_meta.get("metar_cache_ttl_sec")
+        try:
+            ttl = int(raw_ttl)
+        except (TypeError, ValueError):
+            ttl = 0
+        if ttl > 0:
+            return ttl
+
+        if city_meta.get("fast_metar_refresh"):
+            return max(1, int(getattr(self, "metar_fast_cache_ttl_sec", 60)))
+        return max(1, int(getattr(self, "metar_cache_ttl_sec", 600)))
+
     def get_icao_code(self, city: str) -> Optional[str]:
         """根据城市名获取对应的 ICAO 机场代码"""
         normalized = city.lower().strip()
@@ -74,9 +96,10 @@ class MetarSourceMixin:
 
         cache_key = f"{icao}:{utc_offset}:{use_fahrenheit}"
         now_ts = time.time()
+        cache_ttl_sec = self._metar_cache_ttl_for_city(city, icao)
         with self._metar_cache_lock:
             cached = self._metar_cache.get(cache_key)
-            if cached and now_ts - cached["t"] < self.metar_cache_ttl_sec:
+            if cached and now_ts - cached["t"] < cache_ttl_sec:
                 logger.debug(f"METAR cache hit {icao} age={int(now_ts - cached['t'])}s")
                 record_source_call("metar", "current", "cache_hit", (time.perf_counter() - started) * 1000.0)
                 return cached["d"]

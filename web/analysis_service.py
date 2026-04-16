@@ -1650,6 +1650,15 @@ def _analyze(
             int(utc_offset or 0),
         )
 
+    airport_primary_current = dict(network_snapshot.get("airport_primary_current") or {})
+    if (
+        airport_primary_current.get("source_code") == "metar"
+        and obs_time_str
+        and not use_settlement_current
+    ):
+        airport_primary_current["obs_time"] = obs_time_str
+        airport_primary_current["obs_age_min"] = metar_age_min
+
     settlement_today_obs = []
     if use_settlement_current:
         explicit_settlement_obs = settlement_current.get("today_obs") or []
@@ -2266,7 +2275,7 @@ def _analyze(
         },
         "airport_current": {
             "temp": _sf(mc.get("temp")),
-            "obs_time": metar.get("obs_time"),
+            "obs_time": obs_time_str,
             "max_so_far": airport_max_so_far,
             "max_temp_time": airport_max_temp_time,
             "obs_age_min": metar_age_min,
@@ -2283,7 +2292,7 @@ def _analyze(
             "source_label": "METAR",
         },
         "settlement_station": network_snapshot.get("settlement_station") or {},
-        "airport_primary": network_snapshot.get("airport_primary_current") or {},
+        "airport_primary": airport_primary_current,
         "airport_primary_today_obs": network_snapshot.get("airport_primary_today_obs") or [],
         "official_nearby": network_snapshot.get("official_nearby") or [],
         "official_network_source": network_snapshot.get("official_network_source"),

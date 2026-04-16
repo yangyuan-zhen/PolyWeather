@@ -184,6 +184,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.metar_cache_ttl_sec = int(
             os.getenv("METAR_CACHE_TTL_SEC", "600")  # 默认 10 分钟
         )
+        self.metar_fast_cache_ttl_sec = int(
+            os.getenv("METAR_FAST_CACHE_TTL_SEC", "60")
+        )
         self._metar_cache: Dict[str, Dict] = {}
         self._metar_cache_lock = threading.Lock()
         self.taf_cache_ttl_sec = int(

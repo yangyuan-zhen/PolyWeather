@@ -2993,6 +2993,14 @@ function formatObservationUpdate(value: unknown, locale: Locale) {
   return normalizeHm(raw) || raw;
 }
 
+function localObservationTimeCandidate(value: unknown) {
+  const raw = String(value ?? "").trim();
+  if (!raw || raw.includes("T") || /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+    return "";
+  }
+  return normalizeHm(raw) || raw;
+}
+
 function getOfficialObservationCandidates(detail: CityDetail) {
   const officialNearby = Array.isArray(detail.official_nearby)
     ? detail.official_nearby
@@ -3078,15 +3086,15 @@ function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
     .toLowerCase();
   const isNmcCurrent = currentSource === "nmc" || currentSource.includes("nmc");
   const rawValue = firstNonEmptyString([
-    detail.airport_primary?.obs_time,
-    detail.airport_primary?.report_time,
-    detail.airport_current?.obs_time,
-    detail.airport_current?.report_time,
     isNmcCurrent ? "" : detail.current?.obs_time,
+    localObservationTimeCandidate(detail.airport_primary?.obs_time),
+    localObservationTimeCandidate(detail.airport_current?.obs_time),
+    localObservationTimeCandidate(mgmFirstRecord?.obs_time),
+    localObservationTimeCandidate(mgmFirstRecord?.time),
+    detail.airport_primary?.report_time,
+    detail.airport_current?.report_time,
     isNmcCurrent ? "" : detail.current?.report_time,
-    mgmFirstRecord?.obs_time,
     mgmFirstRecord?.report_time,
-    mgmFirstRecord?.time,
     detail.updated_at,
   ]);
 

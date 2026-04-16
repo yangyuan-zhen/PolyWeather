@@ -1,7 +1,15 @@
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.metar_sources import MetarSourceMixin
 from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
 from web.core import CITIES
+
+
+class _DummyMetarSource(MetarSourceMixin):
+    CITY_REGISTRY = CITY_REGISTRY
+    CITY_TO_ICAO = {key: value["icao"] for key, value in CITY_REGISTRY.items() if value.get("icao")}
+    metar_cache_ttl_sec = 600
+    metar_fast_cache_ttl_sec = 60
 
 
 def test_new_south_asia_city_registry_entries_are_wired():
@@ -16,6 +24,14 @@ def test_new_south_asia_city_registry_entries_are_wired():
     assert CITIES["manila"]["lat"] == CITY_REGISTRY["manila"]["lat"]
     assert CITIES["karachi"]["lon"] == CITY_REGISTRY["karachi"]["lon"]
     assert CITIES["masroor air base"]["settlement_source"] == "metar"
+
+
+def test_turkey_metar_uses_fast_cache_ttl():
+    source = _DummyMetarSource()
+
+    assert source._metar_cache_ttl_for_city("ankara", "LTAC") == 60
+    assert source._metar_cache_ttl_for_city("istanbul", "LTFM") == 60
+    assert source._metar_cache_ttl_for_city("karachi", "OPKC") == 600
 
 
 def test_turkey_mgm_provider_returns_official_nearby_rows():
