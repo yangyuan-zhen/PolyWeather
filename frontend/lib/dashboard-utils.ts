@@ -2837,9 +2837,151 @@ export function getHistorySummary(
   };
 }
 
+function toFiniteNumber(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function firstFiniteNumber(values: unknown[]) {
+  for (const value of values) {
+    const numeric = toFiniteNumber(value);
+    if (numeric != null) return numeric;
+  }
+  return null;
+}
+
+function firstNonEmptyString(values: unknown[]) {
+  for (const value of values) {
+    const text = String(value ?? "").trim();
+    if (text) return text;
+  }
+  return null;
+}
+
+function formatObservationUpdate(value: unknown, locale: Locale) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+
+  const looksDated =
+    /^\d{4}-\d{2}-\d{2}/.test(raw) ||
+    raw.includes("T") ||
+    /[+-]\d{2}:?\d{2}$/.test(raw);
+  if (looksDated) {
+    const parsed = new Date(raw);
+    if (!Number.isNaN(parsed.getTime())) {
+      return new Intl.DateTimeFormat(isEnglish(locale) ? "en-US" : "zh-CN", {
+        day: "2-digit",
+        hour: "2-digit",
+        hour12: false,
+        minute: "2-digit",
+        month: "2-digit",
+      })
+        .format(parsed)
+        .replace(",", "");
+    }
+  }
+
+  return normalizeHm(raw) || raw;
+}
+
+function getOfficialObservationCandidates(detail: CityDetail) {
+  const officialNearby = Array.isArray(detail.official_nearby)
+    ? detail.official_nearby
+    : [];
+  const mgmNearby = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const officialAnchor =
+    officialNearby.find(
+      (station) => station.is_settlement_anchor || station.is_airport_station,
+    ) || officialNearby[0];
+
+  return {
+    centerStation: detail.center_station_candidate,
+    mgmNearby,
+    officialAnchor,
+    officialNearby,
+  };
+}
+
+function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
+  const { centerStation, officialAnchor, officialNearby, mgmNearby } =
+    getOfficialObservationCandidates(detail);
+  const observedTemp = firstFiniteNumber([
+    detail.current?.temp,
+    detail.airport_primary?.temp,
+    detail.airport_current?.temp,
+    centerStation?.temp,
+    officialAnchor?.temp,
+    officialNearby[0]?.temp,
+    mgmNearby[0]?.temp,
+  ]);
+
+  if (observedTemp == null) {
+    return isEnglish(locale) ? "Unavailable" : "未提供";
+  }
+
+  const sourceLabel = firstNonEmptyString([
+    detail.current?.settlement_source_label,
+    detail.airport_primary?.source_label,
+    detail.airport_current?.source_label,
+    centerStation?.source_label,
+    officialAnchor?.source_label,
+    officialNearby[0]?.source_label,
+    mgmNearby[0]?.source_label,
+    getObservationSourceTag(detail),
+  ]);
+  const rounded =
+    Math.abs(observedTemp - Math.round(observedTemp)) < 0.05
+      ? String(Math.round(observedTemp))
+      : observedTemp.toFixed(1);
+
+  return `${rounded}${detail.temp_symbol || "°C"}${
+    sourceLabel ? ` · ${sourceLabel}` : ""
+  }`;
+}
+
+function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
+  const { centerStation, officialAnchor, officialNearby, mgmNearby } =
+    getOfficialObservationCandidates(detail);
+  const centerRecord = asRecord(centerStation);
+  const officialAnchorRecord = asRecord(officialAnchor);
+  const officialFirstRecord = asRecord(officialNearby[0]);
+  const mgmFirstRecord = asRecord(mgmNearby[0]);
+  const rawValue = firstNonEmptyString([
+    detail.current?.obs_time,
+    detail.current?.report_time,
+    detail.airport_primary?.obs_time,
+    detail.airport_primary?.report_time,
+    detail.airport_current?.obs_time,
+    detail.airport_current?.report_time,
+    centerRecord?.obs_time,
+    centerRecord?.report_time,
+    centerRecord?.time,
+    officialAnchorRecord?.obs_time,
+    officialAnchorRecord?.report_time,
+    officialAnchorRecord?.time,
+    officialFirstRecord?.obs_time,
+    officialFirstRecord?.report_time,
+    officialFirstRecord?.time,
+    mgmFirstRecord?.obs_time,
+    mgmFirstRecord?.report_time,
+    mgmFirstRecord?.time,
+    detail.updated_at,
+  ]);
+
+  return (
+    formatObservationUpdate(rawValue, locale) ||
+    (isEnglish(locale) ? "Unavailable" : "未提供")
+  );
+}
+
 export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN") {
   const risk = detail.risk || {};
-  const current = detail.current || {};
   const nearbyCount = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby.length : 0;
   const nearbySource = String(detail.nearby_source || "").trim().toLowerCase();
   const sourceCode = getObservationSourceCode(detail);
@@ -2912,11 +3054,12 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
             : "未标注",
     },
     {
+      label: isEnglish(locale) ? "Observed temp" : "实测温度",
+      value: getObservedTemperatureProfile(detail, locale),
+    },
+    {
       label: isEnglish(locale) ? "Observation update" : "观测更新",
-      value:
-        current.obs_time ||
-        detail.updated_at ||
-        (isEnglish(locale) ? "Unavailable" : "未提供"),
+      value: getObservationUpdateProfile(detail, locale),
     },
     {
       label: isEnglish(locale) ? "Nearby stations" : "周边站点",
