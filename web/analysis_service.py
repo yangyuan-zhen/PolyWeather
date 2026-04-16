@@ -30,6 +30,7 @@ from src.analysis.deb_algorithm import calculate_dynamic_weights
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
@@ -50,6 +51,39 @@ _GROQ_COMMENTARY_CACHE: Dict[str, Dict[str, Any]] = {}
 _GROQ_COMMENTARY_CACHE_TTL_SEC = int(
     os.getenv("POLYWEATHER_GROQ_COMMENTARY_CACHE_TTL_SEC", "1800")
 )
+
+
+def _format_observation_time_local(value: Any, utc_offset: int) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if "T" in raw:
+        try:
+            dt = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone(timedelta(seconds=utc_offset))).strftime("%H:%M")
+        except Exception:
+            pass
+    match = re.search(r"(\d{1,2}):(\d{2})", raw)
+    if match:
+        return f"{int(match.group(1)):02d}:{match.group(2)}"
+    return raw[:16]
+
+
+def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str, Any]:
+    city_key = str(city or "").strip().lower()
+    if city_key not in NMC_CITY_REFERENCES:
+        return {}
+    try:
+        payload = _weather.fetch_nmc_region_current(
+            city_key,
+            use_fahrenheit=use_fahrenheit,
+        )
+        return payload if isinstance(payload, dict) else {}
+    except Exception as exc:
+        logger.debug("NMC current fallback failed city={}: {}", city_key, exc)
+        return {}
 
 
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
@@ -1176,17 +1210,33 @@ def _analyze(
     sc_cur = settlement_current.get("current", {}) if settlement_current else {}
     use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else mc
+    current_source = settlement_source
+    current_source_label = settlement_source_label
+    current_station_code = settlement_current.get("station_code")
+    current_station_name = settlement_current.get("station_name")
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mc.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
+    if cur_temp is None:
+        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
+        nmc_cur = nmc_fallback.get("current") or {}
+        nmc_temp = _sf(nmc_cur.get("temp"))
+        if nmc_temp is not None:
+            cur_temp = nmc_temp
+            current_source = "nmc"
+            current_source_label = "NMC"
+            current_station_code = nmc_fallback.get("station_code")
+            current_station_name = nmc_fallback.get("station_name")
 
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
     if max_so_far is None:
         max_so_far = _sf(mc.get("max_temp_so_far"))
     if max_so_far is None:
         max_so_far = _sf(mg_cur.get("mgm_max_temp"))
+    if max_so_far is None:
+        max_so_far = cur_temp
 
     max_temp_time = primary_current.get("max_temp_time")
     if not max_temp_time and not use_settlement_current:
@@ -1237,6 +1287,12 @@ def _analyze(
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
+    if not obs_time_str and current_source == "nmc":
+        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
+        obs_time_str = _format_observation_time_local(
+            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
+            int(utc_offset or 0),
+        )
 
     settlement_today_obs = []
     if use_settlement_current:
@@ -1826,10 +1882,10 @@ def _analyze(
             "max_temp_time": max_temp_time,
             "raw_max_so_far": raw_settlement_max,
             "wu_settlement": wu_settle,
-            "settlement_source": settlement_source,
-            "settlement_source_label": settlement_source_label,
-            "station_code": settlement_current.get("station_code"),
-            "station_name": settlement_current.get("station_name"),
+            "settlement_source": current_source,
+            "settlement_source_label": current_source_label,
+            "station_code": current_station_code,
+            "station_name": current_station_name,
             "obs_time": obs_time_str,
             "obs_age_min": None if use_settlement_current else metar_age_min,
             "report_time": primary_current.get("report_time"),
@@ -2033,17 +2089,30 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
     primary_current = sc_cur if use_settlement_current else mc
 
+    current_source = settlement_source
+    current_source_label = settlement_source_label
+    nmc_fallback: Dict[str, Any] = {}
     cur_temp = _sf(primary_current.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mc.get("temp"))
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
+    if cur_temp is None:
+        nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
+        nmc_cur = nmc_fallback.get("current") or {}
+        nmc_temp = _sf(nmc_cur.get("temp"))
+        if nmc_temp is not None:
+            cur_temp = nmc_temp
+            current_source = "nmc"
+            current_source_label = "NMC"
 
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
     if max_so_far is None:
         max_so_far = _sf(mc.get("max_temp_so_far"))
     if max_so_far is None:
         max_so_far = _sf(mg_cur.get("mgm_max_temp"))
+    if max_so_far is None:
+        max_so_far = cur_temp
 
     max_temp_time = primary_current.get("max_temp_time")
     if not max_temp_time and not use_settlement_current:
@@ -2084,6 +2153,13 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
+    if not obs_time_str and current_source == "nmc":
+        if not nmc_fallback:
+            nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
+        obs_time_str = _format_observation_time_local(
+            nmc_fallback.get("publish_time") or nmc_fallback.get("timestamp"),
+            int(utc_offset or 0),
+        )
 
     om_daily = (open_meteo.get("daily") or {}) if isinstance(open_meteo, dict) else {}
     om_hourly = (open_meteo.get("hourly") or {}) if isinstance(open_meteo, dict) else {}
@@ -2200,8 +2276,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             "max_so_far": _sf(display_settlement_max),
             "max_temp_time": max_temp_time,
             "wu_settlement": _sf(wu_settle),
-            "settlement_source": settlement_source,
-            "settlement_source_label": settlement_source_label,
+            "settlement_source": current_source,
+            "settlement_source_label": current_source_label,
             "obs_time": obs_time_str or None,
             "obs_age_min": obs_age_min,
         },

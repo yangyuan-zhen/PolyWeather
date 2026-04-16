@@ -323,6 +323,78 @@ function sortObservationItemsByTime<T extends { time?: string | null }>(items: T
   });
 }
 
+function normalizeObservationTimeForChart(
+  value: unknown,
+  detail: CityDetail,
+) {
+  const raw = String(value || "").trim();
+  if (raw && !raw.includes("T")) {
+    return normalizeHm(raw) || raw;
+  }
+  return normalizeHm(detail.local_time) || normalizeHm(raw) || raw;
+}
+
+function buildCurrentObservationFallback(
+  detail: CityDetail,
+): Array<{ time?: string; temp?: number | null; sourceLabel?: string | null }> {
+  const candidates: Array<{
+    sourceLabel?: string | null;
+    temp?: number | null;
+    time?: string | null;
+  }> = [
+    {
+      sourceLabel: detail.current?.settlement_source_label,
+      temp: detail.current?.temp,
+      time: detail.current?.obs_time || detail.current?.report_time,
+    },
+    {
+      sourceLabel: detail.airport_primary?.source_label || "METAR",
+      temp: detail.airport_primary?.temp,
+      time: detail.airport_primary?.obs_time || detail.airport_primary?.report_time,
+    },
+    {
+      sourceLabel: detail.airport_current?.source_label || "METAR",
+      temp: detail.airport_current?.temp,
+      time: detail.airport_current?.obs_time || detail.airport_current?.report_time,
+    },
+    {
+      sourceLabel:
+        detail.center_station_candidate?.source_label ||
+        detail.center_station_candidate?.source_code,
+      temp: detail.center_station_candidate?.temp,
+      time: String((detail.center_station_candidate as Record<string, unknown> | null | undefined)?.obs_time || ""),
+    },
+    {
+      sourceLabel:
+        detail.official_nearby?.[0]?.source_label ||
+        detail.official_nearby?.[0]?.source_code,
+      temp: detail.official_nearby?.[0]?.temp,
+      time: String((detail.official_nearby?.[0] as Record<string, unknown> | null | undefined)?.obs_time || ""),
+    },
+    {
+      sourceLabel:
+        detail.mgm_nearby?.[0]?.source_label ||
+        detail.mgm_nearby?.[0]?.source_code,
+      temp: detail.mgm_nearby?.[0]?.temp,
+      time: String((detail.mgm_nearby?.[0] as Record<string, unknown> | null | undefined)?.obs_time || ""),
+    },
+  ];
+
+  const first = candidates.find((item) => {
+    const numeric = Number(item.temp);
+    return Number.isFinite(numeric);
+  });
+  if (!first) return [];
+
+  return [
+    {
+      sourceLabel: first.sourceLabel,
+      temp: Number(first.temp),
+      time: normalizeObservationTimeForChart(first.time, detail),
+    },
+  ];
+}
+
 function interpolateSeriesAtMinutes(
   times: string[],
   values: Array<number | null | undefined>,
@@ -623,9 +695,19 @@ export function getTemperatureChartData(
           ? [{ time: detail.current.obs_time, temp: detail.current.temp }]
           : []
       : [];
+  const currentObservationFallback = buildCurrentObservationFallback(detail);
   const metarObservationSource = detail.metar_today_obs?.length
     ? detail.metar_today_obs
-    : detail.trend?.recent || [];
+    : detail.trend?.recent?.length
+      ? detail.trend.recent
+      : currentObservationFallback;
+  const usingCurrentObservationFallback =
+    !detail.metar_today_obs?.length &&
+    !detail.trend?.recent?.length &&
+    currentObservationFallback.length > 0;
+  const currentFallbackTag =
+    currentObservationFallback[0]?.sourceLabel ||
+    getObservationSourceTag(detail);
   const allowMetarFallback = settlementSource && observationCode !== "hko";
   const shouldUseMetarFallback =
     allowMetarFallback &&
@@ -644,7 +726,9 @@ export function getTemperatureChartData(
     return `${icao} METAR`;
   })();
   const observationDisplayTag =
-    observationCode === "wunderground"
+    usingCurrentObservationFallback
+      ? String(currentFallbackTag).toUpperCase()
+      : observationCode === "wunderground"
       ? metarFallbackTag
       : useSettlementObservationSource && shouldUseMetarFallback
       ? metarFallbackTag

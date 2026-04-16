@@ -52,6 +52,26 @@ function getMarkerDisplayOffset(cityName: string) {
   };
 }
 
+function pickMarkerTemperature(
+  snapshot?: Pick<CityDetail, "current" | "temp_symbol"> | CitySummary,
+) {
+  if (!snapshot) return null;
+  const detail = snapshot as Partial<CityDetail>;
+  const candidates = [
+    snapshot.current?.temp,
+    detail.airport_primary?.temp,
+    detail.airport_current?.temp,
+    detail.center_station_candidate?.temp,
+    detail.official_nearby?.[0]?.temp,
+    detail.mgm_nearby?.[0]?.temp,
+  ];
+  for (const value of candidates) {
+    const numeric = Number(value);
+    if (Number.isFinite(numeric)) return numeric;
+  }
+  return null;
+}
+
 function createMarkerIcon(
   city: CityListItem,
   snapshot?: Pick<CityDetail, "current" | "temp_symbol"> | CitySummary,
@@ -60,8 +80,8 @@ function createMarkerIcon(
   const label = city.display_name;
   const unit = city.temp_unit === "fahrenheit" ? "°F" : "°C";
   const shortName = label.length > 10 ? `${label.substring(0, 8)}...` : label;
-  const tempText =
-    snapshot?.current?.temp != null ? `${snapshot.current.temp}${unit}` : "--";
+  const markerTemp = pickMarkerTemperature(snapshot);
+  const tempText = markerTemp != null ? `${markerTemp}${unit}` : "--";
   const offset = getMarkerDisplayOffset(city.name);
   const styleAttr =
     offset.x || offset.y
@@ -91,7 +111,7 @@ function getMarkerSignature(
     city.temp_unit,
     city.lat,
     city.lon,
-    snapshot?.current?.temp ?? "",
+    pickMarkerTemperature(snapshot) ?? "",
   ].join("|");
 }
 
