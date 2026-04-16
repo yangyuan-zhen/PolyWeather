@@ -2313,6 +2313,14 @@ def _analyze(
         },
         "source_forecasts": {
             "weather_gov": raw.get("nws") or {},
+            "open_meteo_multi_model": {
+                "source": mm.get("source"),
+                "provider": mm.get("provider"),
+                "dates": mm.get("dates") or [],
+                "model_metadata": mm.get("model_metadata") or {},
+                "model_keys": mm.get("model_keys") or {},
+                "attribution": mm.get("attribution"),
+            } if isinstance(mm, dict) and mm else {},
         },
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,

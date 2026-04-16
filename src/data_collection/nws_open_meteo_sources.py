@@ -2,11 +2,141 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+
+
+OPEN_METEO_MULTI_MODEL_SPECS: Dict[str, Dict[str, Any]] = {
+    "ecmwf_ifs025": {
+        "label": "ECMWF",
+        "provider": "ECMWF",
+        "model": "IFS",
+        "tier": "global",
+        "resolution_km": 25,
+        "horizon": "15d",
+    },
+    "ecmwf_aifs025_single": {
+        "label": "ECMWF AIFS",
+        "provider": "ECMWF",
+        "model": "AIFS single",
+        "tier": "global_ai",
+        "resolution_km": 25,
+        "horizon": "15d",
+    },
+    "gfs_seamless": {
+        "label": "GFS",
+        "provider": "NOAA",
+        "model": "GFS Seamless",
+        "tier": "global",
+        "resolution_km": None,
+        "horizon": "16d",
+    },
+    "icon_seamless": {
+        "label": "ICON",
+        "provider": "DWD",
+        "model": "ICON Seamless",
+        "tier": "global",
+        "resolution_km": None,
+        "horizon": "7d",
+    },
+    "icon_eu": {
+        "label": "ICON-EU",
+        "provider": "DWD",
+        "model": "ICON-EU",
+        "tier": "regional_europe",
+        "resolution_km": 7,
+        "horizon": "5d",
+    },
+    "icon_d2": {
+        "label": "ICON-D2",
+        "provider": "DWD",
+        "model": "ICON-D2",
+        "tier": "short_range_europe",
+        "resolution_km": 2.2,
+        "horizon": "2d",
+    },
+    "gem_seamless": {
+        "label": "GEM",
+        "provider": "ECCC",
+        "model": "GEM Seamless",
+        "tier": "global",
+        "resolution_km": None,
+        "horizon": "10d",
+    },
+    "gem_global": {
+        "label": "GDPS",
+        "provider": "ECCC",
+        "model": "GEM Global / GDPS",
+        "tier": "global",
+        "resolution_km": 15,
+        "horizon": "10d",
+    },
+    "gem_regional": {
+        "label": "RDPS",
+        "provider": "ECCC",
+        "model": "GEM Regional / RDPS",
+        "tier": "regional_north_america",
+        "resolution_km": 10,
+        "horizon": "3d",
+    },
+    "gem_hrdps_continental": {
+        "label": "HRDPS",
+        "provider": "ECCC",
+        "model": "HRDPS Continental",
+        "tier": "short_range_north_america",
+        "resolution_km": 2.5,
+        "horizon": "2d",
+    },
+    "jma_seamless": {
+        "label": "JMA",
+        "provider": "JMA",
+        "model": "JMA Seamless",
+        "tier": "global",
+        "resolution_km": None,
+        "horizon": "11d",
+    },
+}
+
+OPEN_METEO_MULTI_MODEL_ORDER = tuple(OPEN_METEO_MULTI_MODEL_SPECS.keys())
+
+
+def _parse_open_meteo_multi_model_daily(
+    daily: Dict[str, Any],
+) -> tuple[list[str], Dict[str, Dict[str, float]], Dict[str, Dict[str, Any]], Dict[str, str]]:
+    dates = daily.get("time", [])
+    if not isinstance(dates, list):
+        dates = []
+
+    model_metadata: Dict[str, Dict[str, Any]] = {}
+    model_keys: Dict[str, str] = {}
+    daily_forecasts: Dict[str, Dict[str, float]] = {}
+
+    for day_idx, date_str in enumerate(dates):
+        day_data: Dict[str, float] = {}
+        for model_key, spec in OPEN_METEO_MULTI_MODEL_SPECS.items():
+            label = str(spec["label"])
+            key = f"temperature_2m_max_{model_key}"
+            values = daily.get(key, [])
+            if not isinstance(values, list):
+                continue
+            if day_idx >= len(values) or values[day_idx] is None:
+                continue
+            try:
+                day_data[label] = round(float(values[day_idx]), 1)
+            except (TypeError, ValueError):
+                continue
+            model_metadata[label] = {
+                **spec,
+                "open_meteo_model": model_key,
+            }
+            model_keys[label] = model_key
+        if day_data:
+            daily_forecasts[str(date_str)] = day_data
+
+    return [str(d) for d in dates], daily_forecasts, model_metadata, model_keys
 
 
 class NwsOpenMeteoSourceMixin:
@@ -468,10 +598,10 @@ class NwsOpenMeteoSourceMixin:
         用于真正的多模型共识评分
 
         模型列表:
-        - ECMWF IFS (欧洲中期天气预报中心)
+        - ECMWF IFS / AIFS
         - GFS (美国 NOAA)
-        - ICON (德国气象局 DWD)
-        - GEM (加拿大气象局)
+        - ICON Seamless / ICON-EU / ICON-D2 (德国气象局 DWD)
+        - GEM Seamless / GDPS / RDPS / HRDPS (加拿大 ECCC)
         - JMA (日本气象厅)
 
         返回 3 天的预报数据，支持今日+明日共识分析
@@ -510,7 +640,7 @@ class NwsOpenMeteoSourceMixin:
                     return dict(cached_data)
         try:
             url = "https://api.open-meteo.com/v1/forecast"
-            models = "ecmwf_ifs025,gfs_seamless,icon_seamless,gem_seamless,jma_seamless"
+            models = ",".join(OPEN_METEO_MULTI_MODEL_ORDER)
             params = {
                 "latitude": lat,
                 "longitude": lon,
@@ -532,27 +662,11 @@ class NwsOpenMeteoSourceMixin:
             data = response.json()
 
             daily = data.get("daily", {})
-            dates = daily.get("time", [])
-
-            model_labels = {
-                "ecmwf_ifs025": "ECMWF",
-                "gfs_seamless": "GFS",
-                "icon_seamless": "ICON",
-                "gem_seamless": "GEM",
-                "jma_seamless": "JMA",
-            }
-
-            # 按天提取每个模型的预报
-            daily_forecasts = {}  # {"2026-02-23": {"ECMWF": 7.9, "GFS": 6.5, ...}, ...}
-            for day_idx, date_str in enumerate(dates):
-                day_data = {}
-                for model_key, label in model_labels.items():
-                    key = f"temperature_2m_max_{model_key}"
-                    values = daily.get(key, [])
-                    if day_idx < len(values) and values[day_idx] is not None:
-                        day_data[label] = round(values[day_idx], 1)
-                if day_data:
-                    daily_forecasts[date_str] = day_data
+            if not isinstance(daily, dict):
+                daily = {}
+            dates, daily_forecasts, model_metadata, model_keys = (
+                _parse_open_meteo_multi_model_daily(daily)
+            )
 
             if not daily_forecasts:
                 logger.warning("Multi-model: 无有效模型数据")
@@ -570,10 +684,14 @@ class NwsOpenMeteoSourceMixin:
 
             result = {
                 "source": "multi_model",
+                "provider": "open-meteo",
                 "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
                 "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
+                "model_metadata": model_metadata,
+                "model_keys": model_keys,
                 "dates": dates,
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
+                "attribution": "Open-Meteo forecast model API; underlying models from ECMWF, DWD, ECCC, NOAA and JMA.",
             }
             with self._multi_model_cache_lock:
                 self._multi_model_cache[cache_key] = {
