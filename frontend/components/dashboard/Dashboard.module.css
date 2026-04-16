@@ -1005,7 +1005,7 @@
 .root :global(.model-bars) {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .root :global(.model-row) {
@@ -1026,6 +1026,91 @@
   text-overflow: ellipsis;
 }
 
+.root :global(.model-row-rich) {
+  align-items: flex-start;
+}
+
+.root :global(.model-row-rich .model-name) {
+  width: 118px;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.root :global(.model-row-rich .model-name strong) {
+  display: block;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.root :global(.model-row-rich .model-name span) {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.root :global(.model-stack-summary) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.root :global(.model-stack-summary span) {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.5);
+  color: var(--text-secondary);
+  font-size: 11px;
+  padding: 5px 8px;
+}
+
+.root :global(.model-stack-summary strong) {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.root :global(.model-group) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border-left: 2px solid rgba(148, 163, 184, 0.26);
+  background: rgba(15, 23, 42, 0.28);
+  border-radius: 6px;
+}
+
+.root :global(.model-group-cyan) {
+  border-left-color: rgba(34, 211, 238, 0.75);
+}
+
+.root :global(.model-group-blue) {
+  border-left-color: rgba(96, 165, 250, 0.75);
+}
+
+.root :global(.model-group-amber) {
+  border-left-color: rgba(245, 158, 11, 0.8);
+}
+
+.root :global(.model-group-heading) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.root :global(.model-group-heading em) {
+  color: var(--text-muted);
+  font-style: normal;
+  letter-spacing: 0;
+}
+
 .root :global(.model-bar-track) {
   flex: 1;
   height: 20px;
@@ -1038,7 +1123,7 @@
 .root :global(.model-bar-fill) {
   height: 100%;
   border-radius: 6px;
-  background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+  background: linear-gradient(90deg, rgba(14, 165, 233, 0.72), rgba(34, 211, 238, 0.92));
   transition: width 0.6s ease-out;
   display: flex;
   align-items: center;

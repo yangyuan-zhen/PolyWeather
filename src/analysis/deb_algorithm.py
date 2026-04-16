@@ -65,6 +65,82 @@ def _is_excluded_model_name(model_name: str) -> bool:
     return "meteoblue" in normalized
 
 
+def _normalize_deb_model_name(model_name: str) -> str:
+    return (
+        str(model_name or "")
+        .strip()
+        .lower()
+        .replace(" ", "")
+        .replace("_", "")
+        .replace("-", "")
+        .replace("/", "")
+    )
+
+
+def _deb_model_family(model_name: str) -> str:
+    normalized = _normalize_deb_model_name(model_name)
+    if normalized in {"icon", "iconeu", "icond2"}:
+        return "dwd_icon"
+    if normalized in {"gem", "gdps", "rdps", "hrdps"}:
+        return "eccc_gem"
+    if normalized in {"ecmwfaifs", "aifs"}:
+        return "ecmwf_aifs"
+    if normalized in {"ecmwf"}:
+        return "ecmwf_ifs"
+    return normalized or str(model_name or "").strip()
+
+
+def _deb_model_priority(model_name: str) -> int:
+    normalized = _normalize_deb_model_name(model_name)
+    return {
+        "icond2": 40,
+        "iconeu": 30,
+        "icon": 20,
+        "hrdps": 40,
+        "rdps": 35,
+        "gdps": 30,
+        "gem": 20,
+        "ecmwfaifs": 30,
+        "ecmwf": 30,
+        "gfs": 30,
+        "jma": 30,
+        "mgm": 45,
+        "nws": 45,
+        "hko": 45,
+        "lgbm": 50,
+        "openmeteo": 15,
+    }.get(normalized, 10)
+
+
+def _collapse_forecasts_for_deb(current_forecasts):
+    """
+    Avoid counting the same modelling family multiple times in DEB.
+    Regional/high-resolution variants replace their global family member when present.
+    """
+    collapsed = {}
+    representatives = {}
+    for model_name, value in (current_forecasts or {}).items():
+        if value is None or _is_excluded_model_name(model_name):
+            continue
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            continue
+        family = _deb_model_family(model_name)
+        current_rep = representatives.get(family)
+        priority = _deb_model_priority(model_name)
+        if current_rep is None or priority > current_rep["priority"]:
+            representatives[family] = {
+                "name": model_name,
+                "priority": priority,
+                "value": numeric,
+            }
+
+    for rep in representatives.values():
+        collapsed[rep["name"]] = rep["value"]
+    return collapsed
+
+
 def load_history(filepath):
     global _history_cache, _history_mtime
     mode = get_state_storage_mode()
@@ -914,11 +990,15 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
     history_file = os.path.join(project_root, "data", "daily_records.json")
     data = load_history(history_file)
 
-    current_forecasts = {
-        k: v
-        for k, v in (current_forecasts or {}).items()
-        if not _is_excluded_model_name(k)
-    }
+    raw_forecast_count = len(
+        [
+            v
+            for k, v in (current_forecasts or {}).items()
+            if v is not None and not _is_excluded_model_name(k)
+        ]
+    )
+    current_forecasts = _collapse_forecasts_for_deb(current_forecasts)
+    dedup_note = "家族去重" if raw_forecast_count > len(current_forecasts) else ""
 
     if city_name not in data or not data[city_name]:
         # 没有历史数据，返回简单的平均/中位数
@@ -926,7 +1006,10 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
         if not valid_vals:
             return None, "暂无模型数据"
         avg = sum(valid_vals) / len(valid_vals)
-        return round(avg, 1), "等权平均(历史数据不足)"
+        note = "等权平均(历史数据不足)"
+        if dedup_note:
+            note = f"{note} | {dedup_note}"
+        return round(avg, 1), note
 
     # 获取过去 lookback_days 天的有 actual_high 的记录
     city_data = data[city_name]
@@ -968,7 +1051,10 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
         if not valid_vals:
             return None, f"暂无有效模型数据(由于仅{days_used}天历史)"
         avg = sum(valid_vals) / len(valid_vals)
-        return round(avg, 1), f"等权平均(由于仅{days_used}天历史)"
+        note = f"等权平均(由于仅{days_used}天历史)"
+        if dedup_note:
+            note = f"{note} | {dedup_note}"
+        return round(avg, 1), note
 
     # 计算 MAE
     maes = {}
@@ -1002,6 +1088,8 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
     weight_str_parts = []
     for m, w in sorted_models[:3]:
         weight_str_parts.append(f"{m}({w * 100:.0f}%,MAE:{maes[m]:.1f}°)")
+    if dedup_note:
+        weight_str_parts.append(dedup_note)
 
     return round(blended_high, 1), " | ".join(weight_str_parts)
 

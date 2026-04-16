@@ -100,6 +100,80 @@ function getMarketYesPrice(scan?: MarketScan | null) {
   return null;
 }
 
+type ModelMetadata = NonNullable<
+  NonNullable<CityDetail["source_forecasts"]>["open_meteo_multi_model"]
+>["model_metadata"];
+
+function getModelGroupMeta(
+  name: string,
+  metadata: ModelMetadata,
+  locale: string,
+) {
+  const meta = metadata?.[name] || {};
+  const tier = String(meta.tier || "").toLowerCase();
+  const upperName = String(name || "").toUpperCase();
+
+  if (tier.includes("ai") || upperName.includes("AIFS")) {
+    return {
+      key: "ai",
+      label: locale === "en-US" ? "AI forecast" : "AI 预报",
+      order: 1,
+      tone: "blue",
+    };
+  }
+  if (
+    tier.includes("europe") ||
+    upperName.includes("ICON-EU") ||
+    upperName.includes("ICON-D2")
+  ) {
+    return {
+      key: "europe",
+      label: locale === "en-US" ? "Europe high-resolution" : "欧洲高分辨率",
+      order: 2,
+      tone: "cyan",
+    };
+  }
+  if (
+    tier.includes("north_america") ||
+    upperName === "RDPS" ||
+    upperName === "HRDPS"
+  ) {
+    return {
+      key: "north-america",
+      label: locale === "en-US" ? "North America high-resolution" : "北美高分辨率",
+      order: 3,
+      tone: "amber",
+    };
+  }
+  return {
+    key: "global",
+    label: locale === "en-US" ? "Global baseline" : "全球基准",
+    order: 0,
+    tone: "neutral",
+  };
+}
+
+function formatModelMetaLine(
+  name: string,
+  metadata: ModelMetadata,
+  locale: string,
+) {
+  const meta = metadata?.[name] || {};
+  const provider = String(meta.provider || "").trim();
+  const model = String(meta.model || "").trim();
+  const horizon = String(meta.horizon || "").trim();
+  const resolution = Number(meta.resolution_km);
+  const parts = [
+    provider,
+    model && model !== name ? model : "",
+    Number.isFinite(resolution)
+      ? `${resolution}${locale === "en-US" ? " km" : " 公里"}`
+      : "",
+    horizon,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
 function getMarketNoPrice(scan?: MarketScan | null) {
   if (scan?.no_buy != null) {
     const direct = Number(scan.no_buy);
@@ -619,6 +693,8 @@ export function ModelForecast({
   const { locale, t } = useI18n();
   const view = getModelView(detail, targetDate);
   const modelsMap = { ...view.models };
+  const modelMetadata =
+    detail.source_forecasts?.open_meteo_multi_model?.model_metadata || {};
 
   const modelEntries = Object.entries(modelsMap).filter(
     ([, value]) =>
@@ -648,11 +724,66 @@ export function ModelForecast({
     ? Math.max(...comparisonValues) + 1
     : 1;
   const range = Math.max(maxValue - minValue, 1);
+  const sortedEntries = modelEntries.sort(
+    (a, b) => Number(b[1] || 0) - Number(a[1] || 0),
+  );
+  const groupedEntries = sortedEntries.reduce(
+    (acc, [name, value]) => {
+      const group = getModelGroupMeta(name, modelMetadata, locale);
+      const existing = acc.find((item) => item.key === group.key);
+      const entry = {
+        metaLine: formatModelMetaLine(name, modelMetadata, locale),
+        name,
+        value: Number(value),
+      };
+      if (existing) {
+        existing.entries.push(entry);
+      } else {
+        acc.push({ ...group, entries: [entry] });
+      }
+      return acc;
+    },
+    [] as Array<{
+      entries: Array<{ metaLine: string; name: string; value: number }>;
+      key: string;
+      label: string;
+      order: number;
+      tone: string;
+    }>,
+  ).sort((a, b) => a.order - b.order);
+  const spread =
+    numericValues.length >= 2
+      ? Math.max(...numericValues) - Math.min(...numericValues)
+      : null;
+  const metadataSource =
+    detail.source_forecasts?.open_meteo_multi_model?.provider === "open-meteo"
+      ? "Open-Meteo"
+      : null;
 
   return (
     <section className="models-section">
       {!hideTitle && <h3>{t("section.models")}</h3>}
       <div className="model-bars">
+        <div className="model-stack-summary">
+          <span>
+            {locale === "en-US" ? "Available models" : "可用模型"} ·{" "}
+            <strong>{modelEntries.length}</strong>
+          </span>
+          <span>
+            {locale === "en-US" ? "Spread" : "分歧"} ·{" "}
+            <strong>
+              {spread != null
+                ? `${spread.toFixed(1)}${detail.temp_symbol}`
+                : "--"}
+            </strong>
+          </span>
+          {metadataSource && (
+            <span>
+              {locale === "en-US" ? "Source" : "来源"} ·{" "}
+              <strong>{metadataSource}</strong>
+            </span>
+          )}
+        </div>
         {hasSingleModelOnly && (
           <div
             style={{
@@ -666,39 +797,48 @@ export function ModelForecast({
               : "当前处于单模型回退，其他模型结果还没回传。"}
           </div>
         )}
-        {modelEntries
-          .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
-          .map(([name, value]) => {
-            const numeric = Number(value);
-            const width = ((numeric - minValue) / range) * 100;
-            const debLine =
-              view.deb != null
-                ? ((Number(view.deb) - minValue) / range) * 100
-                : null;
+        {groupedEntries.map((group) => (
+          <div
+            key={group.key}
+            className={clsx("model-group", `model-group-${group.tone}`)}
+          >
+            <div className="model-group-heading">
+              <span>{group.label}</span>
+              <em>{group.entries.length}</em>
+            </div>
+            {group.entries.map(({ metaLine, name, value }) => {
+              const width = ((value - minValue) / range) * 100;
+              const debLine =
+                view.deb != null
+                  ? ((Number(view.deb) - minValue) / range) * 100
+                  : null;
 
-            return (
-              <div key={name} className="model-row">
-                <div className="model-name" title={name}>
-                  {name}
-                </div>
-                <div className="model-bar-track">
-                  <div
-                    className="model-bar-fill"
-                    style={{ width: `${width}%` }}
-                  >
-                    {numeric}
-                    {detail.temp_symbol}
+              return (
+                <div key={name} className="model-row model-row-rich">
+                  <div className="model-name" title={metaLine || name}>
+                    <strong>{name}</strong>
+                    {metaLine && <span>{metaLine}</span>}
                   </div>
-                  {debLine != null && (
+                  <div className="model-bar-track">
                     <div
-                      className="model-deb-line"
-                      style={{ left: `${debLine}%` }}
-                    />
-                  )}
+                      className="model-bar-fill"
+                      style={{ width: `${width}%` }}
+                    >
+                      {value}
+                      {detail.temp_symbol}
+                    </div>
+                    {debLine != null && (
+                      <div
+                        className="model-deb-line"
+                        style={{ left: `${debLine}%` }}
+                      />
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
+        ))}
         {view.deb != null && (
           <div
             className="model-row"

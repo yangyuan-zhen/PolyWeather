@@ -238,6 +238,25 @@ export interface SourceForecasts {
   weather_gov?: {
     forecast_periods?: WeatherGovPeriod[];
   };
+  open_meteo_multi_model?: {
+    source?: string | null;
+    provider?: string | null;
+    dates?: string[];
+    model_metadata?: Record<
+      string,
+      {
+        label?: string | null;
+        provider?: string | null;
+        model?: string | null;
+        tier?: string | null;
+        resolution_km?: number | null;
+        horizon?: string | null;
+        open_meteo_model?: string | null;
+      }
+    >;
+    model_keys?: Record<string, string>;
+    attribution?: string | null;
+  };
 }
 
 export interface DailyModelForecast {
