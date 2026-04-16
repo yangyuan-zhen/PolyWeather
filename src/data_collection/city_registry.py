@@ -262,6 +262,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "真纳国际机场",
         "distance_km": 15.0,
+        "min_plausible_metar_temp_c": 5.0,
         "warning": "市场现按 Wunderground 真纳国际机场站整度°C口径结算；海风锋、干热输送与尘霾会影响峰值兑现时间。",
     },
     "masroor air base": {
@@ -278,6 +279,7 @@ CITY_REGISTRY = {
         "risk_emoji": "🟡",
         "airport_name": "Masroor Air Base",
         "distance_km": 0.0,
+        "min_plausible_metar_temp_c": 5.0,
         "warning": "军事机场 METAR 锚点；公开报文可能不连续，若 OPMR 缺报则不要自动替换为 OPKC 结算口径。",
     },
     "tokyo": {

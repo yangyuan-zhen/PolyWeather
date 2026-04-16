@@ -205,6 +205,32 @@ function signalTone(signal?: IntradayMeteorologySignal | null) {
   return "blue";
 }
 
+function localizedText(
+  locale: string,
+  primary?: string | null,
+  english?: string | null,
+) {
+  const en = String(english || "").trim();
+  const value = String(primary || "").trim();
+  if (locale === "en-US" && en) return en;
+  return value || en;
+}
+
+function localizedList(
+  locale: string,
+  primary?: string[] | null,
+  english?: string[] | null,
+) {
+  const en = Array.isArray(english)
+    ? english.filter((item) => String(item || "").trim())
+    : [];
+  const value = Array.isArray(primary)
+    ? primary.filter((item) => String(item || "").trim())
+    : [];
+  if (locale === "en-US" && en.length) return en;
+  return value.length ? value : en;
+}
+
 function getTrendMetricVisual(metric: {
   label?: string;
   value?: string;
@@ -1115,14 +1141,22 @@ export function FutureForecastModal() {
   const meteorologySignals = Array.isArray(intradayMeteorology.signal_contributions)
     ? intradayMeteorology.signal_contributions
     : [];
-  const invalidationRules = Array.isArray(intradayMeteorology.invalidation_rules)
-    ? intradayMeteorology.invalidation_rules
-    : [];
-  const confirmationRules = Array.isArray(intradayMeteorology.confirmation_rules)
-    ? intradayMeteorology.confirmation_rules
-    : [];
+  const invalidationRules = localizedList(
+    locale,
+    intradayMeteorology.invalidation_rules,
+    intradayMeteorology.invalidation_rules_en,
+  );
+  const confirmationRules = localizedList(
+    locale,
+    intradayMeteorology.confirmation_rules,
+    intradayMeteorology.confirmation_rules_en,
+  );
   const meteorologyHeadline =
-    String(intradayMeteorology.headline || "").trim() ||
+    localizedText(
+      locale,
+      intradayMeteorology.headline,
+      intradayMeteorology.headline_en,
+    ) ||
     todayTradeSummaryLines[0] ||
     (locale === "en-US"
       ? "Intraday meteorology layers are still syncing; use the next observation as the anchor."
@@ -1650,13 +1684,17 @@ export function FutureForecastModal() {
                               )}
                             >
                               <div className="future-v2-evidence-head">
-                                <strong>{signal.label || "--"}</strong>
+                                <strong>
+                                  {localizedText(locale, signal.label, signal.label_en) || "--"}
+                                </strong>
                                 <span>
                                   {formatSignalDirection(signal.direction, locale)} ·{" "}
                                   {formatSignalStrength(signal.strength, locale)}
                                 </span>
                               </div>
-                              <p>{signal.summary || "--"}</p>
+                              <p>
+                                {localizedText(locale, signal.summary, signal.summary_en) || "--"}
+                              </p>
                             </div>
                           ))
                         ) : (

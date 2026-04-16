@@ -696,15 +696,34 @@ export function getTemperatureChartData(
           : []
       : [];
   const currentObservationFallback = buildCurrentObservationFallback(detail);
-  const metarObservationSource = detail.metar_today_obs?.length
-    ? detail.metar_today_obs
-    : detail.trend?.recent?.length
-      ? detail.trend.recent
-      : currentObservationFallback;
+  const minPlausibleObservationTemp = (() => {
+    const name = String(detail.name || "").trim().toLowerCase();
+    const icao = String(detail.risk?.icao || "").trim().toUpperCase();
+    if (name === "karachi" || name === "masroor air base" || icao === "OPKC" || icao === "OPMR") {
+      return detail.temp_symbol === "°F" ? 41 : 5;
+    }
+    return null;
+  })();
+  const filterPlausibleObservations = <T extends { temp?: number | null }>(
+    rows?: T[] | null,
+  ) =>
+    (Array.isArray(rows) ? rows : []).filter((row) => {
+      const value = Number(row?.temp);
+      if (!Number.isFinite(value)) return false;
+      return minPlausibleObservationTemp == null || value >= minPlausibleObservationTemp;
+    });
+  const plausibleMetarTodayObs = filterPlausibleObservations(detail.metar_today_obs);
+  const plausibleTrendRecent = filterPlausibleObservations(detail.trend?.recent);
+  const plausibleCurrentFallback = filterPlausibleObservations(currentObservationFallback);
+  const metarObservationSource = plausibleMetarTodayObs.length
+    ? plausibleMetarTodayObs
+    : plausibleTrendRecent.length
+      ? plausibleTrendRecent
+      : plausibleCurrentFallback;
   const usingCurrentObservationFallback =
-    !detail.metar_today_obs?.length &&
-    !detail.trend?.recent?.length &&
-    currentObservationFallback.length > 0;
+    !plausibleMetarTodayObs.length &&
+    !plausibleTrendRecent.length &&
+    plausibleCurrentFallback.length > 0;
   const currentFallbackTag =
     currentObservationFallback[0]?.sourceLabel ||
     getObservationSourceTag(detail);

@@ -318,13 +318,16 @@ export interface MarketScan {
 
 export interface IntradayMeteorologySignal {
   label?: string | null;
+  label_en?: string | null;
   direction?: "support" | "suppress" | "neutral" | string | null;
   strength?: "weak" | "medium" | "strong" | string | null;
   summary?: string | null;
+  summary_en?: string | null;
 }
 
 export interface IntradayMeteorology {
   headline?: string | null;
+  headline_en?: string | null;
   confidence?: "low" | "medium" | "high" | string | null;
   base_case_bucket?: string | null;
   upside_bucket?: string | null;
@@ -332,7 +335,9 @@ export interface IntradayMeteorology {
   next_observation_time?: string | null;
   peak_window?: string | null;
   invalidation_rules?: string[] | null;
+  invalidation_rules_en?: string[] | null;
   confirmation_rules?: string[] | null;
+  confirmation_rules_en?: string[] | null;
   signal_contributions?: IntradayMeteorologySignal[] | null;
 }
 

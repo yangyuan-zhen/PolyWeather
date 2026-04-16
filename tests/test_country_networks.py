@@ -223,10 +223,12 @@ def test_intraday_meteorology_supportive_heating_case():
     )
 
     assert "上修空间" in payload["headline"]
+    assert "upside" in payload["headline_en"].lower()
     assert payload["confidence"] == "high"
     assert payload["base_case_bucket"] == "40°C"
     assert payload["next_observation_time"] == "12:30"
     assert any(item["direction"] == "support" for item in payload["signal_contributions"])
+    assert all(item.get("summary_en") for item in payload["signal_contributions"])
 
 
 def test_intraday_meteorology_suppressed_cloud_rain_case():
@@ -245,8 +247,10 @@ def test_intraday_meteorology_suppressed_cloud_rain_case():
     )
 
     assert "压制" in payload["headline"]
+    assert "capping" in payload["headline_en"].lower()
     assert payload["confidence"] == "high"
     assert any("云雨" in rule for rule in payload["invalidation_rules"])
+    assert any("cloud" in rule.lower() for rule in payload["invalidation_rules_en"])
     assert any(item["direction"] == "suppress" for item in payload["signal_contributions"])
 
 
@@ -266,6 +270,7 @@ def test_intraday_meteorology_handles_sparse_observations():
     assert payload["confidence"] == "low"
     assert payload["next_observation_time"] == "08:30"
     assert payload["signal_contributions"][0]["label"] == "数据完整性"
+    assert payload["signal_contributions"][0]["label_en"] == "Data completeness"
 
 
 def test_intraday_meteorology_past_peak_case():
@@ -281,5 +286,7 @@ def test_intraday_meteorology_past_peak_case():
     )
 
     assert "峰值窗口已过" in payload["headline"]
+    assert "passed" in payload["headline_en"].lower()
     assert payload["base_case_bucket"] == "39°C"
     assert any("最终高点" in rule for rule in payload["invalidation_rules"])
+    assert any("final" in rule.lower() for rule in payload["invalidation_rules_en"])

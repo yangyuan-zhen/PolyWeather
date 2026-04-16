@@ -12,6 +12,45 @@ from src.utils.metrics import record_source_call
 
 
 class MetarSourceMixin:
+    def _get_min_plausible_metar_temp_c(
+        self, city: str, icao: Optional[str] = None
+    ) -> Optional[float]:
+        normalized = str(city or "").strip().lower()
+        city_meta = (getattr(self, "CITY_REGISTRY", {}) or {}).get(normalized) or {}
+        if not city_meta and icao:
+            icao_upper = str(icao or "").strip().upper()
+            for candidate in (getattr(self, "CITY_REGISTRY", {}) or {}).values():
+                if str(candidate.get("icao") or "").strip().upper() == icao_upper:
+                    city_meta = candidate
+                    break
+        raw = city_meta.get("min_plausible_metar_temp_c")
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if value > -80 else None
+
+    def _is_plausible_metar_temp_c(
+        self, temp_c: object, city: str, icao: Optional[str] = None
+    ) -> bool:
+        try:
+            value = float(temp_c)
+        except (TypeError, ValueError):
+            return False
+        minimum = self._get_min_plausible_metar_temp_c(city, icao)
+        if minimum is None:
+            return True
+        if value < minimum:
+            logger.warning(
+                "Discarding implausible METAR temperature city={} icao={} temp_c={} min_c={}",
+                city,
+                icao,
+                value,
+                minimum,
+            )
+            return False
+        return True
+
     def get_icao_code(self, city: str) -> Optional[str]:
         """根据城市名获取对应的 ICAO 机场代码"""
         normalized = city.lower().strip()
@@ -83,6 +122,8 @@ class MetarSourceMixin:
 
             latest = data[0]
             temp_c = latest.get("temp")
+            if temp_c is not None and not self._is_plausible_metar_temp_c(temp_c, city, icao):
+                temp_c = None
             dewp_c = latest.get("dewp")
 
             def _parse_rawob_time(obs):
@@ -136,7 +177,11 @@ class MetarSourceMixin:
                 try:
                     if obs_dt_iter >= utc_midnight:
                         temp_value = obs.get("temp")
-                        if temp_value is not None and temp_value > max_so_far_c:
+                        if (
+                            temp_value is not None
+                            and self._is_plausible_metar_temp_c(temp_value, city, icao)
+                            and temp_value > max_so_far_c
+                        ):
                             max_so_far_c = temp_value
                             local_report = obs_dt_iter + timedelta(seconds=utc_offset)
                             max_temp_time = local_report.strftime("%H:%M")
@@ -157,7 +202,11 @@ class MetarSourceMixin:
             for index, obs in enumerate(data):
                 obs_temp = obs.get("temp")
                 obs_dt_iter = _parse_rawob_time(obs)
-                if obs_temp is not None and obs_dt_iter:
+                if (
+                    obs_temp is not None
+                    and obs_dt_iter
+                    and self._is_plausible_metar_temp_c(obs_temp, city, icao)
+                ):
                     local_rt = obs_dt_iter + timedelta(seconds=utc_offset)
                     time_str = local_rt.strftime("%H:%M")
                     if obs_dt_iter >= utc_midnight:
@@ -226,9 +275,12 @@ class MetarSourceMixin:
                 "history_hours": history_hours,
             }
 
-            logger.info(
-                f"✈️ METAR {icao}: {temp:.1f}°{'F' if use_fahrenheit else 'C'} (obs: {obs_time})"
-            )
+            if temp is not None:
+                logger.info(
+                    f"✈️ METAR {icao}: {temp:.1f}°{'F' if use_fahrenheit else 'C'} (obs: {obs_time})"
+                )
+            else:
+                logger.info(f"✈️ METAR {icao}: temperature unavailable (obs: {obs_time})")
             with self._metar_cache_lock:
                 self._metar_cache[cache_key] = {"d": result, "t": now_ts}
             record_source_call("metar", "current", "success", (time.perf_counter() - started) * 1000.0)

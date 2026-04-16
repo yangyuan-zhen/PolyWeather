@@ -86,6 +86,18 @@ def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str,
         return {}
 
 
+def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
+    temp = _sf(value)
+    if temp is None:
+        return False
+    meta = CITY_REGISTRY.get(str(city or "").strip().lower(), {}) or {}
+    min_c = _sf(meta.get("min_plausible_metar_temp_c"))
+    if min_c is None:
+        return True
+    min_value = min_c * 9 / 5 + 32 if str(unit or "").upper().endswith("F") else min_c
+    return temp >= min_value
+
+
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()
     with _ANALYSIS_CACHE_STATS_LOCK:
@@ -1180,13 +1192,17 @@ def _add_signal(
     direction: str,
     strength: str,
     summary: str,
+    label_en: Optional[str] = None,
+    summary_en: Optional[str] = None,
 ) -> None:
     signals.append(
         {
             "label": label,
+            "label_en": label_en or label,
             "direction": direction,
             "strength": strength,
             "summary": summary,
+            "summary_en": summary_en or summary,
         }
     )
 
@@ -1237,26 +1253,32 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
             _add_signal(
                 signals,
                 label="日内节奏",
+                label_en="Intraday pace",
                 direction="support",
                 strength=strength,
                 summary=f"实测较预期路径偏高 {abs(delta or 0):.1f}{unit}，峰值仍有上修空间。",
+                summary_en=f"Observed temperature is running {abs(delta or 0):.1f}{unit} above the expected path; the peak still has upside room.",
             )
         elif direction == "cold":
             suppress_score += 2 if strength == "strong" else 1
             _add_signal(
                 signals,
                 label="日内节奏",
+                label_en="Intraday pace",
                 direction="suppress",
                 strength=strength,
                 summary=f"实测较预期路径偏低 {abs(delta or 0):.1f}{unit}，追更高温档需要等待后续观测确认。",
+                summary_en=f"Observed temperature is running {abs(delta or 0):.1f}{unit} below the expected path; higher buckets need confirmation from later observations.",
             )
         else:
             _add_signal(
                 signals,
                 label="日内节奏",
+                label_en="Intraday pace",
                 direction="neutral",
                 strength="weak",
                 summary="实测大体贴近当前预期路径，下一步主要看峰值窗口内是否继续抬升。",
+                summary_en="Observed temperature is broadly tracking the expected path; the next question is whether it keeps lifting through the peak window.",
             )
 
     heating_setup = str(vertical.get("heating_setup") or "").lower()
@@ -1268,26 +1290,32 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
             _add_signal(
                 signals,
                 label="边界层结构",
+                label_en="Boundary-layer setup",
                 direction="support",
                 strength="strong",
                 summary=str(vertical.get("summary_zh") or "边界层结构支持白天继续混合升温。"),
+                summary_en=str(vertical.get("summary_en") or "The boundary-layer setup supports continued daytime mixing and warming."),
             )
         elif heating_setup == "suppressed" or suppression_risk == "high":
             suppress_score += 2
             _add_signal(
                 signals,
                 label="边界层结构",
+                label_en="Boundary-layer setup",
                 direction="suppress",
                 strength="strong",
                 summary=str(vertical.get("summary_zh") or "边界层或云雨结构对午后峰值形成压制。"),
+                summary_en=str(vertical.get("summary_en") or "Boundary-layer or cloud/rain structure is capping the afternoon peak."),
             )
         else:
             _add_signal(
                 signals,
                 label="边界层结构",
+                label_en="Boundary-layer setup",
                 direction="neutral",
                 strength="medium",
                 summary=str(vertical.get("summary_zh") or "边界层结构暂未给出单边信号。"),
+                summary_en=str(vertical.get("summary_en") or "The boundary-layer setup does not yet provide a one-sided signal."),
             )
 
     taf_suppression = str(taf_signal.get("suppression_level") or "").lower()
@@ -1309,9 +1337,11 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
         _add_signal(
             signals,
             label="TAF 云雨扰动",
+            label_en="TAF cloud/rain disruption",
             direction=direction_value,
             strength=strength,
             summary=str(taf_signal.get("summary_zh") or "TAF 暂未提示强云雨压温信号。"),
+            summary_en=str(taf_signal.get("summary_en") or "TAF does not yet flag a strong cloud/rain temperature cap."),
         )
 
     airport_delta = _sf(data.get("airport_vs_network_delta"))
@@ -1324,26 +1354,32 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
             _add_signal(
                 signals,
                 label="站网对比",
+                label_en="Station-network comparison",
                 direction="support",
                 strength="medium",
                 summary=f"周边站网较机场锚点偏热 {abs(airport_delta):.1f}{unit}{f'，领先点位 {leader}' if leader else ''}。",
+                summary_en=f"Nearby stations are {abs(airport_delta):.1f}{unit} warmer than the airport anchor{f'; leading site: {leader}' if leader else ''}.",
             )
         elif airport_delta >= 0.4:
             suppress_score += 1
             _add_signal(
                 signals,
                 label="站网对比",
+                label_en="Station-network comparison",
                 direction="suppress",
                 strength="medium",
                 summary=f"机场锚点较周边站网偏热 {abs(airport_delta):.1f}{unit}，继续上修需要机场自身后续报文确认。",
+                summary_en=f"The airport anchor is {abs(airport_delta):.1f}{unit} warmer than nearby stations; further upside needs confirmation from later airport reports.",
             )
         else:
             _add_signal(
                 signals,
                 label="站网对比",
+                label_en="Station-network comparison",
                 direction="neutral",
                 strength="weak",
                 summary="机场锚点与周边站网基本同步，暂不构成单独上修或下修理由。",
+                summary_en="The airport anchor and nearby station network are broadly aligned, so this layer does not independently argue for upside or downside.",
             )
 
     peak_status = str(peak.get("status") or "").lower()
@@ -1356,46 +1392,62 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
     )
     if peak_status == "past":
         headline = "峰值窗口已过，后续更偏向确认最终高点而非继续上修。"
+        headline_en = "The peak window has passed; the read now shifts toward confirming the final high rather than chasing further upside."
         confidence = "high" if available_layers >= 2 else "medium"
     elif suppress_score >= support_score + 2:
         headline = "峰值存在云雨或结构压制，当前更偏防守高温上修。"
+        headline_en = "Cloud/rain or structural suppression is capping the peak; defend against aggressive high-temperature upside for now."
         confidence = "high" if available_layers >= 3 else "medium"
     elif support_score >= suppress_score + 2:
         headline = "峰值仍有上修空间，后续重点看峰值窗口内报文能否继续抬升。"
+        headline_en = "The peak still has upside room; the next check is whether reports keep lifting through the peak window."
         confidence = "high" if available_layers >= 3 else "medium"
     elif available_layers == 0:
         headline = "关键日内层仍在补齐，先以观测锚点和下一次报文为主。"
+        headline_en = "Key intraday layers are still filling in; anchor the read on observations and the next report."
         confidence = "low"
     else:
         headline = "当前处于分歧判断区，峰值窗口内的下一组观测将决定方向。"
+        headline_en = "The setup is in a split-decision zone; the next observations inside the peak window should decide direction."
         confidence = "medium" if available_layers >= 2 else "low"
 
     next_observation = _next_observation_clock(data.get("local_time") or current.get("obs_time"))
     threshold = base_value
     invalidation_rules = []
+    invalidation_rules_en = []
     confirmation_rules = []
+    confirmation_rules_en = []
     if peak_status == "past":
         invalidation_rules.append("若后续官方结算源补录更高值，以结算源最终高点为准。")
+        invalidation_rules_en.append("If the official settlement source later backfills a higher reading, defer to the final settlement-source high.")
         confirmation_rules.append("若峰值窗口后连续两次观测不再创新高，当前高点基本确认。")
+        confirmation_rules_en.append("If two consecutive post-peak observations fail to make a new high, the current high is broadly confirmed.")
     else:
         watch_clock = _format_clock_minutes(int(first_h or 13) * 60 + 30)
         if threshold is not None:
             invalidation_rules.append(f"{watch_clock} 前若仍未接近 {threshold:.0f}{unit}，上修路径降级。")
+            invalidation_rules_en.append(f"If observations are still not near {threshold:.0f}{unit} before {watch_clock}, downgrade the upside path.")
             confirmation_rules.append(f"峰值窗口内任一结算源观测触达或超过 {threshold:.0f}{unit}，基准路径确认度上升。")
+            confirmation_rules_en.append(f"If any settlement-source observation reaches or exceeds {threshold:.0f}{unit} inside the peak window, confidence in the base path rises.")
         invalidation_rules.append("若 TAF 或实况报文出现阵雨、雷暴或低云/云雨压制，高温上沿需要下调。")
+        invalidation_rules_en.append("If TAF or live reports show showers, thunderstorms, or low-cloud/cloud-rain suppression, lower the upper temperature bound.")
         confirmation_rules.append("若实测继续贴近 DEB 曲线且云雨信号不增强，维持当前主路径。")
+        confirmation_rules_en.append("If observations keep tracking the DEB curve and cloud/rain signals do not strengthen, maintain the current main path.")
 
     if not signals:
         _add_signal(
             signals,
             label="数据完整性",
+            label_en="Data completeness",
             direction="neutral",
             strength="weak",
             summary="当前缺少足够的日内结构层，等待下一次观测刷新后再提高判断权重。",
+            summary_en="There are not enough intraday structure layers yet; wait for the next observation refresh before raising confidence.",
         )
 
     return {
         "headline": headline,
+        "headline_en": headline_en,
         "confidence": confidence,
         "base_case_bucket": base_case_bucket,
         "upside_bucket": upside_bucket,
@@ -1403,7 +1455,9 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
         "next_observation_time": next_observation,
         "peak_window": peak_window,
         "invalidation_rules": invalidation_rules[:4],
+        "invalidation_rules_en": invalidation_rules_en[:4],
         "confirmation_rules": confirmation_rules[:3],
+        "confirmation_rules_en": confirmation_rules_en[:3],
         "signal_contributions": signals[:5],
     }
 
@@ -1505,10 +1559,16 @@ def _analyze(
     current_station_code = settlement_current.get("station_code")
     current_station_name = settlement_current.get("station_name")
     cur_temp = _sf(primary_current.get("temp"))
+    if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+        cur_temp = None
     if cur_temp is None:
         cur_temp = _sf(mc.get("temp"))
+        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+            cur_temp = None
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
+        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+            cur_temp = None
     if cur_temp is None:
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         nmc_cur = nmc_fallback.get("current") or {}
@@ -1521,10 +1581,16 @@ def _analyze(
             current_station_name = nmc_fallback.get("station_name")
 
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
+    if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+        max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(mc.get("max_temp_so_far"))
+        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+            max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(mg_cur.get("mgm_max_temp"))
+        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+            max_so_far = None
     if max_so_far is None:
         max_so_far = cur_temp
 
@@ -1615,8 +1681,14 @@ def _analyze(
     metar_today_obs_payload = [
         {"time": t, "temp": v}
         for t, v in (metar.get("today_obs", []) if metar else [])
+        if _is_plausible_city_temp(city, v, sym)
     ]
-    metar_recent_obs_payload = metar.get("recent_obs", []) if metar else []
+    metar_recent_obs_payload = [
+        point
+        for point in (metar.get("recent_obs", []) if metar else [])
+        if isinstance(point, dict)
+        and _is_plausible_city_temp(city, point.get("temp"), sym)
+    ]
     airport_max_so_far = None
     airport_max_temp_time = None
     for point in metar_today_obs_payload:
@@ -2384,10 +2456,16 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     current_source_label = settlement_source_label
     nmc_fallback: Dict[str, Any] = {}
     cur_temp = _sf(primary_current.get("temp"))
+    if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+        cur_temp = None
     if cur_temp is None:
         cur_temp = _sf(mc.get("temp"))
+        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+            cur_temp = None
     if cur_temp is None:
         cur_temp = _sf(mg_cur.get("temp"))
+        if cur_temp is not None and not _is_plausible_city_temp(city, cur_temp, sym):
+            cur_temp = None
     if cur_temp is None:
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         nmc_cur = nmc_fallback.get("current") or {}
@@ -2398,10 +2476,16 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             current_source_label = "NMC"
 
     max_so_far = _sf(primary_current.get("max_temp_so_far"))
+    if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+        max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(mc.get("max_temp_so_far"))
+        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+            max_so_far = None
     if max_so_far is None:
         max_so_far = _sf(mg_cur.get("mgm_max_temp"))
+        if max_so_far is not None and not _is_plausible_city_temp(city, max_so_far, sym):
+            max_so_far = None
     if max_so_far is None:
         max_so_far = cur_temp
 
