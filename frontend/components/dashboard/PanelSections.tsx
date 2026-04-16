@@ -485,12 +485,12 @@ export function ProbabilityDistribution({
             const buyNoText = toPriceCents(bucket.no_buy);
             const marketTag = buyYesText
               ? locale === "en-US"
-                ? `Buy Yes: ${buyYesText}`
-                : `买 Yes: ${buyYesText}`
+                ? `Market ref: ${buyYesText}`
+                : `市场参考: ${buyYesText}`
               : buyNoText
                 ? locale === "en-US"
-                  ? `Buy No: ${buyNoText}`
-                  : `买 No: ${buyNoText}`
+                  ? `Market hedge: ${buyNoText}`
+                  : `市场反向: ${buyNoText}`
                 : null;
 
             return (
@@ -530,23 +530,23 @@ export function ProbabilityDistribution({
               Math.abs(bucketTemp - marketBucketTemp) < 0.26;
             const marketTag = isMarketBucket
               ? locale === "en-US"
-                ? `Buy Yes: ${marketYesText || "--"}`
-                : `买 Yes: ${marketYesText || "--"}`
+                ? `Market ref: ${marketYesText || "--"}`
+                : `市场参考: ${marketYesText || "--"}`
               : marketNoText
                 ? locale === "en-US"
-                  ? `Buy No: ${marketNoText}`
-                  : `买 No: ${marketNoText}`
+                  ? `Market hedge: ${marketNoText}`
+                  : `市场反向: ${marketNoText}`
                 : null;
             const yesPriceText = toPriceCents(marketYesPrice);
             const noPriceText = toPriceCents(marketNoPrice);
             const marketTagFinal = isMarketBucket
               ? locale === "en-US"
-                ? `Buy Yes: ${yesPriceText || "--"}`
-                : `买 Yes: ${yesPriceText || "--"}`
+                ? `Market ref: ${yesPriceText || "--"}`
+                : `市场参考: ${yesPriceText || "--"}`
               : noPriceText
                 ? locale === "en-US"
-                  ? `Buy No: ${noPriceText}`
-                  : `买 No: ${noPriceText}`
+                  ? `Market hedge: ${noPriceText}`
+                  : `市场反向: ${noPriceText}`
                 : marketTag;
             let bucketLabel =
               bucket.label || `${bucket.value}${detail.temp_symbol}`;

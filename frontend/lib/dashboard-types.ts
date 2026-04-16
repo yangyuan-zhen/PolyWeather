@@ -316,6 +316,26 @@ export interface MarketScan {
   websocket?: Record<string, unknown>;
 }
 
+export interface IntradayMeteorologySignal {
+  label?: string | null;
+  direction?: "support" | "suppress" | "neutral" | string | null;
+  strength?: "weak" | "medium" | "strong" | string | null;
+  summary?: string | null;
+}
+
+export interface IntradayMeteorology {
+  headline?: string | null;
+  confidence?: "low" | "medium" | "high" | string | null;
+  base_case_bucket?: string | null;
+  upside_bucket?: string | null;
+  downside_bucket?: string | null;
+  next_observation_time?: string | null;
+  peak_window?: string | null;
+  invalidation_rules?: string[] | null;
+  confirmation_rules?: string[] | null;
+  signal_contributions?: IntradayMeteorologySignal[] | null;
+}
+
 export interface AiAnalysisStructured {
   summary?: string | null;
   text?: string | null;
@@ -473,6 +493,7 @@ export interface CityDetail {
   multi_model_daily?: Record<string, DailyModelForecast>;
   source_forecasts?: SourceForecasts;
   market_scan?: MarketScan;
+  intraday_meteorology?: IntradayMeteorology;
 }
 
 export interface HistoryPoint {

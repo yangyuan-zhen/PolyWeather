@@ -15,6 +15,10 @@ import {
 } from "@/lib/dashboard-client";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
+import {
   CityDetail,
   CityListItem,
   CitySummary,
@@ -94,6 +98,36 @@ function getInitialProAccessState(): ProAccessState {
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
 const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
 type CityDetailDepth = "panel" | "market" | "nearby" | "full";
+
+async function buildAuthMeHeaders(): Promise<HeadersInit> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (!hasSupabasePublicEnv()) {
+    return headers;
+  }
+
+  try {
+    const {
+      data: { session: cachedSession },
+    } = await getSupabaseBrowserClient().auth.getSession();
+    let accessToken = String(cachedSession?.access_token || "").trim();
+    const expiresAtSec = Number(cachedSession?.expires_at || 0);
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (!accessToken || (Number.isFinite(expiresAtSec) && expiresAtSec <= nowSec + 60)) {
+      const {
+        data: { session: refreshedSession },
+      } = await getSupabaseBrowserClient().auth.refreshSession();
+      accessToken = String(refreshedSession?.access_token || accessToken || "").trim();
+    }
+    if (accessToken) {
+      headers.Authorization = `Bearer ${accessToken}`;
+    }
+  } catch {
+    // The same-origin route can still fall back to cookie-backed auth.
+  }
+  return headers;
+}
 
 function countAvailableModels(
   detail?: CityDetail | null,
@@ -563,11 +597,10 @@ export function DashboardStoreProvider({
       error: null,
     }));
     try {
+      const headers = await buildAuthMeHeaders();
       const response = await fetch("/api/auth/me", {
         cache: "no-store",
-        headers: {
-          Accept: "application/json",
-        },
+        headers,
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

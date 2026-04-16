@@ -1,6 +1,6 @@
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
-from web.analysis_service import _build_city_detail_payload
+from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
 
 
 def test_new_south_asia_city_registry_entries_are_wired():
@@ -198,3 +198,84 @@ def test_city_detail_payload_exposes_airport_and_official_network_layers():
     assert payload["official"]["airport_primary"]["source_code"] == "metar"
     assert payload["official"]["official_nearby"][0]["source_code"] == "mgm"
     assert payload["settlement_station"]["settlement_station_code"] == "LTAC"
+
+
+def test_intraday_meteorology_supportive_heating_case():
+    payload = _build_intraday_meteorology(
+        {
+            "local_time": "12:04",
+            "temp_symbol": "°C",
+            "current": {"temp": 38.2, "max_so_far": 38.2},
+            "deb": {"prediction": 40.4},
+            "probabilities": {"distribution": [{"value": 40, "probability": 0.42}]},
+            "peak": {"first_h": 14, "last_h": 15, "status": "before"},
+            "deviation_monitor": {"direction": "hot", "severity": "strong", "current_delta": 1.9},
+            "vertical_profile_signal": {
+                "heating_setup": "supportive",
+                "summary_zh": "混合层偏深，仍支持午后继续升温。",
+            },
+            "taf": {"signal": {"available": True, "suppression_level": "low", "summary_zh": "TAF 暂未提示强云雨压温。"}},
+        }
+    )
+
+    assert "上修空间" in payload["headline"]
+    assert payload["confidence"] == "high"
+    assert payload["base_case_bucket"] == "40°C"
+    assert payload["next_observation_time"] == "12:30"
+    assert any(item["direction"] == "support" for item in payload["signal_contributions"])
+
+
+def test_intraday_meteorology_suppressed_cloud_rain_case():
+    payload = _build_intraday_meteorology(
+        {
+            "local_time": "13:10",
+            "temp_symbol": "°C",
+            "current": {"temp": 36.0, "max_so_far": 36.5},
+            "deb": {"prediction": 40.2},
+            "probabilities": {"distribution": [{"value": 40, "probability": 0.35}]},
+            "peak": {"first_h": 14, "last_h": 15, "status": "before"},
+            "deviation_monitor": {"direction": "cold", "severity": "strong", "current_delta": -2.0},
+            "vertical_profile_signal": {"heating_setup": "suppressed", "suppression_risk": "high"},
+            "taf": {"signal": {"available": True, "suppression_level": "high", "disruption_level": "high"}},
+        }
+    )
+
+    assert "压制" in payload["headline"]
+    assert payload["confidence"] == "high"
+    assert any("云雨" in rule for rule in payload["invalidation_rules"])
+    assert any(item["direction"] == "suppress" for item in payload["signal_contributions"])
+
+
+def test_intraday_meteorology_handles_sparse_observations():
+    payload = _build_intraday_meteorology(
+        {
+            "local_time": "08:00",
+            "temp_symbol": "°C",
+            "current": {},
+            "probabilities": {"distribution": []},
+            "peak": {},
+            "taf": {},
+            "vertical_profile_signal": {},
+        }
+    )
+
+    assert payload["confidence"] == "low"
+    assert payload["next_observation_time"] == "08:30"
+    assert payload["signal_contributions"][0]["label"] == "数据完整性"
+
+
+def test_intraday_meteorology_past_peak_case():
+    payload = _build_intraday_meteorology(
+        {
+            "local_time": "17:20",
+            "temp_symbol": "°C",
+            "current": {"temp": 33.0, "max_so_far": 39.0},
+            "probabilities": {"distribution": [{"value": 39, "probability": 0.5}]},
+            "peak": {"first_h": 13, "last_h": 15, "status": "past"},
+            "deviation_monitor": {"direction": "normal", "severity": "normal", "current_delta": 0.1},
+        }
+    )
+
+    assert "峰值窗口已过" in payload["headline"]
+    assert payload["base_case_bucket"] == "39°C"
+    assert any("最终高点" in rule for rule in payload["invalidation_rules"])

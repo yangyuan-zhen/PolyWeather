@@ -1118,6 +1118,296 @@ def _build_taf_signal(
     }
 
 
+def _clock_minutes(value: Any) -> Optional[int]:
+    text = str(value or "").strip()
+    match = re.search(r"\b(\d{1,2}):(\d{2})\b", text)
+    if not match:
+        return None
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+
+def _format_clock_minutes(value: int) -> str:
+    value = max(0, min(23 * 60 + 59, int(value)))
+    return f"{value // 60:02d}:{value % 60:02d}"
+
+
+def _next_observation_clock(local_time: Any) -> str:
+    minutes = _clock_minutes(local_time)
+    if minutes is None:
+        return "--"
+    next_slot = ((minutes // 30) + 1) * 30
+    if next_slot > 23 * 60 + 59:
+        return "23:59"
+    return _format_clock_minutes(next_slot)
+
+
+def _bucket_label_from_value(value: Optional[float], unit: str) -> Optional[str]:
+    if value is None:
+        return None
+    try:
+        return f"{int(round(float(value)))}{unit or '°C'}"
+    except Exception:
+        return None
+
+
+def _top_probability_bucket(distribution: Any) -> Optional[Dict[str, Any]]:
+    if not isinstance(distribution, list):
+        return None
+    candidates = [row for row in distribution if isinstance(row, dict)]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda row: _sf(row.get("probability")) or -1.0)
+
+
+def _bucket_label(row: Optional[Dict[str, Any]], unit: str) -> Optional[str]:
+    if not isinstance(row, dict):
+        return None
+    for key in ("label", "bucket", "range"):
+        raw = str(row.get(key) or "").strip()
+        if raw:
+            return raw
+    return _bucket_label_from_value(_sf(row.get("value")), unit)
+
+
+def _add_signal(
+    signals: list,
+    *,
+    label: str,
+    direction: str,
+    strength: str,
+    summary: str,
+) -> None:
+    signals.append(
+        {
+            "label": label,
+            "direction": direction,
+            "strength": strength,
+            "summary": summary,
+        }
+    )
+
+
+def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
+    """Build a paid-product intraday meteorology read from existing layers."""
+    current = data.get("current") or {}
+    probabilities = data.get("probabilities") or {}
+    distribution = probabilities.get("distribution") or []
+    top_bucket = _top_probability_bucket(distribution)
+    unit = str(data.get("temp_symbol") or "°C")
+    deb = data.get("deb") or {}
+    peak = data.get("peak") or {}
+    deviation = data.get("deviation_monitor") or {}
+    taf_signal = (
+        ((data.get("taf") or {}).get("signal") or {})
+        if isinstance(data.get("taf"), dict)
+        else {}
+    )
+    vertical = data.get("vertical_profile_signal") or {}
+
+    current_temp = _sf(current.get("temp"))
+    max_so_far = _sf(current.get("max_so_far"))
+    deb_prediction = _sf(deb.get("prediction"))
+    base_value = _sf(top_bucket.get("value")) if isinstance(top_bucket, dict) else None
+    if base_value is None:
+        base_value = deb_prediction
+    if base_value is None:
+        base_value = max_so_far if max_so_far is not None else current_temp
+
+    base_case_bucket = _bucket_label(top_bucket, unit) or _bucket_label_from_value(base_value, unit)
+    upside_bucket = _bucket_label_from_value(base_value + 1.0, unit) if base_value is not None else None
+    downside_bucket = _bucket_label_from_value(base_value - 1.0, unit) if base_value is not None else None
+
+    signals: list = []
+    support_score = 0
+    suppress_score = 0
+    available_layers = 0
+
+    direction = str(deviation.get("direction") or "").lower()
+    severity = str(deviation.get("severity") or "normal").lower()
+    delta = _sf(deviation.get("current_delta"))
+    if direction:
+        available_layers += 1
+        strength = "strong" if severity == "strong" else ("medium" if severity == "light" else "weak")
+        if direction == "hot":
+            support_score += 2 if strength == "strong" else 1
+            _add_signal(
+                signals,
+                label="日内节奏",
+                direction="support",
+                strength=strength,
+                summary=f"实测较预期路径偏高 {abs(delta or 0):.1f}{unit}，峰值仍有上修空间。",
+            )
+        elif direction == "cold":
+            suppress_score += 2 if strength == "strong" else 1
+            _add_signal(
+                signals,
+                label="日内节奏",
+                direction="suppress",
+                strength=strength,
+                summary=f"实测较预期路径偏低 {abs(delta or 0):.1f}{unit}，追更高温档需要等待后续观测确认。",
+            )
+        else:
+            _add_signal(
+                signals,
+                label="日内节奏",
+                direction="neutral",
+                strength="weak",
+                summary="实测大体贴近当前预期路径，下一步主要看峰值窗口内是否继续抬升。",
+            )
+
+    heating_setup = str(vertical.get("heating_setup") or "").lower()
+    suppression_risk = str(vertical.get("suppression_risk") or "").lower()
+    if heating_setup or suppression_risk:
+        available_layers += 1
+        if heating_setup == "supportive":
+            support_score += 2
+            _add_signal(
+                signals,
+                label="边界层结构",
+                direction="support",
+                strength="strong",
+                summary=str(vertical.get("summary_zh") or "边界层结构支持白天继续混合升温。"),
+            )
+        elif heating_setup == "suppressed" or suppression_risk == "high":
+            suppress_score += 2
+            _add_signal(
+                signals,
+                label="边界层结构",
+                direction="suppress",
+                strength="strong",
+                summary=str(vertical.get("summary_zh") or "边界层或云雨结构对午后峰值形成压制。"),
+            )
+        else:
+            _add_signal(
+                signals,
+                label="边界层结构",
+                direction="neutral",
+                strength="medium",
+                summary=str(vertical.get("summary_zh") or "边界层结构暂未给出单边信号。"),
+            )
+
+    taf_suppression = str(taf_signal.get("suppression_level") or "").lower()
+    taf_disruption = str(taf_signal.get("disruption_level") or "").lower()
+    if taf_signal.get("available") or taf_suppression:
+        available_layers += 1
+        if taf_suppression == "high" or taf_disruption == "high":
+            suppress_score += 2
+            direction_value = "suppress"
+            strength = "strong"
+        elif taf_suppression == "medium" or taf_disruption == "medium":
+            suppress_score += 1
+            direction_value = "suppress"
+            strength = "medium"
+        else:
+            support_score += 1
+            direction_value = "support"
+            strength = "weak"
+        _add_signal(
+            signals,
+            label="TAF 云雨扰动",
+            direction=direction_value,
+            strength=strength,
+            summary=str(taf_signal.get("summary_zh") or "TAF 暂未提示强云雨压温信号。"),
+        )
+
+    airport_delta = _sf(data.get("airport_vs_network_delta"))
+    lead_signal = data.get("network_lead_signal") or {}
+    if airport_delta is not None:
+        available_layers += 1
+        leader = str(lead_signal.get("leader_station_label") or lead_signal.get("leader_station_code") or "").strip()
+        if airport_delta <= -0.4:
+            support_score += 1
+            _add_signal(
+                signals,
+                label="站网对比",
+                direction="support",
+                strength="medium",
+                summary=f"周边站网较机场锚点偏热 {abs(airport_delta):.1f}{unit}{f'，领先点位 {leader}' if leader else ''}。",
+            )
+        elif airport_delta >= 0.4:
+            suppress_score += 1
+            _add_signal(
+                signals,
+                label="站网对比",
+                direction="suppress",
+                strength="medium",
+                summary=f"机场锚点较周边站网偏热 {abs(airport_delta):.1f}{unit}，继续上修需要机场自身后续报文确认。",
+            )
+        else:
+            _add_signal(
+                signals,
+                label="站网对比",
+                direction="neutral",
+                strength="weak",
+                summary="机场锚点与周边站网基本同步，暂不构成单独上修或下修理由。",
+            )
+
+    peak_status = str(peak.get("status") or "").lower()
+    first_h = _sf(peak.get("first_h"))
+    last_h = _sf(peak.get("last_h"))
+    peak_window = (
+        f"{int(first_h):02d}:00-{int(last_h):02d}:59"
+        if first_h is not None and last_h is not None
+        else "--"
+    )
+    if peak_status == "past":
+        headline = "峰值窗口已过，后续更偏向确认最终高点而非继续上修。"
+        confidence = "high" if available_layers >= 2 else "medium"
+    elif suppress_score >= support_score + 2:
+        headline = "峰值存在云雨或结构压制，当前更偏防守高温上修。"
+        confidence = "high" if available_layers >= 3 else "medium"
+    elif support_score >= suppress_score + 2:
+        headline = "峰值仍有上修空间，后续重点看峰值窗口内报文能否继续抬升。"
+        confidence = "high" if available_layers >= 3 else "medium"
+    elif available_layers == 0:
+        headline = "关键日内层仍在补齐，先以观测锚点和下一次报文为主。"
+        confidence = "low"
+    else:
+        headline = "当前处于分歧判断区，峰值窗口内的下一组观测将决定方向。"
+        confidence = "medium" if available_layers >= 2 else "low"
+
+    next_observation = _next_observation_clock(data.get("local_time") or current.get("obs_time"))
+    threshold = base_value
+    invalidation_rules = []
+    confirmation_rules = []
+    if peak_status == "past":
+        invalidation_rules.append("若后续官方结算源补录更高值，以结算源最终高点为准。")
+        confirmation_rules.append("若峰值窗口后连续两次观测不再创新高，当前高点基本确认。")
+    else:
+        watch_clock = _format_clock_minutes(int(first_h or 13) * 60 + 30)
+        if threshold is not None:
+            invalidation_rules.append(f"{watch_clock} 前若仍未接近 {threshold:.0f}{unit}，上修路径降级。")
+            confirmation_rules.append(f"峰值窗口内任一结算源观测触达或超过 {threshold:.0f}{unit}，基准路径确认度上升。")
+        invalidation_rules.append("若 TAF 或实况报文出现阵雨、雷暴或低云/云雨压制，高温上沿需要下调。")
+        confirmation_rules.append("若实测继续贴近 DEB 曲线且云雨信号不增强，维持当前主路径。")
+
+    if not signals:
+        _add_signal(
+            signals,
+            label="数据完整性",
+            direction="neutral",
+            strength="weak",
+            summary="当前缺少足够的日内结构层，等待下一次观测刷新后再提高判断权重。",
+        )
+
+    return {
+        "headline": headline,
+        "confidence": confidence,
+        "base_case_bucket": base_case_bucket,
+        "upside_bucket": upside_bucket,
+        "downside_bucket": downside_bucket,
+        "next_observation_time": next_observation,
+        "peak_window": peak_window,
+        "invalidation_rules": invalidation_rules[:4],
+        "confirmation_rules": confirmation_rules[:3],
+        "signal_contributions": signals[:5],
+    }
+
+
 def _analyze(
     city: str,
     force_refresh: bool = False,
@@ -1983,6 +2273,7 @@ def _analyze(
         "ai_analysis": "",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+    result["intraday_meteorology"] = _build_intraday_meteorology(result)
 
     if include_llm_commentary:
         result["dynamic_commentary"] = _maybe_enrich_dynamic_commentary_with_groq(
@@ -2483,6 +2774,8 @@ def _build_city_detail_payload(
         },
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
         "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
+        "intraday_meteorology": data.get("intraday_meteorology")
+        or _build_intraday_meteorology(data),
         "vertical_profile_signal": data.get("vertical_profile_signal") or {},
         "taf": data.get("taf") or {},
         "market_scan": market_scan,

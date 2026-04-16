@@ -31,6 +31,7 @@ import {
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
+import type { IntradayMeteorologySignal } from "@/lib/dashboard-types";
 
 function normalizeMarketValue(value?: number | null) {
   if (value == null) return null;
@@ -173,6 +174,35 @@ function parsePercentFromText(value?: string | number | null) {
     return Number.isFinite(numeric) ? clamp(numeric, 0, 100) : null;
   }
   return parseLeadingNumber(text);
+}
+
+function formatConfidenceLabel(value?: string | null, locale = "zh-CN") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "high") return locale === "en-US" ? "High" : "高";
+  if (normalized === "medium") return locale === "en-US" ? "Medium" : "中";
+  if (normalized === "low") return locale === "en-US" ? "Low" : "低";
+  return locale === "en-US" ? "Pending" : "待确认";
+}
+
+function formatSignalDirection(value?: string | null, locale = "zh-CN") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "support") return locale === "en-US" ? "Support" : "支持升温";
+  if (normalized === "suppress") return locale === "en-US" ? "Suppress" : "压制峰值";
+  return locale === "en-US" ? "Neutral" : "中性";
+}
+
+function formatSignalStrength(value?: string | null, locale = "zh-CN") {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (normalized === "strong") return locale === "en-US" ? "Strong" : "强";
+  if (normalized === "medium") return locale === "en-US" ? "Medium" : "中";
+  return locale === "en-US" ? "Weak" : "弱";
+}
+
+function signalTone(signal?: IntradayMeteorologySignal | null) {
+  const direction = String(signal?.direction || "").trim().toLowerCase();
+  if (direction === "support") return "cyan";
+  if (direction === "suppress") return "amber";
+  return "blue";
 }
 
 function getTrendMetricVisual(metric: {
@@ -1081,6 +1111,58 @@ export function FutureForecastModal() {
     }
     return lines.slice(0, 3);
   }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView, showDeferredTodaySections]);
+  const intradayMeteorology = detail.intraday_meteorology || {};
+  const meteorologySignals = Array.isArray(intradayMeteorology.signal_contributions)
+    ? intradayMeteorology.signal_contributions
+    : [];
+  const invalidationRules = Array.isArray(intradayMeteorology.invalidation_rules)
+    ? intradayMeteorology.invalidation_rules
+    : [];
+  const confirmationRules = Array.isArray(intradayMeteorology.confirmation_rules)
+    ? intradayMeteorology.confirmation_rules
+    : [];
+  const meteorologyHeadline =
+    String(intradayMeteorology.headline || "").trim() ||
+    todayTradeSummaryLines[0] ||
+    (locale === "en-US"
+      ? "Intraday meteorology layers are still syncing; use the next observation as the anchor."
+      : "关键日内气象层仍在同步，先以下一次观测作为判断锚点。");
+  const baseCaseBucket =
+    String(intradayMeteorology.base_case_bucket || "").trim() ||
+    formatBucketLabel(topProbabilityBucket);
+  const nextObservationTime =
+    String(intradayMeteorology.next_observation_time || "").trim() || "--";
+  const baseBucketNumber = parseLeadingNumber(baseCaseBucket);
+  const referenceObservedTemp =
+    topObservedTemp != null && Number.isFinite(Number(topObservedTemp))
+      ? Number(topObservedTemp)
+      : detail.current?.temp != null
+        ? Number(detail.current.temp)
+        : null;
+  const gapToBaseBucket =
+    baseBucketNumber != null && referenceObservedTemp != null
+      ? Math.max(0, baseBucketNumber - referenceObservedTemp)
+      : null;
+  const pathStatus =
+    gapToBaseBucket == null
+      ? locale === "en-US"
+        ? "Awaiting anchor"
+        : "等待锚点"
+      : gapToBaseBucket <= 0.05
+        ? locale === "en-US"
+          ? "Base path touched"
+          : "基准路径已触达"
+        : gapToBaseBucket <= 1.0
+          ? locale === "en-US"
+            ? "Base path open"
+            : "基准路径开放"
+          : locale === "en-US"
+            ? "Needs peak push"
+            : "需要峰值推动";
+  const peakWindowText =
+    String(intradayMeteorology.peak_window || "").trim() ||
+    paceView?.peakWindowText ||
+    "--";
   const syncStatusItems = [
     {
       key: "base",
@@ -1215,7 +1297,49 @@ export function FutureForecastModal() {
             </button>
           </div>
           <div className="modal-body future-modal-body">
-            <section className="future-v2-sync-strip" aria-live="polite">
+            {isToday && (
+              <section className="future-v2-meteorology-brief">
+                <div className="future-v2-meteorology-copy">
+                  <div className="modal-section-kicker">
+                    {locale === "en-US" ? "Professional meteorology read" : "专业气象判断"}
+                  </div>
+                  <h3>{meteorologyHeadline}</h3>
+                  <div className="future-v2-meteorology-meta">
+                    <span>
+                      {locale === "en-US" ? "Confidence" : "置信度"} ·{" "}
+                      {formatConfidenceLabel(intradayMeteorology.confidence, locale)}
+                    </span>
+                    <span>
+                      {locale === "en-US" ? "Peak window" : "峰值窗口"} · {peakWindowText}
+                    </span>
+                    <span>
+                      {locale === "en-US" ? "Next observation" : "下一观测"} · {nextObservationTime}
+                    </span>
+                  </div>
+                </div>
+                <div className="future-v2-meteorology-paths">
+                  <div>
+                    <span>{locale === "en-US" ? "Base case" : "基准路径"}</span>
+                    <strong>{baseCaseBucket || "--"}</strong>
+                  </div>
+                  <div>
+                    <span>{locale === "en-US" ? "Upside" : "上修路径"}</span>
+                    <strong>{intradayMeteorology.upside_bucket || "--"}</strong>
+                  </div>
+                  <div>
+                    <span>{locale === "en-US" ? "Downside" : "下修路径"}</span>
+                    <strong>{intradayMeteorology.downside_bucket || "--"}</strong>
+                  </div>
+                </div>
+              </section>
+            )}
+            <section
+              className={clsx(
+                "future-v2-sync-strip",
+                isToday && "future-v2-sync-strip-compact",
+              )}
+              aria-live="polite"
+            >
               {syncStatusItems.map((item) => (
                 <div
                   key={item.key}
@@ -1313,6 +1437,22 @@ export function FutureForecastModal() {
                           {locale === "en-US" ? "Anchor clock" : "锚点时钟"}
                         </span>
                         <strong>{detail.current?.obs_time || "--"}</strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Gap to base" : "距基准档"}
+                        </span>
+                        <strong>
+                          {gapToBaseBucket != null
+                            ? `${gapToBaseBucket.toFixed(1)}${detail.temp_symbol}`
+                            : "--"}
+                        </strong>
+                      </div>
+                      <div className="future-v2-mini-item">
+                        <span>
+                          {locale === "en-US" ? "Path state" : "路径状态"}
+                        </span>
+                        <strong>{pathStatus}</strong>
                       </div>
                       <div className="future-v2-mini-item">
                         <span>
@@ -1484,16 +1624,103 @@ export function FutureForecastModal() {
                       </h3>
                     </div>
                     <DailyTemperatureChart dateStr={dateStr} />
+                    <div className="future-v2-chart-thresholds">
+                      <span>{locale === "en-US" ? "Base" : "基准"} · {baseCaseBucket || "--"}</span>
+                      <span>{locale === "en-US" ? "Upside" : "上修"} · {intradayMeteorology.upside_bucket || "--"}</span>
+                      <span>{locale === "en-US" ? "Invalidates at" : "失效观察"} · {nextObservationTime}</span>
+                    </div>
                   </section>
+
+                  <div className="future-v2-meteorology-grid">
+                    <section className="future-modal-section future-v2-evidence-panel">
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Evidence chain" : "气象证据链"}
+                        </div>
+                        <h3>{locale === "en-US" ? "Signal Contributions" : "信号贡献"}</h3>
+                      </div>
+                      <div className="future-v2-evidence-list">
+                        {meteorologySignals.length > 0 ? (
+                          meteorologySignals.map((signal, index) => (
+                            <div
+                              key={`${signal.label || "signal"}-${index}`}
+                              className={clsx(
+                                "future-v2-evidence-row",
+                                signalTone(signal),
+                              )}
+                            >
+                              <div className="future-v2-evidence-head">
+                                <strong>{signal.label || "--"}</strong>
+                                <span>
+                                  {formatSignalDirection(signal.direction, locale)} ·{" "}
+                                  {formatSignalStrength(signal.strength, locale)}
+                                </span>
+                              </div>
+                              <p>{signal.summary || "--"}</p>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="future-text-block">
+                            {locale === "en-US"
+                              ? "Meteorology signals are still loading."
+                              : "气象信号仍在加载。"}
+                          </div>
+                        )}
+                      </div>
+                    </section>
+
+                    <section className="future-modal-section future-v2-rule-panel">
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Failure modes" : "失效条件"}
+                        </div>
+                        <h3>{locale === "en-US" ? "What Downgrades the Read" : "什么会让判断降级"}</h3>
+                      </div>
+                      <ul className="future-v2-rule-list">
+                        {(invalidationRules.length > 0
+                          ? invalidationRules
+                          : [
+                              locale === "en-US"
+                                ? "If observations stop tracking the expected curve, wait for the next refresh."
+                                : "若实测不再贴近预期曲线，等待下一次刷新确认。",
+                            ]
+                        ).map((rule, index) => (
+                          <li key={`${rule}-${index}`}>{rule}</li>
+                        ))}
+                      </ul>
+                    </section>
+
+                    <section className="future-modal-section future-v2-rule-panel">
+                      <div className="modal-section-heading">
+                        <div className="modal-section-kicker">
+                          {locale === "en-US" ? "Confirmation" : "确认条件"}
+                        </div>
+                        <h3>{locale === "en-US" ? "What Confirms the Path" : "什么会确认主路径"}</h3>
+                      </div>
+                      <ul className="future-v2-rule-list">
+                        {(confirmationRules.length > 0
+                          ? confirmationRules
+                          : [
+                              locale === "en-US"
+                                ? "Keep watching the next settlement-source observation."
+                                : "继续观察下一次结算源报文。",
+                            ]
+                        ).map((rule, index) => (
+                          <li key={`${rule}-${index}`}>{rule}</li>
+                        ))}
+                      </ul>
+                      <div className="future-v2-model-note">{modelSummary}</div>
+                    </section>
+                  </div>
 
                   <div className="future-modal-grid">
                     <section className="future-modal-section">
                       <div className="modal-section-heading">
                         <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Probability layer" : "概率层"}
+                          {locale === "en-US" ? "Auxiliary probability" : "辅助概率"}
                         </div>
                         <h3>
-                          {locale === "en-US" ? "Current Hit Odds" : "当前命中胜率"}
+                          {locale === "en-US" ? "Model & Market Reference" : "模型与市场参考"}
                         </h3>
                       </div>
                       <div className="future-text-block" style={{ marginBottom: "12px" }}>
@@ -1503,6 +1730,7 @@ export function FutureForecastModal() {
                         <ProbabilityDistribution
                           detail={detail}
                           targetDate={dateStr}
+                          marketScan={detail.market_scan}
                           hideTitle
                         />
                       </div>
