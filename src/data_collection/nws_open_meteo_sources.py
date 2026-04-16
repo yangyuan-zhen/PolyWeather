@@ -22,7 +22,7 @@ OPEN_METEO_MULTI_MODEL_SPECS: Dict[str, Dict[str, Any]] = {
         "label": "ECMWF AIFS",
         "provider": "ECMWF",
         "model": "AIFS single",
-        "tier": "global_ai",
+        "tier": "aifs_global",
         "resolution_km": 25,
         "horizon": "15d",
     },

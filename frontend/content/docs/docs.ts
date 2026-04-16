@@ -173,8 +173,8 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "model-sources",
             title: "当前接入的开放模型",
             blocks: [
-              { type: "paragraph", text: "PolyWeather 的多模型层通过 Open-Meteo 模型接口接入开放 NWP / AI 预报。它不是直接下载原始 GRIB，而是把可用模型统一归一到最高温模型栈里，供模型分歧、概率层和 DEB 使用。" },
-              { type: "bullets", items: ["ECMWF IFS：全球传统数值模式。", "ECMWF AIFS：ECMWF AI forecast，作为独立 AI 路径保留。", "DWD ICON：全球 ICON 基准层。", "DWD ICON-EU：欧洲区域高分辨率层。", "DWD ICON-D2：欧洲短时高分辨率层。", "ECCC GEM / GDPS：加拿大系全球模式。", "ECCC RDPS / HRDPS：北美区域与短时高分辨率层。", "GFS / JMA：继续作为全球参考模型保留。"] },
+              { type: "paragraph", text: "PolyWeather 的多模型层通过 Open-Meteo 模型接口接入开放 NWP / AIFS 等预报模型。它不是直接下载原始 GRIB，而是把可用模型统一归一到最高温模型栈里，供模型分歧、概率层和 DEB 使用。" },
+              { type: "bullets", items: ["ECMWF IFS：全球传统数值模式。", "ECMWF AIFS：ECMWF AIFS 模型，作为独立 AIFS 路径保留。", "DWD ICON：全球 ICON 基准层。", "DWD ICON-EU：欧洲区域高分辨率层。", "DWD ICON-D2：欧洲短时高分辨率层。", "ECCC GEM / GDPS：加拿大系全球模式。", "ECCC RDPS / HRDPS：北美区域与短时高分辨率层。", "GFS / JMA：继续作为全球参考模型保留。"] },
             ],
           },
           {
@@ -190,7 +190,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "DEB 如何处理新增模型",
             blocks: [
               { type: "paragraph", text: "DEB 不会把所有新模型按“每个模型一票”直接等权加入。否则 ICON / ICON-EU / ICON-D2 会让 DWD 模型家族被重复放大，GEM / GDPS / RDPS / HRDPS 也会让加拿大模型家族被重复放大。" },
-              { type: "bullets", items: ["ICON / ICON-EU / ICON-D2 归为 DWD ICON 家族，优先级为 ICON-D2 > ICON-EU > ICON。", "GEM / GDPS / RDPS / HRDPS 归为 ECCC GEM 家族，优先级为 HRDPS > RDPS > GDPS > GEM。", "ECMWF IFS 与 ECMWF AIFS 分开保留，因为一个是传统数值模式，一个是 AI forecast。", "GFS、JMA、MGM、NWS、LGBM、Open-Meteo 等保持独立路径。", "DEB 权重信息中出现“家族去重”时，表示系统已经先折叠同家族模型，再进行历史 MAE 倒数加权。"] },
+              { type: "bullets", items: ["ICON / ICON-EU / ICON-D2 归为 DWD ICON 家族，优先级为 ICON-D2 > ICON-EU > ICON。", "GEM / GDPS / RDPS / HRDPS 归为 ECCC GEM 家族，优先级为 HRDPS > RDPS > GDPS > GEM。", "ECMWF IFS 与 ECMWF AIFS 分开保留，因为一个是传统数值模式，一个是 AIFS 模型。", "GFS、JMA、MGM、NWS、LGBM、Open-Meteo 等保持独立路径。", "DEB 权重信息中出现“家族去重”时，表示系统已经先折叠同家族模型，再进行历史 MAE 倒数加权。"] },
               { type: "callout", tone: "info", title: "产品含义", text: "新增模型提升的是区域代表性和解释力，不是让某个地区因为模型数量更多就天然拥有更高权重。" },
             ],
           },
@@ -198,7 +198,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "display",
             title: "网页上如何展示",
             blocks: [
-              { type: "paragraph", text: "网页的“模型区间与分歧”会按全球基准、AI 预报、欧洲高分辨率、北美高分辨率分组显示，并展示可用模型数量、模型分歧、来源、模型名称、分辨率和预报时效。没有覆盖的区域模型不会显示。" },
+              { type: "paragraph", text: "网页的“模型区间与分歧”会按全球基准、AIFS 模型、欧洲高分辨率、北美高分辨率分组显示，并展示可用模型数量、模型分歧、来源、模型名称、分辨率和预报时效。没有覆盖的区域模型不会显示。" },
             ],
           },
         ],
@@ -211,8 +211,8 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "model-sources",
             title: "Open models currently integrated",
             blocks: [
-              { type: "paragraph", text: "PolyWeather's multi-model layer uses the Open-Meteo model API to integrate open NWP and AI forecasts. It does not download raw GRIB directly; instead, available models are normalized into the daily-high model stack used by spread, probabilities, and DEB." },
-              { type: "bullets", items: ["ECMWF IFS: global traditional NWP.", "ECMWF AIFS: ECMWF AI forecast, kept as a separate AI path.", "DWD ICON: global ICON baseline.", "DWD ICON-EU: European regional high-resolution layer.", "DWD ICON-D2: European short-range high-resolution layer.", "ECCC GEM / GDPS: Canadian global model family.", "ECCC RDPS / HRDPS: North American regional and short-range high-resolution layers.", "GFS / JMA: retained as global reference models."] },
+              { type: "paragraph", text: "PolyWeather's multi-model layer uses the Open-Meteo model API to integrate open NWP and AIFS model forecasts. It does not download raw GRIB directly; instead, available models are normalized into the daily-high model stack used by spread, probabilities, and DEB." },
+              { type: "bullets", items: ["ECMWF IFS: global traditional NWP.", "ECMWF AIFS: ECMWF AIFS model, kept as a separate AIFS path.", "DWD ICON: global ICON baseline.", "DWD ICON-EU: European regional high-resolution layer.", "DWD ICON-D2: European short-range high-resolution layer.", "ECCC GEM / GDPS: Canadian global model family.", "ECCC RDPS / HRDPS: North American regional and short-range high-resolution layers.", "GFS / JMA: retained as global reference models."] },
             ],
           },
           {
@@ -228,7 +228,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "How DEB handles the new models",
             blocks: [
               { type: "paragraph", text: "DEB does not treat every new model as one independent vote. Otherwise ICON / ICON-EU / ICON-D2 would over-amplify the DWD family, and GEM / GDPS / RDPS / HRDPS would over-amplify the Canadian family." },
-              { type: "bullets", items: ["ICON / ICON-EU / ICON-D2 are collapsed into one DWD ICON family, with priority ICON-D2 > ICON-EU > ICON.", "GEM / GDPS / RDPS / HRDPS are collapsed into one ECCC GEM family, with priority HRDPS > RDPS > GDPS > GEM.", "ECMWF IFS and ECMWF AIFS are kept separate because one is traditional NWP and the other is an AI forecast.", "GFS, JMA, MGM, NWS, LGBM, and Open-Meteo remain independent paths.", "When the DEB weight string includes “family deduplication” or “家族去重”, the system has collapsed same-family models before applying historical inverse-MAE weighting."] },
+              { type: "bullets", items: ["ICON / ICON-EU / ICON-D2 are collapsed into one DWD ICON family, with priority ICON-D2 > ICON-EU > ICON.", "GEM / GDPS / RDPS / HRDPS are collapsed into one ECCC GEM family, with priority HRDPS > RDPS > GDPS > GEM.", "ECMWF IFS and ECMWF AIFS are kept separate because one is traditional NWP and the other is the AIFS model.", "GFS, JMA, MGM, NWS, LGBM, and Open-Meteo remain independent paths.", "When the DEB weight string includes “family deduplication” or “家族去重”, the system has collapsed same-family models before applying historical inverse-MAE weighting."] },
               { type: "callout", tone: "info", title: "Product meaning", text: "The new models improve regional representativeness and explanation quality. They do not let a region gain extra weight simply because more related model variants exist there." },
             ],
           },
@@ -236,7 +236,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "display",
             title: "How the site displays this",
             blocks: [
-              { type: "paragraph", text: "The Model Range & Spread panel groups the model stack into Global Baseline, AI Forecast, Europe High-resolution, and North America High-resolution. It shows available model count, spread, source, model name, resolution, and forecast horizon. Regional models outside their domain are simply not shown." },
+              { type: "paragraph", text: "The Model Range & Spread panel groups the model stack into Global Baseline, AIFS Model, Europe High-resolution, and North America High-resolution. It shows available model count, spread, source, model name, resolution, and forecast horizon. Regional models outside their domain are simply not shown." },
             ],
           },
         ],

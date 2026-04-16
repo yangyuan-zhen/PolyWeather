@@ -113,10 +113,10 @@ function getModelGroupMeta(
   const tier = String(meta.tier || "").toLowerCase();
   const upperName = String(name || "").toUpperCase();
 
-  if (tier.includes("ai") || upperName.includes("AIFS")) {
+  if (tier.includes("aifs") || upperName.includes("AIFS")) {
     return {
-      key: "ai",
-      label: locale === "en-US" ? "AI forecast" : "AI 预报",
+      key: "aifs",
+      label: locale === "en-US" ? "AIFS model" : "AIFS 模型",
       order: 1,
       tone: "blue",
     };

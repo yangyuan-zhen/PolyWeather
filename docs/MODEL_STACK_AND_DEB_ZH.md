@@ -4,7 +4,7 @@
 
 ## 1. 接入方式
 
-当前多模型层通过 Open-Meteo model API 接入开放 NWP / AI 预报，不直接下载原始 GRIB。
+当前多模型层通过 Open-Meteo model API 接入开放 NWP / AIFS 等预报模型，不直接下载原始 GRIB。
 
 入口：
 
@@ -33,7 +33,7 @@ Web API 会把这部分元数据挂到：
 | 显示名 | Open-Meteo key | 来源 | 层级 | 说明 |
 | --- | --- | --- | --- | --- |
 | ECMWF | `ecmwf_ifs025` | ECMWF | global | IFS 全球传统数值模式 |
-| ECMWF AIFS | `ecmwf_aifs025_single` | ECMWF | global_ai | ECMWF AI forecast |
+| ECMWF AIFS | `ecmwf_aifs025_single` | ECMWF | aifs_global | ECMWF AIFS 模型 |
 | GFS | `gfs_seamless` | NOAA | global | NOAA 全球参考 |
 | ICON | `icon_seamless` | DWD | global | DWD ICON 全球基准 |
 | ICON-EU | `icon_eu` | DWD | regional_europe | 欧洲区域高分辨率 |
@@ -152,7 +152,7 @@ HRDPS > RDPS > GDPS > GEM
 - LGBM
 - Open-Meteo
 
-ECMWF IFS 与 ECMWF AIFS 分开保留，因为前者是传统 NWP，后者是 AI forecast。
+ECMWF IFS 与 ECMWF AIFS 分开保留，因为前者是传统 NWP，后者是 AIFS 模型。
 
 ## 5. DEB 权重流程
 
@@ -180,7 +180,7 @@ raw current_forecasts
 显示分组：
 
 - 全球基准
-- AI 预报
+- AIFS 模型
 - 欧洲高分辨率
 - 北美高分辨率
 
