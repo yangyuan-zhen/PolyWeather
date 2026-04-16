@@ -2949,8 +2949,31 @@
 
 .root :global(.future-v2-meteorology-copy) {
   display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.root :global(.future-v2-anchor-row) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 10px;
   min-width: 0;
+}
+
+.root :global(.future-v2-anchor-source) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  background: rgba(8, 47, 73, 0.36);
+  color: #67e8f9;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.25;
+  white-space: nowrap;
 }
 
 .root :global(.future-v2-meteorology-copy h3) {
@@ -2960,6 +2983,14 @@
   font-weight: 800;
   line-height: 1.35;
   letter-spacing: 0;
+}
+
+.root :global(.future-v2-anchor-rule) {
+  margin: 0;
+  max-width: 860px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .root :global(.future-v2-meteorology-meta) {
@@ -2979,6 +3010,73 @@
   color: #cbd5e1;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.root :global(.future-v2-decision-rail) {
+  display: grid;
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.35fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+.root :global(.future-v2-decision-anchor) {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.root :global(.future-v2-decision-anchor span),
+.root :global(.future-v2-decision-grid span) {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.root :global(.future-v2-decision-anchor strong) {
+  display: block;
+  margin-top: 8px;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.35;
+  letter-spacing: 0;
+}
+
+.root :global(.future-v2-decision-anchor small) {
+  display: block;
+  margin-top: 6px;
+  color: #67e8f9;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.root :global(.future-v2-decision-grid) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.future-v2-decision-grid div) {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 8px;
+  background: rgba(2, 6, 23, 0.5);
+}
+
+.root :global(.future-v2-decision-grid strong) {
+  display: block;
+  margin-top: 7px;
+  color: #67e8f9;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .root :global(.future-v2-meteorology-paths) {
@@ -4127,6 +4225,14 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .root :global(.future-v2-decision-rail) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.future-v2-decision-grid) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .root :global(.future-v2-layout) {
     grid-template-columns: 1fr;
   }
@@ -4158,6 +4264,15 @@
 
   .root :global(.future-v2-meteorology-paths) {
     grid-template-columns: 1fr;
+  }
+
+  .root :global(.future-v2-anchor-row) {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .root :global(.future-v2-decision-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .root :global(.future-v2-meteorology-copy h3) {

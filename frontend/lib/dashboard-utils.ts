@@ -106,7 +106,12 @@ function getObservationSourceTag(detail: CityDetail): string {
   if (code === "hko") return "HKO";
   if (code === "cwa") return "CWA";
   if (code === "noaa") return "NOAA";
-  if (code === "wunderground") return "WUNDERGROUND";
+  if (code === "wunderground") {
+    const icao = String(detail.risk?.icao || detail.current?.station_code || "")
+      .trim()
+      .toUpperCase();
+    return icao ? `${icao} METAR` : "METAR";
+  }
   if (code === "mgm") return "MGM";
   return "METAR";
 }
@@ -819,7 +824,7 @@ export function getTemperatureChartData(
       : observationCode === "wunderground" && usingMetarObservationSource
       ? metarFallbackTag
       : observationCode === "wunderground"
-        ? `WU ${String(detail.risk?.icao || "").trim().toUpperCase() || "STATION"}`
+        ? metarFallbackTag
       : useSettlementObservationSource && shouldUseMetarFallback
       ? metarFallbackTag
       : observationCode === "noaa"
@@ -3190,8 +3195,7 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
   const isOfficialSource =
     sourceCode === "hko" ||
     sourceCode === "cwa" ||
-    sourceCode === "noaa" ||
-    sourceCode === "wunderground";
+    sourceCode === "noaa";
 
   const sourceDisplay = (() => {
     if (sourceCode === "hko") {
@@ -3210,6 +3214,15 @@ export function getCityProfileStats(detail: CityDetail, locale: Locale = "zh-CN"
       return isEnglish(locale)
         ? `${noaaName}${noaaCode ? ` (${noaaCode})` : ""}`
         : `${noaaName}${noaaCode ? `（${noaaCode}）` : ""}`;
+    }
+    if (sourceCode === "wunderground") {
+      const icao = String(detail.risk?.icao || detail.current?.station_code || "")
+        .trim()
+        .toUpperCase();
+      const stationName = String(
+        detail.current?.station_name || detail.risk?.airport || "",
+      ).trim();
+      return `${stationName || icao || "Airport"}${icao ? ` (${icao} METAR)` : " METAR"}`;
     }
     const stationName = String(
       detail.current?.station_name || detail.risk?.airport || "",
@@ -3343,8 +3356,7 @@ export function getSettlementRiskNarrative(
   const stationTerm =
     sourceCode === "hko" ||
     sourceCode === "cwa" ||
-    sourceCode === "noaa" ||
-    sourceCode === "wunderground"
+    sourceCode === "noaa"
     ? isEnglish(locale)
       ? "settlement reference station"
       : "结算参考站"

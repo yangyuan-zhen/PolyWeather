@@ -158,7 +158,22 @@ export function HeroSummary() {
   const { weatherIcon, weatherText } = getWeatherSummary(data, locale);
   const metaItems = getHeroMetaItems(data, locale);
   const current = data.current || {};
-  const settlementSource = String(current.settlement_source || "metar").toUpperCase();
+  const settlementSourceCode = String(current.settlement_source || "metar")
+    .trim()
+    .toLowerCase();
+  const settlementIcao = String(
+    current.station_code || data.risk?.icao || "",
+  )
+    .trim()
+    .toUpperCase();
+  const settlementSource =
+    settlementSourceCode === "wunderground"
+      ? settlementIcao
+        ? `${settlementIcao} METAR`
+        : "METAR"
+      : String(current.settlement_source_label || current.settlement_source || "METAR")
+          .trim()
+          .toUpperCase();
   const isMax =
     current.max_so_far != null &&
     current.temp != null &&
@@ -198,8 +213,8 @@ export function HeroSummary() {
         <div className="hero-item">
           <span className="label">
             {locale === "en-US"
-              ? `${settlementSource} Settlement Ref`
-              : `${settlementSource} 结算参考`}
+              ? `${settlementSource} Anchor`
+              : `${settlementSource} 锚点`}
           </span>
           <span className="value highlight">
             {current.wu_settlement != null

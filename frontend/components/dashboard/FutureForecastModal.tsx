@@ -1197,6 +1197,47 @@ export function FutureForecastModal() {
     String(intradayMeteorology.peak_window || "").trim() ||
     paceView?.peakWindowText ||
     "--";
+  const settlementSourceCode = String(
+    detail.current?.settlement_source || "",
+  ).trim().toLowerCase();
+  const settlementStationCode = String(
+    detail.current?.station_code || detail.risk?.icao || "",
+  )
+    .trim()
+    .toUpperCase();
+  const settlementStationName =
+    String(detail.current?.station_name || detail.risk?.airport || "").trim() ||
+    settlementStationCode ||
+    (locale === "en-US" ? "Anchor station" : "锚点站");
+  const airportMetarAnchor =
+    settlementSourceCode === "metar" ||
+    settlementSourceCode === "wunderground" ||
+    Boolean(settlementStationCode && /^[A-Z]{4}$/.test(settlementStationCode));
+  const anchorSourceLabel = airportMetarAnchor
+    ? settlementStationCode
+      ? `${settlementStationCode} METAR`
+      : "METAR"
+    : detail.current?.settlement_source_label ||
+      detail.current?.settlement_source ||
+      (locale === "en-US" ? "Official observation" : "官方观测");
+  const anchorRuleText = airportMetarAnchor
+    ? locale === "en-US"
+      ? `Airport contract anchor: use the ${anchorSourceLabel} reports. Wunderground is only a history display page when present.`
+      : `机场合约锚点：以 ${anchorSourceLabel} 报文为准；若出现 Wunderground，它只是历史展示页面。`
+    : locale === "en-US"
+      ? `Official anchor: use ${anchorSourceLabel} observations for this contract.`
+      : `官方锚点：该合约按 ${anchorSourceLabel} 观测口径判断。`;
+  const nextObservationLabel = airportMetarAnchor
+    ? locale === "en-US"
+      ? "Next METAR watch"
+      : "下一次 METAR 观察"
+    : locale === "en-US"
+      ? "Next anchor watch"
+      : "下一次锚点观察";
+  const gapToBaseText =
+    gapToBaseBucket == null
+      ? "--"
+      : `${gapToBaseBucket.toFixed(1)}${detail.temp_symbol || "°C"}`;
   const syncStatusItems = [
     {
       key: "base",
@@ -1334,35 +1375,50 @@ export function FutureForecastModal() {
             {isToday && (
               <section className="future-v2-meteorology-brief">
                 <div className="future-v2-meteorology-copy">
-                  <div className="modal-section-kicker">
-                    {locale === "en-US" ? "Professional meteorology read" : "专业气象判断"}
+                  <div className="future-v2-anchor-row">
+                    <div className="modal-section-kicker">
+                      {locale === "en-US" ? "Professional meteorology read" : "专业气象判断"}
+                    </div>
+                    <span className="future-v2-anchor-source">{anchorSourceLabel}</span>
                   </div>
                   <h3>{meteorologyHeadline}</h3>
+                  <p className="future-v2-anchor-rule">{anchorRuleText}</p>
                   <div className="future-v2-meteorology-meta">
                     <span>
                       {locale === "en-US" ? "Confidence" : "置信度"} ·{" "}
                       {formatConfidenceLabel(intradayMeteorology.confidence, locale)}
                     </span>
                     <span>
-                      {locale === "en-US" ? "Peak window" : "峰值窗口"} · {peakWindowText}
+                      {locale === "en-US" ? "Path state" : "路径状态"} · {pathStatus}
                     </span>
                     <span>
-                      {locale === "en-US" ? "Next observation" : "下一观测"} · {nextObservationTime}
+                      {nextObservationLabel} · {nextObservationTime}
                     </span>
                   </div>
                 </div>
-                <div className="future-v2-meteorology-paths">
-                  <div>
-                    <span>{locale === "en-US" ? "Base case" : "基准路径"}</span>
-                    <strong>{baseCaseBucket || "--"}</strong>
+                <div className="future-v2-decision-rail">
+                  <div className="future-v2-decision-anchor">
+                    <span>{locale === "en-US" ? "Anchor" : "锚点"}</span>
+                    <strong>{settlementStationName}</strong>
+                    <small>{anchorSourceLabel}</small>
                   </div>
-                  <div>
-                    <span>{locale === "en-US" ? "Upside" : "上修路径"}</span>
-                    <strong>{intradayMeteorology.upside_bucket || "--"}</strong>
-                  </div>
-                  <div>
-                    <span>{locale === "en-US" ? "Downside" : "下修路径"}</span>
-                    <strong>{intradayMeteorology.downside_bucket || "--"}</strong>
+                  <div className="future-v2-decision-grid">
+                    <div>
+                      <span>{locale === "en-US" ? "Base" : "基准"}</span>
+                      <strong>{baseCaseBucket || "--"}</strong>
+                    </div>
+                    <div>
+                      <span>{locale === "en-US" ? "Upside" : "上修"}</span>
+                      <strong>{intradayMeteorology.upside_bucket || "--"}</strong>
+                    </div>
+                    <div>
+                      <span>{locale === "en-US" ? "Downside" : "下修"}</span>
+                      <strong>{intradayMeteorology.downside_bucket || "--"}</strong>
+                    </div>
+                    <div>
+                      <span>{locale === "en-US" ? "Gap to base" : "距基准还差"}</span>
+                      <strong>{gapToBaseText}</strong>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -1653,8 +1709,8 @@ export function FutureForecastModal() {
                       </div>
                       <h3>
                         {locale === "en-US"
-                          ? "Today's temperature forecast (obs + market)"
-                          : "今日气温预测（观测 + 市场）"}
+                          ? "Today's temperature path (anchor obs + models)"
+                          : "今日气温路径（锚点观测 + 模型）"}
                       </h3>
                     </div>
                     <DailyTemperatureChart dateStr={dateStr} />
@@ -1740,8 +1796,12 @@ export function FutureForecastModal() {
                           ? confirmationRules
                           : [
                               locale === "en-US"
-                                ? "Keep watching the next settlement-source observation."
-                                : "继续观察下一次结算源报文。",
+                                ? airportMetarAnchor
+                                  ? "Keep watching the next anchor METAR report."
+                                  : "Keep watching the next official anchor observation."
+                                : airportMetarAnchor
+                                  ? "继续观察下一次锚点 METAR 报文。"
+                                  : "继续观察下一次官方锚点观测。",
                             ]
                         ).map((rule, index) => (
                           <li key={`${rule}-${index}`}>{rule}</li>
