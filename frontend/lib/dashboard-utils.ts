@@ -2993,30 +2993,48 @@ function getOfficialObservationCandidates(detail: CityDetail) {
 }
 
 function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
-  const { centerStation, officialAnchor, officialNearby, mgmNearby } =
-    getOfficialObservationCandidates(detail);
-  const observedTemp = firstFiniteNumber([
-    detail.current?.temp,
-    detail.airport_primary?.temp,
-    detail.airport_current?.temp,
-    centerStation?.temp,
-    officialAnchor?.temp,
-    officialNearby[0]?.temp,
-    mgmNearby[0]?.temp,
-  ]);
+  const { mgmNearby } = getOfficialObservationCandidates(detail);
+  const currentSource = String(
+    detail.current?.settlement_source ||
+      detail.current?.settlement_source_label ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  const isNmcCurrent = currentSource === "nmc" || currentSource.includes("nmc");
+  const isNmcAirport = String(detail.airport_primary?.source_label || "")
+    .trim()
+    .toLowerCase()
+    .includes("nmc");
+  const candidates = [
+    {
+      sourceLabel: detail.airport_current?.source_label || "METAR",
+      temp: detail.airport_current?.temp,
+    },
+    {
+      sourceLabel: detail.airport_primary?.source_label || "METAR",
+      temp: isNmcAirport ? null : detail.airport_primary?.temp,
+    },
+    {
+      sourceLabel: detail.current?.settlement_source_label,
+      temp: isNmcCurrent ? null : detail.current?.temp,
+    },
+    {
+      sourceLabel: mgmNearby[0]?.source_label,
+      temp: mgmNearby[0]?.temp,
+    },
+  ];
+  const selected = candidates.find((candidate) =>
+    Number.isFinite(Number(candidate.temp)),
+  );
 
-  if (observedTemp == null) {
+  if (!selected) {
     return isEnglish(locale) ? "Unavailable" : "未提供";
   }
 
+  const observedTemp = Number(selected.temp);
   const sourceLabel = firstNonEmptyString([
-    detail.current?.settlement_source_label,
-    detail.airport_primary?.source_label,
-    detail.airport_current?.source_label,
-    centerStation?.source_label,
-    officialAnchor?.source_label,
-    officialNearby[0]?.source_label,
-    mgmNearby[0]?.source_label,
+    selected.sourceLabel,
     getObservationSourceTag(detail),
   ]);
   const rounded =
@@ -3030,28 +3048,23 @@ function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
 }
 
 function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
-  const { centerStation, officialAnchor, officialNearby, mgmNearby } =
-    getOfficialObservationCandidates(detail);
-  const centerRecord = asRecord(centerStation);
-  const officialAnchorRecord = asRecord(officialAnchor);
-  const officialFirstRecord = asRecord(officialNearby[0]);
+  const { mgmNearby } = getOfficialObservationCandidates(detail);
   const mgmFirstRecord = asRecord(mgmNearby[0]);
+  const currentSource = String(
+    detail.current?.settlement_source ||
+      detail.current?.settlement_source_label ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  const isNmcCurrent = currentSource === "nmc" || currentSource.includes("nmc");
   const rawValue = firstNonEmptyString([
-    detail.current?.obs_time,
-    detail.current?.report_time,
     detail.airport_primary?.obs_time,
     detail.airport_primary?.report_time,
     detail.airport_current?.obs_time,
     detail.airport_current?.report_time,
-    centerRecord?.obs_time,
-    centerRecord?.report_time,
-    centerRecord?.time,
-    officialAnchorRecord?.obs_time,
-    officialAnchorRecord?.report_time,
-    officialAnchorRecord?.time,
-    officialFirstRecord?.obs_time,
-    officialFirstRecord?.report_time,
-    officialFirstRecord?.time,
+    isNmcCurrent ? "" : detail.current?.obs_time,
+    isNmcCurrent ? "" : detail.current?.report_time,
     mgmFirstRecord?.obs_time,
     mgmFirstRecord?.report_time,
     mgmFirstRecord?.time,

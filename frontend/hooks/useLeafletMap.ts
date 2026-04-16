@@ -57,12 +57,26 @@ function pickMarkerTemperature(
 ) {
   if (!snapshot) return null;
   const detail = snapshot as Partial<CityDetail>;
+  const currentSource = String(
+    snapshot.current?.settlement_source ||
+      snapshot.current?.settlement_source_label ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  const currentTemp =
+    currentSource === "nmc" || currentSource.includes("nmc")
+      ? null
+      : snapshot.current?.temp;
+  const isNmcStation = (station?: { source_label?: string | null }) =>
+    String(station?.source_label || "")
+      .trim()
+      .toLowerCase()
+      .includes("nmc");
   const candidates = [
-    snapshot.current?.temp,
-    detail.airport_primary?.temp,
+    currentTemp,
     detail.airport_current?.temp,
-    detail.center_station_candidate?.temp,
-    detail.official_nearby?.[0]?.temp,
+    isNmcStation(detail.airport_primary) ? null : detail.airport_primary?.temp,
     detail.mgm_nearby?.[0]?.temp,
   ];
   for (const value of candidates) {
