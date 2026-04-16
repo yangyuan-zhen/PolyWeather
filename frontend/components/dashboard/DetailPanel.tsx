@@ -16,7 +16,6 @@ import {
   getCityProfileStats,
   getRiskBadgeLabel,
   getTemperatureChartData,
-  getWeatherSummary,
 } from "@/lib/dashboard-utils";
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
@@ -151,7 +150,6 @@ export function DetailPanel() {
   );
   const isPro = store.proAccess.subscriptionActive;
   const isAuthenticated = store.proAccess.authenticated;
-  const isProStateLoading = store.proAccess.loading;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen = Boolean(store.futureModalDate) || store.historyState.isOpen;
@@ -180,12 +178,6 @@ export function DetailPanel() {
     () => getTodayPolymarketUrl(detail, locale),
     [detail, locale],
   );
-  const weatherSummary = detail
-    ? getWeatherSummary(detail, locale)
-    : { weatherIcon: "", weatherText: "" };
-  const basicCurrentTemp = selectedSummary?.current?.temp;
-  const basicObsTime = selectedSummary?.current?.obs_time;
-  const basicDeb = selectedSummary?.deb?.prediction;
   const basicSettlementLabel =
     selectedSummary?.current?.settlement_source_label ||
     selectedCityItem?.settlement_source_label ||
@@ -195,34 +187,9 @@ export function DetailPanel() {
     selectedCityItem?.airport ||
     selectedSummary?.icao ||
     (locale === "en-US" ? "Airport pending" : "机场待确认");
-  const activeTempSymbol = detail?.temp_symbol || selectedSummary?.temp_symbol || "°C";
-  const heroCurrentTemp = detail?.current?.temp ?? basicCurrentTemp;
-  const heroCurrentTempText =
-    heroCurrentTemp != null ? `${heroCurrentTemp}${activeTempSymbol}` : "--";
-  const heroObsTimeLabel =
-    detail?.current?.obs_time ||
-    basicObsTime ||
-    (locale === "en-US" ? "Observation pending" : "观测时间待更新");
-  const heroDebValue = detail?.deb?.prediction ?? basicDeb;
-  const heroDebText =
-    heroDebValue != null
-      ? `${heroDebValue}${activeTempSymbol}`
-      : locale === "en-US"
-        ? "Pending"
-        : "待更新";
   const heroSettlementLabel =
     detail?.current?.settlement_source_label || basicSettlementLabel;
   const heroAirportLabel = detail?.risk?.airport || basicAirportLabel;
-  const heroWeatherText = detail
-    ? weatherSummary.weatherText
-    : locale === "en-US"
-      ? "City snapshot"
-      : "城市快照";
-  const heroWeatherIcon = detail ? weatherSummary.weatherIcon : "";
-  const isBasicSummaryLoading = !detail && !selectedSummary && store.loadingState.cityDetail;
-  const shouldShowSyncCard =
-    !detail &&
-    (store.loadingState.cityDetail || isProStateLoading || isAuthenticated);
 
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -423,87 +390,15 @@ export function DetailPanel() {
             </div>
           </section>
         ) : !detail ? (
-          <>
-            <section className="detail-summary-shell">
-              <div className="detail-section-head">
-                <div>
-                  <div className="detail-section-kicker">
-                    {locale === "en-US" ? "Quick read" : "基础快照"}
-                  </div>
-                  <h3>{locale === "en-US" ? "Summary before deep sync." : "先看基础结论，再等深度详情。"}</h3>
-                </div>
-              </div>
-              {isBasicSummaryLoading ? (
-                <div className="detail-mini-meta">
-                  {locale === "en-US" ? "Syncing public city snapshot..." : "正在同步城市基础信息..."}
-                </div>
-              ) : null}
-              <div className="detail-summary-main">
-                <article className="detail-card detail-card-hero">
-                  <span className="detail-label">{locale === "en-US" ? "Current posture" : "当前态势"}</span>
-                  <span className="detail-summary-temp">{heroCurrentTempText}</span>
-                  <span className="detail-summary-supporting">@{heroObsTimeLabel}</span>
-                  <span className="detail-summary-supporting">{heroWeatherText}</span>
-                </article>
-                <div className="detail-summary-grid">
-                  <article className="detail-card">
-                    <span className="detail-label">DEB</span>
-                    <span className="detail-value">{heroDebText}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Settlement" : "结算口径"}</span>
-                    <span className="detail-value">{heroSettlementLabel}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Airport" : "结算机场"}</span>
-                    <span className="detail-value">{heroAirportLabel}</span>
-                  </article>
-                  <article className="detail-card">
-                    <span className="detail-label">{locale === "en-US" ? "Sync status" : "同步状态"}</span>
-                    <span className="detail-value-muted">
-                      {locale === "en-US" ? "Deep detail pending" : "深度详情补齐中"}
-                    </span>
-                  </article>
-                </div>
-              </div>
-            </section>
-
-            <section className="detail-summary-shell detail-summary-shell-live">
-              <div className="detail-section-head">
-                <div>
-                  <div className="detail-section-kicker">
-                    {shouldShowSyncCard
-                      ? locale === "en-US"
-                        ? "Background sync"
-                        : "后台同步"
-                      : locale === "en-US"
-                        ? "Pro workflow"
-                        : "Pro 工作流"}
-                  </div>
-                  <h3>
-                    {shouldShowSyncCard
-                      ? locale === "en-US"
-                        ? "Deep evidence will appear automatically."
-                        : "更深层的结算证据会自动补齐。"
-                      : locale === "en-US"
-                        ? "Intraday and history live behind the analysis flow."
-                        : "今日日内分析和历史对账会在分析流中继续展开。"}
-                  </h3>
-                </div>
-              </div>
-              <div className="detail-callout-card">
-                <span className="detail-value-muted">
-                  {shouldShowSyncCard
-                    ? locale === "en-US"
-                      ? "Full city detail is still syncing. Nearby stations, source links, and mini trend will land here once ready."
-                      : "完整城市详情仍在同步中。周边站点、官方参考和温度微趋势会在完成后自动出现在这里。"
-                    : locale === "en-US"
-                      ? "Intraday analysis, history reconciliation, and deeper structure signals stay available from the action bar."
-                      : "今日日内分析、历史对账和更深层结构信号会从上方操作区继续展开。"}
-                </span>
-              </div>
-            </section>
-          </>
+          <div className="detail-mini-meta" role="status" aria-live="polite">
+            {store.loadingState.cityDetail
+              ? locale === "en-US"
+                ? "Loading city cards..."
+                : "正在加载城市卡片..."
+              : locale === "en-US"
+                ? "City cards will appear here."
+                : "城市卡片会显示在这里。"}
+          </div>
         ) : (
           <>
             <section className="detail-structured-section">

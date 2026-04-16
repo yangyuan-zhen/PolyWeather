@@ -715,11 +715,13 @@ export function DashboardStoreProvider({
 
     if (proAccessRef.current.loading) {
       setLoadingState((current) => ({ ...current, cityDetail: true }));
+      const detailPromise = ensureCityDetail(cityName, false, "panel");
       try {
-        await summaryPromise;
-        const detail = await ensureCityDetail(cityName, false, "panel");
+        const [, detail] = await Promise.allSettled([summaryPromise, detailPromise]);
         if (selectedCityRef.current === cityName) {
-          setSelectedForecastDate(detail.local_date);
+          if (detail.status === "fulfilled") {
+            setSelectedForecastDate(detail.value.local_date);
+          }
         }
       } catch {
       } finally {
@@ -734,15 +736,13 @@ export function DashboardStoreProvider({
       cachedDetail?.local_date,
     );
     setLoadingState((current) => ({ ...current, cityDetail: true }));
-    try {
-      await summaryPromise;
-    } catch {
-    }
-
-    void ensureCityDetail(cityName, needsDetailRefresh, "panel")
-      .then((detail) => {
+    const detailPromise = ensureCityDetail(cityName, needsDetailRefresh, "panel");
+    void Promise.allSettled([summaryPromise, detailPromise])
+      .then(([, detail]) => {
         if (selectedCityRef.current !== cityName) return;
-        setSelectedForecastDate(detail.local_date);
+        if (detail.status === "fulfilled") {
+          setSelectedForecastDate(detail.value.local_date);
+        }
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
