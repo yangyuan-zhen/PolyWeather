@@ -296,7 +296,10 @@ def build_training_samples(
         runtime_history = DailyRecordRepository().load_all()
     else:
         runtime_history = load_history(_history_file_path())
-    if mode == STATE_STORAGE_SQLITE:
+    if isinstance(history_data, dict):
+        truth_history = runtime_history
+        training_feature_history = {}
+    elif mode == STATE_STORAGE_SQLITE:
         truth_history = TruthRecordRepository().load_all()
         training_feature_history = TrainingFeatureRecordRepository().load_all()
     else:

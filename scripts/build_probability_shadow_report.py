@@ -9,9 +9,11 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.analysis.deb_algorithm import load_history  # noqa: E402
 from src.analysis.settlement_rounding import apply_city_settlement  # noqa: E402
-from scripts.fit_probability_calibration import _default_history_arg  # noqa: E402
+from scripts.fit_probability_calibration import (  # noqa: E402
+    _default_history_arg,
+    _load_history_with_fallback,
+)
 
 
 def _sf(value):
@@ -126,7 +128,7 @@ def main():
     )
     args = parser.parse_args()
 
-    history = load_history(args.history_file)
+    history = _load_history_with_fallback(args.history_file)
     overall = _blank_metrics()
     by_city = defaultdict(_blank_metrics)
     by_date = defaultdict(_blank_metrics)

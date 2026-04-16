@@ -134,7 +134,7 @@ def test_payment_runtime_endpoint_returns_shape():
     assert 'recent_audit_events' in payload
 
 
-def test_auth_me_auto_reconciles_missing_subscription(monkeypatch):
+def test_auth_me_does_not_reconcile_on_status_probe(monkeypatch):
     monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
 
     def _bind_identity(request):
@@ -147,11 +147,10 @@ def test_auth_me_auto_reconciles_missing_subscription(monkeypatch):
     monkeypatch.setattr(routes.SUPABASE_ENTITLEMENT, "enabled", True)
 
     calls = {"count": 0}
+    reconcile_calls = {"count": 0}
 
     def _latest_subscription(user_id, respect_requirement=False):
         calls["count"] += 1
-        if calls["count"] == 1:
-            return None
         return {
             "plan_code": "pro_monthly",
             "starts_at": "2026-03-22T00:00:00+00:00",
@@ -164,10 +163,15 @@ def test_auth_me_auto_reconciles_missing_subscription(monkeypatch):
         _latest_subscription,
     )
     monkeypatch.setattr(routes.PAYMENT_CHECKOUT, "enabled", True)
+
+    def _reconcile_latest_intent(user_id):
+        reconcile_calls["count"] += 1
+        return {"ok": True, "action": "reconciled_confirmed_intent"}
+
     monkeypatch.setattr(
         routes.PAYMENT_CHECKOUT,
         "reconcile_latest_intent",
-        lambda user_id: {"ok": True, "action": "reconciled_confirmed_intent"},
+        _reconcile_latest_intent,
     )
 
     response = client.get("/api/auth/me")
@@ -176,6 +180,7 @@ def test_auth_me_auto_reconciles_missing_subscription(monkeypatch):
     payload = response.json()
     assert payload["subscription_active"] is True
     assert payload["subscription_plan_code"] == "pro_monthly"
+    assert reconcile_calls["count"] == 0
 
 
 def test_ops_memberships_prefers_supabase_auth_email(monkeypatch):

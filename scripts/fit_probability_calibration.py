@@ -72,10 +72,10 @@ def _load_history_with_fallback(path):
         if get_state_storage_mode() == STATE_STORAGE_SQLITE:
             return DailyRecordRepository().load_all()
         return {}
-    data = load_history(path)
+    data = _load_json_if_exists(path)
     if data:
         return data
-    return _load_json_if_exists(path)
+    return load_history(path)
 
 
 def _load_truth_history():
