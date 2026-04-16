@@ -1,6 +1,7 @@
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
+from web.core import CITIES
 
 
 def test_new_south_asia_city_registry_entries_are_wired():
@@ -12,6 +13,9 @@ def test_new_south_asia_city_registry_entries_are_wired():
     assert ALIASES["rpll"] == "manila"
     assert ALIASES["opkc"] == "karachi"
     assert ALIASES["opmr"] == "masroor air base"
+    assert CITIES["manila"]["lat"] == CITY_REGISTRY["manila"]["lat"]
+    assert CITIES["karachi"]["lon"] == CITY_REGISTRY["karachi"]["lon"]
+    assert CITIES["masroor air base"]["settlement_source"] == "metar"
 
 
 def test_turkey_mgm_provider_returns_official_nearby_rows():

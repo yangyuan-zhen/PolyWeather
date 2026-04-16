@@ -21,12 +21,9 @@ export async function GET(req: NextRequest) {
     const auth = await buildBackendRequestHeaders(req, {
       includeSupabaseIdentity: false,
     });
-    const fetchOptions = {
-      headers: auth.headers,
-      next: { revalidate: 300 },
-    } as const;
     const res = await fetch(`${API_BASE}/api/cities`, {
-      ...fetchOptions,
+      headers: auth.headers,
+      cache: "no-store",
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -40,7 +37,7 @@ export async function GET(req: NextRequest) {
     const response = buildCachedJsonResponse(
       req,
       data,
-      "public, max-age=0, s-maxage=300, stale-while-revalidate=1800",
+      "no-store, max-age=0",
     );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
