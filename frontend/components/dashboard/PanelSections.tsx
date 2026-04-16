@@ -174,6 +174,92 @@ function formatModelMetaLine(
   return parts.join(" · ");
 }
 
+function normalizeModelNameForVote(name: string) {
+  return String(name || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_/-]/g, "");
+}
+
+function getModelVoteFamily(name: string) {
+  const normalized = normalizeModelNameForVote(name);
+  if (["icon", "iconeu", "icond2"].includes(normalized)) return "dwd_icon";
+  if (["gem", "gdps", "rdps", "hrdps"].includes(normalized)) return "eccc_gem";
+  if (["ecmwfaifs", "aifs"].includes(normalized)) return "ecmwf_aifs";
+  if (normalized === "ecmwf") return "ecmwf_ifs";
+  return normalized || name;
+}
+
+function getModelVotePriority(name: string) {
+  const normalized = normalizeModelNameForVote(name);
+  return (
+    {
+      icond2: 40,
+      iconeu: 30,
+      icon: 20,
+      hrdps: 40,
+      rdps: 35,
+      gdps: 30,
+      gem: 20,
+      ecmwfaifs: 30,
+      ecmwf: 30,
+      gfs: 30,
+      jma: 30,
+      mgm: 45,
+      nws: 45,
+      openmeteo: 15,
+    }[normalized] || 10
+  );
+}
+
+function getRoundedModelVoteDistribution(
+  detail: CityDetail,
+  targetDate?: string | null,
+) {
+  const view = getModelView(detail, targetDate);
+  const representatives = new Map<
+    string,
+    { name: string; priority: number; value: number }
+  >();
+
+  Object.entries(view.models || {}).forEach(([name, rawValue]) => {
+    const normalized = normalizeModelNameForVote(name);
+    if (normalized === "lgbm" || normalized.includes("meteoblue")) return;
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) return;
+    const family = getModelVoteFamily(name);
+    const priority = getModelVotePriority(name);
+    const current = representatives.get(family);
+    if (!current || priority > current.priority) {
+      representatives.set(family, { name, priority, value });
+    }
+  });
+
+  const bucketMap = new Map<number, { count: number; models: string[] }>();
+  representatives.forEach(({ name, value }) => {
+    const rounded = Math.round(value);
+    const row = bucketMap.get(rounded) || { count: 0, models: [] };
+    row.count += 1;
+    row.models.push(name);
+    bucketMap.set(rounded, row);
+  });
+
+  const total = representatives.size;
+  const rows = Array.from(bucketMap.entries())
+    .map(([value, row]) => ({
+      count: row.count,
+      models: row.models,
+      percent: total > 0 ? row.count / total : 0,
+      value,
+    }))
+    .sort((a, b) => b.count - a.count || b.value - a.value);
+
+  return {
+    rows,
+    total,
+  };
+}
+
 function getMarketNoPrice(scan?: MarketScan | null) {
   if (scan?.no_buy != null) {
     const direct = Number(scan.no_buy);
@@ -494,6 +580,10 @@ export function ProbabilityDistribution({
   const marketYesText = toPercent(marketYesPrice);
   const marketNoText = toPercent(marketNoPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
+  const modelVoteView = useMemo(
+    () => getRoundedModelVoteDistribution(detail, targetDate),
+    [detail, targetDate],
+  );
   const marketTopBuckets = isToday ? getMarketTopBuckets(marketScan) : [];
   const sortedMarketTopBuckets = useMemo(() => {
     const sorted = [...marketTopBuckets].sort(
@@ -547,6 +637,46 @@ export function ProbabilityDistribution({
               : locale === "en-US"
                 ? `Market probability (this bucket): ${marketYesText}`
                 : `市场概率（该温度桶）: ${marketYesText}`}
+          </div>
+        )}
+        {modelVoteView.rows.length > 0 && (
+          <div className="prob-model-vote">
+            <div className="prob-model-vote-head">
+              <span>
+                {locale === "en-US"
+                  ? "Rounded model-vote baseline"
+                  : "模型四舍五入票数基线"}
+              </span>
+              <em>
+                {locale === "en-US"
+                  ? `${modelVoteView.total} sources after family dedup`
+                  : `家族去重后 ${modelVoteView.total} 个来源`}
+              </em>
+            </div>
+            <div className="prob-model-vote-grid">
+              {modelVoteView.rows.slice(0, 4).map((row) => (
+                <div key={row.value} className="prob-model-vote-row">
+                  <span>
+                    {row.value}
+                    {detail.temp_symbol}
+                  </span>
+                  <div className="prob-model-vote-track">
+                    <div
+                      className="prob-model-vote-fill"
+                      style={{ width: `${Math.max(row.percent * 100, 8)}%` }}
+                    />
+                    <strong>
+                      {row.count}/{modelVoteView.total}
+                    </strong>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p>
+              {locale === "en-US"
+                ? "This is a transparent model-count baseline, not the calibrated settlement probability."
+                : "这是透明模型票数基线，不等同于经过实测下限与历史 MAE 校准后的结算概率。"}
+            </p>
           </div>
         )}
         {useMarketTopBuckets ? (
