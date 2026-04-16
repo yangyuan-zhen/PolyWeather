@@ -823,10 +823,11 @@ export function ModelForecast({
                     <div
                       className="model-bar-fill"
                       style={{ width: `${width}%` }}
-                    >
+                    />
+                    <span className="model-bar-value">
                       {value}
                       {detail.temp_symbol}
-                    </div>
+                    </span>
                     {debLine != null && (
                       <div
                         className="model-deb-line"
@@ -860,10 +861,11 @@ export function ModelForecast({
                 style={{
                   width: `${((Number(view.deb) - minValue) / range) * 100}%`,
                 }}
-              >
+              />
+              <span className="model-bar-value deb">
                 {Number(view.deb)}
                 {detail.temp_symbol}
-              </div>
+              </span>
             </div>
           </div>
         )}
