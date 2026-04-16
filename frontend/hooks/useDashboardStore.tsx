@@ -619,6 +619,25 @@ export function DashboardStoreProvider({
   }, []);
 
   useEffect(() => {
+    if (!cities.length) return;
+    if (typeof window === "undefined") return;
+    const schedule = () => dashboardClient.sendPriorityWarmHint();
+    const idleCallback = (window as Window & {
+      requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
+    }).requestIdleCallback;
+    if (typeof idleCallback === "function") {
+      const id = idleCallback(schedule, { timeout: 3000 });
+      return () => {
+        if (typeof window.cancelIdleCallback === "function") {
+          window.cancelIdleCallback(id);
+        }
+      };
+    }
+    const timer = window.setTimeout(schedule, 2000);
+    return () => window.clearTimeout(timer);
+  }, [cities.length]);
+
+  useEffect(() => {
     void refreshProAccess();
   }, []);
 

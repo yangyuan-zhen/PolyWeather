@@ -6,12 +6,13 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi.concurrency import run_in_threadpool
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
 from src.analysis.deb_algorithm import load_history
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
+from src.database.db_manager import DBManager
 from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRecordRepository
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import get_country_network_provider
@@ -55,6 +56,7 @@ from web.core import (
 )
 
 router = APIRouter()
+_CACHE_DB = DBManager()
 
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3
@@ -91,6 +93,278 @@ DEFAULT_PREWARM_CITIES = [
     "madrid",
 ]
 HISTORY_PREVIEW_DAY_LIMIT = 21
+ASIA_CORE_CITIES = [
+    "hong kong",
+    "taipei",
+    "tokyo",
+    "seoul",
+    "busan",
+    "shanghai",
+    "beijing",
+    "guangzhou",
+    "shenzhen",
+    "chongqing",
+    "chengdu",
+    "singapore",
+    "kuala lumpur",
+    "jakarta",
+]
+EUROPE_CORE_CITIES = [
+    "istanbul",
+    "ankara",
+    "moscow",
+    "tel aviv",
+    "london",
+    "paris",
+    "madrid",
+    "milan",
+    "warsaw",
+    "amsterdam",
+    "helsinki",
+]
+US_CORE_CITIES = [
+    "new york",
+    "los angeles",
+    "san francisco",
+    "austin",
+    "houston",
+    "chicago",
+    "dallas",
+    "miami",
+    "atlanta",
+    "seattle",
+]
+CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", "180")))
+CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "300")))
+CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "480")))
+CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "900")))
+CITY_HISTORY_PREVIEW_CACHE_TTL_SEC = max(
+    60,
+    int(os.getenv("POLYWEATHER_CITY_HISTORY_PREVIEW_CACHE_TTL_SEC", "1800")),
+)
+CACHE_REFRESH_LOCK_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CACHE_REFRESH_LOCK_TTL_SEC", "120")))
+
+
+def _city_cache_is_fresh(entry: Optional[dict], ttl_sec: int) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    updated_at_ts = float(entry.get("updated_at_ts") or 0.0)
+    if updated_at_ts <= 0:
+        return False
+    return (time.time() - updated_at_ts) < float(ttl_sec)
+
+
+def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
+    data = _analyze_summary(city, force_refresh=force_refresh)
+    payload = _build_city_summary_payload(data)
+    _CACHE_DB.set_city_cache(
+        "summary",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:summary",
+    )
+    return payload
+
+
+def _refresh_city_panel_cache(city: str, force_refresh: bool = False) -> dict:
+    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="panel")
+    _CACHE_DB.set_city_cache(
+        "panel",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:panel",
+    )
+    return payload
+
+
+def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
+    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="nearby")
+    _CACHE_DB.set_city_cache(
+        "nearby",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:nearby",
+    )
+    return payload
+
+
+def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
+    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="market")
+    _CACHE_DB.set_city_cache(
+        "market",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:market",
+    )
+    return payload
+
+
+def _build_city_history_payload(city: str, include_records: bool = False) -> dict:
+    source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
+    truth_rows = _truth_record_repo.load_city(city)
+    feature_rows = _training_feature_repo.load_city(city)
+
+    if not truth_rows and not feature_rows:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        history_file = os.path.join(project_root, "data", "daily_records.json")
+        data = load_history(history_file)
+        city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
+    else:
+        all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
+        city_data = {}
+        for day in all_dates:
+            record: dict[str, object] = {}
+            truth = truth_rows.get(day) or {}
+            features = feature_rows.get(day) or {}
+            if truth.get("actual_high") is not None:
+                record["actual_high"] = truth.get("actual_high")
+                record["settlement_source"] = truth.get("settlement_source")
+                record["settlement_station_code"] = truth.get("settlement_station_code")
+                record["settlement_station_label"] = truth.get("settlement_station_label")
+                record["truth_version"] = truth.get("truth_version")
+                record["updated_by"] = truth.get("updated_by")
+                record["truth_updated_at"] = truth.get("truth_updated_at")
+            if isinstance(features, dict):
+                if features.get("deb_prediction") is not None:
+                    record["deb_prediction"] = features.get("deb_prediction")
+                if features.get("mu") is not None:
+                    record["mu"] = features.get("mu")
+                if isinstance(features.get("forecasts"), dict):
+                    record["forecasts"] = features.get("forecasts")
+            city_data[day] = record
+
+    if not city_data:
+        return {
+            "history": [],
+            "mode": "full" if include_records else "preview",
+            "has_more": False,
+            "full_count": 0,
+            "preview_count": 0,
+            "settlement_source": source,
+            "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+        }
+
+    all_days = sorted(city_data.keys())
+    selected_days = all_days if include_records else all_days[-HISTORY_PREVIEW_DAY_LIMIT:]
+    out = []
+    for day in selected_days:
+        rec = city_data.get(day, {})
+        if not isinstance(rec, dict):
+            rec = {}
+
+        act = rec.get("actual_high")
+        deb = rec.get("deb_prediction")
+        mu = rec.get("mu")
+        snapshots = load_snapshot_rows_for_day(city, day)
+        peak_ref = _build_peak_minus_12h_reference(
+            actual_high=act,
+            snapshots=snapshots,
+        )
+        forecasts_raw = rec.get("forecasts", {}) or {}
+        forecasts = {}
+        if isinstance(forecasts_raw, dict):
+            for model_name, model_value in forecasts_raw.items():
+                if _is_excluded_model_name(str(model_name)):
+                    continue
+                fv = _sf(model_value)
+                forecasts[str(model_name)] = fv if fv is not None else None
+        forecasts = _merge_missing_history_forecasts_from_snapshots(
+            forecasts,
+            snapshots,
+        )
+        mgm = forecasts.get("MGM")
+        out.append(
+            {
+                "date": day,
+                "actual": float(act) if act is not None else None,
+                "deb": float(deb) if deb is not None else None,
+                "mu": float(mu) if mu is not None else None,
+                "mgm": float(mgm) if mgm is not None else None,
+                "forecasts": forecasts,
+                "settlement_source": rec.get("settlement_source"),
+                "settlement_station_code": rec.get("settlement_station_code"),
+                "settlement_station_label": rec.get("settlement_station_label"),
+                "truth_version": rec.get("truth_version"),
+                "updated_by": rec.get("updated_by"),
+                "truth_updated_at": rec.get("truth_updated_at"),
+                "actual_peak_time": peak_ref.get("actual_peak_time"),
+                "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
+                "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
+                "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
+            }
+        )
+
+    return {
+        "history": out,
+        "mode": "full" if include_records else "preview",
+        "has_more": len(all_days) > len(selected_days),
+        "full_count": len(all_days),
+        "preview_count": len(out),
+        "settlement_source": source,
+        "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+    }
+
+
+def _refresh_city_history_preview_cache(city: str) -> dict:
+    payload = _build_city_history_payload(city, include_records=False)
+    _CACHE_DB.set_city_cache(
+        "history_preview",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:history_preview",
+    )
+    return payload
+
+
+def _schedule_cache_refresh(
+    background_tasks: BackgroundTasks,
+    *,
+    kind: str,
+    city: str,
+    force_refresh: bool = False,
+) -> bool:
+    normalized_kind = str(kind or "").strip().lower()
+    normalized_city = str(city or "").strip().lower()
+    if normalized_kind not in {"summary", "panel", "nearby", "market", "history_preview"} or not normalized_city:
+        return False
+    cache_key = f"city:{normalized_kind}:{normalized_city}"
+    owner = _CACHE_DB.acquire_cache_refresh_lock(
+        cache_key,
+        ttl_sec=CACHE_REFRESH_LOCK_TTL_SEC,
+    )
+    if not owner:
+        return False
+
+    def _runner() -> None:
+        try:
+            if normalized_kind == "summary":
+                _refresh_city_summary_cache(normalized_city, force_refresh=force_refresh)
+            elif normalized_kind == "panel":
+                _refresh_city_panel_cache(normalized_city, force_refresh=force_refresh)
+            elif normalized_kind == "nearby":
+                _refresh_city_nearby_cache(normalized_city, force_refresh=force_refresh)
+            elif normalized_kind == "history_preview":
+                _refresh_city_history_preview_cache(normalized_city)
+            else:
+                _refresh_city_market_cache(normalized_city, force_refresh=force_refresh)
+        except Exception as exc:
+            logger.warning(
+                "cache refresh failed kind={} city={} force_refresh={}: {}",
+                normalized_kind,
+                normalized_city,
+                force_refresh,
+                exc,
+            )
+        finally:
+            _CACHE_DB.release_cache_refresh_lock(cache_key, owner)
+
+    background_tasks.add_task(_runner)
+    return True
 
 
 def _parse_snapshot_dt(value: object) -> Optional[datetime]:
@@ -218,6 +492,33 @@ def _normalize_city_list(raw: Optional[str]) -> list[str]:
     return out
 
 
+def _select_priority_city_batches(client_timezone: Optional[str]) -> dict[str, object]:
+    tz = str(client_timezone or "").strip()
+    normalized = tz.lower()
+    if normalized.startswith("america/"):
+        primary = list(US_CORE_CITIES)
+        secondary = []
+        region = "america"
+    elif normalized.startswith("europe/"):
+        primary = list(EUROPE_CORE_CITIES)
+        secondary = list(ASIA_CORE_CITIES)
+        region = "europe"
+    elif normalized.startswith("asia/") or normalized.startswith("australia/") or normalized.startswith("pacific/"):
+        primary = list(ASIA_CORE_CITIES)
+        secondary = list(EUROPE_CORE_CITIES)
+        region = "asia"
+    else:
+        primary = list(ASIA_CORE_CITIES)
+        secondary = list(EUROPE_CORE_CITIES)
+        region = "default"
+    return {
+        "region": region,
+        "timezone": tz or None,
+        "primary": primary,
+        "secondary": secondary,
+    }
+
+
 def _history_file_path() -> str:
     project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     return os.path.join(project_root, "data", "daily_records.json")
@@ -317,7 +618,7 @@ async def system_prewarm(
     for city in selected:
         city_started = time.perf_counter()
         try:
-            data = _analyze(city, force_refresh=force_refresh)
+            _refresh_city_summary_cache(city, force_refresh=force_refresh)
             entry: dict[str, object] = {
                 "city": city,
                 "summary": True,
@@ -325,20 +626,11 @@ async def system_prewarm(
             }
             summary_ok += 1
             if include_detail:
-                _build_city_summary_payload(data)
-                _build_city_detail_payload(
-                    data,
-                    target_date=str(data.get("local_date") or "").strip() or None,
-                )
+                _refresh_city_panel_cache(city, force_refresh=force_refresh)
                 entry["detail"] = True
                 detail_ok += 1
             if include_market:
-                _build_city_detail_payload(
-                    data,
-                    target_date=str(data.get("local_date") or "").strip() or None,
-                )
-                entry["market"] = True
-                market_ok += 1
+                entry["market"] = False
             warmed.append(entry)
         except Exception as exc:
             failed.append(
@@ -365,6 +657,7 @@ async def system_prewarm(
         "warmed": warmed,
         "failed": failed,
         "summary_ok": summary_ok,
+        "panel_ok": detail_ok,
         "detail_ok": detail_ok,
         "market_ok": market_ok,
         "failed_count": len(failed),
@@ -431,6 +724,7 @@ async def list_cities(request: Request):
 @router.get("/api/city/{name}")
 async def city_detail(
     request: Request,
+    background_tasks: BackgroundTasks,
     name: str,
     force_refresh: bool = False,
     depth: str = "panel",
@@ -446,128 +740,121 @@ async def city_detail(
         detail_mode = "nearby"
     else:
         detail_mode = "panel"
+    if detail_mode == "panel":
+        if force_refresh:
+            return await run_in_threadpool(_refresh_city_panel_cache, city, True)
+        cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "panel", city)
+        if cached_entry:
+            if not _city_cache_is_fresh(cached_entry, CITY_PANEL_CACHE_TTL_SEC):
+                _schedule_cache_refresh(background_tasks, kind="panel", city=city)
+            return cached_entry.get("payload") or {}
+        return await run_in_threadpool(_refresh_city_panel_cache, city, False)
+    if detail_mode == "nearby":
+        if force_refresh:
+            return await run_in_threadpool(_refresh_city_nearby_cache, city, True)
+        cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "nearby", city)
+        if cached_entry:
+            if not _city_cache_is_fresh(cached_entry, CITY_NEARBY_CACHE_TTL_SEC):
+                _schedule_cache_refresh(background_tasks, kind="nearby", city=city)
+            return cached_entry.get("payload") or {}
+        return await run_in_threadpool(_refresh_city_nearby_cache, city, False)
+    if detail_mode == "market":
+        if force_refresh:
+            return await run_in_threadpool(_refresh_city_market_cache, city, True)
+        cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "market", city)
+        if cached_entry:
+            if not _city_cache_is_fresh(cached_entry, CITY_MARKET_CACHE_TTL_SEC):
+                _schedule_cache_refresh(background_tasks, kind="market", city=city)
+            return cached_entry.get("payload") or {}
+        return await run_in_threadpool(_refresh_city_market_cache, city, False)
     return await run_in_threadpool(_analyze, city, force_refresh, False, detail_mode)
 
 
 @router.get("/api/history/{name}")
 async def city_history(
     request: Request,
+    background_tasks: BackgroundTasks,
     name: str,
     include_records: bool = False,
 ):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
+    if include_records:
+        return await run_in_threadpool(_build_city_history_payload, city, True)
+    cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "history_preview", city)
+    if cached_entry:
+        if not _city_cache_is_fresh(cached_entry, CITY_HISTORY_PREVIEW_CACHE_TTL_SEC):
+            _schedule_cache_refresh(background_tasks, kind="history_preview", city=city)
+        return cached_entry.get("payload") or {}
+    return await run_in_threadpool(_refresh_city_history_preview_cache, city)
 
-    def _build_history_payload():
-        source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
-        truth_rows = _truth_record_repo.load_city(city)
-        feature_rows = _training_feature_repo.load_city(city)
 
-        if not truth_rows and not feature_rows:
-            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            history_file = os.path.join(project_root, "data", "daily_records.json")
-            data = load_history(history_file)
-            city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
-        else:
-            all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
-            city_data = {}
-            for day in all_dates:
-                record: dict[str, object] = {}
-                truth = truth_rows.get(day) or {}
-                features = feature_rows.get(day) or {}
-                if truth.get("actual_high") is not None:
-                    record["actual_high"] = truth.get("actual_high")
-                    record["settlement_source"] = truth.get("settlement_source")
-                    record["settlement_station_code"] = truth.get("settlement_station_code")
-                    record["settlement_station_label"] = truth.get("settlement_station_label")
-                    record["truth_version"] = truth.get("truth_version")
-                    record["updated_by"] = truth.get("updated_by")
-                    record["truth_updated_at"] = truth.get("truth_updated_at")
-                if isinstance(features, dict):
-                    if features.get("deb_prediction") is not None:
-                        record["deb_prediction"] = features.get("deb_prediction")
-                    if features.get("mu") is not None:
-                        record["mu"] = features.get("mu")
-                    if isinstance(features.get("forecasts"), dict):
-                        record["forecasts"] = features.get("forecasts")
-                city_data[day] = record
-
-        if not city_data:
-            return {
-                "history": [],
-                "mode": "full" if include_records else "preview",
-                "has_more": False,
-                "full_count": 0,
-                "preview_count": 0,
-                "settlement_source": source,
-                "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
+@router.get("/api/system/cache-status")
+async def system_cache_status(request: Request, cities: Optional[str] = None):
+    _assert_entitlement(request)
+    selected = _normalize_city_list(cities)
+    if not selected:
+        selected = list(DEFAULT_PREWARM_CITIES)
+    kinds = {
+        "summary": CITY_SUMMARY_CACHE_TTL_SEC,
+        "panel": CITY_PANEL_CACHE_TTL_SEC,
+        "nearby": CITY_NEARBY_CACHE_TTL_SEC,
+        "market": CITY_MARKET_CACHE_TTL_SEC,
+        "history_preview": CITY_HISTORY_PREVIEW_CACHE_TTL_SEC,
+    }
+    items = []
+    for city in selected:
+        row = {"city": city}
+        for kind, ttl_sec in kinds.items():
+            entry = _CACHE_DB.get_city_cache(kind, city)
+            row[kind] = {
+                "exists": bool(entry),
+                "fresh": _city_cache_is_fresh(entry, ttl_sec),
+                "updated_at": entry.get("updated_at") if entry else None,
+                "age_sec": round(max(0.0, time.time() - float(entry.get("updated_at_ts") or 0.0)), 1)
+                if entry
+                else None,
+                "ttl_sec": ttl_sec,
             }
+        items.append(row)
+    return {"cities": items}
 
-        all_days = sorted(city_data.keys())
-        selected_days = (
-            all_days
-            if include_records
-            else all_days[-HISTORY_PREVIEW_DAY_LIMIT:]
-        )
-        out = []
-        for day in selected_days:
-            rec = city_data.get(day, {})
-            if not isinstance(rec, dict):
-                rec = {}
 
-            act = rec.get("actual_high")
-            deb = rec.get("deb_prediction")
-            mu = rec.get("mu")
-            snapshots = load_snapshot_rows_for_day(city, day)
-            peak_ref = _build_peak_minus_12h_reference(
-                actual_high=act,
-                snapshots=snapshots,
-            )
-            forecasts_raw = rec.get("forecasts", {}) or {}
-            forecasts = {}
-            if isinstance(forecasts_raw, dict):
-                for model_name, model_value in forecasts_raw.items():
-                    if _is_excluded_model_name(str(model_name)):
-                        continue
-                    fv = _sf(model_value)
-                    forecasts[str(model_name)] = fv if fv is not None else None
-            forecasts = _merge_missing_history_forecasts_from_snapshots(
-                forecasts,
-                snapshots,
-            )
-            mgm = forecasts.get("MGM")
-            out.append(
-                {
-                    "date": day,
-                    "actual": float(act) if act is not None else None,
-                    "deb": float(deb) if deb is not None else None,
-                    "mu": float(mu) if mu is not None else None,
-                    "mgm": float(mgm) if mgm is not None else None,
-                    "forecasts": forecasts,
-                    "settlement_source": rec.get("settlement_source"),
-                    "settlement_station_code": rec.get("settlement_station_code"),
-                    "settlement_station_label": rec.get("settlement_station_label"),
-                    "truth_version": rec.get("truth_version"),
-                    "updated_by": rec.get("updated_by"),
-                    "truth_updated_at": rec.get("truth_updated_at"),
-                    "actual_peak_time": peak_ref.get("actual_peak_time"),
-                    "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
-                    "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
-                    "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
-                }
-            )
+@router.post("/api/system/priority-warm")
+async def system_priority_warm(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    timezone: Optional[str] = None,
+):
+    _assert_entitlement(request)
+    batches = _select_priority_city_batches(timezone)
+    primary = list(batches.get("primary") or [])
+    secondary = list(batches.get("secondary") or [])
 
-        return {
-            "history": out,
-            "mode": "full" if include_records else "preview",
-            "has_more": len(all_days) > len(selected_days),
-            "full_count": len(all_days),
-            "preview_count": len(out),
-            "settlement_source": source,
-            "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
-        }
+    def _runner() -> None:
+        for city in primary:
+            try:
+                _refresh_city_summary_cache(city, force_refresh=False)
+                _refresh_city_panel_cache(city, force_refresh=False)
+                _refresh_city_nearby_cache(city, force_refresh=False)
+                _refresh_city_market_cache(city, force_refresh=False)
+            except Exception as exc:
+                logger.warning("priority warm primary failed city={} timezone={}: {}", city, timezone, exc)
+        for city in secondary:
+            try:
+                _refresh_city_summary_cache(city, force_refresh=False)
+                _refresh_city_panel_cache(city, force_refresh=False)
+            except Exception as exc:
+                logger.warning("priority warm secondary failed city={} timezone={}: {}", city, timezone, exc)
 
-    return await run_in_threadpool(_build_history_payload)
+    background_tasks.add_task(_runner)
+    return {
+        "ok": True,
+        "region": batches.get("region"),
+        "timezone": batches.get("timezone"),
+        "primary": primary,
+        "secondary": secondary,
+    }
 
 
 @router.get("/api/auth/me")
@@ -1063,10 +1350,21 @@ async def payment_reconcile_latest(request: Request):
 
 
 @router.get("/api/city/{name}/summary")
-async def city_summary(request: Request, name: str, force_refresh: bool = False):
+async def city_summary(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    name: str,
+    force_refresh: bool = False,
+):
     city = _normalize_city_or_404(name)
-    data = await run_in_threadpool(_analyze_summary, city, force_refresh)
-    return await run_in_threadpool(_build_city_summary_payload, data)
+    if force_refresh:
+        return await run_in_threadpool(_refresh_city_summary_cache, city, True)
+    cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "summary", city)
+    if cached_entry:
+        if not _city_cache_is_fresh(cached_entry, CITY_SUMMARY_CACHE_TTL_SEC):
+            _schedule_cache_refresh(background_tasks, kind="summary", city=city)
+        return cached_entry.get("payload") or {}
+    return await run_in_threadpool(_refresh_city_summary_cache, city, False)
 
 
 @router.get("/api/city/{name}/detail")
@@ -1091,6 +1389,7 @@ async def city_detail_aggregate(
 @router.get("/api/city/{name}/market-scan")
 async def city_market_scan(
     request: Request,
+    background_tasks: BackgroundTasks,
     name: str,
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
@@ -1098,7 +1397,16 @@ async def city_market_scan(
 ):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
-    data = await run_in_threadpool(_analyze, city, force_refresh, False, "market")
+    if force_refresh:
+        data = await run_in_threadpool(_refresh_city_market_cache, city, True)
+    else:
+        cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "market", city)
+        if cached_entry:
+            if not _city_cache_is_fresh(cached_entry, CITY_MARKET_CACHE_TTL_SEC):
+                _schedule_cache_refresh(background_tasks, kind="market", city=city)
+            data = cached_entry.get("payload") or {}
+        else:
+            data = await run_in_threadpool(_refresh_city_market_cache, city, False)
     return await run_in_threadpool(
         _build_city_market_scan_payload,
         data,

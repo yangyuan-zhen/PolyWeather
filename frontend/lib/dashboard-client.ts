@@ -12,6 +12,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
+const PRIORITY_WARM_SESSION_KEY = "polyWeather_priority_warm_v1";
 
 type CityCacheMeta = {
   cachedAt: number;
@@ -140,6 +141,24 @@ export const dashboardClient = {
   async getCities() {
     const data = await fetchJson<{ cities?: CityListItem[] }>("/api/cities");
     return data.cities || [];
+  },
+
+  sendPriorityWarmHint(timezone?: string | null) {
+    if (!isClient()) return;
+    const tz = String(
+      timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || "",
+    ).trim();
+    if (!tz) return;
+    const cacheKey = `${PRIORITY_WARM_SESSION_KEY}:${tz}`;
+    if (window.sessionStorage.getItem(cacheKey)) return;
+    window.sessionStorage.setItem(cacheKey, "1");
+    const params = new URLSearchParams({ timezone: tz });
+    void fetch(`/api/system/priority-warm?${params.toString()}`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      keepalive: true,
+    }).catch(() => {});
   },
 
   async getCitySummary(cityName: string, options?: { force?: boolean }) {

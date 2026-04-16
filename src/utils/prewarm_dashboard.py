@@ -208,7 +208,7 @@ def get_prewarm_runtime_summary() -> Dict[str, Any]:
         "interval_sec": interval_sec,
         "jitter_sec": jitter_sec,
         "include_detail": _truthy_env("POLYWEATHER_PREWARM_INCLUDE_DETAIL", True),
-        "include_market": _truthy_env("POLYWEATHER_PREWARM_INCLUDE_MARKET", True),
+        "include_market": _truthy_env("POLYWEATHER_PREWARM_INCLUDE_MARKET", False),
         "force_refresh": _truthy_env("POLYWEATHER_PREWARM_FORCE_REFRESH", False),
         "thread_alive": bool(_WORKER_THREAD and _WORKER_THREAD.is_alive()) or shared_alive,
         "heartbeat_age_sec": None if heartbeat_age_sec is None else round(heartbeat_age_sec, 2),
@@ -380,7 +380,7 @@ def start_prewarm_worker_thread() -> Optional[threading.Thread]:
     jitter_sec = int(os.getenv("POLYWEATHER_PREWARM_JITTER_SEC", "20"))
     force_refresh = str(os.getenv("POLYWEATHER_PREWARM_FORCE_REFRESH") or "").strip().lower() in {"1", "true", "yes", "on"}
     include_detail = str(os.getenv("POLYWEATHER_PREWARM_INCLUDE_DETAIL", "true")).strip().lower() in {"1", "true", "yes", "on"}
-    include_market = str(os.getenv("POLYWEATHER_PREWARM_INCLUDE_MARKET", "true")).strip().lower() in {"1", "true", "yes", "on"}
+    include_market = str(os.getenv("POLYWEATHER_PREWARM_INCLUDE_MARKET", "false")).strip().lower() in {"1", "true", "yes", "on"}
 
     thread = threading.Thread(
         target=run_worker_loop,
