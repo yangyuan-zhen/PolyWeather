@@ -44,16 +44,40 @@ class MetarSourceMixin:
 
         try:
             url = "https://aviationweather.gov/api/data/metar"
-            params = {
-                "ids": icao,
-                "format": "json",
-                "hours": 24,
-                "_t": int(time.time()),
-            }
-            response = self.session.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
+            history_hours = 24
 
-            data = response.json()
+            def _request_metar_records(hours: int, timeout: float) -> list:
+                response = self._http_get(
+                    url,
+                    params={
+                        "ids": icao,
+                        "format": "json",
+                        "hours": hours,
+                    },
+                    timeout=timeout,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                return payload if isinstance(payload, list) else []
+
+            try:
+                data = _request_metar_records(
+                    history_hours,
+                    getattr(self, "metar_timeout_sec", self.timeout),
+                )
+            except httpx.HTTPError as primary_exc:
+                history_hours = 2
+                logger.warning(
+                    f"METAR {icao} 24h 请求失败，尝试 latest fallback: {primary_exc}"
+                )
+                try:
+                    data = _request_metar_records(
+                        history_hours,
+                        getattr(self, "metar_latest_timeout_sec", 2.5),
+                    )
+                except httpx.HTTPError:
+                    raise primary_exc
+
             if not data:
                 return None
 
@@ -63,7 +87,7 @@ class MetarSourceMixin:
 
             def _parse_rawob_time(obs):
                 raw = obs.get("rawOb", "")
-                match = re.search(r"(\d{2})(\d{2})(\d{2})Z", raw)
+                match = re.search(r"\b(\d{2})(\d{2})(\d{2})Z\b", raw)
                 if match:
                     _day, hour, minute = (
                         int(match.group(1)),
@@ -199,6 +223,7 @@ class MetarSourceMixin:
                 "today_obs": today_obs,
                 "recent_obs": recent_obs_raw,
                 "unit": unit,
+                "history_hours": history_hours,
             }
 
             logger.info(
@@ -246,9 +271,8 @@ class MetarSourceMixin:
                 "ids": icao,
                 "format": "json",
                 "hours": 24,
-                "_t": int(time.time()),
             }
-            response = self.session.get(
+            response = self._http_get(
                 url,
                 params=params,
                 timeout=getattr(self, "metar_timeout_sec", self.timeout),

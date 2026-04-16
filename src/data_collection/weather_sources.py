@@ -130,12 +130,22 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.metar_timeout_sec = max(
             2.0, float(os.getenv("POLYWEATHER_METAR_TIMEOUT_SEC", "4"))
         )
+        self.metar_latest_timeout_sec = max(
+            1.0, float(os.getenv("POLYWEATHER_METAR_LATEST_TIMEOUT_SEC", "2.5"))
+        )
         self.metar_cluster_timeout_sec = max(
             2.0, float(os.getenv("POLYWEATHER_METAR_CLUSTER_TIMEOUT_SEC", "3.5"))
         )
+        self.user_agent = str(
+            os.getenv(
+                "POLYWEATHER_USER_AGENT",
+                "PolyWeather/1.0 (+https://polyweather-pro.vercel.app)",
+            )
+        ).strip()
         self.session = httpx.Client(
             timeout=self.timeout,
             follow_redirects=True,
+            headers={"User-Agent": self.user_agent},
             limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
         )
         self.open_meteo_cache_ttl_sec = int(
@@ -235,6 +245,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 timeout=self.timeout,
                 follow_redirects=True,
                 proxy=proxy,
+                headers={"User-Agent": self.user_agent},
                 limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
             )
             logger.info(f"正在使用天气数据代理: {proxy}")
