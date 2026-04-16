@@ -323,6 +323,54 @@ function sortObservationItemsByTime<T extends { time?: string | null }>(items: T
   });
 }
 
+function dedupeObservationItems<T extends { temp?: number | null; time?: string | null }>(
+  items: T[],
+) {
+  const byTime = new Map<string, T>();
+  items.forEach((item) => {
+    const time = normalizeHm(item.time);
+    const value = Number(item.temp);
+    if (!time || !Number.isFinite(value)) return;
+    const existing = byTime.get(time);
+    if (!existing || Number(item.temp) >= Number(existing.temp)) {
+      byTime.set(time, { ...item, time });
+    }
+  });
+  return sortObservationItemsByTime([...byTime.values()]);
+}
+
+function looksLikeForecastMirror(
+  observations: Array<{ temp?: number | null; time?: string | null }>,
+  forecastTimes: string[],
+  forecastValues: Array<number | null | undefined>,
+) {
+  const unique = dedupeObservationItems(observations);
+  if (unique.length < 6 || forecastTimes.length < 6) return false;
+  if (unique.length < Math.max(6, Math.floor(forecastTimes.length * 0.4))) {
+    return false;
+  }
+
+  let compared = 0;
+  let exactMatches = 0;
+  unique.forEach((item) => {
+    const minute = hmToMinutes(item.time);
+    const observed = Number(item.temp);
+    if (minute == null || !Number.isFinite(observed)) return;
+    const expected = interpolateSeriesAtMinutes(
+      forecastTimes,
+      forecastValues,
+      minute,
+    );
+    if (expected == null || !Number.isFinite(expected)) return;
+    compared += 1;
+    if (Math.abs(observed - expected) <= 0.05) {
+      exactMatches += 1;
+    }
+  });
+
+  return compared >= 6 && exactMatches / compared >= 0.65;
+}
+
 function normalizeObservationTimeForChart(
   value: unknown,
   detail: CityDetail,
@@ -732,13 +780,33 @@ export function getTemperatureChartData(
     officialObservationSource.length > 0 &&
     officialObservationSource.length < 3 &&
     metarObservationSource.length >= 3;
-  const usingMetarObservationSource =
+  let usingMetarObservationSource =
     !useSettlementObservationSource || shouldUseMetarFallback;
-  const observationSource = useSettlementObservationSource
+  let observationSource = useSettlementObservationSource
     ? shouldUseMetarFallback
       ? metarObservationSource
       : officialObservationSource
     : metarObservationSource;
+  let usingMirrorFallback = false;
+  if (looksLikeForecastMirror(observationSource, times, debTemps)) {
+    const fallbackCandidates = [
+      plausibleTrendRecent,
+      plausibleCurrentFallback,
+      metarObservationSource,
+    ];
+    const fallback = fallbackCandidates.find(
+      (candidate) =>
+        candidate.length > 0 &&
+        candidate !== observationSource &&
+        !looksLikeForecastMirror(candidate, times, debTemps),
+    );
+    if (fallback) {
+      observationSource = fallback;
+      usingMetarObservationSource = fallback === metarObservationSource;
+      usingMirrorFallback = true;
+    }
+  }
+  observationSource = dedupeObservationItems(observationSource);
   const airportMetarSource: Array<{ time?: string; temp?: number | null }> = [];
   const metarFallbackTag = (() => {
     const icao = String(detail.risk?.icao || "").trim().toUpperCase();
@@ -1013,6 +1081,13 @@ export function getTemperatureChartData(
       isEnglish(locale)
         ? `Official ${observationTag} feed is sparse today, so the continuous observation line switches to ${metarFallbackTag}.`
         : `今日官方 ${observationTag} 点位较稀疏，连续实测线改用 ${metarFallbackTag}。`,
+    );
+  }
+  if (usingMirrorFallback) {
+    legendParts.push(
+      isEnglish(locale)
+        ? "Dense observation feed matched the forecast curve exactly, so it was ignored for this chart refresh."
+        : "本次高密度观测源与预测曲线逐点重合，已忽略该异常源。",
     );
   } else if (observationCode === "hko") {
     legendParts.push(
