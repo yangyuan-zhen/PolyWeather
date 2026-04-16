@@ -1,5 +1,17 @@
 from src.data_collection.country_networks import build_country_network_snapshot
+from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from web.analysis_service import _build_city_detail_payload
+
+
+def test_new_south_asia_city_registry_entries_are_wired():
+    assert CITY_REGISTRY["manila"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["manila"]["settlement_station_code"] == "RPLL"
+    assert CITY_REGISTRY["karachi"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["karachi"]["settlement_station_code"] == "OPKC"
+    assert CITY_REGISTRY["masroor air base"]["icao"] == "OPMR"
+    assert ALIASES["rpll"] == "manila"
+    assert ALIASES["opkc"] == "karachi"
+    assert ALIASES["opmr"] == "masroor air base"
 
 
 def test_turkey_mgm_provider_returns_official_nearby_rows():

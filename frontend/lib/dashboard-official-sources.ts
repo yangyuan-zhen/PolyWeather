@@ -126,6 +126,47 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
+  manila: [
+    {
+      label: "Wunderground RPLL",
+      href: "https://www.wunderground.com/history/daily/ph/manila/RPLL",
+      kind: "agency",
+    },
+    {
+      label: "Ninoy Aquino International Airport",
+      href: "https://www.newnaia.com.ph/",
+      kind: "airport",
+    },
+    {
+      label: "RPLL METAR",
+      href: "https://aviationweather.gov/data/metar/?id=RPLL&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  karachi: [
+    {
+      label: "Wunderground OPKC",
+      href: "https://www.wunderground.com/history/daily/pk/karachi/OPKC",
+      kind: "agency",
+    },
+    {
+      label: "Jinnah International Airport",
+      href: "https://www.caapakistan.com.pk/",
+      kind: "airport",
+    },
+    {
+      label: "OPKC METAR",
+      href: "https://aviationweather.gov/data/metar/?id=OPKC&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
+  "masroor air base": [
+    {
+      label: "OPMR METAR",
+      href: "https://aviationweather.gov/data/metar/?id=OPMR&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
   istanbul: [
     {
       label: "MGM",
