@@ -198,7 +198,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "display",
             title: "网页上如何展示",
             blocks: [
-              { type: "paragraph", text: "网页的“模型区间与分歧”会按全球基准、AIFS 模型、欧洲高分辨率、北美高分辨率分组显示，并展示可用模型数量、模型分歧、来源、模型名称、分辨率和预报时效。没有覆盖的区域模型不会显示。" },
+              { type: "paragraph", text: "网页的“模型区间与分歧”会按全球基准、AIFS 模型、欧洲高分辨率、北美高分辨率分组显示，并展示可用模型数量、模型分歧、模型机构、接入接口、模型名称、分辨率和预报时效。没有覆盖的区域模型不会显示。" },
             ],
           },
         ],
@@ -236,7 +236,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "display",
             title: "How the site displays this",
             blocks: [
-              { type: "paragraph", text: "The Model Range & Spread panel groups the model stack into Global Baseline, AIFS Model, Europe High-resolution, and North America High-resolution. It shows available model count, spread, source, model name, resolution, and forecast horizon. Regional models outside their domain are simply not shown." },
+              { type: "paragraph", text: "The Model Range & Spread panel groups the model stack into Global Baseline, AIFS Model, Europe High-resolution, and North America High-resolution. It shows available model count, spread, model agency, API, model name, resolution, and forecast horizon. Regional models outside their domain are simply not shown." },
             ],
           },
         ],

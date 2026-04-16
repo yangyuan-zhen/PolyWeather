@@ -584,6 +584,13 @@ export function ProbabilityDistribution({
     () => getRoundedModelVoteDistribution(detail, targetDate),
     [detail, targetDate],
   );
+  const modelVoteHint = modelVoteView.rows
+    .slice(0, 2)
+    .map(
+      (row) =>
+        `${row.value}${detail.temp_symbol} ${row.count}/${modelVoteView.total}`,
+    )
+    .join(" · ");
   const marketTopBuckets = isToday ? getMarketTopBuckets(marketScan) : [];
   const sortedMarketTopBuckets = useMemo(() => {
     const sorted = [...marketTopBuckets].sort(
@@ -639,44 +646,17 @@ export function ProbabilityDistribution({
                 : `市场概率（该温度桶）: ${marketYesText}`}
           </div>
         )}
-        {modelVoteView.rows.length > 0 && (
-          <div className="prob-model-vote">
-            <div className="prob-model-vote-head">
-              <span>
-                {locale === "en-US"
-                  ? "Rounded model-vote baseline"
-                  : "模型四舍五入票数基线"}
-              </span>
-              <em>
-                {locale === "en-US"
-                  ? `${modelVoteView.total} sources after family dedup`
-                  : `家族去重后 ${modelVoteView.total} 个来源`}
-              </em>
-            </div>
-            <div className="prob-model-vote-grid">
-              {modelVoteView.rows.slice(0, 4).map((row) => (
-                <div key={row.value} className="prob-model-vote-row">
-                  <span>
-                    {row.value}
-                    {detail.temp_symbol}
-                  </span>
-                  <div className="prob-model-vote-track">
-                    <div
-                      className="prob-model-vote-fill"
-                      style={{ width: `${Math.max(row.percent * 100, 8)}%` }}
-                    />
-                    <strong>
-                      {row.count}/{modelVoteView.total}
-                    </strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <p>
+        {modelVoteHint && (
+          <div className="prob-model-hint">
+            <span>
+              {locale === "en-US" ? "Model vote reference" : "模型投票参考"}
+            </span>
+            <strong>{modelVoteHint}</strong>
+            <em>
               {locale === "en-US"
-                ? "This is a transparent model-count baseline, not the calibrated settlement probability."
-                : "这是透明模型票数基线，不等同于经过实测下限与历史 MAE 校准后的结算概率。"}
-            </p>
+                ? "shown for explanation only"
+                : "仅用于解释，不作为结算概率"}
+            </em>
           </div>
         )}
         {useMarketTopBuckets ? (
@@ -909,7 +889,7 @@ export function ModelForecast({
           </span>
           {metadataSource && (
             <span>
-              {locale === "en-US" ? "Source" : "来源"} ·{" "}
+              {locale === "en-US" ? "API" : "接口"} ·{" "}
               <strong>{metadataSource}</strong>
             </span>
           )}

@@ -1001,85 +1001,34 @@
   border: 1px solid rgba(251, 113, 133, 0.26);
 }
 
-.root :global(.prob-model-vote) {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 8px;
-  padding: 10px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: 8px;
-  background: rgba(15, 23, 42, 0.34);
-}
-
-.root :global(.prob-model-vote-head) {
+.root :global(.prob-model-hint) {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  padding: 7px 9px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.22);
 }
 
-.root :global(.prob-model-vote-head span) {
-  color: var(--text-primary);
-  font-size: 12px;
+.root :global(.prob-model-hint span) {
+  color: var(--cyan);
+  font-size: 11px;
   font-weight: 800;
 }
 
-.root :global(.prob-model-vote-head em) {
+.root :global(.prob-model-hint strong) {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.root :global(.prob-model-hint em) {
   color: var(--text-muted);
   font-size: 11px;
   font-style: normal;
-}
-
-.root :global(.prob-model-vote-grid) {
-  display: grid;
-  gap: 6px;
-}
-
-.root :global(.prob-model-vote-row) {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-
-.root :global(.prob-model-vote-row > span) {
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 800;
-  text-align: right;
-}
-
-.root :global(.prob-model-vote-track) {
-  position: relative;
-  height: 18px;
-  overflow: hidden;
-  border-radius: 6px;
-  background: rgba(148, 163, 184, 0.1);
-}
-
-.root :global(.prob-model-vote-fill) {
-  height: 100%;
-  border-radius: 6px;
-  background: linear-gradient(90deg, rgba(20, 184, 166, 0.62), rgba(34, 211, 238, 0.88));
-}
-
-.root :global(.prob-model-vote-track strong) {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
-  color: var(--text-primary);
-  font-size: 11px;
-  line-height: 1;
-  text-shadow: 0 1px 2px rgba(2, 6, 23, 0.85);
-}
-
-.root :global(.prob-model-vote p) {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.45;
 }
 
 /* ── Model Bars ── */
