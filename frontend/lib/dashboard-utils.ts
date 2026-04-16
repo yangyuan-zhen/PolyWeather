@@ -685,8 +685,7 @@ export function getTemperatureChartData(
     observationCode === "cwa" ||
     observationCode === "noaa" ||
     observationCode === "wunderground";
-  const useSettlementObservationSource =
-    settlementSource && observationCode !== "wunderground";
+  const useSettlementObservationSource = settlementSource;
   const officialObservationSource =
     useSettlementObservationSource
       ? detail.settlement_today_obs?.length
@@ -733,6 +732,8 @@ export function getTemperatureChartData(
     officialObservationSource.length > 0 &&
     officialObservationSource.length < 3 &&
     metarObservationSource.length >= 3;
+  const usingMetarObservationSource =
+    !useSettlementObservationSource || shouldUseMetarFallback;
   const observationSource = useSettlementObservationSource
     ? shouldUseMetarFallback
       ? metarObservationSource
@@ -747,8 +748,10 @@ export function getTemperatureChartData(
   const observationDisplayTag =
     usingCurrentObservationFallback
       ? String(currentFallbackTag).toUpperCase()
-      : observationCode === "wunderground"
+      : observationCode === "wunderground" && usingMetarObservationSource
       ? metarFallbackTag
+      : observationCode === "wunderground"
+        ? `WU ${String(detail.risk?.icao || "").trim().toUpperCase() || "STATION"}`
       : useSettlementObservationSource && shouldUseMetarFallback
       ? metarFallbackTag
       : observationCode === "noaa"

@@ -106,8 +106,6 @@ class MetarSourceMixin:
 
         try:
             url = "https://aviationweather.gov/api/data/metar"
-            history_hours = 24
-
             def _request_metar_records(hours: int, timeout: float) -> list:
                 response = self._http_get(
                     url,
@@ -122,23 +120,39 @@ class MetarSourceMixin:
                 payload = response.json()
                 return payload if isinstance(payload, list) else []
 
-            try:
-                data = _request_metar_records(
-                    history_hours,
-                    getattr(self, "metar_timeout_sec", self.timeout),
-                )
-            except httpx.HTTPError as primary_exc:
-                history_hours = 2
-                logger.warning(
-                    f"METAR {icao} 24h 请求失败，尝试 latest fallback: {primary_exc}"
+            data = []
+            history_hours = 24
+            first_exc: Optional[httpx.HTTPError] = None
+            fallback_hours = [24, 12, 6, 2]
+            for index, hours in enumerate(fallback_hours):
+                timeout = (
+                    getattr(self, "metar_timeout_sec", self.timeout)
+                    if index == 0
+                    else getattr(self, "metar_latest_timeout_sec", 2.5)
                 )
                 try:
-                    data = _request_metar_records(
-                        history_hours,
-                        getattr(self, "metar_latest_timeout_sec", 2.5),
+                    data = _request_metar_records(hours, timeout)
+                    history_hours = hours
+                    if index > 0:
+                        logger.warning(
+                            "METAR {} {}h fallback returned {} records",
+                            icao,
+                            hours,
+                            len(data),
+                        )
+                    break
+                except httpx.HTTPError as exc:
+                    if first_exc is None:
+                        first_exc = exc
+                    logger.warning(
+                        "METAR {} {}h 请求失败，尝试下一档 fallback: {}",
+                        icao,
+                        hours,
+                        exc,
                     )
-                except httpx.HTTPError:
-                    raise primary_exc
+            else:
+                if first_exc is not None:
+                    raise first_exc
 
             if not data:
                 return None
