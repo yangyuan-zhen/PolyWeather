@@ -923,6 +923,49 @@
   gap: 8px;
 }
 
+.root :global(.prob-calibration-head) {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.26);
+}
+
+.root :global(.prob-calibration-head > div) {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.prob-calibration-head strong) {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.root :global(.prob-calibration-head p) {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.root :global(.prob-source-chip) {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  border-radius: 8px;
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.08);
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .root :global(.prob-row) {
   display: flex;
   align-items: center;

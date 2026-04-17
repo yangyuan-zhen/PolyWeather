@@ -310,6 +310,31 @@ function getMarketTopBucketKey(bucket: MarketTopBucket) {
   return `s:${String(bucket?.slug || bucket?.question || bucket?.label || "")}`;
 }
 
+function hasLgbmModel(detail: CityDetail, targetDate?: string | null) {
+  const view = getModelView(detail, targetDate);
+  return Object.keys(view.models || {}).some((name) =>
+    normalizeModelNameForVote(name).includes("lgbm"),
+  );
+}
+
+function formatProbabilityEngineLabel(
+  detail: CityDetail,
+  targetDate: string | null | undefined,
+  locale: string,
+) {
+  const view = getProbabilityView(detail, targetDate);
+  if (hasLgbmModel(detail, targetDate)) {
+    return locale === "en-US"
+      ? "LGBM-calibrated probability"
+      : "LGBM 校准概率";
+  }
+  const engine = String(view.engine || "").trim().toLowerCase();
+  if (engine === "emos") {
+    return locale === "en-US" ? "EMOS-calibrated probability" : "EMOS 校准概率";
+  }
+  return locale === "en-US" ? "Model probability" : "模型概率";
+}
+
 export function HeroSummary() {
   const { data } = useCityData();
   const { locale } = useI18n();
@@ -580,6 +605,12 @@ export function ProbabilityDistribution({
   const marketYesText = toPercent(marketYesPrice);
   const marketNoText = toPercent(marketNoPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
+  const probabilityEngineLabel = formatProbabilityEngineLabel(
+    detail,
+    targetDate,
+    locale,
+  );
+  const hasLgbmProbability = hasLgbmModel(detail, targetDate);
   const modelVoteView = useMemo(
     () => getRoundedModelVoteDistribution(detail, targetDate),
     [detail, targetDate],
@@ -610,11 +641,41 @@ export function ProbabilityDistribution({
   const useMarketTopBuckets =
     marketScan?.available && sortedMarketTopBuckets.length >= 2;
   const topMarketBucketText = toPercent(sortedMarketTopBuckets[0]?.probability);
+  const topProbability = [...(view.probabilities || [])].sort(
+    (a, b) => Number(b.probability || 0) - Number(a.probability || 0),
+  )[0];
+  const topProbabilityText = toPercent(topProbability?.probability);
+  const topProbabilityLabel = topProbability
+    ? topProbability.label || `${topProbability.value}${detail.temp_symbol}`
+    : null;
 
   return (
     <section className="prob-section">
       {!hideTitle && <h3>{t("section.probability")}</h3>}
       <div className="prob-bars">
+        <div className="prob-calibration-head">
+          <div>
+            <span className="prob-source-chip">{probabilityEngineLabel}</span>
+            <strong>
+              {topProbability && topProbabilityText
+                ? locale === "en-US"
+                  ? `${topProbabilityLabel} leads at ${topProbabilityText}`
+                  : `${topProbabilityLabel} 当前最高，${topProbabilityText}`
+                : locale === "en-US"
+                  ? "Awaiting calibrated buckets"
+                  : "等待校准概率桶"}
+            </strong>
+          </div>
+          <p>
+            {hasLgbmProbability
+              ? locale === "en-US"
+                ? "LGBM is the learned intraday adjustment; model consensus below remains an explanation layer."
+                : "LGBM 作为日内学习校准项；下方模型共识只保留为解释层。"
+              : locale === "en-US"
+                ? "Using the calibrated model distribution; model consensus below is for explanation only."
+                : "使用校准后的模型分布；下方模型共识仅用于解释。"}
+          </p>
+        </div>
         {view.mu != null && (
           <div
             style={{
@@ -639,82 +700,27 @@ export function ProbabilityDistribution({
           >
             {useMarketTopBuckets
               ? locale === "en-US"
-                ? `Market top-4 buckets (top): ${topMarketBucketText}`
-                : `市场概率（前4温度桶）：最高 ${topMarketBucketText}`
+                ? `Market reference only: top traded bucket ${topMarketBucketText}`
+                : `市场仅作参考：最高交易温度桶 ${topMarketBucketText}`
               : locale === "en-US"
-                ? `Market probability (this bucket): ${marketYesText}`
-                : `市场概率（该温度桶）: ${marketYesText}`}
+                ? `Market reference only: this bucket ${marketYesText}`
+                : `市场仅作参考：该温度桶 ${marketYesText}`}
           </div>
         )}
         {modelVoteHint && (
           <div className="prob-model-hint">
             <span>
-              {locale === "en-US" ? "Model vote reference" : "模型投票参考"}
+              {locale === "en-US" ? "Model consensus" : "模型共识参考"}
             </span>
             <strong>{modelVoteHint}</strong>
             <em>
               {locale === "en-US"
-                ? "shown for explanation only"
-                : "仅用于解释，不作为结算概率"}
+                ? "explains clustering, not calibrated probability"
+                : "解释模型聚集，不等同于校准概率"}
             </em>
           </div>
         )}
-        {useMarketTopBuckets ? (
-          sortedMarketTopBuckets.map((bucket, index) => {
-            const probability = Math.round(
-              Number(bucket.probability || 0) * 100,
-            );
-            let bucketLabel =
-              bucket.label ||
-              (bucket.value != null
-                ? `${bucket.value}${detail.temp_symbol}`
-                : `${bucket.temp ?? "--"}${detail.temp_symbol}`);
-
-            if (bucketLabel) {
-              let str = String(bucketLabel).toUpperCase().replace(/\s+/g, "");
-              str = str.replace(/°?C($|\+|-)/g, "℃$1");
-              if (!str.includes("℃") && /[0-9]/.test(str)) {
-                str += "℃";
-              }
-              bucketLabel = str;
-            }
-            const buyYesText = toPriceCents(
-              bucket.yes_buy ?? bucket.market_price ?? bucket.probability,
-            );
-            const buyNoText = toPriceCents(bucket.no_buy);
-            const marketTag = buyYesText
-              ? locale === "en-US"
-                ? `Market ref: ${buyYesText}`
-                : `市场参考: ${buyYesText}`
-              : buyNoText
-                ? locale === "en-US"
-                  ? `Market hedge: ${buyNoText}`
-                  : `市场反向: ${buyNoText}`
-                : null;
-
-            return (
-              <div
-                key={`${bucket.slug || bucket.label || index}`}
-                className="prob-row"
-              >
-                <div className="prob-label">{bucketLabel}</div>
-                <div className="prob-bar-track">
-                  <div
-                    className={clsx("prob-bar-fill", `rank-${index}`)}
-                    style={{ width: `${Math.max(probability, 8)}%` }}
-                  >
-                    {probability}%
-                  </div>
-                </div>
-                {marketTag && (
-                  <div className={clsx("prob-market-inline", "yes")}>
-                    {marketTag}
-                  </div>
-                )}
-              </div>
-            );
-          })
-        ) : view.probabilities.length === 0 ? (
+        {view.probabilities.length === 0 ? (
           <EmptyState text={t("section.noProb")} />
         ) : (
           view.probabilities.slice(0, 6).map((bucket, index) => {

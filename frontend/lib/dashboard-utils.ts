@@ -1195,15 +1195,23 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
   const date = targetDate || detail.local_date;
   if (date === detail.local_date) {
     return {
+      calibrationMode: detail.probabilities?.calibration_mode ?? null,
+      calibrationVersion: detail.probabilities?.calibration_version ?? null,
+      engine: detail.probabilities?.engine ?? null,
       mu: detail.probabilities?.mu ?? null,
       probabilities: detail.probabilities?.distribution || [],
+      shadowProbabilities: detail.probabilities?.shadow_distribution || [],
     };
   }
 
   const daily = detail.multi_model_daily?.[date];
   return {
+    calibrationMode: null,
+    calibrationVersion: null,
+    engine: null,
     mu: daily?.deb?.prediction ?? null,
     probabilities: daily?.probabilities || [],
+    shadowProbabilities: [],
   };
 }
 

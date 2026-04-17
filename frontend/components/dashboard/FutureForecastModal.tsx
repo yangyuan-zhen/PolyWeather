@@ -742,6 +742,13 @@ export function FutureForecastModal() {
     [dateStr, detail],
   );
   const modelView = useMemo(() => getModelView(detail, dateStr), [dateStr, detail]);
+  const hasLgbmProbability = useMemo(
+    () =>
+      Object.keys(modelView?.models || {}).some((name) =>
+        String(name || "").toLowerCase().replace(/[\s_/-]/g, "").includes("lgbm"),
+      ),
+    [modelView],
+  );
   const topProbabilityBucket = useMemo(() => {
     const buckets = Array.isArray(probabilityView?.probabilities)
       ? probabilityView.probabilities
@@ -914,9 +921,14 @@ export function FutureForecastModal() {
     }
     const bucketLabel = formatBucketLabel(topProbabilityBucket);
     const bucketProb = formatMarketPercent(topProbabilityBucket.probability);
+    if (hasLgbmProbability) {
+      return locale === "en-US"
+        ? `LGBM-calibrated read puts the leading bucket at ${bucketLabel} (${bucketProb}). Treat this as the base case, not the final settlement.`
+        : `LGBM 校准后领先温度桶为 ${bucketLabel}（${bucketProb}）。可作为基准情形，但不要直接等同于最终结算。`;
+    }
     return locale === "en-US"
-      ? `Highest current hit probability is ${bucketLabel} at ${bucketProb}. Treat this as the base case, not the final settlement.`
-      : `当前命中概率最高的是 ${bucketLabel}（${bucketProb}），可把它当作基准情形，但不要直接等同于最终结算。`;
+      ? `Calibrated model probability puts the leading bucket at ${bucketLabel} (${bucketProb}). Treat this as the base case, not the final settlement.`
+      : `校准模型概率显示领先温度桶为 ${bucketLabel}（${bucketProb}）。可作为基准情形，但不要直接等同于最终结算。`;
   })();
   const modelSummary = (() => {
     if (!modelSpreadView) {
@@ -1823,10 +1835,16 @@ export function FutureForecastModal() {
                     <section className="future-modal-section">
                       <div className="modal-section-heading">
                         <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Auxiliary probability" : "辅助概率"}
+                          {locale === "en-US" ? "Probability read" : "概率判断"}
                         </div>
                         <h3>
-                          {locale === "en-US" ? "Model & Market Reference" : "模型与市场参考"}
+                          {hasLgbmProbability
+                            ? locale === "en-US"
+                              ? "LGBM-Calibrated Probability"
+                              : "LGBM 校准概率"
+                            : locale === "en-US"
+                              ? "Calibrated Model Probability"
+                              : "校准模型概率"}
                         </h3>
                       </div>
                       <div className="future-text-block" style={{ marginBottom: "12px" }}>
