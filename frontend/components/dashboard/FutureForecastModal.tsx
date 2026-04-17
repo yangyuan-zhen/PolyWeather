@@ -287,12 +287,18 @@ function getTrendMetricVisual(metric: {
   return null;
 }
 
-function DailyTemperatureChart({ dateStr }: { dateStr: string }) {
+function DailyTemperatureChart({
+  dateStr,
+  forceToday = false,
+}: {
+  dateStr: string;
+  forceToday?: boolean;
+}) {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
   const view = detail ? getFutureModalView(detail, dateStr, locale) : null;
-  const isToday = detail ? dateStr === detail.local_date : false;
+  const isToday = forceToday || (detail ? dateStr === detail.local_date : false);
   const todayChartData = useMemo(
     () => (detail && isToday ? getTemperatureChartData(detail, locale) : null),
     [detail, isToday, locale],
@@ -711,7 +717,9 @@ export function FutureForecastModal() {
     };
   }, [dateStr, detail]);
 
-  const isToday = dateStr === detail.local_date;
+  const isToday =
+    store.forecastModalMode === "today" ||
+    (store.forecastModalMode == null && dateStr === detail.local_date);
   const detailDepth = detail.detail_depth || "full";
   const isFullDetailReady = detailDepth === "full";
   const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
@@ -1713,7 +1721,7 @@ export function FutureForecastModal() {
                           : "今日气温路径（锚点观测 + 模型）"}
                       </h3>
                     </div>
-                    <DailyTemperatureChart dateStr={dateStr} />
+                    <DailyTemperatureChart dateStr={dateStr} forceToday={isToday} />
                     <div className="future-v2-chart-thresholds">
                       <span>{locale === "en-US" ? "Base" : "基准"} · {baseCaseBucket || "--"}</span>
                       <span>{locale === "en-US" ? "Upside" : "上修"} · {intradayMeteorology.upside_bucket || "--"}</span>
@@ -1891,7 +1899,7 @@ export function FutureForecastModal() {
 
                 <section className="future-modal-section">
                   <h3>{t("future.targetTempTrend")}</h3>
-                  <DailyTemperatureChart dateStr={dateStr} />
+                  <DailyTemperatureChart dateStr={dateStr} forceToday={isToday} />
                 </section>
 
                 <div className="future-modal-grid">

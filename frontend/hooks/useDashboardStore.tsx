@@ -23,6 +23,7 @@ import {
   CityListItem,
   CitySummary,
   DashboardState,
+  ForecastModalMode,
   HistoryPoint,
   HistoryPayload,
   HistoryPayloadMeta,
@@ -40,6 +41,7 @@ interface DashboardStoreValue extends DashboardState {
     force?: boolean,
     depth?: "panel" | "nearby" | "full",
   ) => Promise<CityDetail>;
+  forecastModalMode: ForecastModalMode | null;
   futureModalDate: string | null;
   loadCities: () => Promise<void>;
   openFutureModal: (dateStr: string, forceRefresh?: boolean) => Promise<void>;
@@ -323,6 +325,8 @@ export function DashboardStoreProvider({
     string | null
   >(null);
   const [futureModalDate, setFutureModalDate] = useState<string | null>(null);
+  const [forecastModalMode, setForecastModalMode] =
+    useState<ForecastModalMode | null>(null);
   const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [loadingState, setLoadingState] = useState<LoadingState>(
     getInitialLoadingState,
@@ -761,6 +765,7 @@ export function DashboardStoreProvider({
     setIsPanelOpen(true);
     setSelectedForecastDate(null);
     setFutureModalDate(null);
+    setForecastModalMode(null);
 
     const summaryPromise = !citySummariesRef.current[cityName]
       ? ensureCitySummary(cityName).catch(() => null)
@@ -1007,6 +1012,7 @@ export function DashboardStoreProvider({
       closeFutureModal: () => {
         modalOpenSeqRef.current += 1;
         setFutureModalDate(null);
+        setForecastModalMode(null);
       },
       closeHistory: () =>
         setHistoryState((current) => ({ ...current, isOpen: false })),
@@ -1014,6 +1020,7 @@ export function DashboardStoreProvider({
         setIsPanelOpen(false);
       },
       ensureCityDetail,
+      forecastModalMode,
       futureModalDate,
       historyState,
       isPanelOpen,
@@ -1048,9 +1055,16 @@ export function DashboardStoreProvider({
           "market",
           dateStr,
         );
+        const todayDate =
+          cachedDetail?.local_date ||
+          cachedDetail?.forecast?.daily?.[0]?.date ||
+          null;
+        const modalMode: ForecastModalMode =
+          todayDate && dateStr === todayDate ? "today" : "future";
 
         setSelectedForecastDate(dateStr);
         setFutureModalDate(dateStr);
+        setForecastModalMode(modalMode);
         if (!hasMarketCachedDetail || forceRefresh) {
           void ensureCityDetail(cityName, forceRefresh, "market").catch(() => {});
         }
@@ -1109,6 +1123,7 @@ export function DashboardStoreProvider({
         if (targetDate) {
           setSelectedForecastDate(targetDate);
           setFutureModalDate(targetDate);
+          setForecastModalMode("today");
         }
         if (!proAccess.subscriptionActive) return;
         const needsDetailRefresh =
@@ -1136,12 +1151,14 @@ export function DashboardStoreProvider({
             if (!isLatestModalRequest()) return;
             setSelectedForecastDate(detail.local_date);
             setFutureModalDate(detail.local_date);
+            setForecastModalMode("today");
           })
           .catch(() => {
             if (!isLatestModalRequest()) return;
             if (cachedDetail?.local_date) {
               setSelectedForecastDate(cachedDetail.local_date);
               setFutureModalDate(cachedDetail.local_date);
+              setForecastModalMode("today");
             }
           })
           .finally(() => {
@@ -1170,6 +1187,7 @@ export function DashboardStoreProvider({
       cities,
       cityDetailsByName,
       citySummariesByName,
+      forecastModalMode,
       futureModalDate,
       historyState,
       isPanelOpen,

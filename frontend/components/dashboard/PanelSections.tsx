@@ -1020,7 +1020,11 @@ export function ForecastTable() {
           daily.map((day, index) => {
             const isToday = day.date === data.local_date || index === 0;
             const isSelected =
-              store.futureModalDate === day.date ||
+              (isToday &&
+                store.forecastModalMode === "today" &&
+                Boolean(store.futureModalDate)) ||
+              (store.forecastModalMode !== "today" &&
+                store.futureModalDate === day.date) ||
               store.selectedForecastDate === day.date;
             return (
               <button
@@ -1033,6 +1037,10 @@ export function ForecastTable() {
                 )}
                 onClick={() => {
                   startTransition(() => {
+                    if (isToday) {
+                      store.openTodayModal();
+                      return;
+                    }
                     store.openFutureModal(day.date);
                   });
                 }}

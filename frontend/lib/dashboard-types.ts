@@ -606,6 +606,8 @@ export interface ProAccessState {
   error: string | null;
 }
 
+export type ForecastModalMode = "today" | "future";
+
 export interface DashboardState {
   cities: CityListItem[];
   cityDetailsByName: Record<string, CityDetail>;
@@ -613,6 +615,7 @@ export interface DashboardState {
   selectedCity: string | null;
   isPanelOpen: boolean;
   selectedForecastDate: string | null;
+  forecastModalMode: ForecastModalMode | null;
   loadingState: LoadingState;
   historyState: HistoryState;
   proAccess: ProAccessState;
