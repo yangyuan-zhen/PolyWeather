@@ -77,7 +77,6 @@ function pickMarkerTemperature(
     currentTemp,
     detail.airport_current?.temp,
     isNmcStation(detail.airport_primary) ? null : detail.airport_primary?.temp,
-    detail.mgm_nearby?.[0]?.temp,
   ];
   for (const value of candidates) {
     const numeric = Number(value);

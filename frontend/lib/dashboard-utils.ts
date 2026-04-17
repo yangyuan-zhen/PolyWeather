@@ -410,27 +410,6 @@ function buildCurrentObservationFallback(
       temp: detail.airport_current?.temp,
       time: detail.airport_current?.obs_time || detail.airport_current?.report_time,
     },
-    {
-      sourceLabel:
-        detail.center_station_candidate?.source_label ||
-        detail.center_station_candidate?.source_code,
-      temp: detail.center_station_candidate?.temp,
-      time: String((detail.center_station_candidate as Record<string, unknown> | null | undefined)?.obs_time || ""),
-    },
-    {
-      sourceLabel:
-        detail.official_nearby?.[0]?.source_label ||
-        detail.official_nearby?.[0]?.source_code,
-      temp: detail.official_nearby?.[0]?.temp,
-      time: String((detail.official_nearby?.[0] as Record<string, unknown> | null | undefined)?.obs_time || ""),
-    },
-    {
-      sourceLabel:
-        detail.mgm_nearby?.[0]?.source_label ||
-        detail.mgm_nearby?.[0]?.source_code,
-      temp: detail.mgm_nearby?.[0]?.temp,
-      time: String((detail.mgm_nearby?.[0] as Record<string, unknown> | null | undefined)?.obs_time || ""),
-    },
   ];
 
   const first = candidates.find((item) => {
