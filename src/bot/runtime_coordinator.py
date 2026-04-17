@@ -162,10 +162,24 @@ class StartupCoordinator:
             "cities_count": cities_count,
             "chat_targets": len(chat_ids),
             "focus_digest_enabled": _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True),
-            "focus_digest_hours": str(
-                os.getenv("TELEGRAM_MARKET_FOCUS_DIGEST_HOURS") or "11,18"
-            ).strip(),
-            "schedule_basis": "server_local_time",
+            "focus_digest_interval_sec": max(
+                300,
+                _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
+            ),
+            "focus_push_start_local_hour": min(
+                23,
+                max(0, _env_int("TELEGRAM_MARKET_FOCUS_PUSH_START_LOCAL_HOUR", 8)),
+            ),
+            "focus_push_before_peak_min": max(
+                0,
+                _env_int("TELEGRAM_MARKET_FOCUS_PUSH_BEFORE_PEAK_MIN", 480),
+            ),
+            "focus_push_after_peak_min": max(
+                0,
+                _env_int("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", 300),
+            ),
+            "schedule_basis": "city_local_time_for_push_window",
+            "daily_signal_cap": "none",
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(

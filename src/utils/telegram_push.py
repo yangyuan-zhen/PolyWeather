@@ -317,6 +317,32 @@ def _format_interval_brief(seconds: int) -> str:
     return f"{total}秒"
 
 
+def _focus_push_window_config() -> Dict[str, int]:
+    return {
+        "start_local_hour": min(
+            23,
+            max(0, _env_int("TELEGRAM_MARKET_FOCUS_PUSH_START_LOCAL_HOUR", 8)),
+        ),
+        "before_peak_min": max(
+            0,
+            _env_int("TELEGRAM_MARKET_FOCUS_PUSH_BEFORE_PEAK_MIN", 480),
+        ),
+        "after_peak_min": max(
+            0,
+            _env_int("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", 300),
+        ),
+    }
+
+
+def _focus_push_window_label() -> str:
+    config = _focus_push_window_config()
+    return (
+        f"当地 {config['start_local_hour']:02d}:00 后，"
+        f"峰值前 {_format_minutes_window(config['before_peak_min'])} / "
+        f"峰值后 {_format_minutes_window(config['after_peak_min'])} 内"
+    )
+
+
 def _local_peak_context(alert_payload: Dict[str, Any]) -> Dict[str, Any]:
     evidence = alert_payload.get("evidence") or {}
     generated_local_time = str(evidence.get("generated_local_time") or "").strip()
@@ -456,15 +482,16 @@ def _shortlist_focus_payloads(
         if not _market_price_cap_ok(item, require_actionable_quote=True):
             continue
         if for_push:
+            window_config = _focus_push_window_config()
             peak_context = _local_peak_context(item)
             local_min = _minute_of_day(peak_context.get("local_time"))
             minutes_to_peak = peak_context.get("minutes_to_peak")
-            if local_min is not None and local_min < 9 * 60:
+            if local_min is not None and local_min < window_config["start_local_hour"] * 60:
                 continue
-            if isinstance(minutes_to_peak, int | float):
-                if minutes_to_peak > 360:
+            if isinstance(minutes_to_peak, (int, float)):
+                if minutes_to_peak > window_config["before_peak_min"]:
                     continue
-                if minutes_to_peak < -90:
+                if minutes_to_peak < -window_config["after_peak_min"]:
                     continue
         shortlisted.append(item)
         if len(shortlisted) >= top_n:
@@ -542,6 +569,8 @@ def _build_focus_digest_message(
     frequency_parts = [
         f"后台扫描：约每{scan_interval}一次",
         f"主动推送：约每{digest_interval}一次",
+        f"观察窗口：{_focus_push_window_label()}",
+        "没有每日信号次数上限",
     ]
     lines.append("更新频率：" + "；".join(frequency_parts))
     return "\n".join(lines).strip()
@@ -576,17 +605,20 @@ def _maybe_send_focus_digest(
         if bool((item.get("market_snapshot") or {}).get("available"))
         and _market_price_cap_ok(item, require_actionable_quote=True)
     )
-    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n)
+    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=True)
+    reference_shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=False)
     high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
     logger.info(
-        "market focus digest evaluate payloads={} available={} actionable={} shortlisted={} high_priority={} interval_sec={} top_n={}",
+        "market focus digest evaluate payloads={} available={} actionable={} shortlisted={} reference_shortlisted={} high_priority={} interval_sec={} top_n={} push_window={}",
         len(payloads),
         available_count,
         actionable_count,
         len(shortlisted),
+        len(reference_shortlisted),
         high_priority_count,
         digest_interval_sec,
         top_n,
+        _focus_push_window_label(),
     )
     if last_digest_ts and now_ts - last_digest_ts < digest_interval_sec:
         logger.info(

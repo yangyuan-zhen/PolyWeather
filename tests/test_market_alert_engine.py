@@ -1,5 +1,9 @@
 from src.analysis.market_alert_engine import build_trading_alerts
-from src.utils.telegram_push import build_market_monitor_digest
+from src.utils.telegram_push import (
+    _build_focus_digest_message,
+    _shortlist_focus_payloads,
+    build_market_monitor_digest,
+)
 
 
 def _sample_weather_payload():
@@ -195,3 +199,62 @@ def test_market_monitor_digest_skips_non_tradable_market(monkeypatch):
 
     digest = build_market_monitor_digest({}, slot_label="当前市场概览")
     assert digest == "ℹ️ 当前没有可用的市场监控摘要。"
+
+
+def _focus_payload(*, local_time: str = "14:00", peak_time: str = "12:00"):
+    return {
+        "city": "madrid",
+        "severity": "medium",
+        "trigger_count": 1,
+        "rules": {},
+        "market_snapshot": {
+            "available": True,
+            "forecast_bucket": {
+                "label": "30°C",
+                "value": 30,
+                "yes_buy": 0.18,
+                "market_url": "https://example.com/market",
+            },
+            "market_url": "https://example.com/market",
+            "confidence": "medium",
+            "edge_percent": 5.0,
+        },
+        "evidence": {
+            "generated_local_time": local_time,
+            "inputs": {
+                "current_temp": 29.0,
+                "deb_prediction": 30.2,
+            },
+            "trigger_summary": {
+                "suppression_snapshot": {
+                    "max_temp_time": peak_time,
+                },
+            },
+        },
+    }
+
+
+def test_focus_digest_push_window_does_not_cut_off_after_2pm_spanish_time(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", raising=False)
+
+    shortlisted = _shortlist_focus_payloads(
+        [_focus_payload(local_time="14:00", peak_time="12:00")],
+        top_n=5,
+        for_push=True,
+    )
+
+    assert len(shortlisted) == 1
+
+
+def test_focus_digest_footer_explains_no_daily_signal_cap(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", "300")
+    monkeypatch.setenv("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", "1800")
+
+    message = _build_focus_digest_message(
+        [_focus_payload(local_time="14:00", peak_time="12:00")],
+        slot_label="白天关注",
+        top_n=5,
+    )
+
+    assert "没有每日信号次数上限" in message
+    assert "观察窗口" in message

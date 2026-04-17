@@ -199,6 +199,19 @@ export function HistoryModal() {
         .reverse(),
     [summary.recentData],
   );
+  const modelReferenceRows = useMemo(
+    () =>
+      summary.recentData
+        .filter(
+          (row) =>
+            row.actual != null &&
+            row.model_reference?.available &&
+            (row.model_reference.models?.length || 0) > 0,
+        )
+        .slice(-5)
+        .reverse(),
+    [summary.recentData],
+  );
 
   if (!isOpen) return null;
 
@@ -383,6 +396,81 @@ export function HistoryModal() {
                   )}
                 </div>
                 {!error && <HistoryChart />}
+                {!error && modelReferenceRows.length > 0 && (
+              <div className="history-model-reference">
+                <div className="modal-section-heading">
+                  <div className="modal-section-kicker">
+                    {locale === "en-US" ? "Reference layer" : "参考层"}
+                  </div>
+                  <div className="history-peak-reference-title">
+                    {locale === "en-US"
+                      ? "Model Reference at Cutoff"
+                      : "当时模型参考"}
+                  </div>
+                  <div className="modal-section-note">
+                    {locale === "en-US"
+                      ? "These are archived model snapshots used for audit context. Settlement truth still comes only from the finalized observation source."
+                      : "这里展示当时归档的模型快照，仅用于解释判断背景；结算真值仍只来自最终实况来源。"}
+                  </div>
+                </div>
+                <div className="history-model-reference-scroll">
+                  {modelReferenceRows.map((row) => {
+                    const models = (row.model_reference?.models || []).slice(0, 6);
+                    return (
+                      <div key={row.date} className="history-model-reference-row">
+                        <div className="history-peak-reference-date">
+                          {row.date}
+                        </div>
+                        <div className="history-model-reference-body">
+                          <div className="history-model-reference-summary">
+                            <span>
+                              {locale === "en-US" ? "Actual" : "最终实测"}{" "}
+                              <strong>
+                                {row.actual}
+                                {store.selectedDetail?.temp_symbol || "°C"}
+                              </strong>
+                            </span>
+                            <span>
+                              DEB{" "}
+                              <strong>
+                                {row.model_reference?.deb?.value ?? row.deb ?? "--"}
+                                {store.selectedDetail?.temp_symbol || "°C"}
+                              </strong>
+                              {row.model_reference?.deb?.error != null
+                                ? ` / ${locale === "en-US" ? "err" : "误差"} ${row.model_reference.deb.error}${store.selectedDetail?.temp_symbol || "°C"}`
+                                : ""}
+                            </span>
+                          </div>
+                          <div className="history-model-reference-models">
+                            {models.map((model) => (
+                              <div
+                                key={`${row.date}-${model.model}`}
+                                className="history-model-reference-model"
+                              >
+                                <span className="history-model-name">
+                                  {model.model}
+                                </span>
+                                <span>
+                                  {model.value}
+                                  {store.selectedDetail?.temp_symbol || "°C"}
+                                </span>
+                                <span className="history-model-error">
+                                  {model.error != null
+                                    ? `${locale === "en-US" ? "err" : "误差"} ${model.error}${store.selectedDetail?.temp_symbol || "°C"}`
+                                    : locale === "en-US"
+                                      ? "pending"
+                                      : "待结算"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+                )}
                 {!error && settledPeakRows.length > 0 && (
               <div className="history-peak-reference">
                 <div className="modal-section-heading">

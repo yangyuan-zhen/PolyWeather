@@ -2769,11 +2769,29 @@
   background: rgba(15, 23, 42, 0.42);
 }
 
+.root :global(.history-modal .history-model-reference) {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 16px;
+  background: rgba(8, 47, 73, 0.2);
+}
+
 .root :global(.history-modal .history-peak-reference-title) {
   color: var(--text-primary);
   font-size: 14px;
   font-weight: 700;
   margin-bottom: 10px;
+}
+
+.root :global(.history-modal .history-model-reference-scroll) {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(34, 211, 238, 0.5) rgba(15, 23, 42, 0.32);
 }
 
 .root :global(.history-modal .history-peak-reference-scroll) {
@@ -2820,10 +2838,67 @@
   background: rgba(255, 255, 255, 0.03);
 }
 
+.root :global(.history-modal .history-model-reference-row) {
+  display: grid;
+  grid-template-columns: minmax(72px, 88px) 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .root :global(.history-modal .history-peak-reference-date) {
   color: var(--text-secondary);
   font-size: 12px;
   font-weight: 700;
+}
+
+.root :global(.history-modal .history-model-reference-body) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.history-modal .history-model-reference-summary) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.root :global(.history-modal .history-model-reference-summary strong) {
+  color: var(--text-primary);
+}
+
+.root :global(.history-modal .history-model-reference-models) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.root :global(.history-modal .history-model-reference-model) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.root :global(.history-modal .history-model-name) {
+  overflow: hidden;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.history-modal .history-model-error) {
+  color: var(--text-muted);
 }
 
 .root :global(.history-modal .history-peak-reference-meta) {
@@ -2856,6 +2931,14 @@
 
   .root :global(.history-modal .history-peak-reference-scroll) {
     max-height: 320px;
+  }
+
+  .root :global(.history-modal .history-model-reference-scroll) {
+    max-height: 320px;
+  }
+
+  .root :global(.history-modal .history-model-reference-models) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -2921,7 +3004,16 @@
     padding: 12px;
   }
 
+  .root :global(.history-modal .history-model-reference) {
+    padding: 12px;
+  }
+
   .root :global(.history-modal .history-peak-reference-scroll) {
+    max-height: 260px;
+    padding-right: 2px;
+  }
+
+  .root :global(.history-modal .history-model-reference-scroll) {
     max-height: 260px;
     padding-right: 2px;
   }
@@ -2929,6 +3021,15 @@
   .root :global(.history-modal .history-peak-reference-row) {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .root :global(.history-modal .history-model-reference-row) {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .root :global(.history-modal .history-model-reference-models) {
+    grid-template-columns: 1fr;
   }
 }
 

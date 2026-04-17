@@ -203,6 +203,52 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
+def _build_history_model_reference(
+    *,
+    forecasts: dict,
+    actual: object,
+    deb: object,
+) -> dict:
+    """Expose the archived model snapshot as reference evidence, not truth."""
+    actual_value = _sf(actual)
+    deb_value = _sf(deb)
+    entries = []
+    for model_name, model_value in (forecasts or {}).items():
+        if _is_excluded_model_name(str(model_name)):
+            continue
+        value = _sf(model_value)
+        if value is None:
+            continue
+        error = abs(value - actual_value) if actual_value is not None else None
+        entries.append(
+            {
+                "model": str(model_name),
+                "value": round(value, 1),
+                "error": round(error, 1) if error is not None else None,
+                "participates_in_deb": True,
+            }
+        )
+    entries.sort(
+        key=lambda row: (
+            row["error"] is None,
+            row["error"] if row["error"] is not None else 999,
+            row["model"],
+        )
+    )
+    deb_error = abs(deb_value - actual_value) if deb_value is not None and actual_value is not None else None
+    return {
+        "available": bool(entries),
+        "truth_layer": "settlement_actual",
+        "reference_layer": "archived_model_snapshot",
+        "deb": {
+            "value": round(deb_value, 1) if deb_value is not None else None,
+            "error": round(deb_error, 1) if deb_error is not None else None,
+        },
+        "models": entries,
+        "model_count": len(entries),
+    }
+
+
 def _build_city_history_payload(city: str, include_records: bool = False) -> dict:
     source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
     truth_rows = _truth_record_repo.load_city(city)
@@ -276,6 +322,11 @@ def _build_city_history_payload(city: str, include_records: bool = False) -> dic
             forecasts,
             snapshots,
         )
+        model_reference = _build_history_model_reference(
+            forecasts=forecasts,
+            actual=act,
+            deb=deb,
+        )
         mgm = forecasts.get("MGM")
         out.append(
             {
@@ -285,6 +336,7 @@ def _build_city_history_payload(city: str, include_records: bool = False) -> dic
                 "mu": float(mu) if mu is not None else None,
                 "mgm": float(mgm) if mgm is not None else None,
                 "forecasts": forecasts,
+                "model_reference": model_reference,
                 "settlement_source": rec.get("settlement_source"),
                 "settlement_station_code": rec.get("settlement_station_code"),
                 "settlement_station_label": rec.get("settlement_station_label"),

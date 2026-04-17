@@ -527,6 +527,22 @@ export interface HistoryPoint {
   mu?: number | null;
   mgm?: number | null;
   forecasts?: Record<string, number | null>;
+  model_reference?: {
+    available?: boolean;
+    truth_layer?: string | null;
+    reference_layer?: string | null;
+    deb?: {
+      value?: number | null;
+      error?: number | null;
+    };
+    models?: Array<{
+      model?: string | null;
+      value?: number | null;
+      error?: number | null;
+      participates_in_deb?: boolean;
+    }>;
+    model_count?: number | null;
+  };
   settlement_source?: string | null;
   settlement_station_code?: string | null;
   settlement_station_label?: string | null;
