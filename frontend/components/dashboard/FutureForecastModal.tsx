@@ -724,6 +724,7 @@ export function FutureForecastModal() {
   const isFullDetailReady = detailDepth === "full";
   const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
   const isAnyLayerSyncing = isStructureSyncing;
+  const isTodayBlockingRefresh = isToday && isStructureSyncing;
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
@@ -1261,25 +1262,41 @@ export function FutureForecastModal() {
   const syncStatusItems = [
     {
       key: "base",
-      state: "ready",
+      state: isAnyLayerSyncing ? "syncing" : "ready",
       label:
-        locale === "en-US" ? "Base analysis ready" : "基础分析已加载",
+        isAnyLayerSyncing
+          ? locale === "en-US"
+            ? "Refreshing base analysis"
+            : "正在刷新基础分析"
+          : locale === "en-US" ? "Base analysis ready" : "基础分析已加载",
       note:
-        locale === "en-US"
-          ? "Forecast curve, anchor state, and the core intraday view are available."
-          : "预测曲线、锚点状态和核心日内视图已经可用。",
+        isAnyLayerSyncing
+          ? locale === "en-US"
+            ? "Latest anchor readings and forecast curve are being rebuilt."
+            : "正在重建最新锚点读数和预测曲线。"
+          : locale === "en-US"
+            ? "Forecast curve, anchor state, and the core intraday view are available."
+            : "预测曲线、锚点状态和核心日内视图已经可用。",
     },
     {
       key: "market",
-      state: "ready",
+      state: isAnyLayerSyncing ? "syncing" : "ready",
       label:
-        locale === "en-US"
-          ? "Probability layer ready"
-          : "概率层已加载",
+        isAnyLayerSyncing
+          ? locale === "en-US"
+            ? "Refreshing probability layer"
+            : "正在刷新概率层"
+          : locale === "en-US"
+            ? "Probability layer ready"
+            : "概率层已加载",
       note:
-        locale === "en-US"
-          ? "Probability buckets are derived from the local model stack."
-          : "概率桶当前由本地模型栈推导。",
+        isAnyLayerSyncing
+          ? locale === "en-US"
+            ? "Model spread and calibrated buckets are updating."
+            : "模型分歧和校准概率桶正在更新。"
+          : locale === "en-US"
+            ? "Probability buckets are derived from the local model stack."
+            : "概率桶当前由本地模型栈推导。",
     },
   ] as const;
 
@@ -1391,7 +1408,29 @@ export function FutureForecastModal() {
               ×
             </button>
           </div>
-          <div className="modal-body future-modal-body">
+          <div
+            className={clsx(
+              "modal-body future-modal-body",
+              isTodayBlockingRefresh && "future-modal-body-refreshing",
+            )}
+          >
+            {isTodayBlockingRefresh && (
+              <div className="future-v2-refresh-lock" role="status" aria-live="assertive">
+                <span className="future-v2-refresh-spinner" aria-hidden="true" />
+                <div>
+                  <strong>
+                    {locale === "en-US"
+                      ? "Refreshing latest intraday data"
+                      : "正在刷新最新日内数据"}
+                  </strong>
+                  <p>
+                    {locale === "en-US"
+                      ? "Old cached readings are temporarily locked to prevent misjudgement. The analysis will unlock after the latest anchor observation, model layer, and probability layer are ready."
+                      : "旧缓存读数已临时锁定，避免误判。最新锚点观测、模型层和概率层就绪后会自动解锁。"}
+                  </p>
+                </div>
+              </div>
+            )}
             {isToday && (
               <section className="future-v2-meteorology-brief">
                 <div className="future-v2-meteorology-copy">
@@ -1453,7 +1492,10 @@ export function FutureForecastModal() {
               {syncStatusItems.map((item) => (
                 <div
                   key={item.key}
-                  className="future-v2-sync-chip"
+                  className={clsx(
+                    "future-v2-sync-chip",
+                    item.state === "syncing" && "syncing",
+                  )}
                 >
                   <span className="future-v2-sync-dot" aria-hidden="true" />
                   <div className="future-v2-sync-copy">

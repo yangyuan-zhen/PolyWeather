@@ -3183,10 +3183,57 @@
 }
 
 .root :global(.future-modal-body) {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding-right: 14px;
+}
+
+.root :global(.future-modal-body-refreshing > :not(.future-v2-refresh-lock)) {
+  opacity: 0.18;
+  filter: blur(1px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.root :global(.future-v2-refresh-lock) {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  border-radius: 8px;
+  background: rgba(8, 13, 24, 0.96);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
+}
+
+.root :global(.future-v2-refresh-lock strong) {
+  display: block;
+  color: #e0faff;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.root :global(.future-v2-refresh-lock p) {
+  margin: 5px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.root :global(.future-v2-refresh-spinner) {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  border: 2px solid rgba(34, 211, 238, 0.18);
+  border-top-color: #22d3ee;
+  border-radius: 999px;
+  animation: spin 0.8s linear infinite;
 }
 
 .root :global(.future-v2-sync-strip) {
