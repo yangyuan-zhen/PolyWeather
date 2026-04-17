@@ -1245,7 +1245,28 @@
 }
 
 .root :global(.forecast-inline-note) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: rgba(34, 211, 238, 0.06);
+  font-size: 12px;
   line-height: 1.45;
+}
+
+.root :global(.forecast-inline-note::before) {
+  content: "";
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #22d3ee;
+  box-shadow: 0 0 0 4px rgba(34, 211, 238, 0.12);
+  animation: pulseGlow 1.25s ease-in-out infinite;
 }
 
 .root :global(.forecast-day) {
@@ -1285,6 +1306,28 @@
 }
 .root :global(.forecast-day.selected .f-date) {
   color: var(--accent-cyan);
+}
+
+.root :global(.forecast-day-sync) {
+  cursor: wait;
+  opacity: 0.76;
+  background:
+    linear-gradient(90deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.86));
+  background-size: 220% 100%;
+  animation: panelSkeletonSweep 1.35s ease-in-out infinite;
+}
+
+.root :global(.forecast-day-sync .f-temp) {
+  color: var(--text-muted);
+}
+
+@keyframes panelSkeletonSweep {
+  0% {
+    background-position: 120% 0;
+  }
+  100% {
+    background-position: -120% 0;
+  }
 }
 
 @media (max-width: 720px) {

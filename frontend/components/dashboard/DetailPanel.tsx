@@ -190,6 +190,12 @@ export function DetailPanel() {
   const heroSettlementLabel =
     detail?.current?.settlement_source_label || basicSettlementLabel;
   const heroAirportLabel = detail?.risk?.airport || basicAirportLabel;
+  const isDetailCompleting = Boolean(
+    detail &&
+      (detail.detail_depth !== "full" ||
+        (detail.forecast?.daily?.length ?? 0) <= 1),
+  );
+  const isPanelSyncing = store.loadingState.cityDetail || isDetailCompleting;
 
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -309,13 +315,17 @@ export function DetailPanel() {
             </div>
             <h2>{panelDisplayName}</h2>
           </div>
-          {store.loadingState.cityDetail && (
+          {isPanelSyncing && (
             <div className="panel-loading-hint" role="status" aria-live="polite">
               <span className="panel-loading-spinner" aria-hidden="true" />
               <span>
                 {locale === "en-US"
-                  ? `Syncing ${panelDisplayName}...`
-                  : `正在同步 ${panelDisplayName}...`}
+                  ? isDetailCompleting
+                    ? `Completing ${panelDisplayName} cards...`
+                    : `Syncing ${panelDisplayName}...`
+                  : isDetailCompleting
+                    ? `正在补齐 ${panelDisplayName} 卡片...`
+                    : `正在同步 ${panelDisplayName}...`}
               </span>
             </div>
           )}

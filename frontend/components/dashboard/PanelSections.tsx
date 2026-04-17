@@ -993,11 +993,15 @@ export function ModelForecast({
 export function ForecastTable() {
   const store = useDashboardStore();
   const { data } = useCityData();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   if (!data) return null;
 
   const daily = data.forecast?.daily || [];
   const isSparseDaily = daily.length <= 1;
+  const isForecastCompleting =
+    store.loadingState.cityDetail ||
+    data.detail_depth !== "full" ||
+    isSparseDaily;
   const resolveForecastTemp = (date: string, fallback: number | null | undefined) => {
     const debPrediction = data.multi_model_daily?.[date]?.deb?.prediction;
     return debPrediction ?? fallback ?? null;
@@ -1006,17 +1010,14 @@ export function ForecastTable() {
     <section className="forecast-section">
       <h3>{t("forecast.title")}</h3>
       {isSparseDaily && (
-        <div
-          className="forecast-inline-note"
-          style={{
-            color: "var(--text-secondary)",
-            fontSize: "12px",
-            marginBottom: "10px",
-          }}
-        >
-          {store.loadingState.cityDetail
-            ? "多日预报同步中，正在刷新完整日序列。"
-            : "当前只收到当日预报，其他日期结果暂未回传。"}
+        <div className="forecast-inline-note">
+          {isForecastCompleting
+            ? locale === "en-US"
+              ? "Multi-day forecast is syncing. Only the current-day card has arrived."
+              : "多日预报同步中，当前只到达当日卡片。"
+            : locale === "en-US"
+              ? "Only the current-day forecast is available right now."
+              : "当前只收到当日预报，其他日期结果暂未回传。"}
         </div>
       )}
       <div className="forecast-table">
@@ -1062,7 +1063,23 @@ export function ForecastTable() {
                 </div>
               </button>
             );
-          })
+          }).concat(
+            isForecastCompleting
+              ? Array.from({ length: Math.max(0, 5 - daily.length) }).map((_, index) => (
+                  <button
+                    key={`forecast-sync-${index}`}
+                    type="button"
+                    className="forecast-day forecast-day-sync"
+                    disabled
+                  >
+                    <div className="f-date">
+                      {locale === "en-US" ? "Syncing" : "同步中"}
+                    </div>
+                    <div className="f-temp">--</div>
+                  </button>
+                ))
+              : [],
+          )
         )}
       </div>
     </section>
