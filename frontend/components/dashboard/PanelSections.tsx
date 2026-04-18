@@ -679,20 +679,6 @@ export function ProbabilityDistribution({
                 : "使用校准后的模型分布；下方模型共识仅用于解释。"}
           </p>
         </div>
-        {view.mu != null && (
-          <div
-            style={{
-              color: "var(--text-muted)",
-              fontSize: "11px",
-              marginBottom: "6px",
-            }}
-          >
-            {t("section.mu", {
-              unit: detail.temp_symbol || "",
-              value: view.mu.toFixed(1),
-            })}
-          </div>
-        )}
         {marketScan?.available && (topMarketBucketText || marketYesText) && (
           <div
             style={{
