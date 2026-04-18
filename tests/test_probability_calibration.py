@@ -8,6 +8,7 @@ from src.analysis.probability_calibration import (
     apply_probability_calibration,
     build_probability_features,
     fit_calibration,
+    resolve_probability_engine_mode,
 )
 
 
@@ -49,6 +50,17 @@ def _write_calibration(tmp_path: Path):
     path = tmp_path / "calibration.json"
     path.write_text(json.dumps(payload), encoding="utf-8")
     return path
+
+
+def test_default_probability_engine_is_emos_primary(monkeypatch):
+    monkeypatch.delenv("POLYWEATHER_PROBABILITY_ENGINE", raising=False)
+
+    assert resolve_probability_engine_mode() == ENGINE_MODE_EMOS_PRIMARY
+    assert resolve_probability_engine_mode("unknown-mode") == ENGINE_MODE_EMOS_PRIMARY
+
+    monkeypatch.setenv("POLYWEATHER_PROBABILITY_ENGINE", ENGINE_MODE_EMOS_SHADOW)
+
+    assert resolve_probability_engine_mode() == ENGINE_MODE_EMOS_SHADOW
 
 
 def test_shadow_mode_keeps_legacy_distribution(tmp_path):

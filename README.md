@@ -17,7 +17,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## Product Status (2026-04-18)
+## Product Status (2026-04-19)
 
 - Subscription live: `Pro Monthly 5 USDC`.
 - Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
@@ -26,7 +26,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
-- EMOS/CRPS pipeline is integrated in `shadow` mode with rollout gating.
+- EMOS/CRPS calibrated probability is now the default primary probability engine (`emos_primary`); set `POLYWEATHER_PROBABILITY_ENGINE=emos_shadow` or `legacy` to roll back.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
 - Calibrated model probability is now the primary probability panel. `LGBM` is shown as a calibrated probability engine when available; model consensus and market prices are secondary references.

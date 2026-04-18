@@ -14,7 +14,7 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-04-18）
+## 当前产品状态（2026-04-19）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
 - 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
@@ -25,7 +25,7 @@
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
-- 已接入 EMOS/CRPS 校准链路，但当前仍保持 `emos_shadow`。
+- EMOS/CRPS 校准概率已切为默认主路径（`emos_primary`）；如需回滚可设置 `POLYWEATHER_PROBABILITY_ENGINE=emos_shadow` 或 `legacy`。
 - 官方增强站网已统一接入：
   - `MGM`（土耳其）
   - `CMA/NMC`（中国内地）

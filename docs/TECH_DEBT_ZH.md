@@ -1,6 +1,6 @@
-# 技术债与工程待办（v1.5.1）
+# 技术债与工程待办（v1.5.4）
 
-最后更新：`2026-03-31`
+最后更新：`2026-04-19`
 
 目标：在收费上线后，优先保证状态一致性、支付可靠性、可观测性和概率引擎发布可控。
 
@@ -29,7 +29,7 @@ flowchart TD
     end
 
     subgraph S["状态与概率"]
-        S1["EMOS shadow -> primary 门禁稳定化"]
+        S1["EMOS primary 线上监控"]
     end
 
     A --> P
@@ -49,13 +49,13 @@ flowchart TD
 - 钱包异动支持独立频道路由。
 - 运行态状态/缓存与核心离线训练、评估、回填链路已完成 SQLite 主路径收口。
 - 轻量可观测性已上线（`/healthz`、`/api/system/status`、`/metrics`）。
-- EMOS/CRPS 校准链路已上线 shadow 模式。
+- EMOS/CRPS 校准链路已切为默认主路径（`emos_primary`），保留 `emos_shadow` / `legacy` 回滚开关。
 
 ## 3. 高优先级技术债
 
 | 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| EMOS 上线门禁 | 当前 `hold`，不能切 primary | 继续积累样本，重点压 `bucket_brier` |
+| EMOS 线上监控 | 已切 primary，仍需观察概率质量漂移 | 持续跑 CRPS / MAE / bucket hit 回归，异常时切回 `emos_shadow` |
 | 外部监控与告警 | 只有轻量指标，无外部抓取 | 接 Prometheus/Grafana 或最小巡检 |
 | 退款与售后链路 | 商业闭环不完整 | 增加退款状态机与工单系统 |
 
@@ -76,6 +76,6 @@ flowchart TD
 
 ## 6. 下阶段里程碑
 
-1. 稳定 EMOS shadow，达到 rollout `observe/promote` 条件。
+1. 监控 EMOS primary 的 CRPS / MAE / bucket hit，并保留 shadow 回滚。
 2. 补外部监控抓取与告警阈值。
 3. 评估并推进支付合约 V2 升级。

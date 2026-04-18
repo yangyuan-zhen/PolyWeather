@@ -13,6 +13,7 @@ from src.analysis.settlement_rounding import apply_city_settlement, is_exact_set
 ENGINE_MODE_LEGACY = "legacy"
 ENGINE_MODE_EMOS_SHADOW = "emos_shadow"
 ENGINE_MODE_EMOS_PRIMARY = "emos_primary"
+DEFAULT_ENGINE_MODE = ENGINE_MODE_EMOS_PRIMARY
 VALID_ENGINE_MODES = {
     ENGINE_MODE_LEGACY,
     ENGINE_MODE_EMOS_SHADOW,
@@ -53,10 +54,10 @@ def resolve_probability_engine_mode(explicit_mode: Optional[str] = None) -> str:
     mode = str(
         explicit_mode
         or os.getenv("POLYWEATHER_PROBABILITY_ENGINE")
-        or ENGINE_MODE_EMOS_SHADOW
+        or DEFAULT_ENGINE_MODE
     ).strip().lower()
     if mode not in VALID_ENGINE_MODES:
-        return ENGINE_MODE_EMOS_SHADOW
+        return DEFAULT_ENGINE_MODE
     return mode
 
 
