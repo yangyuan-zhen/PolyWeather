@@ -67,8 +67,21 @@ def _write_json(path: str, payload: Dict[str, Any]) -> None:
         json.dump(payload, fh, ensure_ascii=False, indent=2)
 
 
-def _run_python(args: List[str]) -> Dict[str, Any]:
+def _run_python(args: List[str], *, stream: bool = False) -> Dict[str, Any]:
     command = [sys.executable, *args]
+    if stream:
+        completed = subprocess.run(
+            command,
+            cwd=PROJECT_ROOT,
+            text=True,
+            check=False,
+        )
+        return {
+            "command": command,
+            "returncode": completed.returncode,
+            "stdout": "",
+            "stderr": "",
+        }
     completed = subprocess.run(
         command,
         cwd=PROJECT_ROOT,
@@ -179,6 +192,17 @@ def main() -> int:
         help="Run focused probability tests before promotion.",
     )
     parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print child script progress while training and evaluating.",
+    )
+    parser.add_argument(
+        "--snapshot-limit",
+        type=int,
+        default=_env_int("POLYWEATHER_EMOS_TRAINING_SNAPSHOT_LIMIT", 0),
+        help="Optional max number of recent probability snapshots to load from SQLite.",
+    )
+    parser.add_argument(
         "--min-samples",
         type=int,
         default=_env_int("POLYWEATHER_EMOS_AUTO_MIN_SAMPLES", 50),
@@ -211,14 +235,20 @@ def main() -> int:
     evaluation_path = os.path.join(candidate_dir, "evaluation_report.json")
     decision_path = os.path.join(candidate_dir, "decision_report.json")
 
-    fit_result = _run_python(
-        [
+    fit_args = [
             "scripts/fit_probability_calibration.py",
             "--output",
             candidate_path,
             "--version",
             version,
-        ]
+    ]
+    if args.verbose:
+        fit_args.append("--verbose")
+    if args.snapshot_limit and args.snapshot_limit > 0:
+        fit_args.extend(["--snapshot-limit", str(args.snapshot_limit)])
+    fit_result = _run_python(
+        fit_args,
+        stream=args.verbose,
     )
     if fit_result["returncode"] != 0:
         payload = {
@@ -239,7 +269,8 @@ def main() -> int:
             candidate_path,
             "--output",
             evaluation_path,
-        ]
+        ],
+        stream=args.verbose,
     )
     if eval_result["returncode"] != 0:
         payload = {

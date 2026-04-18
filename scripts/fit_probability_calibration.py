@@ -34,6 +34,21 @@ def _sf(value):
         return None
 
 
+def _env_int(name, default=None):
+    try:
+        value = os.getenv(name)
+        if value is None or str(value).strip() == "":
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+def _log(enabled, message):
+    if enabled:
+        print(f"[fit_probability_calibration] {message}", flush=True)
+
+
 def _load_json_if_exists(path):
     if not path or not os.path.exists(path):
         return {}
@@ -96,9 +111,28 @@ def _load_training_feature_history():
         return {}
 
 
-def _load_snapshot_rows(path):
+def _load_snapshot_rows(path, limit=None):
     if get_state_storage_mode() == STATE_STORAGE_SQLITE:
-        return ProbabilitySnapshotRepository().load_all_rows()
+        repo = ProbabilitySnapshotRepository()
+        if limit is not None and int(limit) > 0:
+            with repo.db.connect() as conn:
+                rows = conn.execute(
+                    """
+                    SELECT payload_json
+                    FROM probability_training_snapshots_store
+                    ORDER BY id DESC
+                    LIMIT ?
+                    """,
+                    (int(limit),),
+                ).fetchall()
+            out = []
+            for row in reversed(rows):
+                try:
+                    out.append(json.loads(row["payload_json"]))
+                except Exception:
+                    continue
+            return out
+        return repo.load_all_rows()
     rows = []
     if not path or not os.path.exists(path):
         return rows
@@ -410,14 +444,42 @@ def main():
         default=None,
         help="Optional explicit calibration version.",
     )
+    parser.add_argument(
+        "--snapshot-limit",
+        type=int,
+        default=_env_int("POLYWEATHER_EMOS_TRAINING_SNAPSHOT_LIMIT"),
+        help="Optional max number of recent probability snapshots to load from SQLite.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print data loading and fitting progress.",
+    )
     args = parser.parse_args()
 
+    _log(args.verbose, "loading daily records")
     history = _load_history_with_fallback(args.history_file)
+    _log(args.verbose, f"loaded daily record cities={len(history or {})}")
+    _log(args.verbose, "loading training feature history")
     training_feature_history = _load_training_feature_history()
+    _log(args.verbose, f"loaded training feature cities={len(training_feature_history or {})}")
+    _log(args.verbose, "loading truth history")
     truth_history = _load_truth_history()
+    _log(args.verbose, f"loaded truth cities={len(truth_history or {})}")
+    _log(args.verbose, "loading settlement history")
     settlement_history = _load_json_if_exists(args.settlement_history)
-    snapshot_rows = _load_snapshot_rows(args.snapshot_file)
+    _log(args.verbose, f"loaded settlement history cities={len(settlement_history or {})}")
+    _log(
+        args.verbose,
+        "loading probability snapshots"
+        + (f" limit={args.snapshot_limit}" if args.snapshot_limit else ""),
+    )
+    snapshot_rows = _load_snapshot_rows(args.snapshot_file, limit=args.snapshot_limit)
+    _log(args.verbose, f"loaded probability snapshots={len(snapshot_rows or [])}")
+    _log(args.verbose, "loading legacy training archive")
     legacy_training_samples = _load_legacy_training_samples()
+    _log(args.verbose, f"loaded legacy training samples={len(legacy_training_samples or [])}")
+    _log(args.verbose, "extracting EMOS samples")
     samples, filled_actual_from_history = _extract_samples(
         history,
         training_feature_history=training_feature_history,
@@ -426,6 +488,7 @@ def main():
         snapshot_rows=snapshot_rows,
     )
     samples = merge_samples_with_legacy_archive(samples, legacy_training_samples)
+    _log(args.verbose, f"fitting calibration samples={len(samples or [])}")
     calibration = fit_calibration(samples, version=args.version)
     if not samples:
         calibration = default_calibration_payload(
@@ -447,6 +510,7 @@ def main():
     with open(args.output, "w", encoding="utf-8") as fh:
         json.dump(calibration, fh, ensure_ascii=False, indent=2)
 
+    _log(args.verbose, "done")
     print(
         "saved calibration to {path} with {count} samples".format(
             path=args.output,

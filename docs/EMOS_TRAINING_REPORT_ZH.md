@@ -149,7 +149,7 @@ python scripts\auto_retrain_probability_calibration.py --promote-if-passed --run
 Docker 手动触发：
 
 ```text
-docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py
+docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --verbose
 ```
 
 查看最新报告：
@@ -161,7 +161,19 @@ docker compose exec -T polyweather_web cat /var/lib/polyweather/probability_cali
 Docker 允许门禁发布：
 
 ```text
-docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --promote-if-passed --run-tests
+docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --verbose --promote-if-passed --run-tests
+```
+
+如果线上 SQLite 的 `probability_training_snapshots_store` 已经很大，可以先限制最近 N 条快照：
+
+```text
+docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --verbose --snapshot-limit 20000
+```
+
+也可以放到 `.env`：
+
+```text
+POLYWEATHER_EMOS_TRAINING_SNAPSHOT_LIMIT=20000
 ```
 
 如果希望自动发布不需要重建镜像，需要在 `.env` 中指定可写参数文件：
