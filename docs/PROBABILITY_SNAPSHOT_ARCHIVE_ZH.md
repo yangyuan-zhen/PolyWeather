@@ -1,6 +1,6 @@
 # 概率训练样本归档说明（中文）
 
-最后更新：`2026-04-18`
+最后更新：`2026-04-19`
 
 ## 1. 目的
 
@@ -223,13 +223,20 @@ python scripts/export_probability_training_dataset.py
 
 ### 7.4 重训 EMOS
 
-```bash
-python scripts/fit_probability_calibration.py
+推荐在本地电脑使用生产 SQLite 副本训练，不建议在低配 VPS 上训练：
+
+```powershell
+scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
+$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
+$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
+python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
 ```
 
 作用：
 
-- 生成新的 [default.json](/E:/web/PolyWeather/artifacts/probability_calibration/default.json)
+- 生成新的候选 `default.json`
+- 同时生成 `evaluation_report.json` 与 `auto_retrain_report.json`
+- 不自动覆盖线上参数
 
 ### 7.5 离线评估训练效果
 
@@ -263,21 +270,22 @@ python scripts/build_probability_shadow_report.py
 
 ## 8. 推荐的一整套重训流程
 
-如果过了十天、半个月，想重新训练一次，建议按这个顺序执行：
+如果过了十天、半个月，想重新训练一次，当前推荐流程是：
 
-```bash
-python scripts/build_settlement_history_from_csv.py
-python scripts/export_probability_training_dataset.py
-python scripts/fit_probability_calibration.py
-python scripts/evaluate_probability_calibration.py
-python scripts/backfill_probability_shadow_history.py
-python scripts/build_probability_shadow_report.py
+```powershell
+scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
+$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
+$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
+python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
 ```
 
-如果历史天气 CSV 还没补全，再先执行：
+只有 `auto_retrain_report.json` 中 `ready_for_promotion=true`，才把候选参数传回 VPS，并优先用 `emos_shadow` 观察。
+
+如果只是做历史真值补数，才需要额外执行：
 
 ```bash
 python scripts/backfill_historical_weather.py
+python scripts/build_settlement_history_from_csv.py
 ```
 
 ## 9. 怎么判断这次训练有没有进步
@@ -301,12 +309,13 @@ python scripts/backfill_historical_weather.py
 - 越低越好
 - 反映概率分布质量
 
-只有同时满足下面条件，才可以说训练效果真的进步：
+当前自动门禁至少要求：
 
 - `CRPS` 下降
-- `MAE` 不上升
-- `Bucket Hit Rate` 不下降
-- `Bucket Brier` 不上升
+- `MAE` 最多轻微退化 `0.05`
+- `Bucket Hit Rate` 退化不超过 `0.05`
+
+人工复核还应看城市级结果，避免少数关键城市大幅退化。`Bucket Hit Rate` 受整数结算边界影响大，不能单独作为唯一判断。
 
 ## 10. 当前最重要的现实判断
 
@@ -328,7 +337,8 @@ python scripts/backfill_historical_weather.py
 1. 新增 `probability_training_snapshots.jsonl`
 2. 每次分析时自动追加一条快照
 3. 当天结束后自动回填 `actual_high`
-4. 每 1-2 周重新训练一次
+4. 每 1-2 周在本地电脑重新训练一次
+5. VPS 只加载通过评估的参数文件，不做全量训练
 
 ## 12. 总结
 

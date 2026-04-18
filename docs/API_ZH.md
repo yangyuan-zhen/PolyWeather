@@ -94,7 +94,7 @@ flowchart LR
 - `calibrated_mu` / `calibrated_sigma`：校准后分布参数
 - `shadow_distribution`：shadow / 对照分布，供回归与灰度验证
 
-当前前端会优先展示 LGBM / EMOS 等校准概率；模型共识与市场价格只作为辅助参考，不再作为主结论。
+当前前端展示 `probabilities.engine` 对应的生产概率分布；`EMOS` / `LGBM` 只有在评估通过、显式启用或 shadow 对照时才进入展示/解释层。模型共识与市场价格只作为辅助参考，不再作为主结论。
 
 #### 3. `detail_depth`
 

@@ -1,6 +1,6 @@
 # EMOS + LGBM 系统说明（中文）
 
-最后更新：`2026-04-18`
+最后更新：`2026-04-19`
 
 本文档用于完整说明 PolyWeather 当前的两条统计/机器学习链路：
 
@@ -351,7 +351,11 @@ LGBM 训练样本会优先从：
 
 ### 8.1 概率引擎模式
 
-当前项目仍然应该保持：
+当前生产主概率应保持：
+
+- `legacy`
+
+如果需要观察 EMOS 对照，可切：
 
 - `emos_shadow`
 
@@ -359,7 +363,7 @@ LGBM 训练样本会优先从：
 
 - `emos_primary`
 
-原因不是工程没接好，而是门禁还没过。
+原因不是工程没接好，而是主概率发布必须由离线评估结果决定。VPS 轻量训练候选未通过门禁；本地训练候选虽通过门禁，但仍建议先 shadow 观察，再人工决定是否切主。
 
 ### 8.2 LGBM 角色
 
@@ -433,26 +437,38 @@ LGBM 训练样本会优先从：
 
 ## 10. 当前 EMOS 结果怎么理解
 
-最近一轮离线评估大致是：
+最近两轮评估给出了更清晰的结论。
 
-- `sample_count = 54`
-- `delta_crps ≈ -0.0867`
-- `delta_mae = 0`
-- `delta_bucket_hit_rate = 0`
+VPS 轻量训练候选：
+
+- 版本：`emos-auto-20260418204203`
+- `sample_count = 791`
+- `delta_crps = +0.004652`
+- `delta_mae = +0.102623`
+- `delta_bucket_hit_rate = -0.137800`
+- 结论：`hold`
+
+本地训练候选：
+
+- 版本：`emos-auto-20260418212046`
+- `sample_count = 847`
+- `delta_crps = -0.036170`
+- `delta_mae = -0.007896`
+- `delta_bucket_hit_rate = -0.009445`
+- 结论：`promote`
 
 这说明：
 
-- 从 `CRPS` 看，EMOS 有改善
-- 但从 `MAE` 和 `top bucket hit` 看，没有明显进步
+- EMOS 工程链路有效，本地用更多 snapshot 训练时可以超过 legacy 的 CRPS/MAE。
+- 低配 VPS 不适合做主训练环境。
+- 通过门禁不等于立即默认主用，仍应先 `emos_shadow` 观察。
 
-shadow 报告里更关键的问题是：
+当前生产策略仍然是：
 
-- `shadow sample_count = 48`
-- `delta_bucket_brier` 仍然明显偏坏
-
-所以 rollout 结论仍然是：
-
-- `hold`
+- 用户主概率默认 `legacy`
+- EMOS 通过本地训练产生候选
+- 通过门禁后先以 `emos_shadow` 灰度
+- 连续稳定后才考虑 `emos_primary`
 
 这不是“EMOS 无效”，而是：
 
@@ -462,14 +478,17 @@ shadow 报告里更关键的问题是：
 
 主要阻塞仍然是：
 
-- 样本数不够
-- shadow bucket brier 退化
+- 有效样本仍然不大，城市级样本分布不均
+- 桶概率容易受结算边界影响
+- 需要避免 VPS 训练消耗线上资源
+- `emos_primary` 发布需要明确人工门禁
 
 也就是说，当前 EMOS 状态可以总结成：
 
 - 工程链路完整
 - 数据治理大幅改善
-- 发布门禁仍未通过
+- 本地训练可通过门禁
+- 生产主用仍需 shadow 观察与人工发布
 
 ---
 
@@ -594,20 +613,21 @@ EMOS 更依赖：
 1. 查看 `/ops`
 2. 看 `truth / feature / EMOS / LGBM` 覆盖有没有继续增长
 3. 看 `Taipei/Shenzhen` 的 WU 行数是否继续更新
-4. 看 rollout 仍然是 `hold` 还是有改善
+4. 看本地 EMOS 候选是否通过门禁
+5. 看 VPS 是否只加载已批准参数，不在低配机器上训练
 
 ### 15.2 周期性重训
 
-建议周期性执行：
+建议在本地开发机执行，不建议在低配 VPS 上执行：
 
-```bash
-./venv/Scripts/python.exe scripts/export_probability_training_dataset.py
-./venv/Scripts/python.exe scripts/fit_probability_calibration.py
-./venv/Scripts/python.exe scripts/evaluate_probability_calibration.py
-./venv/Scripts/python.exe scripts/build_probability_shadow_report.py
-./venv/Scripts/python.exe scripts/judge_probability_rollout.py
-./venv/Scripts/python.exe scripts/train_lgbm_daily_high.py
+```powershell
+scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
+$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
+$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
+python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
 ```
+
+只有 `auto_retrain_report.json` 里 `ready_for_promotion=true` 时，才允许把候选 `default.json` 传回 VPS。
 
 ### 15.3 真值恢复/补数
 
@@ -631,7 +651,7 @@ EMOS 更依赖：
 
 如果只用一句话概括当前状态：
 
-**EMOS 和 LGBM 的工程基础已经补齐，但数据积累还在恢复期；当前最正确的策略仍然是继续以 `DEB` 为主路径，让长期真值和训练特征继续沉淀，再观察 EMOS/LGBM 是否自然变强。**
+**EMOS 和 LGBM 的工程基础已经补齐，但生产主概率仍必须由评估门禁控制；当前最正确的策略是继续以 `DEB/legacy` 为主路径，在本地训练 EMOS 候选，VPS 只加载已批准参数。**
 
 更具体一点：
 
@@ -640,7 +660,8 @@ EMOS 更依赖：
   - 可训练
   - 可评估
   - 可 shadow
-  - 但暂时不能切主路径
+  - 通过门禁后可灰度
+  - 不应在低配 VPS 上自动训练或自动主用
 
 - `LGBM`
   - 已接好

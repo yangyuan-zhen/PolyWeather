@@ -25,7 +25,7 @@
 - 已上线轻量可观测性：`/healthz`、`/api/system/status`、`/metrics`。
 - 已补最小外部监控栈：Prometheus + Alertmanager + Grafana + Telegram 告警 relay。
 - 运行态状态、缓存与核心离线训练/回填链路已完成 SQLite 主路径收口；legacy JSON/JSONL 仅保留给迁移、导出与显式回退输入。
-- EMOS/CRPS 校准概率已切为默认主路径（`emos_primary`）；如需回滚可设置 `POLYWEATHER_PROBABILITY_ENGINE=emos_shadow` 或 `legacy`。
+- EMOS/CRPS 校准链路已接通，但生产主概率保持 `legacy` 或 `emos_shadow`；`emos_primary` 只在本地离线评估通过并手动灰度后启用。
 - 官方增强站网已统一接入：
   - `MGM`（土耳其）
   - `CMA/NMC`（中国内地）
@@ -38,7 +38,7 @@
 - `/ops` 现已展示缓存桶数量、summary cache hit/miss 与 prewarm heartbeat。
 - 今日日内分析已改为“专业气象判断台”：顶部先给气象主判断、置信度、基准/上修/下修路径、下一观测点，再展示证据链、失效条件、确认条件和模型层。
 - 日内分析弹窗在 full detail / market detail 同步完成前会锁住旧内容并显示刷新状态，避免用户短暂看到上一轮缓存数据后误判。
-- 概率区已改为“校准模型概率”，有 LGBM 时展示 LGBM 校准概率；模型共识和市场价格只作为辅助参考。
+- 概率区已改为“校准模型概率”；默认展示生产概率引擎输出，EMOS/LGBM 只在通过评估或作为 shadow 时进入解释层。
 - 今日日内结构解读已支持可选 `Groq` 改写层，失败时自动回退规则文案。
 - 前端部署文档已补充 Vercel 节流建议，包括 analytics 关闭、eager fetch 开关与扫描流量防火墙规则。
 
@@ -121,6 +121,24 @@ POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather
 POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 POLYWEATHER_STATE_STORAGE_MODE=sqlite
 ```
+
+## EMOS 本地训练流程
+
+低配 VPS 只负责采集、服务和加载已通过评估的参数，不建议在 VPS 上跑 EMOS 全量训练。训练前先从 VPS 拉 SQLite 副本到本地：
+
+```powershell
+scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
+```
+
+本地训练：
+
+```powershell
+$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
+$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
+python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
+```
+
+只有 `auto_retrain_report.json` 中 `ready_for_promotion=true` 时，才允许把候选 `default.json` 传回 VPS，并优先以 `emos_shadow` 观察。
 
 ## 运维验收
 
@@ -235,4 +253,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## 当前版本
 
 - 版本：`v1.5.4`
-- 文档最后更新：`2026-04-18`
+- 文档最后更新：`2026-04-19`

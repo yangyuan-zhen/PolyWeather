@@ -26,10 +26,10 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
-- EMOS/CRPS calibrated probability is now the default primary probability engine (`emos_primary`); set `POLYWEATHER_PROBABILITY_ENGINE=emos_shadow` or `legacy` to roll back.
+- EMOS/CRPS calibration is wired and trainable, but production should stay on `legacy` or `emos_shadow`; `emos_primary` is only for candidates that pass local offline evaluation and manual rollout.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
-- Calibrated model probability is now the primary probability panel. `LGBM` is shown as a calibrated probability engine when available; model consensus and market prices are secondary references.
+- Calibrated model probability is now the primary probability panel. It shows the active production probability engine; EMOS/LGBM are surfaced only when evaluated or shadowed, while model consensus and market prices remain secondary references.
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
@@ -132,6 +132,19 @@ POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 POLYWEATHER_STATE_STORAGE_MODE=sqlite
 ```
 
+## EMOS Local Training
+
+Do not run full EMOS retraining on a small VPS. The VPS should collect data and load approved calibration files; training should run on a local/dev machine using a copied production SQLite database:
+
+```powershell
+scp root@38.54.27.70:/var/lib/polyweather/polyweather.db E:\web\PolyWeather\data\polyweather-prod.db
+$env:POLYWEATHER_DB_PATH="E:\web\PolyWeather\data\polyweather-prod.db"
+$env:POLYWEATHER_RUNTIME_DATA_DIR="E:\web\PolyWeather\artifacts\local_runtime"
+python scripts\auto_retrain_probability_calibration.py --verbose --snapshot-limit 50000
+```
+
+Promote a generated `default.json` only when `auto_retrain_report.json` has `ready_for_promotion=true`, and prefer `emos_shadow` before enabling `emos_primary`.
+
 ## Ops Verification
 
 ### Health / system status / metrics
@@ -219,4 +232,4 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 ## Version
 
 - Version: `v1.5.4`
-- Last Updated: `2026-04-18`
+- Last Updated: `2026-04-19`
