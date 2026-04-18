@@ -132,6 +132,37 @@ def test_primary_mode_switches_to_calibrated_distribution(tmp_path):
     assert result["distribution"][0]["value"] >= 10
 
 
+def test_primary_mode_respects_observed_max_floor(tmp_path):
+    calibration_path = _write_calibration(tmp_path)
+    features = build_probability_features(
+        city_name="ankara",
+        raw_mu=32.0,
+        raw_sigma=1.0,
+        deb_prediction=32.0,
+        ens_data={"median": 31.5, "p10": 30.0, "p90": 34.0},
+        current_forecasts={"Open-Meteo": 32.0, "MGM": 31.8},
+        max_so_far=33.0,
+        peak_status="in_window",
+        local_hour_frac=14.0,
+    )
+
+    result = apply_probability_calibration(
+        city_name="ankara",
+        temp_symbol="°C",
+        raw_mu=32.0,
+        raw_sigma=1.0,
+        max_so_far=33.0,
+        legacy_distribution=[{"value": 33, "range": "[32.5~33.5)", "probability": 0.7}],
+        features=features,
+        calibration_path=str(calibration_path),
+        mode=ENGINE_MODE_EMOS_PRIMARY,
+    )
+
+    assert result["engine"] == "emos"
+    assert result["calibrated_mu"] >= 33.0
+    assert all(row["value"] >= 33 for row in result["distribution"])
+
+
 def test_fit_calibration_returns_metrics():
     samples = [
         {

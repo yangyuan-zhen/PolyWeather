@@ -378,6 +378,10 @@ def apply_probability_calibration(
     blend_alpha_mu = max(0.0, min(1.0, _coalesce_float(blending_cfg.get("alpha_mu"), 1.0)))
     blend_alpha_sigma = max(0.0, min(1.0, _coalesce_float(blending_cfg.get("alpha_sigma"), 1.0)))
     calibrated_mu = _blend_value(raw_mu, calibrated_mu, blend_alpha_mu)
+    if max_so_far is not None:
+        observed_floor = _sf(max_so_far)
+        if observed_floor is not None and calibrated_mu < observed_floor:
+            calibrated_mu = observed_floor
     calibrated_sigma = max(0.1, _blend_value(raw_sigma, calibrated_sigma, blend_alpha_sigma))
     calibrated_sigma = _clamp_sigma(raw_sigma, calibrated_sigma, sigma_constraints)
     calibrated_distribution, calibrated_sorted = _bucket_probabilities(
