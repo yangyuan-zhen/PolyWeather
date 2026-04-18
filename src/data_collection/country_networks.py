@@ -43,7 +43,7 @@ def _provider_code_for_city(city: str) -> str:
     if normalized in {"busan", "seoul"}:
         return "korea_kma"
     if normalized == "moscow":
-        return "russia_station_web"
+        return "russia_metar_cluster"
     if settlement_source == "hko":
         return "hongkong_hko"
     if settlement_source == "cwa":
@@ -138,6 +138,7 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                 temp=row.get("temp"),
                 lat=row.get("lat"),
                 lon=row.get("lon"),
+                obs_time=row.get("obs_time"),
                 source_code="metar_cluster",
                 source_label="METAR cluster",
                 is_official=False,
@@ -530,22 +531,18 @@ class KoreaKmaNetworkProvider(CountryNetworkProvider):
 
 class RussiaStationWebNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
-        super().__init__("russia_station_web", "Russia station web")
+        super().__init__("russia_metar_cluster", "Moscow METAR network")
 
     def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        rows = _ru_rows(raw, city)
-        if rows:
-            return rows
         return _metar_cluster_rows(raw)
 
     def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         rows = self.official_nearby_current(city, raw)
-        has_ru = bool(_ru_rows(raw, city))
         return {
             "provider_code": self.provider_code,
             "provider_label": self.provider_label,
-            "available": has_ru,
-            "mode": "official_web_crawl" if has_ru else ("fallback_metar_cluster" if rows else "reference_only"),
+            "available": bool(rows),
+            "mode": "realtime_metar_cluster" if rows else "reference_only",
             "row_count": len(rows),
         }
 
@@ -574,7 +571,7 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return TurkeyMgmNetworkProvider()
     if provider_code == "korea_kma":
         return KoreaKmaNetworkProvider()
-    if provider_code == "russia_station_web":
+    if provider_code == "russia_metar_cluster":
         return RussiaStationWebNetworkProvider()
     if provider_code == "japan_jma":
         return JapanJmaNetworkProvider()

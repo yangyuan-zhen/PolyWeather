@@ -37,7 +37,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     CITY_METAR_CLUSTERS = {
         "buenos aires": ["SAEZ", "SABE", "SADP", "SADF", "SADL", "SADJ"],
         "istanbul": ["LTFM", "LTBA", "LTFJ"],
-        "moscow": ["UUWW", "UUEE", "UUDD"],
+        "moscow": ["UUWW", "UUEE", "UUDD", "UUBW", "UUMO"],
         "london": ["EGLL", "EGLC", "EGKK", "EGSS", "EGGW"],
         "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
         "los angeles": ["KLAX", "KBUR", "KLGB", "KSNA", "KVNY"],
@@ -213,7 +213,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             os.getenv("RU_STATION_CACHE_TTL_SEC", "300")
         )
         self.ru_station_max_stale_sec = int(
-            os.getenv("RU_STATION_MAX_STALE_SEC", str(72 * 3600))
+            os.getenv("RU_STATION_MAX_STALE_SEC", str(4 * 3600))
         )
         self._ru_station_cache: Dict[str, Dict] = {}
         self._ru_station_cache_lock = threading.Lock()
@@ -891,10 +891,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         if not official_rows:
             return
-        results["ru_official_nearby"] = official_rows
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = official_rows
-        results["nearby_source"] = "ru_station_web"
+        # Pogodaiklimat station rows are SYNOP/archive-style reference observations,
+        # not realtime enough for the map. Keep them out of official_nearby/mgm_nearby
+        # so Moscow uses the live METAR cluster for nearby map temperatures.
+        results["ru_reference_nearby"] = official_rows
 
     def _attach_warsaw_official_nearby(
         self, results: Dict, use_fahrenheit: bool

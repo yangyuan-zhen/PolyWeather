@@ -140,7 +140,7 @@ def test_hko_provider_marks_explicit_official_station_as_anchor():
     assert snapshot["official_nearby"][0]["station_code"] == "LFS"
 
 
-def test_russia_provider_prefers_official_web_rows_when_available():
+def test_moscow_provider_uses_realtime_metar_cluster_not_station_archive_rows():
     raw = {
         "metar": {
             "observation_time": "2026-04-06T10:00:00.000Z",
@@ -171,11 +171,11 @@ def test_russia_provider_prefers_official_web_rows_when_available():
 
     snapshot = build_country_network_snapshot("moscow", raw)
 
-    assert snapshot["provider_code"] == "russia_station_web"
+    assert snapshot["provider_code"] == "russia_metar_cluster"
     assert snapshot["official_network_status"]["available"] is True
-    assert snapshot["official_network_status"]["mode"] == "official_web_crawl"
-    assert snapshot["official_nearby"][0]["source_code"] == "ru_station_web"
-    assert snapshot["official_nearby"][0]["is_official"] is True
+    assert snapshot["official_network_status"]["mode"] == "realtime_metar_cluster"
+    assert snapshot["official_nearby"][0]["source_code"] == "metar_cluster"
+    assert snapshot["official_nearby"][0]["is_airport_station"] is True
 
 
 def test_city_detail_payload_exposes_airport_and_official_network_layers():

@@ -221,7 +221,7 @@ class RussiaStationSourceMixin:
             obs_time = parsed.get("obs_time")
             max_stale_sec = max(
                 0,
-                int(getattr(self, "ru_station_max_stale_sec", 72 * 3600)),
+                int(getattr(self, "ru_station_max_stale_sec", 4 * 3600)),
             )
             if obs_time and max_stale_sec > 0:
                 try:
