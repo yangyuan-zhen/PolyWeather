@@ -99,7 +99,66 @@ POLYWEATHER_PROBABILITY_ENGINE=legacy
 
 如果连续回归显示 EMOS 退化，应先切回 `emos_shadow`，保留 shadow 观测，再决定是否回退到 `legacy`。
 
-## 8. 已验证
+## 8. 自动重训
+
+已新增自动重训编排脚本：
+
+```text
+python scripts\auto_retrain_probability_calibration.py
+```
+
+默认行为：
+
+- 生成一个新的 EMOS candidate。
+- 对 candidate 跑离线评估。
+- 写入候选目录和门禁报告。
+- 不覆盖线上 [default.json](/E:/web/PolyWeather/artifacts/probability_calibration/default.json)。
+
+候选产物默认写入：
+
+```text
+artifacts/probability_calibration/candidates/<version>/
+```
+
+允许门禁通过后自动发布：
+
+```text
+python scripts\auto_retrain_probability_calibration.py --promote-if-passed --run-tests
+```
+
+门禁默认阈值：
+
+- `POLYWEATHER_EMOS_AUTO_MIN_SAMPLES=50`
+- `POLYWEATHER_EMOS_AUTO_MAX_DELTA_CRPS=0`
+- `POLYWEATHER_EMOS_AUTO_MAX_DELTA_MAE=0.05`
+- `POLYWEATHER_EMOS_AUTO_MIN_DELTA_BUCKET_HIT_RATE=-0.05`
+
+说明：
+
+- `CRPS` 不允许比 legacy 更差。
+- `MAE` 最多允许轻微退化 `0.05`。
+- `bucket_hit_rate` 只做软门槛，因为它对结算边界过于敏感。
+- 如果发布，会先备份旧版 `default.json`。
+
+Docker 手动触发：
+
+```text
+docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py
+```
+
+Docker 允许门禁发布：
+
+```text
+docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --promote-if-passed --run-tests
+```
+
+建议后续挂到宿主机 `cron` 或 systemd timer：
+
+```text
+0 3 * * * cd /root/PolyWeather && docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --promote-if-passed --run-tests
+```
+
+## 9. 已验证
 
 本次上线前已执行：
 

@@ -11,6 +11,8 @@ data/historical/
 data/cache/
 data/models/
 logs/
+artifacts/probability_calibration/auto_retrain_report.json
+artifacts/probability_calibration/candidates/
 
 # Python
 __pycache__/
