@@ -38,3 +38,24 @@ def test_fetch_moscow_official_nearby_keeps_nearest_ten_station_rows():
     assert rows[0]["station_code"] == "27524"
     assert rows[1]["station_code"] == "27500"
     assert all(row["distance_km"] is not None for row in rows)
+
+
+def test_russia_weather_archive_parser_uses_latest_valid_row():
+    html = """
+    <table>
+      <tr><th>hour</th><th>date</th></tr>
+      <tr><td>09</td><td>11.04</td></tr>
+      <tr><td>21</td><td>17.04</td></tr>
+    </table>
+    <table>
+      <tr><th>a</th><th>b</th><th>c</th><th>d</th><th>cloud</th><th>temp</th></tr>
+      <tr><td>x</td><td>x</td><td>x</td><td>x</td><td>x</td><td>+4.2</td></tr>
+      <tr><td>x</td><td>x</td><td>x</td><td>x</td><td>x</td><td>+5.8</td></tr>
+    </table>
+    """
+
+    parsed = RussiaStationSourceMixin()._ru_parse_station_current_from_weather_html(html)
+
+    assert parsed["temp_c"] == 5.8
+    assert parsed["raw_hour"] == "21"
+    assert parsed["raw_day_month"] == "17.04"

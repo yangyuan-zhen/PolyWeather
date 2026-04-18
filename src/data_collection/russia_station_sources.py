@@ -175,7 +175,7 @@ class RussiaStationSourceMixin:
             return None
 
         pair_count = min(len(time_rows), len(data_rows)) - 1
-        for idx in range(pair_count):
+        for idx in range(pair_count - 1, -1, -1):
             time_row = time_rows[idx + 1]
             data_row = data_rows[idx + 1]
             if len(time_row) < 2 or len(data_row) < 6:
