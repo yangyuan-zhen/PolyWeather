@@ -1,6 +1,6 @@
 {
   "name": "polyweather-frontend",
-  "version": "1.5.1",
+  "version": "1.5.4",
   "private": true,
   "scripts": {
     "dev": "next dev",

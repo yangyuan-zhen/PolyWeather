@@ -1,6 +1,6 @@
-# PolyWeather API 文档（v1.5.1）
+# PolyWeather API 文档（v1.5.4）
 
-最后更新：`2026-03-24`
+最后更新：`2026-04-18`
 
 本文档描述当前对外可用 API 口径（`web/app.py` + `web/routes.py` + `frontend/app/api/*`）。
 
@@ -48,6 +48,13 @@ flowchart LR
 - `market_scan.anchor_model / anchor_high / anchor_settlement`
 - `market_scan.yes_buy / no_buy`
 - `market_scan.primary_market.tradable`
+- `probabilities.engine / calibration_mode / calibration_version`
+- `probabilities.raw_mu / raw_sigma / calibrated_mu / calibrated_sigma`
+- `probabilities.shadow_distribution`
+- `intraday_meteorology.headline / confidence`
+- `intraday_meteorology.base_case_bucket / upside_bucket / downside_bucket`
+- `intraday_meteorology.next_observation_time`
+- `intraday_meteorology.invalidation_rules / confirmation_rules / signal_contributions`
 - `peak.first_h / peak.last_h / peak.status`
 - `vertical_profile_signal.heating_setup / suppression_risk / trigger_risk / mixing_strength`
 - `taf.signal.peak_window / suppression_level / disruption_level / markers`
@@ -56,7 +63,50 @@ flowchart LR
 
 `/api/city/{name}/detail` 现在会返回一组更偏交易场景的结构字段：
 
-#### 1. `peak`
+#### 1. `intraday_meteorology`
+
+今日日内分析的专业气象判断层。该字段只做派生，不改变路由和缓存策略。
+
+重点字段：
+
+- `headline`：今日主判断，例如“峰值仍有上修空间 / 峰值受云雨压制”
+- `confidence`：`low | medium | high`
+- `base_case_bucket`：基准温度档位
+- `upside_bucket`：上修路径档位
+- `downside_bucket`：下修路径档位
+- `next_observation_time`：下一次应重点看的本地时间
+- `invalidation_rules`：2-4 条失效条件
+- `confirmation_rules`：1-3 条确认条件
+- `signal_contributions`：气象因子列表，含 `label`、`direction`、`strength`、`summary`
+
+前端如果该字段暂缺，会降级使用现有 `paceView`、`boundaryRiskView`、`upperAirCue`、`probabilitySummary` 等字段。
+
+#### 2. `probabilities`
+
+概率层现在按“校准模型概率”对外解释，而不是直接把模型票数或市场价格当成概率。
+
+新增 / 重点字段：
+
+- `engine`：概率引擎名称，例如 `lgbm_calibrated`、`emos`、`legacy`
+- `calibration_mode`：校准运行模式
+- `calibration_version`：校准产物版本
+- `raw_mu` / `raw_sigma`：原始分布参数
+- `calibrated_mu` / `calibrated_sigma`：校准后分布参数
+- `shadow_distribution`：shadow / 对照分布，供回归与灰度验证
+
+当前前端会优先展示 LGBM / EMOS 等校准概率；模型共识与市场价格只作为辅助参考，不再作为主结论。
+
+#### 3. `detail_depth`
+
+`detail_depth` 用于区分轻量 detail 与完整 detail。前端如果发现：
+
+- `detail_depth != "full"`
+- 或 `forecast.daily` 只有当天一张卡
+- 或模型层只剩单模型
+
+会触发强刷完整 detail，并在 UI 上显示同步状态 / 占位卡，避免用户把中间态误判成完整分析。
+
+#### 4. `peak`
 
 - `first_h`：预计峰值窗口起始小时
 - `last_h`：预计峰值窗口结束小时
@@ -64,7 +114,7 @@ flowchart LR
 
 这组字段用于让日内结构信号围绕真实峰值窗口分析，而不是固定只看下午。
 
-#### 2. `vertical_profile_signal`
+#### 5. `vertical_profile_signal`
 
 重点字段：
 
@@ -86,7 +136,7 @@ flowchart LR
 
 这组字段对应前端“高空结构信号 / Upper-Air Structure”卡片。
 
-#### 3. `taf.signal`
+#### 6. `taf.signal`
 
 仅对**非香港机场城市**启用。当前已支持解析：
 
@@ -108,6 +158,12 @@ flowchart LR
 - `summary_en`
 
 `markers` 会被前端温度走势图拿来做 `TAF 时段 / TAF Timing` 标记。
+
+#### 7. 结算锚点口径
+
+- 多数机场市场以 `METAR` / 机场主站实况为结算锚点。
+- `Wunderground` 是历史页面或参考入口，不应在产品文案里被描述成“站”。
+- `MGM / NMC / JMA / KMA / HKO / CWA` 等官方站网属于增强层或明确官方站点层；只有合约规则明确指定时，才作为最终结算站点。
 
 ## 4. 鉴权与账户接口
 
@@ -196,6 +252,7 @@ flowchart LR
 - `summary?force_refresh=true`：`Cache-Control: no-store`
 - 详情接口与支付接口：`no-store`
 - `METAR` / `TAF` / settlement current 由后端各自维护短 TTL 缓存
+- 前端打开今日日内分析时，如果 full detail 或 market scan 正在同步，会先显示刷新锁，不展示可交互的旧内容
 
 ## 9. 调试示例
 

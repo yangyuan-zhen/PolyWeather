@@ -14,7 +14,7 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-04-10）
+## 当前产品状态（2026-04-18）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
 - 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
@@ -36,6 +36,9 @@
 - 东京现已接入羽田 `JMA AMeDAS` 10 分钟温度作为官方增强层。
 - 已支持 Dashboard 定向预热 worker / cron 路径，运行态在 `/api/system/status` 与 `/ops` 可见。
 - `/ops` 现已展示缓存桶数量、summary cache hit/miss 与 prewarm heartbeat。
+- 今日日内分析已改为“专业气象判断台”：顶部先给气象主判断、置信度、基准/上修/下修路径、下一观测点，再展示证据链、失效条件、确认条件和模型层。
+- 日内分析弹窗在 full detail / market detail 同步完成前会锁住旧内容并显示刷新状态，避免用户短暂看到上一轮缓存数据后误判。
+- 概率区已改为“校准模型概率”，有 LGBM 时展示 LGBM 校准概率；模型共识和市场价格只作为辅助参考。
 - 今日日内结构解读已支持可选 `Groq` 改写层，失败时自动回退规则文案。
 - 前端部署文档已补充 Vercel 节流建议，包括 analytics 关闭、eager fetch 开关与扫描流量防火墙规则。
 
@@ -51,13 +54,13 @@
 
 ## 核心能力
 
-- 聚合 45 个监控城市的实测与预报数据。
+- 聚合 52 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
-- 输出结算导向概率分布（`mu` + 温度桶）。
+- 输出结算导向校准概率分布（`mu` + 温度桶），并在 LGBM 生效时展示校准引擎元数据。
 - 将模型观点映射到 Polymarket 行情，做错价扫描。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
 - 支付链路具备事件重放、SQLite 审计事件与 RPC 容灾能力。
-- 官方增强层支持按国家 provider 统一接入，但不替代机场主站或明确官方结算站。
+- 官方增强层支持按国家 provider 统一接入，但不替代机场主站、METAR 或明确官方结算站。
 - 支持后台预热热点城市，降低用户点击城市后的冷启动成本。
 
 ## 参考架构
@@ -86,12 +89,12 @@ flowchart LR
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
-## 监控城市（45）
+## 监控城市（52）
 
-- 欧洲/中东：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki
-- 亚太：Seoul、Busan、Hong Kong、Lau Fau Shan、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen、Singapore、Tokyo、Kuala Lumpur、Jakarta、Wellington
-- 美洲：Toronto、New York、Los Angeles、San Francisco、Denver、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
-- 南亚：Lucknow
+- 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Lagos、Cape Town、Jeddah
+- 亚太：Seoul、Busan、Hong Kong、Lau Fau Shan、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen、Guangzhou、Singapore、Tokyo、Kuala Lumpur、Jakarta、Manila、Wellington
+- 美洲：Toronto、New York、Los Angeles、San Francisco、Aurora、Austin、Houston、Chicago、Dallas、Miami、Atlanta、Seattle、Mexico City、Buenos Aires、Sao Paulo、Panama City
+- 南亚：Lucknow、Karachi、Masroor Air Base
 
 ## 快速启动
 
@@ -221,6 +224,9 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
 - 运营后台说明：[docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
 - 外部监控说明：[docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
+- 模型栈与 DEB：[docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
+- LightGBM 日最高温模型：[docs/LGBM_DAILY_HIGH_ZH.md](docs/LGBM_DAILY_HIGH_ZH.md)
+- EMOS + LGBM 系统：[docs/EMOS_LGBM_SYSTEM_ZH.md](docs/EMOS_LGBM_SYSTEM_ZH.md)
 - 深度评估报告：[docs/deep-research-report.md](docs/deep-research-report.md)
 - 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
@@ -228,5 +234,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## 当前版本
 
-- 版本：`v1.5.3`
-- 文档最后更新：`2026-04-10`
+- 版本：`v1.5.4`
+- 文档最后更新：`2026-04-18`

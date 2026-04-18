@@ -999,9 +999,8 @@ export function ForecastTable() {
   const daily = data.forecast?.daily || [];
   const isSparseDaily = daily.length <= 1;
   const isForecastCompleting =
-    store.loadingState.cityDetail ||
-    data.detail_depth !== "full" ||
-    isSparseDaily;
+    store.loadingState.cityDetail &&
+    (data.detail_depth !== "full" || isSparseDaily);
   const resolveForecastTemp = (date: string, fallback: number | null | undefined) => {
     const debPrediction = data.multi_model_daily?.[date]?.deb?.prediction;
     return debPrediction ?? fallback ?? null;

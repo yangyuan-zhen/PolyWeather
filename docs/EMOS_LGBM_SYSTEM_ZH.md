@@ -1,5 +1,7 @@
 # EMOS + LGBM 系统说明（中文）
 
+最后更新：`2026-04-18`
+
 本文档用于完整说明 PolyWeather 当前的两条统计/机器学习链路：
 
 - `EMOS`：概率后处理与校准链路
@@ -309,7 +311,14 @@ LGBM 训练样本会优先从：
 - `Taipei`
 - `Shenzhen`
 
-这两个城市已经切到了市场指定的 `Wunderground` 结算口径。
+这两个城市配置了 `Wunderground` 历史页面作为历史观测取数入口。
+
+这里要注意产品文案口径：
+
+- `Wunderground` 不是物理观测站
+- 它只是历史页面 / 数据入口
+- 机场类市场仍应以 METAR / 机场主站作为结算锚点
+- 明确官方站点市场才以规则指定的官方站点作为最终结算锚点
 
 之前的问题是：
 
@@ -334,7 +343,7 @@ LGBM 训练样本会优先从：
 5. 写入永久真值表
 6. 记录来源与审计信息
 
-这一步对 `Taipei/Shenzhen` 尤其关键，因为它们不是 NOAA/HKO 口径。
+这一步对 `Taipei/Shenzhen` 尤其关键，因为它们的历史页面取数和普通 METAR bootstrap 不同。
 
 ---
 
@@ -358,8 +367,11 @@ LGBM 训练样本会优先从：
 
 - 辅助预测源
 - 研究/观测链路
+- 校准概率层的一个可用引擎输入
 
 不适合替代 `DEB` 主路径。
+
+前端展示上，`LGBM 校准概率` 代表概率层已使用 LGBM 上下文生成桶分布；它不是把模型四舍五入票数直接当成概率。模型共识仍只是解释层，市场价格也只作为参考层。
 
 ---
 
@@ -650,4 +662,3 @@ EMOS 更依赖：
 - [LGBM_DAILY_HIGH_ZH.md](/E:/web/PolyWeather/docs/LGBM_DAILY_HIGH_ZH.md)
 - [PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md](/E:/web/PolyWeather/docs/PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md)
 - [deep-research-report.md](/E:/web/PolyWeather/docs/deep-research-report.md)
-

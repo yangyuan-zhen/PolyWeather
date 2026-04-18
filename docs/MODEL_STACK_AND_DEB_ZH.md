@@ -2,6 +2,8 @@
 
 本文档记录 PolyWeather 当前开放模型接入、区域覆盖差异，以及 DEB 在新增模型后的计权规则。
 
+最后更新：`2026-04-18`
+
 ## 1. 接入方式
 
 当前多模型层通过 Open-Meteo model API 接入开放 NWP / AIFS 等预报模型，不直接下载原始 GRIB。
@@ -33,7 +35,7 @@ Web API 会把这部分元数据挂到：
 | 显示名 | Open-Meteo key | 来源 | 层级 | 说明 |
 | --- | --- | --- | --- | --- |
 | ECMWF | `ecmwf_ifs025` | ECMWF | global | IFS 全球传统数值模式 |
-| ECMWF AIFS | `ecmwf_aifs025_single` | ECMWF | aifs_global | ECMWF AIFS 模型 |
+| ECMWF AIFS | `ecmwf_aifs025_single` | ECMWF | aifs_global | ECMWF AIFS 模型；产品文案保留 AIFS 名称，避免和外部泛神经天气模型混淆 |
 | GFS | `gfs_seamless` | NOAA | global | NOAA 全球参考 |
 | ICON | `icon_seamless` | DWD | global | DWD ICON 全球基准 |
 | ICON-EU | `icon_eu` | DWD | regional_europe | 欧洲区域高分辨率 |
@@ -195,6 +197,32 @@ raw current_forecasts
 - horizon
 
 区域模型不覆盖时不显示空模型。
+
+### 6.1 “来源 Open-Meteo”是什么意思
+
+前端中的 `来源 - Open-Meteo` 表示本次多模型数据通过 Open-Meteo model API 归一化接入。
+
+它不表示：
+
+- Open-Meteo 是单一数值模型
+- Open-Meteo 生成了所有预报
+- ECMWF / DWD / ECCC / NOAA / JMA 的机构来源被替换
+
+所以模型行仍会分别展示：
+
+- 机构：例如 ECMWF、DWD、ECCC、NOAA、JMA
+- 接入接口：例如 Open-Meteo
+- 模型 key：例如 `ecmwf_ifs025`、`icon_d2`、`gem_hrdps_continental`
+
+### 6.2 模型区间、校准概率、市场参考的关系
+
+当前前端把三层拆开展示：
+
+- `模型区间与分歧`：解释不同模型当前给出的最高温范围和分歧，不直接等于命中概率。
+- `校准模型概率`：由概率引擎输出温度桶概率；有 LGBM 时展示 LGBM 校准概率，缺失时降级到 EMOS / legacy 概率。
+- `市场参考`：只展示市场价格和错价背景，不再作为主判断，也不默认输出 BUY YES / BUY NO。
+
+模型票数只用于解释“哪些模型支持某个档位”，不等于最终概率。最终概率应优先读取 `probabilities.engine` 对应的校准分布。
 
 ## 7. 测试覆盖
 

@@ -5,7 +5,7 @@ Production weather-intelligence stack for temperature settlement markets.
 Official dashboard: [polyweather-pro.vercel.app](https://polyweather-pro.vercel.app/)
 中文说明: [README_ZH.md](README_ZH.md)
 
-Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday signals, TAF, settlement sources, history, and extension).
+Public docs center: `/docs/intro` on the main site (bilingual product documentation, including intraday analysis, calibrated probability, model stack, TAF, settlement sources, history, and extension).
 
 ## Product Screenshots
 
@@ -17,7 +17,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
-## Product Status (2026-04-10)
+## Product Status (2026-04-18)
 
 - Subscription live: `Pro Monthly 5 USDC`.
 - Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
@@ -27,7 +27,9 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Lightweight observability live: `/healthz`, `/api/system/status`, `/metrics`.
 - Runtime state, cache, and core offline training/backfill flows now use SQLite as the primary path; legacy JSON/JSONL files remain only for migration, export, and explicit fallback input.
 - EMOS/CRPS pipeline is integrated in `shadow` mode with rollout gating.
-- Intraday structural signal is now peak-window aware and bilingual (`zh-CN` / `en-US`).
+- Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
+- Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
+- Calibrated model probability is now the primary probability panel. `LGBM` is shown as a calibrated probability engine when available; model consensus and market prices are secondary references.
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
@@ -51,13 +53,13 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 45 monitored cities.
+- Aggregates observations and forecasts for 52 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
-- Generates settlement-oriented probability buckets (`mu` + bucket distribution).
+- Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution), with `LGBM` metadata surfaced when the calibrated engine is active.
 - Maps weather view to Polymarket quotes for mispricing scan.
 - Reuses one analysis core across web dashboard and Telegram bot.
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
-- Adds peak-window-oriented intraday structure cards for surface + upper-air analysis.
+- Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
 - Adds official nearby-network enhancement layers for China, Japan, Korea, Hong Kong, Taiwan, and Turkey without replacing airport settlement anchors.
 - Adds optional dashboard prewarm worker so hot cities can be refreshed before user clicks.
@@ -87,12 +89,12 @@ flowchart LR
     API --> PREWARM["Dashboard Prewarm API / Worker"]
 ```
 
-## Monitored Cities (45)
+## Monitored Cities (52)
 
-- Europe / Middle East: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki
-- APAC: Seoul, Busan, Hong Kong, Lau Fau Shan, Taipei, Shanghai, Beijing, Wuhan, Chengdu, Chongqing, Shenzhen, Singapore, Tokyo, Kuala Lumpur, Jakarta, Wellington
-- Americas: Toronto, New York, Los Angeles, San Francisco, Denver, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
-- South Asia: Lucknow
+- Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Lagos, Cape Town, Jeddah
+- APAC: Seoul, Busan, Hong Kong, Lau Fau Shan, Taipei, Shanghai, Beijing, Wuhan, Chengdu, Chongqing, Shenzhen, Guangzhou, Singapore, Tokyo, Kuala Lumpur, Jakarta, Manila, Wellington
+- Americas: Toronto, New York, Los Angeles, San Francisco, Aurora, Austin, Houston, Chicago, Dallas, Miami, Atlanta, Seattle, Mexico City, Buenos Aires, Sao Paulo, Panama City
+- South Asia: Lucknow, Karachi, Masroor Air Base
 
 ## Quick Start
 
@@ -112,14 +114,12 @@ npm run dev
 
 ## Recent Highlights
 
-- Taipei settlement is aligned to `Wunderground RCSS` with whole-degree Celsius resolution logic.
-- Shenzhen settlement is aligned to `Wunderground ZGSZ`.
+- Airport-linked contracts use the METAR / airport primary observing site as the settlement anchor. Wunderground pages are reference/history pages, not stations.
+- Taipei and Shenzhen retain their explicitly configured station history pages for reconciliation, but the docs avoid describing Wunderground itself as a physical station.
 - Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
-- Intraday analysis now separates:
-  - `Surface Structure`
-  - `Upper-Air Structure`
-  - `Trade cue`
+- Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model.
+- `LGBM` can power the calibrated probability panel; model vote counts remain an explanatory consensus line, not the final probability.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 
 ## Runtime Data (Recommended on VPS)
@@ -196,6 +196,8 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Chinese overview: [README_ZH.md](README_ZH.md)
 - Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
 - TAF signal guide (ZH): [docs/TAF_SIGNAL_ZH.md](docs/TAF_SIGNAL_ZH.md)
+- Model stack & DEB (ZH): [docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
+- EMOS + LGBM system (ZH): [docs/EMOS_LGBM_SYSTEM_ZH.md](docs/EMOS_LGBM_SYSTEM_ZH.md)
 - Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - AGPL-3.0 policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
@@ -208,6 +210,7 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Payment audit: [docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - Payment V2 upgrade: [docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
 - Ops admin guide: [docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
+- Monitoring guide (ZH): [docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
 - Deep research report: [docs/deep-research-report.md](docs/deep-research-report.md)
 - Frontend report: [FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - Release process: [RELEASE.md](RELEASE.md)
@@ -215,5 +218,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## Version
 
-- Version: `v1.5.3`
-- Last Updated: `2026-04-10`
+- Version: `v1.5.4`
+- Last Updated: `2026-04-18`

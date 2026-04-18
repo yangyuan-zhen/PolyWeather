@@ -41,7 +41,7 @@ export const DOCS_PAGES: DocsPage[] = [
     content: {
       "zh-CN": {
         title: "简介",
-        description: "PolyWeather 文档中心解释核心产品概念、结算口径和日内结构信号，帮助用户把机场锚点、官方增强层和模型判断转成可执行判断。",
+        description: "PolyWeather 文档中心解释核心产品概念、结算口径、日内气象判断、校准概率和模型栈，帮助用户把机场锚点、官方增强层和模型判断转成可执行判断。",
         sections: [
           {
             id: "what-is-polyweather",
@@ -55,21 +55,21 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "你会在页面上看到什么",
             blocks: [
-              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "当前命中胜率 / 模型区间与分歧：快速看最可能命中的温度桶，以及多模型当前分歧。", "今日日内结构信号：用近地面结构、高空结构、机场 TAF 和官方增强层解释今天还会不会继续冲高。", "历史对账：查看近 15 天已结算样本、DEB MAE 与最佳单模型表现。"] },
+              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "专业气象结论条：先给今日主判断、置信度、基准/上修/下修路径和下一观测点。", "校准模型概率 / 模型区间与分歧：概率层优先看 LGBM / EMOS 等校准分布，模型区间用于解释分歧。", "气象证据链 / 失效条件 / 确认条件：解释为什么这么判断，以及什么情况会让判断降级。", "历史对账：查看已结算样本、DEB MAE、单模型表现和新增模型参考。"] },
             ],
           },
           {
             id: "how-to-read",
             title: "如何快速读懂主站",
             blocks: [
-              { type: "steps", items: ["先看锚点状态和今日气温预测图，确认当前机场实测、DEB 预测和峰值窗口。", "再看当前节奏，判断今天是偏热、偏冷，还是基本按预期在走。", "接着看今日日内结构信号，确认边界风险、机场 vs 周边站，以及 TAF 有没有压温扰动。", "最后看当前命中胜率与模型区间，判断最热桶是不是已经被市场充分计价。"] },
+              { type: "steps", items: ["先看专业气象结论条，确认今日主判断、基准路径和下一观测点。", "再看锚点状态和今日气温预测图，确认机场实测、DEB、峰值窗口和关键档位线。", "接着看气象证据链、失效条件和确认条件，判断这个路径有没有被新观测破坏。", "最后看校准模型概率、模型区间和市场参考，判断概率是否已经被市场充分计价。"] },
             ],
           },
         ],
       },
       "en-US": {
         title: "Introduction",
-        description: "The PolyWeather docs explain the product's core concepts, settlement logic, and intraday structural signals so users can turn airport anchors, official nearby networks, and model context into actionable decisions.",
+        description: "The PolyWeather docs explain the product's core concepts, settlement logic, intraday meteorology, calibrated probability, and model stack so users can turn airport anchors, official nearby networks, and model context into actionable decisions.",
         sections: [
           {
             id: "what-is-polyweather",
@@ -83,14 +83,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "What you see on the site",
             blocks: [
-              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Current hit odds / model spread: the likeliest bucket now and how far the model family is split.", "Intraday structural signal: surface structure, upper-air structure, airport TAF, and official nearby-network context around the peak window.", "History reconciliation: settled-sample MAE and hit-rate over the last 15 days."] },
+              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Professional meteorology read: headline, confidence, base/upside/downside path, and next observation point.", "Calibrated model probability / model spread: probability comes from the calibrated engine; spread explains model disagreement.", "Evidence chain / failure modes / confirmation: why the read is valid and what would downgrade it.", "History reconciliation: settled-sample MAE, single-model performance, and the new model reference stack."] },
             ],
           },
           {
             id: "how-to-read",
             title: "How to read the dashboard quickly",
             blocks: [
-              { type: "steps", items: ["Start with anchor status and the intraday chart to anchor current observations, DEB, and the expected peak window.", "Read the current pace card to see whether the airport is running hot, cold, or roughly on schedule.", "Use the structural signal to check boundary risk, airport versus nearby stations, and whether TAF introduces suppression risk.", "Then compare that weather structure against hit odds and the model spread."] },
+              { type: "steps", items: ["Start with the professional meteorology read: headline, base path, and next observation point.", "Use anchor status and the intraday chart to check current observations, DEB, peak window, and key bucket lines.", "Read the evidence chain, failure modes, and confirmation rules to see whether the path is still valid.", "Then compare the calibrated probability, model spread, and market reference."] },
             ],
           },
         ],
@@ -102,9 +102,17 @@ export const DOCS_PAGES: DocsPage[] = [
     group: "analysis",
     content: {
       "zh-CN": {
-        title: "今日日内结构信号",
-        description: "这页解释顶部“今日日内结构信号”如何生成，以及近地面与机场 TAF 为什么会同时出现。",
+        title: "今日日内分析",
+        description: "这页解释今日日内分析如何从气象主判断、证据链、失效条件、TAF 和校准概率组成一套付费判断台。",
         sections: [
+          {
+            id: "professional-read",
+            title: "顶部结论条怎么读",
+            blocks: [
+              { type: "paragraph", text: "顶部结论条先给主判断和置信度，再给基准、上修、下修路径与下一观测点。它的作用是让用户先知道今天应重点验证哪条路径，而不是先被概率条和市场价格带偏。" },
+              { type: "callout", tone: "info", title: "刷新状态", text: "如果完整 detail 或 market scan 仍在同步，日内弹窗会先显示刷新锁，旧内容会降权且不可交互，避免用户把上一轮缓存当成当前结论。" },
+            ],
+          },
           {
             id: "surface-vs-upper",
             title: "近地面信号和高空结构信号的区别",
@@ -131,9 +139,17 @@ export const DOCS_PAGES: DocsPage[] = [
         ],
       },
       "en-US": {
-        title: "Intraday Structural Signal",
-        description: "This page explains how the intraday structural signal is built and why surface structure and airport TAF both appear in the same reading.",
+        title: "Intraday Analysis",
+        description: "This page explains how intraday analysis combines the meteorology headline, evidence chain, failure modes, TAF, and calibrated probability into a paid decision workspace.",
         sections: [
+          {
+            id: "professional-read",
+            title: "How to read the top read",
+            blocks: [
+              { type: "paragraph", text: "The top read gives the headline and confidence first, then the base, upside, downside path, and next observation point. Its job is to tell users what path to verify before they look at probability bars or market prices." },
+              { type: "callout", tone: "info", title: "Refresh state", text: "If full detail or market scan is still syncing, the intraday modal shows a refresh lock first. Old content is de-emphasized and non-interactive so users do not treat stale cached data as the current read." },
+            ],
+          },
           {
             id: "surface-vs-upper",
             title: "Surface versus upper-air structure",
@@ -173,7 +189,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "model-sources",
             title: "当前接入的开放模型",
             blocks: [
-              { type: "paragraph", text: "PolyWeather 的多模型层通过 Open-Meteo 模型接口接入开放 NWP / AIFS 等预报模型。它不是直接下载原始 GRIB，而是把可用模型统一归一到最高温模型栈里，供模型分歧、概率层和 DEB 使用。" },
+              { type: "paragraph", text: "PolyWeather 的多模型层通过 Open-Meteo 模型接口接入开放 NWP / AIFS 等预报模型。这里的“来源 Open-Meteo”表示接入接口，不表示 Open-Meteo 是单一模型，也不替代 ECMWF、DWD、ECCC、NOAA、JMA 等机构来源。" },
               { type: "bullets", items: ["ECMWF IFS：全球传统数值模式。", "ECMWF AIFS：ECMWF AIFS 模型，作为独立 AIFS 路径保留。", "DWD ICON：全球 ICON 基准层。", "DWD ICON-EU：欧洲区域高分辨率层。", "DWD ICON-D2：欧洲短时高分辨率层。", "ECCC GEM / GDPS：加拿大系全球模式。", "ECCC RDPS / HRDPS：北美区域与短时高分辨率层。", "GFS / JMA：继续作为全球参考模型保留。"] },
             ],
           },
@@ -199,6 +215,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "网页上如何展示",
             blocks: [
               { type: "paragraph", text: "网页的“模型区间与分歧”会按全球基准、AIFS 模型、欧洲高分辨率、北美高分辨率分组显示，并展示可用模型数量、模型分歧、模型机构、接入接口、模型名称、分辨率和预报时效。没有覆盖的区域模型不会显示。" },
+              { type: "callout", tone: "info", title: "概率怎么读", text: "模型票数只解释哪些模型支持某个温度档，不等于最终概率。最终概率优先读取校准模型概率；有 LGBM 时展示 LGBM 校准概率，市场价格只作为参考。" },
             ],
           },
         ],
@@ -211,7 +228,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "model-sources",
             title: "Open models currently integrated",
             blocks: [
-              { type: "paragraph", text: "PolyWeather's multi-model layer uses the Open-Meteo model API to integrate open NWP and AIFS model forecasts. It does not download raw GRIB directly; instead, available models are normalized into the daily-high model stack used by spread, probabilities, and DEB." },
+              { type: "paragraph", text: "PolyWeather's multi-model layer uses the Open-Meteo model API to integrate open NWP and AIFS model forecasts. The label “source: Open-Meteo” means the integration API, not a single model source, and it does not replace ECMWF, DWD, ECCC, NOAA, or JMA attribution." },
               { type: "bullets", items: ["ECMWF IFS: global traditional NWP.", "ECMWF AIFS: ECMWF AIFS model, kept as a separate AIFS path.", "DWD ICON: global ICON baseline.", "DWD ICON-EU: European regional high-resolution layer.", "DWD ICON-D2: European short-range high-resolution layer.", "ECCC GEM / GDPS: Canadian global model family.", "ECCC RDPS / HRDPS: North American regional and short-range high-resolution layers.", "GFS / JMA: retained as global reference models."] },
             ],
           },
@@ -237,6 +254,7 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "How the site displays this",
             blocks: [
               { type: "paragraph", text: "The Model Range & Spread panel groups the model stack into Global Baseline, AIFS Model, Europe High-resolution, and North America High-resolution. It shows available model count, spread, model agency, API, model name, resolution, and forecast horizon. Regional models outside their domain are simply not shown." },
+              { type: "callout", tone: "info", title: "How to read probability", text: "Model vote counts explain which models round into a bucket; they are not the final probability. The final probability should come from the calibrated engine. When LGBM is available, the site labels it as LGBM-calibrated probability, while market price remains only a reference." },
             ],
           },
         ],
@@ -324,14 +342,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "当前主要口径",
             blocks: [
-              { type: "bullets", items: ["多数机场市场：按机场 METAR 或机场主站实况结算。", "土耳其机场市场：机场主站仍以 METAR 为锚点，同时保留 Turkish MGM 作为领先结构参考。", "中国内地机场市场：机场主站仍以 METAR 为锚点，NMC 当前实况作为官方增强层，不直接替代机场结算站。", "日本 / 韩国机场市场：机场主站仍以 METAR 为锚点，同时可接入 JMA / KMA 官方增强层做领先结构参考。", "香港 / 流浮山 / 台湾等明确官方站点市场：按规则指定的官方结算站点结算，不能拿机场 TAF 或城区体感替代。"] },
+              { type: "bullets", items: ["多数机场市场：按机场 METAR 或机场主站实况结算。", "土耳其机场市场：机场主站仍以 METAR 为锚点，同时保留 Turkish MGM 作为领先结构参考。", "中国内地机场市场：机场主站仍以 METAR 为锚点，NMC 当前实况作为官方增强层，不直接替代机场结算站。", "日本 / 韩国机场市场：机场主站仍以 METAR 为锚点，同时可接入 JMA / KMA 官方增强层做领先结构参考。", "Manila、Karachi、Masroor Air Base 等新增机场城市按对应 METAR / 机场主站作为锚点；Masroor Air Base 是军事机场，OPMR 报文可能不连续，不能自动用 OPKC 替代结算口径。", "香港 / 流浮山 / 台湾等明确官方站点市场：按规则指定的官方结算站点结算，不能拿机场 TAF 或城区体感替代。"] },
             ],
           },
           {
             id: "common-mistakes",
             title: "最常见的误解",
             blocks: [
-              { type: "bullets", items: ["TAF 不是结算站点，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "官方增强站网是领先参考层，不等于它可以替代机场主站做结算锚点。", "香港、流浮山、台湾等明确官方站点市场，不能简单套用通用机场 TAF / METAR 主链逻辑。"] },
+              { type: "bullets", items: ["TAF 不是结算站点，它只告诉你机场未来有没有压温扰动。", "市场按机场结算时，城区更热不代表市场就该结到更高温桶。", "Wunderground 是历史页面或参考入口，不是物理观测站；机场市场仍以 METAR / 机场主站为锚点。", "官方增强站网是领先参考层，不等于它可以替代机场主站做结算锚点。", "香港、流浮山、台湾等明确官方站点市场，不能简单套用通用机场 TAF / METAR 主链逻辑。"] },
             ],
           },
         ],
@@ -351,14 +369,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "city-rules",
             title: "Current primary rules",
             blocks: [
-              { type: "bullets", items: ["Most airport-linked markets settle on airport METAR or the airport primary observing site.", "Turkish airport markets keep METAR as the airport anchor, with Turkish MGM retained as a leading-structure reference.", "Mainland China airport markets keep METAR as the airport anchor, while NMC current observations act as an official enhancement layer rather than a direct replacement anchor.", "Japanese and Korean airport markets can keep METAR as the anchor while using JMA / KMA nearby-network observations as an official enhancement layer.", "Markets with explicitly designated official sites, such as Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts, should be anchored to those official settlement stations rather than generic airport logic."] },
+              { type: "bullets", items: ["Most airport-linked markets settle on airport METAR or the airport primary observing site.", "Turkish airport markets keep METAR as the airport anchor, with Turkish MGM retained as a leading-structure reference.", "Mainland China airport markets keep METAR as the airport anchor, while NMC current observations act as an official enhancement layer rather than a direct replacement anchor.", "Japanese and Korean airport markets can keep METAR as the anchor while using JMA / KMA nearby-network observations as an official enhancement layer.", "New airport cities such as Manila, Karachi, and Masroor Air Base are anchored to their corresponding METAR / airport-primary station. Masroor Air Base is a military airport; OPMR reports may be discontinuous, and OPKC should not automatically replace it as the settlement anchor.", "Markets with explicitly designated official sites, such as Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts, should be anchored to those official settlement stations rather than generic airport logic."] },
             ],
           },
           {
             id: "common-mistakes",
             title: "Common mistakes",
             blocks: [
-              { type: "bullets", items: ["TAF is not the settlement station. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "The official nearby network is a lead/lag and spread layer. It should not be mistaken for the final settlement anchor unless the market explicitly names that station.", "Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts should not be forced into the generic airport TAF / METAR chain."] },
+              { type: "bullets", items: ["TAF is not the settlement station. It only tells you whether airport-side suppressive weather may appear.", "If the market settles on an airport site, a hotter downtown feel does not automatically justify a warmer settlement bucket.", "Wunderground is a history/reference page, not a physical station. Airport markets still anchor to METAR or the airport primary observing site.", "The official nearby network is a lead/lag and spread layer. It should not be mistaken for the final settlement anchor unless the market explicitly names that station.", "Hong Kong, Lau Fau Shan, and Taiwan station-driven contracts should not be forced into the generic airport TAF / METAR chain."] },
             ],
           },
         ],
@@ -395,6 +413,13 @@ export const DOCS_PAGES: DocsPage[] = [
               { type: "callout", tone: "info", title: "近似值说明", text: "当前峰值时间是根据历史快照链路反推的近似时间，不是逐分钟官方复盘。页面会明确标记为“参考 / 近似”。" },
             ],
           },
+          {
+            id: "model-reference",
+            title: "新增模型参考",
+            blocks: [
+              { type: "paragraph", text: "历史对账会保留 DEB、最佳单模型和实测最高温对比，同时加入当前模型栈的参考信息。新增模型用于解释当时模型家族分歧，不会 retroactively 改写已经结算的历史真值。" },
+            ],
+          },
         ],
       },
       "en-US": {
@@ -421,6 +446,13 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               { type: "paragraph", text: "This field answers a more specific question: how good was DEB roughly 12 hours before the eventual high actually printed? It is not a settlement rule, but a way to judge whether the model corrected too slowly." },
               { type: "callout", tone: "info", title: "Approximation note", text: "The current peak time is inferred from the snapshot chain and should be treated as an approximate reference rather than a minute-perfect official replay." },
+            ],
+          },
+          {
+            id: "model-reference",
+            title: "New model reference",
+            blocks: [
+              { type: "paragraph", text: "History reconciliation keeps the DEB, best single model, and observed high comparison, while adding the current model-stack reference. New model lines explain family spread at the time; they do not rewrite already settled truth records." },
             ],
           },
         ],

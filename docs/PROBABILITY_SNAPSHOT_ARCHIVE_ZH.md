@@ -1,5 +1,7 @@
 # 概率训练样本归档说明（中文）
 
+最后更新：`2026-04-18`
+
 ## 1. 目的
 
 这份文档说明两件事：
@@ -27,6 +29,12 @@
 - `max_so_far`
 - `peak_status`
 - `prob_snapshot`
+- `probability_engine`
+- `calibration_mode`
+- `calibration_version`
+- `raw_mu / raw_sigma`
+- `calibrated_mu / calibrated_sigma`
+- `shadow_distribution`
 - 当天最终 `actual_high`
 - 当天最终 `settlement bucket`
 
@@ -167,7 +175,10 @@
   ],
   "probability_engine": "legacy",
   "probability_mode": "emos_shadow",
-  "calibration_version": "emos-20260320130245"
+  "calibration_mode": "emos_shadow",
+  "calibration_version": "emos-20260320130245",
+  "calibrated_mu": 15.4,
+  "calibrated_sigma": 1.1
 }
 ```
 
@@ -175,6 +186,8 @@
 
 - `actual_high`
 - `settlement_bucket`
+
+当前前端把这类快照解释为“校准模型概率”。如果 `probability_engine` 为 LGBM 相关值，则显示为 LGBM 校准概率；模型舍入票数和市场价格只用于解释，不直接作为最终概率。
 
 ## 7. 现阶段你可以执行的命令
 
