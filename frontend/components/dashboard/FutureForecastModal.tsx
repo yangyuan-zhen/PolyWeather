@@ -968,6 +968,11 @@ export function FutureForecastModal() {
     }
     const bucketLabel = formatBucketLabel(topProbabilityBucket);
     const bucketProb = formatMarketPercent(topProbabilityBucket.probability);
+    if (!isToday) {
+      return locale === "en-US"
+        ? `Target-day model probability reference puts the leading bucket at ${bucketLabel} (${bucketProb}). EMOS is reserved for intraday analysis after live anchor observations arrive.`
+        : `目标日模型概率参考显示领先温度桶为 ${bucketLabel}（${bucketProb}）。EMOS 仅用于有实时锚点观测后的日内分析。`;
+    }
     if (hasLgbmProbability) {
       return locale === "en-US"
         ? `LGBM-calibrated read puts the leading bucket at ${bucketLabel} (${bucketProb}). Treat this as the base case, not the final settlement.`
