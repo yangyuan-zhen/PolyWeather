@@ -305,8 +305,14 @@ class MgmSourceMixin:
                             temp = obs.get("sicaklik")
                             wind_speed = obs.get("ruzgarHiz")
                             wind_dir = obs.get("ruzgarYon")
+                            obs_time = obs.get("veriZamani")
                             if temp is not None and temp > -9000:
-                                return ist_no, {"temp": temp, "wind_speed": wind_speed, "wind_dir": wind_dir}
+                                return ist_no, {
+                                    "temp": temp,
+                                    "wind_speed": wind_speed,
+                                    "wind_dir": wind_dir,
+                                    "obs_time": obs_time,
+                                }
                 except Exception:
                     pass
                 return None, None
@@ -344,6 +350,7 @@ class MgmSourceMixin:
                     "lat": lat,
                     "lon": lon,
                     "temp": temp.get("temp") if isinstance(temp, dict) else temp,
+                    "obs_time": temp.get("obs_time") if isinstance(temp, dict) else None,
                     "wind_speed": temp.get("wind_speed") if isinstance(temp, dict) else None,
                     "wind_dir": temp.get("wind_dir") if isinstance(temp, dict) else None,
                     "istNo": ist_no

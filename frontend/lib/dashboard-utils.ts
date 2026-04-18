@@ -2786,7 +2786,11 @@ export function getShortTermNowcastLines(
   const recent = Array.isArray(detail.metar_recent_obs)
     ? detail.metar_recent_obs.slice(-4)
     : [];
-  const nearby = Array.isArray(detail.mgm_nearby) ? detail.mgm_nearby : [];
+  const nearby = Array.isArray(detail.official_nearby) && detail.official_nearby.length
+    ? detail.official_nearby
+    : Array.isArray(detail.mgm_nearby)
+      ? detail.mgm_nearby
+      : [];
   const nearbySource = String(detail.nearby_source || "").toLowerCase();
   const sourceLabel =
     nearbySource === "mgm" || isTurkishMgmCity(detail)
@@ -2809,12 +2813,33 @@ export function getShortTermNowcastLines(
     Number.isFinite(currentTemp) && Number.isFinite(baseline)
       ? currentTemp - baseline
       : 0;
-  let nearbyLead: { diff: number; name: string; temp: number } | null = null;
+  let nearbyLead: { diff: number; name: string; temp: number; syncText: string } | null = null;
 
   for (const station of nearby) {
     const temp = Number(station.temp);
+    if (station.usable_for_intraday === false) continue;
     if (!Number.isFinite(temp) || !Number.isFinite(currentTemp)) continue;
     const diff = temp - currentTemp;
+    const syncStatus = String(station.sync_status || "").toLowerCase();
+    const syncDelta = Number(station.time_delta_vs_anchor_minutes);
+    const syncText =
+      syncStatus === "synced"
+        ? isEnglish(locale)
+          ? "time-synced"
+          : "时间同步"
+        : syncStatus === "near_realtime" || syncStatus === "lagged"
+          ? Number.isFinite(syncDelta)
+            ? isEnglish(locale)
+              ? `${Math.round(syncDelta)} min offset`
+              : `时间差 ${Math.round(syncDelta)} 分钟`
+            : isEnglish(locale)
+              ? "not fully synchronized"
+              : "非完全同步"
+          : syncStatus === "unknown"
+            ? isEnglish(locale)
+              ? "timing unverified"
+              : "时间待校验"
+            : "";
     if (!nearbyLead || Math.abs(diff) > Math.abs(nearbyLead.diff)) {
       nearbyLead = {
         diff,
@@ -2823,9 +2848,11 @@ export function getShortTermNowcastLines(
           station.icao ||
           (isEnglish(locale) ? "Nearby station" : "周边站"),
         temp,
+        syncText,
       };
     }
   }
+  const usableNearbyCount = nearby.filter((station) => station.usable_for_intraday !== false).length;
 
   const rows: Array<readonly [string, string]> = [
     [
@@ -2845,8 +2872,8 @@ export function getShortTermNowcastLines(
     [
       sourceLabel,
       isEnglish(locale)
-        ? `${nearby.length} stations joined the nearby scan.`
-        : `${nearby.length} 个站点参与邻近监控。`,
+        ? `${usableNearbyCount}/${nearby.length} stations usable for the nearby scan; station timestamps may differ.`
+        : `${usableNearbyCount}/${nearby.length} 个站点可参与邻近监控；周边站观测时间可能不同步。`,
     ],
   ];
 
@@ -2865,8 +2892,8 @@ export function getShortTermNowcastLines(
     rows.push([
       isEnglish(locale) ? "Leading station" : "领先站",
       isEnglish(locale)
-        ? `${nearbyLead.name} ${nearbyLead.temp}${detail.temp_symbol}, relative to primary station ${formatDelta(nearbyLead.diff, detail.temp_symbol)} (${tone}).`
-        : `${nearbyLead.name} ${nearbyLead.temp}${detail.temp_symbol}，相对主站 ${formatDelta(nearbyLead.diff, detail.temp_symbol)}（${tone}）。`,
+        ? `${nearbyLead.name} ${nearbyLead.temp}${detail.temp_symbol}, relative to primary station ${formatDelta(nearbyLead.diff, detail.temp_symbol)} (${tone})${nearbyLead.syncText ? `; ${nearbyLead.syncText}` : ""}.`
+        : `${nearbyLead.name} ${nearbyLead.temp}${detail.temp_symbol}，相对主站 ${formatDelta(nearbyLead.diff, detail.temp_symbol)}（${tone}）${nearbyLead.syncText ? `；${nearbyLead.syncText}` : ""}。`,
     ]);
   }
 

@@ -2158,6 +2158,27 @@
   color: var(--text-muted);
 }
 
+.root :global(.nearby-time) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(148, 163, 184, 0.88);
+  white-space: nowrap;
+}
+
+.root :global(.nearby-time span + span)::before {
+  content: "·";
+  margin-right: 4px;
+  color: rgba(148, 163, 184, 0.55);
+}
+
+.root :global(.nearby-time.is-stale) {
+  color: #fbbf24;
+}
+
 .root :global(.nearby-wind) {
   display: flex;
   align-items: center;

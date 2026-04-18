@@ -134,7 +134,59 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
     if (!text || text === "9999") return "";
     return text;
   };
+  const isEnglishUi =
+    typeof document !== "undefined" &&
+    String(document.documentElement.lang || "").toLowerCase().startsWith("en");
   const symbol = detail.temp_symbol || "°C";
+  const formatObsTime = () => {
+    const label = String(station.obs_time_label || "").trim();
+    if (label) return label;
+    const raw = String(station.obs_time || "").trim();
+    if (!raw) return "";
+    if (raw.endsWith("Z") || raw.includes("+00:00")) {
+      const parsed = new Date(raw);
+      if (!Number.isNaN(parsed.getTime())) {
+        return `${String(parsed.getUTCHours()).padStart(2, "0")}:${String(parsed.getUTCMinutes()).padStart(2, "0")}Z`;
+      }
+    }
+    if (raw.includes("T")) return raw.split("T").pop()?.slice(0, 5) || "";
+    if (raw.includes(" ")) return raw.split(" ").pop()?.slice(0, 5) || "";
+    return raw.slice(0, 5);
+  };
+  const syncLabel = () => {
+    const status = String(station.sync_status || "").trim().toLowerCase();
+    const delta = Number(station.time_delta_vs_anchor_minutes);
+    if (status === "synced") return isEnglishUi ? "synced" : "同步";
+    if (status === "near_realtime") {
+      return Number.isFinite(delta)
+        ? isEnglishUi
+          ? `${Math.round(delta)}m off`
+          : `差${Math.round(delta)}m`
+        : isEnglishUi
+          ? "near-live"
+          : "近实时";
+    }
+    if (status === "lagged") {
+      return Number.isFinite(delta)
+        ? isEnglishUi
+          ? `${Math.round(delta)}m lag`
+          : `滞后${Math.round(delta)}m`
+        : isEnglishUi
+          ? "lagged"
+          : "滞后";
+    }
+    if (status === "stale") return isEnglishUi ? "stale" : "过期";
+    return "";
+  };
+  const obsTime = formatObsTime();
+  const syncText = syncLabel();
+  const timingHtml =
+    obsTime || syncText
+      ? `<div class="nearby-time ${station.sync_status === "stale" ? "is-stale" : ""}">
+          ${obsTime ? `<span>${obsTime}</span>` : ""}
+          ${syncText ? `<span>${syncText}</span>` : ""}
+        </div>`
+      : "";
   const rawLabel =
     station.station_label ||
     station.name ||
@@ -182,6 +234,7 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
           <span class="nearby-temp-val">${station.temp ?? "--"}</span>
           <span class="nearby-temp-unit">${symbol}</span>
         </div>
+        ${timingHtml}
       </div>
       ${windHtml}
     </div>

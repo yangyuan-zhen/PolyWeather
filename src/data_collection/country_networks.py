@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from src.data_collection.city_registry import CITY_REGISTRY
@@ -28,6 +29,106 @@ def _safe_float(value: Any) -> Optional[float]:
         return float(value)
     except Exception:
         return None
+
+
+def _parse_obs_datetime(value: Any, epoch_value: Any = None) -> Optional[datetime]:
+    for candidate in (epoch_value, value):
+        if candidate is None or candidate == "":
+            continue
+        try:
+            if isinstance(candidate, (int, float)):
+                numeric = float(candidate)
+                if numeric > 1_000_000_000_000:
+                    numeric /= 1000.0
+                if numeric > 1_000_000_000:
+                    return datetime.fromtimestamp(numeric, tz=timezone.utc)
+            text = str(candidate).strip()
+            if not text:
+                continue
+            if text.isdigit():
+                numeric = float(text)
+                if numeric > 1_000_000_000_000:
+                    numeric /= 1000.0
+                if numeric > 1_000_000_000:
+                    return datetime.fromtimestamp(numeric, tz=timezone.utc)
+            normalized = text.replace(" ", "T")
+            if normalized.endswith("Z"):
+                normalized = normalized[:-1] + "+00:00"
+            return datetime.fromisoformat(normalized)
+        except Exception:
+            continue
+    return None
+
+
+def _format_obs_time_label(value: Any, epoch_value: Any = None) -> Optional[str]:
+    text = str(value or "").strip()
+    parsed = _parse_obs_datetime(value, epoch_value)
+    if parsed is not None:
+        suffix = "Z" if parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed) else ""
+        return parsed.strftime("%H:%M") + suffix
+    if not text:
+        return None
+    if "T" in text:
+        return text.split("T")[-1][:5]
+    if " " in text:
+        return text.split()[-1][:5]
+    return text[:5] if len(text) >= 5 else text
+
+
+def _timing_delta_minutes(anchor_dt: Optional[datetime], station_dt: Optional[datetime]) -> Optional[int]:
+    if anchor_dt is None or station_dt is None:
+        return None
+    try:
+        if (anchor_dt.tzinfo is None) != (station_dt.tzinfo is None):
+            return None
+        delta = abs((station_dt - anchor_dt).total_seconds()) / 60.0
+        return int(round(delta))
+    except Exception:
+        return None
+
+
+def _station_age_minutes(station_dt: Optional[datetime]) -> Optional[int]:
+    if station_dt is None or station_dt.tzinfo is None:
+        return None
+    try:
+        return int(round((datetime.now(timezone.utc) - station_dt.astimezone(timezone.utc)).total_seconds() / 60.0))
+    except Exception:
+        return None
+
+
+def _sync_status(delta_minutes: Optional[int], age_minutes: Optional[int]) -> str:
+    reference = delta_minutes if delta_minutes is not None else age_minutes
+    if reference is None:
+        return "unknown"
+    if reference <= 10:
+        return "synced"
+    if reference <= 30:
+        return "near_realtime"
+    if reference <= 60:
+        return "lagged"
+    return "stale"
+
+
+def _enrich_station_timing(
+    anchor: Optional[Dict[str, Any]],
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    anchor = anchor or {}
+    anchor_dt = _parse_obs_datetime(anchor.get("obs_time"), anchor.get("obs_time_epoch"))
+    enriched: List[Dict[str, Any]] = []
+    for row in rows:
+        station_dt = _parse_obs_datetime(row.get("obs_time"), row.get("obs_time_epoch"))
+        delta_minutes = _timing_delta_minutes(anchor_dt, station_dt)
+        age_minutes = _station_age_minutes(station_dt)
+        status = _sync_status(delta_minutes, age_minutes)
+        enriched_row = dict(row)
+        enriched_row["obs_time_label"] = _format_obs_time_label(row.get("obs_time"), row.get("obs_time_epoch"))
+        enriched_row["age_minutes"] = age_minutes
+        enriched_row["time_delta_vs_anchor_minutes"] = delta_minutes
+        enriched_row["sync_status"] = status
+        enriched_row["usable_for_intraday"] = status != "stale"
+        enriched.append(enriched_row)
+    return enriched
 
 
 def _city_meta(city: str) -> Dict[str, Any]:
@@ -145,6 +246,7 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                 is_airport_station=True,
                 is_settlement_anchor=False,
                 extra={
+                    "obs_time_epoch": row.get("obs_time_epoch"),
                     "wind_dir": _safe_float(row.get("wind_dir")),
                     "wind_speed_kt": _safe_float(row.get("wind_speed_kt") or row.get("wind_speed")),
                     "raw_metar": row.get("raw_metar"),
@@ -284,6 +386,7 @@ def _mgm_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                 temp=row.get("temp"),
                 lat=row.get("lat"),
                 lon=row.get("lon"),
+                obs_time=row.get("obs_time"),
                 source_code="mgm",
                 source_label="MGM",
                 is_official=True,
@@ -368,7 +471,11 @@ def _network_signals(
     official_rows: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     airport_temp = _safe_float((airport_primary or {}).get("temp"))
-    valid_rows = [row for row in official_rows if _safe_float(row.get("temp")) is not None]
+    valid_rows = [
+        row
+        for row in official_rows
+        if _safe_float(row.get("temp")) is not None and row.get("usable_for_intraday") is not False
+    ]
     if not valid_rows:
         return {
             "network_lead_signal": {"available": False},
@@ -394,6 +501,10 @@ def _network_signals(
             "leader_station_code": hottest.get("station_code"),
             "leader_station_label": hottest.get("station_label"),
             "leader_temp": hottest_temp,
+            "leader_obs_time": hottest.get("obs_time"),
+            "leader_obs_time_label": hottest.get("obs_time_label"),
+            "leader_sync_status": hottest.get("sync_status"),
+            "leader_time_delta_vs_anchor_minutes": hottest.get("time_delta_vs_anchor_minutes"),
         },
         "network_spread_signal": {
             "available": spread is not None,
@@ -588,9 +699,21 @@ def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, 
     provider = get_country_network_provider(city)
     metadata = provider.settlement_station_metadata(city)
     airport_primary = provider.airport_primary_current(city, raw) or {}
-    official_nearby = provider.official_nearby_current(city, raw)
+    official_nearby = _enrich_station_timing(
+        airport_primary,
+        provider.official_nearby_current(city, raw),
+    )
     status = provider.official_network_status(city, raw)
     signals = _network_signals(airport_primary, official_nearby)
+    usable_count = len([row for row in official_nearby if row.get("usable_for_intraday") is not False])
+    stale_count = len([row for row in official_nearby if row.get("sync_status") == "stale"])
+    unknown_count = len([row for row in official_nearby if row.get("sync_status") == "unknown"])
+    status = {
+        **status,
+        "usable_row_count": usable_count,
+        "stale_row_count": stale_count,
+        "unknown_timing_count": unknown_count,
+    }
     return {
         "provider_code": provider.provider_code,
         "provider_label": provider.provider_label,

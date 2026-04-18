@@ -866,6 +866,22 @@ export function FutureForecastModal() {
     const leaderLabel =
       String(leadSignal?.leader_station_label || "").trim() ||
       String(leadSignal?.leader_station_code || "").trim();
+    const leaderSyncStatus = String(leadSignal?.leader_sync_status || "").trim().toLowerCase();
+    const leaderSyncDelta = Number(leadSignal?.leader_time_delta_vs_anchor_minutes);
+    const syncNote =
+      leaderSyncStatus === "near_realtime" || leaderSyncStatus === "lagged"
+        ? Number.isFinite(leaderSyncDelta)
+          ? locale === "en-US"
+            ? ` Timing offset versus the airport anchor is about ${Math.round(leaderSyncDelta)} minutes.`
+            : ` 与机场锚点存在约 ${Math.round(leaderSyncDelta)} 分钟时间差。`
+          : locale === "en-US"
+            ? " Nearby observations are not fully synchronized."
+            : " 周边观测并非完全同步。"
+        : leaderSyncStatus === "unknown"
+          ? locale === "en-US"
+            ? " Nearby station timing is not fully verified."
+            : " 周边站观测时间尚未完全校验。"
+          : "";
     const absDelta = Math.abs(delta);
     const status =
       delta <= -0.4
@@ -884,12 +900,12 @@ export function FutureForecastModal() {
     const note =
       delta <= -0.4
         ? locale === "en-US"
-          ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} cooler than the nearby official network${leaderLabel ? `, led by ${leaderLabel}` : ""}.`
-          : `机场主站当前比周边官方站网低 ${absDelta.toFixed(1)}${detail.temp_symbol}${leaderLabel ? `，领先点位是 ${leaderLabel}` : ""}。`
+          ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} cooler than the nearby official network${leaderLabel ? `, led by ${leaderLabel}` : ""}.${syncNote}`
+          : `机场主站当前比周边官方站网低 ${absDelta.toFixed(1)}${detail.temp_symbol}${leaderLabel ? `，领先点位是 ${leaderLabel}` : ""}。${syncNote}`
         : delta >= 0.4
           ? locale === "en-US"
-            ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} hotter than the nearby official network.`
-            : `机场主站当前比周边官方站网高 ${absDelta.toFixed(1)}${detail.temp_symbol}。`
+            ? `Airport anchor is ${absDelta.toFixed(1)}${detail.temp_symbol} hotter than the nearby official network.${syncNote}`
+            : `机场主站当前比周边官方站网高 ${absDelta.toFixed(1)}${detail.temp_symbol}。${syncNote}`
           : locale === "en-US"
             ? "Airport anchor and nearby official network are broadly aligned."
             : "机场主站与周边官方站网当前大体齐平。";

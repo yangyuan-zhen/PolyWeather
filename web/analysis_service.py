@@ -1349,6 +1349,16 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
     if airport_delta is not None:
         available_layers += 1
         leader = str(lead_signal.get("leader_station_label") or lead_signal.get("leader_station_code") or "").strip()
+        sync_status = str(lead_signal.get("leader_sync_status") or "").strip().lower()
+        sync_delta = _sf(lead_signal.get("leader_time_delta_vs_anchor_minutes"))
+        sync_suffix_zh = ""
+        sync_suffix_en = ""
+        if sync_status in {"near_realtime", "lagged"} and sync_delta is not None:
+            sync_suffix_zh = f"；但与机场锚点约差 {sync_delta:.0f} 分钟，作为降权信号处理"
+            sync_suffix_en = f"; timing differs from the airport anchor by about {sync_delta:.0f} minutes, so this signal is down-weighted"
+        elif sync_status == "unknown":
+            sync_suffix_zh = "；周边站观测时间不可完全校验，作为弱参考"
+            sync_suffix_en = "; station timing is not fully verified, so this is treated as a weak reference"
         if airport_delta <= -0.4:
             support_score += 1
             _add_signal(
@@ -1356,9 +1366,9 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
                 label="站网对比",
                 label_en="Station-network comparison",
                 direction="support",
-                strength="medium",
-                summary=f"周边站网较机场锚点偏热 {abs(airport_delta):.1f}{unit}{f'，领先点位 {leader}' if leader else ''}。",
-                summary_en=f"Nearby stations are {abs(airport_delta):.1f}{unit} warmer than the airport anchor{f'; leading site: {leader}' if leader else ''}.",
+                strength="weak" if sync_suffix_zh else "medium",
+                summary=f"周边站网较机场锚点偏热 {abs(airport_delta):.1f}{unit}{f'，领先点位 {leader}' if leader else ''}{sync_suffix_zh}。",
+                summary_en=f"Nearby stations are {abs(airport_delta):.1f}{unit} warmer than the airport anchor{f'; leading site: {leader}' if leader else ''}{sync_suffix_en}.",
             )
         elif airport_delta >= 0.4:
             suppress_score += 1
@@ -1367,9 +1377,9 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
                 label="站网对比",
                 label_en="Station-network comparison",
                 direction="suppress",
-                strength="medium",
-                summary=f"机场锚点较周边站网偏热 {abs(airport_delta):.1f}{unit}，继续上修需要机场自身后续报文确认。",
-                summary_en=f"The airport anchor is {abs(airport_delta):.1f}{unit} warmer than nearby stations; further upside needs confirmation from later airport reports.",
+                strength="weak" if sync_suffix_zh else "medium",
+                summary=f"机场锚点较周边站网偏热 {abs(airport_delta):.1f}{unit}，继续上修需要机场自身后续报文确认{sync_suffix_zh}。",
+                summary_en=f"The airport anchor is {abs(airport_delta):.1f}{unit} warmer than nearby stations; further upside needs confirmation from later airport reports{sync_suffix_en}.",
             )
         else:
             _add_signal(

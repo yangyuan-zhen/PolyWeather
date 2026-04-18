@@ -117,6 +117,12 @@ export interface NearbyStation {
   is_official?: boolean;
   is_airport_station?: boolean;
   is_settlement_anchor?: boolean;
+  obs_time?: string | null;
+  obs_time_label?: string | null;
+  age_minutes?: number | null;
+  time_delta_vs_anchor_minutes?: number | null;
+  sync_status?: "synced" | "near_realtime" | "lagged" | "stale" | "unknown" | string | null;
+  usable_for_intraday?: boolean;
   wind_direction_text?: string | null;
   wind_power_text?: string | null;
 }
@@ -413,6 +419,10 @@ export interface CityDetail {
     leader_station_code?: string | null;
     leader_station_label?: string | null;
     leader_temp?: number | null;
+    leader_obs_time?: string | null;
+    leader_obs_time_label?: string | null;
+    leader_sync_status?: string | null;
+    leader_time_delta_vs_anchor_minutes?: number | null;
   };
   network_spread_signal?: {
     available?: boolean;

@@ -446,6 +446,7 @@ class MetarSourceMixin:
                             "wind_speed": obs.get("wspd"),
                             "wind_speed_kt": obs.get("wspd"),
                             "obs_time": obs.get("obsTime") or obs.get("reportTime"),
+                            "obs_time_epoch": obs.get("obsTime"),
                             "raw_metar": obs.get("rawOb"),
                         }
                     )

@@ -48,6 +48,7 @@ def test_turkey_mgm_provider_returns_official_nearby_rows():
                 "lat": 40.1,
                 "lon": 32.9,
                 "temp": 17.1,
+                "obs_time": "2026-04-06T10:08:00.000Z",
             }
         ],
     }
@@ -58,6 +59,46 @@ def test_turkey_mgm_provider_returns_official_nearby_rows():
     assert snapshot["official_network_status"]["available"] is True
     assert snapshot["official_nearby"][0]["source_code"] == "mgm"
     assert snapshot["official_nearby"][0]["is_official"] is True
+    assert snapshot["official_nearby"][0]["time_delta_vs_anchor_minutes"] == 8
+    assert snapshot["official_nearby"][0]["sync_status"] == "synced"
+    assert snapshot["official_nearby"][0]["usable_for_intraday"] is True
+    assert snapshot["official_network_status"]["usable_row_count"] == 1
+
+
+def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
+    raw = {
+        "metar": {
+            "observation_time": "2026-04-06T10:00:00.000Z",
+            "current": {"temp": 20.0},
+        },
+        "mgm_nearby": [
+            {
+                "name": "Fresh",
+                "istNo": "100",
+                "lat": 40.1,
+                "lon": 32.9,
+                "temp": 21.0,
+                "obs_time": "2026-04-06T10:20:00.000Z",
+            },
+            {
+                "name": "Stale Hot",
+                "istNo": "101",
+                "lat": 40.2,
+                "lon": 33.0,
+                "temp": 26.0,
+                "obs_time": "2026-04-06T08:30:00.000Z",
+            },
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("ankara", raw)
+
+    stale = next(row for row in snapshot["official_nearby"] if row["station_label"] == "Stale Hot")
+    assert stale["sync_status"] == "stale"
+    assert stale["usable_for_intraday"] is False
+    assert snapshot["official_network_status"]["stale_row_count"] == 1
+    assert snapshot["network_lead_signal"]["leader_station_label"] == "Fresh"
+    assert snapshot["airport_vs_network_delta"] == 1.0
 
 
 def test_china_provider_falls_back_to_metar_cluster_without_replacing_airport_anchor():
