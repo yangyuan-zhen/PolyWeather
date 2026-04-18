@@ -19,6 +19,12 @@ RUSSIA_MOSCOW_STATIONS: Dict[str, Dict[str, Any]] = {
         "lat": 55.5870,
         "lon": 37.2500,
     },
+    "27500": {
+        "station_code": "27500",
+        "station_label": "Tolstopaltsevo",
+        "lat": 55.5900,
+        "lon": 37.1940,
+    },
     "27518": {
         "station_code": "27518",
         "station_label": "Podmoskovnaya",
@@ -37,6 +43,18 @@ RUSSIA_MOSCOW_STATIONS: Dict[str, Dict[str, Any]] = {
         "lat": 55.5780,
         "lon": 37.5541,
     },
+    "27614": {
+        "station_code": "27614",
+        "station_label": "Mikhailovskoye",
+        "lat": 55.3671,
+        "lon": 37.2033,
+    },
+    "27601": {
+        "station_code": "27601",
+        "station_label": "Krasnogorsk",
+        "lat": 55.8069,
+        "lon": 37.3446,
+    },
     "27416": {
         "station_code": "27416",
         "station_label": "Moscow (Strogino)",
@@ -49,7 +67,21 @@ RUSSIA_MOSCOW_STATIONS: Dict[str, Dict[str, Any]] = {
         "lat": 55.7455,
         "lon": 37.6300,
     },
+    "27619": {
+        "station_code": "27619",
+        "station_label": "Moscow (Tushino)",
+        "lat": 55.8783,
+        "lon": 37.4367,
+    },
+    "27621": {
+        "station_code": "27621",
+        "station_label": "Gorki Leninskie",
+        "lat": 55.5079,
+        "lon": 37.7755,
+    },
 }
+
+RUSSIA_MOSCOW_MAP_STATION_LIMIT = 10
 
 
 class RussiaStationSourceMixin:
@@ -312,7 +344,7 @@ class RussiaStationSourceMixin:
                     item.get("station_label") or "",
                 )
             )
-            trimmed = rows[:6]
+            trimmed = rows[:RUSSIA_MOSCOW_MAP_STATION_LIMIT]
             record_source_call(
                 "ru_station_web",
                 "nearby",
