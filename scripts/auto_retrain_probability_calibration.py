@@ -262,14 +262,19 @@ def main() -> int:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return fit_result["returncode"] or 1
 
+    eval_args = [
+        "scripts/evaluate_probability_calibration.py",
+        "--calibration-file",
+        candidate_path,
+        "--output",
+        evaluation_path,
+    ]
+    if args.verbose:
+        eval_args.append("--verbose")
+    if args.snapshot_limit and args.snapshot_limit > 0:
+        eval_args.extend(["--snapshot-limit", str(args.snapshot_limit)])
     eval_result = _run_python(
-        [
-            "scripts/evaluate_probability_calibration.py",
-            "--calibration-file",
-            candidate_path,
-            "--output",
-            evaluation_path,
-        ],
+        eval_args,
         stream=args.verbose,
     )
     if eval_result["returncode"] != 0:

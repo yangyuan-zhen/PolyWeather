@@ -28,6 +28,21 @@ from scripts.fit_probability_calibration import (  # noqa: E402
 )
 
 
+def _env_int(name, default=None):
+    try:
+        value = os.getenv(name)
+        if value is None or str(value).strip() == "":
+            return default
+        return int(value)
+    except Exception:
+        return default
+
+
+def _log(enabled, message):
+    if enabled:
+        print(f"[evaluate_probability_calibration] {message}", flush=True)
+
+
 def _mean(values):
     return (sum(values) / len(values)) if values else None
 
@@ -96,14 +111,47 @@ def main():
             "evaluation_report.json",
         ),
     )
+    parser.add_argument(
+        "--snapshot-file",
+        default=None,
+        help="Optional legacy JSONL snapshot archive path. In sqlite mode this defaults to the runtime database.",
+    )
+    parser.add_argument(
+        "--snapshot-limit",
+        type=int,
+        default=_env_int("POLYWEATHER_EMOS_TRAINING_SNAPSHOT_LIMIT"),
+        help="Optional max number of recent probability snapshots to load from SQLite.",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print data loading and evaluation progress.",
+    )
     args = parser.parse_args()
 
+    _log(args.verbose, "loading daily records")
     history = _load_history_with_fallback(args.history_file)
+    _log(args.verbose, f"loaded daily record cities={len(history or {})}")
+    _log(args.verbose, "loading training feature history")
     training_feature_history = _load_training_feature_history()
+    _log(args.verbose, f"loaded training feature cities={len(training_feature_history or {})}")
+    _log(args.verbose, "loading truth history")
     truth_history = _load_truth_history()
+    _log(args.verbose, f"loaded truth cities={len(truth_history or {})}")
+    _log(args.verbose, "loading settlement history")
     settlement_history = _load_json_if_exists(args.settlement_history)
-    snapshot_rows = _load_snapshot_rows(None)
+    _log(args.verbose, f"loaded settlement history cities={len(settlement_history or {})}")
+    _log(
+        args.verbose,
+        "loading probability snapshots"
+        + (f" limit={args.snapshot_limit}" if args.snapshot_limit else ""),
+    )
+    snapshot_rows = _load_snapshot_rows(args.snapshot_file, limit=args.snapshot_limit)
+    _log(args.verbose, f"loaded probability snapshots={len(snapshot_rows or [])}")
+    _log(args.verbose, "loading legacy training archive")
     legacy_training_samples = _load_legacy_training_samples()
+    _log(args.verbose, f"loaded legacy training samples={len(legacy_training_samples or [])}")
+    _log(args.verbose, "extracting evaluation samples")
     samples, filled_actual_from_history = _extract_samples(
         history,
         training_feature_history=training_feature_history,
@@ -112,6 +160,7 @@ def main():
         snapshot_rows=snapshot_rows,
     )
     samples = merge_samples_with_legacy_archive(samples, legacy_training_samples)
+    _log(args.verbose, f"evaluating samples={len(samples or [])}")
 
     legacy_crps = []
     emos_crps = []
@@ -214,6 +263,7 @@ def main():
 
     print(json.dumps(summary, ensure_ascii=False, indent=2))
     print(f"saved evaluation report to {args.output}")
+    _log(args.verbose, "done")
 
 
 if __name__ == "__main__":
