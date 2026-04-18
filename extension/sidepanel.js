@@ -4,7 +4,7 @@ const DEFAULT_CONFIG = {
   selectedCity: "",
   siteBase: "https://polyweather-pro.vercel.app"
 };
-const CACHE_VERSION = "v2";
+const CACHE_VERSION = "v3";
 const locale = String(navigator.language || "en").toLowerCase().startsWith("zh")
   ? "zh"
   : "en";
@@ -21,7 +21,7 @@ const I18N = {
     hko: "香港天文台 (HKO)",
     cwa: "交通部中央气象署 (CWA)",
     noaa: "NOAA 官方时序",
-    wunderground: "Wunderground 结算站",
+    wunderground: "WU/weather.com 历史参考页",
     city: "城市",
     refresh: "刷新数据",
     cityProfile: "城市档案",
@@ -83,7 +83,7 @@ const I18N = {
     hko: "Hong Kong Observatory (HKO)",
     cwa: "Central Weather Administration (CWA)",
     noaa: "NOAA official timeseries",
-    wunderground: "Wunderground settlement station",
+    wunderground: "WU/weather.com history reference",
     city: "City",
     refresh: "Refresh data",
     cityProfile: "City Profile",
