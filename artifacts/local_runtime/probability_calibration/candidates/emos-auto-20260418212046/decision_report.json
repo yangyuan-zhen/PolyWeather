@@ -1,0 +1,62 @@
+{
+  "ok": true,
+  "version": "emos-auto-20260418212046",
+  "generated_at": "2026-04-18T21:21:04.160748+00:00",
+  "candidate_dir": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046",
+  "candidate_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
+  "evaluation_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\evaluation_report.json",
+  "target_path": "E:\\web\\PolyWeather\\artifacts\\probability_calibration\\default.json",
+  "promote_requested": false,
+  "promoted": false,
+  "backup_path": null,
+  "decision": {
+    "decision": "promote",
+    "ready_for_promotion": true,
+    "blocking_reasons": [],
+    "thresholds": {
+      "min_samples": 50,
+      "max_delta_crps": 0.0,
+      "max_delta_mae": 0.05,
+      "min_delta_bucket_hit_rate": -0.05
+    },
+    "metrics": {
+      "sample_count": 847,
+      "delta_crps": -0.03617,
+      "delta_mae": -0.007896,
+      "delta_bucket_hit_rate": -0.009445
+    }
+  },
+  "fit": {
+    "command": [
+      "C:\\Users\\Yang\\AppData\\Local\\Programs\\Python\\Python38\\python.exe",
+      "scripts/fit_probability_calibration.py",
+      "--output",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
+      "--version",
+      "emos-auto-20260418212046",
+      "--verbose",
+      "--snapshot-limit",
+      "50000"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "evaluate": {
+    "command": [
+      "C:\\Users\\Yang\\AppData\\Local\\Programs\\Python\\Python38\\python.exe",
+      "scripts/evaluate_probability_calibration.py",
+      "--calibration-file",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
+      "--output",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\evaluation_report.json",
+      "--verbose",
+      "--snapshot-limit",
+      "50000"
+    ],
+    "returncode": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  "tests": null
+}
