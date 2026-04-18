@@ -769,6 +769,7 @@ CITY_REGISTRY = {
         "tz_offset": 3600,
         "use_fahrenheit": False,
         "is_major": True,
+        "fast_metar_refresh": True,
         "risk_level": "medium",
         "risk_emoji": "🟡",
         "airport_name": "穆尔塔拉·穆罕默德国际机场",

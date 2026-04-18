@@ -31,6 +31,7 @@ def test_turkey_metar_uses_fast_cache_ttl():
 
     assert source._metar_cache_ttl_for_city("ankara", "LTAC") == 60
     assert source._metar_cache_ttl_for_city("istanbul", "LTFM") == 60
+    assert source._metar_cache_ttl_for_city("lagos", "DNMM") == 60
     assert source._metar_cache_ttl_for_city("karachi", "OPKC") == 600
 
 
