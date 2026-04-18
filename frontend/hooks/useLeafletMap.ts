@@ -593,6 +593,13 @@ export function useLeafletMap({
     }
 
     async function maybeAutoShowNearbyStations() {
+      if (selectedCity && isLoadingDetail) {
+        autoNearbyCityRef.current = selectedCity;
+        clearNearbyRefreshTimer();
+        layer.clearLayers();
+        return;
+      }
+
       if (handlingAutoNearbyRef.current) {
         return;
       }
@@ -700,7 +707,7 @@ export function useLeafletMap({
       map.off("zoomend", syncVisibility);
       map.off("moveend", maybeAutoShowNearbyStations);
     };
-  }, [cityDetailsByName, selectedCity, selectedDetail, suspendMotion]);
+  }, [cityDetailsByName, selectedCity, selectedDetail, suspendMotion, isLoadingDetail]);
 
   // Centralized City Selection Zoom Effect
   // Higher level than selection: we only flyTo once the data is loaded (selectedDetail)

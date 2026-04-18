@@ -196,6 +196,7 @@ export function DetailPanel() {
         (detail.forecast?.daily?.length ?? 0) <= 1),
   );
   const isPanelSyncing = store.loadingState.cityDetail;
+  const isShowingCachedDetailDuringSync = Boolean(detail && isPanelSyncing);
 
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -384,7 +385,18 @@ export function DetailPanel() {
         </div>
       </div>
 
-      <div className="panel-body">
+      <div className={clsx("panel-body", isShowingCachedDetailDuringSync && "is-syncing")}>
+        {isShowingCachedDetailDuringSync ? (
+          <div className="panel-sync-blocker" role="status" aria-live="polite">
+            <span className="panel-loading-spinner" aria-hidden="true" />
+            <span>
+              {locale === "en-US"
+                ? `Refreshing ${panelDisplayName}. Current cards are paused until the latest data arrives.`
+                : `正在刷新 ${panelDisplayName}，最新数据返回前暂停展示旧卡片。`}
+            </span>
+          </div>
+        ) : null}
+        <div className={clsx(isShowingCachedDetailDuringSync && "panel-content-stale")}>
         {!hasBasicPanelContent ? (
           <section className="detail-summary-shell detail-empty-state">
             <div className="detail-section-head">
@@ -479,6 +491,7 @@ export function DetailPanel() {
             {heavyContentReady ? <ForecastTable /> : null}
           </>
         )}
+        </div>
       </div>
     </aside>
   );

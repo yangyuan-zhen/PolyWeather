@@ -774,7 +774,38 @@
 .root :global(.panel-body) {
   overflow-y: auto;
   flex: 1;
+  position: relative;
   padding: 0 20px 24px;
+}
+
+.root :global(.panel-sync-blocker) {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 16, 30, 0.96);
+  color: var(--text-primary);
+  box-shadow: 0 14px 34px rgba(2, 6, 23, 0.38);
+  backdrop-filter: blur(18px);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.root :global(.panel-content-stale) {
+  opacity: 0.28;
+  pointer-events: none;
+  user-select: none;
+}
+
+.root :global(.panel-content-stale canvas) {
+  visibility: hidden;
 }
 .root :global(.panel-body::-webkit-scrollbar) {
   width: 4px;

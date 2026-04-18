@@ -788,11 +788,7 @@ export function DashboardStoreProvider({
       return;
     }
 
-    const cachedDetail = cityDetailsByName[cityName];
-    const needsDetailRefresh = hasSparseDetailCoverage(
-      cachedDetail,
-      cachedDetail?.local_date,
-    );
+    const needsDetailRefresh = true;
     setLoadingState((current) => ({ ...current, cityDetail: true }));
     const detailPromise = ensureCityDetail(cityName, needsDetailRefresh, "panel");
     void Promise.allSettled([summaryPromise, detailPromise])
