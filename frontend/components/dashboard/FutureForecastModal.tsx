@@ -743,6 +743,14 @@ export function FutureForecastModal() {
     [dateStr, detail],
   );
   const modelView = useMemo(() => getModelView(detail, dateStr), [dateStr, detail]);
+  const probabilityEngineKey = String(probabilityView?.engine || "")
+    .trim()
+    .toLowerCase();
+  const probabilityCalibrationMode = String(
+    probabilityView?.calibrationMode || "",
+  )
+    .trim()
+    .toLowerCase();
   const hasLgbmProbability = useMemo(
     () =>
       Object.keys(modelView?.models || {}).some((name) =>
@@ -750,6 +758,28 @@ export function FutureForecastModal() {
       ),
     [modelView],
   );
+  const hasEmosProbability =
+    probabilityEngineKey === "emos" || probabilityCalibrationMode.includes("emos");
+  const probabilityEngineLabel = hasLgbmProbability
+    ? locale === "en-US"
+      ? "LGBM"
+      : "LGBM"
+    : hasEmosProbability
+      ? "EMOS"
+      : locale === "en-US"
+        ? "Calibrated model"
+        : "校准模型";
+  const probabilityTitle = hasLgbmProbability
+    ? locale === "en-US"
+      ? "LGBM-Calibrated Probability"
+      : "LGBM 校准概率"
+    : hasEmosProbability
+      ? locale === "en-US"
+        ? "EMOS-Calibrated Probability"
+        : "EMOS 校准概率"
+      : locale === "en-US"
+        ? "Calibrated Model Probability"
+        : "校准模型概率";
   const topProbabilityBucket = useMemo(() => {
     const buckets = Array.isArray(probabilityView?.probabilities)
       ? probabilityView.probabilities
@@ -942,6 +972,11 @@ export function FutureForecastModal() {
       return locale === "en-US"
         ? `LGBM-calibrated read puts the leading bucket at ${bucketLabel} (${bucketProb}). Treat this as the base case, not the final settlement.`
         : `LGBM 校准后领先温度桶为 ${bucketLabel}（${bucketProb}）。可作为基准情形，但不要直接等同于最终结算。`;
+    }
+    if (hasEmosProbability) {
+      return locale === "en-US"
+        ? `EMOS-calibrated probability puts the leading bucket at ${bucketLabel} (${bucketProb}). It is the primary calibrated probability layer, not the final settlement.`
+        : `EMOS 校准概率显示领先温度桶为 ${bucketLabel}（${bucketProb}）。这是当前主概率层，但不要直接等同于最终结算。`;
     }
     return locale === "en-US"
       ? `Calibrated model probability puts the leading bucket at ${bucketLabel} (${bucketProb}). Treat this as the base case, not the final settlement.`
@@ -1311,8 +1346,8 @@ export function FutureForecastModal() {
             ? "Model spread and calibrated buckets are updating."
             : "模型分歧和校准概率桶正在更新。"
           : locale === "en-US"
-            ? "Probability buckets are derived from the local model stack."
-            : "概率桶当前由本地模型栈推导。",
+            ? `Probability buckets are derived from the ${probabilityEngineLabel} layer.`
+            : `概率桶当前由 ${probabilityEngineLabel} 层推导。`,
     },
   ] as const;
 
@@ -1896,13 +1931,7 @@ export function FutureForecastModal() {
                           {locale === "en-US" ? "Probability read" : "概率判断"}
                         </div>
                         <h3>
-                          {hasLgbmProbability
-                            ? locale === "en-US"
-                              ? "LGBM-Calibrated Probability"
-                              : "LGBM 校准概率"
-                            : locale === "en-US"
-                              ? "Calibrated Model Probability"
-                              : "校准模型概率"}
+                          {probabilityTitle}
                         </h3>
                       </div>
                       <div className="future-text-block" style={{ marginBottom: "12px" }}>

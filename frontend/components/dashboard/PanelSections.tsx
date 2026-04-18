@@ -329,7 +329,10 @@ function formatProbabilityEngineLabel(
       : "LGBM 校准概率";
   }
   const engine = String(view.engine || "").trim().toLowerCase();
-  if (engine === "emos") {
+  const calibrationMode = String(view.calibrationMode || "")
+    .trim()
+    .toLowerCase();
+  if (engine === "emos" || calibrationMode.includes("emos")) {
     return locale === "en-US" ? "EMOS-calibrated probability" : "EMOS 校准概率";
   }
   return locale === "en-US" ? "Model probability" : "模型概率";
