@@ -140,13 +140,13 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const symbol = detail.temp_symbol || "°C";
   const formatObsTime = () => {
     const label = String(station.obs_time_label || "").trim();
-    if (label) return label;
+    if (label) return label.replace(/Z$/i, "");
     const raw = String(station.obs_time || "").trim();
     if (!raw) return "";
     if (raw.endsWith("Z") || raw.includes("+00:00")) {
       const parsed = new Date(raw);
       if (!Number.isNaN(parsed.getTime())) {
-        return `${String(parsed.getUTCHours()).padStart(2, "0")}:${String(parsed.getUTCMinutes()).padStart(2, "0")}Z`;
+        return `${String(parsed.getUTCHours()).padStart(2, "0")}:${String(parsed.getUTCMinutes()).padStart(2, "0")}`;
       }
     }
     if (raw.includes("T")) return raw.split("T").pop()?.slice(0, 5) || "";

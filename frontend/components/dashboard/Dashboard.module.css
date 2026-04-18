@@ -2162,10 +2162,10 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  margin-top: 2px;
-  font-size: 8px;
+  margin-top: 3px;
+  font-size: 10px;
   font-weight: 700;
-  color: rgba(148, 163, 184, 0.88);
+  color: rgba(203, 213, 225, 0.95);
   white-space: nowrap;
 }
 
