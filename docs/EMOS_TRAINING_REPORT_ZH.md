@@ -117,7 +117,13 @@ python scripts\auto_retrain_probability_calibration.py
 候选产物默认写入：
 
 ```text
-artifacts/probability_calibration/candidates/<version>/
+/var/lib/polyweather/probability_calibration/candidates/<version>/
+```
+
+最新自动训练报告默认写入：
+
+```text
+/var/lib/polyweather/probability_calibration/auto_retrain_report.json
 ```
 
 允许门禁通过后自动发布：
@@ -146,10 +152,29 @@ Docker 手动触发：
 docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py
 ```
 
+查看最新报告：
+
+```text
+docker compose exec -T polyweather_web cat /var/lib/polyweather/probability_calibration/auto_retrain_report.json
+```
+
 Docker 允许门禁发布：
 
 ```text
 docker compose exec -T polyweather_web python scripts/auto_retrain_probability_calibration.py --promote-if-passed --run-tests
+```
+
+如果希望自动发布不需要重建镜像，需要在 `.env` 中指定可写参数文件：
+
+```text
+POLYWEATHER_PROBABILITY_CALIBRATION_FILE=/var/lib/polyweather/probability_calibration/default.json
+```
+
+首次启用该路径前，先用当前镜像内置参数初始化一次：
+
+```text
+docker compose exec -T polyweather_web mkdir -p /var/lib/polyweather/probability_calibration
+docker compose exec -T polyweather_web cp /app/artifacts/probability_calibration/default.json /var/lib/polyweather/probability_calibration/default.json
 ```
 
 建议后续挂到宿主机 `cron` 或 systemd timer：

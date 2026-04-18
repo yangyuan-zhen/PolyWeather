@@ -15,8 +15,20 @@ from src.analysis.probability_calibration import DEFAULT_CALIBRATION_FILE  # noq
 
 
 ARTIFACT_DIR = os.path.join(PROJECT_ROOT, "artifacts", "probability_calibration")
-DEFAULT_CANDIDATE_ROOT = os.path.join(ARTIFACT_DIR, "candidates")
-DEFAULT_DECISION_REPORT = os.path.join(ARTIFACT_DIR, "auto_retrain_report.json")
+
+
+def _runtime_calibration_dir() -> str:
+    runtime_dir = str(os.getenv("POLYWEATHER_RUNTIME_DATA_DIR") or "").strip()
+    if runtime_dir:
+        return os.path.join(runtime_dir, "probability_calibration")
+    return ARTIFACT_DIR
+
+
+DEFAULT_CANDIDATE_ROOT = os.path.join(_runtime_calibration_dir(), "candidates")
+DEFAULT_DECISION_REPORT = os.path.join(
+    _runtime_calibration_dir(),
+    "auto_retrain_report.json",
+)
 
 
 def _sf(value: Any) -> Optional[float]:
