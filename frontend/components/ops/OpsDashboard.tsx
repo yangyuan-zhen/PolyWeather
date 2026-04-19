@@ -286,7 +286,11 @@ type MembershipEntry = {
   registered_at?: string | null;
   plan_code?: string | null;
   starts_at?: string | null;
+  current_expires_at?: string | null;
+  total_expires_at?: string | null;
   expires_at?: string | null;
+  queued_days?: number | null;
+  queued_count?: number | null;
 };
 
 function formatDateTime(value?: string | null) {
@@ -299,6 +303,15 @@ function formatDateTime(value?: string | null) {
 function formatUnixDateTime(value?: number | null) {
   if (!value) return "-";
   return formatDateTime(new Date(value * 1000).toISOString());
+}
+
+function formatMembershipExpiry(item: MembershipEntry) {
+  const total = item.total_expires_at || item.expires_at;
+  const current = item.current_expires_at || item.expires_at;
+  const queuedDays = Math.max(0, Number(item.queued_days || 0));
+  const totalLabel = formatDateTime(total);
+  if (!queuedDays || !current || current === total) return totalLabel;
+  return `${totalLabel}（已续 +${queuedDays} 天）`;
 }
 
 function formatMetric(value?: number | null, digits = 3) {
@@ -1535,7 +1548,7 @@ export function OpsDashboard() {
                   <div className="mt-3 grid gap-2">
                     <MobileField label="User ID" value={item.user_id || "-"} mono />
                     <MobileField label="注册时间" value={formatDateTime(item.registered_at)} />
-                    <MobileField label="到期时间" value={formatDateTime(item.expires_at)} />
+                    <MobileField label="到期时间" value={formatMembershipExpiry(item)} />
                   </div>
                 </div>
               ))}
@@ -1563,7 +1576,7 @@ export function OpsDashboard() {
                       <td className="px-4 py-3">{item.username || "-"}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-300">{item.user_id || "-"}</td>
                       <td className="px-4 py-3">{formatDateTime(item.registered_at)}</td>
-                      <td className="px-4 py-3">{formatDateTime(item.expires_at)}</td>
+                      <td className="px-4 py-3">{formatMembershipExpiry(item)}</td>
                     </tr>
                   ))}
                   {!memberships.length ? (

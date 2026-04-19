@@ -1501,8 +1501,13 @@ export function AccountCenter() {
       ? expiryFormatted
       : displayExpiryRaw || copy.proPendingSync
     : copy.noProSubscription;
-  const showExpiringSoon =
-    Boolean(isSubscribed && expiryInfo && !expiryInfo.expired && expiryInfo.daysLeft <= 3);
+  const showExpiringSoon = Boolean(
+    isSubscribed &&
+      !hasQueuedExtension &&
+      expiryInfo &&
+      !expiryInfo.expired &&
+      expiryInfo.daysLeft <= 3,
+  );
   const showExpiredReminder = Boolean(!isSubscribed && expiryInfo && expiryInfo.expired);
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(

@@ -1080,6 +1080,26 @@ async def ops_memberships(request: Request, limit: int = 200):
         user_id = str(item.get("user_id") or "").strip().lower()
         local_user = user_map.get(user_id, {})
         auth_user = auth_user_map.get(user_id, {})
+        subscription_window = SUPABASE_ENTITLEMENT.get_subscription_window(
+            user_id,
+            respect_requirement=False,
+        )
+        current_expires_at = item.get("expires_at")
+        total_expires_at = (
+            subscription_window.get("total_expires_at")
+            if isinstance(subscription_window, dict)
+            else None
+        )
+        queued_days = (
+            int(subscription_window.get("queued_days") or 0)
+            if isinstance(subscription_window, dict)
+            else 0
+        )
+        queued_count = (
+            int(subscription_window.get("queued_count") or 0)
+            if isinstance(subscription_window, dict)
+            else 0
+        )
         row = {
             "user_id": user_id,
             "email": str(auth_user.get("email") or local_user.get("supabase_email") or ""),
@@ -1088,7 +1108,11 @@ async def ops_memberships(request: Request, limit: int = 200):
             "registered_at": local_user.get("created_at") or auth_user.get("created_at"),
             "plan_code": item.get("plan_code"),
             "starts_at": item.get("starts_at"),
-            "expires_at": item.get("expires_at"),
+            "current_expires_at": current_expires_at,
+            "total_expires_at": total_expires_at or current_expires_at,
+            "expires_at": total_expires_at or current_expires_at,
+            "queued_days": queued_days,
+            "queued_count": queued_count,
         }
         existing = deduped.get(user_id)
         existing_expires = str(existing.get("expires_at") or "") if existing else ""

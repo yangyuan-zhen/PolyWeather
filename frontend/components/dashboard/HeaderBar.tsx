@@ -47,12 +47,17 @@ export function HeaderBar() {
       store.proAccess.subscriptionExpiresAt
     : store.proAccess.subscriptionExpiresAt;
   const expiryInfo = parseExpiryInfo(effectiveExpiry);
+  const hasQueuedExtension = Boolean(
+    store.proAccess.subscriptionActive &&
+      store.proAccess.subscriptionQueuedDays > 0,
+  );
   const isTrialPlan = /trial/i.test(
     String(store.proAccess.subscriptionPlanCode || ""),
   );
   const showRenewReminder =
     isAuthenticated &&
     !store.proAccess.loading &&
+    !hasQueuedExtension &&
     ((store.proAccess.subscriptionActive &&
       expiryInfo &&
       expiryInfo.daysLeft <= 3) ||
