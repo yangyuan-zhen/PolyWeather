@@ -30,6 +30,7 @@ from src.analysis.deb_algorithm import calculate_dynamic_weights
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
@@ -1657,7 +1658,7 @@ def _analyze(
         except Exception:
             utc_offset = None
     if utc_offset is None:
-        utc_offset = info.get("tz", 0)
+        utc_offset = get_city_utc_offset_seconds(city)
     if obs_t and "T" in obs_t:
         try:
             dt = datetime.fromisoformat(str(obs_t).replace("Z", "+00:00"))
@@ -2441,7 +2442,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         except Exception:
             pass
 
-    default_utc_offset = int(info.get("tz", 0) or 0)
+    default_utc_offset = get_city_utc_offset_seconds(city)
 
     def _safe_call(fn):
         try:

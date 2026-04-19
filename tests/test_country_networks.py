@@ -1,5 +1,8 @@
+from datetime import datetime, timedelta, timezone
+
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.city_time import CITY_TIME_ZONES, get_city_utc_offset_seconds
 from src.data_collection.metar_sources import MetarSourceMixin
 from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
 from web.core import CITIES
@@ -26,6 +29,22 @@ def test_new_south_asia_city_registry_entries_are_wired():
     assert CITIES["masroor air base"]["settlement_source"] == "metar"
 
 
+def test_city_time_zone_mapping_covers_every_city_and_dst_offsets():
+    missing = sorted(set(CITY_REGISTRY) - set(CITY_TIME_ZONES))
+    assert missing == []
+
+    april = datetime(2026, 4, 19, 6, 30, tzinfo=timezone.utc)
+
+    assert get_city_utc_offset_seconds("guangzhou", april) == 28800
+    assert get_city_utc_offset_seconds("ankara", april) == 10800
+    assert get_city_utc_offset_seconds("london", april) == 3600
+    assert get_city_utc_offset_seconds("paris", april) == 7200
+    assert get_city_utc_offset_seconds("new york", april) == -14400
+    assert get_city_utc_offset_seconds("chicago", april) == -18000
+    assert get_city_utc_offset_seconds("los angeles", april) == -25200
+    assert get_city_utc_offset_seconds("wellington", april) == 43200
+
+
 def test_paris_registry_uses_le_bourget_anchor():
     paris = CITY_REGISTRY["paris"]
 
@@ -48,9 +67,11 @@ def test_turkey_metar_uses_fast_cache_ttl():
 
 
 def test_turkey_mgm_provider_returns_official_nearby_rows():
+    anchor_time = datetime.now(timezone.utc).replace(microsecond=0)
+    station_time = anchor_time + timedelta(minutes=8)
     raw = {
         "metar": {
-            "observation_time": "2026-04-06T10:00:00.000Z",
+            "observation_time": anchor_time.isoformat().replace("+00:00", "Z"),
             "current": {"temp": 16.0},
         },
         "mgm_nearby": [
@@ -60,7 +81,7 @@ def test_turkey_mgm_provider_returns_official_nearby_rows():
                 "lat": 40.1,
                 "lon": 32.9,
                 "temp": 17.1,
-                "obs_time": "2026-04-06T10:08:00.000Z",
+                "obs_time": station_time.isoformat().replace("+00:00", "Z"),
             }
         ],
     }
@@ -78,9 +99,12 @@ def test_turkey_mgm_provider_returns_official_nearby_rows():
 
 
 def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
+    anchor_time = datetime.now(timezone.utc).replace(microsecond=0)
+    fresh_time = anchor_time + timedelta(minutes=20)
+    stale_time = anchor_time - timedelta(minutes=90)
     raw = {
         "metar": {
-            "observation_time": "2026-04-06T10:00:00.000Z",
+            "observation_time": anchor_time.isoformat().replace("+00:00", "Z"),
             "current": {"temp": 20.0},
         },
         "mgm_nearby": [
@@ -90,7 +114,7 @@ def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
                 "lat": 40.1,
                 "lon": 32.9,
                 "temp": 21.0,
-                "obs_time": "2026-04-06T10:20:00.000Z",
+                "obs_time": fresh_time.isoformat().replace("+00:00", "Z"),
             },
             {
                 "name": "Stale Hot",
@@ -98,7 +122,7 @@ def test_nearby_station_timing_marks_stale_rows_unusable_for_network_signal():
                 "lat": 40.2,
                 "lon": 33.0,
                 "temp": 26.0,
-                "obs_time": "2026-04-06T08:30:00.000Z",
+                "obs_time": stale_time.isoformat().replace("+00:00", "Z"),
             },
         ],
     }
@@ -140,6 +164,57 @@ def test_china_provider_falls_back_to_metar_cluster_without_replacing_airport_an
     assert snapshot["official_nearby"][0]["is_official"] is False
 
 
+def test_metar_cluster_obs_time_label_uses_city_local_time():
+    raw = {
+        "metar": {
+            "observation_time": "2026-04-19T06:30:00.000Z",
+            "current": {"temp": 32.0},
+        },
+        "mgm_nearby": [
+            {
+                "name": "Guangzhou/Baiyun",
+                "icao": "ZGGG",
+                "lat": 23.39,
+                "lon": 113.30,
+                "temp": 32.0,
+                "obs_time": "2026-04-19T06:30:00.000Z",
+            }
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("guangzhou", raw)
+    row = snapshot["official_nearby"][0]
+
+    assert row["source_code"] == "metar_cluster"
+    assert row["obs_time_label"] == "14:30"
+    assert row["obs_time_display_tz"] == "city_local"
+
+
+def test_metar_cluster_obs_time_label_uses_dst_aware_city_time():
+    raw = {
+        "metar": {
+            "observation_time": "2026-04-19T06:30:00.000Z",
+            "current": {"temp": 12.0},
+        },
+        "mgm_nearby": [
+            {
+                "name": "London test",
+                "icao": "EGLC",
+                "lat": 51.50,
+                "lon": -0.05,
+                "temp": 12.0,
+                "obs_time": "2026-04-19T06:30:00.000Z",
+            }
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("london", raw)
+    row = snapshot["official_nearby"][0]
+
+    assert row["source_code"] == "metar_cluster"
+    assert row["obs_time_label"] == "07:30"
+
+
 def test_china_provider_prefers_nmc_rows_when_available():
     raw = {
         "metar": {
@@ -174,6 +249,32 @@ def test_china_provider_prefers_nmc_rows_when_available():
     assert snapshot["official_network_status"]["mode"] == "official_active"
     assert snapshot["official_nearby"][0]["source_code"] == "nmc"
     assert snapshot["official_nearby"][0]["is_official"] is True
+
+
+def test_china_nmc_local_time_stale_when_absolute_age_is_old():
+    raw = {
+        "metar": {
+            "observation_time": "2020-01-01T06:30:00.000Z",
+            "current": {"temp": 32.0},
+        },
+        "nmc_official_nearby": [
+            {
+                "name": "广州区域实况 (NMC)",
+                "icao": "atcGz",
+                "lat": 23.39,
+                "lon": 113.30,
+                "temp": 32.0,
+                "obs_time": "2020-01-01 06:30",
+            }
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("guangzhou", raw)
+    row = snapshot["official_nearby"][0]
+
+    assert row["source_code"] == "nmc"
+    assert row["sync_status"] == "stale"
+    assert row["usable_for_intraday"] is False
 
 
 def test_hko_provider_marks_explicit_official_station_as_anchor():

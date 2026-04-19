@@ -17,6 +17,7 @@ from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRec
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import get_country_network_provider
 from src.data_collection.city_registry import ALIASES
+from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.utils.metrics import export_prometheus_metrics
 from web.analysis_service import (
     _analyze,
@@ -742,7 +743,7 @@ async def list_cities(request: Request):
                     "display_name": str(city_meta.get("display_name") or city_meta.get("name") or name.title()),
                     "lat": info["lat"],
                     "lon": info["lon"],
-                    "utc_offset_seconds": info.get("tz", 0),
+                    "utc_offset_seconds": get_city_utc_offset_seconds(name),
                     "risk_level": risk.get("risk_level", "low"),
                     "risk_emoji": risk.get("risk_emoji", "🟢"),
                     "airport": risk.get("airport_name", ""),

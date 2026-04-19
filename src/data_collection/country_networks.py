@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from src.data_collection.city_registry import CITY_REGISTRY
+from src.data_collection.city_time import get_city_utc_offset_seconds
 
 
 CHINA_CMA_CITIES = {
@@ -31,7 +32,11 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
-def _parse_obs_datetime(value: Any, epoch_value: Any = None) -> Optional[datetime]:
+def _parse_obs_datetime(
+    value: Any,
+    epoch_value: Any = None,
+    utc_offset_seconds: Any = None,
+) -> Optional[datetime]:
     for candidate in (epoch_value, value):
         if candidate is None or candidate == "":
             continue
@@ -54,16 +59,34 @@ def _parse_obs_datetime(value: Any, epoch_value: Any = None) -> Optional[datetim
             normalized = text.replace(" ", "T")
             if normalized.endswith("Z"):
                 normalized = normalized[:-1] + "+00:00"
-            return datetime.fromisoformat(normalized)
+            parsed = datetime.fromisoformat(normalized)
+            if parsed.tzinfo is None and utc_offset_seconds is not None:
+                try:
+                    offset = int(utc_offset_seconds)
+                    parsed = parsed.replace(tzinfo=timezone(timedelta(seconds=offset)))
+                except Exception:
+                    pass
+            return parsed
         except Exception:
             continue
     return None
 
 
-def _format_obs_time_label(value: Any, epoch_value: Any = None) -> Optional[str]:
+def _format_obs_time_label(
+    value: Any,
+    epoch_value: Any = None,
+    display_utc_offset_seconds: Any = None,
+) -> Optional[str]:
     text = str(value or "").strip()
     parsed = _parse_obs_datetime(value, epoch_value)
     if parsed is not None:
+        if display_utc_offset_seconds is not None and parsed.tzinfo is not None:
+            try:
+                offset = int(display_utc_offset_seconds)
+                local_tz = timezone(timedelta(seconds=offset))
+                return parsed.astimezone(local_tz).strftime("%H:%M")
+            except Exception:
+                pass
         suffix = "Z" if parsed.tzinfo is not None and parsed.utcoffset() == timezone.utc.utcoffset(parsed) else ""
         return parsed.strftime("%H:%M") + suffix
     if not text:
@@ -97,6 +120,8 @@ def _station_age_minutes(station_dt: Optional[datetime]) -> Optional[int]:
 
 
 def _sync_status(delta_minutes: Optional[int], age_minutes: Optional[int]) -> str:
+    if age_minutes is not None and age_minutes > 60:
+        return "stale"
     reference = delta_minutes if delta_minutes is not None else age_minutes
     if reference is None:
         return "unknown"
@@ -112,17 +137,32 @@ def _sync_status(delta_minutes: Optional[int], age_minutes: Optional[int]) -> st
 def _enrich_station_timing(
     anchor: Optional[Dict[str, Any]],
     rows: List[Dict[str, Any]],
+    display_utc_offset_seconds: Any = None,
 ) -> List[Dict[str, Any]]:
     anchor = anchor or {}
-    anchor_dt = _parse_obs_datetime(anchor.get("obs_time"), anchor.get("obs_time_epoch"))
+    anchor_dt = _parse_obs_datetime(
+        anchor.get("obs_time"),
+        anchor.get("obs_time_epoch"),
+        anchor.get("obs_time_utc_offset_seconds"),
+    )
     enriched: List[Dict[str, Any]] = []
     for row in rows:
-        station_dt = _parse_obs_datetime(row.get("obs_time"), row.get("obs_time_epoch"))
+        station_dt = _parse_obs_datetime(
+            row.get("obs_time"),
+            row.get("obs_time_epoch"),
+            row.get("obs_time_utc_offset_seconds"),
+        )
         delta_minutes = _timing_delta_minutes(anchor_dt, station_dt)
         age_minutes = _station_age_minutes(station_dt)
         status = _sync_status(delta_minutes, age_minutes)
         enriched_row = dict(row)
-        enriched_row["obs_time_label"] = _format_obs_time_label(row.get("obs_time"), row.get("obs_time_epoch"))
+        enriched_row["obs_time_label"] = _format_obs_time_label(
+            row.get("obs_time"),
+            row.get("obs_time_epoch"),
+            display_utc_offset_seconds,
+        )
+        if display_utc_offset_seconds is not None and enriched_row.get("obs_time_label"):
+            enriched_row["obs_time_display_tz"] = "city_local"
         enriched_row["age_minutes"] = age_minutes
         enriched_row["time_delta_vs_anchor_minutes"] = delta_minutes
         enriched_row["sync_status"] = status
@@ -216,6 +256,7 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
             "report_time": metar.get("report_time"),
             "receipt_time": metar.get("receipt_time"),
             "obs_time_epoch": metar.get("obs_time_epoch"),
+            "obs_time_utc_offset_seconds": 0,
             "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
             "wind_dir": _safe_float(current.get("wind_dir")),
             "humidity": _safe_float(current.get("humidity")),
@@ -247,6 +288,7 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
                 is_settlement_anchor=False,
                 extra={
                     "obs_time_epoch": row.get("obs_time_epoch"),
+                    "obs_time_utc_offset_seconds": 0,
                     "wind_dir": _safe_float(row.get("wind_dir")),
                     "wind_speed_kt": _safe_float(row.get("wind_speed_kt") or row.get("wind_speed")),
                     "raw_metar": row.get("raw_metar"),
@@ -258,6 +300,7 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def _nmc_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
     rows = raw.get("nmc_official_nearby") or []
+    city_offset = get_city_utc_offset_seconds(city)
     out: List[Dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
@@ -276,6 +319,7 @@ def _nmc_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                 is_airport_station=False,
                 is_settlement_anchor=False,
                 extra={
+                    "obs_time_utc_offset_seconds": city_offset,
                     "page_url": row.get("page_url"),
                     "humidity": _safe_float(row.get("humidity")),
                     "rain": _safe_float(row.get("rain")),
@@ -697,11 +741,13 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
 
 def build_country_network_snapshot(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     provider = get_country_network_provider(city)
+    city_offset = get_city_utc_offset_seconds(city)
     metadata = provider.settlement_station_metadata(city)
     airport_primary = provider.airport_primary_current(city, raw) or {}
     official_nearby = _enrich_station_timing(
         airport_primary,
         provider.official_nearby_current(city, raw),
+        city_offset,
     )
     status = provider.official_network_status(city, raw)
     signals = _network_signals(airport_primary, official_nearby)
