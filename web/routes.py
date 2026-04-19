@@ -742,6 +742,7 @@ async def list_cities(request: Request):
                     "display_name": str(city_meta.get("display_name") or city_meta.get("name") or name.title()),
                     "lat": info["lat"],
                     "lon": info["lon"],
+                    "utc_offset_seconds": info.get("tz", 0),
                     "risk_level": risk.get("risk_level", "low"),
                     "risk_emoji": risk.get("risk_emoji", "🟢"),
                     "airport": risk.get("airport_name", ""),

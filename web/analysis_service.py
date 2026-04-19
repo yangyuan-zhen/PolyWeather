@@ -2263,6 +2263,7 @@ def _analyze(
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "lat": lat,
         "lon": lon,
+        "utc_offset_seconds": int(utc_offset or 0),
         "temp_symbol": sym,
         "local_time": local_time_str,
         "local_date": local_date_str,
@@ -2683,6 +2684,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         "name": city,
         "display_name": str(city_meta.get("display_name") or city_meta.get("name") or city.title()),
         "temp_symbol": sym,
+        "utc_offset_seconds": int(utc_offset or 0),
         "local_time": local_time_str,
         "local_date": local_date_str,
         "risk": {
@@ -2713,6 +2715,7 @@ def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
         "name": data.get("name"),
         "display_name": data.get("display_name"),
         "icao": data.get("risk", {}).get("icao"),
+        "utc_offset_seconds": data.get("utc_offset_seconds"),
         "local_time": data.get("local_time"),
         "temp_symbol": data.get("temp_symbol"),
         "current": {

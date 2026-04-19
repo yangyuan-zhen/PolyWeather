@@ -128,6 +128,77 @@ function getMarkerSignature(
   ].join("|");
 }
 
+function formatCityLocalDateTime(
+  epochMs: number,
+  utcOffsetSeconds: number,
+  cityLocalDate?: string | null,
+  isEnglishUi = false,
+) {
+  if (!Number.isFinite(epochMs) || !Number.isFinite(utcOffsetSeconds)) return "";
+  const shifted = new Date(epochMs + utcOffsetSeconds * 1000);
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth() + 1;
+  const day = shifted.getUTCDate();
+  const dateText = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const timeText = `${String(shifted.getUTCHours()).padStart(2, "0")}:${String(
+    shifted.getUTCMinutes(),
+  ).padStart(2, "0")}`;
+  const anchorDate = String(cityLocalDate || "").slice(0, 10);
+  if (!anchorDate || dateText === anchorDate) return timeText;
+
+  const anchorMs = Date.UTC(
+    Number(anchorDate.slice(0, 4)),
+    Number(anchorDate.slice(5, 7)) - 1,
+    Number(anchorDate.slice(8, 10)),
+  );
+  const stationDateMs = Date.UTC(year, month - 1, day);
+  if (Number.isFinite(anchorMs) && anchorMs - stationDateMs === 86_400_000) {
+    return isEnglishUi ? `Yesterday ${timeText}` : `昨日 ${timeText}`;
+  }
+  return `${String(month).padStart(2, "0")}/${String(day).padStart(2, "0")} ${timeText}`;
+}
+
+function parseIsoLikeTime(value: string, treatNaiveAsUtc: boolean) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const hasDate = raw.includes("T") || /^\d{4}-\d{2}-\d{2}\s+\d{1,2}:\d{2}/.test(raw);
+  if (!hasDate) return null;
+
+  const normalized = raw.replace(" ", "T");
+  const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  if (!hasExplicitTz && !treatNaiveAsUtc) return null;
+  const parseTarget = hasExplicitTz || !treatNaiveAsUtc ? normalized : `${normalized}Z`;
+  const parsed = new Date(parseTarget);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.getTime();
+}
+
+function getDetailUtcOffsetSeconds(detail: CityDetail) {
+  const explicit = Number(detail.utc_offset_seconds);
+  if (Number.isFinite(explicit)) return explicit;
+
+  const localDate = String(detail.local_date || "").slice(0, 10);
+  const localTime = String(detail.local_time || "").match(/(\d{1,2}):(\d{2})/);
+  const updatedAt = String(detail.updated_at || "").trim();
+  const updatedEpochMs = parseIsoLikeTime(updatedAt, false);
+  if (localDate && localTime && updatedEpochMs != null) {
+    const localEpochMs = Date.UTC(
+      Number(localDate.slice(0, 4)),
+      Number(localDate.slice(5, 7)) - 1,
+      Number(localDate.slice(8, 10)),
+      Number(localTime[1]),
+      Number(localTime[2]),
+    );
+    const rawOffsetSeconds = (localEpochMs - updatedEpochMs) / 1000;
+    if (Number.isFinite(rawOffsetSeconds)) {
+      // Use 15-minute buckets so half-hour/quarter-hour time zones also survive.
+      const rounded = Math.round(rawOffsetSeconds / 900) * 900;
+      if (rounded >= -43_200 && rounded <= 50_400) return rounded;
+    }
+  }
+  return null;
+}
+
 function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const sanitizeWindText = (value?: string | null) => {
     const text = String(value || "").trim();
@@ -138,10 +209,25 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
     typeof document !== "undefined" &&
     String(document.documentElement.lang || "").toLowerCase().startsWith("en");
   const symbol = detail.temp_symbol || "°C";
+  const sourceCode = String(station.source_code || station.source_label || "")
+    .trim()
+    .toLowerCase();
+  const isMgmStation = sourceCode === "mgm" || sourceCode.includes("mgm");
+  const utcOffsetSeconds = getDetailUtcOffsetSeconds(detail);
   const formatObsTime = () => {
+    const raw = String(station.obs_time || "").trim();
+    const epochRaw = Number(station.obs_time_epoch);
+    const epochMs = Number.isFinite(epochRaw)
+      ? epochRaw > 1_000_000_000_000
+        ? epochRaw
+        : epochRaw * 1000
+      : parseIsoLikeTime(raw, isMgmStation);
+    if (epochMs != null && Number.isFinite(epochMs) && utcOffsetSeconds != null) {
+      const localOffsetSeconds = utcOffsetSeconds;
+      return formatCityLocalDateTime(epochMs, localOffsetSeconds, detail.local_date, isEnglishUi);
+    }
     const label = String(station.obs_time_label || "").trim();
     if (label) return label.replace(/Z$/i, "");
-    const raw = String(station.obs_time || "").trim();
     if (!raw) return "";
     if (raw.endsWith("Z") || raw.includes("+00:00")) {
       const parsed = new Date(raw);
@@ -194,7 +280,7 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
     station.icao ||
     "实测 (OBS)";
   const label =
-    String(station.source_code || station.source_label || "").trim().toLowerCase() === "nmc" &&
+    sourceCode === "nmc" &&
     /\(NMC\)$/i.test(String(rawLabel)) &&
     !String(rawLabel).includes("区域实况")
       ? String(rawLabel).replace(/\s*\(NMC\)$/i, "区域实况 (NMC)")

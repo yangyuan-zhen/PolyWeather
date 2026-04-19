@@ -5,6 +5,7 @@ export interface CityListItem {
   display_name: string;
   lat: number;
   lon: number;
+  utc_offset_seconds?: number;
   risk_level: RiskLevel;
   deb_recent_tier?: RiskLevel;
   deb_recent_hit_rate?: number | null;
@@ -118,6 +119,7 @@ export interface NearbyStation {
   is_airport_station?: boolean;
   is_settlement_anchor?: boolean;
   obs_time?: string | null;
+  obs_time_epoch?: number | string | null;
   obs_time_label?: string | null;
   age_minutes?: number | null;
   time_delta_vs_anchor_minutes?: number | null;
@@ -180,6 +182,7 @@ export interface CitySummary {
   name: string;
   display_name?: string | null;
   icao?: string | null;
+  utc_offset_seconds?: number | null;
   local_time?: string | null;
   temp_symbol?: string | null;
   current?: {
@@ -380,6 +383,7 @@ export interface CityDetail {
   detail_depth?: "panel" | "market" | "nearby" | "full";
   lat: number;
   lon: number;
+  utc_offset_seconds?: number;
   temp_symbol: string;
   local_time: string;
   local_date: string;
