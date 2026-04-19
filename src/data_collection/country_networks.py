@@ -76,9 +76,10 @@ def _format_obs_time_label(
     value: Any,
     epoch_value: Any = None,
     display_utc_offset_seconds: Any = None,
+    source_utc_offset_seconds: Any = None,
 ) -> Optional[str]:
     text = str(value or "").strip()
-    parsed = _parse_obs_datetime(value, epoch_value)
+    parsed = _parse_obs_datetime(value, epoch_value, source_utc_offset_seconds)
     if parsed is not None:
         if display_utc_offset_seconds is not None and parsed.tzinfo is not None:
             try:
@@ -160,6 +161,7 @@ def _enrich_station_timing(
             row.get("obs_time"),
             row.get("obs_time_epoch"),
             display_utc_offset_seconds,
+            row.get("obs_time_utc_offset_seconds"),
         )
         if display_utc_offset_seconds is not None and enriched_row.get("obs_time_label"):
             enriched_row["obs_time_display_tz"] = "city_local"

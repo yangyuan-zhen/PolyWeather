@@ -216,6 +216,8 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
   const utcOffsetSeconds = getDetailUtcOffsetSeconds(detail);
   const formatObsTime = () => {
     const raw = String(station.obs_time || "").trim();
+    const label = String(station.obs_time_label || "").trim();
+    if (station.obs_time_display_tz === "city_local" && label) return label.replace(/Z$/i, "");
     const epochRaw = Number(station.obs_time_epoch);
     const epochMs = Number.isFinite(epochRaw)
       ? epochRaw > 1_000_000_000_000
@@ -226,7 +228,6 @@ function buildNearbyIconHtml(detail: CityDetail, station: NearbyStation) {
       const localOffsetSeconds = utcOffsetSeconds;
       return formatCityLocalDateTime(epochMs, localOffsetSeconds, detail.local_date, isEnglishUi);
     }
-    const label = String(station.obs_time_label || "").trim();
     if (label) return label.replace(/Z$/i, "");
     if (!raw) return "";
     if (raw.endsWith("Z") || raw.includes("+00:00")) {

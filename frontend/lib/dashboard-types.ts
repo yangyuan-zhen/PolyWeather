@@ -121,6 +121,7 @@ export interface NearbyStation {
   obs_time?: string | null;
   obs_time_epoch?: number | string | null;
   obs_time_label?: string | null;
+  obs_time_display_tz?: "city_local" | string | null;
   age_minutes?: number | null;
   time_delta_vs_anchor_minutes?: number | null;
   sync_status?: "synced" | "near_realtime" | "lagged" | "stale" | "unknown" | string | null;

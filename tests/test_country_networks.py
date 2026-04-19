@@ -215,6 +215,32 @@ def test_metar_cluster_obs_time_label_uses_dst_aware_city_time():
     assert row["obs_time_label"] == "07:30"
 
 
+def test_metar_cluster_naive_obs_time_is_interpreted_as_utc_before_city_display():
+    raw = {
+        "metar": {
+            "observation_time": "2026-04-19 08:00",
+            "current": {"temp": 4.0},
+        },
+        "mgm_nearby": [
+            {
+                "name": "Moscow/Vnukovo",
+                "icao": "UUWW",
+                "lat": 55.59,
+                "lon": 37.26,
+                "temp": 4.0,
+                "obs_time": "2026-04-19 08:00",
+            }
+        ],
+    }
+
+    snapshot = build_country_network_snapshot("moscow", raw)
+    row = snapshot["official_nearby"][0]
+
+    assert row["source_code"] == "metar_cluster"
+    assert row["obs_time_label"] == "11:00"
+    assert row["obs_time_display_tz"] == "city_local"
+
+
 def test_china_provider_prefers_nmc_rows_when_available():
     raw = {
         "metar": {
