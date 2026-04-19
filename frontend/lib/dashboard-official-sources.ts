@@ -351,8 +351,8 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "agency",
     },
     {
-      label: "LFPG METAR",
-      href: "https://aviationweather.gov/data/metar/?id=LFPG&decoded=1&taf=1",
+      label: "LFPB METAR",
+      href: "https://aviationweather.gov/data/metar/?id=LFPB&decoded=1&taf=1",
       kind: "metar",
     },
   ],

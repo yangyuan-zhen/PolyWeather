@@ -26,6 +26,18 @@ def test_new_south_asia_city_registry_entries_are_wired():
     assert CITIES["masroor air base"]["settlement_source"] == "metar"
 
 
+def test_paris_registry_uses_le_bourget_anchor():
+    paris = CITY_REGISTRY["paris"]
+
+    assert paris["icao"] == "LFPB"
+    assert paris["settlement_source"] == "metar"
+    assert paris["settlement_station_code"] == "LFPB"
+    assert "bonneuil-en-france/LFPB" in paris["settlement_url"]
+    assert CITIES["paris"]["lat"] == paris["lat"]
+    assert CITIES["paris"]["settlement_source"] == "metar"
+    assert _DummyMetarSource.CITY_TO_ICAO["paris"] == "LFPB"
+
+
 def test_turkey_metar_uses_fast_cache_ttl():
     source = _DummyMetarSource()
 

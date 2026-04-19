@@ -46,7 +46,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "austin": ["KAUS", "KEDC", "KSAT"],
         "houston": ["KHOU", "KIAH", "KSGR", "KCXO"],
         "mexico city": ["MMMX", "MMSM", "MMTO"],
-        "paris": ["LFPG", "LFPO", "LFPB"],
+        "paris": ["LFPB", "LFPG", "LFPO"],
         "seoul": ["RKSI", "RKSS"],
         "busan": ["RKPK", "RKSS"],
         "hong kong": ["VHHH", "VMMC", "ZGSZ"],
