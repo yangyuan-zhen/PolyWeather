@@ -1320,6 +1320,11 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
 
     taf_suppression = str(taf_signal.get("suppression_level") or "").lower()
     taf_disruption = str(taf_signal.get("disruption_level") or "").lower()
+    taf_has_cloud_rain_cap = taf_suppression in {"medium", "high"} or taf_disruption in {
+        "medium",
+        "high",
+    }
+    structural_cap = False
     if taf_signal.get("available") or taf_suppression:
         available_layers += 1
         if taf_suppression == "high" or taf_disruption == "high":
@@ -1405,8 +1410,20 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
         headline_en = "The peak window has passed; the read now shifts toward confirming the final high rather than chasing further upside."
         confidence = "high" if available_layers >= 2 else "medium"
     elif suppress_score >= support_score + 2:
-        headline = "峰值存在云雨或结构压制，当前更偏防守高温上修。"
-        headline_en = "Cloud/rain or structural suppression is capping the peak; defend against aggressive high-temperature upside for now."
+        structural_cap = any(
+            signal.get("direction") == "suppress"
+            and signal.get("label") in {"边界层结构", "站网对比", "日内节奏"}
+            for signal in signals
+        )
+        if taf_has_cloud_rain_cap and structural_cap:
+            headline = "峰值同时存在 TAF 云雨扰动和结构压制，当前更偏防守高温上修。"
+            headline_en = "Both TAF cloud/rain disruption and structural signals are capping the peak; defend against aggressive high-temperature upside for now."
+        elif taf_has_cloud_rain_cap:
+            headline = "TAF 提示峰值窗口有云雨扰动，当前更偏防守高温上修。"
+            headline_en = "TAF flags cloud/rain disruption near the peak window; defend against aggressive high-temperature upside for now."
+        else:
+            headline = "峰值主要受结构信号压制，TAF 云雨层暂未构成主压温理由。"
+            headline_en = "The peak is mainly capped by structural signals; TAF cloud/rain is not the primary suppression reason for now."
         confidence = "high" if available_layers >= 3 else "medium"
     elif support_score >= suppress_score + 2:
         headline = "峰值仍有上修空间，后续重点看峰值窗口内报文能否继续抬升。"

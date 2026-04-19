@@ -312,6 +312,38 @@ def test_intraday_meteorology_suppressed_cloud_rain_case():
     assert any(item["direction"] == "suppress" for item in payload["signal_contributions"])
 
 
+def test_intraday_meteorology_structural_cap_does_not_claim_taf_cloud_rain():
+    payload = _build_intraday_meteorology(
+        {
+            "local_time": "11:30",
+            "temp_symbol": "°C",
+            "current": {"temp": 39.0, "max_so_far": 39.0},
+            "deb": {"prediction": 40.4},
+            "probabilities": {"distribution": [{"value": 42, "probability": 0.35}]},
+            "peak": {"first_h": 12, "last_h": 16, "status": "before"},
+            "deviation_monitor": {"direction": "cold", "severity": "strong", "current_delta": -1.4},
+            "vertical_profile_signal": {
+                "heating_setup": "suppressed",
+                "suppression_risk": "medium",
+                "summary_zh": "边界层混合偏弱，午后上修需要后续观测确认。",
+            },
+            "taf": {
+                "signal": {
+                    "available": True,
+                    "suppression_level": "low",
+                    "disruption_level": "low",
+                    "summary_zh": "TAF 在峰值窗口暂未提示明显云雨压温。",
+                }
+            },
+        }
+    )
+
+    assert "结构信号压制" in payload["headline"]
+    assert "TAF 云雨层暂未构成主压温理由" in payload["headline"]
+    assert "存在云雨或结构压制" not in payload["headline"]
+    assert any(item["label"] == "TAF 云雨扰动" and item["direction"] == "support" for item in payload["signal_contributions"])
+
+
 def test_intraday_meteorology_handles_sparse_observations():
     payload = _build_intraday_meteorology(
         {
