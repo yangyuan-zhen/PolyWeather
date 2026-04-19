@@ -14,6 +14,7 @@ Optional emergency fallback (manual grant if no matching intent):
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -25,7 +26,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from src.payments.contract_checkout import PAYMENT_CHECKOUT, PaymentCheckoutError
+_contract_checkout = importlib.import_module("src.payments.contract_checkout")
+PAYMENT_CHECKOUT = _contract_checkout.PAYMENT_CHECKOUT
+PaymentCheckoutError = _contract_checkout.PaymentCheckoutError
 
 
 def _list_recent_intents(user_id: str, limit: int = 20) -> List[Dict[str, Any]]:
