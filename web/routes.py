@@ -1083,6 +1083,7 @@ async def ops_memberships(request: Request, limit: int = 200):
         subscription_window = SUPABASE_ENTITLEMENT.get_subscription_window(
             user_id,
             respect_requirement=False,
+            bypass_cache=True,
         )
         current_expires_at = item.get("expires_at")
         total_expires_at = (

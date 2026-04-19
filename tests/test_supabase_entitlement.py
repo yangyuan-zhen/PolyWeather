@@ -100,3 +100,43 @@ def test_latest_active_subscription_ignores_future_start(monkeypatch):
 
     assert result is not None
     assert result["plan_code"] == "signup_trial_3d"
+
+
+def test_subscription_window_keeps_queued_renewal_after_current_cache(monkeypatch):
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_ANON_KEY", "anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+
+    service = SupabaseEntitlementService()
+
+    now = datetime.now(timezone.utc)
+    current = {
+        "id": 1,
+        "user_id": "user-1",
+        "status": "active",
+        "plan_code": "pro_monthly",
+        "starts_at": (now - timedelta(days=29)).isoformat(),
+        "expires_at": (now + timedelta(days=1)).isoformat(),
+    }
+    queued = {
+        "id": 2,
+        "user_id": "user-1",
+        "status": "active",
+        "plan_code": "pro_monthly",
+        "starts_at": (now + timedelta(days=1)).isoformat(),
+        "expires_at": (now + timedelta(days=31)).isoformat(),
+    }
+
+    def _fake_get(url, headers=None, params=None, timeout=None):
+        return _Response(200, [queued, current])
+
+    monkeypatch.setattr(entitlement_module.requests, "get", _fake_get)
+
+    assert service._query_latest_active_subscription("user-1") == current
+
+    window = service.get_subscription_window("user-1", respect_requirement=False)
+
+    assert window["current"] == current
+    assert window["total_expires_at"] == queued["expires_at"]
+    assert window["queued_days"] == 30
+    assert window["queued_count"] == 1

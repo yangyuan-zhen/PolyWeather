@@ -218,14 +218,17 @@ class SupabaseEntitlementService:
                     response.status_code,
                 )
                 row = None
+                rows: List[Dict[str, object]] = []
             else:
                 data = response.json() if response.content else []
-                row = self._pick_latest_current_subscription(data, now=now)
+                rows = [item for item in data if isinstance(item, dict)] if isinstance(data, list) else []
+                row = self._pick_latest_current_subscription(rows, now=now)
 
             with self._sub_cache_lock:
                 self._sub_cache[user_id] = {
                     "active": bool(row),
                     "row": row,
+                    "rows": rows,
                     "ts": now_ts,
                 }
             return row
@@ -236,6 +239,7 @@ class SupabaseEntitlementService:
     def _query_active_subscription_rows(
         self,
         user_id: str,
+        bypass_cache: bool = False,
     ) -> List[Dict[str, object]]:
         if not user_id:
             return []
@@ -244,16 +248,17 @@ class SupabaseEntitlementService:
             return []
 
         now_ts = time.time()
-        with self._sub_cache_lock:
-            cached = self._sub_cache.get(user_id)
-            if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
-                rows = cached.get("rows")
-                if isinstance(rows, list):
-                    return [row for row in rows if isinstance(row, dict)]
-                row = cached.get("row")
-                if isinstance(row, dict):
-                    return [row]
-                return []
+        if not bypass_cache:
+            with self._sub_cache_lock:
+                cached = self._sub_cache.get(user_id)
+                if cached and now_ts - float(cached.get("ts") or 0) < self.sub_cache_ttl_sec:
+                    rows = cached.get("rows")
+                    if isinstance(rows, list):
+                        return [row for row in rows if isinstance(row, dict)]
+                    row = cached.get("row")
+                    if isinstance(row, dict):
+                        return [row]
+                    return []
 
         try:
             now = datetime.now(timezone.utc)
@@ -520,10 +525,11 @@ class SupabaseEntitlementService:
         self,
         user_id: str,
         respect_requirement: bool = True,
+        bypass_cache: bool = False,
     ) -> Dict[str, object]:
         if respect_requirement and not self.require_subscription:
             return {}
-        rows = self._query_active_subscription_rows(user_id)
+        rows = self._query_active_subscription_rows(user_id, bypass_cache=bypass_cache)
         if not rows:
             return {}
 
