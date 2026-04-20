@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import { Clock } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
@@ -61,6 +61,7 @@ export function CitySidebar() {
   const [expandedGroups, setExpandedGroups] = useState<
     Record<RiskGroupKey, boolean>
   >(DEFAULT_EXPANDED_GROUPS);
+  const cityItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const sortedCities = useMemo(
     () =>
@@ -103,6 +104,23 @@ export function CitySidebar() {
       current[groupKey] ? current : { ...current, [groupKey]: true },
     );
   }, [selectedCity, store.cities]);
+
+  useEffect(() => {
+    if (!selectedCity) return;
+    const selected = store.cities.find((city) => city.name === selectedCity);
+    if (!selected) return;
+    const groupKey = toPerformanceGroup(selected);
+    if (!expandedGroups[groupKey]) return;
+
+    const frameId = window.requestAnimationFrame(() => {
+      cityItemRefs.current[selectedCity]?.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [expandedGroups, selectedCity, store.cities]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -226,6 +244,9 @@ export function CitySidebar() {
                   return (
                     <button
                       key={city.name}
+                      ref={(node) => {
+                        cityItemRefs.current[city.name] = node;
+                      }}
                       type="button"
                       className={clsx("city-item", isActive && "active")}
                       onClick={() =>
