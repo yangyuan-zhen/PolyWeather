@@ -1094,8 +1094,8 @@ export function ProbabilityDistribution({
             <strong>
               {topProbability && topProbabilityText
                 ? locale === "en-US"
-                  ? `${topProbabilityLabel} leads at ${topProbabilityText}`
-                  : `${topProbabilityLabel} 当前最高，${topProbabilityText}`
+                  ? `${topProbabilityLabel} is the top single bucket at ${topProbabilityText}`
+                  : `${topProbabilityLabel} 单点最高，${topProbabilityText}`
                 : locale === "en-US"
                   ? "Awaiting calibrated buckets"
                   : "等待校准概率桶"}
@@ -1138,8 +1138,8 @@ export function ProbabilityDistribution({
             <em>
               {marketContractRows.length > 0
                 ? locale === "en-US"
-                  ? "aligned to market contract buckets"
-                  : "已按市场合约桶聚合"
+                  ? "market buckets are aggregated from single-degree EMOS buckets"
+                  : "市场合约桶由单点 EMOS 概率聚合"
                 : locale === "en-US"
                   ? "calibrated temperature buckets"
                   : "校准后的温度桶"}
