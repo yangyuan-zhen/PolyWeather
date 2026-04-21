@@ -313,6 +313,25 @@ function getMarketTopBuckets(scan?: MarketScan | null) {
     .filter(
       (item): item is MarketTopBucket & { probability: number } =>
         item.probability != null,
+      );
+}
+
+function getMarketAllBuckets(scan?: MarketScan | null) {
+  const buckets = Array.isArray(scan?.all_buckets)
+    ? scan.all_buckets
+    : Array.isArray(scan?.top_buckets)
+      ? scan.top_buckets
+      : [];
+  if (!buckets.length) return [];
+
+  return buckets
+    .map((item) => ({
+      ...item,
+      probability: normalizeMarketProbability(item.probability),
+    }))
+    .filter(
+      (item): item is MarketTopBucket & { probability: number } =>
+        item.probability != null,
     );
 }
 
@@ -655,6 +674,7 @@ export function ProbabilityDistribution({
     )
     .join(" · ");
   const marketTopBuckets = isToday ? getMarketTopBuckets(marketScan) : [];
+  const marketAllBuckets = isToday ? getMarketAllBuckets(marketScan) : [];
   const sortedMarketTopBuckets = useMemo(() => {
     const sorted = [...marketTopBuckets].sort(
       (a, b) => Number(b.probability || 0) - Number(a.probability || 0),
@@ -680,13 +700,54 @@ export function ProbabilityDistribution({
   const topProbabilityLabel = topProbability
     ? topProbability.label || `${topProbability.value}${detail.temp_symbol}`
     : null;
+  const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
+  const linkedMarketBucket = useMemo(() => {
+    if (topProbabilityTemp == null) return null;
+    return (
+      marketAllBuckets.find((bucket) => {
+        const bucketTemp = bucket.temp ?? bucket.value ?? null;
+        if (bucketTemp == null) return false;
+        const numeric = Number(bucketTemp);
+        return Number.isFinite(numeric) && Math.abs(numeric - topProbabilityTemp) < 0.26;
+      }) || null
+    );
+  }, [marketAllBuckets, topProbabilityTemp]);
   const priceAnalysis = marketScan?.price_analysis;
   const yesPriceView = priceAnalysis?.yes;
   const noPriceView = priceAnalysis?.no;
+  const linkedMarketAsk =
+    linkedMarketBucket?.yes_buy ??
+    linkedMarketBucket?.market_price ??
+    yesPriceView?.ask ??
+    null;
+  const linkedMarketProbability =
+    topProbability?.probability != null ? Number(topProbability.probability) : null;
+  const linkedMarketEdge =
+    linkedMarketProbability != null && linkedMarketAsk != null
+      ? linkedMarketProbability - Number(linkedMarketAsk)
+      : null;
+  const linkedMarketKelly =
+    linkedMarketProbability != null &&
+    linkedMarketAsk != null &&
+    Number(linkedMarketAsk) > 0 &&
+    Number(linkedMarketAsk) < 1
+      ? linkedMarketEdge! / (1 - Number(linkedMarketAsk))
+      : null;
   const preferredPriceView =
-    priceAnalysis?.best_side === "no" ? noPriceView : yesPriceView;
+    linkedMarketBucket
+      ? {
+          ask: linkedMarketAsk,
+          edge: linkedMarketEdge,
+          quarter_kelly:
+            linkedMarketKelly != null ? Math.max(0, linkedMarketKelly) / 4 : null,
+        }
+      : priceAnalysis?.best_side === "no"
+        ? noPriceView
+        : yesPriceView;
   const preferredSideLabel =
-    priceAnalysis?.best_side === "no"
+    linkedMarketBucket
+      ? "YES"
+      : priceAnalysis?.best_side === "no"
       ? locale === "en-US"
         ? "NO"
         : "NO"
@@ -694,16 +755,21 @@ export function ProbabilityDistribution({
         ? "YES"
         : "YES";
   const hasPriceAnalysis =
-    Boolean(priceAnalysis?.available) &&
-    (yesPriceView?.ask != null || noPriceView?.ask != null);
+    isToday &&
+    (Boolean(priceAnalysis?.available) ||
+      Boolean(marketScan) ||
+      Boolean(topProbability));
   const lockEdge = normalizeSignedProbability(priceAnalysis?.lock?.edge);
   const lockAvailable = Boolean(priceAnalysis?.lock?.available && lockEdge != null);
   const quoteSource =
+    linkedMarketBucket?.quote_source ||
     marketScan?.yes_token?.quote_source ||
     marketScan?.no_token?.quote_source ||
     null;
   const quoteAgeMs =
-    marketScan?.yes_token?.quote_age_ms ?? marketScan?.no_token?.quote_age_ms;
+    linkedMarketBucket?.quote_age_ms ??
+    marketScan?.yes_token?.quote_age_ms ??
+    marketScan?.no_token?.quote_age_ms;
   const quoteSourceLabel =
     quoteSource === "polymarket_ws"
       ? locale === "en-US"
@@ -761,10 +827,22 @@ export function ProbabilityDistribution({
           <div className="prob-price-card">
             <div className="prob-price-head">
               <span>
-                {locale === "en-US" ? "Price reference" : "价格参考"}
+                {locale === "en-US" ? "Probability x Price" : "概率 x 价格联动"}
               </span>
               <strong>
-                {preferredPriceView?.edge != null
+                {!marketScan
+                  ? locale === "en-US"
+                    ? "Waiting for market layer"
+                    : "等待市场层"
+                  : !marketScan.available
+                    ? locale === "en-US"
+                      ? "No matched active market"
+                      : "未匹配到活跃盘口"
+                    : linkedMarketBucket
+                      ? locale === "en-US"
+                        ? `${topProbabilityLabel || "Top bucket"} vs ${toPriceCents(linkedMarketAsk) || "--"}`
+                        : `${topProbabilityLabel || "最高概率桶"} 对比 ${toPriceCents(linkedMarketAsk) || "--"}`
+                      : preferredPriceView?.edge != null
                   ? locale === "en-US"
                     ? `${preferredSideLabel} edge ${formatSignedPercent(preferredPriceView.edge)}`
                     : `${preferredSideLabel} 边际 ${formatSignedPercent(preferredPriceView.edge)}`
@@ -775,35 +853,43 @@ export function ProbabilityDistribution({
             </div>
             <div className="prob-price-grid">
               <div>
-                <span>YES ask</span>
-                <strong>{toPriceCents(yesPriceView?.ask) || "--"}</strong>
-                <em>{formatSignedPercent(yesPriceView?.edge)}</em>
+                <span>{locale === "en-US" ? "Model bucket" : "概率主桶"}</span>
+                <strong>{topProbabilityLabel || "--"}</strong>
+                <em>{topProbabilityText || "--"}</em>
               </div>
               <div>
-                <span>NO ask</span>
-                <strong>{toPriceCents(noPriceView?.ask) || "--"}</strong>
-                <em>{formatSignedPercent(noPriceView?.edge)}</em>
+                <span>{locale === "en-US" ? "Market ask" : "市场 ask"}</span>
+                <strong>{toPriceCents(linkedMarketAsk ?? yesPriceView?.ask) || "--"}</strong>
+                <em>
+                  {linkedMarketBucket
+                    ? locale === "en-US"
+                      ? "matched bucket"
+                      : "已匹配桶"
+                    : marketScan?.available
+                      ? locale === "en-US"
+                        ? "primary market"
+                        : "主盘口"
+                      : marketScan?.reason || "--"}
+                </em>
+              </div>
+              <div>
+                <span>{locale === "en-US" ? "Edge" : "边际"}</span>
+                <strong>{formatSignedPercent(preferredPriceView?.edge)}</strong>
+                <em>
+                  {quoteSourceLabel}
+                </em>
               </div>
               <div>
                 <span>{locale === "en-US" ? "1/4 Kelly" : "1/4 Kelly"}</span>
                 <strong>{formatKellyFraction(preferredPriceView?.quarter_kelly)}</strong>
-                <em>{locale === "en-US" ? "cap required" : "需限额"}</em>
-              </div>
-              <div>
-                <span>{locale === "en-US" ? "Lock" : "锁价"}</span>
-                <strong>
-                  {lockAvailable
-                    ? formatSignedPercent(lockEdge)
-                    : locale === "en-US"
-                      ? "None"
-                      : "无"}
-                </strong>
                 <em>
-                  {priceAnalysis?.lock?.ask_sum != null
+                  {lockAvailable
                     ? locale === "en-US"
-                      ? `sum ${toPriceCents(priceAnalysis.lock.ask_sum)}`
-                      : `合计 ${toPriceCents(priceAnalysis.lock.ask_sum)}`
-                    : "--"}
+                      ? `lock ${formatSignedPercent(lockEdge)}`
+                      : `锁价 ${formatSignedPercent(lockEdge)}`
+                    : locale === "en-US"
+                      ? "cap required"
+                      : "需限额"}
                 </em>
               </div>
             </div>

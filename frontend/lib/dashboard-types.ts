@@ -379,6 +379,7 @@ export interface MarketScan {
   price_analysis?: MarketPriceAnalysis | null;
   sparkline?: number[];
   top_buckets?: MarketTopBucket[] | null;
+  all_buckets?: MarketTopBucket[] | null;
   recent_trades?: unknown[];
   websocket?: Record<string, unknown>;
 }
