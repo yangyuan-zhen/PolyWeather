@@ -122,6 +122,58 @@ function ProbabilityHubScreen() {
     [],
   );
 
+  const refreshMarketScans = useCallback(async (
+    sourceDetails?: Record<string, CityDetail>,
+    sourceCities?: CityListItem[],
+  ) => {
+    const detailMap = sourceDetails || detailsByName;
+    const cityList = sourceCities || cities;
+    const loadedCities = cityList.filter((city) => detailMap[city.name]);
+    if (!loadedCities.length) return;
+
+    let touched = false;
+
+    for (let index = 0; index < loadedCities.length; index += DETAIL_BATCH_SIZE) {
+      const batch = loadedCities.slice(index, index + DETAIL_BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((city) =>
+          dashboardClient.getCityMarketScan(city.name, {
+            force: true,
+            targetDate: detailMap[city.name]?.local_date || null,
+            marketSlug: detailMap[city.name]?.market_scan?.selected_slug || null,
+          }),
+        ),
+      );
+
+      const patch: Record<string, CityDetail> = {};
+      results.forEach((result, batchIndex) => {
+        if (result.status !== "fulfilled") return;
+        const city = batch[batchIndex];
+        const previous = detailMap[city.name] || detailsByName[city.name];
+        if (!previous) return;
+        const nextMarketScan = result.value.market_scan || previous.market_scan;
+        if (!nextMarketScan) return;
+        patch[city.name] = {
+          ...previous,
+          market_scan: nextMarketScan,
+        };
+      });
+
+      if (Object.keys(patch).length) {
+        touched = true;
+        Object.assign(detailMap, patch);
+        setDetailsByName((previous) => ({
+          ...previous,
+          ...patch,
+        }));
+      }
+    }
+
+    if (touched) {
+      setLastMarketUpdatedAt(new Date().toISOString());
+    }
+  }, [cities, detailsByName]);
+
   const loadAll = useCallback(async (force = false) => {
     setError(null);
     setRefreshing(true);
@@ -131,8 +183,9 @@ function ProbabilityHubScreen() {
     try {
       const cityList = sortCities(await dashboardClient.getCities());
       setCities(cityList);
-      await fetchCityDetails(cityList, force);
+      const fetched = await fetchCityDetails(cityList, force);
       setLastUpdatedAt(new Date().toISOString());
+      await refreshMarketScans(fetched, cityList);
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -145,7 +198,7 @@ function ProbabilityHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [cities.length, fetchCityDetails, locale]);
+  }, [cities.length, fetchCityDetails, locale, refreshMarketScans]);
 
   const retryMissingCities = useCallback(async () => {
     if (!cities.length) return;
@@ -153,50 +206,13 @@ function ProbabilityHubScreen() {
     if (!missingCities.length) return;
 
     try {
-      await fetchCityDetails(missingCities, true);
+      const fetched = await fetchCityDetails(missingCities, true);
       setLastUpdatedAt(new Date().toISOString());
+      await refreshMarketScans(fetched, missingCities);
     } catch {
       // keep silent; page-level retry should not override the main error banner
     }
-  }, [cities, detailsByName, fetchCityDetails]);
-
-  const refreshMarketScans = useCallback(async () => {
-    const loadedCities = cities.filter((city) => detailsByName[city.name]);
-    if (!loadedCities.length) return;
-
-    for (let index = 0; index < loadedCities.length; index += DETAIL_BATCH_SIZE) {
-      const batch = loadedCities.slice(index, index + DETAIL_BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map((city) =>
-          dashboardClient.getCityMarketScan(city.name, {
-            force: true,
-            targetDate: detailsByName[city.name]?.local_date || null,
-          }),
-        ),
-      );
-
-      const patch: Record<string, CityDetail> = {};
-      results.forEach((result, batchIndex) => {
-        if (result.status !== "fulfilled") return;
-        const city = batch[batchIndex];
-        const previous = detailsByName[city.name];
-        if (!previous) return;
-        patch[city.name] = {
-          ...previous,
-          market_scan: result.value.market_scan || previous.market_scan,
-        };
-      });
-
-      if (Object.keys(patch).length) {
-        setDetailsByName((previous) => ({
-          ...previous,
-          ...patch,
-        }));
-      }
-    }
-
-    setLastMarketUpdatedAt(new Date().toISOString());
-  }, [cities, detailsByName]);
+  }, [cities, detailsByName, fetchCityDetails, refreshMarketScans]);
 
   useEffect(() => {
     void loadAll(false);
