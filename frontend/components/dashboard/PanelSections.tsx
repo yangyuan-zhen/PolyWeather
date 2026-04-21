@@ -871,7 +871,6 @@ export function ProbabilityDistribution({
         marketBucket,
         detail,
       );
-      if (probability == null) continue;
 
       const key =
         marketBucket.slug ||
@@ -882,7 +881,7 @@ export function ProbabilityDistribution({
       rows.push({
         key,
         label: formatMarketBucketDisplayLabel(marketBucket, detail),
-        probability,
+        probability: probability ?? 0,
         marketBucket,
       });
     }
