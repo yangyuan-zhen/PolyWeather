@@ -227,6 +227,56 @@ function getAggregatedModelProbabilityForMarketBucket(
   return matched > 0 ? Math.max(0, Math.min(1, total)) : null;
 }
 
+type ProbabilityDisplayRow = {
+  key: string;
+  label: string;
+  probability: number;
+  marketBucket?: MarketTopBucket | null;
+};
+
+function formatMarketBucketDisplayLabel(
+  bucket: MarketTopBucket,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  const label = String(bucket.label || "").trim();
+  if (label) {
+    const unit = getMarketBucketUnit(bucket);
+    let normalized = label.toUpperCase().replace(/\s+/g, "");
+    if (unit === "F" || isFahrenheitSymbol(detail.temp_symbol)) {
+      normalized = normalized
+        .replace(/ORHIGHER/g, "+")
+        .replace(/ORLOWER/g, "-")
+        .replace(/℃/g, "°F")
+        .replace(/°C/g, "°F")
+        .replace(/(?<=\d)F/g, "°F");
+    } else {
+      normalized = normalized
+        .replace(/ORHIGHER/g, "+")
+        .replace(/ORLOWER/g, "-")
+        .replace(/℃/g, "°C")
+        .replace(/°F/g, "°C")
+        .replace(/(?<=\d)C/g, "°C");
+    }
+    return normalized.replace(/\+/g, "+");
+  }
+
+  const unit =
+    getMarketBucketUnit(bucket) === "F" || isFahrenheitSymbol(detail.temp_symbol)
+      ? "°F"
+      : "°C";
+  const lower = bucket.lower != null ? Number(bucket.lower) : null;
+  const upper = bucket.upper != null ? Number(bucket.upper) : null;
+  if (lower != null && upper != null && Number.isFinite(lower) && Number.isFinite(upper)) {
+    return `${lower}-${upper}${unit}`;
+  }
+  const value = bucket.value ?? bucket.temp ?? lower;
+  const numeric = value != null ? Number(value) : null;
+  if (numeric != null && Number.isFinite(numeric)) {
+    return isMarketBucketAbove(bucket) ? `${numeric}${unit}+` : `${numeric}${unit}`;
+  }
+  return "--";
+}
+
 type ModelMetadata = NonNullable<
   NonNullable<CityDetail["source_forecasts"]>["open_meteo_multi_model"]
 >["model_metadata"];
@@ -808,14 +858,72 @@ export function ProbabilityDistribution({
     ? formatBucketDisplayLabel(topProbability, detail)
     : null;
   const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
+  const marketContractRows = useMemo<ProbabilityDisplayRow[]>(() => {
+    if (!isToday || !marketScan?.available || marketAllBuckets.length === 0) {
+      return [];
+    }
+
+    const rows: ProbabilityDisplayRow[] = [];
+    const seenKeys = new Set<string>();
+    for (const marketBucket of marketAllBuckets) {
+      const probability = getAggregatedModelProbabilityForMarketBucket(
+        view.probabilities || [],
+        marketBucket,
+        detail,
+      );
+      if (probability == null) continue;
+
+      const key =
+        marketBucket.slug ||
+        marketBucket.label ||
+        `${marketBucket.lower ?? marketBucket.value ?? marketBucket.temp}-${marketBucket.upper ?? ""}`;
+      if (seenKeys.has(key)) continue;
+      seenKeys.add(key);
+      rows.push({
+        key,
+        label: formatMarketBucketDisplayLabel(marketBucket, detail),
+        probability,
+        marketBucket,
+      });
+    }
+    return rows;
+  }, [detail, isToday, marketAllBuckets, marketScan?.available, view.probabilities]);
+  const modelProbabilityRows = useMemo<ProbabilityDisplayRow[]>(
+    () =>
+      (view.probabilities || []).slice(0, 6).map((bucket, index) => {
+        const bucketTemp = getBucketTemp(bucket);
+        return {
+          key: `${bucket.label || bucket.value || index}`,
+          label: formatBucketDisplayLabel(bucket, detail),
+          probability: Number(bucket.probability || 0),
+          marketBucket: findMarketBucketForDisplayTemp(
+            marketAllBuckets,
+            bucketTemp,
+            detail,
+          ),
+        };
+      }),
+    [detail, marketAllBuckets, view.probabilities],
+  );
+  const probabilityRows =
+    marketContractRows.length > 0
+      ? marketContractRows.slice(0, 8)
+      : modelProbabilityRows;
+  const topContractRow =
+    marketContractRows.length > 0
+      ? marketContractRows.reduce((best, row) =>
+          row.probability > best.probability ? row : best,
+        )
+      : null;
   const linkedMarketBucket = useMemo(() => {
+    if (topContractRow?.marketBucket) return topContractRow.marketBucket;
     if (topProbabilityTemp == null) return null;
     return findMarketBucketForDisplayTemp(
       marketAllBuckets,
       topProbabilityTemp,
       detail,
     );
-  }, [detail, marketAllBuckets, topProbabilityTemp]);
+  }, [detail, marketAllBuckets, topContractRow, topProbabilityTemp]);
   const priceAnalysis = marketScan?.price_analysis;
   const yesPriceView = priceAnalysis?.yes;
   const noPriceView = priceAnalysis?.no;
@@ -826,13 +934,17 @@ export function ProbabilityDistribution({
     null;
   const linkedNoAsk = linkedMarketBucket?.no_buy ?? noPriceView?.ask ?? null;
   const linkedContractLabel =
-    linkedMarketBucket?.label || topProbabilityLabel || null;
+    topContractRow?.label ||
+    (linkedMarketBucket ? formatMarketBucketDisplayLabel(linkedMarketBucket, detail) : null) ||
+    topProbabilityLabel ||
+    null;
   const aggregatedMarketProbability = getAggregatedModelProbabilityForMarketBucket(
     view.probabilities || [],
     linkedMarketBucket,
     detail,
   );
   const linkedMarketProbability =
+    topContractRow?.probability ??
     aggregatedMarketProbability ??
     (topProbability?.probability != null ? Number(topProbability.probability) : null);
   const linkedMarketProbabilityText = toPercent(linkedMarketProbability);
@@ -1060,19 +1172,12 @@ export function ProbabilityDistribution({
             </em>
           </div>
         )}
-        {view.probabilities.length === 0 ? (
+        {probabilityRows.length === 0 ? (
           <EmptyState text={t("section.noProb")} />
         ) : (
-          view.probabilities.slice(0, 6).map((bucket, index) => {
-            const probability = Math.round(
-              Number(bucket.probability || 0) * 100,
-            );
-            const bucketTemp = getBucketTemp(bucket);
-            const rowMarketBucket = findMarketBucketForDisplayTemp(
-              marketAllBuckets,
-              bucketTemp,
-              detail,
-            );
+          probabilityRows.map((row, index) => {
+            const probability = Math.round(Number(row.probability || 0) * 100);
+            const rowMarketBucket = row.marketBucket;
             const rowMarketPrice =
               rowMarketBucket?.market_price ?? rowMarketBucket?.yes_buy ?? null;
             const yesPriceText = toPriceCents(rowMarketPrice);
@@ -1081,14 +1186,13 @@ export function ProbabilityDistribution({
                 ? `Market ref: ${yesPriceText || "--"}`
                 : `市场参考: ${yesPriceText || "--"}`
               : null;
-            const bucketLabel = formatBucketDisplayLabel(bucket, detail);
 
             return (
               <div
-                key={`${bucket.label || bucket.value || index}`}
+                key={`${row.key || index}`}
                 className="prob-row"
               >
-                <div className="prob-label">{bucketLabel}</div>
+                <div className="prob-label">{row.label}</div>
                 <div className="prob-bar-track">
                   <div
                     className={clsx("prob-bar-fill", `rank-${index}`)}
