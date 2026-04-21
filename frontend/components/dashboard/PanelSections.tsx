@@ -278,6 +278,29 @@ function normalizeMarketProbability(value?: number | null) {
   return Math.max(0, Math.min(1, numeric));
 }
 
+function normalizeSignedProbability(value?: number | null) {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  if (Math.abs(numeric) > 1) return numeric / 100;
+  return numeric;
+}
+
+function formatSignedPercent(value?: number | null, digits = 1) {
+  const normalized = normalizeSignedProbability(value);
+  if (normalized == null) return "--";
+  const percent = normalized * 100;
+  const sign = percent > 0 ? "+" : "";
+  return `${sign}${percent.toFixed(digits)}%`;
+}
+
+function formatKellyFraction(value?: number | null) {
+  const normalized = normalizeSignedProbability(value);
+  if (normalized == null) return "--";
+  if (normalized <= 0) return "0%";
+  return `${(normalized * 100).toFixed(1)}%`;
+}
+
 function getMarketTopBuckets(scan?: MarketScan | null) {
   const buckets = Array.isArray(scan?.top_buckets) ? scan.top_buckets : [];
   if (!buckets.length) return [];
@@ -657,6 +680,38 @@ export function ProbabilityDistribution({
   const topProbabilityLabel = topProbability
     ? topProbability.label || `${topProbability.value}${detail.temp_symbol}`
     : null;
+  const priceAnalysis = marketScan?.price_analysis;
+  const yesPriceView = priceAnalysis?.yes;
+  const noPriceView = priceAnalysis?.no;
+  const preferredPriceView =
+    priceAnalysis?.best_side === "no" ? noPriceView : yesPriceView;
+  const preferredSideLabel =
+    priceAnalysis?.best_side === "no"
+      ? locale === "en-US"
+        ? "NO"
+        : "NO"
+      : locale === "en-US"
+        ? "YES"
+        : "YES";
+  const hasPriceAnalysis =
+    Boolean(priceAnalysis?.available) &&
+    (yesPriceView?.ask != null || noPriceView?.ask != null);
+  const lockEdge = normalizeSignedProbability(priceAnalysis?.lock?.edge);
+  const lockAvailable = Boolean(priceAnalysis?.lock?.available && lockEdge != null);
+  const quoteSource =
+    marketScan?.yes_token?.quote_source ||
+    marketScan?.no_token?.quote_source ||
+    null;
+  const quoteAgeMs =
+    marketScan?.yes_token?.quote_age_ms ?? marketScan?.no_token?.quote_age_ms;
+  const quoteSourceLabel =
+    quoteSource === "polymarket_ws"
+      ? locale === "en-US"
+        ? `WS live${quoteAgeMs != null ? ` · ${Math.max(0, Math.round(Number(quoteAgeMs) / 1000))}s` : ""}`
+        : `WS 实时${quoteAgeMs != null ? ` · ${Math.max(0, Math.round(Number(quoteAgeMs) / 1000))}秒` : ""}`
+      : locale === "en-US"
+        ? "CLOB fallback"
+        : "CLOB 兜底";
 
   return (
     <section className="prob-section">
@@ -700,6 +755,63 @@ export function ProbabilityDistribution({
               : locale === "en-US"
                 ? `Market reference only: this bucket ${marketYesText}`
                 : `市场仅作参考：该温度桶 ${marketYesText}`}
+          </div>
+        )}
+        {hasPriceAnalysis && (
+          <div className="prob-price-card">
+            <div className="prob-price-head">
+              <span>
+                {locale === "en-US" ? "Price reference" : "价格参考"}
+              </span>
+              <strong>
+                {preferredPriceView?.edge != null
+                  ? locale === "en-US"
+                    ? `${preferredSideLabel} edge ${formatSignedPercent(preferredPriceView.edge)}`
+                    : `${preferredSideLabel} 边际 ${formatSignedPercent(preferredPriceView.edge)}`
+                  : locale === "en-US"
+                    ? "Waiting for executable quote"
+                    : "等待可执行报价"}
+              </strong>
+            </div>
+            <div className="prob-price-grid">
+              <div>
+                <span>YES ask</span>
+                <strong>{toPriceCents(yesPriceView?.ask) || "--"}</strong>
+                <em>{formatSignedPercent(yesPriceView?.edge)}</em>
+              </div>
+              <div>
+                <span>NO ask</span>
+                <strong>{toPriceCents(noPriceView?.ask) || "--"}</strong>
+                <em>{formatSignedPercent(noPriceView?.edge)}</em>
+              </div>
+              <div>
+                <span>{locale === "en-US" ? "1/4 Kelly" : "1/4 Kelly"}</span>
+                <strong>{formatKellyFraction(preferredPriceView?.quarter_kelly)}</strong>
+                <em>{locale === "en-US" ? "cap required" : "需限额"}</em>
+              </div>
+              <div>
+                <span>{locale === "en-US" ? "Lock" : "锁价"}</span>
+                <strong>
+                  {lockAvailable
+                    ? formatSignedPercent(lockEdge)
+                    : locale === "en-US"
+                      ? "None"
+                      : "无"}
+                </strong>
+                <em>
+                  {priceAnalysis?.lock?.ask_sum != null
+                    ? locale === "en-US"
+                      ? `sum ${toPriceCents(priceAnalysis.lock.ask_sum)}`
+                      : `合计 ${toPriceCents(priceAnalysis.lock.ask_sum)}`
+                    : "--"}
+                </em>
+              </div>
+            </div>
+            <p>
+              {locale === "en-US"
+                ? `Read-only sizing reference from executable quotes; it does not place orders. Source: ${quoteSourceLabel}.`
+                : `基于可执行盘口的只读仓位参考；系统不会下单。来源：${quoteSourceLabel}。`}
+            </p>
           </div>
         )}
         {modelVoteHint && (

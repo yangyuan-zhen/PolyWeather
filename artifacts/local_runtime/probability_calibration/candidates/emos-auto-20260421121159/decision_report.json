@@ -1,0 +1,21 @@
+{
+  "ok": false,
+  "version": "emos-auto-20260421121159",
+  "stage": "fit",
+  "fit": {
+    "command": [
+      "C:\\Users\\Yang\\AppData\\Local\\Programs\\Python\\Python38\\python.exe",
+      "scripts/fit_probability_calibration.py",
+      "--output",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421121159\\default.json",
+      "--version",
+      "emos-auto-20260421121159",
+      "--verbose",
+      "--snapshot-limit",
+      "50000"
+    ],
+    "returncode": 1,
+    "stdout": "",
+    "stderr": ""
+  }
+}

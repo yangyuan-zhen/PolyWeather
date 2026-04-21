@@ -1075,6 +1075,72 @@
   border: 1px solid rgba(251, 113, 133, 0.26);
 }
 
+.root :global(.prob-price-card) {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 20, 32, 0.52);
+}
+
+.root :global(.prob-price-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.root :global(.prob-price-head span) {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.root :global(.prob-price-head strong) {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.root :global(.prob-price-grid) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.root :global(.prob-price-grid > div) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.root :global(.prob-price-grid span),
+.root :global(.prob-price-grid em),
+.root :global(.prob-price-card p) {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+.root :global(.prob-price-grid strong) {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.root :global(.prob-price-card p) {
+  margin: 0;
+}
+
 .root :global(.prob-model-hint) {
   display: flex;
   align-items: center;
@@ -2465,6 +2531,15 @@
 
   .root :global(.marker-name) {
     font-size: 11px;
+  }
+
+  .root :global(.prob-price-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .root :global(.prob-price-head) {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

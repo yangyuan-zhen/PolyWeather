@@ -289,6 +289,8 @@ export interface MarketToken {
   sell_price?: number | null;
   midpoint?: number | null;
   last_trade_price?: number | null;
+  quote_source?: string | null;
+  quote_age_ms?: number | null;
 }
 
 export interface MarketPrimary {
@@ -314,9 +316,40 @@ export interface MarketTopBucket {
   yes_sell?: number | null;
   no_buy?: number | null;
   no_sell?: number | null;
+  quote_source?: string | null;
+  quote_age_ms?: number | null;
   slug?: string | null;
   question?: string | null;
   is_primary?: boolean;
+}
+
+export interface MarketPriceSide {
+  side?: "yes" | "no" | string | null;
+  model_probability?: number | null;
+  ask?: number | null;
+  bid?: number | null;
+  edge?: number | null;
+  edge_percent?: number | null;
+  kelly_fraction?: number | null;
+  quarter_kelly?: number | null;
+}
+
+export interface MarketPriceAnalysis {
+  available?: boolean;
+  source?: string | null;
+  model_probability?: number | null;
+  yes?: MarketPriceSide | null;
+  no?: MarketPriceSide | null;
+  best_side?: "yes" | "no" | string | null;
+  lock?: {
+    available?: boolean;
+    ask_sum?: number | null;
+    edge?: number | null;
+  } | null;
+  sell_side?: {
+    bid_sum?: number | null;
+    edge?: number | null;
+  } | null;
 }
 
 export interface MarketScan {
@@ -343,6 +376,7 @@ export interface MarketScan {
   last_trade_price?: number | null;
   liquidity?: number | null;
   volume?: number | null;
+  price_analysis?: MarketPriceAnalysis | null;
   sparkline?: number[];
   top_buckets?: MarketTopBucket[] | null;
   recent_trades?: unknown[];

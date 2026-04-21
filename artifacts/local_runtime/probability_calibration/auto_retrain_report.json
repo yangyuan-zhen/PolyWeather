@@ -1,14 +1,14 @@
 {
   "ok": true,
-  "version": "emos-auto-20260418212046",
-  "generated_at": "2026-04-18T21:21:04.160748+00:00",
-  "candidate_dir": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046",
-  "candidate_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
-  "evaluation_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\evaluation_report.json",
+  "version": "emos-auto-20260421122743",
+  "generated_at": "2026-04-21T12:28:08.021388+00:00",
+  "candidate_dir": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743",
+  "candidate_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743\\default.json",
+  "evaluation_path": "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743\\evaluation_report.json",
   "target_path": "E:\\web\\PolyWeather\\artifacts\\probability_calibration\\default.json",
-  "promote_requested": false,
-  "promoted": false,
-  "backup_path": null,
+  "promote_requested": true,
+  "promoted": true,
+  "backup_path": "E:\\web\\PolyWeather\\artifacts\\probability_calibration\\default.backup-20260421122808.json",
   "decision": {
     "decision": "promote",
     "ready_for_promotion": true,
@@ -20,10 +20,10 @@
       "min_delta_bucket_hit_rate": -0.05
     },
     "metrics": {
-      "sample_count": 847,
-      "delta_crps": -0.03617,
-      "delta_mae": -0.007896,
-      "delta_bucket_hit_rate": -0.009445
+      "sample_count": 978,
+      "delta_crps": -0.05721,
+      "delta_mae": -0.034568,
+      "delta_bucket_hit_rate": -0.00409
     }
   },
   "fit": {
@@ -31,9 +31,9 @@
       "C:\\Users\\Yang\\AppData\\Local\\Programs\\Python\\Python38\\python.exe",
       "scripts/fit_probability_calibration.py",
       "--output",
-      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743\\default.json",
       "--version",
-      "emos-auto-20260418212046",
+      "emos-auto-20260421122743",
       "--verbose",
       "--snapshot-limit",
       "50000"
@@ -47,9 +47,9 @@
       "C:\\Users\\Yang\\AppData\\Local\\Programs\\Python\\Python38\\python.exe",
       "scripts/evaluate_probability_calibration.py",
       "--calibration-file",
-      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\default.json",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743\\default.json",
       "--output",
-      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260418212046\\evaluation_report.json",
+      "E:\\web\\PolyWeather\\artifacts\\local_runtime\\probability_calibration\\candidates\\emos-auto-20260421122743\\evaluation_report.json",
       "--verbose",
       "--snapshot-limit",
       "50000"

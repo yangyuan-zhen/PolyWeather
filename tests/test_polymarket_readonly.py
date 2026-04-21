@@ -61,6 +61,62 @@ def test_fetch_token_market_data_prefers_orderbook_executable_prices():
     assert data["last_trade_price"] == 0.49
 
 
+def test_get_token_market_data_prefers_fresh_ws_cache():
+    layer = PolymarketReadOnlyLayer()
+
+    class FakeWsCache:
+        enabled = True
+
+        def subscribe(self, asset_ids):
+            self.asset_ids = list(asset_ids)
+
+        @staticmethod
+        def get_market_data(_token_id):
+            return {
+                "buy": 0.33,
+                "sell": 0.31,
+                "midpoint": 0.32,
+                "quote_source": "polymarket_ws",
+                "quote_age_ms": 80,
+            }
+
+    layer._ws_quote_cache = FakeWsCache()
+    layer._fetch_token_market_data = lambda _token_id: {"buy": 0.99}
+
+    data = layer._get_token_market_data("token-1")
+
+    assert data["buy"] == 0.33
+    assert data["sell"] == 0.31
+    assert data["quote_source"] == "polymarket_ws"
+
+
+def test_price_analysis_computes_edge_kelly_and_lock():
+    layer = PolymarketReadOnlyLayer()
+
+    analysis = layer._build_price_analysis(
+        model_probability=0.62,
+        yes_buy=0.52,
+        yes_sell=0.50,
+        no_buy=0.45,
+        no_sell=0.43,
+    )
+
+    assert analysis["available"] is True
+    assert abs(analysis["yes"]["edge"] - 0.10) < 0.000001
+    assert round(analysis["yes"]["kelly_fraction"], 6) == round(
+        (0.62 - 0.52) / (1.0 - 0.52),
+        6,
+    )
+    assert round(analysis["yes"]["quarter_kelly"], 6) == round(
+        ((0.62 - 0.52) / (1.0 - 0.52)) / 4.0,
+        6,
+    )
+    assert abs(analysis["no"]["edge"] - -0.07) < 0.000001
+    assert analysis["lock"]["available"] is True
+    assert round(analysis["lock"]["edge"], 6) == 0.03
+    assert analysis["best_side"] == "yes"
+
+
 def test_build_top_temperature_buckets_dedupes_same_temperature():
     layer = PolymarketReadOnlyLayer()
 

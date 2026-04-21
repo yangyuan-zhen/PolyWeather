@@ -9,3 +9,4 @@ lightgbm
 web3
 fastapi
 uvicorn
+websockets

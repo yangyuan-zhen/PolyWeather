@@ -23,6 +23,7 @@ import httpx
 from loguru import logger
 
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.polymarket_ws_cache import PolymarketWsQuoteCache
 
 try:
     from py_clob_client.client import ClobClient  # type: ignore
@@ -171,6 +172,16 @@ def _extract_price(value: Any) -> Optional[float]:
             if numeric is not None:
                 return numeric
     return None
+
+
+def _clamp_probability(value: Optional[float]) -> Optional[float]:
+    if value is None:
+        return None
+    if value < 0.0:
+        return 0.0
+    if value > 1.0:
+        return 1.0
+    return value
 
 
 def _extract_iso_date(value: Any) -> Optional[str]:
@@ -394,6 +405,7 @@ class PolymarketReadOnlyLayer:
         self._lock = threading.Lock()
         self._clob_client: Any = None
         self._clob_unavailable_reason: Optional[str] = None
+        self._ws_quote_cache = PolymarketWsQuoteCache.from_env()
 
     def build_market_scan(
         self,
@@ -430,6 +442,7 @@ class PolymarketReadOnlyLayer:
             "last_trade_price": None,
             "liquidity": None,
             "volume": None,
+            "price_analysis": None,
             "sparkline": fallback_sparkline or [],
             "top_buckets": [],
             "recent_trades": [],
@@ -570,6 +583,8 @@ class PolymarketReadOnlyLayer:
             "sell_price": _extract_price(yes_prices.get("sell")),
             "midpoint": _extract_price(yes_prices.get("midpoint")),
             "last_trade_price": _extract_price(yes_prices.get("last_trade_price")),
+            "quote_source": yes_prices.get("quote_source"),
+            "quote_age_ms": _safe_int(yes_prices.get("quote_age_ms"), 0),
             "book": yes_prices.get("book"),
         }
         no_payload = {
@@ -580,8 +595,17 @@ class PolymarketReadOnlyLayer:
             "sell_price": _extract_price(no_prices.get("sell")),
             "midpoint": _extract_price(no_prices.get("midpoint")),
             "last_trade_price": _extract_price(no_prices.get("last_trade_price")),
+            "quote_source": no_prices.get("quote_source"),
+            "quote_age_ms": _safe_int(no_prices.get("quote_age_ms"), 0),
             "book": no_prices.get("book"),
         }
+        price_analysis = self._build_price_analysis(
+            model_probability=model_probability,
+            yes_buy=_extract_price(yes_payload.get("buy_price")),
+            yes_sell=_extract_price(yes_payload.get("sell_price")),
+            no_buy=_extract_price(no_payload.get("buy_price")),
+            no_sell=_extract_price(no_payload.get("sell_price")),
+        )
 
         sparkline_values: List[float] = []
         for candidate in (
@@ -617,12 +641,15 @@ class PolymarketReadOnlyLayer:
                 "last_trade_price": last_trade_price,
                 "liquidity": liquidity,
                 "volume": volume,
+                "price_analysis": price_analysis,
                 "sparkline": sparkline_values,
                 "top_buckets": top_buckets,
                 "all_buckets": all_buckets,
-                "websocket": {
-                    "market_url": market_url,
-                    "asset_ids": [
+            "websocket": {
+                "enabled": self._ws_quote_cache.enabled,
+                "status": self._ws_quote_cache.status(),
+                "market_url": market_url,
+                "asset_ids": [
                         token
                         for token in [
                             yes_payload.get("token_id"),
@@ -635,6 +662,112 @@ class PolymarketReadOnlyLayer:
             }
         )
         return scan
+
+    def _build_price_analysis(
+        self,
+        *,
+        model_probability: Optional[float],
+        yes_buy: Optional[float],
+        yes_sell: Optional[float],
+        no_buy: Optional[float],
+        no_sell: Optional[float],
+    ) -> Dict[str, Any]:
+        """Build read-only market price diagnostics.
+
+        Polymarket CLOB naming is from the user's perspective:
+        BUY is the executable ask to buy that outcome, SELL is the executable bid.
+        Kelly here is a sizing reference only; no order execution is performed.
+        """
+        p_yes = _clamp_probability(_safe_float(model_probability))
+        p_no = _clamp_probability(1.0 - p_yes if p_yes is not None else None)
+        yes_ask = _clamp_probability(_safe_float(yes_buy))
+        no_ask = _clamp_probability(_safe_float(no_buy))
+        yes_bid = _clamp_probability(_safe_float(yes_sell))
+        no_bid = _clamp_probability(_safe_float(no_sell))
+
+        yes = self._build_side_price_analysis("yes", p_yes, yes_ask, yes_bid)
+        no = self._build_side_price_analysis("no", p_no, no_ask, no_bid)
+
+        ask_sum = None
+        lock_edge = None
+        lock_available = False
+        if yes_ask is not None and no_ask is not None:
+            ask_sum = yes_ask + no_ask
+            lock_edge = 1.0 - ask_sum
+            lock_available = lock_edge > 0
+
+        bid_sum = None
+        sell_side_edge = None
+        if yes_bid is not None and no_bid is not None:
+            bid_sum = yes_bid + no_bid
+            sell_side_edge = bid_sum - 1.0
+
+        best_side = None
+        side_rows = [
+            row
+            for row in [yes, no]
+            if isinstance(row.get("edge"), (int, float))
+            and isinstance(row.get("kelly_fraction"), (int, float))
+            and row.get("kelly_fraction") > 0
+        ]
+        if side_rows:
+            best_side = max(
+                side_rows,
+                key=lambda row: (
+                    float(row.get("edge") or 0.0),
+                    float(row.get("kelly_fraction") or 0.0),
+                ),
+            ).get("side")
+
+        return {
+            "available": any(
+                value is not None
+                for value in (yes_ask, no_ask, yes_bid, no_bid, p_yes)
+            ),
+            "source": "polymarket_clob_orderbook",
+            "model_probability": p_yes,
+            "yes": yes,
+            "no": no,
+            "best_side": best_side,
+            "lock": {
+                "available": lock_available,
+                "ask_sum": ask_sum,
+                "edge": lock_edge,
+            },
+            "sell_side": {
+                "bid_sum": bid_sum,
+                "edge": sell_side_edge,
+            },
+        }
+
+    def _build_side_price_analysis(
+        self,
+        side: str,
+        probability: Optional[float],
+        ask: Optional[float],
+        bid: Optional[float],
+    ) -> Dict[str, Any]:
+        edge = None
+        kelly_fraction = None
+        if probability is not None and ask is not None:
+            edge = probability - ask
+            if 0.0 < ask < 1.0:
+                kelly_fraction = edge / (1.0 - ask)
+
+        return {
+            "side": side,
+            "model_probability": probability,
+            "ask": ask,
+            "bid": bid,
+            "edge": edge,
+            "edge_percent": edge * 100.0 if edge is not None else None,
+            "kelly_fraction": kelly_fraction,
+            "quarter_kelly": (
+                max(0.0, kelly_fraction) / 4.0
+                if kelly_fraction is not None
+                else None
+            ),
+        }
 
     def _market_trade_state(self, market: Dict[str, Any]) -> Dict[str, Any]:
         active = _safe_bool(market.get("active"))
@@ -1193,6 +1326,11 @@ class PolymarketReadOnlyLayer:
         if not token_id:
             return {}
 
+        self._ws_quote_cache.subscribe([token_id])
+        ws_data = self._ws_quote_cache.get_market_data(token_id)
+        if ws_data is not None:
+            return ws_data
+
         now = time.time()
         with self._lock:
             cached = self._price_cache.get(token_id)
@@ -1473,6 +1611,8 @@ class PolymarketReadOnlyLayer:
                         "yes_sell": yes_sell,
                         "no_buy": no_buy,
                         "no_sell": no_sell,
+                        "quote_source": yes_prices.get("quote_source"),
+                        "quote_age_ms": _safe_int(yes_prices.get("quote_age_ms"), 0),
                         "slug": market_slug or None,
                         "question": market.get("question") or market.get("title"),
                         "is_primary": bool(
