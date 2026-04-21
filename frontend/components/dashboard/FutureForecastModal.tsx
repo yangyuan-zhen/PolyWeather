@@ -736,24 +736,39 @@ export function FutureForecastModal() {
     if (!cityName || !dateStr) return;
 
     let cancelled = false;
-    dashboardClient
-      .getCityMarketScan(cityName, {
-        force: false,
-        marketSlug: detail.market_scan?.primary_market?.slug || null,
-        targetDate: dateStr,
-      })
-      .then((payload) => {
-        if (cancelled) return;
-        setFreshMarketScan(payload.market_scan || null);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setFreshMarketScan(null);
-        }
-      });
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const refreshMarketScan = () => {
+      dashboardClient
+        .getCityMarketScan(cityName, {
+          force: false,
+          marketSlug: detail.market_scan?.primary_market?.slug || null,
+          targetDate: dateStr,
+        })
+        .then((payload) => {
+          if (cancelled) return;
+          setFreshMarketScan(payload.market_scan || null);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setFreshMarketScan(null);
+          }
+        });
+    };
+
+    refreshMarketScan();
+    intervalId = setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      refreshMarketScan();
+    }, 3000);
 
     return () => {
       cancelled = true;
+      if (intervalId != null) {
+        clearInterval(intervalId);
+      }
     };
   }, [
     dateStr,

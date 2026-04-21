@@ -924,6 +924,14 @@ export function ProbabilityDistribution({
           row.probability > best.probability ? row : best,
         )
       : null;
+  const displayTopLabel = topContractRow?.label || topProbabilityLabel || null;
+  const displayTopProbability =
+    topContractRow?.probability ??
+    (topProbability?.probability != null
+      ? Number(topProbability.probability)
+      : null);
+  const displayTopProbabilityText = toPercent(displayTopProbability);
+  const displayUsesMarketBuckets = marketContractRows.length > 0;
   const linkedMarketBucket = useMemo(() => {
     if (topContractRow?.marketBucket) return topContractRow.marketBucket;
     if (topProbabilityTemp == null) return null;
@@ -1092,10 +1100,14 @@ export function ProbabilityDistribution({
           <div>
             <span className="prob-source-chip">{probabilityEngineLabel}</span>
             <strong>
-              {topProbability && topProbabilityText
+              {displayTopLabel && displayTopProbabilityText
                 ? locale === "en-US"
-                  ? `${topProbabilityLabel} is the top single bucket at ${topProbabilityText}`
-                  : `${topProbabilityLabel} 单点最高，${topProbabilityText}`
+                  ? displayUsesMarketBuckets
+                    ? `${displayTopLabel} is the top displayed contract bucket at ${displayTopProbabilityText}`
+                    : `${displayTopLabel} is the top single bucket at ${displayTopProbabilityText}`
+                  : displayUsesMarketBuckets
+                    ? `${displayTopLabel} 为当前显示分布最高，${displayTopProbabilityText}`
+                    : `${displayTopLabel} 单点最高，${displayTopProbabilityText}`
                 : locale === "en-US"
                   ? "Awaiting calibrated buckets"
                   : "等待校准概率桶"}
