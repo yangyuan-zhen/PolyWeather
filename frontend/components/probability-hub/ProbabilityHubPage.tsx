@@ -12,6 +12,11 @@ import { DashboardStoreProvider } from "@/hooks/useDashboardStore";
 import styles from "./ProbabilityHubPage.module.css";
 
 const DETAIL_BATCH_SIZE = 6;
+const FULL_REFRESH_INTERVAL_MS = 60_000;
+const MARKET_REFRESH_INTERVAL_MS = 5_000;
+
+type FilterMode = "all" | "market" | "high-risk";
+type SortMode = "risk" | "edge" | "probability" | "updated";
 
 function sortCities(cities: CityListItem[]) {
   const riskOrder: Record<string, number> = {
@@ -31,6 +36,44 @@ function sortCities(cities: CityListItem[]) {
   });
 }
 
+function getRiskRank(level?: string | null) {
+  const riskOrder: Record<string, number> = {
+    high: 0,
+    medium: 1,
+    low: 2,
+  };
+  return riskOrder[String(level || "").toLowerCase()] ?? 9;
+}
+
+function getProbabilityPeak(detail?: CityDetail | null) {
+  const buckets = Array.isArray(detail?.probabilities?.distribution_all)
+    ? detail.probabilities?.distribution_all
+    : Array.isArray(detail?.probabilities?.distribution)
+      ? detail.probabilities?.distribution
+      : [];
+  return buckets.reduce((best, bucket) => {
+    const next = Number(bucket?.probability ?? -1);
+    return next > best ? next : best;
+  }, -1);
+}
+
+function getPositiveEdge(detail?: CityDetail | null) {
+  const analysis = detail?.market_scan?.price_analysis;
+  const yesEdge = Number(analysis?.yes?.edge ?? Number.NEGATIVE_INFINITY);
+  const noEdge = Number(analysis?.no?.edge ?? Number.NEGATIVE_INFINITY);
+  return Math.max(yesEdge, noEdge, Number.NEGATIVE_INFINITY);
+}
+
+function hasMarket(detail?: CityDetail | null) {
+  return Boolean(
+    detail?.market_scan?.available &&
+      ((Array.isArray(detail.market_scan.all_buckets) &&
+        detail.market_scan.all_buckets.length > 0) ||
+        (Array.isArray(detail.market_scan.top_buckets) &&
+          detail.market_scan.top_buckets.length > 0)),
+  );
+}
+
 function ProbabilityHubScreen() {
   const { locale } = useI18n();
   const [cities, setCities] = useState<CityListItem[]>([]);
@@ -39,19 +82,14 @@ function ProbabilityHubScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<string | null>(null);
+  const [lastMarketUpdatedAt, setLastMarketUpdatedAt] = useState<string | null>(null);
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [sortMode, setSortMode] = useState<SortMode>("risk");
 
-  const loadAll = useCallback(async (force = false) => {
-    setError(null);
-    setRefreshing(true);
-    if (!cities.length || force) {
-      setLoading(true);
-    }
+  const fetchCityDetails = useCallback(
+    async (cityList: CityListItem[], force: boolean) => {
+      const fetched: Record<string, CityDetail> = {};
 
-    try {
-      const cityList = sortCities(await dashboardClient.getCities());
-      setCities(cityList);
-
-      const nextDetails: Record<string, CityDetail> = {};
       for (let index = 0; index < cityList.length; index += DETAIL_BATCH_SIZE) {
         const batch = cityList.slice(index, index + DETAIL_BATCH_SIZE);
         const results = await Promise.allSettled(
@@ -63,17 +101,37 @@ function ProbabilityHubScreen() {
           ),
         );
 
+        const patch: Record<string, CityDetail> = {};
         results.forEach((result, batchIndex) => {
           if (result.status !== "fulfilled") return;
-          nextDetails[batch[batchIndex].name] = result.value;
+          const detail = result.value;
+          fetched[batch[batchIndex].name] = detail;
+          patch[batch[batchIndex].name] = detail;
         });
 
-        setDetailsByName((previous) => ({
-          ...previous,
-          ...nextDetails,
-        }));
+        if (Object.keys(patch).length) {
+          setDetailsByName((previous) => ({
+            ...previous,
+            ...patch,
+          }));
+        }
       }
 
+      return fetched;
+    },
+    [],
+  );
+
+  const loadAll = useCallback(async (force = false) => {
+    setError(null);
+    setRefreshing(true);
+    if (!cities.length || force) {
+      setLoading(true);
+    }
+    try {
+      const cityList = sortCities(await dashboardClient.getCities());
+      setCities(cityList);
+      await fetchCityDetails(cityList, force);
       setLastUpdatedAt(new Date().toISOString());
     } catch (loadError) {
       setError(
@@ -87,11 +145,89 @@ function ProbabilityHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [cities.length, locale]);
+  }, [cities.length, fetchCityDetails, locale]);
+
+  const retryMissingCities = useCallback(async () => {
+    if (!cities.length) return;
+    const missingCities = cities.filter((city) => !detailsByName[city.name]);
+    if (!missingCities.length) return;
+
+    try {
+      await fetchCityDetails(missingCities, true);
+      setLastUpdatedAt(new Date().toISOString());
+    } catch {
+      // keep silent; page-level retry should not override the main error banner
+    }
+  }, [cities, detailsByName, fetchCityDetails]);
+
+  const refreshMarketScans = useCallback(async () => {
+    const loadedCities = cities.filter((city) => detailsByName[city.name]);
+    if (!loadedCities.length) return;
+
+    for (let index = 0; index < loadedCities.length; index += DETAIL_BATCH_SIZE) {
+      const batch = loadedCities.slice(index, index + DETAIL_BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map((city) =>
+          dashboardClient.getCityMarketScan(city.name, {
+            force: true,
+            targetDate: detailsByName[city.name]?.local_date || null,
+          }),
+        ),
+      );
+
+      const patch: Record<string, CityDetail> = {};
+      results.forEach((result, batchIndex) => {
+        if (result.status !== "fulfilled") return;
+        const city = batch[batchIndex];
+        const previous = detailsByName[city.name];
+        if (!previous) return;
+        patch[city.name] = {
+          ...previous,
+          market_scan: result.value.market_scan || previous.market_scan,
+        };
+      });
+
+      if (Object.keys(patch).length) {
+        setDetailsByName((previous) => ({
+          ...previous,
+          ...patch,
+        }));
+      }
+    }
+
+    setLastMarketUpdatedAt(new Date().toISOString());
+  }, [cities, detailsByName]);
 
   useEffect(() => {
     void loadAll(false);
   }, [loadAll]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void retryMissingCities();
+    }, 20_000);
+
+    return () => window.clearInterval(timer);
+  }, [retryMissingCities]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void loadAll(true);
+    }, FULL_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [loadAll]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      void refreshMarketScans();
+    }, MARKET_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [refreshMarketScans]);
 
   const loadedCount = Object.keys(detailsByName).length;
   const cityCount = cities.length;
@@ -99,6 +235,59 @@ function ProbabilityHubScreen() {
     () => cities.filter((city) => detailsByName[city.name]).length,
     [cities, detailsByName],
   );
+  const marketReadyCount = useMemo(
+    () => cities.filter((city) => hasMarket(detailsByName[city.name])).length,
+    [cities, detailsByName],
+  );
+  const positiveEdgeCount = useMemo(
+    () =>
+      cities.filter((city) => {
+        const edge = getPositiveEdge(detailsByName[city.name]);
+        return Number.isFinite(edge) && edge > 0;
+      }).length,
+    [cities, detailsByName],
+  );
+  const visibleCities = useMemo(() => {
+    const filtered = cities.filter((city) => {
+      const detail = detailsByName[city.name];
+      if (filterMode === "market") return hasMarket(detail);
+      if (filterMode === "high-risk") {
+        return String(detail?.risk?.level || city.risk_level || "").toLowerCase() === "high";
+      }
+      return true;
+    });
+
+    return [...filtered].sort((a, b) => {
+      const detailA = detailsByName[a.name];
+      const detailB = detailsByName[b.name];
+
+      if (sortMode === "edge") {
+        const edgeDelta = getPositiveEdge(detailB) - getPositiveEdge(detailA);
+        if (Number.isFinite(edgeDelta) && edgeDelta !== 0) return edgeDelta;
+      }
+
+      if (sortMode === "probability") {
+        const probabilityDelta = getProbabilityPeak(detailB) - getProbabilityPeak(detailA);
+        if (Number.isFinite(probabilityDelta) && probabilityDelta !== 0) return probabilityDelta;
+      }
+
+      if (sortMode === "updated") {
+        const updatedDelta =
+          new Date(detailB?.updated_at || 0).getTime() -
+          new Date(detailA?.updated_at || 0).getTime();
+        if (updatedDelta !== 0) return updatedDelta;
+      }
+
+      const riskDelta =
+        getRiskRank(detailA?.risk?.level || a.risk_level) -
+        getRiskRank(detailB?.risk?.level || b.risk_level);
+      if (riskDelta !== 0) return riskDelta;
+
+      return String(a.display_name || a.name).localeCompare(
+        String(b.display_name || b.name),
+      );
+    });
+  }, [cities, detailsByName, filterMode, sortMode]);
 
   return (
     <div className={clsx(dashboardStyles.root, styles.pageRoot)}>
@@ -127,10 +316,31 @@ function ProbabilityHubScreen() {
                 {locale === "en-US" ? "Ready" : "已加载"} <strong>{readyCards}</strong>
               </span>
               <span className={styles.heroPill}>
+                {locale === "en-US" ? "Market" : "有市场"} <strong>{marketReadyCount}</strong>
+              </span>
+              <span className={styles.heroPill}>
+                {locale === "en-US" ? "Positive edge" : "有优势"} <strong>{positiveEdgeCount}</strong>
+              </span>
+              <span className={styles.heroPill}>
                 {locale === "en-US" ? "Updated" : "更新时间"}{" "}
                 <strong>
                   {lastUpdatedAt
                     ? new Date(lastUpdatedAt).toLocaleTimeString(
+                        locale === "en-US" ? "en-US" : "zh-CN",
+                        {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        },
+                      )
+                    : "--"}
+                </strong>
+              </span>
+              <span className={styles.heroPill}>
+                {locale === "en-US" ? "Market tick" : "价格更新"}{" "}
+                <strong>
+                  {lastMarketUpdatedAt
+                    ? new Date(lastMarketUpdatedAt).toLocaleTimeString(
                         locale === "en-US" ? "en-US" : "zh-CN",
                         {
                           hour: "2-digit",
@@ -147,6 +357,73 @@ function ProbabilityHubScreen() {
           {error ? <div className={styles.errorCard}>{error}</div> : null}
         </section>
 
+        <section className={styles.toolbar}>
+          <div className={styles.toolbarGroup}>
+            <span className={styles.toolbarLabel}>
+              {locale === "en-US" ? "Filter" : "筛选"}
+            </span>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, filterMode === "all" && styles.active)}
+              onClick={() => setFilterMode("all")}
+            >
+              {locale === "en-US" ? "All" : "全部"}
+            </button>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, filterMode === "market" && styles.active)}
+              onClick={() => setFilterMode("market")}
+            >
+              {locale === "en-US" ? "With market" : "仅看有市场"}
+            </button>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, filterMode === "high-risk" && styles.active)}
+              onClick={() => setFilterMode("high-risk")}
+            >
+              {locale === "en-US" ? "High risk" : "仅看高风险"}
+            </button>
+          </div>
+          <div className={styles.toolbarGroup}>
+            <span className={styles.toolbarLabel}>
+              {locale === "en-US" ? "Sort" : "排序"}
+            </span>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, sortMode === "risk" && styles.active)}
+              onClick={() => setSortMode("risk")}
+            >
+              {locale === "en-US" ? "Risk" : "风险"}
+            </button>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, sortMode === "edge" && styles.active)}
+              onClick={() => setSortMode("edge")}
+            >
+              {locale === "en-US" ? "Edge" : "优势"}
+            </button>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, sortMode === "probability" && styles.active)}
+              onClick={() => setSortMode("probability")}
+            >
+              {locale === "en-US" ? "Probability" : "概率"}
+            </button>
+            <button
+              type="button"
+              className={clsx(styles.toolbarButton, sortMode === "updated" && styles.active)}
+              onClick={() => setSortMode("updated")}
+            >
+              {locale === "en-US" ? "Updated" : "更新时间"}
+            </button>
+          </div>
+          <div className={styles.toolbarSummary}>
+            {locale === "en-US"
+              ? `${visibleCities.length} cards in view`
+              : `当前显示 ${visibleCities.length} 张卡片`}
+          </div>
+        </section>
+
         {loading && loadedCount === 0 ? (
           <div className={styles.loadingGrid}>
             {Array.from({ length: 6 }).map((_, index) => (
@@ -155,7 +432,7 @@ function ProbabilityHubScreen() {
           </div>
         ) : (
           <div className={styles.grid}>
-            {cities.map((city) => {
+            {visibleCities.map((city) => {
               const detail = detailsByName[city.name];
               if (!detail) {
                 return (

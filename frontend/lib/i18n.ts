@@ -6,10 +6,12 @@ const DEFAULT_LOCALE: Locale = "zh-CN";
 export const LOCALE_STORAGE_KEY = "polyweather.locale";
 
 const MESSAGES: Record<Locale, Record<string, string>> = {
-  "zh-CN": {
-    "header.subtitle": "天气衍生品智能分析",
-    "header.docs": "文档",
-    "header.docsAria": "打开产品文档中心",
+    "zh-CN": {
+      "header.subtitle": "天气衍生品智能分析",
+      "header.home": "主页",
+      "header.homeAria": "返回主地图主页",
+      "header.docs": "文档",
+      "header.docsAria": "打开产品文档中心",
     "header.probabilityHub": "概率页",
     "header.probabilityHubAria": "打开 52 城市概率汇总页",
     "header.info": "技术说明",
@@ -171,10 +173,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "common.na": "--",
   },
-  "en-US": {
-    "header.subtitle": "Weather Derivatives Intelligence",
-    "header.docs": "Docs",
-    "header.docsAria": "Open product documentation",
+    "en-US": {
+      "header.subtitle": "Weather Derivatives Intelligence",
+      "header.home": "Home",
+      "header.homeAria": "Return to the main map homepage",
+      "header.docs": "Docs",
+      "header.docsAria": "Open product documentation",
     "header.probabilityHub": "Probabilities",
     "header.probabilityHubAria": "Open the 52-city probability hub",
     "header.info": "Tech Notes",

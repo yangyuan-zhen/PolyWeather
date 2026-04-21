@@ -10,6 +10,7 @@ import {
   BookOpen,
   Sparkles,
   BarChart3,
+  House,
 } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -41,6 +42,8 @@ export function HeaderBar({
   const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
+  const homeHref = "/";
+  const homeActive = pathname === "/";
   const probabilityHubHref = "/probabilities";
   const probabilityHubActive = pathname?.startsWith("/probabilities");
   const trialPromoLabel =
@@ -130,6 +133,16 @@ export function HeaderBar({
             {t("header.langEn")}
           </button>
         </div>
+
+        <Link
+          href={homeHref}
+          className={clsx("info-btn", homeActive && "active")}
+          title={t("header.homeAria")}
+          aria-label={t("header.homeAria")}
+        >
+          <House size={14} strokeWidth={2} />
+          {t("header.home")}
+        </Link>
 
         <Link
           href={docsHref}

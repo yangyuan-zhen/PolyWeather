@@ -73,6 +73,61 @@
   line-height: 1.6;
 }
 
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.toolbarGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolbarLabel {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.toolbarButton {
+  min-height: 30px;
+  padding: 6px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    color 0.18s ease;
+}
+
+.toolbarButton:hover {
+  border-color: rgba(34, 211, 238, 0.28);
+  color: var(--text-primary);
+}
+
+.toolbarButton.active {
+  border-color: rgba(34, 211, 238, 0.42);
+  background: rgba(8, 47, 73, 0.28);
+  color: #e0fbff;
+}
+
+.toolbarSummary {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -176,6 +231,10 @@
 @media (max-width: 640px) {
   .pageBody {
     padding: 68px 12px 18px;
+  }
+
+  .toolbar {
+    align-items: flex-start;
   }
 
   .heroCard,
