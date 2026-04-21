@@ -9,7 +9,6 @@ import {
   RotateCw,
   BookOpen,
   Sparkles,
-  BarChart3,
   House,
 } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
@@ -44,8 +43,6 @@ export function HeaderBar({
   const docsActive = pathname?.startsWith("/docs");
   const homeHref = "/";
   const homeActive = pathname === "/";
-  const probabilityHubHref = "/probabilities";
-  const probabilityHubActive = pathname?.startsWith("/probabilities");
   const trialPromoLabel =
     locale === "en-US"
       ? "New users get 3-day Pro trial"
@@ -152,16 +149,6 @@ export function HeaderBar({
         >
           <BookOpen size={14} strokeWidth={2} />
           {t("header.docs")}
-        </Link>
-
-        <Link
-          href={probabilityHubHref}
-          className={clsx("info-btn", probabilityHubActive && "active")}
-          title={t("header.probabilityHubAria")}
-          aria-label={t("header.probabilityHubAria")}
-        >
-          <BarChart3 size={14} strokeWidth={2} />
-          {t("header.probabilityHub")}
         </Link>
 
         <Link
