@@ -594,7 +594,9 @@ def analyze_weather_trend(
 
     # === Probability Engine ===
     probabilities: List[Dict[str, Any]] = []
+    probabilities_all: List[Dict[str, Any]] = []
     shadow_probabilities: List[Dict[str, Any]] = []
+    shadow_probabilities_all: List[Dict[str, Any]] = []
     forecast_miss_deg = 0.0
     probability_features = None
     calibration_summary = {
@@ -621,6 +623,7 @@ def analyze_weather_trend(
             probabilities = [
                 {"value": settled_wu, "range": f"[{settled_wu-0.5}~{settled_wu+0.5})", "probability": 1.0}
             ]
+            probabilities_all = probabilities
     elif (ens_p10 is not None and ens_p90 is not None) or fallback_sigma:
         # Forecast miss magnitude
         if max_so_far is not None and forecast_median is not None:
@@ -665,6 +668,7 @@ def analyze_weather_trend(
         )
         mu = probs_result.get("mu", mu)
         probabilities = probs_result.get("probabilities", [])
+        probabilities_all = probs_result.get("probabilities_all", probabilities)
         sorted_probs = probs_result.get("sorted_probs", [])
 
         probability_features = build_probability_features(
@@ -698,10 +702,12 @@ def analyze_weather_trend(
             "calibration_source": calibration_result.get("calibration_source"),
         }
         shadow_probabilities = calibration_result.get("shadow_distribution") or []
+        shadow_probabilities_all = calibration_result.get("shadow_distribution_all") or shadow_probabilities
         if calibration_result.get("engine") == "emos":
             mu = calibration_result.get("calibrated_mu", mu)
             sigma = calibration_result.get("calibrated_sigma", sigma)
             probabilities = calibration_result.get("distribution") or probabilities
+            probabilities_all = calibration_result.get("distribution_all") or probabilities_all or probabilities
             sorted_probs = calibration_result.get("selected_sorted_probs") or sorted_probs
 
         if sorted_probs:
@@ -926,7 +932,9 @@ def analyze_weather_trend(
     structured = {
         "mu": mu,
         "probabilities": probabilities,
+        "probabilities_all": probabilities_all or probabilities,
         "shadow_probabilities": shadow_probabilities,
+        "shadow_probabilities_all": shadow_probabilities_all or shadow_probabilities,
         "probability_engine": calibration_summary["engine"],
         "probability_calibration_mode": calibration_summary["mode"],
         "probability_calibration_version": calibration_summary["calibration_version"],
@@ -999,21 +1007,24 @@ def calculate_prob_distribution(
     total_p = sum(probs.values())
     sorted_probs = []
     probabilities = []
+    probabilities_all = []
     
     if total_p > 0:
         norm_probs = {k: v / total_p for k, v in probs.items()}
         sorted_probs = sorted(norm_probs.items(), key=lambda x: x[1], reverse=True)
-        for t, p in sorted_probs[:4]:
+        for t, p in sorted_probs:
             rng_str = f"[{t}.0~{t+1}.0)" if is_exact else f"[{t-0.5}~{t+0.5})"
-            probabilities.append({
+            probabilities_all.append({
                 "value": int(t),
                 "range": rng_str,
                 "probability": round(p, 3)
             })
+        probabilities = probabilities_all[:4]
 
     return {
         "mu": mu,
         "sigma": sigma,
         "probabilities": probabilities,
+        "probabilities_all": probabilities_all,
         "sorted_probs": sorted_probs
     }

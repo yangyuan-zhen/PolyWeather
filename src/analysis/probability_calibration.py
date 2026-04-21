@@ -169,7 +169,7 @@ def _bucket_probabilities(
     sigma: float,
     max_so_far: Optional[float],
     city_name: str,
-) -> Tuple[List[Dict[str, Any]], List[Tuple[int, float]]]:
+) -> Tuple[List[Dict[str, Any]], List[Tuple[int, float]], List[Dict[str, Any]]]:
     sigma = max(0.1, float(sigma))
     min_possible = (
         apply_city_settlement(city_name, max_so_far) if max_so_far is not None else -999
@@ -193,24 +193,24 @@ def _bucket_probabilities(
 
     total = sum(probs.values())
     if total <= 0:
-        return [], []
+        return [], [], []
 
     normalized = {key: val / total for key, val in probs.items()}
     sorted_probs = sorted(normalized.items(), key=lambda item: item[1], reverse=True)
-    distribution = []
-    for value, prob in sorted_probs[:4]:
+    full_distribution = []
+    for value, prob in sorted_probs:
         if is_exact:
             bucket_range = "[{0}.0~{1}.0)".format(value, value + 1)
         else:
             bucket_range = "[{0}~{1})".format(value - 0.5, value + 0.5)
-        distribution.append(
+        full_distribution.append(
             {
                 "value": int(value),
                 "range": bucket_range,
                 "probability": round(prob, 3),
             }
         )
-    return distribution, sorted_probs
+    return full_distribution[:4], sorted_probs, full_distribution
 
 
 def _top_bucket_value(distribution: Optional[List[Dict[str, Any]]]) -> Optional[int]:
@@ -299,7 +299,9 @@ def apply_probability_calibration(
             "mode": selected_mode,
             "engine": ENGINE_MODE_LEGACY,
             "distribution": legacy_distribution or [],
+            "distribution_all": legacy_distribution or [],
             "shadow_distribution": [],
+            "shadow_distribution_all": [],
             "raw_mu": raw_mu,
             "raw_sigma": raw_sigma,
             "calibrated_mu": None,
@@ -314,7 +316,9 @@ def apply_probability_calibration(
             "mode": selected_mode,
             "engine": ENGINE_MODE_LEGACY,
             "distribution": legacy_distribution or [],
+            "distribution_all": legacy_distribution or [],
             "shadow_distribution": [],
+            "shadow_distribution_all": [],
             "raw_mu": raw_mu,
             "raw_sigma": raw_sigma,
             "calibrated_mu": None,
@@ -384,7 +388,7 @@ def apply_probability_calibration(
             calibrated_mu = observed_floor
     calibrated_sigma = max(0.1, _blend_value(raw_sigma, calibrated_sigma, blend_alpha_sigma))
     calibrated_sigma = _clamp_sigma(raw_sigma, calibrated_sigma, sigma_constraints)
-    calibrated_distribution, calibrated_sorted = _bucket_probabilities(
+    calibrated_distribution, calibrated_sorted, calibrated_distribution_all = _bucket_probabilities(
         calibrated_mu,
         calibrated_sigma,
         max_so_far=max_so_far,
@@ -393,23 +397,29 @@ def apply_probability_calibration(
 
     engine = ENGINE_MODE_LEGACY
     selected_distribution = legacy_distribution or []
+    selected_distribution_all = legacy_distribution or []
     selected_sorted: List[Tuple[int, float]] = []
     shadow_distribution: List[Dict[str, Any]] = []
+    shadow_distribution_all: List[Dict[str, Any]] = []
     shadow_sorted: List[Tuple[int, float]] = []
     if selected_mode == ENGINE_MODE_EMOS_PRIMARY:
         engine = "emos"
         selected_distribution = calibrated_distribution
+        selected_distribution_all = calibrated_distribution_all
         selected_sorted = calibrated_sorted
     elif selected_mode == ENGINE_MODE_EMOS_SHADOW:
         shadow_distribution = calibrated_distribution
+        shadow_distribution_all = calibrated_distribution_all
         shadow_sorted = calibrated_sorted
 
     return {
         "mode": selected_mode,
         "engine": engine,
         "distribution": selected_distribution,
+        "distribution_all": selected_distribution_all,
         "selected_sorted_probs": selected_sorted,
         "shadow_distribution": shadow_distribution,
+        "shadow_distribution_all": shadow_distribution_all,
         "shadow_sorted_probs": shadow_sorted,
         "raw_mu": raw_mu,
         "raw_sigma": raw_sigma,
@@ -551,7 +561,7 @@ def fit_calibration(
             == apply_city_settlement(city, actual_high)
             else 0.0
         )
-        legacy_distribution, _ = _bucket_probabilities(
+        legacy_distribution, _, _ = _bucket_probabilities(
             legacy_mu,
             legacy_sigma,
             max_so_far=None,
@@ -627,7 +637,7 @@ def fit_calibration(
                 city = row["city"]
                 crps_values.append(_gaussian_crps(actual_high, mu_hat, sigma_hat))
                 mae_values.append(abs(mu_hat - actual_high))
-                distribution, _ = _bucket_probabilities(
+                distribution, _, _ = _bucket_probabilities(
                     mu_hat,
                     sigma_hat,
                     max_so_far=None,

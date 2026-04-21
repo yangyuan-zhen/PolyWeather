@@ -96,6 +96,7 @@ def test_shadow_mode_keeps_legacy_distribution(tmp_path):
     assert result["shadow_distribution"]
     assert result["calibrated_mu"] == 10.5
     assert result["calibrated_sigma"] == 1.2
+    assert len(result["shadow_distribution_all"]) >= len(result["shadow_distribution"])
 
 
 def test_primary_mode_switches_to_calibrated_distribution(tmp_path):
@@ -129,6 +130,7 @@ def test_primary_mode_switches_to_calibrated_distribution(tmp_path):
     assert result["calibrated_mu"] == 10.5
     assert result["calibrated_sigma"] == 1.2
     assert result["distribution"]
+    assert len(result["distribution_all"]) >= len(result["distribution"])
     assert result["distribution"][0]["value"] >= 10
 
 

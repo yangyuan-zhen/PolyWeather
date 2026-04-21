@@ -1212,7 +1212,15 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
       engine: detail.probabilities?.engine ?? null,
       mu: detail.probabilities?.mu ?? null,
       probabilities: detail.probabilities?.distribution || [],
+      probabilitiesAll:
+        detail.probabilities?.distribution_all ||
+        detail.probabilities?.distribution ||
+        [],
       shadowProbabilities: detail.probabilities?.shadow_distribution || [],
+      shadowProbabilitiesAll:
+        detail.probabilities?.shadow_distribution_all ||
+        detail.probabilities?.shadow_distribution ||
+        [],
     };
   }
 
@@ -1223,7 +1231,9 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
     engine: null,
     mu: daily?.deb?.prediction ?? null,
     probabilities: daily?.probabilities || [],
+    probabilitiesAll: daily?.probabilities || [],
     shadowProbabilities: [],
+    shadowProbabilitiesAll: [],
   };
 }
 

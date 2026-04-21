@@ -858,6 +858,10 @@ export function ProbabilityDistribution({
     ? formatBucketDisplayLabel(topProbability, detail)
     : null;
   const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
+  const probabilitiesForMarketContracts =
+    view.probabilitiesAll?.length > 0
+      ? view.probabilitiesAll
+      : view.probabilities || [];
   const marketContractRows = useMemo<ProbabilityDisplayRow[]>(() => {
     if (!isToday || !marketScan?.available || marketAllBuckets.length === 0) {
       return [];
@@ -867,7 +871,7 @@ export function ProbabilityDistribution({
     const seenKeys = new Set<string>();
     for (const marketBucket of marketAllBuckets) {
       const probability = getAggregatedModelProbabilityForMarketBucket(
-        view.probabilities || [],
+        probabilitiesForMarketContracts,
         marketBucket,
         detail,
       );
@@ -886,7 +890,13 @@ export function ProbabilityDistribution({
       });
     }
     return rows;
-  }, [detail, isToday, marketAllBuckets, marketScan?.available, view.probabilities]);
+  }, [
+    detail,
+    isToday,
+    marketAllBuckets,
+    marketScan?.available,
+    probabilitiesForMarketContracts,
+  ]);
   const modelProbabilityRows = useMemo<ProbabilityDisplayRow[]>(
     () =>
       (view.probabilities || []).slice(0, 6).map((bucket, index) => {
@@ -938,7 +948,7 @@ export function ProbabilityDistribution({
     topProbabilityLabel ||
     null;
   const aggregatedMarketProbability = getAggregatedModelProbabilityForMarketBucket(
-    view.probabilities || [],
+    probabilitiesForMarketContracts,
     linkedMarketBucket,
     detail,
   );

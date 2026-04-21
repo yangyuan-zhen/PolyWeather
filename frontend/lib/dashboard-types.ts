@@ -488,6 +488,7 @@ export interface CityDetail {
   probabilities?: {
     mu?: number | null;
     distribution?: ProbabilityBucket[];
+    distribution_all?: ProbabilityBucket[];
     engine?: string | null;
     calibration_mode?: string | null;
     calibration_version?: string | null;
@@ -496,6 +497,7 @@ export interface CityDetail {
     calibrated_mu?: number | null;
     calibrated_sigma?: number | null;
     shadow_distribution?: ProbabilityBucket[];
+    shadow_distribution_all?: ProbabilityBucket[];
   };
   hourly?: {
     times?: string[];

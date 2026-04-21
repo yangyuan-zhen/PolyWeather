@@ -2006,7 +2006,9 @@ def _analyze(
     from src.analysis.trend_engine import analyze_weather_trend as _trend_analyze, calculate_prob_distribution
 
     probabilities = []
+    probabilities_all = []
     shadow_probabilities = []
+    shadow_probabilities_all = []
     mu = None
     probability_engine = "legacy"
     probability_calibration_mode = "legacy"
@@ -2022,7 +2024,9 @@ def _analyze(
         # Use structured data from shared engine
         mu = sd.get("mu")
         probabilities = sd.get("probabilities", [])
+        probabilities_all = sd.get("probabilities_all", probabilities)
         shadow_probabilities = sd.get("shadow_probabilities", [])
+        shadow_probabilities_all = sd.get("shadow_probabilities_all", shadow_probabilities)
         probability_engine = sd.get("probability_engine", "legacy")
         probability_calibration_mode = sd.get("probability_calibration_mode", "legacy")
         probability_calibration_version = sd.get("probability_calibration_version")
@@ -2406,6 +2410,7 @@ def _analyze(
         "probabilities": {
             "mu": round(mu, 1) if mu is not None else None,
             "distribution": probabilities,
+            "distribution_all": probabilities_all or probabilities,
             "engine": probability_engine,
             "calibration_mode": probability_calibration_mode,
             "calibration_version": probability_calibration_version,
@@ -2414,6 +2419,7 @@ def _analyze(
             "calibrated_mu": probability_calibrated_mu,
             "calibrated_sigma": probability_calibrated_sigma,
             "shadow_distribution": shadow_probabilities,
+            "shadow_distribution_all": shadow_probabilities_all or shadow_probabilities,
         },
         "trend": trend_info,
         "peak": {
