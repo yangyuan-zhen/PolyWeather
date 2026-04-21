@@ -64,13 +64,40 @@ function getPositiveEdge(detail?: CityDetail | null) {
   return Math.max(yesEdge, noEdge, Number.NEGATIVE_INFINITY);
 }
 
+function isActiveMarketScan(detail?: CityDetail | null) {
+  const scan = detail?.market_scan;
+  if (!scan?.available) return false;
+  const primary = scan.primary_market as
+    | ({
+        active?: boolean | null;
+        closed?: boolean | null;
+        accepting_orders?: boolean | null;
+        tradable?: boolean | null;
+        ended_at_utc?: string | null;
+      } & Record<string, unknown>)
+    | null
+    | undefined;
+  if (!primary) return false;
+  if (primary.closed === true) return false;
+  if (primary.active === false) return false;
+  if (primary.accepting_orders === false) return false;
+  if (primary.tradable === false) return false;
+  if (primary.ended_at_utc) {
+    const endedAt = new Date(String(primary.ended_at_utc)).getTime();
+    if (Number.isFinite(endedAt) && endedAt <= Date.now()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function hasMarket(detail?: CityDetail | null) {
+  const scan = detail?.market_scan;
   return Boolean(
-    detail?.market_scan?.available &&
-      ((Array.isArray(detail.market_scan.all_buckets) &&
-        detail.market_scan.all_buckets.length > 0) ||
-        (Array.isArray(detail.market_scan.top_buckets) &&
-          detail.market_scan.top_buckets.length > 0)),
+    isActiveMarketScan(detail) &&
+      scan &&
+      ((Array.isArray(scan.all_buckets) && scan.all_buckets.length > 0) ||
+        (Array.isArray(scan.top_buckets) && scan.top_buckets.length > 0)),
   );
 }
 
@@ -138,7 +165,7 @@ function ProbabilityHubScreen() {
       const results = await Promise.allSettled(
         batch.map((city) =>
           dashboardClient.getCityMarketScan(city.name, {
-            force: true,
+            force: false,
             targetDate: detailMap[city.name]?.local_date || null,
             marketSlug: detailMap[city.name]?.market_scan?.selected_slug || null,
           }),
@@ -187,18 +214,22 @@ function ProbabilityHubScreen() {
       setLastUpdatedAt(new Date().toISOString());
       await refreshMarketScans(fetched, cityList);
     } catch (loadError) {
-      setError(
-        loadError instanceof Error
-          ? loadError.message
-          : locale === "en-US"
-            ? "Failed to load probability hub"
-            : "加载概率页失败",
-      );
+      if (!Object.keys(detailsByName).length && !cities.length) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : locale === "en-US"
+              ? "Failed to load probability hub"
+              : "加载概率页失败",
+        );
+      } else {
+        console.warn("probability hub refresh failed", loadError);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [cities.length, fetchCityDetails, locale, refreshMarketScans]);
+  }, [cities.length, detailsByName, fetchCityDetails, locale, refreshMarketScans]);
 
   const retryMissingCities = useCallback(async () => {
     if (!cities.length) return;
@@ -230,7 +261,7 @@ function ProbabilityHubScreen() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "hidden") return;
-      void loadAll(true);
+      void loadAll(false);
     }, FULL_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
@@ -508,11 +539,18 @@ function ProbabilityHubScreen() {
                       </strong>
                     </span>
                   </div>
-                  <ProbabilityDistribution
-                    detail={detail}
-                    hideTitle
-                    marketScan={detail.market_scan}
-                  />
+                  {(() => {
+                    const activeMarketScan = isActiveMarketScan(detail)
+                      ? detail.market_scan
+                      : null;
+                    return (
+                      <ProbabilityDistribution
+                        detail={detail}
+                        hideTitle
+                        marketScan={activeMarketScan}
+                      />
+                    );
+                  })()}
                 </section>
               );
             })}
