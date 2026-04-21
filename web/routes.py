@@ -146,6 +146,10 @@ CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CAC
 CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "300")))
 CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "480")))
 CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "900")))
+MARKET_SCAN_PAYLOAD_TTL_SEC = max(
+    5,
+    int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "20")),
+)
 CITY_HISTORY_PREVIEW_CACHE_TTL_SEC = max(
     60,
     int(os.getenv("POLYWEATHER_CITY_HISTORY_PREVIEW_CACHE_TTL_SEC", "1800")),
@@ -160,6 +164,106 @@ def _city_cache_is_fresh(entry: Optional[dict], ttl_sec: int) -> bool:
     if updated_at_ts <= 0:
         return False
     return (time.time() - updated_at_ts) < float(ttl_sec)
+
+
+def _market_analysis_cache_is_fresh(entry: Optional[dict]) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    payload = entry.get("payload") or {}
+    if isinstance(payload, dict):
+        cached_at_ts = float(payload.get("market_analysis_cached_at_ts") or 0.0)
+        if cached_at_ts > 0:
+            return (time.time() - cached_at_ts) < float(CITY_MARKET_CACHE_TTL_SEC)
+    return _city_cache_is_fresh(entry, CITY_MARKET_CACHE_TTL_SEC)
+
+
+def _market_scan_cache_key(
+    data: dict,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+) -> str:
+    local_date = str(data.get("local_date") or "").strip()
+    requested_date = str(target_date or "").strip()
+    selected_date = requested_date or local_date
+    multi_model_daily = data.get("multi_model_daily") or {}
+    if requested_date and isinstance(multi_model_daily, dict) and requested_date not in multi_model_daily:
+        selected_date = local_date
+    normalized_slug = str(market_slug or "").strip().lower()
+    return f"{selected_date}|{normalized_slug}"
+
+
+def _attach_market_scan_payload(
+    payload: dict,
+    *,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+) -> dict:
+    if not isinstance(payload, dict):
+        return payload
+    scan_payload = _build_city_market_scan_payload(
+        payload,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    now_ts = time.time()
+    payload["market_scan_payload"] = scan_payload
+    payload["market_scan_updated_at"] = datetime.now().isoformat()
+    payload["market_scan_updated_at_ts"] = now_ts
+    payload["market_scan_cache_key"] = _market_scan_cache_key(
+        payload,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    return payload
+
+
+def _get_cached_market_scan_payload(
+    payload: dict,
+    *,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+) -> Optional[dict]:
+    if not isinstance(payload, dict):
+        return None
+    scan_payload = payload.get("market_scan_payload")
+    if not isinstance(scan_payload, dict):
+        return None
+    expected_key = _market_scan_cache_key(
+        payload,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    cached_key = str(payload.get("market_scan_cache_key") or "")
+    if cached_key != expected_key:
+        return None
+    updated_at_ts = float(payload.get("market_scan_updated_at_ts") or 0.0)
+    if updated_at_ts <= 0:
+        return None
+    if (time.time() - updated_at_ts) >= float(MARKET_SCAN_PAYLOAD_TTL_SEC):
+        return None
+    return scan_payload
+
+
+def _refresh_market_scan_payload_from_cached_analysis(
+    city: str,
+    payload: dict,
+    *,
+    market_slug: Optional[str] = None,
+    target_date: Optional[str] = None,
+) -> dict:
+    _attach_market_scan_payload(
+        payload,
+        market_slug=market_slug,
+        target_date=target_date,
+    )
+    _CACHE_DB.set_city_cache(
+        "market",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:market",
+    )
+    return payload.get("market_scan_payload") or {}
 
 
 def _refresh_city_summary_cache(city: str, force_refresh: bool = False) -> dict:
@@ -201,6 +305,10 @@ def _refresh_city_nearby_cache(city: str, force_refresh: bool = False) -> dict:
 
 def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=False, detail_mode="market")
+    now_ts = time.time()
+    payload["market_analysis_cached_at"] = datetime.now().isoformat()
+    payload["market_analysis_cached_at_ts"] = now_ts
+    _attach_market_scan_payload(payload)
     _CACHE_DB.set_city_cache(
         "market",
         city,
@@ -865,7 +973,7 @@ async def city_detail(
             return await run_in_threadpool(_refresh_city_market_cache, city, True)
         cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "market", city)
         if cached_entry:
-            if not _city_cache_is_fresh(cached_entry, CITY_MARKET_CACHE_TTL_SEC):
+            if not _market_analysis_cache_is_fresh(cached_entry):
                 _schedule_cache_refresh(background_tasks, kind="market", city=city)
             return cached_entry.get("payload") or {}
         return await run_in_threadpool(_refresh_city_market_cache, city, False)
@@ -1526,14 +1634,45 @@ async def city_market_scan(
     city = _normalize_city_or_404(name)
     if force_refresh:
         data = await run_in_threadpool(_refresh_city_market_cache, city, True)
+        cached_scan = _get_cached_market_scan_payload(
+            data,
+            market_slug=market_slug,
+            target_date=target_date,
+        )
+        if cached_scan is not None:
+            return cached_scan
     else:
         cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "market", city)
         if cached_entry:
-            if not _city_cache_is_fresh(cached_entry, CITY_MARKET_CACHE_TTL_SEC):
-                _schedule_cache_refresh(background_tasks, kind="market", city=city)
             data = cached_entry.get("payload") or {}
+            cached_scan = _get_cached_market_scan_payload(
+                data,
+                market_slug=market_slug,
+                target_date=target_date,
+            )
+            if cached_scan is not None:
+                if not _market_analysis_cache_is_fresh(cached_entry):
+                    _schedule_cache_refresh(background_tasks, kind="market", city=city)
+                return cached_scan
+            if _market_analysis_cache_is_fresh(cached_entry):
+                return await run_in_threadpool(
+                    _refresh_market_scan_payload_from_cached_analysis,
+                    city,
+                    data,
+                    market_slug=market_slug,
+                    target_date=target_date,
+                )
+            else:
+                _schedule_cache_refresh(background_tasks, kind="market", city=city)
         else:
             data = await run_in_threadpool(_refresh_city_market_cache, city, False)
+            cached_scan = _get_cached_market_scan_payload(
+                data,
+                market_slug=market_slug,
+                target_date=target_date,
+            )
+            if cached_scan is not None:
+                return cached_scan
     return await run_in_threadpool(
         _build_city_market_scan_payload,
         data,

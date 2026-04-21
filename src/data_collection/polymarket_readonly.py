@@ -605,7 +605,7 @@ class PolymarketReadOnlyLayer:
         )
         all_bucket_limit = max(
             top_bucket_limit,
-            _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "24"), 24),
+            _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "8"), 8),
         )
         all_buckets = self._build_top_temperature_buckets(
             city_key=city_key,
@@ -613,8 +613,6 @@ class PolymarketReadOnlyLayer:
             primary_market=market,
             limit=all_bucket_limit,
         )
-        if all_buckets:
-            self._hydrate_bucket_prices(all_buckets)
         top_buckets = list(all_buckets[:top_bucket_limit])
 
         yes_payload = {

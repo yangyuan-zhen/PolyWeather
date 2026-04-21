@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
 import dashboardStyles from "@/components/dashboard/Dashboard.module.css";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
@@ -13,7 +13,7 @@ import styles from "./ProbabilityHubPage.module.css";
 
 const DETAIL_BATCH_SIZE = 6;
 const FULL_REFRESH_INTERVAL_MS = 60_000;
-const MARKET_REFRESH_INTERVAL_MS = 5_000;
+const MARKET_REFRESH_INTERVAL_MS = 20_000;
 
 type FilterMode = "all" | "market" | "high-risk";
 type SortMode = "risk" | "edge" | "probability" | "updated";
@@ -112,6 +112,20 @@ function ProbabilityHubScreen() {
   const [lastMarketUpdatedAt, setLastMarketUpdatedAt] = useState<string | null>(null);
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [sortMode, setSortMode] = useState<SortMode>("risk");
+  const [visibleCityNames, setVisibleCityNames] = useState<Set<string>>(new Set());
+  const cardNodesRef = useRef(new Map<string, HTMLElement>());
+  const initialMarketRequestsRef = useRef(new Set<string>());
+  const marketRefreshInFlightRef = useRef(false);
+  const detailsByNameRef = useRef(detailsByName);
+  const citiesRef = useRef(cities);
+
+  useEffect(() => {
+    detailsByNameRef.current = detailsByName;
+  }, [detailsByName]);
+
+  useEffect(() => {
+    citiesRef.current = cities;
+  }, [cities]);
 
   const fetchCityDetails = useCallback(
     async (cityList: CityListItem[], force: boolean) => {
@@ -122,7 +136,7 @@ function ProbabilityHubScreen() {
         const results = await Promise.allSettled(
           batch.map((city) =>
             dashboardClient.getCityDetail(city.name, {
-              depth: "market",
+              depth: "panel",
               force,
             }),
           ),
@@ -153,68 +167,76 @@ function ProbabilityHubScreen() {
     sourceDetails?: Record<string, CityDetail>,
     sourceCities?: CityListItem[],
   ) => {
-    const detailMap = sourceDetails || detailsByName;
+    if (marketRefreshInFlightRef.current) return;
+    const detailMap = sourceDetails ? { ...sourceDetails } : { ...detailsByName };
     const cityList = sourceCities || cities;
     const loadedCities = cityList.filter((city) => detailMap[city.name]);
     if (!loadedCities.length) return;
 
     let touched = false;
+    marketRefreshInFlightRef.current = true;
 
-    for (let index = 0; index < loadedCities.length; index += DETAIL_BATCH_SIZE) {
-      const batch = loadedCities.slice(index, index + DETAIL_BATCH_SIZE);
-      const results = await Promise.allSettled(
-        batch.map((city) =>
-          dashboardClient.getCityMarketScan(city.name, {
-            force: false,
-            targetDate: detailMap[city.name]?.local_date || null,
-            marketSlug: detailMap[city.name]?.market_scan?.selected_slug || null,
-          }),
-        ),
-      );
+    try {
+      for (let index = 0; index < loadedCities.length; index += DETAIL_BATCH_SIZE) {
+        const batch = loadedCities.slice(index, index + DETAIL_BATCH_SIZE);
+        const results = await Promise.allSettled(
+          batch.map((city) =>
+            dashboardClient.getCityMarketScan(city.name, {
+              force: false,
+              targetDate: detailMap[city.name]?.local_date || null,
+              marketSlug: detailMap[city.name]?.market_scan?.selected_slug || null,
+            }),
+          ),
+        );
 
-      const patch: Record<string, CityDetail> = {};
-      results.forEach((result, batchIndex) => {
-        if (result.status !== "fulfilled") return;
-        const city = batch[batchIndex];
-        const previous = detailMap[city.name] || detailsByName[city.name];
-        if (!previous) return;
-        const nextMarketScan = result.value.market_scan || previous.market_scan;
-        if (!nextMarketScan) return;
-        patch[city.name] = {
-          ...previous,
-          market_scan: nextMarketScan,
-        };
-      });
+        const patch: Record<string, CityDetail> = {};
+        results.forEach((result, batchIndex) => {
+          if (result.status !== "fulfilled") return;
+          const city = batch[batchIndex];
+          const previous = detailMap[city.name] || detailsByName[city.name];
+          if (!previous) return;
+          const nextMarketScan = result.value.market_scan || previous.market_scan;
+          if (!nextMarketScan) return;
+          patch[city.name] = {
+            ...previous,
+            market_scan: nextMarketScan,
+          };
+        });
 
-      if (Object.keys(patch).length) {
-        touched = true;
-        Object.assign(detailMap, patch);
-        setDetailsByName((previous) => ({
-          ...previous,
-          ...patch,
-        }));
+        if (Object.keys(patch).length) {
+          touched = true;
+          Object.assign(detailMap, patch);
+          setDetailsByName((previous) => ({
+            ...previous,
+            ...patch,
+          }));
+        }
       }
-    }
 
-    if (touched) {
-      setLastMarketUpdatedAt(new Date().toISOString());
+      if (touched) {
+        setLastMarketUpdatedAt(new Date().toISOString());
+      }
+    } finally {
+      marketRefreshInFlightRef.current = false;
     }
   }, [cities, detailsByName]);
 
   const loadAll = useCallback(async (force = false) => {
     setError(null);
     setRefreshing(true);
-    if (!cities.length || force) {
+    if (!citiesRef.current.length || force) {
       setLoading(true);
+    }
+    if (force) {
+      initialMarketRequestsRef.current.clear();
     }
     try {
       const cityList = sortCities(await dashboardClient.getCities());
       setCities(cityList);
-      const fetched = await fetchCityDetails(cityList, force);
+      await fetchCityDetails(cityList, force);
       setLastUpdatedAt(new Date().toISOString());
-      await refreshMarketScans(fetched, cityList);
     } catch (loadError) {
-      if (!Object.keys(detailsByName).length && !cities.length) {
+      if (!Object.keys(detailsByNameRef.current).length && !citiesRef.current.length) {
         setError(
           loadError instanceof Error
             ? loadError.message
@@ -229,7 +251,7 @@ function ProbabilityHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [cities.length, detailsByName, fetchCityDetails, locale, refreshMarketScans]);
+  }, [fetchCityDetails, locale]);
 
   const retryMissingCities = useCallback(async () => {
     if (!cities.length) return;
@@ -239,11 +261,14 @@ function ProbabilityHubScreen() {
     try {
       const fetched = await fetchCityDetails(missingCities, true);
       setLastUpdatedAt(new Date().toISOString());
-      await refreshMarketScans(fetched, missingCities);
+      const visibleMissing = missingCities.filter((city) => visibleCityNames.has(city.name));
+      if (visibleMissing.length) {
+        await refreshMarketScans(fetched, visibleMissing);
+      }
     } catch {
       // keep silent; page-level retry should not override the main error banner
     }
-  }, [cities, detailsByName, fetchCityDetails, refreshMarketScans]);
+  }, [cities, detailsByName, fetchCityDetails, refreshMarketScans, visibleCityNames]);
 
   useEffect(() => {
     void loadAll(false);
@@ -270,11 +295,13 @@ function ProbabilityHubScreen() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "hidden") return;
-      void refreshMarketScans();
+      const visibleCitiesForRefresh = cities.filter((city) => visibleCityNames.has(city.name));
+      if (!visibleCitiesForRefresh.length) return;
+      void refreshMarketScans(undefined, visibleCitiesForRefresh);
     }, MARKET_REFRESH_INTERVAL_MS);
 
     return () => window.clearInterval(timer);
-  }, [refreshMarketScans]);
+  }, [cities, refreshMarketScans, visibleCityNames]);
 
   const loadedCount = Object.keys(detailsByName).length;
   const cityCount = cities.length;
@@ -335,6 +362,71 @@ function ProbabilityHubScreen() {
       );
     });
   }, [cities, detailsByName, filterMode, sortMode]);
+
+  const visibleCitiesKey = useMemo(
+    () => visibleCities.map((city) => city.name).join("|"),
+    [visibleCities],
+  );
+
+  const setCardNode = useCallback((cityName: string, node: HTMLElement | null) => {
+    if (node) {
+      cardNodesRef.current.set(cityName, node);
+    } else {
+      cardNodesRef.current.delete(cityName);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") {
+      setVisibleCityNames(new Set(visibleCities.slice(0, DETAIL_BATCH_SIZE).map((city) => city.name)));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisibleCityNames((previous) => {
+          const next = new Set(previous);
+          for (const entry of entries) {
+            const cityName = (entry.target as HTMLElement).dataset.cityName;
+            if (!cityName) continue;
+            if (entry.isIntersecting) {
+              next.add(cityName);
+            } else {
+              next.delete(cityName);
+            }
+          }
+          return next;
+        });
+      },
+      {
+        root: null,
+        rootMargin: "900px 0px",
+        threshold: 0.01,
+      },
+    );
+
+    const namesInView = new Set(visibleCities.map((city) => city.name));
+    for (const [cityName, node] of cardNodesRef.current.entries()) {
+      if (namesInView.has(cityName)) {
+        observer.observe(node);
+      }
+    }
+
+    return () => observer.disconnect();
+  }, [visibleCitiesKey, visibleCities]);
+
+  useEffect(() => {
+    if (!visibleCityNames.size) return;
+    const citiesToWarm = cities.filter((city) => {
+      if (!visibleCityNames.has(city.name)) return false;
+      if (!detailsByName[city.name]) return false;
+      if (initialMarketRequestsRef.current.has(city.name)) return false;
+      return true;
+    });
+    if (!citiesToWarm.length) return;
+    citiesToWarm.forEach((city) => initialMarketRequestsRef.current.add(city.name));
+    void refreshMarketScans(undefined, citiesToWarm);
+  }, [cities, detailsByName, refreshMarketScans, visibleCityNames]);
 
   return (
     <div className={clsx(dashboardStyles.root, styles.pageRoot)}>
@@ -483,7 +575,12 @@ function ProbabilityHubScreen() {
               const detail = detailsByName[city.name];
               if (!detail) {
                 return (
-                  <section key={city.name} className={styles.card}>
+                  <section
+                    key={city.name}
+                    ref={(node) => setCardNode(city.name, node)}
+                    data-city-name={city.name}
+                    className={styles.card}
+                  >
                     <div className={styles.cardHead}>
                       <div className={styles.cardTitleBlock}>
                         <div className={styles.cardTitle}>{city.display_name}</div>
@@ -502,7 +599,12 @@ function ProbabilityHubScreen() {
               }
 
               return (
-                <section key={city.name} className={styles.card}>
+                <section
+                  key={city.name}
+                  ref={(node) => setCardNode(city.name, node)}
+                  data-city-name={city.name}
+                  className={styles.card}
+                >
                   <div className={styles.cardHead}>
                     <div className={styles.cardTitleBlock}>
                       <div className={styles.cardTitle}>{detail.display_name}</div>

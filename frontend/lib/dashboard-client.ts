@@ -13,6 +13,14 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
+const pendingCityMarketScanRequests = new Map<
+  string,
+  Promise<{
+    fetched_at?: string | null;
+    market_scan?: MarketScan | null;
+    selected_date?: string | null;
+  }>
+>();
 const PRIORITY_WARM_SESSION_KEY = "polyWeather_priority_warm_v1";
 
 type CityCacheMeta = {
@@ -247,8 +255,9 @@ export const dashboardClient = {
       targetDate?: string | null;
     },
   ) {
+    const force = options?.force ?? false;
     const params = new URLSearchParams({
-      force_refresh: String(options?.force ?? false),
+      force_refresh: String(force),
       _ts: String(Date.now()),
     });
     if (options?.targetDate) {
@@ -257,11 +266,31 @@ export const dashboardClient = {
     if (options?.marketSlug) {
       params.set("market_slug", options.marketSlug);
     }
-    return fetchJson<{
+    const requestKey = [
+      cityName,
+      force ? "force" : "cached",
+      options?.targetDate || "",
+      options?.marketSlug || "",
+    ].join("::");
+    if (!force) {
+      const existing = pendingCityMarketScanRequests.get(requestKey);
+      if (existing) {
+        return existing;
+      }
+    }
+    const request = fetchJson<{
       fetched_at?: string | null;
       market_scan?: MarketScan | null;
       selected_date?: string | null;
-    }>(`/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`);
+    }>(`/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`).finally(
+      () => {
+        pendingCityMarketScanRequests.delete(requestKey);
+      },
+    );
+    if (!force) {
+      pendingCityMarketScanRequests.set(requestKey, request);
+    }
+    return request;
   },
 
   async getHistory(cityName: string, options?: { includeRecords?: boolean }) {
