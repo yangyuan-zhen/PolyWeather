@@ -1164,12 +1164,12 @@ export function ProbabilityDistribution({
               const probability = Math.round(Number(row.probability || 0) * 100);
               const rowMarketBucket = row.marketBucket;
               const rowMarketPrice =
-                rowMarketBucket?.market_price ?? rowMarketBucket?.yes_buy ?? null;
+                rowMarketBucket?.yes_buy ?? rowMarketBucket?.market_price ?? null;
               const yesPriceText = toPriceCents(rowMarketPrice);
               const marketTagFinal = rowMarketBucket
                 ? locale === "en-US"
-                  ? `Market ref: ${yesPriceText || "--"}`
-                  : `市场参考: ${yesPriceText || "--"}`
+                  ? `YES ask: ${yesPriceText || "--"}`
+                  : `YES 买价: ${yesPriceText || "--"}`
                 : null;
 
               return (

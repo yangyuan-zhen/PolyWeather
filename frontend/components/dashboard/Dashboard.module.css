@@ -3373,6 +3373,12 @@
   transform: translateY(-1px);
 }
 
+.root :global(.info-btn.active) {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: rgba(34, 211, 238, 0.42);
+  color: #e0fbff;
+}
+
 /* ── Guide Modal Customizations ── */
 .root :global(.modal-content.large) {
   max-width: 900px;

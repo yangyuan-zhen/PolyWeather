@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
-import { LogIn, UserRound, RotateCw, BookOpen, Sparkles } from "lucide-react";
+import {
+  LogIn,
+  UserRound,
+  RotateCw,
+  BookOpen,
+  Sparkles,
+  BarChart3,
+} from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -21,17 +28,32 @@ function parseExpiryInfo(raw?: string | null) {
   };
 }
 
-export function HeaderBar() {
+export function HeaderBar({
+  refreshAction,
+  refreshSpinning,
+}: {
+  refreshAction?: () => void | Promise<void>;
+  refreshSpinning?: boolean;
+}) {
   const store = useDashboardStore();
   const { locale, setLocale, t } = useI18n();
   const pathname = usePathname();
   const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
+  const probabilityHubHref = "/probabilities";
+  const probabilityHubActive = pathname?.startsWith("/probabilities");
   const trialPromoLabel =
     locale === "en-US"
       ? "New users get 3-day Pro trial"
       : "新用户可免费体验 3 天 Pro";
+  const isRefreshing = refreshSpinning ?? store.loadingState.refresh;
+  const handleRefresh = () => {
+    if (refreshAction) {
+      return void refreshAction();
+    }
+    return void store.refreshAll();
+  };
 
   const accountHref = isAuthenticated
     ? "/account"
@@ -120,6 +142,16 @@ export function HeaderBar() {
         </Link>
 
         <Link
+          href={probabilityHubHref}
+          className={clsx("info-btn", probabilityHubActive && "active")}
+          title={t("header.probabilityHubAria")}
+          aria-label={t("header.probabilityHubAria")}
+        >
+          <BarChart3 size={14} strokeWidth={2} />
+          {t("header.probabilityHub")}
+        </Link>
+
+        <Link
           href="/account"
           className="trial-promo-badge"
           title={trialPromoLabel}
@@ -160,13 +192,10 @@ export function HeaderBar() {
 
         <button
           type="button"
-          className={clsx(
-            "refresh-btn",
-            store.loadingState.refresh && "spinning",
-          )}
+          className={clsx("refresh-btn", isRefreshing && "spinning")}
           title={t("header.refreshAria")}
           aria-label={t("header.refreshAria")}
-          onClick={() => void store.refreshAll()}
+          onClick={handleRefresh}
         >
           <RotateCw size={16} strokeWidth={2} />
         </button>

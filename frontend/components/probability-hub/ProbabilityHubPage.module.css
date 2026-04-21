@@ -1,0 +1,190 @@
+.pageRoot {
+  min-height: 100vh;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.pageBody {
+  position: relative;
+  z-index: 1;
+  padding: 72px 20px 24px;
+}
+
+.hero {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.heroCard {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 16px 18px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.heroTitle {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+.heroText {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.heroPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  background: rgba(8, 47, 73, 0.24);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.heroPill strong {
+  color: var(--text-primary);
+}
+
+.errorCard {
+  border: 1px solid rgba(239, 68, 68, 0.24);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: rgba(127, 29, 29, 0.16);
+  color: #fecaca;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cardTitleBlock {
+  display: grid;
+  gap: 4px;
+}
+
+.cardTitle {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.cardSubTitle {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.cardMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.metaChip strong {
+  color: var(--text-secondary);
+}
+
+.loadingGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.loadingCard {
+  height: 280px;
+  border-radius: 16px;
+  border: 1px solid var(--border-subtle);
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      rgba(255, 255, 255, 0.05) 50%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+  background-size: 200% 100%;
+  animation: probabilityHubShimmer 1.6s linear infinite;
+}
+
+@keyframes probabilityHubShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@media (max-width: 1200px) {
+  .grid,
+  .loadingGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .pageBody {
+    padding: 68px 12px 18px;
+  }
+
+  .heroCard,
+  .card {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .heroTitle {
+    font-size: 18px;
+  }
+}
