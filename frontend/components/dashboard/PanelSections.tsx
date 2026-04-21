@@ -63,31 +63,6 @@ function getBucketTemp(bucket: ProbabilityBucket) {
   return parseTempFromText(bucket.label || bucket.bucket || bucket.range);
 }
 
-function getMarketBucketTemp(scan?: MarketScan | null) {
-  if (!scan) return null;
-
-  if (scan.temperature_bucket?.value != null) {
-    const byBucketValue = Number(scan.temperature_bucket.value);
-    if (Number.isFinite(byBucketValue)) return byBucketValue;
-  }
-
-  const byBucketLabel = parseTempFromText(
-    scan.temperature_bucket?.label ||
-      scan.temperature_bucket?.bucket ||
-      scan.temperature_bucket?.range,
-  );
-  if (byBucketLabel != null) return byBucketLabel;
-
-  const slug = String(scan.selected_slug || scan.primary_market?.slug || "");
-  const slugMatch = slug.match(/-(-?\d+(?:\.\d+)?)c(?:$|[^a-z0-9])/i);
-  if (slugMatch) {
-    const numeric = Number(slugMatch[1]);
-    if (Number.isFinite(numeric)) return numeric;
-  }
-
-  return parseTempFromText(scan.primary_market?.question);
-}
-
 function getMarketYesPrice(scan?: MarketScan | null) {
   if (scan?.market_price != null) {
     const preferred = Number(scan.market_price);
@@ -98,6 +73,46 @@ function getMarketYesPrice(scan?: MarketScan | null) {
     if (Number.isFinite(implied)) return implied;
   }
   return null;
+}
+
+function isFahrenheitSymbol(symbol?: string | null) {
+  return String(symbol || "").toUpperCase().includes("F");
+}
+
+function displayTempToMarketCelsius(
+  value: number | null,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  if (value == null || !Number.isFinite(value)) return null;
+  if (isFahrenheitSymbol(detail.temp_symbol)) {
+    return ((value - 32) * 5) / 9;
+  }
+  return value;
+}
+
+function findMarketBucketForDisplayTemp(
+  buckets: MarketTopBucket[],
+  displayTemp: number | null,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  const marketTemp = displayTempToMarketCelsius(displayTemp, detail);
+  if (marketTemp == null) return null;
+
+  const tolerance = isFahrenheitSymbol(detail.temp_symbol) ? 0.56 : 0.26;
+  let best: MarketTopBucket | null = null;
+  let bestDelta = Number.POSITIVE_INFINITY;
+  for (const bucket of buckets) {
+    const rawTemp = bucket.temp ?? bucket.value ?? null;
+    if (rawTemp == null) continue;
+    const candidateTemp = Number(rawTemp);
+    if (!Number.isFinite(candidateTemp)) continue;
+    const delta = Math.abs(candidateTemp - marketTemp);
+    if (delta < bestDelta) {
+      best = bucket;
+      bestDelta = delta;
+    }
+  }
+  return best && bestDelta <= tolerance ? best : null;
 }
 
 type ModelMetadata = NonNullable<
@@ -633,7 +648,6 @@ export function ProbabilityDistribution({
 }) {
   const { locale, t } = useI18n();
   const view = getProbabilityView(detail, targetDate);
-  const marketBucketTemp = getMarketBucketTemp(marketScan);
   const marketYesPrice = getMarketYesPrice(marketScan);
   const marketYesText = toPercent(marketYesPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
@@ -684,15 +698,12 @@ export function ProbabilityDistribution({
   const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
   const linkedMarketBucket = useMemo(() => {
     if (topProbabilityTemp == null) return null;
-    return (
-      marketAllBuckets.find((bucket) => {
-        const bucketTemp = bucket.temp ?? bucket.value ?? null;
-        if (bucketTemp == null) return false;
-        const numeric = Number(bucketTemp);
-        return Number.isFinite(numeric) && Math.abs(numeric - topProbabilityTemp) < 0.26;
-      }) || null
+    return findMarketBucketForDisplayTemp(
+      marketAllBuckets,
+      topProbabilityTemp,
+      detail,
     );
-  }, [marketAllBuckets, topProbabilityTemp]);
+  }, [detail, marketAllBuckets, topProbabilityTemp]);
   const priceAnalysis = marketScan?.price_analysis;
   const yesPriceView = priceAnalysis?.yes;
   const noPriceView = priceAnalysis?.no;
@@ -936,13 +947,15 @@ export function ProbabilityDistribution({
               Number(bucket.probability || 0) * 100,
             );
             const bucketTemp = getBucketTemp(bucket);
-            const isMarketBucket =
-              marketYesText != null &&
-              marketBucketTemp != null &&
-              bucketTemp != null &&
-              Math.abs(bucketTemp - marketBucketTemp) < 0.26;
-            const yesPriceText = toPriceCents(marketYesPrice);
-            const marketTagFinal = isMarketBucket
+            const rowMarketBucket = findMarketBucketForDisplayTemp(
+              marketAllBuckets,
+              bucketTemp,
+              detail,
+            );
+            const rowMarketPrice =
+              rowMarketBucket?.market_price ?? rowMarketBucket?.yes_buy ?? null;
+            const yesPriceText = toPriceCents(rowMarketPrice);
+            const marketTagFinal = rowMarketBucket
               ? locale === "en-US"
                 ? `Market ref: ${yesPriceText || "--"}`
                 : `市场参考: ${yesPriceText || "--"}`
@@ -951,9 +964,11 @@ export function ProbabilityDistribution({
               bucket.label || `${bucket.value}${detail.temp_symbol}`;
             if (bucketLabel) {
               let str = String(bucketLabel).toUpperCase().replace(/\s+/g, "");
-              str = str.replace(/°?C($|\+|-)/g, "℃$1");
-              if (!str.includes("℃") && /[0-9]/.test(str)) {
-                str += "℃";
+              const symbol = detail.temp_symbol || "°C";
+              str = str.replace(/°?C($|\+|-)/g, "°C$1");
+              str = str.replace(/°?F($|\+|-)/g, "°F$1");
+              if (!/[°℃][CF]/.test(str) && /[0-9]/.test(str)) {
+                str += symbol;
               }
               bucketLabel = str;
             }
@@ -976,7 +991,7 @@ export function ProbabilityDistribution({
                   <div
                     className={clsx(
                       "prob-market-inline",
-                      isMarketBucket ? "yes" : "no",
+                      rowMarketBucket ? "yes" : "no",
                     )}
                   >
                     {marketTagFinal}

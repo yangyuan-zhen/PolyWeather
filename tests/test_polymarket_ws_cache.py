@@ -63,8 +63,8 @@ def test_ws_cache_parses_price_change_side_updates():
     data = cache.get_market_data("asset-1")
 
     assert data is not None
-    assert data["buy"] == 0.48
-    assert data["sell"] == 0.45
+    assert data["buy"] == 0.45
+    assert data["sell"] == 0.48
 
 
 def test_ws_cache_parses_price_changes_key_and_book_event():
@@ -94,8 +94,8 @@ def test_ws_cache_parses_price_changes_key_and_book_event():
     data = cache.get_market_data("asset-1")
 
     assert data is not None
-    assert data["sell"] == 0.44
-    assert data["buy"] == 0.48
+    assert data["sell"] == 0.48
+    assert data["buy"] == 0.49
 
 
 def test_ws_cache_subscription_payloads_match_market_channel_shape():

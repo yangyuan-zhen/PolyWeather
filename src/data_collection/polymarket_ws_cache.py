@@ -35,6 +35,14 @@ def _safe_float(value: Any) -> Optional[float]:
         return None
 
 
+def _first_float(*values: Any) -> Optional[float]:
+    for value in values:
+        parsed = _safe_float(value)
+        if parsed is not None:
+            return parsed
+    return None
+
+
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -327,15 +335,15 @@ class PolymarketWsQuoteCache:
         if not asset_id:
             return
 
-        best_bid = (
-            _safe_float(item.get("best_bid"))
-            or _safe_float(item.get("bid"))
-            or _safe_float(item.get("bestBid"))
+        best_bid = _first_float(
+            item.get("best_bid"),
+            item.get("bid"),
+            item.get("bestBid"),
         )
-        best_ask = (
-            _safe_float(item.get("best_ask"))
-            or _safe_float(item.get("ask"))
-            or _safe_float(item.get("bestAsk"))
+        best_ask = _first_float(
+            item.get("best_ask"),
+            item.get("ask"),
+            item.get("bestAsk"),
         )
         if event_type == "book":
             parsed_bid, parsed_ask = self._extract_book_top(item)
@@ -345,9 +353,9 @@ class PolymarketWsQuoteCache:
         side = str(item.get("side") or "").strip().upper()
         if event_type == "price_change" and price is not None:
             if side == "BUY":
-                best_ask = price
-            elif side == "SELL":
                 best_bid = price
+            elif side == "SELL":
+                best_ask = price
 
         last_trade = (
             _safe_float(item.get("last_trade_price"))
