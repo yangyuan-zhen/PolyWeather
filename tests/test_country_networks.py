@@ -1,8 +1,10 @@
+import threading
 from datetime import datetime, timedelta, timezone
 
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import CITY_TIME_ZONES, get_city_utc_offset_seconds
+from src.data_collection import metar_sources
 from src.data_collection.metar_sources import MetarSourceMixin
 from web.analysis_service import _build_city_detail_payload, _build_intraday_meteorology
 from web.core import CITIES
@@ -64,6 +66,51 @@ def test_turkey_metar_uses_fast_cache_ttl():
     assert source._metar_cache_ttl_for_city("istanbul", "LTFM") == 60
     assert source._metar_cache_ttl_for_city("lagos", "DNMM") == 60
     assert source._metar_cache_ttl_for_city("karachi", "OPKC") == 600
+
+
+def test_metar_marks_previous_local_day_report_stale(monkeypatch):
+    class FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = datetime(2026, 4, 21, 12, 0, tzinfo=timezone.utc)
+            return value if tz is None else value.astimezone(tz)
+
+        @classmethod
+        def utcnow(cls):
+            return datetime(2026, 4, 21, 12, 0)
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return [
+                {
+                    "rawOb": "METAR DNMM 200600Z 00000KT 9999 SCT015 26/25 Q1012",
+                    "reportTime": "2026-04-20T06:00:00Z",
+                    "receiptTime": "2026-04-20T06:12:07Z",
+                    "temp": 26,
+                    "dewp": 25,
+                    "name": "Murtala Muhammed International Airport",
+                }
+            ]
+
+    source = _DummyMetarSource()
+    source._metar_cache = {}
+    source._metar_cache_lock = threading.Lock()
+    source.metar_timeout_sec = 1
+    source.metar_latest_timeout_sec = 1
+    source.timeout = 1
+    source._http_get = lambda *args, **kwargs: FakeResponse()
+
+    monkeypatch.setattr(metar_sources, "datetime", FixedDateTime)
+
+    result = source.fetch_metar("lagos", utc_offset=3600)
+
+    assert result["stale_for_today"] is True
+    assert result["observation_local_date"] == "2026-04-20"
+    assert result["current_local_date"] == "2026-04-21"
+    assert result["today_obs"] == []
 
 
 def test_turkey_mgm_provider_returns_official_nearby_rows():

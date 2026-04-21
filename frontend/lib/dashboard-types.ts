@@ -64,6 +64,7 @@ export interface CurrentConditions {
   station_name?: string | null;
   obs_time: string | null;
   obs_age_min: number | null;
+  observation_status?: "live" | "missing" | "stale" | string | null;
   wind_speed_kt: number | null;
   wind_dir: number | null;
   humidity: number | null;
@@ -100,6 +101,9 @@ export interface AirportCurrentConditions {
   is_airport_station?: boolean;
   is_official?: boolean;
   is_settlement_anchor?: boolean;
+  stale_for_today?: boolean;
+  last_observation_local_date?: string | null;
+  current_local_date?: string | null;
 }
 
 export interface NearbyStation {
@@ -466,6 +470,14 @@ export interface CityDetail {
     time?: string;
     temp?: number | null;
   }>;
+  metar_status?: {
+    available_for_today?: boolean;
+    stale_for_today?: boolean;
+    last_observation_time?: string | null;
+    last_observation_local_date?: string | null;
+    current_local_date?: string | null;
+    last_temp?: number | null;
+  };
   settlement_today_obs?: Array<{
     time?: string;
     temp?: number | null;

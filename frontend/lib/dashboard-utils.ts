@@ -1060,6 +1060,18 @@ export function getTemperatureChartData(
         : `${metarFallbackTag}: ${airportRecentText}`,
     );
   }
+  if (detail.metar_status?.stale_for_today) {
+    const dateText = detail.metar_status.last_observation_local_date || "";
+    const tempText =
+      detail.metar_status.last_temp != null
+        ? `${detail.metar_status.last_temp}${detail.temp_symbol}`
+        : "";
+    legendParts.push(
+      isEnglish(locale)
+        ? `No same-day ${metarFallbackTag} report yet; latest report${dateText ? ` was ${dateText}` : ""}${tempText ? ` at ${tempText}` : ""}.`
+        : `今日暂无同日 ${metarFallbackTag} 报文；最近一报${dateText ? `为 ${dateText}` : ""}${tempText ? `，${tempText}` : ""}。`,
+    );
+  }
   if (shouldUseMetarFallback) {
     legendParts.push(
       isEnglish(locale)

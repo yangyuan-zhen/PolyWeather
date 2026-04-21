@@ -366,6 +366,14 @@ export function HeroSummary() {
     current.max_so_far != null &&
     current.temp != null &&
     current.max_so_far <= current.temp;
+  const currentObsText =
+    current.temp != null
+      ? `${current.temp}${data.temp_symbol} @${current.obs_time || "--"}`
+      : data.metar_status?.stale_for_today
+        ? locale === "en-US"
+          ? "No same-day METAR"
+          : "今日暂无 METAR"
+        : "--";
 
   return (
     <section className="hero-section">
@@ -393,9 +401,7 @@ export function HeroSummary() {
             {locale === "en-US" ? "Current Obs" : "当前实测"}
           </span>
           <span className="value">
-            {current.temp != null
-              ? `${current.temp}${data.temp_symbol} @${current.obs_time || "--"}`
-              : "--"}
+            {currentObsText}
           </span>
         </div>
         <div className="hero-item">

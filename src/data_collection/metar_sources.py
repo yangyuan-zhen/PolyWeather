@@ -202,6 +202,16 @@ class MetarSourceMixin:
 
             now_utc = datetime.now(timezone.utc)
             local_now = now_utc + timedelta(seconds=utc_offset)
+            current_local_date = local_now.date().isoformat()
+            observation_local_date = None
+            if obs_dt:
+                observation_local_date = (
+                    obs_dt + timedelta(seconds=utc_offset)
+                ).date().isoformat()
+            stale_for_today = bool(
+                observation_local_date
+                and observation_local_date != current_local_date
+            )
             local_midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
             utc_midnight = local_midnight - timedelta(seconds=utc_offset)
 
@@ -288,6 +298,9 @@ class MetarSourceMixin:
                 "station_name": latest.get("name", icao),
                 "timestamp": datetime.utcnow().isoformat(),
                 "observation_time": obs_time,
+                "observation_local_date": observation_local_date,
+                "current_local_date": current_local_date,
+                "stale_for_today": stale_for_today,
                 "report_time": latest.get("reportTime"),
                 "receipt_time": latest.get("receiptTime"),
                 "obs_time_epoch": latest.get("obsTime"),
