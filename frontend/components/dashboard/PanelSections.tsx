@@ -742,6 +742,12 @@ export function ProbabilityDistribution({
       : locale === "en-US"
         ? "YES"
         : "YES";
+  const yesDisplayPrice = linkedMarketBucket ? linkedMarketAsk : yesPriceView?.ask;
+  const noDisplayPrice = linkedMarketBucket ? linkedNoAsk : noPriceView?.ask;
+  const yesDisplayEdge = linkedMarketBucket
+    ? linkedMarketEdge
+    : yesPriceView?.edge;
+  const noDisplayEdge = linkedMarketBucket ? linkedNoEdge : noPriceView?.edge;
   const hasPriceAnalysis =
     isToday &&
     (Boolean(priceAnalysis?.available) ||
@@ -794,11 +800,11 @@ export function ProbabilityDistribution({
   const actionNote =
     actionableEdge != null && actionableEdge >= 0.02
       ? locale === "en-US"
-        ? "model above ask"
-        : "模型高于买价"
+        ? `${formatSignedPercent(actionableEdge)} vs ask`
+        : `相对买价 ${formatSignedPercent(actionableEdge)}`
       : locale === "en-US"
-        ? "read-only signal"
-        : "只读信号";
+        ? `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`
+        : `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`;
 
   return (
     <section className="prob-section">
@@ -884,25 +890,21 @@ export function ProbabilityDistribution({
                 <em>{actionNote}</em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "Buy price" : "买入价格"}</span>
-                <strong>{toPriceCents(preferredPriceView?.ask) || "--"}</strong>
+                <span>{locale === "en-US" ? "YES price" : "YES 价格"}</span>
+                <strong>{toPriceCents(yesDisplayPrice) || "--"}</strong>
                 <em>
-                  {linkedMarketBucket
-                    ? locale === "en-US"
-                      ? "matched bucket"
-                      : "已匹配桶"
-                    : marketScan?.available
-                      ? locale === "en-US"
-                        ? "primary market"
-                        : "主盘口"
-                      : marketScan?.reason || "--"}
+                  {locale === "en-US"
+                    ? `edge ${formatSignedPercent(yesDisplayEdge)}`
+                    : `优势 ${formatSignedPercent(yesDisplayEdge)}`}
                 </em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "Model edge" : "模型优势"}</span>
-                <strong>{formatSignedPercent(preferredPriceView?.edge)}</strong>
+                <span>{locale === "en-US" ? "NO price" : "NO 价格"}</span>
+                <strong>{toPriceCents(noDisplayPrice) || "--"}</strong>
                 <em>
-                  {quoteSourceLabel}
+                  {locale === "en-US"
+                    ? `edge ${formatSignedPercent(noDisplayEdge)}`
+                    : `优势 ${formatSignedPercent(noDisplayEdge)}`}
                 </em>
               </div>
             </div>
