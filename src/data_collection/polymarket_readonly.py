@@ -407,6 +407,21 @@ class PolymarketReadOnlyLayer:
         self._clob_unavailable_reason: Optional[str] = None
         self._ws_quote_cache = PolymarketWsQuoteCache.from_env()
 
+    def _market_scan_debug_enabled(self) -> bool:
+        return (
+            str(os.getenv("POLYMARKET_MARKET_SCAN_DEBUG", "false")).strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+
+    def _debug_market_scan(self, message: str, **payload: Any) -> None:
+        if not self._market_scan_debug_enabled():
+            return
+        try:
+            details = json.dumps(payload, ensure_ascii=False, default=str)
+        except Exception:
+            details = str(payload)
+        logger.info(f"POLYMARKET_MARKET_SCAN_DEBUG {message} {details}")
+
     def build_market_scan(
         self,
         city: Any,
@@ -451,14 +466,17 @@ class PolymarketReadOnlyLayer:
 
         if not self.enabled:
             scan["reason"] = "Market scan disabled by POLYMARKET_MARKET_SCAN_ENABLED."
+            self._debug_market_scan("disabled", city=city_key, date=date_str)
             return scan
 
         if not city_key or city_key not in CITY_REGISTRY:
             scan["reason"] = "City is not supported by the Polymarket market layer."
+            self._debug_market_scan("unsupported_city", city=city, normalized=city_key)
             return scan
 
         if not date_str:
             scan["reason"] = "Missing target date for market discovery."
+            self._debug_market_scan("missing_date", city=city_key)
             return scan
 
         try:
@@ -474,10 +492,18 @@ class PolymarketReadOnlyLayer:
         except Exception as exc:
             logger.warning(f"Polymarket market discovery failed ({city_key}): {exc}")
             scan["reason"] = "Market discovery failed."
+            self._debug_market_scan("discovery_exception", city=city_key, error=str(exc))
             return scan
 
         if not market:
             scan["reason"] = reason or "No active Polymarket market matched city/date."
+            self._debug_market_scan(
+                "no_market",
+                city=city_key,
+                date=date_str,
+                forced_slug=requested_slug,
+                reason=scan["reason"],
+            )
             return scan
 
         market_date = self._extract_market_date(market)
@@ -528,6 +554,13 @@ class PolymarketReadOnlyLayer:
             scan["selected_slug"] = market_slug
             scan["liquidity"] = liquidity
             scan["volume"] = volume
+            self._debug_market_scan(
+                "not_tradable",
+                city=city_key,
+                date=date_str,
+                slug=market_slug,
+                trade_state=trade_state,
+            )
             return scan
 
         tokens = self._extract_market_tokens(market)
@@ -539,6 +572,13 @@ class PolymarketReadOnlyLayer:
             scan["selected_slug"] = market_slug
             scan["liquidity"] = liquidity
             scan["volume"] = volume
+            self._debug_market_scan(
+                "missing_tokens",
+                city=city_key,
+                date=date_str,
+                slug=market_slug,
+                token_count=len(tokens),
+            )
             return scan
 
         yes_prices = self._get_token_market_data(str(yes_token.get("token_id")))
@@ -662,6 +702,31 @@ class PolymarketReadOnlyLayer:
                     "condition_ids": [condition_id] if condition_id else [],
                 },
             }
+        )
+        self._debug_market_scan(
+            "scan_ready",
+            city=city_key,
+            date=date_str,
+            selected_slug=market_slug,
+            market_price=scan.get("market_price"),
+            yes_buy=scan.get("yes_buy"),
+            yes_sell=scan.get("yes_sell"),
+            no_buy=scan.get("no_buy"),
+            no_sell=scan.get("no_sell"),
+            price_analysis_available=bool(price_analysis and price_analysis.get("available")),
+            all_buckets_count=len(all_buckets),
+            top_buckets=[
+                {
+                    "temp": row.get("temp"),
+                    "yes_buy": row.get("yes_buy"),
+                    "market_price": row.get("market_price"),
+                    "quote_source": row.get("quote_source"),
+                    "slug": row.get("slug"),
+                }
+                for row in all_buckets[:6]
+                if isinstance(row, dict)
+            ],
+            websocket=scan.get("websocket"),
         )
         return scan
 
