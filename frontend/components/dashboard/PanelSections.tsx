@@ -260,16 +260,6 @@ function getRoundedModelVoteDistribution(
   };
 }
 
-function getMarketNoPrice(scan?: MarketScan | null) {
-  if (scan?.no_buy != null) {
-    const direct = Number(scan.no_buy);
-    if (Number.isFinite(direct)) return direct;
-  }
-  const marketYes = getMarketYesPrice(scan);
-  if (marketYes != null) return Math.max(0, Math.min(1, 1 - marketYes));
-  return null;
-}
-
 function normalizeMarketProbability(value?: number | null) {
   if (value == null) return null;
   const numeric = Number(value);
@@ -292,13 +282,6 @@ function formatSignedPercent(value?: number | null, digits = 1) {
   const percent = normalized * 100;
   const sign = percent > 0 ? "+" : "";
   return `${sign}${percent.toFixed(digits)}%`;
-}
-
-function formatKellyFraction(value?: number | null) {
-  const normalized = normalizeSignedProbability(value);
-  if (normalized == null) return "--";
-  if (normalized <= 0) return "0%";
-  return `${(normalized * 100).toFixed(1)}%`;
 }
 
 function getMarketTopBuckets(scan?: MarketScan | null) {
@@ -652,9 +635,7 @@ export function ProbabilityDistribution({
   const view = getProbabilityView(detail, targetDate);
   const marketBucketTemp = getMarketBucketTemp(marketScan);
   const marketYesPrice = getMarketYesPrice(marketScan);
-  const marketNoPrice = getMarketNoPrice(marketScan);
   const marketYesText = toPercent(marketYesPrice);
-  const marketNoText = toPercent(marketNoPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
   const probabilityEngineLabel = formatProbabilityEngineLabel(
     detail,
@@ -720,33 +701,40 @@ export function ProbabilityDistribution({
     linkedMarketBucket?.market_price ??
     yesPriceView?.ask ??
     null;
+  const linkedNoAsk = linkedMarketBucket?.no_buy ?? noPriceView?.ask ?? null;
   const linkedMarketProbability =
     topProbability?.probability != null ? Number(topProbability.probability) : null;
   const linkedMarketEdge =
     linkedMarketProbability != null && linkedMarketAsk != null
       ? linkedMarketProbability - Number(linkedMarketAsk)
       : null;
-  const linkedMarketKelly =
-    linkedMarketProbability != null &&
-    linkedMarketAsk != null &&
-    Number(linkedMarketAsk) > 0 &&
-    Number(linkedMarketAsk) < 1
-      ? linkedMarketEdge! / (1 - Number(linkedMarketAsk))
+  const linkedNoEdge =
+    linkedMarketProbability != null && linkedNoAsk != null
+      ? 1 - linkedMarketProbability - Number(linkedNoAsk)
       : null;
+  const linkedBestSide =
+    linkedMarketBucket && linkedNoEdge != null && linkedMarketEdge != null
+      ? linkedNoEdge > linkedMarketEdge
+        ? "no"
+        : "yes"
+      : null;
+  const linkedBestAsk = linkedBestSide === "no" ? linkedNoAsk : linkedMarketAsk;
+  const linkedBestEdge =
+    linkedBestSide === "no" ? linkedNoEdge : linkedMarketEdge;
   const preferredPriceView =
     linkedMarketBucket
       ? {
-          ask: linkedMarketAsk,
-          edge: linkedMarketEdge,
-          quarter_kelly:
-            linkedMarketKelly != null ? Math.max(0, linkedMarketKelly) / 4 : null,
+          ask: linkedBestAsk,
+          edge: linkedBestEdge,
         }
       : priceAnalysis?.best_side === "no"
         ? noPriceView
         : yesPriceView;
   const preferredSideLabel =
     linkedMarketBucket
-      ? "YES"
+      ? linkedBestSide === "no"
+        ? "NO"
+        : "YES"
       : priceAnalysis?.best_side === "no"
       ? locale === "en-US"
         ? "NO"
@@ -778,6 +766,39 @@ export function ProbabilityDistribution({
       : locale === "en-US"
         ? "CLOB fallback"
         : "CLOB 兜底";
+  const actionableEdge = normalizeSignedProbability(preferredPriceView?.edge);
+  const actionText =
+    !marketScan
+      ? locale === "en-US"
+        ? "Waiting"
+        : "等待"
+      : !marketScan.available
+        ? locale === "en-US"
+          ? "No market"
+          : "无盘口"
+        : actionableEdge == null
+          ? locale === "en-US"
+            ? "No quote"
+            : "无报价"
+          : actionableEdge >= 0.02
+            ? locale === "en-US"
+              ? `Watch ${preferredSideLabel}`
+              : `可关注 ${preferredSideLabel}`
+            : actionableEdge > 0
+              ? locale === "en-US"
+                ? `Small ${preferredSideLabel}`
+                : `${preferredSideLabel} 优势较小`
+              : locale === "en-US"
+                ? "No clear edge"
+                : "暂无优势";
+  const actionNote =
+    actionableEdge != null && actionableEdge >= 0.02
+      ? locale === "en-US"
+        ? "model above ask"
+        : "模型高于买价"
+      : locale === "en-US"
+        ? "read-only signal"
+        : "只读信号";
 
   return (
     <section className="prob-section">
@@ -840,12 +861,12 @@ export function ProbabilityDistribution({
                       : "未匹配到活跃盘口"
                     : linkedMarketBucket
                       ? locale === "en-US"
-                        ? `${topProbabilityLabel || "Top bucket"} vs ${toPriceCents(linkedMarketAsk) || "--"}`
-                        : `${topProbabilityLabel || "最高概率桶"} 对比 ${toPriceCents(linkedMarketAsk) || "--"}`
+                        ? `${actionText}: ${topProbabilityLabel || "top bucket"}`
+                        : `${actionText}：${topProbabilityLabel || "最高概率桶"}`
                       : preferredPriceView?.edge != null
                   ? locale === "en-US"
-                    ? `${preferredSideLabel} edge ${formatSignedPercent(preferredPriceView.edge)}`
-                    : `${preferredSideLabel} 边际 ${formatSignedPercent(preferredPriceView.edge)}`
+                    ? `${actionText} · edge ${formatSignedPercent(preferredPriceView.edge)}`
+                    : `${actionText} · 优势 ${formatSignedPercent(preferredPriceView.edge)}`
                   : locale === "en-US"
                     ? "Waiting for executable quote"
                     : "等待可执行报价"}
@@ -858,8 +879,13 @@ export function ProbabilityDistribution({
                 <em>{topProbabilityText || "--"}</em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "Market ask" : "市场 ask"}</span>
-                <strong>{toPriceCents(linkedMarketAsk ?? yesPriceView?.ask) || "--"}</strong>
+                <span>{locale === "en-US" ? "Candidate" : "可关注"}</span>
+                <strong>{actionText}</strong>
+                <em>{actionNote}</em>
+              </div>
+              <div>
+                <span>{locale === "en-US" ? "Buy price" : "买入价格"}</span>
+                <strong>{toPriceCents(preferredPriceView?.ask) || "--"}</strong>
                 <em>
                   {linkedMarketBucket
                     ? locale === "en-US"
@@ -873,30 +899,17 @@ export function ProbabilityDistribution({
                 </em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "Edge" : "边际"}</span>
+                <span>{locale === "en-US" ? "Model edge" : "模型优势"}</span>
                 <strong>{formatSignedPercent(preferredPriceView?.edge)}</strong>
                 <em>
                   {quoteSourceLabel}
                 </em>
               </div>
-              <div>
-                <span>{locale === "en-US" ? "1/4 Kelly" : "1/4 Kelly"}</span>
-                <strong>{formatKellyFraction(preferredPriceView?.quarter_kelly)}</strong>
-                <em>
-                  {lockAvailable
-                    ? locale === "en-US"
-                      ? `lock ${formatSignedPercent(lockEdge)}`
-                      : `锁价 ${formatSignedPercent(lockEdge)}`
-                    : locale === "en-US"
-                      ? "cap required"
-                      : "需限额"}
-                </em>
-              </div>
             </div>
             <p>
               {locale === "en-US"
-                ? `Read-only sizing reference from executable quotes; it does not place orders. Source: ${quoteSourceLabel}.`
-                : `基于可执行盘口的只读仓位参考；系统不会下单。来源：${quoteSourceLabel}。`}
+                ? `Read-only comparison between model probability and executable ask; it does not place orders. Source: ${quoteSourceLabel}${lockAvailable ? ` · lock ${formatSignedPercent(lockEdge)}` : ""}.`
+                : `只比较模型概率与可执行买价；系统不会下单。来源：${quoteSourceLabel}${lockAvailable ? ` · 锁价 ${formatSignedPercent(lockEdge)}` : ""}。`}
             </p>
           </div>
         )}
@@ -926,26 +939,12 @@ export function ProbabilityDistribution({
               marketBucketTemp != null &&
               bucketTemp != null &&
               Math.abs(bucketTemp - marketBucketTemp) < 0.26;
-            const marketTag = isMarketBucket
-              ? locale === "en-US"
-                ? `Market ref: ${marketYesText || "--"}`
-                : `市场参考: ${marketYesText || "--"}`
-              : marketNoText
-                ? locale === "en-US"
-                  ? `Market hedge: ${marketNoText}`
-                  : `市场反向: ${marketNoText}`
-                : null;
             const yesPriceText = toPriceCents(marketYesPrice);
-            const noPriceText = toPriceCents(marketNoPrice);
             const marketTagFinal = isMarketBucket
               ? locale === "en-US"
                 ? `Market ref: ${yesPriceText || "--"}`
                 : `市场参考: ${yesPriceText || "--"}`
-              : noPriceText
-                ? locale === "en-US"
-                  ? `Market hedge: ${noPriceText}`
-                  : `市场反向: ${noPriceText}`
-                : marketTag;
+              : null;
             let bucketLabel =
               bucket.label || `${bucket.value}${detail.temp_symbol}`;
             if (bucketLabel) {
