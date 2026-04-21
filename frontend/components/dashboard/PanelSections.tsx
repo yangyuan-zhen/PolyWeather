@@ -1125,9 +1125,70 @@ export function ProbabilityDistribution({
                 : `市场仅作参考：最高交易温度桶 ${topMarketBucketText}`
               : locale === "en-US"
                 ? `Market reference only: this bucket ${marketYesText}`
-                : `市场仅作参考：该温度桶 ${marketYesText}`}
+              : `市场仅作参考：该温度桶 ${marketYesText}`}
           </div>
         )}
+        <div className="prob-distribution-panel">
+          <div className="prob-distribution-head">
+            <span>
+              {locale === "en-US"
+                ? "EMOS probability distribution"
+                : "EMOS 概率分布"}
+            </span>
+            <em>
+              {marketContractRows.length > 0
+                ? locale === "en-US"
+                  ? "aligned to market contract buckets"
+                  : "已按市场合约桶聚合"
+                : locale === "en-US"
+                  ? "calibrated temperature buckets"
+                  : "校准后的温度桶"}
+            </em>
+          </div>
+          {probabilityRows.length === 0 ? (
+            <EmptyState text={t("section.noProb")} />
+          ) : (
+            probabilityRows.map((row, index) => {
+              const probability = Math.round(Number(row.probability || 0) * 100);
+              const rowMarketBucket = row.marketBucket;
+              const rowMarketPrice =
+                rowMarketBucket?.market_price ?? rowMarketBucket?.yes_buy ?? null;
+              const yesPriceText = toPriceCents(rowMarketPrice);
+              const marketTagFinal = rowMarketBucket
+                ? locale === "en-US"
+                  ? `Market ref: ${yesPriceText || "--"}`
+                  : `市场参考: ${yesPriceText || "--"}`
+                : null;
+
+              return (
+                <div
+                  key={`${row.key || index}`}
+                  className="prob-row"
+                >
+                  <div className="prob-label">{row.label}</div>
+                  <div className="prob-bar-track">
+                    <div
+                      className={clsx("prob-bar-fill", `rank-${index}`)}
+                      style={{ width: `${Math.max(probability, 8)}%` }}
+                    >
+                      {probability}%
+                    </div>
+                  </div>
+                  {marketTagFinal && (
+                    <div
+                      className={clsx(
+                        "prob-market-inline",
+                        rowMarketBucket ? "yes" : "no",
+                      )}
+                    >
+                      {marketTagFinal}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
         {hasPriceAnalysis && (
           <div className="prob-price-card">
             <div className="prob-price-head">
@@ -1205,49 +1266,6 @@ export function ProbabilityDistribution({
                 : "仅作诊断；EMOS 与合约行使用校准概率"}
             </em>
           </div>
-        )}
-        {probabilityRows.length === 0 ? (
-          <EmptyState text={t("section.noProb")} />
-        ) : (
-          probabilityRows.map((row, index) => {
-            const probability = Math.round(Number(row.probability || 0) * 100);
-            const rowMarketBucket = row.marketBucket;
-            const rowMarketPrice =
-              rowMarketBucket?.market_price ?? rowMarketBucket?.yes_buy ?? null;
-            const yesPriceText = toPriceCents(rowMarketPrice);
-            const marketTagFinal = rowMarketBucket
-              ? locale === "en-US"
-                ? `Market ref: ${yesPriceText || "--"}`
-                : `市场参考: ${yesPriceText || "--"}`
-              : null;
-
-            return (
-              <div
-                key={`${row.key || index}`}
-                className="prob-row"
-              >
-                <div className="prob-label">{row.label}</div>
-                <div className="prob-bar-track">
-                  <div
-                    className={clsx("prob-bar-fill", `rank-${index}`)}
-                    style={{ width: `${Math.max(probability, 8)}%` }}
-                  >
-                    {probability}%
-                  </div>
-                </div>
-                {marketTagFinal && (
-                  <div
-                    className={clsx(
-                      "prob-market-inline",
-                      rowMarketBucket ? "yes" : "no",
-                    )}
-                  >
-                    {marketTagFinal}
-                  </div>
-                )}
-              </div>
-            );
-          })
         )}
       </div>
     </section>

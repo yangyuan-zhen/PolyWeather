@@ -1075,6 +1075,37 @@
   border: 1px solid rgba(251, 113, 133, 0.26);
 }
 
+.root :global(.prob-distribution-panel) {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.root :global(.prob-distribution-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
+}
+
+.root :global(.prob-distribution-head span) {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.root :global(.prob-distribution-head em) {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
 .root :global(.prob-price-card) {
   display: grid;
   gap: 8px;
