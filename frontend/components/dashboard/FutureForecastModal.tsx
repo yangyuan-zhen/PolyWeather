@@ -31,7 +31,8 @@ import {
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
-import type { IntradayMeteorologySignal } from "@/lib/dashboard-types";
+import { dashboardClient } from "@/lib/dashboard-client";
+import type { IntradayMeteorologySignal, MarketScan } from "@/lib/dashboard-types";
 
 function normalizeMarketValue(value?: number | null) {
   if (value == null) return null;
@@ -681,6 +682,7 @@ export function FutureForecastModal() {
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
   const [showDeferredTodaySections, setShowDeferredTodaySections] = useState(false);
+  const [freshMarketScan, setFreshMarketScan] = useState<MarketScan | null>(null);
 
   if (!detail || !dateStr) return null;
 
@@ -725,6 +727,46 @@ export function FutureForecastModal() {
   const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
   const isAnyLayerSyncing = isStructureSyncing;
   const isTodayBlockingRefresh = isToday && isStructureSyncing;
+  const activeMarketScan = freshMarketScan || detail.market_scan || null;
+
+  useEffect(() => {
+    setFreshMarketScan(null);
+    if (!isToday || !isFullDetailReady || !isPro) return;
+    const cityName = String(detail.name || detail.display_name || "").trim();
+    if (!cityName || !dateStr) return;
+
+    let cancelled = false;
+    dashboardClient
+      .getCityMarketScan(cityName, {
+        force: false,
+        marketSlug: detail.market_scan?.primary_market?.slug || null,
+        targetDate: dateStr,
+      })
+      .then((payload) => {
+        if (cancelled) return;
+        setFreshMarketScan(payload.market_scan || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFreshMarketScan(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    dateStr,
+    detail.display_name,
+    detail.local_date,
+    detail.market_scan?.primary_market?.slug,
+    detail.name,
+    detail.updated_at,
+    isFullDetailReady,
+    isPro,
+    isToday,
+  ]);
+
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;
   const barStyle = {
@@ -1946,7 +1988,7 @@ export function FutureForecastModal() {
                         <ProbabilityDistribution
                           detail={detail}
                           targetDate={dateStr}
-                          marketScan={detail.market_scan}
+                          marketScan={activeMarketScan}
                           hideTitle
                         />
                       </div>

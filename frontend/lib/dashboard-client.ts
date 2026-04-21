@@ -5,6 +5,7 @@ import {
   CityListItem,
   CitySummary,
   HistoryPayload,
+  MarketScan,
 } from "@/lib/dashboard-types";
 
 const CACHE_KEY = "polyWeather_v1";
@@ -69,6 +70,31 @@ export function getCityRevision(source?: CityDetail | CitySummary | null) {
           .map((item) => `${normalizeRevisionPart(item?.date)}:${normalizeRevisionPart(item?.max_temp)}`)
           .join("|")
       : "";
+  const marketScan = "market_scan" in source ? source.market_scan : null;
+  const marketFootprint = marketScan
+    ? [
+        normalizeRevisionPart(marketScan.selected_slug),
+        normalizeRevisionPart(marketScan.market_price),
+        normalizeRevisionPart(marketScan.yes_buy),
+        normalizeRevisionPart(marketScan.yes_sell),
+        normalizeRevisionPart(marketScan.no_buy),
+        normalizeRevisionPart(marketScan.no_sell),
+        normalizeRevisionPart(marketScan.price_analysis?.best_side),
+        normalizeRevisionPart(
+          Array.isArray(marketScan.all_buckets)
+            ? marketScan.all_buckets
+                .slice(0, 6)
+                .map(
+                  (bucket) =>
+                    `${normalizeRevisionPart(bucket?.temp ?? bucket?.value)}:${normalizeRevisionPart(
+                      bucket?.market_price ?? bucket?.yes_buy,
+                    )}`,
+                )
+                .join(",")
+            : "",
+        ),
+      ].join("|")
+    : "";
   return [
     normalizeRevisionPart(source.updated_at),
     normalizeRevisionPart(source.current?.obs_time),
@@ -83,6 +109,7 @@ export function getCityRevision(source?: CityDetail | CitySummary | null) {
         : "",
     ),
     normalizeRevisionPart(forecastFootprint),
+    normalizeRevisionPart(marketFootprint),
   ].join("|");
 }
 
@@ -210,6 +237,31 @@ export const dashboardClient = {
     return fetchJson<CityDetail>(
       `/api/city/${normalizeCityName(cityName)}?${params.toString()}`,
     );
+  },
+
+  async getCityMarketScan(
+    cityName: string,
+    options?: {
+      force?: boolean;
+      marketSlug?: string | null;
+      targetDate?: string | null;
+    },
+  ) {
+    const params = new URLSearchParams({
+      force_refresh: String(options?.force ?? false),
+      _ts: String(Date.now()),
+    });
+    if (options?.targetDate) {
+      params.set("target_date", options.targetDate);
+    }
+    if (options?.marketSlug) {
+      params.set("market_slug", options.marketSlug);
+    }
+    return fetchJson<{
+      fetched_at?: string | null;
+      market_scan?: MarketScan | null;
+      selected_date?: string | null;
+    }>(`/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`);
   },
 
   async getHistory(cityName: string, options?: { includeRecords?: boolean }) {
