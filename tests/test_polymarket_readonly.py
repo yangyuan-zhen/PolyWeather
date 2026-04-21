@@ -25,6 +25,18 @@ def test_normalize_orderbook_uses_sorted_best_prices():
     assert book["ask_levels"][0][0] == 0.39
 
 
+def test_extract_market_bucket_range_supports_fahrenheit_ranges():
+    layer = PolymarketReadOnlyLayer()
+    market = {
+        "question": "Will the highest temperature in Miami be between 80-81°F on April 21?",
+        "slug": "highest-temperature-in-miami-on-april-21-2026-80-81f",
+    }
+
+    assert layer._extract_market_bucket_range(market) == (80.0, 81.0, "F")
+    assert layer._extract_market_bucket_temp(market) == 80.5
+    assert layer._extract_market_bucket_label(market, 80.5) == "80-81F"
+
+
 def test_fetch_token_market_data_prefers_orderbook_executable_prices():
     class FakeClob:
         @staticmethod

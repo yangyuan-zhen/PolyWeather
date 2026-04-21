@@ -95,23 +95,42 @@ function findMarketBucketForDisplayTemp(
   displayTemp: number | null,
   detail: Pick<CityDetail, "temp_symbol">,
 ) {
-  const marketTemp = displayTempToMarketCelsius(displayTemp, detail);
-  if (marketTemp == null) return null;
+  if (displayTemp == null || !Number.isFinite(displayTemp)) return null;
 
-  const tolerance = isFahrenheitSymbol(detail.temp_symbol) ? 0.56 : 0.26;
   let best: MarketTopBucket | null = null;
   let bestDelta = Number.POSITIVE_INFINITY;
   for (const bucket of buckets) {
+    const bucketUnit = String(bucket.unit || "").toUpperCase();
+    const compareTemp =
+      bucketUnit === "F"
+        ? displayTemp
+        : displayTempToMarketCelsius(displayTemp, detail);
+    if (compareTemp == null) continue;
+
+    const lower = bucket.lower != null ? Number(bucket.lower) : null;
+    const upper = bucket.upper != null ? Number(bucket.upper) : null;
+    if (
+      lower != null &&
+      upper != null &&
+      Number.isFinite(lower) &&
+      Number.isFinite(upper) &&
+      compareTemp >= lower - 0.01 &&
+      compareTemp <= upper + 0.01
+    ) {
+      return bucket;
+    }
+
     const rawTemp = bucket.temp ?? bucket.value ?? null;
     if (rawTemp == null) continue;
     const candidateTemp = Number(rawTemp);
     if (!Number.isFinite(candidateTemp)) continue;
-    const delta = Math.abs(candidateTemp - marketTemp);
+    const delta = Math.abs(candidateTemp - compareTemp);
     if (delta < bestDelta) {
       best = bucket;
       bestDelta = delta;
     }
   }
+  const tolerance = isFahrenheitSymbol(detail.temp_symbol) ? 0.56 : 0.26;
   return best && bestDelta <= tolerance ? best : null;
 }
 

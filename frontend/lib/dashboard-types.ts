@@ -310,6 +310,9 @@ export interface MarketTopBucket {
   label?: string | null;
   value?: number | null;
   temp?: number | null;
+  lower?: number | null;
+  upper?: number | null;
+  unit?: string | null;
   probability?: number | null;
   market_price?: number | null;
   yes_buy?: number | null;

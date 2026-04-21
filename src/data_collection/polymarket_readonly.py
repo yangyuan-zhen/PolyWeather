@@ -1249,20 +1249,69 @@ class PolymarketReadOnlyLayer:
         return None
 
     def _extract_market_bucket_temp(self, market: Dict[str, Any]) -> Optional[float]:
+        parsed = self._extract_market_bucket_range(market)
+        if parsed:
+            lower, upper, _unit = parsed
+            if upper is not None:
+                return (lower + upper) / 2.0
+            return lower
+        return None
+
+    def _extract_market_bucket_range(
+        self,
+        market: Dict[str, Any],
+    ) -> Optional[Tuple[float, Optional[float], str]]:
+        slug = str(market.get("slug") or "").strip().lower()
+        slug_range = re.search(
+            r"-(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)([cf])(?:$|-or-higher|-or-lower|orhigher|orlower)",
+            slug,
+            re.IGNORECASE,
+        )
+        if slug_range:
+            lower = _safe_float(slug_range.group(1))
+            upper = _safe_float(slug_range.group(2))
+            unit = slug_range.group(3).upper()
+            if lower is not None and upper is not None and abs(upper - lower) <= 20:
+                return min(lower, upper), max(lower, upper), unit
+
         text = " ".join(
             str(part or "")
             for part in (
                 market.get("question"),
                 market.get("title"),
-                market.get("slug"),
             )
         )
-        if not text:
-            return None
-        # Match "... 9°C ..." / "... 9C ..." / "... -2 C ..."
-        match = re.search(r"(-?\d+(?:\.\d+)?)\s*°?\s*c\b", text, re.IGNORECASE)
+        # Match range buckets such as "80-81°F" and "80 to 81F".
+        range_match = re.search(
+            r"(-?\d+(?:\.\d+)?)\s*(?:-|–|—|\bto\b)\s*(-?\d+(?:\.\d+)?)\s*°?\s*([cf])\b",
+            text,
+            re.IGNORECASE,
+        )
+        if range_match:
+            lower = _safe_float(range_match.group(1))
+            upper = _safe_float(range_match.group(2))
+            unit = range_match.group(3).upper()
+            if lower is not None and upper is not None and abs(upper - lower) <= 20:
+                return min(lower, upper), max(lower, upper), unit
+
+        slug_exact = re.search(
+            r"-(\d+(?:\.\d+)?)([cf])(?:$|-or-higher|-or-lower|orhigher|orlower)",
+            slug,
+            re.IGNORECASE,
+        )
+        if slug_exact:
+            value = _safe_float(slug_exact.group(1))
+            unit = slug_exact.group(2).upper()
+            if value is not None:
+                return value, None, unit
+
+        # Match "... 9°C ..." / "... 9F ..." / "... -2 C ..."
+        match = re.search(r"(-?\d+(?:\.\d+)?)\s*°?\s*([cf])\b", text, re.IGNORECASE)
         if match:
-            return _safe_float(match.group(1))
+            value = _safe_float(match.group(1))
+            unit = match.group(2).upper()
+            if value is not None:
+                return value, None, unit
         return None
 
     def _build_weather_event_slug(self, city_key: str, target_date: str) -> Optional[str]:
@@ -1605,12 +1654,14 @@ class PolymarketReadOnlyLayer:
                 Dict[str, Any],
                 Dict[str, Any],
                 Dict[str, Any],
+                Optional[Tuple[float, Optional[float], str]],
             ]
         ] = []
         for market in candidate_markets:
             if not self._market_trade_state(market).get("tradable"):
                 continue
             bucket_temp = self._extract_market_bucket_temp(market)
+            bucket_range = self._extract_market_bucket_range(market)
             if bucket_temp is None:
                 continue
 
@@ -1658,6 +1709,7 @@ class PolymarketReadOnlyLayer:
                     no_token,
                     yes_prices,
                     no_prices,
+                    bucket_range,
                 )
             )
 
@@ -1681,6 +1733,7 @@ class PolymarketReadOnlyLayer:
                 no_token,
                 yes_prices,
                 no_prices,
+                bucket_range,
             ) in ranked:
                 row_direction = self._extract_market_bucket_direction(market)
                 if (
@@ -1713,6 +1766,9 @@ class PolymarketReadOnlyLayer:
                         "label": self._extract_market_bucket_label(market, bucket_temp),
                         "value": bucket_temp,
                         "temp": bucket_temp,
+                        "lower": bucket_range[0] if bucket_range else None,
+                        "upper": bucket_range[1] if bucket_range else None,
+                        "unit": bucket_range[2] if bucket_range else None,
                         "probability": market_prob,
                         "market_price": yes_midpoint,
                         "yes_buy": yes_buy,
@@ -1843,12 +1899,16 @@ class PolymarketReadOnlyLayer:
     ) -> str:
         question = str(market.get("question") or market.get("title") or "").strip()
         direction = self._extract_market_bucket_direction(market)
+        bucket_range = self._extract_market_bucket_range(market)
+        unit = bucket_range[2] if bucket_range else "C"
+        if bucket_range and bucket_range[1] is not None:
+            return f"{bucket_range[0]:g}-{bucket_range[1]:g}{unit}"
         if bucket_temp is not None:
             if direction == "above":
-                return f"{bucket_temp:g}C+"
+                return f"{bucket_temp:g}{unit}+"
             if direction == "below":
-                return f"<={bucket_temp:g}C"
-            return f"{bucket_temp:g}C"
+                return f"<={bucket_temp:g}{unit}"
+            return f"{bucket_temp:g}{unit}"
         return question or str(market.get("slug") or "")
 
     def _extract_market_bucket_direction(self, market: Dict[str, Any]) -> str:
