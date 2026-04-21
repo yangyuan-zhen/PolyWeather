@@ -316,6 +316,8 @@ export interface MarketTopBucket {
   yes_sell?: number | null;
   no_buy?: number | null;
   no_sell?: number | null;
+  yes_token_id?: string | null;
+  no_token_id?: string | null;
   quote_source?: string | null;
   quote_age_ms?: number | null;
   slug?: string | null;

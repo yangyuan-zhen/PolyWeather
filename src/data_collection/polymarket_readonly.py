@@ -573,6 +573,8 @@ class PolymarketReadOnlyLayer:
             primary_market=market,
             limit=all_bucket_limit,
         )
+        if all_buckets:
+            self._hydrate_bucket_prices(all_buckets)
         top_buckets = list(all_buckets[:top_bucket_limit])
 
         yes_payload = {
@@ -662,6 +664,39 @@ class PolymarketReadOnlyLayer:
             }
         )
         return scan
+
+    def _hydrate_bucket_prices(self, buckets: List[Dict[str, Any]]) -> None:
+        for bucket in buckets:
+            if not isinstance(bucket, dict):
+                continue
+            yes_token_id = str(bucket.get("yes_token_id") or "").strip()
+            no_token_id = str(bucket.get("no_token_id") or "").strip()
+            if not yes_token_id:
+                continue
+
+            yes_prices = self._get_token_market_data(yes_token_id)
+            no_prices = self._get_token_market_data(no_token_id) if no_token_id else {}
+            yes_buy = _extract_price(yes_prices.get("buy"))
+            yes_sell = _extract_price(yes_prices.get("sell"))
+            no_buy = _extract_price(no_prices.get("buy"))
+            no_sell = _extract_price(no_prices.get("sell"))
+            yes_midpoint = _extract_price(yes_prices.get("midpoint"))
+
+            if yes_buy is not None:
+                bucket["yes_buy"] = yes_buy
+            if yes_sell is not None:
+                bucket["yes_sell"] = yes_sell
+            if no_buy is not None:
+                bucket["no_buy"] = no_buy
+            if no_sell is not None:
+                bucket["no_sell"] = no_sell
+            if yes_midpoint is not None:
+                bucket["market_price"] = yes_midpoint
+                bucket["probability"] = yes_midpoint
+            if yes_prices.get("quote_source"):
+                bucket["quote_source"] = yes_prices.get("quote_source")
+            if yes_prices.get("quote_age_ms") is not None:
+                bucket["quote_age_ms"] = _safe_int(yes_prices.get("quote_age_ms"), 0)
 
     def _build_price_analysis(
         self,
@@ -1611,6 +1646,8 @@ class PolymarketReadOnlyLayer:
                         "yes_sell": yes_sell,
                         "no_buy": no_buy,
                         "no_sell": no_sell,
+                        "yes_token_id": yes_token_id or None,
+                        "no_token_id": no_token_id or None,
                         "quote_source": yes_prices.get("quote_source"),
                         "quote_age_ms": _safe_int(yes_prices.get("quote_age_ms"), 0),
                         "slug": market_slug or None,
