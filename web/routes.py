@@ -13,7 +13,13 @@ from loguru import logger
 from src.analysis.deb_algorithm import load_history
 from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.database.db_manager import DBManager
-from src.database.runtime_state import TrainingFeatureRecordRepository, TruthRecordRepository
+from src.database.runtime_state import (
+    DailyRecordRepository,
+    STATE_STORAGE_SQLITE,
+    TrainingFeatureRecordRepository,
+    TruthRecordRepository,
+    get_state_storage_mode,
+)
 from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import get_country_network_provider
 from src.data_collection.city_registry import ALIASES
@@ -61,6 +67,7 @@ _CACHE_DB = DBManager()
 
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3
+_daily_record_repo = DailyRecordRepository()
 _truth_record_repo = TruthRecordRepository()
 _training_feature_repo = TrainingFeatureRecordRepository()
 
@@ -583,29 +590,70 @@ def _build_recent_deb_performance_index(
     lookback: int = _DEB_RECENT_LOOKBACK,
     min_samples: int = _DEB_RECENT_MIN_SAMPLES,
 ) -> dict[str, dict[str, object]]:
-    data = history_data if isinstance(history_data, dict) else load_history(_history_file_path())
     index: dict[str, dict[str, object]] = {}
-    if not isinstance(data, dict):
-        return index
-
     today = datetime.utcnow().strftime("%Y-%m-%d")
-    for city_name, rows in data.items():
-        if not isinstance(rows, dict):
+    settled_by_city: dict[str, list[tuple[str, float, float]]] = {}
+
+    if isinstance(history_data, dict):
+        for city_name, rows in history_data.items():
+            if not isinstance(rows, dict):
+                continue
+            settled: list[tuple[str, float, float]] = []
+            for date_key in sorted(rows.keys(), reverse=True):
+                if date_key >= today:
+                    continue
+                record = rows.get(date_key) or {}
+                if not isinstance(record, dict):
+                    continue
+                actual = _sf(record.get("actual_high"))
+                deb_prediction = _sf(record.get("deb_prediction"))
+                if actual is None or deb_prediction is None:
+                    continue
+                settled.append((date_key, actual, deb_prediction))
+                if len(settled) >= max(lookback, 1):
+                    break
+            settled_by_city[str(city_name).strip().lower()] = settled
+    elif get_state_storage_mode() == STATE_STORAGE_SQLITE:
+        recent_rows = _daily_record_repo.load_recent_settled_rows(
+            before_date=today,
+            per_city_limit=max(lookback, 1),
+        )
+        for city_name, rows in recent_rows.items():
+            settled: list[tuple[str, float, float]] = []
+            for row in rows:
+                actual = _sf(row.get("actual_high"))
+                deb_prediction = _sf(row.get("deb_prediction"))
+                date_key = str(row.get("target_date") or "").strip()
+                if not date_key or actual is None or deb_prediction is None:
+                    continue
+                settled.append((date_key, actual, deb_prediction))
+            settled_by_city[str(city_name).strip().lower()] = settled
+    else:
+        data = load_history(_history_file_path())
+        if not isinstance(data, dict):
+            return index
+        for city_name, rows in data.items():
+            if not isinstance(rows, dict):
+                continue
+            settled: list[tuple[str, float, float]] = []
+            for date_key in sorted(rows.keys(), reverse=True):
+                if date_key >= today:
+                    continue
+                record = rows.get(date_key) or {}
+                if not isinstance(record, dict):
+                    continue
+                actual = _sf(record.get("actual_high"))
+                deb_prediction = _sf(record.get("deb_prediction"))
+                if actual is None or deb_prediction is None:
+                    continue
+                settled.append((date_key, actual, deb_prediction))
+                if len(settled) >= max(lookback, 1):
+                    break
+            settled_by_city[str(city_name).strip().lower()] = settled
+
+    for city_name, settled in settled_by_city.items():
+        if not settled:
             continue
-        settled: list[tuple[str, float, float]] = []
-        for date_key in sorted(rows.keys(), reverse=True):
-            if date_key >= today:
-                continue
-            record = rows.get(date_key) or {}
-            if not isinstance(record, dict):
-                continue
-            actual = _sf(record.get("actual_high"))
-            deb_prediction = _sf(record.get("deb_prediction"))
-            if actual is None or deb_prediction is None:
-                continue
-            settled.append((date_key, actual, deb_prediction))
-            if len(settled) >= max(lookback, 1):
-                break
 
         hit_count = 0
         abs_errors: list[float] = []

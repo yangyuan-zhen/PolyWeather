@@ -1,0 +1,82 @@
+{
+  "name": "@vercel/blob",
+  "version": "2.3.0",
+  "description": "The Vercel Blob JavaScript API client",
+  "homepage": "https://vercel.com/storage/blob",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/storage.git",
+    "directory": "packages/blob"
+  },
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "require": "./dist/client.cjs"
+    }
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "browser": {
+    "undici": "./dist/undici-browser.js",
+    "crypto": "./dist/crypto-browser.js",
+    "stream": "./dist/stream-browser.js"
+  },
+  "typesVersions": {
+    "*": {
+      "client": [
+        "dist/client.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "jest": {
+    "preset": "ts-jest",
+    "testEnvironment": "node",
+    "testEnvironmentOptions": {
+      "url": "http://localhost:3000"
+    }
+  },
+  "dependencies": {
+    "async-retry": "^1.3.3",
+    "is-buffer": "^2.0.5",
+    "is-node-process": "^1.2.0",
+    "throttleit": "^2.1.0",
+    "undici": "^6.23.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/jest-environment": "4.0.0",
+    "@edge-runtime/types": "4.0.0",
+    "@types/async-retry": "1.4.9",
+    "@types/jest": "30.0.0",
+    "@types/node": "24.10.13",
+    "jest": "30.2.0",
+    "jest-environment-jsdom": "30.2.0",
+    "ts-jest": "29.4.6",
+    "tsup": "8.5.1",
+    "tsconfig": "0.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsup && pnpm run copy-shims",
+    "copy-shims": "cp src/*-browser.js dist/",
+    "dev": "pnpm run copy-shims && tsup --watch --clean=false",
+    "check": "biome check",
+    "publint": "npx publint",
+    "test": "pnpm run test:node && pnpm run test:edge && pnpm run test:browser",
+    "test:browser": "jest --env jsdom .browser.test.ts --setupFilesAfterEnv ./jest/setup.js",
+    "test:edge": "jest --env @edge-runtime/jest-environment .edge.test.ts",
+    "test:node": "jest --env node .node.test.ts",
+    "type-check": "tsc --noEmit"
+  }
+}

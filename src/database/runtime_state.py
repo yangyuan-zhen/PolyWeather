@@ -232,6 +232,68 @@ class DailyRecordRepository:
             out.setdefault(city, {})[date_str] = payload
         return out
 
+    def load_recent_settled_rows(
+        self,
+        before_date: str,
+        per_city_limit: int,
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        out: Dict[str, List[Dict[str, Any]]] = {}
+        limit = max(int(per_city_limit or 0), 1)
+        query = """
+            SELECT city, target_date, actual_high, deb_prediction
+            FROM (
+                SELECT
+                    city,
+                    target_date,
+                    actual_high,
+                    deb_prediction,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY city
+                        ORDER BY target_date DESC
+                    ) AS row_num
+                FROM daily_records_store
+                WHERE
+                    target_date < ?
+                    AND actual_high IS NOT NULL
+                    AND deb_prediction IS NOT NULL
+            )
+            WHERE row_num <= ?
+            ORDER BY city, target_date DESC
+        """
+        fallback_query = """
+            SELECT city, target_date, actual_high, deb_prediction
+            FROM daily_records_store
+            WHERE
+                target_date < ?
+                AND actual_high IS NOT NULL
+                AND deb_prediction IS NOT NULL
+            ORDER BY city, target_date DESC
+        """
+        try:
+            with self.db.connect() as conn:
+                rows = conn.execute(query, (before_date, limit)).fetchall()
+        except sqlite3.OperationalError:
+            with self.db.connect() as conn:
+                rows = conn.execute(fallback_query, (before_date,)).fetchall()
+
+        counts: Dict[str, int] = {}
+        for row in rows:
+            city = str(row["city"] or "").strip().lower()
+            if not city:
+                continue
+            current_count = counts.get(city, 0)
+            if current_count >= limit:
+                continue
+            out.setdefault(city, []).append(
+                {
+                    "target_date": str(row["target_date"]),
+                    "actual_high": row["actual_high"],
+                    "deb_prediction": row["deb_prediction"],
+                }
+            )
+            counts[city] = current_count + 1
+        return out
+
     def upsert_record(self, city: str, target_date: str, record: Dict[str, Any]) -> None:
         payload_json = json.dumps(record, ensure_ascii=False)
         updated_at = time.time()
