@@ -90,6 +90,45 @@ function displayTempToMarketCelsius(
   return value;
 }
 
+function formatBucketDisplayLabel(
+  bucket: ProbabilityBucket,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  let bucketLabel = bucket.label || `${bucket.value}${detail.temp_symbol}`;
+  if (!bucketLabel) return "";
+  let str = String(bucketLabel).toUpperCase().replace(/\s+/g, "");
+  const symbol = detail.temp_symbol || "°C";
+  if (isFahrenheitSymbol(symbol)) {
+    str = str.replace(/℃/g, "°F").replace(/°C/g, "°F");
+  } else {
+    str = str.replace(/℃/g, "°C").replace(/°F/g, "°C");
+  }
+  str = str.replace(/°?C($|\+|-)/g, "°C$1");
+  str = str.replace(/°?F($|\+|-)/g, "°F$1");
+  if (!/[°℃][CF]/.test(str) && /[0-9]/.test(str)) {
+    str += symbol;
+  }
+  return str;
+}
+
+function getMarketBucketUnit(bucket?: MarketTopBucket | null) {
+  return String(bucket?.unit || "").toUpperCase();
+}
+
+function isMarketBucketAbove(bucket?: MarketTopBucket | null) {
+  const text = `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  return text.includes("+") || text.includes("orhigher") || text.includes("or-higher");
+}
+
+function isMarketBucketBelow(bucket?: MarketTopBucket | null) {
+  const text = `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
+    .toLowerCase()
+    .replace(/\s+/g, "");
+  return text.includes("<=") || text.includes("orlower") || text.includes("or-lower");
+}
+
 function findMarketBucketForDisplayTemp(
   buckets: MarketTopBucket[],
   displayTemp: number | null,
@@ -132,6 +171,60 @@ function findMarketBucketForDisplayTemp(
   }
   const tolerance = isFahrenheitSymbol(detail.temp_symbol) ? 0.56 : 0.26;
   return best && bestDelta <= tolerance ? best : null;
+}
+
+function marketBucketContainsDisplayTemp(
+  bucket: MarketTopBucket | null,
+  displayTemp: number | null,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  if (!bucket || displayTemp == null || !Number.isFinite(displayTemp)) return false;
+
+  const bucketUnit = getMarketBucketUnit(bucket);
+  const compareTemp =
+    bucketUnit === "F" ? displayTemp : displayTempToMarketCelsius(displayTemp, detail);
+  if (compareTemp == null) return false;
+
+  const lower = bucket.lower != null ? Number(bucket.lower) : null;
+  const upper = bucket.upper != null ? Number(bucket.upper) : null;
+  if (lower != null && !Number.isFinite(lower)) return false;
+  if (upper != null && !Number.isFinite(upper)) return false;
+
+  if (lower != null && upper != null) {
+    return compareTemp >= lower - 0.01 && compareTemp <= upper + 0.01;
+  }
+  if (lower != null && isMarketBucketAbove(bucket)) {
+    return compareTemp >= lower - 0.01;
+  }
+  if (lower != null && isMarketBucketBelow(bucket)) {
+    return compareTemp <= lower + 0.01;
+  }
+  const reference = bucket.temp ?? bucket.value ?? lower;
+  const numeric = reference != null ? Number(reference) : null;
+  if (numeric == null || !Number.isFinite(numeric)) return false;
+  const tolerance = bucketUnit === "F" ? 0.56 : 0.26;
+  return Math.abs(compareTemp - numeric) <= tolerance;
+}
+
+function getAggregatedModelProbabilityForMarketBucket(
+  probabilities: ProbabilityBucket[],
+  bucket: MarketTopBucket | null,
+  detail: Pick<CityDetail, "temp_symbol">,
+) {
+  if (!bucket) return null;
+
+  let total = 0;
+  let matched = 0;
+  for (const probabilityBucket of probabilities) {
+    const temp = getBucketTemp(probabilityBucket);
+    if (!marketBucketContainsDisplayTemp(bucket, temp, detail)) continue;
+    const probability = Number(probabilityBucket.probability);
+    if (!Number.isFinite(probability)) continue;
+    total += probability;
+    matched += 1;
+  }
+
+  return matched > 0 ? Math.max(0, Math.min(1, total)) : null;
 }
 
 type ModelMetadata = NonNullable<
@@ -712,7 +805,7 @@ export function ProbabilityDistribution({
   )[0];
   const topProbabilityText = toPercent(topProbability?.probability);
   const topProbabilityLabel = topProbability
-    ? topProbability.label || `${topProbability.value}${detail.temp_symbol}`
+    ? formatBucketDisplayLabel(topProbability, detail)
     : null;
   const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
   const linkedMarketBucket = useMemo(() => {
@@ -732,8 +825,17 @@ export function ProbabilityDistribution({
     yesPriceView?.ask ??
     null;
   const linkedNoAsk = linkedMarketBucket?.no_buy ?? noPriceView?.ask ?? null;
+  const linkedContractLabel =
+    linkedMarketBucket?.label || topProbabilityLabel || null;
+  const aggregatedMarketProbability = getAggregatedModelProbabilityForMarketBucket(
+    view.probabilities || [],
+    linkedMarketBucket,
+    detail,
+  );
   const linkedMarketProbability =
-    topProbability?.probability != null ? Number(topProbability.probability) : null;
+    aggregatedMarketProbability ??
+    (topProbability?.probability != null ? Number(topProbability.probability) : null);
+  const linkedMarketProbabilityText = toPercent(linkedMarketProbability);
   const linkedMarketEdge =
     linkedMarketProbability != null && linkedMarketAsk != null
       ? linkedMarketProbability - Number(linkedMarketAsk)
@@ -897,8 +999,8 @@ export function ProbabilityDistribution({
                       : "未匹配到活跃盘口"
                     : linkedMarketBucket
                       ? locale === "en-US"
-                        ? `${actionText}: ${topProbabilityLabel || "top bucket"}`
-                        : `${actionText}：${topProbabilityLabel || "最高概率桶"}`
+                        ? `${actionText}: ${linkedContractLabel || "contract bucket"}`
+                        : `${actionText}：${linkedContractLabel || "合约桶"}`
                       : preferredPriceView?.edge != null
                   ? locale === "en-US"
                     ? `${actionText} · edge ${formatSignedPercent(preferredPriceView.edge)}`
@@ -910,9 +1012,9 @@ export function ProbabilityDistribution({
             </div>
             <div className="prob-price-grid">
               <div>
-                <span>{locale === "en-US" ? "Model bucket" : "概率主桶"}</span>
-                <strong>{topProbabilityLabel || "--"}</strong>
-                <em>{topProbabilityText || "--"}</em>
+                <span>{locale === "en-US" ? "Contract bucket" : "合约桶口径"}</span>
+                <strong>{linkedContractLabel || topProbabilityLabel || "--"}</strong>
+                <em>{linkedMarketProbabilityText || topProbabilityText || "--"}</em>
               </div>
               <div>
                 <span>{locale === "en-US" ? "Candidate" : "可关注"}</span>
@@ -979,18 +1081,7 @@ export function ProbabilityDistribution({
                 ? `Market ref: ${yesPriceText || "--"}`
                 : `市场参考: ${yesPriceText || "--"}`
               : null;
-            let bucketLabel =
-              bucket.label || `${bucket.value}${detail.temp_symbol}`;
-            if (bucketLabel) {
-              let str = String(bucketLabel).toUpperCase().replace(/\s+/g, "");
-              const symbol = detail.temp_symbol || "°C";
-              str = str.replace(/°?C($|\+|-)/g, "°C$1");
-              str = str.replace(/°?F($|\+|-)/g, "°F$1");
-              if (!/[°℃][CF]/.test(str) && /[0-9]/.test(str)) {
-                str += symbol;
-              }
-              bucketLabel = str;
-            }
+            const bucketLabel = formatBucketDisplayLabel(bucket, detail);
 
             return (
               <div
