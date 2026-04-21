@@ -1026,6 +1026,19 @@ export function ProbabilityDistribution({
         ? "CLOB fallback"
         : "CLOB 兜底";
   const actionableEdge = normalizeSignedProbability(preferredPriceView?.edge);
+  const linkedContractOverpriced =
+    Boolean(linkedMarketBucket) &&
+    linkedBestSide === "no" &&
+    linkedMarketProbability != null &&
+    linkedMarketAsk != null &&
+    linkedMarketEdge != null &&
+    linkedMarketEdge < 0 &&
+    linkedNoEdge != null &&
+    linkedNoEdge > 0;
+  const linkedContractOverpay =
+    linkedContractOverpriced && linkedMarketProbability != null && linkedMarketAsk != null
+      ? Number(linkedMarketAsk) - linkedMarketProbability
+      : null;
   const actionText =
     !marketScan
       ? locale === "en-US"
@@ -1040,18 +1053,30 @@ export function ProbabilityDistribution({
             ? "No quote"
             : "无报价"
           : actionableEdge >= 0.02
-            ? locale === "en-US"
-              ? `Watch ${preferredSideLabel}`
-              : `可关注 ${preferredSideLabel}`
-            : actionableEdge > 0
+            ? linkedContractOverpriced
               ? locale === "en-US"
-                ? `Small ${preferredSideLabel}`
-                : `${preferredSideLabel} 优势较小`
+                ? "Overpriced"
+                : "市场偏贵"
+              : locale === "en-US"
+                ? `Watch ${preferredSideLabel}`
+                : `可关注 ${preferredSideLabel}`
+            : actionableEdge > 0
+              ? linkedContractOverpriced
+                ? locale === "en-US"
+                  ? "Slightly overpriced"
+                  : "略偏贵"
+                : locale === "en-US"
+                  ? `Small ${preferredSideLabel}`
+                  : `${preferredSideLabel} 优势较小`
               : locale === "en-US"
                 ? "No clear edge"
                 : "暂无优势";
   const actionNote =
-    actionableEdge != null && actionableEdge >= 0.02
+    linkedContractOverpriced && linkedContractOverpay != null
+      ? locale === "en-US"
+        ? `YES above model by ${formatSignedPercent(linkedContractOverpay)}`
+        : `YES 高于模型 ${formatSignedPercent(linkedContractOverpay)}`
+      : actionableEdge != null && actionableEdge >= 0.02
       ? locale === "en-US"
         ? `${formatSignedPercent(actionableEdge)} vs ask`
         : `相对买价 ${formatSignedPercent(actionableEdge)}`
@@ -1079,11 +1104,11 @@ export function ProbabilityDistribution({
           <p>
             {hasLgbmProbability
               ? locale === "en-US"
-                ? "LGBM is the learned intraday adjustment; model consensus below remains an explanation layer."
-                : "LGBM 作为日内学习校准项；下方模型共识只保留为解释层。"
+                ? "LGBM is the learned intraday adjustment; raw model points below are only diagnostic."
+                : "LGBM 作为日内学习校准项；下方原始模型落点仅用于诊断。"
               : locale === "en-US"
-                ? "Using the calibrated model distribution; model consensus below is for explanation only."
-                : "使用校准后的模型分布；下方模型共识仅用于解释。"}
+                ? "Using the calibrated probability distribution; raw model points below are not probabilities."
+                : "使用校准后的概率分布；下方原始模型落点不是概率。"}
           </p>
         </div>
         {marketScan?.available && (topMarketBucketText || marketYesText) && (
@@ -1171,13 +1196,13 @@ export function ProbabilityDistribution({
         {modelVoteHint && (
           <div className="prob-model-hint">
             <span>
-              {locale === "en-US" ? "Model consensus" : "模型共识参考"}
+              {locale === "en-US" ? "Raw model points" : "原始模型落点"}
             </span>
             <strong>{modelVoteHint}</strong>
             <em>
               {locale === "en-US"
-                ? "explains clustering, not calibrated probability"
-                : "解释模型聚集，不等同于校准概率"}
+                ? "diagnostic only; EMOS and contract rows use calibrated probabilities"
+                : "仅作诊断；EMOS 与合约行使用校准概率"}
             </em>
           </div>
         )}
