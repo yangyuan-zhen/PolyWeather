@@ -59,6 +59,7 @@ def test_fetch_token_market_data_prefers_orderbook_executable_prices():
     assert data["sell"] == 0.24
     assert data["midpoint"] == 0.5
     assert data["last_trade_price"] == 0.49
+    assert data["quote_source"] == "polymarket_clob_client"
 
 
 def test_get_token_market_data_prefers_fresh_ws_cache():
@@ -115,6 +116,56 @@ def test_price_analysis_computes_edge_kelly_and_lock():
     assert analysis["lock"]["available"] is True
     assert round(analysis["lock"]["edge"], 6) == 0.03
     assert analysis["best_side"] == "yes"
+
+
+def test_trade_state_keeps_open_markets_tradable_after_gamma_end_date():
+    layer = PolymarketReadOnlyLayer()
+
+    state = layer._market_trade_state(
+        {
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "endDate": "2020-01-01T00:00:00Z",
+        }
+    )
+
+    assert state["tradable"] is True
+    assert state["reason"] is None
+    assert state["ended_at_utc"] == "2020-01-01T00:00:00+00:00"
+
+
+def test_hydrate_bucket_prices_uses_executable_quotes_without_midpoint():
+    layer = PolymarketReadOnlyLayer()
+    buckets = [
+        {
+            "temp": 14.0,
+            "yes_token_id": "yes-token",
+            "no_token_id": "no-token",
+        }
+    ]
+
+    def _fake_get_token_market_data(token_id):
+        if token_id == "yes-token":
+            return {
+                "buy": 0.66,
+                "sell": 0.70,
+                "quote_source": "polymarket_clob_rest",
+                "quote_age_ms": 0,
+            }
+        return {"buy": 0.30, "sell": 0.36}
+
+    layer._get_token_market_data = _fake_get_token_market_data
+
+    layer._hydrate_bucket_prices(buckets)
+
+    assert buckets[0]["yes_buy"] == 0.66
+    assert buckets[0]["yes_sell"] == 0.70
+    assert buckets[0]["no_buy"] == 0.30
+    assert buckets[0]["no_sell"] == 0.36
+    assert round(buckets[0]["market_price"], 6) == 0.68
+    assert round(buckets[0]["probability"], 6) == 0.68
+    assert buckets[0]["quote_source"] == "polymarket_clob_rest"
 
 
 def test_build_top_temperature_buckets_dedupes_same_temperature():
@@ -195,6 +246,11 @@ def test_build_top_temperature_buckets_dedupes_same_temperature():
     )
 
     values = [row.get("value") for row in rows]
+    token_ids = [row.get("yes_token_id") for row in rows]
     assert len(values) == len(set(values))
+    assert len(token_ids) == len(set(token_ids))
     assert rows[0]["value"] == 14.0
+    assert rows[0]["yes_token_id"] == (
+        "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher|yes"
+    )
     assert all(not str(row.get("label") or "").startswith("<=") for row in rows)

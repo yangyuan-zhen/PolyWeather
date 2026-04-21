@@ -690,9 +690,15 @@ class PolymarketReadOnlyLayer:
                 bucket["no_buy"] = no_buy
             if no_sell is not None:
                 bucket["no_sell"] = no_sell
-            if yes_midpoint is not None:
-                bucket["market_price"] = yes_midpoint
-                bucket["probability"] = yes_midpoint
+            reference_price = yes_midpoint
+            if reference_price is None and yes_buy is not None and yes_sell is not None:
+                reference_price = (yes_buy + yes_sell) / 2.0
+            if reference_price is None:
+                reference_price = yes_buy if yes_buy is not None else yes_sell
+            if reference_price is not None:
+                reference_price = max(0.0, min(1.0, float(reference_price)))
+                bucket["market_price"] = reference_price
+                bucket["probability"] = reference_price
             if yes_prices.get("quote_source"):
                 bucket["quote_source"] = yes_prices.get("quote_source")
             if yes_prices.get("quote_age_ms") is not None:
@@ -819,7 +825,6 @@ class PolymarketReadOnlyLayer:
                 ended_at = parsed
                 break
 
-        now_utc = datetime.now(timezone.utc)
         tradable = True
         reason = None
         if closed:
@@ -831,9 +836,6 @@ class PolymarketReadOnlyLayer:
         elif accepting_orders is False:
             tradable = False
             reason = "not_accepting_orders"
-        elif ended_at is not None and ended_at <= now_utc:
-            tradable = False
-            reason = "past_end_time"
 
         return {
             "active": active,
@@ -1397,6 +1399,8 @@ class PolymarketReadOnlyLayer:
                     "sell": sell,
                     "midpoint": midpoint,
                     "last_trade_price": last_trade,
+                    "quote_source": "polymarket_clob_client",
+                    "quote_age_ms": 0,
                     "book": book,
                     "book_liquidity": book_liquidity,
                 }
@@ -1420,6 +1424,8 @@ class PolymarketReadOnlyLayer:
             "sell": sell,
             "midpoint": midpoint,
             "last_trade_price": last_trade,
+            "quote_source": "polymarket_clob_rest",
+            "quote_age_ms": 0,
             "book": book,
             "book_liquidity": book_liquidity,
         }
@@ -1635,6 +1641,8 @@ class PolymarketReadOnlyLayer:
                     no_sell = max(0.0, min(1.0, 1.0 - yes_sell))
 
                 market_slug = str(market.get("slug") or "").strip()
+                row_yes_token_id = str(yes_token.get("token_id") or "").strip()
+                row_no_token_id = str(no_token.get("token_id") or "").strip()
                 top_rows.append(
                     {
                         "label": self._extract_market_bucket_label(market, bucket_temp),
@@ -1646,8 +1654,8 @@ class PolymarketReadOnlyLayer:
                         "yes_sell": yes_sell,
                         "no_buy": no_buy,
                         "no_sell": no_sell,
-                        "yes_token_id": yes_token_id or None,
-                        "no_token_id": no_token_id or None,
+                        "yes_token_id": row_yes_token_id or None,
+                        "no_token_id": row_no_token_id or None,
                         "quote_source": yes_prices.get("quote_source"),
                         "quote_age_ms": _safe_int(yes_prices.get("quote_age_ms"), 0),
                         "slug": market_slug or None,
