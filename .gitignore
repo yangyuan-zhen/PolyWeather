@@ -38,6 +38,7 @@ frontend/.vercel/
 frontend/*.tsbuildinfo
 
 .npm-cache/
+.codex-tmp/
 .env.local
 .vercel/
 
