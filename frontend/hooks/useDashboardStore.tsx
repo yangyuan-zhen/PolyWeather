@@ -33,13 +33,14 @@ import {
 } from "@/lib/dashboard-types";
 
 interface DashboardStoreValue extends DashboardState {
+  clearCityFocus: () => void;
   closeFutureModal: () => void;
   closeHistory: () => void;
   closePanel: () => void;
   ensureCityDetail: (
     cityName: string,
     force?: boolean,
-    depth?: "panel" | "nearby" | "full",
+    depth?: "panel" | "market" | "nearby" | "full",
   ) => Promise<CityDetail>;
   focusCity: (cityName: string) => Promise<void>;
   forecastModalMode: ForecastModalMode | null;
@@ -762,6 +763,7 @@ export function DashboardStoreProvider({
   ]);
 
   const selectCity = async (cityName: string) => {
+    selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(true);
     setSelectedForecastDate(null);
@@ -806,12 +808,39 @@ export function DashboardStoreProvider({
   };
 
   const focusCity = async (cityName: string) => {
+    selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(false);
     setSelectedForecastDate(null);
     setFutureModalDate(null);
     setForecastModalMode(null);
-    void ensureCitySummary(cityName).catch(() => null);
+    const depth: CityDetailDepth = proAccessRef.current.subscriptionActive
+      ? "market"
+      : "panel";
+    setLoadingState((current) => ({ ...current, cityDetail: true }));
+    void Promise.allSettled([
+      ensureCitySummary(cityName),
+      ensureCityDetail(cityName, false, depth),
+    ])
+      .then(([, detail]) => {
+        if (selectedCityRef.current !== cityName) return;
+        if (detail.status === "fulfilled") {
+          setSelectedForecastDate(detail.value.local_date);
+        }
+      })
+      .finally(() => {
+        if (selectedCityRef.current !== cityName) return;
+        setLoadingState((current) => ({ ...current, cityDetail: false }));
+      });
+  };
+
+  const clearCityFocus = () => {
+    selectedCityRef.current = null;
+    setSelectedCity(null);
+    setIsPanelOpen(false);
+    setSelectedForecastDate(null);
+    setFutureModalDate(null);
+    setForecastModalMode(null);
   };
 
   useEffect(() => {
@@ -833,19 +862,8 @@ export function DashboardStoreProvider({
     if (typeof window === "undefined") return;
 
     hydratedSelectionRef.current = true;
-    const stored = String(
-      window.localStorage.getItem(SELECTED_CITY_STORAGE_KEY) || "",
-    )
-      .trim()
-      .toLowerCase();
-    if (!stored) {
-      return;
-    }
-    if (!cities.some((city) => city.name === stored)) {
-      return;
-    }
-    void selectCity(stored);
-  }, [cities, selectedCity, selectCity]);
+    window.localStorage.removeItem(SELECTED_CITY_STORAGE_KEY);
+  }, [cities, selectedCity]);
 
   const refreshSelectedCity = async () => {
     if (!selectedCity) return;
@@ -1015,6 +1033,7 @@ export function DashboardStoreProvider({
       cities,
       cityDetailsByName,
       citySummariesByName,
+      clearCityFocus,
       closeFutureModal: () => {
         modalOpenSeqRef.current += 1;
         setFutureModalDate(null);

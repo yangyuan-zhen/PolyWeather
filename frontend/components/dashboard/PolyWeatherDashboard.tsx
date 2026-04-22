@@ -128,13 +128,75 @@ function buildSnapshot(
   return { city, detail, score, summary };
 }
 
+function getProbabilityLabel(
+  bucket: { label?: string | null; value?: number | null; bucket?: string | null },
+  symbol: string,
+) {
+  if (bucket.label) return bucket.label;
+  if (bucket.bucket) return bucket.bucket;
+  if (Number.isFinite(Number(bucket.value))) {
+    return `≥ ${Math.round(Number(bucket.value))}${symbol}`;
+  }
+  return "--";
+}
+
+function formatProbability(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return "--";
+  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  return `${Math.round(normalized)}%`;
+}
+
+function formatCents(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return "--";
+  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  return `${Math.round(normalized)}¢`;
+}
+
+function formatEdge(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return "--";
+  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  const sign = normalized > 0 ? "+" : "";
+  return `${sign}${normalized.toFixed(1)}%`;
+}
+
+function getModelLabels(detail?: CityDetail | null) {
+  const date = detail?.local_date || "";
+  const dailyModels = date ? detail?.multi_model_daily?.[date]?.models : null;
+  const modelMap = dailyModels || detail?.multi_model || {};
+  const labels = Object.keys(modelMap)
+    .filter((key) => Number.isFinite(Number(modelMap[key])))
+    .map((key) =>
+      key
+        .replace(/^open_meteo_/i, "")
+        .replace(/_/g, " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+    );
+  return ["DEB", ...labels].slice(0, 6);
+}
+
+function buildSparklinePoints(values: number[] | undefined) {
+  if (!values?.length) return "";
+  const width = 92;
+  const height = 28;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  return values
+    .map((value, index) => {
+      const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
+      const y = height - ((value - min) / span) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+}
+
 function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
   const selectedSnapshot = store.selectedCity
     ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity)
     : null;
-  const spotlight = selectedSnapshot || snapshots[0] || null;
+  const spotlight = selectedSnapshot || null;
 
   if (!spotlight) return null;
 
@@ -142,6 +204,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const symbol = getTempSymbol(city, summary, detail);
   const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
   const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
+  const maxSoFar = detail?.current?.max_so_far ?? detail?.airport_current?.max_so_far;
+  const maxTime = detail?.current?.max_temp_time || detail?.airport_current?.max_temp_time || "--";
   const localTime = summary?.local_time || detail?.local_time || "--";
   const riskLevel =
     city.deb_recent_tier ||
@@ -149,77 +213,227 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     summary?.risk?.level ||
     detail?.risk?.level;
   const deviation = summary?.deviation_monitor || detail?.deviation_monitor;
-  const deviationLabel =
-    locale === "en-US" ? deviation?.label_en : deviation?.label_zh;
   const observationSource =
     summary?.current?.settlement_source_label ||
     detail?.current?.settlement_source_label ||
     city.settlement_source_label ||
     city.airport;
+  const probabilityBuckets =
+    detail?.probabilities?.distribution ||
+    (detail?.local_date
+      ? detail?.multi_model_daily?.[detail.local_date]?.probabilities
+      : undefined) ||
+    [];
+  const displayedProbabilities = probabilityBuckets.slice(0, 5);
+  const modelLabels = getModelLabels(detail);
+  const marketScan = detail?.market_scan;
+  const marketBucket = marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
+  const marketLabel = marketBucket
+    ? getProbabilityLabel(marketBucket, symbol)
+    : debPrediction != null
+      ? `> ${formatTemperature(debPrediction, symbol)}`
+      : "--";
+  const marketProbability =
+    marketScan?.market_price ?? marketScan?.yes_buy ?? marketScan?.model_probability;
+  const marketModelProbability = marketScan?.model_probability ?? marketBucket?.probability;
+  const sparklinePoints = buildSparklinePoints(marketScan?.sparkline);
+  const isLoading = store.loadingState.cityDetail && store.selectedCity === city.name;
   const isPro = store.proAccess.subscriptionActive;
-  const heading = locale === "en-US" ? "Decision radar" : "决策雷达";
-  const subtitle =
-    locale === "en-US"
-      ? "Live weather, model variance and paid intelligence stay in one workflow."
-      : "把实时天气、模型偏差和付费情报放在同一个工作流里。";
+  const cityCode = city.icao || detail?.risk?.icao || city.airport;
+  const subtitle = `${cityCode} · ${city.airport}`;
+  const highRiskLabel =
+    riskLevel === "high"
+      ? locale === "en-US"
+        ? "High risk"
+        : "高风险"
+      : getRiskCopy(riskLevel, locale);
+  const keySignals = [
+    {
+      active: Number(marketScan?.edge_percent) > 0,
+      label:
+        locale === "en-US"
+          ? "DEB > Market implied"
+          : "DEB 高于市场隐含",
+      tone: "green",
+    },
+    {
+      active: deviation?.trend === "expanding" || deviation?.direction === "hot",
+      label: locale === "en-US" ? "Rising temps trend" : "升温趋势",
+      tone: "green",
+    },
+    {
+      active: Boolean(detail?.peak?.hours?.length),
+      label:
+        detail?.peak?.hours?.length
+          ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
+          : locale === "en-US"
+            ? "High impact window pending"
+            : "高影响窗口待确认",
+      tone: "amber",
+    },
+  ];
 
   return (
-    <aside className="home-intelligence-panel" aria-label={heading}>
+    <aside className="home-intelligence-panel full" aria-label={city.display_name}>
       <div className="home-panel-glow" aria-hidden="true" />
-      <div className="home-panel-kicker">
-        <span className="home-panel-pulse" aria-hidden="true" />
-        <span>{heading}</span>
-      </div>
+      <button
+        type="button"
+        className="home-panel-close"
+        aria-label={locale === "en-US" ? "Close city card" : "关闭城市卡片"}
+        onClick={store.clearCityFocus}
+      >
+        ×
+      </button>
 
-      <div className="home-panel-city">
+      <div className="home-card-titlebar">
         <div>
-          <span className="home-panel-airport">{city.icao || city.airport}</span>
           <h2>{summary?.display_name || detail?.display_name || city.display_name}</h2>
+          <p>{subtitle}</p>
         </div>
         <span className={clsx("home-risk-badge", String(riskLevel || "other"))}>
-          {getRiskCopy(riskLevel, locale)}
+          {highRiskLabel}
         </span>
       </div>
 
-      <p className="home-panel-subtitle">{subtitle}</p>
+      <div className="home-card-meta-row">
+        <span>{locale === "en-US" ? "Local time" : "当地时间"} {localTime}</span>
+        <span className="home-card-live-dot" />
+        <span>
+          {isLoading
+            ? locale === "en-US"
+              ? "Updating..."
+              : "更新中..."
+            : locale === "en-US"
+              ? "Updated now"
+              : "刚刚更新"}
+        </span>
+      </div>
 
-      <div className="home-metric-grid">
-        <div className="home-metric-card primary">
-          <span>{locale === "en-US" ? "Now" : "当前"}</span>
+      <div className="home-weather-hero">
+        <div>
           <strong>{formatTemperature(currentTemp, symbol)}</strong>
+          <span>
+            {locale === "en-US" ? "Feels like" : "体感接近"}{" "}
+            {formatTemperature(currentTemp, symbol)}
+          </span>
         </div>
-        <div className="home-metric-card">
-          <span>{locale === "en-US" ? "DEB high" : "DEB 高点"}</span>
-          <strong>{formatTemperature(debPrediction, symbol)}</strong>
+        <div className="home-weather-icon" aria-hidden="true">
+          <span className="cloud cloud-a" />
+          <span className="cloud cloud-b" />
+          <span className="rain rain-a" />
+          <span className="rain rain-b" />
+          <span className="rain rain-c" />
         </div>
-        <div className="home-metric-card">
-          <span>{locale === "en-US" ? "Delta" : "偏差"}</span>
-          <strong>{formatDelta(currentTemp, debPrediction, symbol)}</strong>
-        </div>
-        <div className="home-metric-card">
-          <span>{locale === "en-US" ? "Local" : "当地"}</span>
-          <strong>{localTime}</strong>
+        <div className="home-max-so-far">
+          <span>{locale === "en-US" ? "Max so far" : "当前最高"}</span>
+          <strong>
+            {formatTemperature(maxSoFar, symbol)} <small>{maxTime}</small>
+          </strong>
         </div>
       </div>
 
-      <div className="home-signal-card">
-        <div className="home-signal-line" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+      <div className="home-deb-card">
         <div>
-          <span className="home-signal-label">
-            {locale === "en-US" ? "Observation anchor" : "观测锚点"}
-          </span>
-          <strong>{observationSource}</strong>
-          <p>
-            {deviationLabel ||
-              (locale === "en-US"
-                ? "Waiting for model deviation monitor."
-                : "等待模型偏差监控信号。")}
-          </p>
+          <span>DEB forecast <small>(24h max)</small></span>
+          <strong>{formatTemperature(debPrediction, symbol)}</strong>
+          <em>{formatDelta(debPrediction, currentTemp, symbol)}</em>
         </div>
+        <svg viewBox="0 0 110 34" aria-hidden="true">
+          <polyline points="4,26 22,22 38,14 55,20 72,16 88,8 106,10" />
+          <circle cx="88" cy="8" r="2.5" />
+        </svg>
+      </div>
+
+      <div className="home-card-section">
+        <h3>{locale === "en-US" ? "Model stack" : "模型栈"}</h3>
+        <div className="home-model-stack">
+          {modelLabels.map((label) => (
+            <span key={label}>
+              <i />
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="home-card-section probability">
+        <h3>EMOS probability <small>(24h max)</small></h3>
+        {displayedProbabilities.length ? (
+          <div className="home-probability-list">
+            {displayedProbabilities.map((bucket, index) => {
+              const probability = Number(bucket.probability ?? 0);
+              const width = Math.max(6, Math.min(100, probability * 100));
+              return (
+                <div key={`${getProbabilityLabel(bucket, symbol)}-${index}`} className="home-probability-row">
+                  <span>{getProbabilityLabel(bucket, symbol)}</span>
+                  <div>
+                    <i style={{ width: `${width}%` }} />
+                    <strong>{formatProbability(probability)}</strong>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="home-card-empty">
+            {isLoading
+              ? locale === "en-US"
+                ? "Loading probabilities..."
+                : "正在加载概率..."
+              : locale === "en-US"
+                ? "Probability layer pending."
+                : "概率层待加载。"}
+          </div>
+        )}
+      </div>
+
+      <div className={clsx("home-card-section market", !isPro && "locked")}>
+        <div className="home-market-header">
+          <h3>Market edge <small>ⓘ</small></h3>
+          <span>{locale === "en-US" ? "Updated now" : "刚刚更新"}</span>
+        </div>
+        <div className="home-market-ticket">
+          <div className="home-market-question">
+            <strong>{marketLabel}</strong>
+            <span>{marketScan?.selected_date || detail?.local_date || ""}</span>
+          </div>
+          <div className="home-market-prices">
+            <span className="yes">YES {formatCents(marketScan?.yes_buy)}</span>
+            <span className="no">NO {formatCents(marketScan?.no_buy)}</span>
+          </div>
+        </div>
+        <div className="home-market-metrics">
+          <span>
+            Edge <strong>{formatEdge(marketScan?.edge_percent)}</strong>
+          </span>
+          <span>
+            Implied <strong>{formatProbability(marketProbability)}</strong>
+          </span>
+          <span>
+            Model prob <strong>{formatProbability(marketModelProbability)}</strong>
+          </span>
+          <svg viewBox="0 0 96 32" aria-hidden="true">
+            {sparklinePoints ? <polyline points={sparklinePoints} /> : null}
+          </svg>
+        </div>
+        {!isPro ? (
+          <Link href="/account" className="home-market-lock">
+            {locale === "en-US" ? "Unlock market layer" : "解锁市场层"}
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="home-card-section key-signals">
+        <h3>{locale === "en-US" ? "Key signals" : "关键信号"}</h3>
+        <ul>
+          {keySignals.map((signal) => (
+            <li key={signal.label}>
+              <span>{signal.label}</span>
+              <i className={clsx(signal.tone, signal.active && "active")} />
+            </li>
+          ))}
+        </ul>
+        <p>{observationSource}</p>
       </div>
 
       <div className={clsx("home-pro-card", isPro && "active")}>
@@ -228,16 +442,16 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           <strong>
             {isPro
               ? locale === "en-US"
-                ? "Market, history and future days are unlocked."
-                : "市场、历史和未来日情报已解锁。"
+                ? "Open full analysis, history and future-day workflow."
+                : "打开完整分析、历史复盘和未来日工作流。"
               : locale === "en-US"
-                ? "Market edge, history review and future dates stay paid."
-                : "市场优势、历史复盘和未来日期保持付费。"}
+                ? "History review and future dates stay paid."
+                : "历史复盘和未来日期保持付费。"}
           </strong>
         </div>
         {isPro ? (
           <button type="button" onClick={() => void store.selectCity(city.name)}>
-            {locale === "en-US" ? "Open detail" : "打开详情"}
+            {locale === "en-US" ? "Open detail" : "完整详情"}
           </button>
         ) : (
           <Link href="/account">{locale === "en-US" ? "Upgrade" : "升级"}</Link>

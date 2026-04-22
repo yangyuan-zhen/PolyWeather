@@ -849,6 +849,473 @@
   background: rgba(34, 211, 238, 0.16);
 }
 
+.root :global(.home-intelligence-panel.full) {
+  bottom: 18px;
+  width: min(372px, calc(100vw - var(--sidebar-width) - 64px));
+  gap: 12px;
+  overflow-y: auto;
+  border-color: rgba(34, 211, 238, 0.34);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.22), transparent 34%),
+    linear-gradient(162deg, rgba(3, 12, 24, 0.94), rgba(6, 26, 48, 0.92));
+}
+
+.root :global(.home-intelligence-panel.full::-webkit-scrollbar) {
+  width: 4px;
+}
+
+.root :global(.home-intelligence-panel.full::-webkit-scrollbar-thumb) {
+  background: rgba(34, 211, 238, 0.28);
+  border-radius: 999px;
+}
+
+.root :global(.home-panel-close) {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.78);
+  cursor: pointer;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.root :global(.home-panel-close:hover) {
+  color: #fff;
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.root :global(.home-card-titlebar) {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding-right: 26px;
+}
+
+.root :global(.home-card-titlebar h2) {
+  color: #f8fafc;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -0.055em;
+}
+
+.root :global(.home-card-titlebar p),
+.root :global(.home-card-meta-row) {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.root :global(.home-card-titlebar p) {
+  margin-top: 7px;
+}
+
+.root :global(.home-card-meta-row) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.root :global(.home-card-live-dot) {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.72);
+}
+
+.root :global(.home-weather-hero) {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  gap: 8px 16px;
+  align-items: center;
+}
+
+.root :global(.home-weather-hero strong) {
+  color: #f8fafc;
+  font-size: 58px;
+  font-weight: 900;
+  line-height: 0.96;
+  letter-spacing: -0.08em;
+}
+
+.root :global(.home-weather-hero span) {
+  display: block;
+  margin-top: 8px;
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 12px;
+}
+
+.root :global(.home-weather-icon) {
+  position: relative;
+  width: 88px;
+  height: 76px;
+}
+
+.root :global(.home-weather-icon .cloud) {
+  position: absolute;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #b8c4d2, #64748b);
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
+}
+
+.root :global(.home-weather-icon .cloud-a) {
+  left: 10px;
+  top: 24px;
+  width: 70px;
+  height: 30px;
+}
+
+.root :global(.home-weather-icon .cloud-b) {
+  left: 31px;
+  top: 10px;
+  width: 37px;
+  height: 37px;
+}
+
+.root :global(.home-weather-icon .rain) {
+  position: absolute;
+  top: 58px;
+  width: 4px;
+  height: 13px;
+  border-radius: 999px;
+  background: #38bdf8;
+  transform: rotate(18deg);
+}
+
+.root :global(.home-weather-icon .rain-a) {
+  left: 29px;
+}
+
+.root :global(.home-weather-icon .rain-b) {
+  left: 48px;
+}
+
+.root :global(.home-weather-icon .rain-c) {
+  left: 67px;
+}
+
+.root :global(.home-max-so-far) {
+  grid-column: 2;
+  color: rgba(203, 213, 225, 0.86);
+  font-size: 12px;
+  text-align: right;
+}
+
+.root :global(.home-max-so-far strong) {
+  display: block;
+  margin-top: 4px;
+  font-size: 16px;
+  letter-spacing: -0.03em;
+}
+
+.root :global(.home-max-so-far small) {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 11px;
+}
+
+.root :global(.home-deb-card),
+.root :global(.home-card-section) {
+  border-radius: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  background: rgba(2, 8, 18, 0.52);
+}
+
+.root :global(.home-deb-card) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+}
+
+.root :global(.home-deb-card span),
+.root :global(.home-card-section h3) {
+  color: #67e8f9;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.root :global(.home-deb-card small),
+.root :global(.home-card-section h3 small) {
+  color: rgba(148, 163, 184, 0.82);
+  font-weight: 700;
+}
+
+.root :global(.home-deb-card strong) {
+  display: inline-block;
+  margin-top: 9px;
+  color: #f8fafc;
+  font-size: 26px;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+}
+
+.root :global(.home-deb-card em) {
+  margin-left: 10px;
+  color: #f87171;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 850;
+}
+
+.root :global(.home-deb-card svg),
+.root :global(.home-market-metrics svg) {
+  width: 100%;
+  height: 42px;
+}
+
+.root :global(.home-deb-card polyline),
+.root :global(.home-market-metrics polyline) {
+  fill: none;
+  stroke: #18e6d4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.root :global(.home-deb-card circle) {
+  fill: #18e6d4;
+}
+
+.root :global(.home-card-section) {
+  padding: 12px 14px;
+}
+
+.root :global(.home-card-section h3) {
+  margin-bottom: 10px;
+  color: rgba(226, 232, 240, 0.94);
+}
+
+.root :global(.home-model-stack) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.root :global(.home-model-stack span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.72);
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.root :global(.home-model-stack i),
+.root :global(.key-signals i.active) {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.62);
+}
+
+.root :global(.home-card-section.probability) {
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.root :global(.home-probability-list) {
+  display: grid;
+  gap: 8px;
+}
+
+.root :global(.home-probability-row) {
+  display: grid;
+  grid-template-columns: 58px 1fr;
+  align-items: center;
+  gap: 10px;
+  color: rgba(226, 232, 240, 0.95);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.root :global(.home-probability-row div) {
+  position: relative;
+  height: 18px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.root :global(.home-probability-row i) {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #3b82f6, #18e6d4);
+}
+
+.root :global(.home-probability-row:nth-child(3) i) {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24);
+}
+
+.root :global(.home-probability-row:nth-child(n + 4) i) {
+  background: linear-gradient(90deg, #ef4444, #fb7185);
+}
+
+.root :global(.home-probability-row strong) {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding-left: 12px;
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.root :global(.home-card-empty) {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.root :global(.home-card-section.market) {
+  position: relative;
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.root :global(.home-card-section.market.locked) {
+  border-color: rgba(251, 191, 36, 0.28);
+}
+
+.root :global(.home-market-header),
+.root :global(.home-market-ticket),
+.root :global(.home-market-prices),
+.root :global(.home-market-metrics) {
+  display: flex;
+  align-items: center;
+}
+
+.root :global(.home-market-header),
+.root :global(.home-market-ticket) {
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.root :global(.home-market-header span) {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.root :global(.home-market-ticket) {
+  margin-top: 8px;
+}
+
+.root :global(.home-market-question strong) {
+  display: block;
+  color: #f8fafc;
+  font-size: 15px;
+}
+
+.root :global(.home-market-question span) {
+  display: block;
+  margin-top: 3px;
+  color: rgba(148, 163, 184, 0.8);
+  font-size: 11px;
+}
+
+.root :global(.home-market-prices) {
+  gap: 6px;
+}
+
+.root :global(.home-market-prices span) {
+  border-radius: 7px;
+  padding: 7px 9px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.root :global(.home-market-prices .yes) {
+  color: #67e8f9;
+  background: rgba(8, 145, 178, 0.2);
+}
+
+.root :global(.home-market-prices .no) {
+  color: #fca5a5;
+  background: rgba(127, 29, 29, 0.24);
+}
+
+.root :global(.home-market-metrics) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 94px;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.root :global(.home-market-metrics span) {
+  color: rgba(148, 163, 184, 0.84);
+  font-size: 11px;
+}
+
+.root :global(.home-market-metrics strong) {
+  display: block;
+  margin-top: 3px;
+  color: #22c55e;
+  font-size: 13px;
+}
+
+.root :global(.home-market-lock) {
+  display: inline-flex;
+  margin-top: 10px;
+  color: #fde68a;
+  font-size: 12px;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.root :global(.key-signals) {
+  border-color: transparent;
+  background: transparent;
+  padding: 0 4px;
+}
+
+.root :global(.key-signals ul) {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+}
+
+.root :global(.key-signals li) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(203, 213, 225, 0.88);
+  font-size: 12px;
+}
+
+.root :global(.key-signals i) {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.42);
+}
+
+.root :global(.key-signals i.amber.active) {
+  background: #f59e0b;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.62);
+}
+
+.root :global(.key-signals p) {
+  margin-top: 9px;
+  color: rgba(100, 116, 139, 0.9);
+  font-size: 11px;
+}
+
+.root :global(.home-intelligence-panel.full .home-pro-card) {
+  margin-top: 0;
+}
+
 .root :global(.home-opportunity-strip) {
   position: fixed;
   left: calc(var(--sidebar-width) + 30px);
