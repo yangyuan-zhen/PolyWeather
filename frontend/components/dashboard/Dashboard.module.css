@@ -223,53 +223,6 @@
   justify-content: center;
 }
 
-.root :global(.home-map-legend) {
-  position: fixed;
-  left: 50%;
-  bottom: 196px;
-  transform: translateX(-50%);
-  z-index: 930;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(115, 137, 161, 0.18);
-  background: rgba(6, 12, 22, 0.86);
-  backdrop-filter: blur(16px);
-}
-
-.root :global(.home-map-legend span) {
-  color: rgba(203, 213, 225, 0.82);
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.root :global(.home-map-legend-bar) {
-  width: 178px;
-  height: 8px;
-  border-radius: 999px;
-  background: linear-gradient(
-    90deg,
-    #2563eb,
-    #06b6d4,
-    #22c55e,
-    #eab308,
-    #ef4444
-  );
-}
-
-.root :global(.home-map-legend-values) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.root :global(.home-map-legend-values span) {
-  color: rgba(148, 163, 184, 0.72);
-  font-size: 9px;
-}
-
 .weatherAura {
   position: absolute;
   inset: 0;

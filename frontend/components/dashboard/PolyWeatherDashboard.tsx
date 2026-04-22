@@ -374,33 +374,18 @@ function buildDashboardSummaryCards(
 function HomeMapToolbar() {
   const { locale } = useI18n();
   return (
-    <>
-      <div className="home-map-header">
-        <div className="home-map-title">
-          <strong>
-            {locale === "en-US" ? "Global weather regime" : "全球天气态势"}
-          </strong>
-          <span>
-            {locale === "en-US"
-              ? "Live monitored weather derivatives board"
-              : "天气衍生品实时监控面板"}
-          </span>
-        </div>
+    <div className="home-map-header">
+      <div className="home-map-title">
+        <strong>
+          {locale === "en-US" ? "Global weather regime" : "全球天气态势"}
+        </strong>
+        <span>
+          {locale === "en-US"
+            ? "Live monitored weather derivatives board"
+            : "天气衍生品实时监控面板"}
+        </span>
       </div>
-      <div className="home-map-legend" aria-hidden="true">
-        <span>{locale === "en-US" ? "Temperature (°F)" : "温度 (°F)"}</span>
-        <div className="home-map-legend-bar" />
-        <div className="home-map-legend-values">
-          <span>-4</span>
-          <span>14</span>
-          <span>32</span>
-          <span>50</span>
-          <span>68</span>
-          <span>86</span>
-          <span>104</span>
-        </div>
-      </div>
-    </>
+    </div>
   );
 }
 
