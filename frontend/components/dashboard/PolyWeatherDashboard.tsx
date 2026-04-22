@@ -42,28 +42,24 @@ const loadFutureForecastModal = () =>
 
 const MapCanvas = dynamic(
   () =>
-    import("@/components/dashboard/MapCanvas").then((module) => module.MapCanvas),
+    import("@/components/dashboard/MapCanvas").then(
+      (module) => module.MapCanvas,
+    ),
   {
     ssr: false,
     loading: () => <div className="map" aria-hidden="true" />,
   },
 );
 
-const HistoryModal = dynamic(
-  loadHistoryModal,
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
+const HistoryModal = dynamic(loadHistoryModal, {
+  ssr: false,
+  loading: () => null,
+});
 
-const FutureForecastModal = dynamic(
-  loadFutureForecastModal,
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
+const FutureForecastModal = dynamic(loadFutureForecastModal, {
+  ssr: false,
+  loading: () => null,
+});
 
 type CitySnapshot = {
   city: CityListItem;
@@ -149,7 +145,11 @@ function buildSnapshot(
 }
 
 function getProbabilityLabel(
-  bucket: { label?: string | null; value?: number | null; bucket?: string | null },
+  bucket: {
+    label?: string | null;
+    value?: number | null;
+    bucket?: string | null;
+  },
   symbol: string,
 ) {
   if (bucket.label) return bucket.label;
@@ -162,19 +162,22 @@ function getProbabilityLabel(
 
 function formatProbability(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return "--";
-  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  const normalized =
+    Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
   return `${Math.round(normalized)}%`;
 }
 
 function formatCents(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return "--";
-  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  const normalized =
+    Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
   return `${Math.round(normalized)}¢`;
 }
 
 function formatEdge(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return "--";
-  const normalized = Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
+  const normalized =
+    Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
   const sign = normalized > 0 ? "+" : "";
   return `${sign}${normalized.toFixed(1)}%`;
 }
@@ -203,7 +206,8 @@ function buildSparklinePoints(values: number[] | undefined) {
   const span = max - min || 1;
   return values
     .map((value, index) => {
-      const x = values.length === 1 ? width : (index / (values.length - 1)) * width;
+      const x =
+        values.length === 1 ? width : (index / (values.length - 1)) * width;
       const y = height - ((value - min) / span) * height;
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
@@ -253,10 +257,18 @@ function buildDashboardSummaryCards(
   snapshots: CitySnapshot[],
   locale: string,
 ): HomeSummaryCard[] {
-  const topTradable = snapshots.filter((snapshot) => snapshot.tradableOpportunity);
-  const highCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "high").length;
-  const mediumCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "medium").length;
-  const lowCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "low").length;
+  const topTradable = snapshots.filter(
+    (snapshot) => snapshot.tradableOpportunity,
+  );
+  const highCount = snapshots.filter(
+    (snapshot) => snapshot.city.deb_recent_tier === "high",
+  ).length;
+  const mediumCount = snapshots.filter(
+    (snapshot) => snapshot.city.deb_recent_tier === "medium",
+  ).length;
+  const lowCount = snapshots.filter(
+    (snapshot) => snapshot.city.deb_recent_tier === "low",
+  ).length;
   const strongAgreement = snapshots.filter(
     (snapshot) => Number(snapshot.city.deb_recent_hit_rate ?? 0) >= 0.66,
   ).length;
@@ -377,11 +389,20 @@ function HomeMapToolbar() {
     <>
       <div className="home-map-header">
         <div className="home-map-title">
-          <strong>{locale === "en-US" ? "Global weather regime" : "全球天气态势"}</strong>
-          <span>{locale === "en-US" ? "Live monitored weather derivatives board" : "天气衍生品实时监控面板"}</span>
+          <strong>
+            {locale === "en-US" ? "Global weather regime" : "全球天气态势"}
+          </strong>
+          <span>
+            {locale === "en-US"
+              ? "Live monitored weather derivatives board"
+              : "天气衍生品实时监控面板"}
+          </span>
         </div>
       </div>
-      <div className="home-map-toolbar" aria-label={locale === "en-US" ? "Map layer controls" : "地图图层控件"}>
+      <div
+        className="home-map-toolbar"
+        aria-label={locale === "en-US" ? "Map layer controls" : "地图图层控件"}
+      >
         <div className="home-map-modes">
           <button type="button" className="active">
             <Thermometer size={14} strokeWidth={2} />
@@ -447,12 +468,21 @@ function projectHomeTrendPoint(
   };
 }
 
-function getHomeWeatherIconKind(detail?: CityDetail | null, locale = "zh-CN"): HomeWeatherIconKind {
+function getHomeWeatherIconKind(
+  detail?: CityDetail | null,
+  locale = "zh-CN",
+): HomeWeatherIconKind {
   if (!detail) return "cloudy";
-  const summary = getWeatherSummary(detail, locale === "en-US" ? "en-US" : "zh-CN");
-  const weatherText = `${summary.weatherIcon} ${summary.weatherText} ${detail.current?.wx_desc || ""} ${detail.current?.cloud_desc || ""}`.toLowerCase();
+  const summary = getWeatherSummary(
+    detail,
+    locale === "en-US" ? "en-US" : "zh-CN",
+  );
+  const weatherText =
+    `${summary.weatherIcon} ${summary.weatherText} ${detail.current?.wx_desc || ""} ${detail.current?.cloud_desc || ""}`.toLowerCase();
   const cloudCover = Number(detail.hourly_next_48h?.cloud_cover?.[0]);
-  const windSpeed = Number(detail.current?.wind_speed_kt ?? detail.airport_current?.wind_speed_kt);
+  const windSpeed = Number(
+    detail.current?.wind_speed_kt ?? detail.airport_current?.wind_speed_kt,
+  );
 
   if (/⛈|雷|storm|thunder/.test(weatherText)) return "storm";
   if (/🌧|🌦|雨|drizzle|shower|rain/.test(weatherText)) return "rain";
@@ -471,11 +501,17 @@ function buildHomeTrendChart(
   locale = "zh-CN",
 ): HomeTrendChart | null {
   if (!detail) return null;
-  const chartData = getTemperatureChartData(detail, locale === "en-US" ? "en-US" : "zh-CN");
+  const chartData = getTemperatureChartData(
+    detail,
+    locale === "en-US" ? "en-US" : "zh-CN",
+  );
   if (!chartData) return null;
   const forecastSeries = chartData.datasets.hasMgmHourly
     ? chartData.datasets.mgmHourlySeries
-    : [...chartData.datasets.debPastSeries, ...chartData.datasets.debFutureSeries];
+    : [
+        ...chartData.datasets.debPastSeries,
+        ...chartData.datasets.debFutureSeries,
+      ];
   const observationSeries =
     chartData.datasets.metarSeries.length > 0
       ? chartData.datasets.metarSeries
@@ -510,7 +546,8 @@ function buildHomeTrendChart(
       key: `${point.labelTime}-${index}`,
     };
   });
-  const hoverSource = observationSeries.length > 0 ? observationSeries : forecastSeries;
+  const hoverSource =
+    observationSeries.length > 0 ? observationSeries : forecastSeries;
   const hoverPoints = hoverSource.map((point, index) => {
     const projected = projectHomeTrendPoint(
       point.x,
@@ -544,14 +581,22 @@ function buildHomeForecastDays(
   if (!detail) return [];
   const todayLabel = locale === "en-US" ? "Today" : "今天";
   const tomorrowLabel = locale === "en-US" ? "Tomorrow" : "明天";
-  const formatter = new Intl.DateTimeFormat(locale === "en-US" ? "en-US" : "zh-CN", {
-    day: "2-digit",
-    month: "2-digit",
-  });
-  const rows = Array.isArray(detail.forecast?.daily) ? detail.forecast.daily : [];
+  const formatter = new Intl.DateTimeFormat(
+    locale === "en-US" ? "en-US" : "zh-CN",
+    {
+      day: "2-digit",
+      month: "2-digit",
+    },
+  );
+  const rows = Array.isArray(detail.forecast?.daily)
+    ? detail.forecast.daily
+    : [];
   const byDate = new Map<string, number>();
 
-  if (detail.local_date && Number.isFinite(Number(detail.forecast?.today_high))) {
+  if (
+    detail.local_date &&
+    Number.isFinite(Number(detail.forecast?.today_high))
+  ) {
     byDate.set(detail.local_date, Number(detail.forecast?.today_high));
   }
   rows.forEach((row) => {
@@ -582,7 +627,9 @@ function buildHomeForecastDays(
 function readNumericField(source: unknown, key: string) {
   if (!source || typeof source !== "object") return undefined;
   const value = (source as Record<string, unknown>)[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function normalizePercentValue(value: number | null | undefined) {
@@ -623,7 +670,8 @@ function isTradableMarketOpportunity(detail?: CityDetail | null) {
     : Number.NaN;
   if (Number.isFinite(endDateMs) && endDateMs < Date.now()) return false;
 
-  const marketBucket = marketScan.temperature_bucket || marketScan.top_buckets?.[0] || null;
+  const marketBucket =
+    marketScan.temperature_bucket || marketScan.top_buckets?.[0] || null;
   const yesPrice =
     marketScan.yes_buy ??
     readNumericField(marketBucket, "yes_buy") ??
@@ -661,7 +709,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const spotlight = useMemo(
     () =>
       store.selectedCity
-        ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity) || null
+        ? snapshots.find(
+            (snapshot) => snapshot.city.name === store.selectedCity,
+          ) || null
         : null,
     [snapshots, store.selectedCity],
   );
@@ -672,9 +722,12 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     const symbol = getTempSymbol(city, summary, detail);
     const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
     const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
-    const maxSoFar = detail?.current?.max_so_far ?? detail?.airport_current?.max_so_far;
+    const maxSoFar =
+      detail?.current?.max_so_far ?? detail?.airport_current?.max_so_far;
     const maxTime =
-      detail?.current?.max_temp_time || detail?.airport_current?.max_temp_time || "--";
+      detail?.current?.max_temp_time ||
+      detail?.airport_current?.max_temp_time ||
+      "--";
     const localTime = summary?.local_time || detail?.local_time || "--";
     const riskLevel =
       city.deb_recent_tier ||
@@ -748,9 +801,11 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         readNumericField(marketBucket, "yes_buy") ??
         yesPrice ??
         marketScan?.model_probability,
-      marketModelProbability: marketScan?.model_probability ?? marketBucket?.probability,
+      marketModelProbability:
+        marketScan?.model_probability ?? marketBucket?.probability,
       sparklinePoints: buildSparklinePoints(marketScan?.sparkline),
-      isLoading: store.loadingState.cityDetail && store.selectedCity === city.name,
+      isLoading:
+        store.loadingState.cityDetail && store.selectedCity === city.name,
       isPro: store.proAccess.subscriptionActive,
       cityCode: city.icao || detail?.risk?.icao || city.airport,
       localizedCityName: getLocalizedCityDisplay(city, locale, summary, detail),
@@ -770,37 +825,34 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       marketEdgeLabel: locale === "en-US" ? "Edge" : "优势",
       marketImpliedLabel: locale === "en-US" ? "Implied" : "市场隐含",
       marketModelLabel: locale === "en-US" ? "Model prob" : "模型概率",
-      proLabel:
-        store.proAccess.subscriptionActive
-          ? locale === "en-US"
-            ? "Pro signal"
-            : "PRO 信号"
-          : locale === "en-US"
-            ? "Pro locked"
-            : "PRO 锁定",
+      proLabel: store.proAccess.subscriptionActive
+        ? locale === "en-US"
+          ? "Pro signal"
+          : "PRO 信号"
+        : locale === "en-US"
+          ? "Pro locked"
+          : "PRO 锁定",
       forecastDays: buildHomeForecastDays(detail, locale),
       keySignals: [
         {
           active: Number(marketEdge) > 0,
           label:
-            locale === "en-US"
-              ? "DEB > Market implied"
-              : "DEB 高于市场隐含",
+            locale === "en-US" ? "DEB > Market implied" : "DEB 高于市场隐含",
           tone: "green",
         },
         {
-          active: deviation?.trend === "expanding" || deviation?.direction === "hot",
+          active:
+            deviation?.trend === "expanding" || deviation?.direction === "hot",
           label: locale === "en-US" ? "Rising temps trend" : "升温趋势",
           tone: "green",
         },
         {
           active: Boolean(detail?.peak?.hours?.length),
-          label:
-            detail?.peak?.hours?.length
-              ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
-              : locale === "en-US"
-                ? "High impact window pending"
-                : "高影响窗口待确认",
+          label: detail?.peak?.hours?.length
+            ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
+            : locale === "en-US"
+              ? "High impact window pending"
+              : "高影响窗口待确认",
           tone: "amber",
         },
       ],
@@ -860,7 +912,10 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const subtitle = `${cityCode} · ${localizedAirportName}`;
 
   return (
-    <aside className="home-intelligence-panel full" aria-label={localizedCityName}>
+    <aside
+      className="home-intelligence-panel full"
+      aria-label={localizedCityName}
+    >
       <div className="home-panel-glow" aria-hidden="true" />
       <button
         type="button"
@@ -901,7 +956,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       </div>
 
       <div className="home-card-meta-row">
-        <span>{locale === "en-US" ? "Local time" : "当地时间"} {localTime}</span>
+        <span>
+          {locale === "en-US" ? "Local time" : "当地时间"} {localTime}
+        </span>
         <span className="home-card-live-dot" />
         <span>
           {isLoading
@@ -1047,7 +1104,10 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
               const probability = Number(bucket.probability ?? 0);
               const width = Math.max(6, Math.min(100, probability * 100));
               return (
-                <div key={`${getProbabilityLabel(bucket, symbol)}-${index}`} className="home-probability-row">
+                <div
+                  key={`${getProbabilityLabel(bucket, symbol)}-${index}`}
+                  className="home-probability-row"
+                >
                   <span>{getProbabilityLabel(bucket, symbol)}</span>
                   <div>
                     <i style={{ width: `${width}%` }} />
@@ -1100,10 +1160,12 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             {marketEdgeLabel} <strong>{formatEdge(marketEdge)}</strong>
           </span>
           <span>
-            {marketImpliedLabel} <strong>{formatProbability(marketProbability)}</strong>
+            {marketImpliedLabel}{" "}
+            <strong>{formatProbability(marketProbability)}</strong>
           </span>
           <span>
-            {marketModelLabel} <strong>{formatProbability(marketModelProbability)}</strong>
+            {marketModelLabel}{" "}
+            <strong>{formatProbability(marketModelProbability)}</strong>
           </span>
           <svg viewBox="0 0 96 32" aria-hidden="true">
             {sparklinePoints ? <polyline points={sparklinePoints} /> : null}
@@ -1154,23 +1216,19 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   );
 }
 
-function OpportunityStrip({
-  snapshots,
-}: {
-  snapshots: CitySnapshot[];
-}) {
+function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
   const { locale } = useI18n();
   const store = useDashboardStore();
   const summaryCards = useMemo(
     () => buildDashboardSummaryCards(snapshots, locale),
     [locale, snapshots],
   );
-  const items = useMemo(
-    () => snapshots.filter((snapshot) => snapshot.tradableOpportunity).slice(0, 5),
-    [snapshots],
-  );
 
-  if (!items.length) return null;
+  // Always show top 5 cities by score, regardless of market tradability
+  const items = useMemo(() => snapshots.slice(0, 5), [snapshots]);
+
+  // Always render: summary cards should be visible even without tradable opportunities
+  if (!snapshots.length) return null;
 
   return (
     <section
@@ -1186,8 +1244,15 @@ function OpportunityStrip({
             </div>
             <div className="home-summary-card-body">
               {card.items.map((item) => (
-                <div key={`${card.key}-${item.label}`} className="home-summary-stat">
-                  <b className={item.accent ? `accent-${item.accent}` : undefined}>
+                <div
+                  key={`${card.key}-${item.label}`}
+                  className="home-summary-stat"
+                >
+                  <b
+                    className={
+                      item.accent ? `accent-${item.accent}` : undefined
+                    }
+                  >
                     {item.value}
                   </b>
                   <span>{item.label}</span>
@@ -1198,57 +1263,97 @@ function OpportunityStrip({
         ))}
       </div>
 
-      <div className="opportunity-strip-heading">
-        <div>
-          <span>{locale === "en-US" ? "Today's Top Opportunities" : "今日最佳机会"}</span>
-          <strong>
-            {locale === "en-US" ? "Sorted by edge and tradability" : "按优势与可交易性排序"}
-          </strong>
-        </div>
-        <Link href="/docs/intraday-signal" className="opportunity-view-all">
-          {locale === "en-US" ? "View all" : "查看全部"}
-        </Link>
-      </div>
-      <div className="opportunity-card-grid top-opportunities">
-        {items.map(({ city, detail, summary }, index) => {
-          const symbol = getTempSymbol(city, summary, detail);
-          const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
-          const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
-          const localizedCityName = getLocalizedCityDisplay(city, locale, summary, detail);
-          const tier =
-            city.deb_recent_tier ||
-            city.risk_level ||
-            summary?.risk?.level ||
-            detail?.risk?.level;
-          return (
-            <button
-              key={city.name}
-              type="button"
-              className="opportunity-card"
-              onClick={() => void store.focusCity(city.name)}
-            >
-              <div className="opportunity-card-header">
-                <span className="opportunity-rank">{index + 1}</span>
-                <span className="opportunity-city">{localizedCityName}</span>
-                <span className={clsx("opportunity-pill", String(tier || "other"))}>
-                  {getRiskCopy(tier as RiskLevel | undefined, locale)}
-                </span>
-              </div>
-              <span className="opportunity-meta">
-                &gt; {formatTemperature(debPrediction, symbol)}{" "}
-                {locale === "en-US" ? "target" : "目标"}
+      {items.length > 0 && (
+        <>
+          <div className="opportunity-strip-heading">
+            <div>
+              <span>
+                {locale === "en-US"
+                  ? "Today's Top Opportunities"
+                  : "今日最佳机会"}
               </span>
-              <div className="opportunity-card-footer">
-                <div className="opportunity-price-pair">
-                  <span className="opportunity-yes">YES {formatCents(detail?.market_scan?.yes_buy)}</span>
-                  <span className="opportunity-no">NO {formatCents(detail?.market_scan?.no_buy)}</span>
-                </div>
-                <span className="opportunity-edge">{formatEdge(getMarketEdgeValue(detail))}</span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
+              <strong>
+                {locale === "en-US"
+                  ? "Sorted by score and risk"
+                  : "按综合评分排序"}
+              </strong>
+            </div>
+            <Link href="/docs/intraday-signal" className="opportunity-view-all">
+              {locale === "en-US" ? "View all" : "查看全部"}
+            </Link>
+          </div>
+          <div className="opportunity-card-grid top-opportunities">
+            {items.map(
+              ({ city, detail, summary, tradableOpportunity }, index) => {
+                const symbol = getTempSymbol(city, summary, detail);
+                const debPrediction =
+                  summary?.deb?.prediction ?? detail?.deb?.prediction;
+                const localizedCityName = getLocalizedCityDisplay(
+                  city,
+                  locale,
+                  summary,
+                  detail,
+                );
+                const tier =
+                  city.deb_recent_tier ||
+                  city.risk_level ||
+                  summary?.risk?.level ||
+                  detail?.risk?.level;
+                const marketClosed = !tradableOpportunity;
+                return (
+                  <button
+                    key={city.name}
+                    type="button"
+                    className={clsx(
+                      "opportunity-card",
+                      marketClosed && "market-closed",
+                    )}
+                    onClick={() => void store.focusCity(city.name)}
+                  >
+                    <div className="opportunity-card-header">
+                      <span className="opportunity-rank">{index + 1}</span>
+                      <span className="opportunity-city">
+                        {localizedCityName}
+                      </span>
+                      <span
+                        className={clsx(
+                          "opportunity-pill",
+                          String(tier || "other"),
+                        )}
+                      >
+                        {getRiskCopy(tier as RiskLevel | undefined, locale)}
+                      </span>
+                    </div>
+                    <span className="opportunity-meta">
+                      &gt; {formatTemperature(debPrediction, symbol)}{" "}
+                      {locale === "en-US" ? "target" : "目标"}
+                      {marketClosed && (
+                        <span className="opportunity-market-status">
+                          {" · "}
+                          {locale === "en-US" ? "Market closed" : "市场已关闭"}
+                        </span>
+                      )}
+                    </span>
+                    <div className="opportunity-card-footer">
+                      <div className="opportunity-price-pair">
+                        <span className="opportunity-yes">
+                          YES {formatCents(detail?.market_scan?.yes_buy)}
+                        </span>
+                        <span className="opportunity-no">
+                          NO {formatCents(detail?.market_scan?.no_buy)}
+                        </span>
+                      </div>
+                      <span className="opportunity-edge">
+                        {formatEdge(getMarketEdgeValue(detail))}
+                      </span>
+                    </div>
+                  </button>
+                );
+              },
+            )}
+          </div>
+        </>
+      )}
     </section>
   );
 }
@@ -1264,7 +1369,8 @@ function DashboardScreen() {
   const activeCityName =
     store.selectedDetail?.display_name ||
     activeSummary?.display_name ||
-    store.cities.find((city) => city.name === store.selectedCity)?.display_name ||
+    store.cities.find((city) => city.name === store.selectedCity)
+      ?.display_name ||
     store.selectedCity ||
     "";
 
@@ -1291,9 +1397,7 @@ function DashboardScreen() {
   }, [store]);
 
   // Avoid full-page flashing on initial load; only show this overlay for manual refresh.
-  const showLoading =
-    store.loadingState.cities ||
-    store.loadingState.refresh;
+  const showLoading = store.loadingState.cities || store.loadingState.refresh;
   const showCitySyncToast =
     store.loadingState.cityDetail &&
     activeCityName &&
@@ -1332,7 +1436,9 @@ function DashboardScreen() {
 
   useEffect(() => {
     if (!showHomepageChrome) return;
-    const targets = homepageSnapshots.slice(0, 4).map((snapshot) => snapshot.city.name);
+    const targets = homepageSnapshots
+      .slice(0, 4)
+      .map((snapshot) => snapshot.city.name);
     targets.forEach((cityName) => {
       if (preloadedOpportunityRef.current.has(cityName)) return;
       preloadedOpportunityRef.current.add(cityName);
@@ -1343,9 +1449,9 @@ function DashboardScreen() {
   }, [homepageSnapshots, showHomepageChrome, store]);
 
   return (
-        <div
-          className={clsx(
-            styles.root,
+    <div
+      className={clsx(
+        styles.root,
         detailChromeStyles.root,
         modalChromeStyles.root,
       )}

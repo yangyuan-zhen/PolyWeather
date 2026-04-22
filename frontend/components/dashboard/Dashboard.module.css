@@ -65,7 +65,11 @@
   width: 100vw;
   background-image:
     radial-gradient(circle at 18% 18%, rgba(30, 64, 175, 0.1), transparent 24%),
-    radial-gradient(circle at 82% 12%, rgba(8, 145, 178, 0.08), transparent 20%),
+    radial-gradient(
+      circle at 82% 12%,
+      rgba(8, 145, 178, 0.08),
+      transparent 20%
+    ),
     linear-gradient(180deg, #040914 0%, #02050d 100%);
 }
 
@@ -156,7 +160,11 @@
 }
 
 .root :global(.home-map-modes button.active) {
-  background: linear-gradient(180deg, rgba(28, 100, 242, 0.76), rgba(31, 72, 184, 0.76));
+  background: linear-gradient(
+    180deg,
+    rgba(28, 100, 242, 0.76),
+    rgba(31, 72, 184, 0.76)
+  );
   color: #f8fafc;
   box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
 }
@@ -205,7 +213,14 @@
   width: 178px;
   height: 8px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #2563eb, #06b6d4, #22c55e, #eab308, #ef4444);
+  background: linear-gradient(
+    90deg,
+    #2563eb,
+    #06b6d4,
+    #22c55e,
+    #eab308,
+    #ef4444
+  );
 }
 
 .root :global(.home-map-legend-values) {
@@ -339,7 +354,11 @@
   border-radius: 9px;
   border: 1px solid rgba(34, 211, 238, 0.28);
   background:
-    radial-gradient(circle at 30% 30%, rgba(34, 211, 238, 0.24), transparent 52%),
+    radial-gradient(
+      circle at 30% 30%,
+      rgba(34, 211, 238, 0.24),
+      transparent 52%
+    ),
     linear-gradient(180deg, rgba(11, 22, 40, 0.96), rgba(6, 13, 24, 0.96));
   display: inline-flex;
   align-items: center;
@@ -373,7 +392,11 @@
   font-size: 18px;
   font-weight: 800;
   letter-spacing: -0.03em;
-  background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-blue) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-cyan) 0%,
+    var(--accent-blue) 100%
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -790,7 +813,9 @@
     linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(30, 64, 175, 0.1)),
     rgba(9, 18, 32, 0.92);
   border-color: rgba(34, 211, 238, 0.24);
-  box-shadow: 0 0 20px rgba(34, 211, 238, 0.08), inset 0 0 0 1px rgba(34, 211, 238, 0.08);
+  box-shadow:
+    0 0 20px rgba(34, 211, 238, 0.08),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 .root :global(.city-item-main) {
@@ -899,8 +924,16 @@
   border: 1px solid rgba(34, 211, 238, 0.18);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.16), transparent 32%),
-    radial-gradient(circle at 100% 20%, rgba(59, 130, 246, 0.18), transparent 34%),
+    radial-gradient(
+      circle at 18% 0%,
+      rgba(34, 211, 238, 0.16),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 100% 20%,
+      rgba(59, 130, 246, 0.18),
+      transparent 34%
+    ),
     linear-gradient(155deg, rgba(5, 12, 25, 0.86), rgba(12, 19, 35, 0.78));
   backdrop-filter: blur(24px) saturate(130%);
   box-shadow:
@@ -915,7 +948,11 @@
   width: 260px;
   height: 260px;
   border-radius: 999px;
-  background: radial-gradient(circle, rgba(34, 211, 238, 0.18), transparent 62%);
+  background: radial-gradient(
+    circle,
+    rgba(34, 211, 238, 0.18),
+    transparent 62%
+  );
   pointer-events: none;
 }
 
@@ -1150,7 +1187,10 @@
   font-weight: 800;
   padding: 8px 12px;
   text-decoration: none;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
 }
 
 .root :global(.home-pro-card a:hover),
@@ -1167,7 +1207,11 @@
   overflow-y: auto;
   border-color: rgba(34, 211, 238, 0.34);
   background:
-    radial-gradient(circle at 100% 0%, rgba(37, 99, 235, 0.22), transparent 34%),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(37, 99, 235, 0.22),
+      transparent 34%
+    ),
     linear-gradient(162deg, rgba(3, 12, 24, 0.94), rgba(6, 26, 48, 0.92));
 }
 
@@ -1403,7 +1447,11 @@
   width: 44px;
   height: 2px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(125, 211, 252, 0), rgba(125, 211, 252, 0.92));
+  background: linear-gradient(
+    90deg,
+    rgba(125, 211, 252, 0),
+    rgba(125, 211, 252, 0.92)
+  );
 }
 
 .root :global(.home-weather-icon .wind::after) {
@@ -1526,7 +1574,11 @@
 .root :global(.home-card-section) {
   border-radius: 18px;
   border: 1px solid rgba(115, 137, 161, 0.16);
-  background: linear-gradient(180deg, rgba(7, 14, 26, 0.92), rgba(9, 17, 30, 0.8));
+  background: linear-gradient(
+    180deg,
+    rgba(7, 14, 26, 0.92),
+    rgba(9, 17, 30, 0.8)
+  );
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
@@ -1940,11 +1992,16 @@
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 22px;
   background:
-    radial-gradient(circle at 8% 50%, rgba(34, 211, 238, 0.12), transparent 32%),
+    radial-gradient(
+      circle at 8% 50%,
+      rgba(34, 211, 238, 0.12),
+      transparent 32%
+    ),
     rgba(7, 13, 25, 0.76);
   backdrop-filter: blur(20px) saturate(130%);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
-  animation: opportunity-strip-enter 580ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  animation: opportunity-strip-enter 580ms cubic-bezier(0.16, 1, 0.3, 1) 120ms
+    both;
 }
 
 .root :global(.home-summary-grid) {
@@ -2011,10 +2068,18 @@
   font-weight: 650;
 }
 
-.root :global(.home-summary-stat b.accent-red) { color: #fb7185; }
-.root :global(.home-summary-stat b.accent-amber) { color: #fbbf24; }
-.root :global(.home-summary-stat b.accent-green) { color: #4ade80; }
-.root :global(.home-summary-stat b.accent-cyan) { color: #22d3ee; }
+.root :global(.home-summary-stat b.accent-red) {
+  color: #fb7185;
+}
+.root :global(.home-summary-stat b.accent-amber) {
+  color: #fbbf24;
+}
+.root :global(.home-summary-stat b.accent-green) {
+  color: #4ade80;
+}
+.root :global(.home-summary-stat b.accent-cyan) {
+  color: #22d3ee;
+}
 
 .root :global(.opportunity-strip-heading) {
   display: flex;
@@ -2064,20 +2129,31 @@
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
   background:
-    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.12), transparent 32%),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(30, 64, 175, 0.12),
+      transparent 32%
+    ),
     rgba(10, 16, 28, 0.84);
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
-  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
 }
 
 .root :global(.opportunity-card:hover) {
   transform: translateY(-2px);
   border-color: rgba(34, 211, 238, 0.32);
   background:
-    radial-gradient(circle at 100% 0%, rgba(30, 64, 175, 0.18), transparent 32%),
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(30, 64, 175, 0.18),
+      transparent 32%
+    ),
     rgba(15, 23, 42, 0.92);
 }
 
@@ -2167,6 +2243,22 @@
   color: rgba(34, 211, 238, 0.9);
   font-size: 18px;
   font-weight: 800;
+}
+
+/* Market-closed opportunity card — dimmed state */
+.root :global(.opportunity-card.market-closed) {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.root :global(.opportunity-card.market-closed:hover) {
+  opacity: 0.82;
+}
+
+.root :global(.opportunity-market-status) {
+  color: rgba(251, 191, 36, 0.8);
+  font-size: 10px;
+  font-weight: 700;
 }
 
 @keyframes home-panel-enter {
@@ -2981,7 +3073,11 @@
 .root :global(.model-bar-fill) {
   height: 100%;
   border-radius: 6px;
-  background: linear-gradient(90deg, rgba(14, 165, 233, 0.72), rgba(34, 211, 238, 0.92));
+  background: linear-gradient(
+    90deg,
+    rgba(14, 165, 233, 0.72),
+    rgba(34, 211, 238, 0.92)
+  );
   transition: width 0.6s ease-out;
 }
 
@@ -3096,8 +3192,12 @@
 .root :global(.forecast-day-sync) {
   cursor: wait;
   opacity: 0.76;
-  background:
-    linear-gradient(90deg, rgba(15, 23, 42, 0.86), rgba(30, 41, 59, 0.72), rgba(15, 23, 42, 0.86));
+  background: linear-gradient(
+    90deg,
+    rgba(15, 23, 42, 0.86),
+    rgba(30, 41, 59, 0.72),
+    rgba(15, 23, 42, 0.86)
+  );
   background-size: 220% 100%;
   animation: panelSkeletonSweep 1.35s ease-in-out infinite;
 }
@@ -5142,8 +5242,11 @@
   padding: 16px;
   border: 1px solid rgba(34, 211, 238, 0.22);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(8, 47, 73, 0.42), rgba(15, 23, 42, 0.78));
+  background: linear-gradient(
+    180deg,
+    rgba(8, 47, 73, 0.42),
+    rgba(15, 23, 42, 0.78)
+  );
 }
 
 .root :global(.future-v2-meteorology-copy) {
@@ -6181,7 +6284,8 @@
   background: #22d3ee;
 }
 
-.root :global(.future-v2-rule-panel:nth-child(2) .future-v2-rule-list li::before) {
+.root
+  :global(.future-v2-rule-panel:nth-child(2) .future-v2-rule-list li::before) {
   background: #f59e0b;
 }
 
