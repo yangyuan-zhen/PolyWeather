@@ -2131,12 +2131,6 @@
   line-height: 1.2;
 }
 
-.root :global(.home-summary-card-head span) {
-  color: #60a5fa;
-  font-size: 10px;
-  font-weight: 700;
-}
-
 .root :global(.home-summary-card-body) {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2195,13 +2189,6 @@
   color: #f8fafc;
   font-size: 15px;
   line-height: 1.25;
-}
-
-.root :global(.opportunity-view-all) {
-  color: #60a5fa;
-  text-decoration: none;
-  font-size: 12px;
-  font-weight: 700;
 }
 
 .root :global(.opportunity-card-grid) {

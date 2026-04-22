@@ -1153,7 +1153,6 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
           <div key={card.key} className="home-summary-card">
             <div className="home-summary-card-head">
               <strong>{card.title}</strong>
-              <span>{locale === "en-US" ? "View all" : "查看全部"}</span>
             </div>
             <div className="home-summary-card-body">
               {card.items.map((item) => (
@@ -1189,9 +1188,6 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
               : "当前市场问题 · YES/NO 价格 · Edge · 小趋势线"}
           </strong>
         </div>
-        <Link href="/docs/intraday-signal" className="opportunity-view-all">
-          {locale === "en-US" ? "View all" : "查看全部"}
-        </Link>
       </div>
       {items.length > 0 ? (
         <div className="opportunity-card-grid top-opportunities">

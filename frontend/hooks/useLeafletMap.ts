@@ -33,6 +33,7 @@ const AUTO_NEARBY_MIN_ZOOM = 8;
 const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
 const AUTO_NEARBY_IDLE_REFRESH_DELAY_MS = 10_000;
 const AUTO_NEARBY_MIN_REFRESH_INTERVAL_MS = 60_000;
+const USER_CAMERA_OVERRIDE_MS = 10 * 60_000;
 const MAP_MAX_ZOOM = 19;
 const MAP_TILE_URLS = {
   dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
@@ -405,6 +406,8 @@ export function useLeafletMap({
   const loadingAutoNearbyRef = useRef(false);
   const handlingAutoNearbyRef = useRef(false);
   const lastMovedCityRef = useRef<string | null>(null);
+  const lastCameraSelectionRef = useRef<string | null>(null);
+  const lastUserCameraInteractionAtRef = useRef(0);
   const suspendMotionRef = useRef(suspendMotion);
   const hasFittedInitialBoundsRef = useRef(false);
   const onClosePanelRef = useRef(onClosePanel);
@@ -482,6 +485,7 @@ export function useLeafletMap({
     map.on("click", handleMapClick);
 
     const markInteracting = () => {
+      lastUserCameraInteractionAtRef.current = Date.now();
       if (interactionIdleTimerRef.current) {
         clearTimeout(interactionIdleTimerRef.current);
         interactionIdleTimerRef.current = null;
@@ -887,6 +891,7 @@ export function useLeafletMap({
   useEffect(() => {
     if (!selectedCity) {
       lastMovedCityRef.current = null;
+      lastCameraSelectionRef.current = null;
       return;
     }
 
@@ -902,6 +907,17 @@ export function useLeafletMap({
 
     const entry = markersRef.current[selectedCity];
     if (!entry) return;
+
+    const selectionChanged = lastCameraSelectionRef.current !== selectedCity;
+    lastCameraSelectionRef.current = selectedCity;
+
+    if (
+      !selectionChanged &&
+      Date.now() - lastUserCameraInteractionAtRef.current < USER_CAMERA_OVERRIDE_MS
+    ) {
+      lastMovedCityRef.current = selectedCity;
+      return;
+    }
 
     // Lock the move
     lastMovedCityRef.current = selectedCity;
