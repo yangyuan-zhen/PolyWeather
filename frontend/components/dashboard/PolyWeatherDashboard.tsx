@@ -222,7 +222,12 @@ type HomeTrendChart = {
   forecastPath: string;
   legendText: string;
   observationDots: Array<{ cx: number; cy: number; key: string }>;
-  tickLabels: Array<{ key: string; label: string; x: number }>;
+};
+
+type HomeForecastDay = {
+  key: string;
+  label: string;
+  maxTemp: number;
 };
 
 function projectHomeTrendPoint(
@@ -314,32 +319,54 @@ function buildHomeTrendChart(
       key: `${point.labelTime}-${index}`,
     };
   });
-  const tickLabels = chartData.tickLabels
-    .map((label, index) => {
-      if (!label) return null;
-      const minutes = Number.parseInt(String(chartData.times[index] || "0").split(":")[0] || "0", 10) * 60;
-      const projected = projectHomeTrendPoint(
-        minutes,
-        chartData.min,
-        chartData.xMin,
-        chartData.xMax,
-        chartData.min,
-        chartData.max,
-      );
-      return {
-        key: `${label}-${index}`,
-        label,
-        x: projected.cx,
-      };
-    })
-    .filter((item): item is { key: string; label: string; x: number } => item != null);
 
   return {
     forecastPath,
     legendText: chartData.legendText,
     observationDots,
-    tickLabels,
   };
+}
+
+function buildHomeForecastDays(
+  detail?: CityDetail | null,
+  locale = "zh-CN",
+): HomeForecastDay[] {
+  if (!detail) return [];
+  const todayLabel = locale === "en-US" ? "Today" : "今天";
+  const tomorrowLabel = locale === "en-US" ? "Tomorrow" : "明天";
+  const formatter = new Intl.DateTimeFormat(locale === "en-US" ? "en-US" : "zh-CN", {
+    day: "2-digit",
+    month: "2-digit",
+  });
+  const rows = Array.isArray(detail.forecast?.daily) ? detail.forecast.daily : [];
+  const byDate = new Map<string, number>();
+
+  if (detail.local_date && Number.isFinite(Number(detail.forecast?.today_high))) {
+    byDate.set(detail.local_date, Number(detail.forecast?.today_high));
+  }
+  rows.forEach((row) => {
+    if (!row?.date || !Number.isFinite(Number(row.max_temp))) return;
+    if (!byDate.has(row.date)) {
+      byDate.set(row.date, Number(row.max_temp));
+    }
+  });
+
+  return [...byDate.entries()].slice(0, 4).map(([date, maxTemp], index) => {
+    const parsed = new Date(`${date}T00:00:00`);
+    const label =
+      index === 0
+        ? todayLabel
+        : index === 1
+          ? tomorrowLabel
+          : Number.isNaN(parsed.getTime())
+            ? date
+            : formatter.format(parsed);
+    return {
+      key: date,
+      label,
+      maxTemp,
+    };
+  });
 }
 
 function readNumericField(source: unknown, key: string) {
@@ -512,6 +539,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     : locale === "en-US"
       ? "Pro locked"
       : "PRO 锁定";
+  const forecastDays = buildHomeForecastDays(detail, locale);
   const keySignals = [
     {
       active: Number(marketEdge) > 0,
@@ -624,10 +652,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           <strong>{formatTemperature(debPrediction, symbol)}</strong>
           <em>{formatDelta(debPrediction, currentTemp, symbol)}</em>
         </div>
-        <svg viewBox="0 0 110 34" aria-hidden="true">
-          <polyline points="4,26 22,22 38,14 55,20 72,16 88,8 106,10" />
-          <circle cx="88" cy="8" r="2.5" />
-        </svg>
       </div>
 
       {trendChart ? (
@@ -648,19 +672,26 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 <circle key={point.key} cx={point.cx} cy={point.cy} r="3.2" />
               ))}
             </svg>
-            <div className="home-intraday-axis">
-              {trendChart.tickLabels.map((tick) => (
-                <span key={tick.key} style={{ left: `${tick.x}px` }}>
-                  {tick.label}
-                </span>
-              ))}
-            </div>
           </div>
           <div className="home-intraday-meta">
             {trendChart.legendText ||
               (locale === "en-US"
                 ? "Intraday observations pending."
                 : "日内观测序列待补充。")}
+          </div>
+        </div>
+      ) : null}
+
+      {forecastDays.length ? (
+        <div className="home-card-section forecast">
+          <h3>{locale === "en-US" ? "Multi-day forecast" : "多日预报"}</h3>
+          <div className="home-forecast-grid">
+            {forecastDays.map((day) => (
+              <div key={day.key} className="home-forecast-item">
+                <span>{day.label}</span>
+                <strong>{formatTemperature(day.maxTemp, symbol)}</strong>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

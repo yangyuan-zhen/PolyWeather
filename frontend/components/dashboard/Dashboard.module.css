@@ -1222,10 +1222,10 @@
 }
 
 .root :global(.home-deb-card) {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px;
-  gap: 12px;
-  align-items: center;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   padding: 12px 14px;
 }
 
@@ -1259,23 +1259,17 @@
   font-weight: 850;
 }
 
-.root :global(.home-deb-card svg),
 .root :global(.home-market-metrics svg) {
   width: 100%;
   height: 42px;
 }
 
-.root :global(.home-deb-card polyline),
 .root :global(.home-market-metrics polyline) {
   fill: none;
   stroke: #18e6d4;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.2;
-}
-
-.root :global(.home-deb-card circle) {
-  fill: #18e6d4;
 }
 
 .root :global(.home-card-section) {
@@ -1293,7 +1287,7 @@
 
 .root :global(.home-intraday-chart) {
   position: relative;
-  padding: 10px 0 22px;
+  padding: 10px 0 0;
 }
 
 .root :global(.home-intraday-chart svg) {
@@ -1320,21 +1314,6 @@
   stroke-width: 1.6;
 }
 
-.root :global(.home-intraday-axis) {
-  position: absolute;
-  inset: auto 0 0;
-  height: 18px;
-}
-
-.root :global(.home-intraday-axis span) {
-  position: absolute;
-  bottom: 0;
-  transform: translateX(-50%);
-  color: rgba(148, 163, 184, 0.82);
-  font-size: 10px;
-  font-weight: 700;
-}
-
 .root :global(.home-intraday-meta) {
   color: rgba(148, 163, 184, 0.9);
   font-size: 11px;
@@ -1343,6 +1322,41 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.root :global(.home-card-section.forecast) {
+  border-color: rgba(99, 102, 241, 0.24);
+}
+
+.root :global(.home-forecast-grid) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.root :global(.home-forecast-item) {
+  min-width: 0;
+  padding: 10px 8px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.5);
+  text-align: center;
+}
+
+.root :global(.home-forecast-item span) {
+  display: block;
+  color: rgba(148, 163, 184, 0.84);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.root :global(.home-forecast-item strong) {
+  display: block;
+  margin-top: 6px;
+  color: #f8fafc;
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: -0.04em;
 }
 
 .root :global(.home-model-stack) {
