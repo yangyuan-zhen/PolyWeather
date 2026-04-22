@@ -34,6 +34,10 @@ const AUTO_NEARBY_MAX_DISTANCE_M = 120000;
 const AUTO_NEARBY_IDLE_REFRESH_DELAY_MS = 10_000;
 const AUTO_NEARBY_MIN_REFRESH_INTERVAL_MS = 60_000;
 const MAP_MAX_ZOOM = 19;
+const MAP_TILE_URLS = {
+  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+} as const;
 const CITY_MARKER_DISPLAY_OFFSETS: Record<
   string,
   { x: number; y: number; zIndexOffset?: number }
@@ -50,6 +54,16 @@ function getMarkerDisplayOffset(cityName: string) {
     y: 0,
     zIndexOffset: 0,
   };
+}
+
+function getMapTileUrl() {
+  if (
+    typeof document !== "undefined" &&
+    document.documentElement.classList.contains("light")
+  ) {
+    return MAP_TILE_URLS.light;
+  }
+  return MAP_TILE_URLS.dark;
 }
 
 function pickMarkerTemperature(
@@ -382,6 +396,7 @@ export function useLeafletMap({
 }: UseLeafletMapArgs) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const markersRef = useRef<
     Record<string, { city: CityListItem; marker: L.Marker }>
   >({});
@@ -444,18 +459,16 @@ export function useLeafletMap({
     });
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-      {
-        attribution:
-          '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
-        maxZoom: 19,
-        subdomains: "abcd",
-      },
-    ).addTo(map);
+    const tileLayer = L.tileLayer(getMapTileUrl(), {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+      maxZoom: 19,
+      subdomains: "abcd",
+    }).addTo(map);
 
     const nearbyLayer = L.layerGroup().addTo(map);
     mapRef.current = map;
+    tileLayerRef.current = tileLayer;
     nearbyLayerRef.current = nearbyLayer;
 
     // Track which city we've already moved to for the current selection
@@ -515,9 +528,28 @@ export function useLeafletMap({
       map.off("click", handleMapClick);
       map.remove();
       mapRef.current = null;
+      tileLayerRef.current = null;
       nearbyLayerRef.current = null;
       markersRef.current = {};
     };
+  }, []);
+
+  useEffect(() => {
+    const tileLayer = tileLayerRef.current;
+    if (!tileLayer || typeof MutationObserver === "undefined") return;
+
+    const syncMapTheme = () => {
+      tileLayer.setUrl(getMapTileUrl());
+    };
+    syncMapTheme();
+
+    const observer = new MutationObserver(syncMapTheme);
+    observer.observe(document.documentElement, {
+      attributeFilter: ["class"],
+      attributes: true,
+    });
+
+    return () => observer.disconnect();
   }, []);
 
   // Handle initial view if cities are loaded
