@@ -238,21 +238,36 @@ type HomeForecastDay = {
   maxTemp: number;
 };
 
-type HomeSummaryMetric = {
+type HomeSummaryCard = {
   key: string;
-  label: string;
-  value: string;
-  accent?: "green" | "amber" | "red" | "cyan";
+  title: string;
+  linkLabel?: string;
+  items: Array<{
+    label: string;
+    value: string;
+    accent?: "green" | "amber" | "red" | "cyan";
+  }>;
 };
 
-function buildDashboardSummaryMetrics(
+function buildDashboardSummaryCards(
   snapshots: CitySnapshot[],
   locale: string,
-): HomeSummaryMetric[] {
+): HomeSummaryCard[] {
   const topTradable = snapshots.filter((snapshot) => snapshot.tradableOpportunity);
   const highCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "high").length;
   const mediumCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "medium").length;
   const lowCount = snapshots.filter((snapshot) => snapshot.city.deb_recent_tier === "low").length;
+  const strongAgreement = snapshots.filter(
+    (snapshot) => Number(snapshot.city.deb_recent_hit_rate ?? 0) >= 0.66,
+  ).length;
+  const mediumAgreement = snapshots.filter((snapshot) => {
+    const rate = Number(snapshot.city.deb_recent_hit_rate ?? 0);
+    return rate >= 0.4 && rate < 0.66;
+  }).length;
+  const weakAgreement = Math.max(
+    snapshots.length - strongAgreement - mediumAgreement,
+    0,
+  );
   const avgEdge = topTradable.length
     ? topTradable.reduce((sum, snapshot) => {
         const edgeValue = Number(getMarketEdgeValue(snapshot.detail));
@@ -266,28 +281,92 @@ function buildDashboardSummaryMetrics(
 
   return [
     {
-      key: "high",
-      label: locale === "en-US" ? "High risk" : "高风险",
-      value: String(highCount),
-      accent: "red",
+      key: "opportunities",
+      title: locale === "en-US" ? "Today's Opportunities" : "今日机会分布",
+      items: [
+        {
+          label: locale === "en-US" ? "High risk" : "高风险",
+          value: String(highCount),
+          accent: "red",
+        },
+        {
+          label: locale === "en-US" ? "Medium risk" : "中风险",
+          value: String(mediumCount),
+          accent: "amber",
+        },
+        {
+          label: locale === "en-US" ? "Low risk" : "低风险",
+          value: String(lowCount),
+          accent: "green",
+        },
+      ],
     },
     {
-      key: "medium",
-      label: locale === "en-US" ? "Medium risk" : "中风险",
-      value: String(mediumCount),
-      accent: "amber",
+      key: "market-summary",
+      title: locale === "en-US" ? "Market Summary" : "市场概览",
+      items: [
+        {
+          label: locale === "en-US" ? "Total markets" : "总市场数",
+          value: String(snapshots.length),
+        },
+        {
+          label: locale === "en-US" ? "Active" : "活跃市场",
+          value: String(topTradable.length),
+          accent: "cyan",
+        },
+        {
+          label: locale === "en-US" ? "Avg. edge" : "平均优势",
+          value: formatEdge(avgEdge),
+          accent: "green",
+        },
+      ],
     },
     {
-      key: "low",
-      label: locale === "en-US" ? "Low risk" : "低风险",
-      value: String(lowCount),
-      accent: "green",
+      key: "model-agreement",
+      title: locale === "en-US" ? "Model Agreement" : "模型一致性",
+      items: [
+        {
+          label: locale === "en-US" ? "High" : "高",
+          value: `${strongAgreement}`,
+          accent: "green",
+        },
+        {
+          label: locale === "en-US" ? "Medium" : "中",
+          value: `${mediumAgreement}`,
+          accent: "amber",
+        },
+        {
+          label: locale === "en-US" ? "Low" : "低",
+          value: `${weakAgreement}`,
+          accent: "red",
+        },
+      ],
     },
     {
-      key: "edge",
-      label: locale === "en-US" ? "Avg. edge" : "平均优势",
-      value: formatEdge(avgEdge),
-      accent: "cyan",
+      key: "impact-window",
+      title: locale === "en-US" ? "High Impact Window" : "高影响窗口",
+      items: [
+        {
+          label: locale === "en-US" ? "Next 6 hours" : "未来 6 小时",
+          value:
+            locale === "en-US"
+              ? `${Math.min(topTradable.length, 12)} markets`
+              : `${Math.min(topTradable.length, 12)} 个市场`,
+        },
+        {
+          label: locale === "en-US" ? "Focus city" : "焦点城市",
+          value: topTradable[0]?.city.display_name || "--",
+          accent: "cyan",
+        },
+        {
+          label: locale === "en-US" ? "Best edge" : "最佳优势",
+          value:
+            topTradable.length > 0
+              ? formatEdge(getMarketEdgeValue(topTradable[0]?.detail))
+              : "--",
+          accent: "green",
+        },
+      ],
     },
   ];
 }
@@ -295,29 +374,50 @@ function buildDashboardSummaryMetrics(
 function HomeMapToolbar() {
   const { locale } = useI18n();
   return (
-    <div className="home-map-toolbar" aria-label={locale === "en-US" ? "Map layer controls" : "地图图层控件"}>
-      <div className="home-map-modes">
-        <button type="button" className="active">
-          <Thermometer size={14} strokeWidth={2} />
-          <span>{locale === "en-US" ? "Temperature" : "温度"}</span>
-        </button>
-        <button type="button">
-          <CloudRain size={14} strokeWidth={2} />
-          <span>{locale === "en-US" ? "Precipitation" : "降水"}</span>
-        </button>
-        <button type="button">
-          <Wind size={14} strokeWidth={2} />
-          <span>{locale === "en-US" ? "Wind" : "风场"}</span>
+    <>
+      <div className="home-map-header">
+        <div className="home-map-title">
+          <strong>{locale === "en-US" ? "Global weather regime" : "全球天气态势"}</strong>
+          <span>{locale === "en-US" ? "Live monitored weather derivatives board" : "天气衍生品实时监控面板"}</span>
+        </div>
+      </div>
+      <div className="home-map-toolbar" aria-label={locale === "en-US" ? "Map layer controls" : "地图图层控件"}>
+        <div className="home-map-modes">
+          <button type="button" className="active">
+            <Thermometer size={14} strokeWidth={2} />
+            <span>{locale === "en-US" ? "Temperature" : "温度"}</span>
+          </button>
+          <button type="button">
+            <CloudRain size={14} strokeWidth={2} />
+            <span>{locale === "en-US" ? "Precipitation" : "降水"}</span>
+          </button>
+          <button type="button">
+            <Wind size={14} strokeWidth={2} />
+            <span>{locale === "en-US" ? "Wind" : "风场"}</span>
+          </button>
+        </div>
+        <button
+          type="button"
+          className="home-map-expand"
+          aria-label={locale === "en-US" ? "Expand map" : "放大地图"}
+        >
+          <Expand size={15} strokeWidth={2} />
         </button>
       </div>
-      <button
-        type="button"
-        className="home-map-expand"
-        aria-label={locale === "en-US" ? "Expand map" : "放大地图"}
-      >
-        <Expand size={15} strokeWidth={2} />
-      </button>
-    </div>
+      <div className="home-map-legend" aria-hidden="true">
+        <span>{locale === "en-US" ? "Temperature (°F)" : "温度 (°F)"}</span>
+        <div className="home-map-legend-bar" />
+        <div className="home-map-legend-values">
+          <span>-4</span>
+          <span>14</span>
+          <span>32</span>
+          <span>50</span>
+          <span>68</span>
+          <span>86</span>
+          <span>104</span>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -771,6 +871,15 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         ×
       </button>
 
+      <div className="home-panel-header">
+        <span className="home-focus-title">
+          {locale === "en-US" ? "Focus city" : "焦点城市"}
+        </span>
+        <button type="button" className="home-why-link">
+          {locale === "en-US" ? "Why this city?" : "为什么是它？"}
+        </button>
+      </div>
+
       <div className="home-top-opportunity-label">
         {showOpportunityLabel
           ? locale === "en-US"
@@ -1052,8 +1161,8 @@ function OpportunityStrip({
 }) {
   const { locale } = useI18n();
   const store = useDashboardStore();
-  const summaryMetrics = useMemo(
-    () => buildDashboardSummaryMetrics(snapshots, locale),
+  const summaryCards = useMemo(
+    () => buildDashboardSummaryCards(snapshots, locale),
     [locale, snapshots],
   );
   const items = useMemo(
@@ -1069,10 +1178,22 @@ function OpportunityStrip({
       aria-label={locale === "en-US" ? "Opportunity strip" : "机会条"}
     >
       <div className="home-summary-grid">
-        {summaryMetrics.map((metric) => (
-          <div key={metric.key} className={clsx("home-summary-card", metric.accent && `accent-${metric.accent}`)}>
-            <span>{metric.label}</span>
-            <strong>{metric.value}</strong>
+        {summaryCards.map((card) => (
+          <div key={card.key} className="home-summary-card">
+            <div className="home-summary-card-head">
+              <strong>{card.title}</strong>
+              <span>{locale === "en-US" ? "View all" : "查看全部"}</span>
+            </div>
+            <div className="home-summary-card-body">
+              {card.items.map((item) => (
+                <div key={`${card.key}-${item.label}`} className="home-summary-stat">
+                  <b className={item.accent ? `accent-${item.accent}` : undefined}>
+                    {item.value}
+                  </b>
+                  <span>{item.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -1118,7 +1239,10 @@ function OpportunityStrip({
                 {locale === "en-US" ? "target" : "目标"}
               </span>
               <div className="opportunity-card-footer">
-                <span className="opportunity-yes">YES {formatCents(detail?.market_scan?.yes_buy)}</span>
+                <div className="opportunity-price-pair">
+                  <span className="opportunity-yes">YES {formatCents(detail?.market_scan?.yes_buy)}</span>
+                  <span className="opportunity-no">NO {formatCents(detail?.market_scan?.no_buy)}</span>
+                </div>
                 <span className="opportunity-edge">{formatEdge(getMarketEdgeValue(detail))}</span>
               </div>
             </button>

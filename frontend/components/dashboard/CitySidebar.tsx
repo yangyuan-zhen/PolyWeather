@@ -186,6 +186,16 @@ export function CitySidebar() {
     { key: "low", label: t("sidebar.group.low") },
     { key: "other", label: t("sidebar.group.other") },
   ];
+  const syncTime = useMemo(
+    () =>
+      new Intl.DateTimeFormat(locale === "en-US" ? "en-US" : "zh-CN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: false,
+      }).format(new Date()),
+    [locale],
+  );
 
   return (
     <nav className="city-list">
@@ -351,6 +361,17 @@ export function CitySidebar() {
             </section>
           );
         })}
+      </div>
+
+      <div className="sidebar-footer">
+        <div>
+          {locale === "en-US" ? "Data sync" : "数据更新"} {syncTime}
+        </div>
+        <div>
+          {locale === "en-US"
+            ? "Sources: METAR · Open-Meteo · DEB · Market"
+            : "数据来源：METAR · Open-Meteo · DEB · 市场"}
+        </div>
       </div>
     </nav>
   );

@@ -8,11 +8,7 @@ import {
   UserRound,
   RotateCw,
   BookOpen,
-  Sparkles,
-  House,
-  Bell,
-  BarChart3,
-  CandlestickChart,
+  MoreHorizontal,
 } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -39,7 +35,7 @@ export function HeaderBar({
   refreshSpinning?: boolean;
 }) {
   const store = useDashboardStore();
-  const { locale, setLocale, t } = useI18n();
+  const { locale, t } = useI18n();
   const pathname = usePathname();
   const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
@@ -49,37 +45,28 @@ export function HeaderBar({
       href: "/",
       label: locale === "en-US" ? "Dashboard" : "总览",
       active: pathname === "/",
-      icon: House,
     },
     {
       href: "/docs/intraday-signal",
       label: locale === "en-US" ? "Markets" : "市场",
       active: pathname?.startsWith("/docs/intraday-signal"),
-      icon: CandlestickChart,
     },
     {
       href: "/docs/model-stack-deb",
       label: locale === "en-US" ? "Analytics" : "分析",
       active: pathname?.startsWith("/docs/model-stack-deb"),
-      icon: BarChart3,
     },
     {
       href: "/docs/history-review",
       label: locale === "en-US" ? "History" : "历史",
       active: pathname?.startsWith("/docs/history-review"),
-      icon: BookOpen,
     },
     {
       href: "/docs/alert-playbook",
-      label: locale === "en-US" ? "Alerts" : "提醒",
+      label: locale === "en-US" ? "Alerts" : "预警",
       active: pathname?.startsWith("/docs/alert-playbook"),
-      icon: Bell,
     },
   ];
-  const trialPromoLabel =
-    locale === "en-US"
-      ? "New users get 3-day Pro trial"
-      : "新用户可免费体验 3 天 Pro";
   const isRefreshing = refreshSpinning ?? store.loadingState.refresh;
   const handleRefresh = () => {
     if (refreshAction) {
@@ -91,9 +78,6 @@ export function HeaderBar({
   const accountHref = isAuthenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const accountLabel = isAuthenticated
-    ? t("header.account")
-    : t("header.signIn");
   const accountAria = isAuthenticated
     ? t("header.accountAria")
     : t("header.signInAria");
@@ -138,6 +122,9 @@ export function HeaderBar({
   return (
     <header className="header">
       <div className="brand">
+        <span className="brand-mark" aria-hidden="true">
+          <i />
+        </span>
         <h1>PolyWeather</h1>
         <span className="subtitle">{t("header.subtitle")}</span>
       </div>
@@ -146,87 +133,18 @@ export function HeaderBar({
         className="header-nav"
         aria-label={locale === "en-US" ? "Primary" : "主导航"}
       >
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx("header-nav-link", item.active && "active")}
-            >
-              <Icon size={14} strokeWidth={2} />
-              <span>{item.label}</span>
-            </Link>
-          );
-        })}
+        {navItems.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={clsx("header-nav-link", item.active && "active")}
+          >
+            <span>{item.label}</span>
+          </Link>
+        ))}
       </nav>
 
       <div className="header-right">
-        <div
-          className="lang-switch"
-          role="group"
-          aria-label={t("header.langAria")}
-        >
-          <button
-            type="button"
-            className={clsx("lang-btn", locale === "zh-CN" && "active")}
-            onClick={() => setLocale("zh-CN")}
-          >
-            {t("header.langZh")}
-          </button>
-          <button
-            type="button"
-            className={clsx("lang-btn", locale === "en-US" && "active")}
-            onClick={() => setLocale("en-US")}
-          >
-            {t("header.langEn")}
-          </button>
-        </div>
-
-        <Link
-          href={docsHref}
-          className={clsx("info-btn", docsActive && "active")}
-          title={t("header.docsAria")}
-          aria-label={t("header.docsAria")}
-        >
-          <BookOpen size={14} strokeWidth={2} />
-          {t("header.docs")}
-        </Link>
-
-        <Link
-          href="/account"
-          className="trial-promo-badge"
-          title={trialPromoLabel}
-          aria-label={trialPromoLabel}
-        >
-          <Sparkles size={12} strokeWidth={2} />
-          <span>{trialPromoLabel}</span>
-        </Link>
-
-        <Link
-          href={accountHref}
-          className="account-btn"
-          title={accountAria}
-          aria-label={accountAria}
-        >
-          {isAuthenticated ? <UserRound size={14} /> : <LogIn size={14} />}
-          <span>{accountLabel}</span>
-        </Link>
-
-        {showRenewReminder ? (
-          <Link
-            href="/account"
-            className={clsx(
-              "account-renew-badge",
-              !store.proAccess.subscriptionActive && "expired",
-            )}
-            title={renewReminderLabel}
-            aria-label={renewReminderLabel}
-          >
-            <span>{renewReminderLabel}</span>
-          </Link>
-        ) : null}
-
         <div className="live-badge" id="liveBadge">
           <span className="pulse-dot" />
           <span>{t("header.live")}</span>
@@ -241,6 +159,48 @@ export function HeaderBar({
         >
           <RotateCw size={16} strokeWidth={2} />
         </button>
+
+        <Link
+          href={docsHref}
+          className={clsx("header-utility-btn", docsActive && "active")}
+          title={t("header.docsAria")}
+          aria-label={t("header.docsAria")}
+        >
+          <BookOpen size={14} strokeWidth={2} />
+          <span>{t("header.docs")}</span>
+        </Link>
+
+        <Link
+          href={accountHref}
+          className="header-utility-btn"
+          title={accountAria}
+          aria-label={accountAria}
+        >
+          {isAuthenticated ? <UserRound size={14} /> : <LogIn size={14} />}
+        </Link>
+
+        <button
+          type="button"
+          className="header-utility-btn more"
+          aria-label={locale === "en-US" ? "More actions" : "更多操作"}
+          title={locale === "en-US" ? "More actions" : "更多操作"}
+        >
+          <MoreHorizontal size={16} strokeWidth={2} />
+        </button>
+
+        {showRenewReminder ? (
+          <Link
+            href="/account"
+            className={clsx(
+              "account-renew-badge",
+              !store.proAccess.subscriptionActive && "expired",
+            )}
+            title={renewReminderLabel}
+            aria-label={renewReminderLabel}
+          >
+            <span>{renewReminderLabel}</span>
+          </Link>
+        ) : null}
       </div>
     </header>
   );
