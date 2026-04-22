@@ -589,6 +589,444 @@
   opacity: 1;
 }
 
+/* ── Homepage Intelligence Layer ── */
+.root :global(.home-intelligence-panel) {
+  position: fixed;
+  top: calc(var(--header-height) + 18px);
+  right: 18px;
+  bottom: 132px;
+  width: min(382px, calc(100vw - var(--sidebar-width) - 64px));
+  z-index: 890;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.16), transparent 32%),
+    radial-gradient(circle at 100% 20%, rgba(59, 130, 246, 0.18), transparent 34%),
+    linear-gradient(155deg, rgba(5, 12, 25, 0.86), rgba(12, 19, 35, 0.78));
+  backdrop-filter: blur(24px) saturate(130%);
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: home-panel-enter 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.root :global(.home-panel-glow) {
+  position: absolute;
+  inset: -28% -30% auto auto;
+  width: 260px;
+  height: 260px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.18), transparent 62%);
+  pointer-events: none;
+}
+
+.root :global(.home-panel-kicker),
+.root :global(.home-panel-airport),
+.root :global(.home-signal-label),
+.root :global(.home-pro-card span),
+.root :global(.opportunity-strip-heading span) {
+  color: rgba(148, 163, 184, 0.92);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.root :global(.home-panel-kicker) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.root :global(.home-panel-pulse) {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.7);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.root :global(.home-panel-city) {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.root :global(.home-panel-city h2) {
+  margin-top: 6px;
+  color: #f8fafc;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 900;
+  line-height: 0.92;
+  letter-spacing: -0.07em;
+}
+
+.root :global(.home-risk-badge) {
+  flex-shrink: 0;
+  border-radius: 999px;
+  padding: 7px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.58);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.root :global(.home-risk-badge.high) {
+  border-color: rgba(248, 113, 113, 0.32);
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.22);
+}
+
+.root :global(.home-risk-badge.medium) {
+  border-color: rgba(251, 191, 36, 0.32);
+  color: #fde68a;
+  background: rgba(120, 53, 15, 0.22);
+}
+
+.root :global(.home-risk-badge.low) {
+  border-color: rgba(52, 211, 153, 0.3);
+  color: #bbf7d0;
+  background: rgba(20, 83, 45, 0.18);
+}
+
+.root :global(.home-panel-subtitle) {
+  max-width: 310px;
+  color: rgba(203, 213, 225, 0.78);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.root :global(.home-metric-grid) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.root :global(.home-metric-card) {
+  min-height: 86px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, 0.36);
+}
+
+.root :global(.home-metric-card.primary) {
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.2), rgba(59, 130, 246, 0.08)),
+    rgba(2, 6, 23, 0.42);
+  border-color: rgba(34, 211, 238, 0.24);
+}
+
+.root :global(.home-metric-card span) {
+  color: rgba(148, 163, 184, 0.86);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.root :global(.home-metric-card strong) {
+  color: #f8fafc;
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: -0.06em;
+}
+
+.root :global(.home-signal-card) {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(34, 211, 238, 0.16);
+  border-radius: 20px;
+  background: rgba(8, 13, 27, 0.48);
+}
+
+.root :global(.home-signal-line) {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  height: 68px;
+}
+
+.root :global(.home-signal-line span) {
+  width: 7px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #22d3ee, #3b82f6);
+  opacity: 0.88;
+  animation: home-signal-wave 1.8s ease-in-out infinite;
+}
+
+.root :global(.home-signal-line span:nth-child(1)) {
+  height: 32px;
+}
+
+.root :global(.home-signal-line span:nth-child(2)) {
+  height: 56px;
+  animation-delay: 180ms;
+}
+
+.root :global(.home-signal-line span:nth-child(3)) {
+  height: 42px;
+  animation-delay: 360ms;
+}
+
+.root :global(.home-signal-card strong) {
+  display: block;
+  margin: 5px 0 4px;
+  color: #e2e8f0;
+  font-size: 15px;
+}
+
+.root :global(.home-signal-card p) {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.root :global(.home-pro-card) {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.26);
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(251, 191, 36, 0.1), transparent 60%),
+    rgba(15, 23, 42, 0.52);
+}
+
+.root :global(.home-pro-card.active) {
+  border-color: rgba(34, 211, 238, 0.28);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), transparent 60%),
+    rgba(15, 23, 42, 0.52);
+}
+
+.root :global(.home-pro-card strong) {
+  display: block;
+  margin-top: 5px;
+  color: #f8fafc;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.root :global(.home-pro-card a),
+.root :global(.home-pro-card button) {
+  flex-shrink: 0;
+  border: 1px solid rgba(34, 211, 238, 0.32);
+  border-radius: 999px;
+  background: rgba(34, 211, 238, 0.1);
+  color: #a5f3fc;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 8px 12px;
+  text-decoration: none;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.root :global(.home-pro-card a:hover),
+.root :global(.home-pro-card button:hover) {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.62);
+  background: rgba(34, 211, 238, 0.16);
+}
+
+.root :global(.home-opportunity-strip) {
+  position: fixed;
+  left: calc(var(--sidebar-width) + 30px);
+  right: 418px;
+  bottom: 18px;
+  z-index: 880;
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 14px;
+  align-items: stretch;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 8% 50%, rgba(34, 211, 238, 0.12), transparent 32%),
+    rgba(7, 13, 25, 0.76);
+  backdrop-filter: blur(20px) saturate(130%);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
+  animation: opportunity-strip-enter 580ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+.root :global(.opportunity-strip-heading) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 4px 8px;
+}
+
+.root :global(.opportunity-strip-heading strong) {
+  color: #f8fafc;
+  font-size: 15px;
+  line-height: 1.25;
+}
+
+.root :global(.opportunity-card-grid) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.root :global(.opportunity-card) {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  grid-template-areas:
+    "dot city"
+    "dot meta"
+    "dot hit";
+  gap: 3px 9px;
+  align-content: center;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.5);
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.root :global(.opportunity-card:hover) {
+  transform: translateY(-2px);
+  border-color: rgba(34, 211, 238, 0.32);
+  background: rgba(15, 23, 42, 0.72);
+}
+
+.root :global(.opportunity-risk-dot) {
+  grid-area: dot;
+  align-self: center;
+  width: 8px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.55);
+}
+
+.root :global(.opportunity-risk-dot.high) {
+  background: linear-gradient(180deg, #fb7185, #f97316);
+}
+
+.root :global(.opportunity-risk-dot.medium) {
+  background: linear-gradient(180deg, #facc15, #f97316);
+}
+
+.root :global(.opportunity-risk-dot.low) {
+  background: linear-gradient(180deg, #34d399, #22d3ee);
+}
+
+.root :global(.opportunity-city) {
+  grid-area: city;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.opportunity-meta) {
+  grid-area: meta;
+  overflow: hidden;
+  color: rgba(203, 213, 225, 0.88);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.opportunity-hit) {
+  grid-area: hit;
+  color: rgba(34, 211, 238, 0.9);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+@keyframes home-panel-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes opportunity-strip-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 22px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes home-signal-wave {
+  0%,
+  100% {
+    transform: scaleY(0.72);
+    opacity: 0.68;
+  }
+  50% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 1360px) {
+  .root :global(.home-intelligence-panel) {
+    display: none;
+  }
+
+  .root :global(.home-opportunity-strip) {
+    right: 18px;
+  }
+}
+
+@media (max-width: 1020px) {
+  .root :global(.home-opportunity-strip) {
+    left: 18px;
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.opportunity-card-grid) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .root :global(.home-opportunity-strip) {
+    display: none;
+  }
+}
+
 /* ── Detail Panel ── */
 .root :global(.detail-panel) {
   position: fixed;
