@@ -681,48 +681,46 @@
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
+  gap: 5px;
+  min-height: 24px;
   border-radius: 999px;
-  padding: 5px 10px 5px 8px;
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  background: rgba(8, 15, 30, 0.52);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 8px 18px rgba(2, 6, 23, 0.14);
-  color: rgba(226, 232, 240, 0.9);
-  font-size: 10px;
+  padding: 4px 9px 4px 7px;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(9, 18, 36, 0.38);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 11px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.01em;
   white-space: nowrap;
 }
 
 .root :global(.home-risk-badge::before) {
   content: "";
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.92;
-  box-shadow: 0 0 12px color-mix(in srgb, currentColor 28%, transparent);
+  opacity: 0.88;
+  box-shadow: 0 0 8px color-mix(in srgb, currentColor 24%, transparent);
 }
 
 .root :global(.home-risk-badge.high) {
-  border-color: rgba(248, 113, 113, 0.22);
-  color: #fca5a5;
-  background: rgba(69, 10, 10, 0.34);
+  border-color: rgba(248, 113, 113, 0.2);
+  color: #fda4af;
+  background: rgba(69, 10, 10, 0.18);
 }
 
 .root :global(.home-risk-badge.medium) {
-  border-color: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.18);
   color: #fbbf24;
-  background: rgba(67, 36, 6, 0.34);
+  background: rgba(67, 36, 6, 0.16);
 }
 
 .root :global(.home-risk-badge.low) {
-  border-color: rgba(52, 211, 153, 0.22);
+  border-color: rgba(52, 211, 153, 0.18);
   color: #34d399;
-  background: rgba(7, 47, 35, 0.34);
+  background: rgba(7, 47, 35, 0.16);
 }
 
 .root :global(.home-panel-subtitle) {
@@ -1355,16 +1353,6 @@
   color: rgba(148, 163, 184, 0.88);
   font-size: 10px;
   font-weight: 700;
-}
-
-.root :global(.home-intraday-meta) {
-  color: rgba(148, 163, 184, 0.9);
-  font-size: 11px;
-  line-height: 1.55;
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
 }
 
 .root :global(.home-card-section.forecast) {

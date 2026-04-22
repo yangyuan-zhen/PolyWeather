@@ -817,12 +817,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
               </div>
             ) : null}
           </div>
-          <div className="home-intraday-meta">
-            {trendChart.legendText ||
-              (locale === "en-US"
-                ? "Intraday observations pending."
-                : "日内观测序列待补充。")}
-          </div>
         </div>
       ) : null}
 
