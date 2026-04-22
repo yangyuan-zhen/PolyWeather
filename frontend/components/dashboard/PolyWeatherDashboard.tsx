@@ -775,8 +775,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           <strong>
             {isPro
               ? locale === "en-US"
-                ? "Open full analysis, history and future-day workflow."
-                : "打开完整分析、历史复盘和未来日工作流。"
+                ? "Open today intraday analysis first. History review and future-day workflow stay available after that."
+                : "先打开今日日内分析，历史复盘和未来日工作流仍可继续查看。"
               : locale === "en-US"
                 ? "History review and future dates stay paid."
                 : "历史复盘和未来日期保持付费。"}
@@ -784,7 +784,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         </div>
         {isPro ? (
           <button type="button" onClick={() => void store.openTodayModal()}>
-            {locale === "en-US" ? "Open intraday" : "打开日内分析"}
+            {locale === "en-US" ? "Today intraday" : "今日日内分析"}
           </button>
         ) : (
           <Link href="/account">{locale === "en-US" ? "Upgrade" : "升级"}</Link>
