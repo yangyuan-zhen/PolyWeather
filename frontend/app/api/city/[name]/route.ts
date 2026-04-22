@@ -97,6 +97,18 @@ function buildFallbackCityDetail(name: string, depth: string, summary: Record<st
   };
 }
 
+function normalizeCityDetailPayload(data: unknown) {
+  if (!data || typeof data !== "object") return data;
+  const payload = data as Record<string, any>;
+  if (!payload.market_scan && payload.market_scan_payload) {
+    return {
+      ...payload,
+      market_scan: payload.market_scan_payload,
+    };
+  }
+  return payload;
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ name: string }> },
@@ -146,7 +158,7 @@ export async function GET(
       );
       return applyAuthResponseCookies(response, auth.response);
     }
-    const data = await res.json();
+    const data = normalizeCityDetailPayload(await res.json());
     const response = NextResponse.json(data);
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
