@@ -280,7 +280,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
               key={city.name}
               type="button"
               className="opportunity-card"
-              onClick={() => void store.selectCity(city.name)}
+              onClick={() => void store.focusCity(city.name)}
             >
               <span className={clsx("opportunity-risk-dot", String(tier || "other"))} />
               <span className="opportunity-city">{city.display_name}</span>

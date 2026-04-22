@@ -16,7 +16,7 @@ export function MapCanvas() {
     onMapInteractionChange: store.setMapInteractionActive,
     onRegisterStopMotion: store.registerMapStopMotion,
     onSelectCity: (cityName) => {
-      void store.selectCity(cityName);
+      void store.focusCity(cityName);
     },
     selectedCity: store.selectedCity,
     selectedDetail: store.selectedDetail,

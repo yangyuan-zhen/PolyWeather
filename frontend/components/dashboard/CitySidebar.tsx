@@ -251,7 +251,7 @@ export function CitySidebar() {
                       className={clsx("city-item", isActive && "active")}
                       onClick={() =>
                         startTransition(() => {
-                          void store.selectCity(city.name);
+                          void store.focusCity(city.name);
                         })
                       }
                     >

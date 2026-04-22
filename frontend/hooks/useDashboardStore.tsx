@@ -41,6 +41,7 @@ interface DashboardStoreValue extends DashboardState {
     force?: boolean,
     depth?: "panel" | "nearby" | "full",
   ) => Promise<CityDetail>;
+  focusCity: (cityName: string) => Promise<void>;
   forecastModalMode: ForecastModalMode | null;
   futureModalDate: string | null;
   loadCities: () => Promise<void>;
@@ -804,6 +805,15 @@ export function DashboardStoreProvider({
       });
   };
 
+  const focusCity = async (cityName: string) => {
+    setSelectedCity(cityName);
+    setIsPanelOpen(false);
+    setSelectedForecastDate(null);
+    setFutureModalDate(null);
+    setForecastModalMode(null);
+    void ensureCitySummary(cityName).catch(() => null);
+  };
+
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (selectedCity) {
@@ -1016,6 +1026,7 @@ export function DashboardStoreProvider({
         setIsPanelOpen(false);
       },
       ensureCityDetail,
+      focusCity,
       forecastModalMode,
       futureModalDate,
       historyState,
