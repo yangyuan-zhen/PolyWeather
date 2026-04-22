@@ -101,7 +101,12 @@ function getInitialProAccessState(): ProAccessState {
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
 const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
+const CITY_LOAD_RETRY_DELAYS_MS = [700, 1600];
 type CityDetailDepth = "panel" | "market" | "nearby" | "full";
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
 
 async function buildAuthMeHeaders(): Promise<HeadersInit> {
   const headers: Record<string, string> = {
@@ -349,6 +354,7 @@ export function DashboardStoreProvider({
   const summaryInflightByCityRef = useRef<Record<string, Promise<CitySummary>>>(
     {},
   );
+  const citiesRef = useRef<CityListItem[]>([]);
   const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedCityRef = useRef<string | null>(null);
   const selectedDetail = selectedCity ? cityDetailsByName[selectedCity] || null : null;
@@ -368,6 +374,10 @@ export function DashboardStoreProvider({
     proAccess.loading,
     proAccess.subscriptionActive,
   ]);
+
+  useEffect(() => {
+    citiesRef.current = cities;
+  }, [cities]);
 
   useEffect(() => {
     citySummariesRef.current = citySummariesByName;
@@ -614,9 +624,24 @@ export function DashboardStoreProvider({
 
   const loadCities = async () => {
     setLoadingState((current) => ({ ...current, cities: true }));
+    let lastError: unknown = null;
     try {
-      const nextCities = await dashboardClient.getCities();
-      setCities(nextCities);
+      for (let attempt = 0; attempt <= CITY_LOAD_RETRY_DELAYS_MS.length; attempt += 1) {
+        try {
+          const nextCities = await dashboardClient.getCities();
+          if (!nextCities.length) {
+            throw new Error("City list was empty");
+          }
+          setCities(nextCities);
+          return;
+        } catch (error) {
+          lastError = error;
+          const delayMs = CITY_LOAD_RETRY_DELAYS_MS[attempt];
+          if (delayMs == null) break;
+          await wait(delayMs);
+        }
+      }
+      console.error("Failed to load monitored cities", lastError);
     } finally {
       setLoadingState((current) => ({ ...current, cities: false }));
     }
@@ -920,6 +945,9 @@ export function DashboardStoreProvider({
     dashboardClient.clearCityDetailCache();
     setCityDetailsByName({});
     setCityDetailMetaByName({});
+    if (!citiesRef.current.length) {
+      await loadCities();
+    }
     if (selectedCity) {
       const access = proAccessRef.current;
       setLoadingState((current) => ({ ...current, refresh: true }));
