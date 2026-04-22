@@ -917,32 +917,23 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       aria-label={localizedCityName}
     >
       <div className="home-panel-glow" aria-hidden="true" />
-      <button
-        type="button"
-        className="home-panel-close"
-        aria-label={locale === "en-US" ? "Close city card" : "关闭城市卡片"}
-        onClick={store.clearCityFocus}
-      >
-        ×
-      </button>
 
       <div className="home-panel-header">
-        <span className="home-focus-title">
-          {locale === "en-US" ? "Focus city" : "焦点城市"}
-        </span>
+        <div className="home-panel-header-left">
+          <span className="home-panel-live-indicator" aria-hidden="true" />
+          <span className="home-focus-title">
+            {showOpportunityLabel
+              ? locale === "en-US"
+                ? "TOP OPPORTUNITY"
+                : "最佳机会"
+              : locale === "en-US"
+                ? "FOCUS CITY"
+                : "焦点城市"}
+          </span>
+        </div>
         <button type="button" className="home-why-link">
           {locale === "en-US" ? "Why this city?" : "为什么是它？"}
         </button>
-      </div>
-
-      <div className="home-top-opportunity-label">
-        {showOpportunityLabel
-          ? locale === "en-US"
-            ? "Today’s Top Opportunity"
-            : "今日最佳机会"
-          : locale === "en-US"
-            ? "Focus City"
-            : "重点观察城市"}
       </div>
 
       <div className="home-card-titlebar">

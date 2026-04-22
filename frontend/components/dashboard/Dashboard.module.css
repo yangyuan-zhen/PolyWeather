@@ -1202,17 +1202,22 @@
 
 .root :global(.home-intelligence-panel.full) {
   bottom: 18px;
-  width: min(360px, calc(100vw - var(--sidebar-width) - 56px));
-  gap: 12px;
+  width: min(372px, calc(100vw - var(--sidebar-width) - 56px));
+  gap: 14px;
   overflow-y: auto;
-  border-color: rgba(34, 211, 238, 0.34);
+  border-color: rgba(34, 211, 238, 0.22);
   background:
     radial-gradient(
       circle at 100% 0%,
-      rgba(37, 99, 235, 0.22),
-      transparent 34%
+      rgba(37, 99, 235, 0.18),
+      transparent 38%
     ),
-    linear-gradient(162deg, rgba(3, 12, 24, 0.94), rgba(6, 26, 48, 0.92));
+    radial-gradient(
+      circle at 0% 100%,
+      rgba(34, 211, 238, 0.06),
+      transparent 32%
+    ),
+    linear-gradient(165deg, rgba(3, 10, 22, 0.96), rgba(5, 18, 38, 0.94));
 }
 
 .root :global(.home-intelligence-panel.full::-webkit-scrollbar) {
@@ -1224,25 +1229,21 @@
   border-radius: 999px;
 }
 
-.root :global(.home-panel-close) {
-  position: absolute;
-  top: 12px;
-  right: 14px;
-  z-index: 2;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: rgba(226, 232, 240, 0.78);
-  cursor: pointer;
-  font-size: 24px;
-  line-height: 1;
+/* Close button removed — panel always visible */
+
+.root :global(.home-panel-header-left) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.root :global(.home-panel-close:hover) {
-  color: #fff;
-  background: rgba(148, 163, 184, 0.1);
+.root :global(.home-panel-live-indicator) {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 10px rgba(34, 197, 94, 0.6);
+  animation: pulse 2s ease-in-out infinite;
 }
 
 .root :global(.home-panel-header) {
@@ -1250,22 +1251,35 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(115, 137, 161, 0.12);
 }
 
 .root :global(.home-focus-title) {
-  color: #f8fafc;
-  font-size: 12px;
-  font-weight: 700;
+  color: rgba(226, 232, 240, 0.92);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .root :global(.home-why-link) {
-  border: none;
-  background: transparent;
-  color: #60a5fa;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: rgba(96, 165, 250, 0.06);
+  color: #93c5fd;
   cursor: pointer;
   font: inherit;
-  font-size: 11px;
-  font-weight: 650;
+  font-size: 10px;
+  font-weight: 700;
+  transition: all 180ms ease;
+}
+
+.root :global(.home-why-link:hover) {
+  border-color: rgba(96, 165, 250, 0.42);
+  background: rgba(96, 165, 250, 0.12);
+  color: #bfdbfe;
 }
 
 .root :global(.home-top-opportunity-label) {
@@ -1295,9 +1309,9 @@
 
 .root :global(.home-card-titlebar) {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
-  padding-right: 26px;
 }
 
 .root :global(.home-card-titlebar h2) {
@@ -1572,14 +1586,22 @@
 
 .root :global(.home-deb-card),
 .root :global(.home-card-section) {
-  border-radius: 18px;
-  border: 1px solid rgba(115, 137, 161, 0.16);
+  border-radius: 14px;
+  border: 1px solid rgba(115, 137, 161, 0.12);
   background: linear-gradient(
     180deg,
-    rgba(7, 14, 26, 0.92),
-    rgba(9, 17, 30, 0.8)
+    rgba(8, 16, 30, 0.88),
+    rgba(6, 12, 24, 0.74)
   );
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  transition: border-color 200ms ease;
+}
+
+.root :global(.home-deb-card:hover),
+.root :global(.home-card-section:hover) {
+  border-color: rgba(34, 211, 238, 0.18);
 }
 
 .root :global(.home-deb-card) {
