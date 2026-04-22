@@ -67,12 +67,19 @@
 
 /* ── Map ── */
 .root :global(.map) {
-  width: 100%;
-  height: 100%;
   position: absolute;
-  top: 0;
-  left: 0;
+  top: calc(var(--header-height) + 16px);
+  right: 418px;
+  bottom: 128px;
+  left: calc(var(--sidebar-width) + 30px);
   z-index: 1;
+  overflow: hidden;
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 22px;
+  background: #020617;
+  box-shadow:
+    0 28px 80px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .weatherAura {
@@ -890,6 +897,31 @@
   background: rgba(148, 163, 184, 0.1);
 }
 
+.root :global(.home-top-opportunity-label) {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 999px;
+  background: rgba(8, 145, 178, 0.1);
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.root :global(.home-top-opportunity-label::before) {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.72);
+}
+
 .root :global(.home-card-titlebar) {
   display: flex;
   justify-content: space-between;
@@ -1468,6 +1500,10 @@
 }
 
 @media (max-width: 1360px) {
+  .root :global(.map) {
+    right: 18px;
+  }
+
   .root :global(.home-intelligence-panel) {
     display: none;
   }
@@ -1478,6 +1514,11 @@
 }
 
 @media (max-width: 1020px) {
+  .root :global(.map) {
+    left: 18px;
+    bottom: 188px;
+  }
+
   .root :global(.home-opportunity-strip) {
     left: 18px;
     grid-template-columns: 1fr;
@@ -1489,6 +1530,13 @@
 }
 
 @media (max-width: 720px) {
+  .root :global(.map) {
+    inset: var(--header-height) 0 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
   .root :global(.home-opportunity-strip) {
     display: none;
   }

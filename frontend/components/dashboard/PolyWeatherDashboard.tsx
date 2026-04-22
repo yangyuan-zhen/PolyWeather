@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
@@ -122,7 +122,13 @@ function buildSnapshot(
     detail?.risk?.level;
   const hitRate = Number(city.deb_recent_hit_rate ?? 0);
   const sampleCount = Number(city.deb_recent_sample_count ?? 0);
+  const edgePercent = Number(detail?.market_scan?.edge_percent);
+  const normalizedEdge =
+    Number.isFinite(edgePercent) && Math.abs(edgePercent) <= 1
+      ? edgePercent * 100
+      : edgePercent;
   const score =
+    (Number.isFinite(normalizedEdge) ? 1000 + normalizedEdge * 10 : 0) +
     (RISK_SCORE[String(tier || "")] || 0) * 100 +
     hitRate * 100 +
     Math.min(sampleCount, 60) / 10;
@@ -287,6 +293,10 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       >
         ×
       </button>
+
+      <div className="home-top-opportunity-label">
+        {locale === "en-US" ? "Today’s Top Opportunity" : "今日最佳机会"}
+      </div>
 
       <div className="home-card-titlebar">
         <div>
@@ -520,6 +530,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
 function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
+  const didAutoFocusRef = useRef(false);
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
     : null;
@@ -580,6 +591,17 @@ function DashboardScreen() {
   );
   const showHomepageChrome =
     !store.isPanelOpen && !store.historyState.isOpen && !store.futureModalDate;
+
+  useEffect(() => {
+    if (didAutoFocusRef.current) return;
+    if (!showHomepageChrome) return;
+    if (store.selectedCity) return;
+    const topOpportunity = homepageSnapshots[0]?.city.name;
+    if (!topOpportunity) return;
+
+    didAutoFocusRef.current = true;
+    void store.focusCity(topOpportunity);
+  }, [homepageSnapshots, showHomepageChrome, store]);
 
   return (
     <div
