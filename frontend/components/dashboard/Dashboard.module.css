@@ -73,6 +73,42 @@
     linear-gradient(180deg, #040914 0%, #02050d 100%);
 }
 
+:global(html.light) .root {
+  --bg-primary: #edf5ff;
+  --bg-secondary: #f7fbff;
+  --bg-card: #ffffff;
+  --bg-glass: rgba(248, 252, 255, 0.84);
+  --border-glass: rgba(48, 77, 112, 0.18);
+  --border-subtle: rgba(48, 77, 112, 0.1);
+  --text-primary: #0b1726;
+  --text-secondary: #42546c;
+  --text-muted: #6b7b91;
+  background: #edf5ff;
+  color: #0b1726;
+  background-image:
+    radial-gradient(circle at 18% 18%, rgba(14, 165, 233, 0.16), transparent 25%),
+    radial-gradient(circle at 82% 12%, rgba(59, 130, 246, 0.12), transparent 22%),
+    linear-gradient(180deg, #f8fbff 0%, #e9f3ff 100%);
+}
+
+:global(html.light) .root :global(.header),
+:global(html.light) .root :global(.city-list),
+:global(html.light) .root :global(.home-intelligence-panel.full),
+:global(html.light) .root :global(.home-opportunity-strip),
+:global(html.light) .root :global(.home-summary-card),
+:global(html.light) .root :global(.opportunity-card),
+:global(html.light) .root :global(.home-deb-card),
+:global(html.light) .root :global(.home-card-section) {
+  background: rgba(255, 255, 255, 0.86);
+  color: #0b1726;
+  border-color: rgba(48, 77, 112, 0.18);
+}
+
+:global(html.light) .root :global(.map) {
+  background: #dbeafe;
+  filter: saturate(0.95) brightness(1.12);
+}
+
 /* ── Map ── */
 .root :global(.map) {
   position: absolute;
@@ -1217,6 +1253,9 @@
       transparent 32%
     ),
     linear-gradient(165deg, rgba(3, 10, 22, 0.96), rgba(5, 18, 38, 0.94));
+  box-shadow:
+    inset 1px 0 0 rgba(255, 255, 255, 0.04),
+    -10px 0 34px rgba(0, 0, 0, 0.18);
 }
 
 .root :global(.home-intelligence-panel.full::-webkit-scrollbar) {
@@ -1348,30 +1387,80 @@
 
 .root :global(.home-weather-hero) {
   display: grid;
-  grid-template-columns: 1fr 92px;
-  gap: 8px 16px;
+  grid-template-columns: minmax(0, 1fr) 130px;
+  gap: 14px;
   align-items: center;
+  padding: 16px;
+  border: 1px solid rgba(34, 211, 238, 0.14);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 88% 24%, rgba(245, 158, 11, 0.12), transparent 24%),
+    linear-gradient(180deg, rgba(8, 16, 30, 0.62), rgba(4, 10, 22, 0.36));
 }
 
-.root :global(.home-weather-hero strong) {
+.root :global(.home-weather-main strong) {
+  display: block;
   color: #f8fafc;
-  font-size: 58px;
+  font-size: 62px;
   font-weight: 900;
   line-height: 0.96;
   letter-spacing: -0.08em;
 }
 
-.root :global(.home-weather-hero span) {
+.root :global(.home-weather-label),
+.root :global(.home-weather-sub),
+.root :global(.home-weather-stat span),
+.root :global(.home-weather-stat small) {
   display: block;
-  margin-top: 8px;
   color: rgba(148, 163, 184, 0.88);
   font-size: 12px;
+}
+
+.root :global(.home-weather-label) {
+  margin-bottom: 8px;
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.root :global(.home-weather-sub) {
+  margin-top: 10px;
+}
+
+.root :global(.home-weather-side) {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
 }
 
 .root :global(.home-weather-icon) {
   position: relative;
   width: 88px;
   height: 76px;
+}
+
+.root :global(.home-weather-stat) {
+  min-width: 118px;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 12px;
+  background: rgba(2, 8, 18, 0.35);
+  text-align: right;
+}
+
+.root :global(.home-weather-stat strong) {
+  display: block;
+  margin-top: 3px;
+  color: #f8fafc;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.root :global(.home-weather-stat small) {
+  margin-top: 2px;
+  font-size: 10px;
 }
 
 .root :global(.home-weather-icon .sun),

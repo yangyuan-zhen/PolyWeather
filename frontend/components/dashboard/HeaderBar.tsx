@@ -9,7 +9,10 @@ import {
   RotateCw,
   BookOpen,
   MoreHorizontal,
+  Moon,
+  Sun,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 
@@ -37,6 +40,7 @@ export function HeaderBar({
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const pathname = usePathname();
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
   const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
@@ -119,6 +123,25 @@ export function HeaderBar({
           ? `Pro ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
           : `Pro 还剩 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`;
 
+  useEffect(() => {
+    const savedTheme =
+      typeof window !== "undefined"
+        ? window.localStorage.getItem("polyweather_theme")
+        : null;
+    const nextTheme = savedTheme === "light" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+    document.documentElement.classList.toggle("light", nextTheme === "light");
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    document.documentElement.classList.toggle("dark", nextTheme === "dark");
+    document.documentElement.classList.toggle("light", nextTheme === "light");
+    window.localStorage.setItem("polyweather_theme", nextTheme);
+  };
+
   return (
     <header className="header">
       <div className="brand">
@@ -158,6 +181,20 @@ export function HeaderBar({
           onClick={handleRefresh}
         >
           <RotateCw size={16} strokeWidth={2} />
+        </button>
+
+        <button
+          type="button"
+          className="header-utility-btn"
+          aria-label={theme === "dark" ? "切换到明亮模式" : "切换到暗黑模式"}
+          title={theme === "dark" ? "明亮模式" : "暗黑模式"}
+          onClick={toggleTheme}
+        >
+          {theme === "dark" ? (
+            <Sun size={15} strokeWidth={2} />
+          ) : (
+            <Moon size={15} strokeWidth={2} />
+          )}
         </button>
 
         <Link

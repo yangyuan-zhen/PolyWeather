@@ -27,7 +27,6 @@ import {
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
-import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 const loadHistoryModal = () =>
   import("@/components/dashboard/HistoryModal").then(
@@ -179,21 +178,6 @@ function formatEdge(value: number | null | undefined) {
     Math.abs(Number(value)) <= 1 ? Number(value) * 100 : Number(value);
   const sign = normalized > 0 ? "+" : "";
   return `${sign}${normalized.toFixed(1)}%`;
-}
-
-function getModelLabels(detail?: CityDetail | null) {
-  const date = detail?.local_date || "";
-  const dailyModels = date ? detail?.multi_model_daily?.[date]?.models : null;
-  const modelMap = dailyModels || detail?.multi_model || {};
-  const labels = Object.keys(modelMap)
-    .filter((key) => Number.isFinite(Number(modelMap[key])))
-    .map((key) =>
-      key
-        .replace(/^open_meteo_/i, "")
-        .replace(/_/g, " ")
-        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
-    );
-  return ["DEB", ...labels].slice(0, 6);
 }
 
 function buildSparklinePoints(values: number[] | undefined) {
@@ -724,13 +708,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       city.risk_level ||
       summary?.risk?.level ||
       detail?.risk?.level;
-    const deviation = summary?.deviation_monitor || detail?.deviation_monitor;
-    const observationSource = normalizeObservationSourceLabel(
-      summary?.current?.settlement_source_label ||
-        detail?.current?.settlement_source_label ||
-        city.settlement_source_label,
-      "METAR",
-    );
     const probabilityBuckets =
       detail?.probabilities?.distribution ||
       (detail?.local_date
@@ -738,7 +715,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         : undefined) ||
       [];
     const displayedProbabilities = probabilityBuckets.slice(0, 4);
-    const modelLabels = getModelLabels(detail);
     const marketScan = detail?.market_scan;
     const marketBucket =
       marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
@@ -772,9 +748,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       maxTime,
       localTime,
       riskLevel,
-      observationSource,
       displayedProbabilities,
-      modelLabels,
       marketScan,
       showOpportunityLabel: !marketScan || spotlight.tradableOpportunity,
       marketLabel: marketBucket
@@ -823,29 +797,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           ? "Pro locked"
           : "PRO 锁定",
       forecastDays: buildHomeForecastDays(detail, locale),
-      keySignals: [
-        {
-          active: Number(marketEdge) > 0,
-          label:
-            locale === "en-US" ? "DEB > Market implied" : "DEB 高于市场隐含",
-          tone: "green",
-        },
-        {
-          active:
-            deviation?.trend === "expanding" || deviation?.direction === "hot",
-          label: locale === "en-US" ? "Rising temps trend" : "升温趋势",
-          tone: "green",
-        },
-        {
-          active: Boolean(detail?.peak?.hours?.length),
-          label: detail?.peak?.hours?.length
-            ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
-            : locale === "en-US"
-              ? "High impact window pending"
-              : "高影响窗口待确认",
-          tone: "amber",
-        },
-      ],
     };
   }, [
     locale,
@@ -867,9 +818,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     maxTime,
     localTime,
     riskLevel,
-    observationSource,
     displayedProbabilities,
-    modelLabels,
     marketScan,
     tradableOpportunity,
     showOpportunityLabel,
@@ -897,7 +846,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     marketModelLabel,
     proLabel,
     forecastDays,
-    keySignals,
   } = spotlightView;
   const subtitle = `${cityCode} · ${localizedAirportName}`;
   const proCard = (
@@ -975,34 +923,38 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       {proCard}
 
       <div className="home-weather-hero">
-        <div>
+        <div className="home-weather-main">
+          <span className="home-weather-label">
+            {locale === "en-US" ? "Observed now" : "当前实况"}
+          </span>
           <strong>{formatTemperature(currentTemp, symbol)}</strong>
-          <span>
-            {locale === "en-US" ? "Feels like" : "体感接近"}{" "}
+          <span className="home-weather-sub">
+            {locale === "en-US" ? "Feels near" : "体感接近"}{" "}
             {formatTemperature(currentTemp, symbol)}
           </span>
         </div>
-        <div
-          className={clsx("home-weather-icon", `weather-${weatherIconKind}`)}
-          aria-hidden="true"
-        >
-          <span className="sun" />
-          <span className="cloud cloud-a" />
-          <span className="cloud cloud-b" />
-          <span className="mist mist-a" />
-          <span className="mist mist-b" />
-          <span className="wind wind-a" />
-          <span className="wind wind-b" />
-          <span className="rain rain-a" />
-          <span className="rain rain-b" />
-          <span className="rain rain-c" />
-          <span className="bolt" />
-        </div>
-        <div className="home-max-so-far">
-          <span>{locale === "en-US" ? "Max so far" : "当前最高"}</span>
-          <strong>
-            {formatTemperature(maxSoFar, symbol)} <small>{maxTime}</small>
-          </strong>
+        <div className="home-weather-side">
+          <div
+            className={clsx("home-weather-icon", `weather-${weatherIconKind}`)}
+            aria-hidden="true"
+          >
+            <span className="sun" />
+            <span className="cloud cloud-a" />
+            <span className="cloud cloud-b" />
+            <span className="mist mist-a" />
+            <span className="mist mist-b" />
+            <span className="wind wind-a" />
+            <span className="wind wind-b" />
+            <span className="rain rain-a" />
+            <span className="rain rain-b" />
+            <span className="rain rain-c" />
+            <span className="bolt" />
+          </div>
+          <div className="home-weather-stat">
+            <span>{locale === "en-US" ? "Day high" : "日内高点"}</span>
+            <strong>{formatTemperature(maxSoFar, symbol)}</strong>
+            <small>{maxTime}</small>
+          </div>
         </div>
       </div>
 
@@ -1095,18 +1047,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         </div>
       ) : null}
 
-      <div className="home-card-section">
-        <h3>{locale === "en-US" ? "Model stack" : "模型栈"}</h3>
-        <div className="home-model-stack">
-          {modelLabels.map((label) => (
-            <span key={label}>
-              <i />
-              {label}
-            </span>
-          ))}
-        </div>
-      </div>
-
       <div className="home-card-section probability">
         <h3>
           {probabilityTitle} <small>{dayMaxLabel}</small>
@@ -1145,7 +1085,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         )}
       </div>
 
-      <div className={clsx("home-card-section market", !isPro && "locked")}>
+      {tradableOpportunity ? (
+        <div className={clsx("home-card-section market", !isPro && "locked")}>
         <div className="home-market-header">
           <h3>
             {marketTitle} <small>ⓘ</small>
@@ -1191,20 +1132,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             {locale === "en-US" ? "Unlock market layer" : "解锁市场层"}
           </Link>
         ) : null}
-      </div>
-
-      <div className="home-card-section key-signals">
-        <h3>{locale === "en-US" ? "Key signals" : "关键信号"}</h3>
-        <ul>
-          {keySignals.map((signal) => (
-            <li key={signal.label}>
-              <span>{signal.label}</span>
-              <i className={clsx(signal.tone, signal.active && "active")} />
-            </li>
-          ))}
-        </ul>
-        <p>{observationSource}</p>
-      </div>
+        </div>
+      ) : null}
 
     </aside>
   );
