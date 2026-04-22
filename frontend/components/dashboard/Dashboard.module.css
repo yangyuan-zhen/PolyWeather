@@ -1314,6 +1314,49 @@
   stroke-width: 1.6;
 }
 
+.root :global(.home-intraday-hotspot) {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.root :global(.home-intraday-hotspot:focus-visible) {
+  outline: 1px solid rgba(34, 211, 238, 0.6);
+  outline-offset: 1px;
+}
+
+.root :global(.home-intraday-tooltip) {
+  position: absolute;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 10px;
+  background: rgba(7, 15, 28, 0.96);
+  box-shadow: 0 10px 26px rgba(2, 6, 23, 0.34);
+  white-space: nowrap;
+}
+
+.root :global(.home-intraday-tooltip strong) {
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.root :global(.home-intraday-tooltip span) {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 10px;
+  font-weight: 700;
+}
+
 .root :global(.home-intraday-meta) {
   color: rgba(148, 163, 184, 0.9);
   font-size: 11px;

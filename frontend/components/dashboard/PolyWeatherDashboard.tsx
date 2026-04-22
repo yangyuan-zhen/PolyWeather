@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
@@ -222,6 +222,13 @@ type HomeTrendChart = {
   forecastPath: string;
   legendText: string;
   observationDots: Array<{ cx: number; cy: number; key: string }>;
+  hoverPoints: Array<{
+    cx: number;
+    cy: number;
+    key: string;
+    label: string;
+    temperatureText: string;
+  }>;
 };
 
 type HomeForecastDay = {
@@ -229,6 +236,8 @@ type HomeForecastDay = {
   label: string;
   maxTemp: number;
 };
+
+const RECENT_OPENED_CITIES_STORAGE_KEY = "polyWeather_recent_opened_cities_v1";
 
 function projectHomeTrendPoint(
   x: number,
@@ -319,11 +328,30 @@ function buildHomeTrendChart(
       key: `${point.labelTime}-${index}`,
     };
   });
+  const hoverSource = observationSeries.length > 0 ? observationSeries : forecastSeries;
+  const hoverPoints = hoverSource.map((point, index) => {
+    const projected = projectHomeTrendPoint(
+      point.x,
+      point.y,
+      chartData.xMin,
+      chartData.xMax,
+      chartData.min,
+      chartData.max,
+    );
+    return {
+      cx: projected.cx,
+      cy: projected.cy,
+      key: `hover-${point.labelTime}-${index}`,
+      label: point.labelTime,
+      temperatureText: formatTemperature(point.y, detail.temp_symbol || "°C"),
+    };
+  });
 
   return {
     forecastPath,
     legendText: chartData.legendText,
     observationDots,
+    hoverPoints,
   };
 }
 
@@ -441,6 +469,13 @@ function isTradableMarketOpportunity(detail?: CityDetail | null) {
 function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
+  const [hoveredTrendPoint, setHoveredTrendPoint] = useState<{
+    cx: number;
+    cy: number;
+    key: string;
+    label: string;
+    temperatureText: string;
+  } | null>(null);
   const selectedSnapshot = store.selectedCity
     ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity)
     : null;
@@ -672,6 +707,39 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 <circle key={point.key} cx={point.cx} cy={point.cy} r="3.2" />
               ))}
             </svg>
+            {trendChart.hoverPoints.map((point) => (
+              <button
+                key={point.key}
+                type="button"
+                className="home-intraday-hotspot"
+                style={{ left: `${point.cx}px`, top: `${point.cy}px` }}
+                aria-label={`${point.label} ${point.temperatureText}`}
+                onMouseEnter={() => setHoveredTrendPoint(point)}
+                onMouseLeave={() =>
+                  setHoveredTrendPoint((current) =>
+                    current?.key === point.key ? null : current,
+                  )
+                }
+                onFocus={() => setHoveredTrendPoint(point)}
+                onBlur={() =>
+                  setHoveredTrendPoint((current) =>
+                    current?.key === point.key ? null : current,
+                  )
+                }
+              />
+            ))}
+            {hoveredTrendPoint ? (
+              <div
+                className="home-intraday-tooltip"
+                style={{
+                  left: `${Math.min(248, Math.max(48, hoveredTrendPoint.cx))}px`,
+                  top: `${Math.max(8, hoveredTrendPoint.cy - 34)}px`,
+                }}
+              >
+                <strong>{hoveredTrendPoint.temperatureText}</strong>
+                <span>{hoveredTrendPoint.label}</span>
+              </div>
+            ) : null}
           </div>
           <div className="home-intraday-meta">
             {trendChart.legendText ||
@@ -825,10 +893,21 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   );
 }
 
-function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
+function OpportunityStrip({
+  snapshots,
+  recentCityNames,
+}: {
+  snapshots: CitySnapshot[];
+  recentCityNames: string[];
+}) {
   const store = useDashboardStore();
   const { locale } = useI18n();
-  const items = snapshots.slice(0, 4);
+  const items = recentCityNames
+    .map((cityName) =>
+      snapshots.find((snapshot) => snapshot.city.name === cityName) || null,
+    )
+    .filter((snapshot): snapshot is CitySnapshot => snapshot != null)
+    .slice(0, 4);
 
   if (!items.length) return null;
 
@@ -838,9 +917,9 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
       aria-label={locale === "en-US" ? "Opportunity strip" : "机会条"}
     >
       <div className="opportunity-strip-heading">
-        <span>{locale === "en-US" ? "Today focus" : "今日焦点"}</span>
+        <span>{locale === "en-US" ? "Recently opened" : "最近打开"}</span>
         <strong>
-          {locale === "en-US" ? "Cities worth opening first" : "优先打开的城市"}
+          {locale === "en-US" ? "Recently opened cities" : "最近打开的城市"}
         </strong>
       </div>
       <div className="opportunity-card-grid">
@@ -884,6 +963,7 @@ function DashboardScreen() {
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
   const preloadedOpportunityRef = useRef<Set<string>>(new Set());
+  const [recentCityNames, setRecentCityNames] = useState<string[]>([]);
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
     : null;
@@ -946,6 +1026,19 @@ function DashboardScreen() {
     !store.historyState.isOpen && !store.futureModalDate;
 
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(RECENT_OPENED_CITIES_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return;
+      setRecentCityNames(
+        parsed.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 8),
+      );
+    } catch {}
+  }, []);
+
+  useEffect(() => {
     if (didAutoFocusRef.current) return;
     if (!showHomepageChrome) return;
     if (store.selectedCity) return;
@@ -968,6 +1061,26 @@ function DashboardScreen() {
     });
   }, [homepageSnapshots, showHomepageChrome, store]);
 
+  useEffect(() => {
+    const selectedCity = store.selectedCity;
+    if (!selectedCity) return;
+    setRecentCityNames((current) => {
+      const next = [
+        selectedCity,
+        ...current.filter((name) => name !== selectedCity),
+      ].slice(0, 8);
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.setItem(
+            RECENT_OPENED_CITIES_STORAGE_KEY,
+            JSON.stringify(next),
+          );
+        } catch {}
+      }
+      return next;
+    });
+  }, [store.selectedCity]);
+
   return (
     <div
       className={clsx(
@@ -982,7 +1095,14 @@ function DashboardScreen() {
       {showHomepageChrome ? (
         <>
           <HomeIntelligencePanel snapshots={homepageSnapshots} />
-          <OpportunityStrip snapshots={homepageSnapshots} />
+          <OpportunityStrip
+            snapshots={homepageSnapshots}
+            recentCityNames={
+              recentCityNames.length
+                ? recentCityNames
+                : homepageSnapshots.slice(0, 4).map((snapshot) => snapshot.city.name)
+            }
+          />
         </>
       ) : null}
       {showCitySyncToast ? (
