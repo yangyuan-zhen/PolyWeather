@@ -20,6 +20,10 @@ import {
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
+import {
+  normalizeObservationSourceCode,
+  normalizeObservationSourceLabel,
+} from "@/lib/source-labels";
 
 function EmptyState({ text }: { text: string }) {
   return (
@@ -548,22 +552,21 @@ export function HeroSummary() {
   const { weatherIcon, weatherText } = getWeatherSummary(data, locale);
   const metaItems = getHeroMetaItems(data, locale);
   const current = data.current || {};
-  const settlementSourceCode = String(current.settlement_source || "metar")
-    .trim()
-    .toLowerCase();
+  const settlementSourceCode = normalizeObservationSourceCode(
+    current.settlement_source || "metar",
+  );
   const settlementIcao = String(
     current.station_code || data.risk?.icao || "",
   )
     .trim()
     .toUpperCase();
   const settlementSource =
-    settlementSourceCode === "wunderground"
-      ? settlementIcao
-        ? `${settlementIcao} METAR`
-        : "METAR"
-      : String(current.settlement_source_label || current.settlement_source || "METAR")
-          .trim()
-          .toUpperCase();
+    settlementSourceCode === "metar" && settlementIcao
+      ? `${settlementIcao} METAR`
+      : normalizeObservationSourceLabel(
+          current.settlement_source_label || current.settlement_source,
+          "METAR",
+        ).toUpperCase();
   const isMax =
     current.max_so_far != null &&
     current.temp != null &&

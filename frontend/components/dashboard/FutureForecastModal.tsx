@@ -32,6 +32,10 @@ import {
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
 import { dashboardClient } from "@/lib/dashboard-client";
+import {
+  normalizeObservationSourceCode,
+  normalizeObservationSourceLabel,
+} from "@/lib/source-labels";
 import type { IntradayMeteorologySignal, MarketScan } from "@/lib/dashboard-types";
 
 function normalizeMarketValue(value?: number | null) {
@@ -1331,9 +1335,9 @@ export function FutureForecastModal() {
     String(intradayMeteorology.peak_window || "").trim() ||
     paceView?.peakWindowText ||
     "--";
-  const settlementSourceCode = String(
+  const settlementSourceCode = normalizeObservationSourceCode(
     detail.current?.settlement_source || "",
-  ).trim().toLowerCase();
+  );
   const settlementStationCode = String(
     detail.current?.station_code || detail.risk?.icao || "",
   )
@@ -1345,19 +1349,20 @@ export function FutureForecastModal() {
     (locale === "en-US" ? "Anchor station" : "锚点站");
   const airportMetarAnchor =
     settlementSourceCode === "metar" ||
-    settlementSourceCode === "wunderground" ||
     Boolean(settlementStationCode && /^[A-Z]{4}$/.test(settlementStationCode));
   const anchorSourceLabel = airportMetarAnchor
     ? settlementStationCode
       ? `${settlementStationCode} METAR`
       : "METAR"
-    : detail.current?.settlement_source_label ||
-      detail.current?.settlement_source ||
-      (locale === "en-US" ? "Official observation" : "官方观测");
+    : normalizeObservationSourceLabel(
+        detail.current?.settlement_source_label ||
+          detail.current?.settlement_source,
+        locale === "en-US" ? "Official observation" : "官方观测",
+      );
   const anchorRuleText = airportMetarAnchor
     ? locale === "en-US"
-      ? `Airport contract anchor: use the ${anchorSourceLabel} reports. Wunderground is only a history display page when present.`
-      : `机场合约锚点：以 ${anchorSourceLabel} 报文为准；若出现 Wunderground，它只是历史展示页面。`
+      ? `Airport contract anchor: use the ${anchorSourceLabel} reports. Third-party history pages are display-only when present.`
+      : `机场合约锚点：以 ${anchorSourceLabel} 报文为准；第三方历史页只作为展示入口。`
     : locale === "en-US"
       ? `Official anchor: use ${anchorSourceLabel} observations for this contract.`
       : `官方锚点：该合约按 ${anchorSourceLabel} 观测口径判断。`;

@@ -17,6 +17,7 @@ import {
   getRiskBadgeLabel,
   getTemperatureChartData,
 } from "@/lib/dashboard-utils";
+import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale, t } = useI18n();
@@ -178,17 +179,20 @@ export function DetailPanel() {
     () => getTodayPolymarketUrl(detail, locale),
     [detail, locale],
   );
-  const basicSettlementLabel =
+  const basicSettlementLabel = normalizeObservationSourceLabel(
     selectedSummary?.current?.settlement_source_label ||
-    selectedCityItem?.settlement_source_label ||
-    selectedCityItem?.settlement_source ||
-    (locale === "en-US" ? "Settlement source pending" : "结算口径待确认");
+      selectedCityItem?.settlement_source_label ||
+      selectedCityItem?.settlement_source,
+    locale === "en-US" ? "Settlement source pending" : "结算口径待确认",
+  );
   const basicAirportLabel =
     selectedCityItem?.airport ||
     selectedSummary?.icao ||
     (locale === "en-US" ? "Airport pending" : "机场待确认");
-  const heroSettlementLabel =
-    detail?.current?.settlement_source_label || basicSettlementLabel;
+  const heroSettlementLabel = normalizeObservationSourceLabel(
+    detail?.current?.settlement_source_label,
+    basicSettlementLabel,
+  );
   const heroAirportLabel = detail?.risk?.airport || basicAirportLabel;
   const isSparsePanelDetail = Boolean(
     detail &&

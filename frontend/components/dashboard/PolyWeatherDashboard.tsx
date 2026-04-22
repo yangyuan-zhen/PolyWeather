@@ -20,6 +20,7 @@ import type {
   CitySummary,
   RiskLevel,
 } from "@/lib/dashboard-types";
+import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 const loadHistoryModal = () =>
   import("@/components/dashboard/HistoryModal").then(
@@ -214,10 +215,12 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     detail?.risk?.level;
   const deviation = summary?.deviation_monitor || detail?.deviation_monitor;
   const observationSource =
-    summary?.current?.settlement_source_label ||
-    detail?.current?.settlement_source_label ||
-    city.settlement_source_label ||
-    city.airport;
+    normalizeObservationSourceLabel(
+      summary?.current?.settlement_source_label ||
+        detail?.current?.settlement_source_label ||
+        city.settlement_source_label,
+      "METAR",
+    );
   const probabilityBuckets =
     detail?.probabilities?.distribution ||
     (detail?.local_date

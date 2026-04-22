@@ -5,6 +5,7 @@ import {
   HistoryPoint,
   NearbyStation,
 } from "@/lib/dashboard-types";
+import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 const METAR_WX_MAP: Record<
   string,
@@ -98,7 +99,10 @@ function getObservationSourceCode(detail: CityDetail): string {
 }
 
 function getObservationSourceTag(detail: CityDetail): string {
-  const label = String(detail.current?.settlement_source_label || "")
+  const label = normalizeObservationSourceLabel(
+    detail.current?.settlement_source_label,
+    "",
+  )
     .trim()
     .toUpperCase();
   if (label) return label;

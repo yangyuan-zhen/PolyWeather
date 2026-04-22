@@ -1,4 +1,5 @@
 import type { CityDetail } from "@/lib/dashboard-types";
+import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 export type OfficialSourceLink = {
   label: string;
@@ -749,7 +750,10 @@ export function getOfficialSourceLinks(detail: CityDetail): OfficialSourceLink[]
         }),
       };
     }
-    return link;
+    return {
+      ...link,
+      label: normalizeObservationSourceLabel(link.label, link.label),
+    };
   });
   const seen = new Set<string>();
   return links.filter((link) => {
