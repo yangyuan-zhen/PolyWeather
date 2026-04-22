@@ -127,102 +127,6 @@
     inset 0 0 0 1px rgba(34, 211, 238, 0.04);
 }
 
-.root :global(.home-map-toolbar) {
-  position: fixed;
-  top: calc(var(--header-height) + 30px);
-  right: 412px;
-  z-index: 930;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.root :global(.home-map-header) {
-  position: fixed;
-  top: calc(var(--header-height) + 28px);
-  left: calc(var(--sidebar-width) + 42px);
-  z-index: 930;
-  display: flex;
-  align-items: center;
-}
-
-.root :global(.home-map-title) {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.root :global(.home-map-title strong) {
-  color: #f8fafc;
-  font-size: 15px;
-  font-weight: 750;
-}
-
-.root :global(.home-map-title span) {
-  color: rgba(148, 163, 184, 0.76);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.root :global(.home-map-modes) {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 14px;
-  border: 1px solid rgba(115, 137, 161, 0.18);
-  background: rgba(6, 12, 22, 0.88);
-  backdrop-filter: blur(16px);
-}
-
-.root :global(.home-map-modes button),
-.root :global(.home-map-expand) {
-  border: none;
-  color: rgba(203, 213, 225, 0.88);
-  background: transparent;
-  cursor: pointer;
-  font: inherit;
-  transition: var(--transition);
-}
-
-.root :global(.home-map-modes button) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.root :global(.home-map-modes button.active) {
-  background: linear-gradient(
-    180deg,
-    rgba(28, 100, 242, 0.76),
-    rgba(31, 72, 184, 0.76)
-  );
-  color: #f8fafc;
-  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24);
-}
-
-.root :global(.home-map-modes button:hover),
-.root :global(.home-map-expand:hover) {
-  color: #f8fafc;
-  background: rgba(30, 41, 59, 0.72);
-}
-
-.root :global(.home-map-expand) {
-  width: 38px;
-  height: 38px;
-  border-radius: 12px;
-  border: 1px solid rgba(115, 137, 161, 0.18);
-  background: rgba(6, 12, 22, 0.88);
-  backdrop-filter: blur(16px);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
 .weatherAura {
   position: absolute;
   inset: 0;
@@ -523,6 +427,42 @@
 }
 .root :global(.refresh-btn.spinning) {
   animation: spin 1s linear infinite;
+}
+
+.root :global(.locale-switch) {
+  height: 32px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.2);
+  background: rgba(8, 15, 27, 0.82);
+  color: rgba(148, 163, 184, 0.86);
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.root :global(.locale-switch span) {
+  min-width: 32px;
+  height: 24px;
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.root :global(.locale-switch span.active) {
+  color: #f8fafc;
+  background: rgba(34, 211, 238, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.24);
+}
+
+.root :global(.locale-switch:hover) {
+  border-color: rgba(34, 211, 238, 0.34);
+  background: rgba(11, 22, 40, 0.94);
 }
 
 .root :global(.header-utility-btn) {
@@ -2405,7 +2345,6 @@
     );
 }
 
-:global(html.light) .root :global(.home-map-title strong),
 :global(html.light) .root :global(.home-panel-city h2),
 :global(html.light) .root :global(.home-weather-main strong),
 :global(html.light) .root :global(.home-weather-stat strong),
@@ -2419,7 +2358,6 @@
   color: #0b1726;
 }
 
-:global(html.light) .root :global(.home-map-title span),
 :global(html.light) .root :global(.home-panel-subtitle),
 :global(html.light) .root :global(.home-weather-sub),
 :global(html.light) .root :global(.home-weather-label),
@@ -2448,6 +2386,18 @@
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.72),
     0 10px 24px rgba(31, 64, 104, 0.12);
+}
+
+:global(html.light) .root :global(.locale-switch) {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(36, 68, 104, 0.16);
+  color: rgba(66, 84, 108, 0.78);
+}
+
+:global(html.light) .root :global(.locale-switch span.active) {
+  color: #075985;
+  background: rgba(14, 165, 233, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.22);
 }
 
 :global(html.light) .root :global(.city-list),

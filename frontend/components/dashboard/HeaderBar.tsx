@@ -39,7 +39,7 @@ export function HeaderBar({
   refreshSpinning?: boolean;
 }) {
   const store = useDashboardStore();
-  const { locale, t } = useI18n();
+  const { locale, t, toggleLocale } = useI18n();
   const pathname = usePathname();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
   const isAuthenticated = store.proAccess.authenticated;
@@ -169,6 +169,17 @@ export function HeaderBar({
       </nav>
 
       <div className="header-right">
+        <button
+          type="button"
+          className="locale-switch"
+          aria-label={locale === "en-US" ? "Switch to Chinese" : "切换到英文"}
+          title={locale === "en-US" ? "Switch to Chinese" : "切换到英文"}
+          onClick={toggleLocale}
+        >
+          <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
+          <span className={clsx(locale === "en-US" && "active")}>EN</span>
+        </button>
+
         <div className="live-badge" id="liveBadge">
           <span className="pulse-dot" />
           <span>{t("header.live")}</span>

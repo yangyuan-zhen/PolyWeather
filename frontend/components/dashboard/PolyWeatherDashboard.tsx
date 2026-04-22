@@ -457,24 +457,6 @@ function buildDashboardSummaryCards(
   ];
 }
 
-function HomeMapToolbar() {
-  const { locale } = useI18n();
-  return (
-    <div className="home-map-header">
-      <div className="home-map-title">
-        <strong>
-          {locale === "en-US" ? "Global weather regime" : "全球天气态势"}
-        </strong>
-        <span>
-          {locale === "en-US"
-            ? "Live monitored weather derivatives board"
-            : "天气衍生品实时监控面板"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 function projectHomeTrendPoint(
   x: number,
   y: number,
@@ -1476,7 +1458,6 @@ function DashboardScreen() {
       )}
     >
       <MapCanvas />
-      <HomeMapToolbar />
       <HeaderBar />
       <CitySidebar />
       {showHomepageChrome ? (
