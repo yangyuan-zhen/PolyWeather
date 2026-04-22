@@ -10,6 +10,9 @@ import {
   BookOpen,
   Sparkles,
   House,
+  Bell,
+  BarChart3,
+  CandlestickChart,
 } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
@@ -41,8 +44,38 @@ export function HeaderBar({
   const isAuthenticated = store.proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
-  const homeHref = "/";
-  const homeActive = pathname === "/";
+  const navItems = [
+    {
+      href: "/",
+      label: locale === "en-US" ? "Dashboard" : "总览",
+      active: pathname === "/",
+      icon: House,
+    },
+    {
+      href: "/docs/intraday-signal",
+      label: locale === "en-US" ? "Markets" : "市场",
+      active: pathname?.startsWith("/docs/intraday-signal"),
+      icon: CandlestickChart,
+    },
+    {
+      href: "/docs/model-stack-deb",
+      label: locale === "en-US" ? "Analytics" : "分析",
+      active: pathname?.startsWith("/docs/model-stack-deb"),
+      icon: BarChart3,
+    },
+    {
+      href: "/docs/history-review",
+      label: locale === "en-US" ? "History" : "历史",
+      active: pathname?.startsWith("/docs/history-review"),
+      icon: BookOpen,
+    },
+    {
+      href: "/docs/alert-playbook",
+      label: locale === "en-US" ? "Alerts" : "提醒",
+      active: pathname?.startsWith("/docs/alert-playbook"),
+      icon: Bell,
+    },
+  ];
   const trialPromoLabel =
     locale === "en-US"
       ? "New users get 3-day Pro trial"
@@ -109,6 +142,25 @@ export function HeaderBar({
         <span className="subtitle">{t("header.subtitle")}</span>
       </div>
 
+      <nav
+        className="header-nav"
+        aria-label={locale === "en-US" ? "Primary" : "主导航"}
+      >
+        {navItems.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={clsx("header-nav-link", item.active && "active")}
+            >
+              <Icon size={14} strokeWidth={2} />
+              <span>{item.label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
       <div className="header-right">
         <div
           className="lang-switch"
@@ -130,16 +182,6 @@ export function HeaderBar({
             {t("header.langEn")}
           </button>
         </div>
-
-        <Link
-          href={homeHref}
-          className={clsx("info-btn", homeActive && "active")}
-          title={t("header.homeAria")}
-          aria-label={t("header.homeAria")}
-        >
-          <House size={14} strokeWidth={2} />
-          {t("header.home")}
-        </Link>
 
         <Link
           href={docsHref}

@@ -2,7 +2,7 @@
 
 import { startTransition, useEffect, useMemo, useRef, useState } from "react";
 import clsx from "clsx";
-import { Clock } from "lucide-react";
+import { Clock, Search } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
@@ -62,7 +62,9 @@ export function CitySidebar() {
   const [expandedGroups, setExpandedGroups] = useState<
     Record<RiskGroupKey, boolean>
   >(DEFAULT_EXPANDED_GROUPS);
+  const [searchQuery, setSearchQuery] = useState("");
   const cityItemRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const normalizedQuery = searchQuery.trim().toLowerCase();
 
   const sortedCities = useMemo(
     () =>
@@ -91,10 +93,36 @@ export function CitySidebar() {
       other: [],
     };
     sortedCities.forEach((city) => {
+      const summary = store.citySummariesByName[city.name];
+      const detail = store.cityDetailsByName[city.name];
+      const localizedName = getLocalizedCityName(
+        city.name,
+        summary?.display_name || detail?.display_name || city.display_name,
+        locale,
+      );
+      if (normalizedQuery) {
+        const searchCorpus = [
+          city.name,
+          city.display_name,
+          city.airport,
+          city.icao,
+          localizedName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!searchCorpus.includes(normalizedQuery)) return;
+      }
       groups[toPerformanceGroup(city)].push(city);
     });
     return groups;
-  }, [sortedCities]);
+  }, [
+    locale,
+    normalizedQuery,
+    sortedCities,
+    store.cityDetailsByName,
+    store.citySummariesByName,
+  ]);
 
   useEffect(() => {
     if (!selectedCity) return;
@@ -164,6 +192,17 @@ export function CitySidebar() {
       <div className="city-list-header">
         <span>{t("sidebar.title")}</span>
         <span className="city-count">{store.cities.length}</span>
+      </div>
+
+      <div className="city-search">
+        <Search size={14} strokeWidth={2} aria-hidden="true" />
+        <input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder={locale === "en-US" ? "Search city" : "搜索城市"}
+          aria-label={locale === "en-US" ? "Search city" : "搜索城市"}
+        />
       </div>
 
       <div className="city-list-items">
