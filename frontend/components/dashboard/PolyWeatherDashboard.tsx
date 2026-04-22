@@ -852,7 +852,6 @@ function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
-  const autoFocusedCityRef = useRef<string | null>(null);
   const preloadedOpportunityRef = useRef<Set<string>>(new Set());
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
@@ -923,26 +922,7 @@ function DashboardScreen() {
     if (!topOpportunity) return;
 
     didAutoFocusRef.current = true;
-    autoFocusedCityRef.current = topOpportunity;
     void store.focusCity(topOpportunity);
-  }, [homepageSnapshots, showHomepageChrome, store]);
-
-  useEffect(() => {
-    if (!showHomepageChrome) return;
-    if (!store.selectedCity) return;
-    if (store.selectedCity !== autoFocusedCityRef.current) return;
-
-    const topOpportunity = homepageSnapshots[0];
-    if (!topOpportunity || topOpportunity.city.name === store.selectedCity) return;
-
-    const selectedSnapshot = homepageSnapshots.find(
-      (snapshot) => snapshot.city.name === store.selectedCity,
-    );
-    if (!selectedSnapshot?.detail?.market_scan) return;
-    if (selectedSnapshot.tradableOpportunity) return;
-
-    autoFocusedCityRef.current = topOpportunity.city.name;
-    void store.focusCity(topOpportunity.city.name);
   }, [homepageSnapshots, showHomepageChrome, store]);
 
   useEffect(() => {
