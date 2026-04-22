@@ -2278,6 +2278,26 @@
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
+.root :global(.opportunity-empty-state) {
+  display: flex;
+  min-height: 132px;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(34, 211, 238, 0.2);
+  border-radius: 16px;
+  background:
+    radial-gradient(
+      circle at 50% 0%,
+      rgba(34, 211, 238, 0.08),
+      transparent 44%
+    ),
+    rgba(7, 12, 22, 0.72);
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
 .root :global(.opportunity-card) {
   position: relative;
   min-width: 0;
@@ -2419,22 +2439,6 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.22));
-}
-
-/* Market-closed opportunity card — dimmed state */
-.root :global(.opportunity-card.market-closed) {
-  opacity: 0.6;
-  border-style: dashed;
-}
-
-.root :global(.opportunity-card.market-closed:hover) {
-  opacity: 0.82;
-}
-
-.root :global(.opportunity-market-status) {
-  color: rgba(251, 191, 36, 0.8);
-  font-size: 10px;
-  font-weight: 700;
 }
 
 @keyframes home-panel-enter {

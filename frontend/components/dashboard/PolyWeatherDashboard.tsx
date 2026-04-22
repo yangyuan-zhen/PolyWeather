@@ -282,7 +282,7 @@ function buildDashboardSummaryCards(
   return [
     {
       key: "opportunities",
-      title: locale === "en-US" ? "Today's Opportunities" : "今日机会分布",
+      title: locale === "en-US" ? "Current Opportunities" : "当前机会分布",
       items: [
         {
           label: locale === "en-US" ? "High risk" : "高风险",
@@ -1147,8 +1147,13 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
     [locale, snapshots],
   );
 
-  // Always show top 5 cities by score, regardless of market tradability
-  const items = useMemo(() => snapshots.slice(0, 5), [snapshots]);
+  const items = useMemo(
+    () =>
+      snapshots
+        .filter((snapshot) => snapshot.tradableOpportunity)
+        .slice(0, 5),
+    [snapshots],
+  );
 
   // Always render: summary cards should be visible even without tradable opportunities
   if (!snapshots.length) return null;
@@ -1186,28 +1191,26 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
         ))}
       </div>
 
-      {items.length > 0 && (
-        <>
-          <div className="opportunity-strip-heading">
-            <div>
-              <span>
-                {locale === "en-US"
-                  ? "Today's Top Opportunities"
-                  : "今日最佳机会"}
-              </span>
-              <strong>
-                {locale === "en-US"
-                  ? "Market question · YES/NO · Edge · Trend"
-                  : "市场问题 · YES/NO 价格 · Edge · 小趋势线"}
-              </strong>
-            </div>
-            <Link href="/docs/intraday-signal" className="opportunity-view-all">
-              {locale === "en-US" ? "View all" : "查看全部"}
-            </Link>
-          </div>
-          <div className="opportunity-card-grid top-opportunities">
-            {items.map(
-              ({ city, detail, summary, tradableOpportunity }, index) => {
+      <div className="opportunity-strip-heading">
+        <div>
+          <span>
+            {locale === "en-US"
+              ? "Current Best Markets"
+              : "当前最佳机会市场"}
+          </span>
+          <strong>
+            {locale === "en-US"
+              ? "Live market question · YES/NO · Edge · Trend"
+              : "当前市场问题 · YES/NO 价格 · Edge · 小趋势线"}
+          </strong>
+        </div>
+        <Link href="/docs/intraday-signal" className="opportunity-view-all">
+          {locale === "en-US" ? "View all" : "查看全部"}
+        </Link>
+      </div>
+      {items.length > 0 ? (
+        <div className="opportunity-card-grid top-opportunities">
+          {items.map(({ city, detail, summary }, index) => {
                 const symbol = getTempSymbol(city, summary, detail);
                 const debPrediction =
                   summary?.deb?.prediction ?? detail?.deb?.prediction;
@@ -1222,7 +1225,6 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                   city.risk_level ||
                   summary?.risk?.level ||
                   detail?.risk?.level;
-                const marketClosed = !tradableOpportunity;
                 const marketBucket = detail?.market_scan?.temperature_bucket;
                 const marketQuestion =
                   detail?.market_scan?.primary_market?.question ||
@@ -1235,19 +1237,20 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                   detail?.market_scan?.sparkline?.length
                     ? detail.market_scan.sparkline
                     : [
-                        Number(summary?.current?.temp ?? detail?.current?.temp ?? 0),
+                        Number(
+                          summary?.current?.temp ?? detail?.current?.temp ?? 0,
+                        ),
                         Number(debPrediction ?? 0),
-                        Number(detail?.forecast?.today_high ?? debPrediction ?? 0),
+                        Number(
+                          detail?.forecast?.today_high ?? debPrediction ?? 0,
+                        ),
                       ],
                 );
                 return (
                   <button
                     key={city.name}
                     type="button"
-                    className={clsx(
-                      "opportunity-card",
-                      marketClosed && "market-closed",
-                    )}
+                    className="opportunity-card"
                     onClick={() => void store.focusCity(city.name)}
                   >
                     <div className="opportunity-card-header">
@@ -1266,12 +1269,6 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                     </div>
                     <span className="opportunity-meta">
                       {marketQuestion}
-                      {marketClosed && (
-                        <span className="opportunity-market-status">
-                          {" · "}
-                          {locale === "en-US" ? "Market closed" : "市场已关闭"}
-                        </span>
-                      )}
                     </span>
                     <div className="opportunity-card-footer">
                       <div className="opportunity-price-pair">
@@ -1293,10 +1290,14 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                     </svg>
                   </button>
                 );
-              },
-            )}
-          </div>
-        </>
+              })}
+        </div>
+      ) : (
+        <div className="opportunity-empty-state">
+          {locale === "en-US"
+            ? "No active opportunity market right now."
+            : "当前暂无可交易机会市场"}
+        </div>
       )}
     </section>
   );
