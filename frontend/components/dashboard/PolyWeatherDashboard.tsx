@@ -28,7 +28,6 @@ import {
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
 import { normalizeObservationSourceLabel } from "@/lib/source-labels";
-import { Expand, Thermometer, CloudRain, Wind } from "lucide-react";
 
 const loadHistoryModal = () =>
   import("@/components/dashboard/HistoryModal").then(
@@ -227,6 +226,11 @@ type HomeTrendChart = {
   forecastPath: string;
   legendText: string;
   observationDots: Array<{ cx: number; cy: number; key: string }>;
+  hourlyReports: Array<{
+    key: string;
+    label: string;
+    temperatureText: string;
+  }>;
   hoverPoints: Array<{
     cx: number;
     cy: number;
@@ -399,32 +403,6 @@ function HomeMapToolbar() {
           </span>
         </div>
       </div>
-      <div
-        className="home-map-toolbar"
-        aria-label={locale === "en-US" ? "Map layer controls" : "地图图层控件"}
-      >
-        <div className="home-map-modes">
-          <button type="button" className="active">
-            <Thermometer size={14} strokeWidth={2} />
-            <span>{locale === "en-US" ? "Temperature" : "温度"}</span>
-          </button>
-          <button type="button">
-            <CloudRain size={14} strokeWidth={2} />
-            <span>{locale === "en-US" ? "Precipitation" : "降水"}</span>
-          </button>
-          <button type="button">
-            <Wind size={14} strokeWidth={2} />
-            <span>{locale === "en-US" ? "Wind" : "风场"}</span>
-          </button>
-        </div>
-        <button
-          type="button"
-          className="home-map-expand"
-          aria-label={locale === "en-US" ? "Expand map" : "放大地图"}
-        >
-          <Expand size={15} strokeWidth={2} />
-        </button>
-      </div>
       <div className="home-map-legend" aria-hidden="true">
         <span>{locale === "en-US" ? "Temperature (°F)" : "温度 (°F)"}</span>
         <div className="home-map-legend-bar" />
@@ -565,11 +543,23 @@ function buildHomeTrendChart(
       temperatureText: formatTemperature(point.y, detail.temp_symbol || "°C"),
     };
   });
+  const hourlyReports = hoverSource
+    .filter((point) => {
+      const label = String(point.labelTime || "");
+      return /(^|\D)\d{1,2}:00($|\D)/.test(label) || hoverSource.length <= 8;
+    })
+    .slice(-6)
+    .map((point, index) => ({
+      key: `hourly-${point.labelTime}-${index}`,
+      label: point.labelTime,
+      temperatureText: formatTemperature(point.y, detail.temp_symbol || "°C"),
+    }));
 
   return {
     forecastPath,
     legendText: chartData.legendText,
     observationDots,
+    hourlyReports,
     hoverPoints,
   };
 }
@@ -747,7 +737,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         ? detail?.multi_model_daily?.[detail.local_date]?.probabilities
         : undefined) ||
       [];
-    const displayedProbabilities = probabilityBuckets.slice(0, 5);
+    const displayedProbabilities = probabilityBuckets.slice(0, 4);
     const modelLabels = getModelLabels(detail);
     const marketScan = detail?.market_scan;
     const marketBucket =
@@ -910,6 +900,29 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     keySignals,
   } = spotlightView;
   const subtitle = `${cityCode} · ${localizedAirportName}`;
+  const proCard = (
+    <div className={clsx("home-pro-card", isPro && "active")}>
+      <div>
+        <span>{proLabel}</span>
+        <strong>
+          {isPro
+            ? locale === "en-US"
+              ? "Today intraday analysis is the primary paid workflow."
+              : "今日日内分析是当前主要付费工作流。"
+            : locale === "en-US"
+              ? "History review and future dates stay paid."
+              : "历史复盘和未来日期保持付费。"}
+        </strong>
+      </div>
+      {isPro ? (
+        <button type="button" onClick={() => void store.openTodayModal()}>
+          {locale === "en-US" ? "Today intraday" : "今日日内分析"}
+        </button>
+      ) : (
+        <Link href="/account">{locale === "en-US" ? "Upgrade" : "升级"}</Link>
+      )}
+    </div>
+  );
 
   return (
     <aside
@@ -928,12 +941,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 : "最佳机会"
               : locale === "en-US"
                 ? "FOCUS CITY"
-                : "焦点城市"}
+              : "焦点城市"}
           </span>
         </div>
-        <button type="button" className="home-why-link">
-          {locale === "en-US" ? "Why this city?" : "为什么是它？"}
-        </button>
       </div>
 
       <div className="home-card-titlebar">
@@ -961,6 +971,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
               : "刚刚更新"}
         </span>
       </div>
+
+      {proCard}
 
       <div className="home-weather-hero">
         <div>
@@ -1007,8 +1019,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       {trendChart ? (
         <div className="home-card-section intraday">
           <h3>
-            {locale === "en-US" ? "Intraday trend" : "今日日内走势"}{" "}
-            <small>{locale === "en-US" ? "compact" : "简版"}</small>
+            {locale === "en-US" ? "Hourly reports" : "小时准点报"}{" "}
+            <small>{locale === "en-US" ? "1h cadence" : "1h 级别"}</small>
           </h3>
           <div className="home-intraday-chart">
             <svg viewBox="0 0 296 78" aria-hidden="true">
@@ -1056,6 +1068,16 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
               </div>
             ) : null}
           </div>
+          {trendChart.hourlyReports.length ? (
+            <div className="home-intraday-reports">
+              {trendChart.hourlyReports.map((report) => (
+                <span key={report.key}>
+                  <b>{report.label}</b>
+                  <strong>{report.temperatureText}</strong>
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -1087,23 +1109,25 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       <div className="home-card-section probability">
         <h3>
-          {probabilityTitle} <small>({dayMaxLabel})</small>
+          {probabilityTitle} <small>{dayMaxLabel}</small>
         </h3>
         {displayedProbabilities.length ? (
-          <div className="home-probability-list">
+          <div className="home-probability-ladder">
             {displayedProbabilities.map((bucket, index) => {
               const probability = Number(bucket.probability ?? 0);
               const width = Math.max(6, Math.min(100, probability * 100));
               return (
                 <div
                   key={`${getProbabilityLabel(bucket, symbol)}-${index}`}
-                  className="home-probability-row"
+                  className="home-probability-ladder-row"
                 >
-                  <span>{getProbabilityLabel(bucket, symbol)}</span>
-                  <div>
+                  <span className="home-probability-threshold">
+                    {getProbabilityLabel(bucket, symbol)}
+                  </span>
+                  <div className="home-probability-track">
                     <i style={{ width: `${width}%` }} />
-                    <strong>{formatProbability(probability)}</strong>
                   </div>
+                  <strong>{formatProbability(probability)}</strong>
                 </div>
               );
             })}
@@ -1182,27 +1206,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         <p>{observationSource}</p>
       </div>
 
-      <div className={clsx("home-pro-card", isPro && "active")}>
-        <div>
-          <span>{proLabel}</span>
-          <strong>
-            {isPro
-              ? locale === "en-US"
-                ? "Open today intraday analysis first. History review and future-day workflow stay available after that."
-                : "先打开今日日内分析，历史复盘和未来日工作流仍可继续查看。"
-              : locale === "en-US"
-                ? "History review and future dates stay paid."
-                : "历史复盘和未来日期保持付费。"}
-          </strong>
-        </div>
-        {isPro ? (
-          <button type="button" onClick={() => void store.openTodayModal()}>
-            {locale === "en-US" ? "Today intraday" : "今日日内分析"}
-          </button>
-        ) : (
-          <Link href="/account">{locale === "en-US" ? "Upgrade" : "升级"}</Link>
-        )}
-      </div>
     </aside>
   );
 }
@@ -1265,8 +1268,8 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
               </span>
               <strong>
                 {locale === "en-US"
-                  ? "Sorted by score and risk"
-                  : "按综合评分排序"}
+                  ? "Market question · YES/NO · Edge · Trend"
+                  : "市场问题 · YES/NO 价格 · Edge · 小趋势线"}
               </strong>
             </div>
             <Link href="/docs/intraday-signal" className="opportunity-view-all">
@@ -1291,6 +1294,23 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                   summary?.risk?.level ||
                   detail?.risk?.level;
                 const marketClosed = !tradableOpportunity;
+                const marketBucket = detail?.market_scan?.temperature_bucket;
+                const marketQuestion =
+                  detail?.market_scan?.primary_market?.question ||
+                  `${getProbabilityLabel(marketBucket || {}, symbol)} ${
+                    detail?.market_scan?.selected_date ||
+                    detail?.local_date ||
+                    ""
+                  }`;
+                const opportunitySparkline = buildSparklinePoints(
+                  detail?.market_scan?.sparkline?.length
+                    ? detail.market_scan.sparkline
+                    : [
+                        Number(summary?.current?.temp ?? detail?.current?.temp ?? 0),
+                        Number(debPrediction ?? 0),
+                        Number(detail?.forecast?.today_high ?? debPrediction ?? 0),
+                      ],
+                );
                 return (
                   <button
                     key={city.name}
@@ -1316,8 +1336,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                       </span>
                     </div>
                     <span className="opportunity-meta">
-                      &gt; {formatTemperature(debPrediction, symbol)}{" "}
-                      {locale === "en-US" ? "target" : "目标"}
+                      {marketQuestion}
                       {marketClosed && (
                         <span className="opportunity-market-status">
                           {" · "}
@@ -1338,6 +1357,11 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
                         {formatEdge(getMarketEdgeValue(detail))}
                       </span>
                     </div>
+                    <svg className="opportunity-sparkline" viewBox="0 0 92 28" aria-hidden="true">
+                      {opportunitySparkline ? (
+                        <polyline points={opportunitySparkline} />
+                      ) : null}
+                    </svg>
                   </button>
                 );
               },

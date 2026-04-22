@@ -1146,7 +1146,6 @@
 }
 
 .root :global(.home-pro-card) {
-  margin-top: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -1665,12 +1664,15 @@
 }
 
 .root :global(.home-card-section.intraday) {
-  border-color: rgba(34, 211, 238, 0.18);
+  border-color: rgba(34, 211, 238, 0.2);
+  background:
+    radial-gradient(circle at 0% 35%, rgba(34, 211, 238, 0.12), transparent 44%),
+    linear-gradient(180deg, rgba(7, 14, 26, 0.94), rgba(9, 17, 30, 0.82));
 }
 
 .root :global(.home-intraday-chart) {
   position: relative;
-  padding: 10px 0 0;
+  padding: 6px 0 0;
 }
 
 .root :global(.home-intraday-chart svg) {
@@ -1742,6 +1744,37 @@
   font-weight: 700;
 }
 
+.root :global(.home-intraday-reports) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.root :global(.home-intraday-reports span) {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 10px;
+  background: rgba(2, 8, 18, 0.55);
+}
+
+.root :global(.home-intraday-reports b) {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.root :global(.home-intraday-reports strong) {
+  color: #e0f2fe;
+  font-size: 11px;
+  font-weight: 900;
+}
+
 .root :global(.home-card-section.forecast) {
   border-color: rgba(99, 102, 241, 0.24);
 }
@@ -1806,33 +1839,40 @@
 }
 
 .root :global(.home-card-section.probability) {
-  border-color: rgba(115, 137, 161, 0.16);
+  border-color: rgba(251, 113, 133, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(251, 113, 133, 0.08), transparent 42%),
+    linear-gradient(180deg, rgba(7, 14, 26, 0.94), rgba(9, 17, 30, 0.82));
 }
 
-.root :global(.home-probability-list) {
+.root :global(.home-probability-list),
+.root :global(.home-probability-ladder) {
   display: grid;
   gap: 8px;
 }
 
-.root :global(.home-probability-row) {
+.root :global(.home-probability-row),
+.root :global(.home-probability-ladder-row) {
   display: grid;
-  grid-template-columns: 58px 1fr;
+  grid-template-columns: 58px minmax(0, 1fr) 42px;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   color: rgba(226, 232, 240, 0.95);
   font-size: 12px;
   font-weight: 850;
 }
 
-.root :global(.home-probability-row div) {
+.root :global(.home-probability-row div),
+.root :global(.home-probability-track) {
   position: relative;
-  height: 18px;
+  height: 14px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(115, 137, 161, 0.12);
 }
 
-.root :global(.home-probability-row i) {
+.root :global(.home-probability-row i),
+.root :global(.home-probability-track i) {
   position: absolute;
   inset: 0 auto 0 0;
   border-radius: inherit;
@@ -1840,22 +1880,31 @@
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.14);
 }
 
-.root :global(.home-probability-row:nth-child(3) i) {
+.root :global(.home-probability-row:nth-child(3) i),
+.root :global(.home-probability-ladder-row:nth-child(3) i) {
   background: linear-gradient(90deg, #f59e0b, #fbbf24);
 }
 
-.root :global(.home-probability-row:nth-child(n + 4) i) {
+.root :global(.home-probability-row:nth-child(n + 4) i),
+.root :global(.home-probability-ladder-row:nth-child(n + 4) i) {
   background: linear-gradient(90deg, #ef4444, #fb7185);
 }
 
-.root :global(.home-probability-row strong) {
+.root :global(.home-probability-row strong),
+.root :global(.home-probability-ladder-row strong) {
   position: relative;
   z-index: 1;
   display: block;
-  padding-left: 12px;
   color: #f8fafc;
   font-size: 12px;
-  line-height: 18px;
+  line-height: 1;
+  text-align: right;
+}
+
+.root :global(.home-probability-threshold) {
+  color: rgba(226, 232, 240, 0.95);
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .root :global(.home-card-empty) {
@@ -2033,7 +2082,7 @@
 }
 
 .root :global(.home-summary-card) {
-  min-height: 118px;
+  min-height: 106px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -2145,8 +2194,8 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 122px;
+  gap: 9px;
+  min-height: 132px;
   padding: 14px;
   border: 1px solid rgba(148, 163, 184, 0.14);
   border-radius: 16px;
@@ -2247,6 +2296,7 @@
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-height: 16px;
 }
 
 .root :global(.opportunity-yes) {
@@ -2265,6 +2315,21 @@
   color: rgba(34, 211, 238, 0.9);
   font-size: 18px;
   font-weight: 800;
+}
+
+.root :global(.opportunity-sparkline) {
+  width: 100%;
+  height: 28px;
+  margin-top: auto;
+}
+
+.root :global(.opportunity-sparkline polyline) {
+  fill: none;
+  stroke: #18e6d4;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.22));
 }
 
 /* Market-closed opportunity card — dimmed state */
