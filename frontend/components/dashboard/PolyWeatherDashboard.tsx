@@ -17,6 +17,9 @@ import type {
   CityDetail,
   CityListItem,
   CitySummary,
+  MarketScan,
+  MarketTopBucket,
+  ProbabilityBucket,
   RiskLevel,
 } from "@/lib/dashboard-types";
 import {
@@ -156,6 +159,89 @@ function getProbabilityLabel(
     return `≥ ${Math.round(Number(bucket.value))}${symbol}`;
   }
   return "--";
+}
+
+function parseBucketThreshold(bucket?: {
+  label?: string | null;
+  value?: number | null;
+  temp?: number | null;
+  bucket?: string | null;
+  range?: string | null;
+}) {
+  const directValue = bucket?.value ?? bucket?.temp;
+  if (Number.isFinite(Number(directValue))) return Number(directValue);
+  const text = String(bucket?.label || bucket?.bucket || bucket?.range || "");
+  const match = text.match(/-?\d+(?:\.\d+)?/);
+  if (!match) return null;
+  const parsed = Number(match[0]);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getBucketMatchKey(bucket?: {
+  label?: string | null;
+  value?: number | null;
+  temp?: number | null;
+  bucket?: string | null;
+  range?: string | null;
+}) {
+  const threshold = parseBucketThreshold(bucket);
+  if (threshold != null) return `t:${threshold.toFixed(2)}`;
+  return `l:${String(bucket?.label || bucket?.bucket || bucket?.range || "").trim().toLowerCase()}`;
+}
+
+function normalizeProbabilityValue(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric : numeric / 100;
+}
+
+function buildMarketAlignedProbabilities(
+  marketScan: MarketScan | null | undefined,
+  probabilityBuckets: ProbabilityBucket[],
+  symbol: string,
+) {
+  const modelByKey = new Map(
+    probabilityBuckets.map((bucket) => [getBucketMatchKey(bucket), bucket]),
+  );
+  const marketBuckets: Array<MarketTopBucket | ProbabilityBucket> = [
+    ...(Array.isArray(marketScan?.all_buckets) ? marketScan.all_buckets : []),
+    ...(Array.isArray(marketScan?.top_buckets) ? marketScan.top_buckets : []),
+    ...(marketScan?.temperature_bucket ? [marketScan.temperature_bucket] : []),
+  ];
+  const aligned: ProbabilityBucket[] = [];
+  const seen = new Set<string>();
+
+  for (const marketBucket of marketBuckets) {
+    const key = getBucketMatchKey(marketBucket);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+
+    const matchedModelBucket = modelByKey.get(key);
+    aligned.push({
+      label: getProbabilityLabel(marketBucket, symbol),
+      value:
+        marketBucket.value ??
+        ("temp" in marketBucket ? marketBucket.temp : undefined) ??
+        matchedModelBucket?.value ??
+        null,
+      bucket:
+        ("bucket" in marketBucket ? marketBucket.bucket : undefined) ??
+        matchedModelBucket?.bucket ??
+        null,
+      range:
+        ("range" in marketBucket ? marketBucket.range : undefined) ??
+        matchedModelBucket?.range ??
+        null,
+      unit:
+        marketBucket.unit ??
+        matchedModelBucket?.unit ??
+        (symbol === "°F" ? "F" : "C"),
+      probability:
+        normalizeProbabilityValue(matchedModelBucket?.probability) ?? null,
+    });
+  }
+
+  return aligned.length ? aligned.slice(0, 4) : probabilityBuckets.slice(0, 4);
 }
 
 function formatProbability(value: number | null | undefined) {
@@ -699,8 +785,12 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         ? detail?.multi_model_daily?.[detail.local_date]?.probabilities
         : undefined) ||
       [];
-    const displayedProbabilities = probabilityBuckets.slice(0, 4);
     const marketScan = detail?.market_scan;
+    const displayedProbabilities = buildMarketAlignedProbabilities(
+      marketScan,
+      probabilityBuckets,
+      symbol,
+    );
     const marketBucket =
       marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
     const yesPrice =
@@ -1039,8 +1129,11 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         {displayedProbabilities.length ? (
           <div className="home-probability-ladder">
             {displayedProbabilities.map((bucket, index) => {
-              const probability = Number(bucket.probability ?? 0);
-              const width = Math.max(6, Math.min(100, probability * 100));
+              const probability = normalizeProbabilityValue(bucket.probability);
+              const width =
+                probability == null
+                  ? 6
+                  : Math.max(6, Math.min(100, probability * 100));
               return (
                 <div
                   key={`${getProbabilityLabel(bucket, symbol)}-${index}`}
