@@ -476,130 +476,206 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     label: string;
     temperatureText: string;
   } | null>(null);
-  const selectedSnapshot = store.selectedCity
-    ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity)
-    : null;
-  const spotlight = selectedSnapshot || null;
+  const spotlight = useMemo(
+    () =>
+      store.selectedCity
+        ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity) || null
+        : null,
+    [snapshots, store.selectedCity],
+  );
+  const spotlightView = useMemo(() => {
+    if (!spotlight) return null;
 
-  if (!spotlight) return null;
-
-  const { city, detail, summary } = spotlight;
-  const symbol = getTempSymbol(city, summary, detail);
-  const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
-  const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
-  const maxSoFar = detail?.current?.max_so_far ?? detail?.airport_current?.max_so_far;
-  const maxTime = detail?.current?.max_temp_time || detail?.airport_current?.max_temp_time || "--";
-  const localTime = summary?.local_time || detail?.local_time || "--";
-  const riskLevel =
-    city.deb_recent_tier ||
-    city.risk_level ||
-    summary?.risk?.level ||
-    detail?.risk?.level;
-  const deviation = summary?.deviation_monitor || detail?.deviation_monitor;
-  const observationSource =
-    normalizeObservationSourceLabel(
+    const { city, detail, summary } = spotlight;
+    const symbol = getTempSymbol(city, summary, detail);
+    const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
+    const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
+    const maxSoFar = detail?.current?.max_so_far ?? detail?.airport_current?.max_so_far;
+    const maxTime =
+      detail?.current?.max_temp_time || detail?.airport_current?.max_temp_time || "--";
+    const localTime = summary?.local_time || detail?.local_time || "--";
+    const riskLevel =
+      city.deb_recent_tier ||
+      city.risk_level ||
+      summary?.risk?.level ||
+      detail?.risk?.level;
+    const deviation = summary?.deviation_monitor || detail?.deviation_monitor;
+    const observationSource = normalizeObservationSourceLabel(
       summary?.current?.settlement_source_label ||
         detail?.current?.settlement_source_label ||
         city.settlement_source_label,
       "METAR",
     );
-  const probabilityBuckets =
-    detail?.probabilities?.distribution ||
-    (detail?.local_date
-      ? detail?.multi_model_daily?.[detail.local_date]?.probabilities
-      : undefined) ||
-    [];
-  const displayedProbabilities = probabilityBuckets.slice(0, 5);
-  const modelLabels = getModelLabels(detail);
-  const marketScan = detail?.market_scan;
-  const hasMarketScan = Boolean(marketScan);
-  const showOpportunityLabel = !hasMarketScan || spotlight.tradableOpportunity;
-  const marketBucket = marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
-  const yesPrice =
-    marketScan?.yes_buy ??
-    readNumericField(marketBucket, "yes_buy") ??
-    marketScan?.yes_token?.buy_price ??
-    marketScan?.yes_token?.midpoint ??
-    marketScan?.price_analysis?.yes?.ask;
-  const noPrice =
-    marketScan?.no_buy ??
-    readNumericField(marketBucket, "no_buy") ??
-    marketScan?.no_token?.buy_price ??
-    marketScan?.no_token?.midpoint ??
-    marketScan?.price_analysis?.no?.ask;
-  const marketEdge =
-    marketScan?.edge_percent ??
-    marketScan?.price_analysis?.yes?.edge_percent ??
-    marketScan?.price_analysis?.yes?.edge ??
-    marketScan?.price_analysis?.no?.edge_percent ??
-    marketScan?.price_analysis?.no?.edge;
-  const marketLabel = marketBucket
-    ? getProbabilityLabel(marketBucket, symbol)
-    : debPrediction != null
-      ? `> ${formatTemperature(debPrediction, symbol)}`
-      : "--";
-  const marketProbability =
-    marketScan?.market_price ??
-    readNumericField(marketBucket, "market_price") ??
-    readNumericField(marketBucket, "yes_buy") ??
-    yesPrice ??
-    marketScan?.model_probability;
-  const marketModelProbability = marketScan?.model_probability ?? marketBucket?.probability;
-  const sparklinePoints = buildSparklinePoints(marketScan?.sparkline);
-  const isLoading = store.loadingState.cityDetail && store.selectedCity === city.name;
-  const isPro = store.proAccess.subscriptionActive;
-  const cityCode = city.icao || detail?.risk?.icao || city.airport;
-  const localizedCityName = getLocalizedCityDisplay(city, locale, summary, detail);
-  const localizedAirportName = getLocalizedAirportDisplay(city, locale, detail);
-  const subtitle = `${cityCode} · ${localizedAirportName}`;
-  const highRiskLabel =
-    riskLevel === "high"
-      ? locale === "en-US"
-        ? "High risk"
-        : "高风险"
-      : getRiskCopy(riskLevel, locale);
-  const weatherIconKind = getHomeWeatherIconKind(detail, locale);
-  const trendChart = buildHomeTrendChart(detail, locale);
-  const debLabel = locale === "en-US" ? "DEB forecast" : "DEB 预测";
-  const dayMaxLabel = locale === "en-US" ? "24h max" : "24 小时最高";
-  const probabilityTitle = locale === "en-US" ? "EMOS probability" : "EMOS 概率";
-  const marketTitle = locale === "en-US" ? "Market edge" : "市场优势";
-  const marketEdgeLabel = locale === "en-US" ? "Edge" : "优势";
-  const marketImpliedLabel = locale === "en-US" ? "Implied" : "市场隐含";
-  const marketModelLabel = locale === "en-US" ? "Model prob" : "模型概率";
-  const proLabel = isPro
-    ? locale === "en-US"
-      ? "Pro signal"
-      : "PRO 信号"
-    : locale === "en-US"
-      ? "Pro locked"
-      : "PRO 锁定";
-  const forecastDays = buildHomeForecastDays(detail, locale);
-  const keySignals = [
-    {
-      active: Number(marketEdge) > 0,
-      label:
-        locale === "en-US"
-          ? "DEB > Market implied"
-          : "DEB 高于市场隐含",
-      tone: "green",
-    },
-    {
-      active: deviation?.trend === "expanding" || deviation?.direction === "hot",
-      label: locale === "en-US" ? "Rising temps trend" : "升温趋势",
-      tone: "green",
-    },
-    {
-      active: Boolean(detail?.peak?.hours?.length),
-      label:
-        detail?.peak?.hours?.length
-          ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
+    const probabilityBuckets =
+      detail?.probabilities?.distribution ||
+      (detail?.local_date
+        ? detail?.multi_model_daily?.[detail.local_date]?.probabilities
+        : undefined) ||
+      [];
+    const displayedProbabilities = probabilityBuckets.slice(0, 5);
+    const modelLabels = getModelLabels(detail);
+    const marketScan = detail?.market_scan;
+    const marketBucket =
+      marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
+    const yesPrice =
+      marketScan?.yes_buy ??
+      readNumericField(marketBucket, "yes_buy") ??
+      marketScan?.yes_token?.buy_price ??
+      marketScan?.yes_token?.midpoint ??
+      marketScan?.price_analysis?.yes?.ask;
+    const noPrice =
+      marketScan?.no_buy ??
+      readNumericField(marketBucket, "no_buy") ??
+      marketScan?.no_token?.buy_price ??
+      marketScan?.no_token?.midpoint ??
+      marketScan?.price_analysis?.no?.ask;
+    const marketEdge =
+      marketScan?.edge_percent ??
+      marketScan?.price_analysis?.yes?.edge_percent ??
+      marketScan?.price_analysis?.yes?.edge ??
+      marketScan?.price_analysis?.no?.edge_percent ??
+      marketScan?.price_analysis?.no?.edge;
+
+    return {
+      city,
+      detail,
+      tradableOpportunity: spotlight.tradableOpportunity,
+      symbol,
+      currentTemp,
+      debPrediction,
+      maxSoFar,
+      maxTime,
+      localTime,
+      riskLevel,
+      observationSource,
+      displayedProbabilities,
+      modelLabels,
+      marketScan,
+      showOpportunityLabel: !marketScan || spotlight.tradableOpportunity,
+      marketLabel: marketBucket
+        ? getProbabilityLabel(marketBucket, symbol)
+        : debPrediction != null
+          ? `> ${formatTemperature(debPrediction, symbol)}`
+          : "--",
+      yesPrice,
+      noPrice,
+      marketEdge,
+      marketProbability:
+        marketScan?.market_price ??
+        readNumericField(marketBucket, "market_price") ??
+        readNumericField(marketBucket, "yes_buy") ??
+        yesPrice ??
+        marketScan?.model_probability,
+      marketModelProbability: marketScan?.model_probability ?? marketBucket?.probability,
+      sparklinePoints: buildSparklinePoints(marketScan?.sparkline),
+      isLoading: store.loadingState.cityDetail && store.selectedCity === city.name,
+      isPro: store.proAccess.subscriptionActive,
+      cityCode: city.icao || detail?.risk?.icao || city.airport,
+      localizedCityName: getLocalizedCityDisplay(city, locale, summary, detail),
+      localizedAirportName: getLocalizedAirportDisplay(city, locale, detail),
+      highRiskLabel:
+        riskLevel === "high"
+          ? locale === "en-US"
+            ? "High risk"
+            : "高风险"
+          : getRiskCopy(riskLevel, locale),
+      weatherIconKind: getHomeWeatherIconKind(detail, locale),
+      trendChart: buildHomeTrendChart(detail, locale),
+      debLabel: locale === "en-US" ? "DEB forecast" : "DEB 预测",
+      dayMaxLabel: locale === "en-US" ? "24h max" : "24 小时最高",
+      probabilityTitle: locale === "en-US" ? "EMOS probability" : "EMOS 概率",
+      marketTitle: locale === "en-US" ? "Market edge" : "市场优势",
+      marketEdgeLabel: locale === "en-US" ? "Edge" : "优势",
+      marketImpliedLabel: locale === "en-US" ? "Implied" : "市场隐含",
+      marketModelLabel: locale === "en-US" ? "Model prob" : "模型概率",
+      proLabel:
+        store.proAccess.subscriptionActive
+          ? locale === "en-US"
+            ? "Pro signal"
+            : "PRO 信号"
           : locale === "en-US"
-            ? "High impact window pending"
-            : "高影响窗口待确认",
-      tone: "amber",
-    },
-  ];
+            ? "Pro locked"
+            : "PRO 锁定",
+      forecastDays: buildHomeForecastDays(detail, locale),
+      keySignals: [
+        {
+          active: Number(marketEdge) > 0,
+          label:
+            locale === "en-US"
+              ? "DEB > Market implied"
+              : "DEB 高于市场隐含",
+          tone: "green",
+        },
+        {
+          active: deviation?.trend === "expanding" || deviation?.direction === "hot",
+          label: locale === "en-US" ? "Rising temps trend" : "升温趋势",
+          tone: "green",
+        },
+        {
+          active: Boolean(detail?.peak?.hours?.length),
+          label:
+            detail?.peak?.hours?.length
+              ? `${locale === "en-US" ? "High impact window" : "高影响窗口"} ${detail.peak.hours[0]}-${detail.peak.hours[detail.peak.hours.length - 1]}`
+              : locale === "en-US"
+                ? "High impact window pending"
+                : "高影响窗口待确认",
+          tone: "amber",
+        },
+      ],
+    };
+  }, [
+    locale,
+    spotlight,
+    store.loadingState.cityDetail,
+    store.proAccess.subscriptionActive,
+    store.selectedCity,
+  ]);
+
+  if (!spotlightView) return null;
+
+  const {
+    city,
+    detail,
+    symbol,
+    currentTemp,
+    debPrediction,
+    maxSoFar,
+    maxTime,
+    localTime,
+    riskLevel,
+    observationSource,
+    displayedProbabilities,
+    modelLabels,
+    marketScan,
+    tradableOpportunity,
+    showOpportunityLabel,
+    marketLabel,
+    yesPrice,
+    noPrice,
+    marketEdge,
+    marketProbability,
+    marketModelProbability,
+    sparklinePoints,
+    isLoading,
+    isPro,
+    cityCode,
+    localizedCityName,
+    localizedAirportName,
+    highRiskLabel,
+    weatherIconKind,
+    trendChart,
+    debLabel,
+    dayMaxLabel,
+    probabilityTitle,
+    marketTitle,
+    marketEdgeLabel,
+    marketImpliedLabel,
+    marketModelLabel,
+    proLabel,
+    forecastDays,
+    keySignals,
+  } = spotlightView;
+  const subtitle = `${cityCode} · ${localizedAirportName}`;
 
   return (
     <aside className="home-intelligence-panel full" aria-label={localizedCityName}>
@@ -815,7 +891,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             {marketTitle} <small>ⓘ</small>
           </h3>
           <span>
-            {hasMarketScan && !spotlight.tradableOpportunity
+            {marketScan && !tradableOpportunity
               ? locale === "en-US"
                 ? "Market closed"
                 : "市场已结束"
@@ -902,12 +978,18 @@ function OpportunityStrip({
 }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
-  const items = recentCityNames
-    .map((cityName) =>
-      snapshots.find((snapshot) => snapshot.city.name === cityName) || null,
-    )
-    .filter((snapshot): snapshot is CitySnapshot => snapshot != null)
-    .slice(0, 4);
+  const snapshotByName = useMemo(
+    () => new Map(snapshots.map((snapshot) => [snapshot.city.name, snapshot])),
+    [snapshots],
+  );
+  const items = useMemo(
+    () =>
+      recentCityNames
+        .map((cityName) => snapshotByName.get(cityName) || null)
+        .filter((snapshot): snapshot is CitySnapshot => snapshot != null)
+        .slice(0, 4),
+    [recentCityNames, snapshotByName],
+  );
 
   if (!items.length) return null;
 
@@ -1022,6 +1104,10 @@ function DashboardScreen() {
         ),
     [store.cities, store.cityDetailsByName, store.citySummariesByName],
   );
+  const fallbackRecentCityNames = useMemo(
+    () => homepageSnapshots.slice(0, 4).map((snapshot) => snapshot.city.name),
+    [homepageSnapshots],
+  );
   const showHomepageChrome =
     !store.historyState.isOpen && !store.futureModalDate;
 
@@ -1097,11 +1183,7 @@ function DashboardScreen() {
           <HomeIntelligencePanel snapshots={homepageSnapshots} />
           <OpportunityStrip
             snapshots={homepageSnapshots}
-            recentCityNames={
-              recentCityNames.length
-                ? recentCityNames
-                : homepageSnapshots.slice(0, 4).map((snapshot) => snapshot.city.name)
-            }
+            recentCityNames={recentCityNames.length ? recentCityNames : fallbackRecentCityNames}
           />
         </>
       ) : null}
