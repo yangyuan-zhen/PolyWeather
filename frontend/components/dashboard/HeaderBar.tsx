@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import {
@@ -146,7 +147,7 @@ export function HeaderBar({
     <header className="header">
       <div className="brand">
         <span className="brand-mark" aria-hidden="true">
-          <i />
+          <Image src="/favicon-32x32.png" alt="" width={24} height={24} priority />
         </span>
         <h1>PolyWeather</h1>
         <span className="subtitle">{t("header.subtitle")}</span>

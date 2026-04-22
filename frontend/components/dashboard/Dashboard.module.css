@@ -338,43 +338,26 @@
 }
 
 .root :global(.brand-mark) {
-  width: 28px;
-  height: 28px;
-  border-radius: 9px;
-  border: 1px solid rgba(34, 211, 238, 0.28);
-  background:
-    radial-gradient(
-      circle at 30% 30%,
-      rgba(34, 211, 238, 0.24),
-      transparent 52%
-    ),
-    linear-gradient(180deg, rgba(11, 22, 40, 0.96), rgba(6, 13, 24, 0.96));
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  background: rgba(8, 15, 28, 0.78);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.08);
+  overflow: hidden;
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, 0.08),
+    0 0 20px rgba(34, 211, 238, 0.12);
 }
 
-.root :global(.brand-mark i) {
-  width: 13px;
-  height: 13px;
-  border-radius: 999px;
-  border: 2px solid #22d3ee;
-  position: relative;
-}
-
-.root :global(.brand-mark i::before),
-.root :global(.brand-mark i::after) {
-  content: "";
-  position: absolute;
-  inset: -4px;
-  border-radius: 999px;
-  border: 1px solid rgba(34, 211, 238, 0.34);
-}
-
-.root :global(.brand-mark i::after) {
-  inset: -8px;
-  border-color: rgba(59, 130, 246, 0.18);
+.root :global(.brand-mark img) {
+  width: 24px;
+  height: 24px;
+  display: block;
+  object-fit: contain;
 }
 
 .root :global(.brand h1) {
@@ -2470,6 +2453,14 @@
   background: rgba(248, 252, 255, 0.9);
   border-bottom-color: rgba(36, 68, 104, 0.14);
   box-shadow: 0 12px 34px rgba(31, 64, 104, 0.08);
+}
+
+:global(html.light) .root :global(.brand-mark) {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(14, 165, 233, 0.24);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.72),
+    0 10px 24px rgba(31, 64, 104, 0.12);
 }
 
 :global(html.light) .root :global(.city-list),
