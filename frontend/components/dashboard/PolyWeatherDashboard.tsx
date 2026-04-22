@@ -62,6 +62,7 @@ type CitySnapshot = {
   detail?: CityDetail | null;
   score: number;
   summary?: CitySummary | null;
+  tradableOpportunity: boolean;
 };
 
 const RISK_SCORE: Record<string, number> = {
@@ -122,17 +123,21 @@ function buildSnapshot(
     detail?.risk?.level;
   const hitRate = Number(city.deb_recent_hit_rate ?? 0);
   const sampleCount = Number(city.deb_recent_sample_count ?? 0);
-  const edgePercent = Number(detail?.market_scan?.edge_percent);
+  const edgePercent = Number(getMarketEdgeValue(detail));
   const normalizedEdge =
     Number.isFinite(edgePercent) && Math.abs(edgePercent) <= 1
       ? edgePercent * 100
       : edgePercent;
+  const tradableOpportunity = isTradableMarketOpportunity(detail);
   const score =
-    (Number.isFinite(normalizedEdge) ? 1000 + normalizedEdge * 10 : 0) +
+    (detail?.market_scan && !tradableOpportunity ? -10_000 : 0) +
+    (tradableOpportunity && Number.isFinite(normalizedEdge)
+      ? 1000 + normalizedEdge * 10
+      : 0) +
     (RISK_SCORE[String(tier || "")] || 0) * 100 +
     hitRate * 100 +
     Math.min(sampleCount, 60) / 10;
-  return { city, detail, score, summary };
+  return { city, detail, score, summary, tradableOpportunity };
 }
 
 function getProbabilityLabel(
@@ -203,6 +208,69 @@ function readNumericField(source: unknown, key: string) {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
+function normalizePercentValue(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+}
+
+function isBoundaryMarketPrice(value: number | null | undefined) {
+  const percent = normalizePercentValue(value);
+  return percent != null && (percent <= 2 || percent >= 98);
+}
+
+function getMarketEdgeValue(detail?: CityDetail | null) {
+  const marketScan = detail?.market_scan;
+  return (
+    marketScan?.edge_percent ??
+    marketScan?.price_analysis?.yes?.edge_percent ??
+    marketScan?.price_analysis?.yes?.edge ??
+    marketScan?.price_analysis?.no?.edge_percent ??
+    marketScan?.price_analysis?.no?.edge
+  );
+}
+
+function isTradableMarketOpportunity(detail?: CityDetail | null) {
+  const marketScan = detail?.market_scan;
+  if (!marketScan) return false;
+  if (marketScan.available === false) return false;
+  if (marketScan.primary_market?.closed === true) return false;
+  if (marketScan.primary_market?.active === false) return false;
+
+  const selectedDate = marketScan.selected_date;
+  const localDate = detail?.local_date;
+  if (selectedDate && localDate && selectedDate < localDate) return false;
+
+  const endDateMs = marketScan.primary_market?.end_date
+    ? Date.parse(marketScan.primary_market.end_date)
+    : Number.NaN;
+  if (Number.isFinite(endDateMs) && endDateMs < Date.now()) return false;
+
+  const marketBucket = marketScan.temperature_bucket || marketScan.top_buckets?.[0] || null;
+  const yesPrice =
+    marketScan.yes_buy ??
+    readNumericField(marketBucket, "yes_buy") ??
+    marketScan.yes_token?.buy_price ??
+    marketScan.yes_token?.midpoint ??
+    marketScan.price_analysis?.yes?.ask;
+  const noPrice =
+    marketScan.no_buy ??
+    readNumericField(marketBucket, "no_buy") ??
+    marketScan.no_token?.buy_price ??
+    marketScan.no_token?.midpoint ??
+    marketScan.price_analysis?.no?.ask;
+  const marketPrice =
+    marketScan.market_price ??
+    readNumericField(marketBucket, "market_price") ??
+    yesPrice;
+
+  if (isBoundaryMarketPrice(yesPrice) || isBoundaryMarketPrice(noPrice)) {
+    return false;
+  }
+  if (isBoundaryMarketPrice(marketPrice)) return false;
+  return Number.isFinite(Number(getMarketEdgeValue(detail)));
+}
+
 function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
@@ -242,6 +310,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const displayedProbabilities = probabilityBuckets.slice(0, 5);
   const modelLabels = getModelLabels(detail);
   const marketScan = detail?.market_scan;
+  const hasMarketScan = Boolean(marketScan);
+  const showOpportunityLabel = !hasMarketScan || spotlight.tradableOpportunity;
   const marketBucket = marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
   const yesPrice =
     marketScan?.yes_buy ??
@@ -323,7 +393,13 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       </button>
 
       <div className="home-top-opportunity-label">
-        {locale === "en-US" ? "Today’s Top Opportunity" : "今日最佳机会"}
+        {showOpportunityLabel
+          ? locale === "en-US"
+            ? "Today’s Top Opportunity"
+            : "今日最佳机会"
+          : locale === "en-US"
+            ? "Focus City"
+            : "重点观察城市"}
       </div>
 
       <div className="home-card-titlebar">
@@ -431,7 +507,15 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       <div className={clsx("home-card-section market", !isPro && "locked")}>
         <div className="home-market-header">
           <h3>Market edge <small>ⓘ</small></h3>
-          <span>{locale === "en-US" ? "Updated now" : "刚刚更新"}</span>
+          <span>
+            {hasMarketScan && !spotlight.tradableOpportunity
+              ? locale === "en-US"
+                ? "Market closed"
+                : "市场已结束"
+              : locale === "en-US"
+                ? "Updated now"
+                : "刚刚更新"}
+          </span>
         </div>
         <div className="home-market-ticket">
           <div className="home-market-question">
@@ -559,6 +643,7 @@ function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
+  const autoFocusedCityRef = useRef<string | null>(null);
   const preloadedOpportunityRef = useRef<Set<string>>(new Set());
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
@@ -629,7 +714,26 @@ function DashboardScreen() {
     if (!topOpportunity) return;
 
     didAutoFocusRef.current = true;
+    autoFocusedCityRef.current = topOpportunity;
     void store.focusCity(topOpportunity);
+  }, [homepageSnapshots, showHomepageChrome, store]);
+
+  useEffect(() => {
+    if (!showHomepageChrome) return;
+    if (!store.selectedCity) return;
+    if (store.selectedCity !== autoFocusedCityRef.current) return;
+
+    const topOpportunity = homepageSnapshots[0];
+    if (!topOpportunity || topOpportunity.city.name === store.selectedCity) return;
+
+    const selectedSnapshot = homepageSnapshots.find(
+      (snapshot) => snapshot.city.name === store.selectedCity,
+    );
+    if (!selectedSnapshot?.detail?.market_scan) return;
+    if (selectedSnapshot.tradableOpportunity) return;
+
+    autoFocusedCityRef.current = topOpportunity.city.name;
+    void store.focusCity(topOpportunity.city.name);
   }, [homepageSnapshots, showHomepageChrome, store]);
 
   useEffect(() => {
