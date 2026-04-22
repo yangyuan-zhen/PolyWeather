@@ -5,6 +5,7 @@ import clsx from "clsx";
 import { Clock } from "lucide-react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { CityListItem, DeviationMonitor } from "@/lib/dashboard-types";
 
 type RiskGroupKey = "high" | "medium" | "low" | "other";
@@ -211,6 +212,11 @@ export function CitySidebar() {
                   const detail = store.cityDetailsByName[city.name];
                   const summary = store.citySummariesByName[city.name];
                   const snapshot = detail || summary;
+                  const localizedCityName = getLocalizedCityName(
+                    city.name,
+                    snapshot?.display_name || city.display_name,
+                    locale,
+                  );
                   const isActive = store.selectedCity === city.name;
                   const tempSymbol = snapshot?.temp_symbol || "°C";
                   const currentTempText =
@@ -258,7 +264,7 @@ export function CitySidebar() {
                       <div className="city-item-main">
                         <span className={clsx("risk-dot", performanceTier)} />
                         <span className="city-name-text">
-                          {city.display_name}
+                          {localizedCityName}
                         </span>
                         <span
                           className={clsx(

@@ -12,7 +12,6 @@ import {
 } from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
-import { DetailPanel } from "@/components/dashboard/DetailPanel";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
 import type {
   CityDetail,
@@ -20,6 +19,14 @@ import type {
   CitySummary,
   RiskLevel,
 } from "@/lib/dashboard-types";
+import {
+  getLocalizedAirportDisplay,
+  getLocalizedCityDisplay,
+} from "@/lib/dashboard-home-copy";
+import {
+  getTemperatureChartData,
+  getWeatherSummary,
+} from "@/lib/dashboard-utils";
 import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 
 const loadHistoryModal = () =>
@@ -202,6 +209,139 @@ function buildSparklinePoints(values: number[] | undefined) {
     .join(" ");
 }
 
+type HomeWeatherIconKind =
+  | "clear"
+  | "partly"
+  | "cloudy"
+  | "rain"
+  | "storm"
+  | "mist"
+  | "wind";
+
+type HomeTrendChart = {
+  forecastPath: string;
+  legendText: string;
+  observationDots: Array<{ cx: number; cy: number; key: string }>;
+  tickLabels: Array<{ key: string; label: string; x: number }>;
+};
+
+function projectHomeTrendPoint(
+  x: number,
+  y: number,
+  xMin: number,
+  xMax: number,
+  yMin: number,
+  yMax: number,
+) {
+  const width = 296;
+  const height = 78;
+  const left = 10;
+  const right = 10;
+  const top = 8;
+  const bottom = 12;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const normalizedX =
+    xMax === xMin ? 0.5 : Math.min(1, Math.max(0, (x - xMin) / (xMax - xMin)));
+  const normalizedY =
+    yMax === yMin ? 0.5 : Math.min(1, Math.max(0, (y - yMin) / (yMax - yMin)));
+  return {
+    cx: Number((left + normalizedX * plotWidth).toFixed(1)),
+    cy: Number((top + (1 - normalizedY) * plotHeight).toFixed(1)),
+  };
+}
+
+function getHomeWeatherIconKind(detail?: CityDetail | null, locale = "zh-CN"): HomeWeatherIconKind {
+  if (!detail) return "cloudy";
+  const summary = getWeatherSummary(detail, locale === "en-US" ? "en-US" : "zh-CN");
+  const weatherText = `${summary.weatherIcon} ${summary.weatherText} ${detail.current?.wx_desc || ""} ${detail.current?.cloud_desc || ""}`.toLowerCase();
+  const cloudCover = Number(detail.hourly_next_48h?.cloud_cover?.[0]);
+  const windSpeed = Number(detail.current?.wind_speed_kt ?? detail.airport_current?.wind_speed_kt);
+
+  if (/⛈|雷|storm|thunder/.test(weatherText)) return "storm";
+  if (/🌧|🌦|雨|drizzle|shower|rain/.test(weatherText)) return "rain";
+  if (/🌫|雾|mist|fog|haze/.test(weatherText)) return "mist";
+  if (/💨|飑|squall/.test(weatherText) || windSpeed >= 22) return "wind";
+  if (/☀|晴|clear|sunny/.test(weatherText)) return "clear";
+  if (/🌤|⛅|partly|few|scattered|少云|散云/.test(weatherText)) return "partly";
+  if (/☁|云|cloud|overcast|阴/.test(weatherText)) return "cloudy";
+  if (Number.isFinite(cloudCover) && cloudCover <= 15) return "clear";
+  if (Number.isFinite(cloudCover) && cloudCover <= 55) return "partly";
+  return "cloudy";
+}
+
+function buildHomeTrendChart(
+  detail?: CityDetail | null,
+  locale = "zh-CN",
+): HomeTrendChart | null {
+  if (!detail) return null;
+  const chartData = getTemperatureChartData(detail, locale === "en-US" ? "en-US" : "zh-CN");
+  if (!chartData) return null;
+  const forecastSeries = chartData.datasets.hasMgmHourly
+    ? chartData.datasets.mgmHourlySeries
+    : [...chartData.datasets.debPastSeries, ...chartData.datasets.debFutureSeries];
+  const observationSeries =
+    chartData.datasets.metarSeries.length > 0
+      ? chartData.datasets.metarSeries
+      : chartData.datasets.airportMetarSeries;
+  if (!forecastSeries.length && !observationSeries.length) return null;
+
+  const forecastPath = forecastSeries
+    .map((point) => {
+      const projected = projectHomeTrendPoint(
+        point.x,
+        point.y,
+        chartData.xMin,
+        chartData.xMax,
+        chartData.min,
+        chartData.max,
+      );
+      return `${projected.cx},${projected.cy}`;
+    })
+    .join(" ");
+  const observationDots = observationSeries.map((point, index) => {
+    const projected = projectHomeTrendPoint(
+      point.x,
+      point.y,
+      chartData.xMin,
+      chartData.xMax,
+      chartData.min,
+      chartData.max,
+    );
+    return {
+      cx: projected.cx,
+      cy: projected.cy,
+      key: `${point.labelTime}-${index}`,
+    };
+  });
+  const tickLabels = chartData.tickLabels
+    .map((label, index) => {
+      if (!label) return null;
+      const minutes = Number.parseInt(String(chartData.times[index] || "0").split(":")[0] || "0", 10) * 60;
+      const projected = projectHomeTrendPoint(
+        minutes,
+        chartData.min,
+        chartData.xMin,
+        chartData.xMax,
+        chartData.min,
+        chartData.max,
+      );
+      return {
+        key: `${label}-${index}`,
+        label,
+        x: projected.cx,
+      };
+    })
+    .filter((item): item is { key: string; label: string; x: number } => item != null);
+
+  return {
+    forecastPath,
+    legendText: chartData.legendText,
+    observationDots,
+    tickLabels,
+  };
+}
+
 function readNumericField(source: unknown, key: string) {
   if (!source || typeof source !== "object") return undefined;
   const value = (source as Record<string, unknown>)[key];
@@ -347,13 +487,31 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const isLoading = store.loadingState.cityDetail && store.selectedCity === city.name;
   const isPro = store.proAccess.subscriptionActive;
   const cityCode = city.icao || detail?.risk?.icao || city.airport;
-  const subtitle = `${cityCode} · ${city.airport}`;
+  const localizedCityName = getLocalizedCityDisplay(city, locale, summary, detail);
+  const localizedAirportName = getLocalizedAirportDisplay(city, locale, detail);
+  const subtitle = `${cityCode} · ${localizedAirportName}`;
   const highRiskLabel =
     riskLevel === "high"
       ? locale === "en-US"
         ? "High risk"
         : "高风险"
       : getRiskCopy(riskLevel, locale);
+  const weatherIconKind = getHomeWeatherIconKind(detail, locale);
+  const trendChart = buildHomeTrendChart(detail, locale);
+  const debLabel = locale === "en-US" ? "DEB forecast" : "DEB 预测";
+  const dayMaxLabel = locale === "en-US" ? "24h max" : "24 小时最高";
+  const probabilityTitle = locale === "en-US" ? "EMOS probability" : "EMOS 概率";
+  const marketTitle = locale === "en-US" ? "Market edge" : "市场优势";
+  const marketEdgeLabel = locale === "en-US" ? "Edge" : "优势";
+  const marketImpliedLabel = locale === "en-US" ? "Implied" : "市场隐含";
+  const marketModelLabel = locale === "en-US" ? "Model prob" : "模型概率";
+  const proLabel = isPro
+    ? locale === "en-US"
+      ? "Pro signal"
+      : "PRO 信号"
+    : locale === "en-US"
+      ? "Pro locked"
+      : "PRO 锁定";
   const keySignals = [
     {
       active: Number(marketEdge) > 0,
@@ -381,7 +539,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   ];
 
   return (
-    <aside className="home-intelligence-panel full" aria-label={city.display_name}>
+    <aside className="home-intelligence-panel full" aria-label={localizedCityName}>
       <div className="home-panel-glow" aria-hidden="true" />
       <button
         type="button"
@@ -404,7 +562,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       <div className="home-card-titlebar">
         <div>
-          <h2>{summary?.display_name || detail?.display_name || city.display_name}</h2>
+          <h2>{localizedCityName}</h2>
           <p>{subtitle}</p>
         </div>
         <span className={clsx("home-risk-badge", String(riskLevel || "other"))}>
@@ -434,12 +592,21 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             {formatTemperature(currentTemp, symbol)}
           </span>
         </div>
-        <div className="home-weather-icon" aria-hidden="true">
+        <div
+          className={clsx("home-weather-icon", `weather-${weatherIconKind}`)}
+          aria-hidden="true"
+        >
+          <span className="sun" />
           <span className="cloud cloud-a" />
           <span className="cloud cloud-b" />
+          <span className="mist mist-a" />
+          <span className="mist mist-b" />
+          <span className="wind wind-a" />
+          <span className="wind wind-b" />
           <span className="rain rain-a" />
           <span className="rain rain-b" />
           <span className="rain rain-c" />
+          <span className="bolt" />
         </div>
         <div className="home-max-so-far">
           <span>{locale === "en-US" ? "Max so far" : "当前最高"}</span>
@@ -451,7 +618,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       <div className="home-deb-card">
         <div>
-          <span>DEB forecast <small>(24h max)</small></span>
+          <span>
+            {debLabel} <small>({dayMaxLabel})</small>
+          </span>
           <strong>{formatTemperature(debPrediction, symbol)}</strong>
           <em>{formatDelta(debPrediction, currentTemp, symbol)}</em>
         </div>
@@ -460,6 +629,41 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           <circle cx="88" cy="8" r="2.5" />
         </svg>
       </div>
+
+      {trendChart ? (
+        <div className="home-card-section intraday">
+          <h3>
+            {locale === "en-US" ? "Intraday trend" : "今日日内走势"}{" "}
+            <small>{locale === "en-US" ? "compact" : "简版"}</small>
+          </h3>
+          <div className="home-intraday-chart">
+            <svg viewBox="0 0 296 78" aria-hidden="true">
+              <line x1="10" y1="14" x2="286" y2="14" />
+              <line x1="10" y1="36" x2="286" y2="36" />
+              <line x1="10" y1="58" x2="286" y2="58" />
+              {trendChart.forecastPath ? (
+                <polyline points={trendChart.forecastPath} />
+              ) : null}
+              {trendChart.observationDots.map((point) => (
+                <circle key={point.key} cx={point.cx} cy={point.cy} r="3.2" />
+              ))}
+            </svg>
+            <div className="home-intraday-axis">
+              {trendChart.tickLabels.map((tick) => (
+                <span key={tick.key} style={{ left: `${tick.x}px` }}>
+                  {tick.label}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="home-intraday-meta">
+            {trendChart.legendText ||
+              (locale === "en-US"
+                ? "Intraday observations pending."
+                : "日内观测序列待补充。")}
+          </div>
+        </div>
+      ) : null}
 
       <div className="home-card-section">
         <h3>{locale === "en-US" ? "Model stack" : "模型栈"}</h3>
@@ -474,7 +678,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       </div>
 
       <div className="home-card-section probability">
-        <h3>EMOS probability <small>(24h max)</small></h3>
+        <h3>
+          {probabilityTitle} <small>({dayMaxLabel})</small>
+        </h3>
         {displayedProbabilities.length ? (
           <div className="home-probability-list">
             {displayedProbabilities.map((bucket, index) => {
@@ -506,7 +712,9 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       <div className={clsx("home-card-section market", !isPro && "locked")}>
         <div className="home-market-header">
-          <h3>Market edge <small>ⓘ</small></h3>
+          <h3>
+            {marketTitle} <small>ⓘ</small>
+          </h3>
           <span>
             {hasMarketScan && !spotlight.tradableOpportunity
               ? locale === "en-US"
@@ -529,13 +737,13 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
         </div>
         <div className="home-market-metrics">
           <span>
-            Edge <strong>{formatEdge(marketEdge)}</strong>
+            {marketEdgeLabel} <strong>{formatEdge(marketEdge)}</strong>
           </span>
           <span>
-            Implied <strong>{formatProbability(marketProbability)}</strong>
+            {marketImpliedLabel} <strong>{formatProbability(marketProbability)}</strong>
           </span>
           <span>
-            Model prob <strong>{formatProbability(marketModelProbability)}</strong>
+            {marketModelLabel} <strong>{formatProbability(marketModelProbability)}</strong>
           </span>
           <svg viewBox="0 0 96 32" aria-hidden="true">
             {sparklinePoints ? <polyline points={sparklinePoints} /> : null}
@@ -563,7 +771,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       <div className={clsx("home-pro-card", isPro && "active")}>
         <div>
-          <span>{isPro ? "PRO SIGNAL" : "PRO LOCKED"}</span>
+          <span>{proLabel}</span>
           <strong>
             {isPro
               ? locale === "en-US"
@@ -575,8 +783,8 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
           </strong>
         </div>
         {isPro ? (
-          <button type="button" onClick={() => void store.selectCity(city.name)}>
-            {locale === "en-US" ? "Open detail" : "完整详情"}
+          <button type="button" onClick={() => void store.openTodayModal()}>
+            {locale === "en-US" ? "Open intraday" : "打开日内分析"}
           </button>
         ) : (
           <Link href="/account">{locale === "en-US" ? "Upgrade" : "升级"}</Link>
@@ -609,6 +817,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
           const symbol = getTempSymbol(city, summary, detail);
           const currentTemp = summary?.current?.temp ?? detail?.current?.temp;
           const debPrediction = summary?.deb?.prediction ?? detail?.deb?.prediction;
+          const localizedCityName = getLocalizedCityDisplay(city, locale, summary, detail);
           const tier =
             city.deb_recent_tier ||
             city.risk_level ||
@@ -622,7 +831,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
               onClick={() => void store.focusCity(city.name)}
             >
               <span className={clsx("opportunity-risk-dot", String(tier || "other"))} />
-              <span className="opportunity-city">{city.display_name}</span>
+              <span className="opportunity-city">{localizedCityName}</span>
               <span className="opportunity-meta">
                 {formatTemperature(currentTemp, symbol)} / DEB{" "}
                 {formatTemperature(debPrediction, symbol)}
@@ -704,7 +913,7 @@ function DashboardScreen() {
     [store.cities, store.cityDetailsByName, store.citySummariesByName],
   );
   const showHomepageChrome =
-    !store.isPanelOpen && !store.historyState.isOpen && !store.futureModalDate;
+    !store.historyState.isOpen && !store.futureModalDate;
 
   useEffect(() => {
     if (didAutoFocusRef.current) return;
@@ -765,7 +974,6 @@ function DashboardScreen() {
           <OpportunityStrip snapshots={homepageSnapshots} />
         </>
       ) : null}
-      <DetailPanel />
       {showCitySyncToast ? (
         <div className="city-loading-toast" role="status" aria-live="polite">
           <span className="city-loading-dot" aria-hidden="true" />

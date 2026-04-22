@@ -990,6 +990,25 @@
   height: 76px;
 }
 
+.root :global(.home-weather-icon .sun),
+.root :global(.home-weather-icon .mist),
+.root :global(.home-weather-icon .wind),
+.root :global(.home-weather-icon .bolt) {
+  position: absolute;
+}
+
+.root :global(.home-weather-icon .sun) {
+  top: 8px;
+  left: 6px;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: radial-gradient(circle, #fde68a 0%, #f59e0b 70%, #f97316 100%);
+  box-shadow:
+    0 0 0 7px rgba(251, 191, 36, 0.12),
+    0 0 22px rgba(245, 158, 11, 0.26);
+}
+
 .root :global(.home-weather-icon .cloud) {
   position: absolute;
   border-radius: 999px;
@@ -1031,6 +1050,130 @@
 
 .root :global(.home-weather-icon .rain-c) {
   left: 67px;
+}
+
+.root :global(.home-weather-icon .mist) {
+  left: 20px;
+  width: 46px;
+  height: 2px;
+  border-radius: 999px;
+  background: rgba(191, 219, 254, 0.85);
+  box-shadow: 0 0 10px rgba(148, 163, 184, 0.18);
+}
+
+.root :global(.home-weather-icon .mist-a) {
+  top: 58px;
+}
+
+.root :global(.home-weather-icon .mist-b) {
+  top: 64px;
+  left: 28px;
+  width: 38px;
+}
+
+.root :global(.home-weather-icon .wind) {
+  left: 20px;
+  width: 44px;
+  height: 2px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(125, 211, 252, 0), rgba(125, 211, 252, 0.92));
+}
+
+.root :global(.home-weather-icon .wind::after) {
+  content: "";
+  position: absolute;
+  right: -3px;
+  top: -1px;
+  width: 9px;
+  height: 4px;
+  border-top: 2px solid rgba(125, 211, 252, 0.92);
+  border-right: 2px solid rgba(125, 211, 252, 0.92);
+  border-radius: 0 8px 0 0;
+}
+
+.root :global(.home-weather-icon .wind-a) {
+  top: 28px;
+}
+
+.root :global(.home-weather-icon .wind-b) {
+  top: 42px;
+  left: 30px;
+  width: 34px;
+}
+
+.root :global(.home-weather-icon .bolt) {
+  top: 44px;
+  left: 20px;
+  width: 0;
+  height: 0;
+  border-left: 6px solid transparent;
+  border-right: 2px solid transparent;
+  border-top: 18px solid #fbbf24;
+  transform: skewX(-16deg);
+  filter: drop-shadow(0 0 12px rgba(251, 191, 36, 0.32));
+}
+
+.root :global(.home-weather-icon .bolt::after) {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -4px;
+  width: 0;
+  height: 0;
+  border-left: 5px solid transparent;
+  border-right: 2px solid transparent;
+  border-top: 12px solid #fde047;
+  transform: translateX(5px) translateY(8px);
+}
+
+.root :global(.home-weather-icon.weather-clear .cloud),
+.root :global(.home-weather-icon.weather-clear .rain),
+.root :global(.home-weather-icon.weather-clear .mist),
+.root :global(.home-weather-icon.weather-clear .wind),
+.root :global(.home-weather-icon.weather-clear .bolt) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-partly .rain),
+.root :global(.home-weather-icon.weather-partly .mist),
+.root :global(.home-weather-icon.weather-partly .wind),
+.root :global(.home-weather-icon.weather-partly .bolt) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-cloudy .sun),
+.root :global(.home-weather-icon.weather-cloudy .rain),
+.root :global(.home-weather-icon.weather-cloudy .mist),
+.root :global(.home-weather-icon.weather-cloudy .wind),
+.root :global(.home-weather-icon.weather-cloudy .bolt) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-rain .sun),
+.root :global(.home-weather-icon.weather-rain .mist),
+.root :global(.home-weather-icon.weather-rain .wind),
+.root :global(.home-weather-icon.weather-rain .bolt) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-storm .sun),
+.root :global(.home-weather-icon.weather-storm .mist),
+.root :global(.home-weather-icon.weather-storm .wind) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-mist .sun),
+.root :global(.home-weather-icon.weather-mist .rain),
+.root :global(.home-weather-icon.weather-mist .wind),
+.root :global(.home-weather-icon.weather-mist .bolt) {
+  display: none;
+}
+
+.root :global(.home-weather-icon.weather-wind .sun),
+.root :global(.home-weather-icon.weather-wind .rain),
+.root :global(.home-weather-icon.weather-wind .mist),
+.root :global(.home-weather-icon.weather-wind .bolt) {
+  display: none;
 }
 
 .root :global(.home-max-so-far) {
@@ -1123,6 +1266,64 @@
 .root :global(.home-card-section h3) {
   margin-bottom: 10px;
   color: rgba(226, 232, 240, 0.94);
+}
+
+.root :global(.home-card-section.intraday) {
+  border-color: rgba(45, 212, 191, 0.24);
+}
+
+.root :global(.home-intraday-chart) {
+  position: relative;
+  padding: 10px 0 22px;
+}
+
+.root :global(.home-intraday-chart svg) {
+  width: 100%;
+  height: 78px;
+}
+
+.root :global(.home-intraday-chart line) {
+  stroke: rgba(148, 163, 184, 0.14);
+  stroke-width: 1;
+}
+
+.root :global(.home-intraday-chart polyline) {
+  fill: none;
+  stroke: #2dd4bf;
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.root :global(.home-intraday-chart circle) {
+  fill: #38bdf8;
+  stroke: rgba(15, 23, 42, 0.92);
+  stroke-width: 1.6;
+}
+
+.root :global(.home-intraday-axis) {
+  position: absolute;
+  inset: auto 0 0;
+  height: 18px;
+}
+
+.root :global(.home-intraday-axis span) {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: rgba(148, 163, 184, 0.82);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.root :global(.home-intraday-meta) {
+  color: rgba(148, 163, 184, 0.9);
+  font-size: 11px;
+  line-height: 1.55;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .root :global(.home-model-stack) {
