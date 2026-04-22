@@ -4,12 +4,12 @@
 
 .root {
   /* ── Palette (bridged from globals.css unified tokens) ── */
-  --bg-primary: var(--color-bg-base);
-  --bg-secondary: var(--color-bg-raised);
-  --bg-card: var(--color-bg-card);
-  --bg-glass: rgba(13, 19, 33, 0.75);
-  --border-glass: var(--color-border-default);
-  --border-subtle: var(--color-border-subtle);
+  --bg-primary: #030711;
+  --bg-secondary: #09111d;
+  --bg-card: #0b1422;
+  --bg-glass: rgba(8, 15, 27, 0.78);
+  --border-glass: rgba(120, 146, 176, 0.18);
+  --border-subtle: rgba(120, 146, 176, 0.1);
 
   /* Text */
   --text-primary: var(--color-text-primary);
@@ -17,13 +17,13 @@
   --text-muted: var(--color-text-muted);
 
   /* Accents — upgraded primary cyan to match new token */
-  --accent-cyan: var(--color-accent-primary);
-  --accent-blue: var(--color-accent-secondary);
+  --accent-cyan: #22d3ee;
+  --accent-blue: #3b82f6;
   --accent-green: #34d399;
-  --accent-orange: #fb923c;
-  --accent-red: #f87171;
+  --accent-orange: #f59e0b;
+  --accent-red: #fb7185;
   --accent-yellow: #fbbf24;
-  --accent-purple: var(--color-accent-tertiary);
+  --accent-purple: #7c3aed;
 
   /* Risk colors */
   --risk-high: var(--color-risk-high);
@@ -63,6 +63,10 @@
   overflow: hidden;
   height: 100vh;
   width: 100vw;
+  background-image:
+    radial-gradient(circle at 18% 18%, rgba(30, 64, 175, 0.1), transparent 24%),
+    radial-gradient(circle at 82% 12%, rgba(8, 145, 178, 0.08), transparent 20%),
+    linear-gradient(180deg, #040914 0%, #02050d 100%);
 }
 
 /* ── Map ── */
@@ -74,12 +78,13 @@
   left: calc(var(--sidebar-width) + 22px);
   z-index: 1;
   overflow: hidden;
-  border: 1px solid rgba(34, 211, 238, 0.12);
-  border-radius: 22px;
-  background: #020617;
+  border: 1px solid rgba(115, 137, 161, 0.16);
+  border-radius: 24px;
+  background: #040912;
   box-shadow:
-    0 28px 80px rgba(0, 0, 0, 0.38),
-    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    0 32px 100px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    inset 0 0 0 1px rgba(34, 211, 238, 0.04);
 }
 
 .root :global(.home-map-toolbar) {
@@ -98,8 +103,8 @@
   gap: 4px;
   padding: 4px;
   border-radius: 14px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(9, 16, 28, 0.84);
+  border: 1px solid rgba(115, 137, 161, 0.18);
+  background: rgba(6, 12, 22, 0.88);
   backdrop-filter: blur(16px);
 }
 
@@ -139,8 +144,8 @@
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.16);
-  background: rgba(9, 16, 28, 0.84);
+  border: 1px solid rgba(115, 137, 161, 0.18);
+  background: rgba(6, 12, 22, 0.88);
   backdrop-filter: blur(16px);
   display: inline-flex;
   align-items: center;
@@ -152,7 +157,7 @@
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  opacity: 0.88;
+  opacity: 0.96;
   mix-blend-mode: screen;
   overflow: hidden;
 }
@@ -171,14 +176,14 @@
   background:
     linear-gradient(
       180deg,
-      rgba(5, 10, 24, 0.52) 0%,
-      rgba(6, 10, 22, 0.12) 24%,
-      rgba(5, 8, 19, 0.08) 54%,
-      rgba(4, 6, 15, 0.34) 100%
+      rgba(3, 8, 19, 0.64) 0%,
+      rgba(5, 10, 20, 0.16) 24%,
+      rgba(4, 8, 18, 0.1) 54%,
+      rgba(3, 6, 14, 0.42) 100%
     ),
     radial-gradient(
       circle at 50% 60%,
-      rgba(92, 142, 255, 0.06) 0%,
+      rgba(34, 211, 238, 0.08) 0%,
       rgba(92, 142, 255, 0) 48%
     );
 }
@@ -429,7 +434,7 @@
   background: var(--bg-glass);
   backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--border-glass);
-  border-radius: 16px;
+  border-radius: 18px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -455,8 +460,8 @@
   margin: 0 14px 12px;
   padding: 10px 12px;
   border-radius: 12px;
-  border: 1px solid rgba(148, 163, 184, 0.12);
-  background: rgba(8, 15, 28, 0.72);
+  border: 1px solid rgba(115, 137, 161, 0.14);
+  background: rgba(6, 12, 22, 0.82);
   color: rgba(148, 163, 184, 0.86);
 }
 
@@ -502,9 +507,9 @@
 }
 
 .root :global(.city-group) {
-  border: 1px solid rgba(99, 102, 241, 0.12);
-  border-radius: 10px;
-  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(115, 137, 161, 0.12);
+  border-radius: 14px;
+  background: rgba(10, 17, 30, 0.48);
   margin-bottom: 8px;
   overflow: hidden;
 }
@@ -516,7 +521,7 @@
 .root :global(.city-group-header) {
   width: 100%;
   border: none;
-  background: rgba(99, 102, 241, 0.06);
+  background: rgba(15, 28, 47, 0.56);
   color: var(--text-secondary);
   display: flex;
   align-items: center;
@@ -528,7 +533,7 @@
 }
 
 .root :global(.city-group-header:hover) {
-  background: rgba(99, 102, 241, 0.1);
+  background: rgba(18, 34, 55, 0.82);
 }
 
 .root :global(.city-group-title) {
@@ -619,13 +624,16 @@
   text-align: left;
 }
 .root :global(.city-item:hover) {
-  background: rgba(99, 102, 241, 0.08);
-  border-color: var(--border-glass);
+  background: rgba(10, 26, 44, 0.84);
+  border-color: rgba(34, 211, 238, 0.18);
+  box-shadow: inset 0 0 0 1px rgba(34, 211, 238, 0.03);
 }
 .root :global(.city-item.active) {
-  background: rgba(0, 229, 255, 0.08);
-  border-color: rgba(0, 229, 255, 0.3);
-  box-shadow: 0 0 16px rgba(0, 229, 255, 0.06), inset 0 0 0 1px rgba(0, 229, 255, 0.08);
+  background:
+    linear-gradient(135deg, rgba(34, 211, 238, 0.12), rgba(30, 64, 175, 0.1)),
+    rgba(9, 18, 32, 0.92);
+  border-color: rgba(34, 211, 238, 0.24);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.08), inset 0 0 0 1px rgba(34, 211, 238, 0.08);
 }
 
 .root :global(.city-item-main) {
@@ -1336,9 +1344,10 @@
 
 .root :global(.home-deb-card),
 .root :global(.home-card-section) {
-  border-radius: 14px;
-  border: 1px solid rgba(34, 211, 238, 0.2);
-  background: rgba(2, 8, 18, 0.52);
+  border-radius: 18px;
+  border: 1px solid rgba(115, 137, 161, 0.16);
+  background: linear-gradient(180deg, rgba(7, 14, 26, 0.92), rgba(9, 17, 30, 0.8));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
 }
 
 .root :global(.home-deb-card) {
@@ -1402,7 +1411,7 @@
 }
 
 .root :global(.home-card-section.intraday) {
-  border-color: rgba(45, 212, 191, 0.24);
+  border-color: rgba(34, 211, 238, 0.18);
 }
 
 .root :global(.home-intraday-chart) {
@@ -1416,22 +1425,24 @@
 }
 
 .root :global(.home-intraday-chart line) {
-  stroke: rgba(148, 163, 184, 0.14);
-  stroke-width: 1;
+  stroke: rgba(115, 137, 161, 0.14);
+  stroke-width: 0.9;
 }
 
 .root :global(.home-intraday-chart polyline) {
   fill: none;
-  stroke: #2dd4bf;
-  stroke-width: 2.1;
+  stroke: #22d3ee;
+  stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px rgba(34, 211, 238, 0.22));
 }
 
 .root :global(.home-intraday-chart circle) {
   fill: #38bdf8;
   stroke: rgba(15, 23, 42, 0.92);
   stroke-width: 1.6;
+  filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.28));
 }
 
 .root :global(.home-intraday-hotspot) {
@@ -1541,7 +1552,7 @@
 }
 
 .root :global(.home-card-section.probability) {
-  border-color: rgba(239, 68, 68, 0.34);
+  border-color: rgba(115, 137, 161, 0.16);
 }
 
 .root :global(.home-probability-list) {
@@ -1564,7 +1575,7 @@
   height: 18px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(148, 163, 184, 0.12);
+  background: rgba(115, 137, 161, 0.12);
 }
 
 .root :global(.home-probability-row i) {
@@ -1572,6 +1583,7 @@
   inset: 0 auto 0 0;
   border-radius: inherit;
   background: linear-gradient(90deg, #3b82f6, #18e6d4);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.14);
 }
 
 .root :global(.home-probability-row:nth-child(3) i) {
@@ -1600,7 +1612,7 @@
 
 .root :global(.home-card-section.market) {
   position: relative;
-  border-color: rgba(16, 185, 129, 0.32);
+  border-color: rgba(34, 211, 238, 0.16);
 }
 
 .root :global(.home-card-section.market.locked) {
@@ -3048,7 +3060,7 @@
 .root :global(.marker-bubble) {
   min-width: 44px;
   padding: 4px 10px;
-  border-radius: 12px;
+  border-radius: 14px;
   font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 700;
@@ -3056,8 +3068,10 @@
   color: white;
   white-space: nowrap;
   position: relative;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
 }
 
 .root :global(.marker-bubble::after) {
@@ -3075,24 +3089,33 @@
 }
 
 .root :global(.marker-bubble.risk-high) {
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  border-color: rgba(239, 68, 68, 0.5);
+  background: linear-gradient(135deg, #991b1b, #fb7185);
+  border-color: rgba(251, 113, 133, 0.42);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.42),
+    0 0 22px rgba(251, 113, 133, 0.18);
 }
 .root :global(.marker-bubble.risk-high::after) {
   border-top-color: #ef4444;
 }
 
 .root :global(.marker-bubble.risk-medium) {
-  background: linear-gradient(135deg, #d97706, #f59e0b);
-  border-color: rgba(245, 158, 11, 0.5);
+  background: linear-gradient(135deg, #9a3412, #f59e0b);
+  border-color: rgba(245, 158, 11, 0.42);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.42),
+    0 0 22px rgba(245, 158, 11, 0.16);
 }
 .root :global(.marker-bubble.risk-medium::after) {
   border-top-color: #f59e0b;
 }
 
 .root :global(.marker-bubble.risk-low) {
-  background: linear-gradient(135deg, #059669, #10b981);
-  border-color: rgba(16, 185, 129, 0.5);
+  background: linear-gradient(135deg, #065f46, #22c55e);
+  border-color: rgba(74, 222, 128, 0.42);
+  box-shadow:
+    0 6px 18px rgba(0, 0, 0, 0.42),
+    0 0 22px rgba(74, 222, 128, 0.14);
 }
 .root :global(.marker-bubble.risk-low::after) {
   border-top-color: #10b981;
@@ -3114,12 +3137,15 @@
 @keyframes markerGlow {
   0%,
   100% {
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.42),
+      0 0 24px rgba(34, 211, 238, 0.12);
   }
   50% {
     box-shadow:
-      0 4px 24px rgba(99, 102, 241, 0.5),
-      0 0 40px rgba(99, 102, 241, 0.2);
+      0 6px 26px rgba(0, 0, 0, 0.46),
+      0 0 20px rgba(34, 211, 238, 0.24),
+      0 0 46px rgba(34, 211, 238, 0.14);
   }
 }
 
