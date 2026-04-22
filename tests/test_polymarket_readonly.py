@@ -147,6 +147,59 @@ def test_trade_state_keeps_open_markets_tradable_after_gamma_end_date():
     assert state["ended_at_utc"] == "2020-01-01T00:00:00+00:00"
 
 
+def test_lau_fau_shan_uses_shenzhen_market_city():
+    layer = PolymarketReadOnlyLayer()
+    captured = {}
+
+    def _fake_find_primary_market(city_key, target_date, **_kwargs):
+        captured["primary_city_key"] = city_key
+        captured["target_date"] = target_date
+        return (
+            {
+                "id": "market-1",
+                "question": "Will the highest temperature in Shenzhen be 30C or higher on April 23?",
+                "slug": "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher",
+                "conditionId": "condition-1",
+                "active": True,
+                "closed": False,
+                "acceptingOrders": True,
+                "volumeNum": 1000,
+                "liquidityNum": 500,
+            },
+            None,
+        )
+
+    layer._find_primary_market = _fake_find_primary_market
+    layer._extract_market_tokens = lambda _market: [
+        {"outcome": "Yes", "token_id": "yes-token"},
+        {"outcome": "No", "token_id": "no-token"},
+    ]
+    layer._get_token_market_data = lambda token_id: (
+        {"buy": 0.42, "sell": 0.40, "midpoint": 0.41}
+        if token_id == "yes-token"
+        else {"buy": 0.61, "sell": 0.59, "midpoint": 0.60}
+    )
+
+    def _fake_build_top_temperature_buckets(city_key, **_kwargs):
+        captured["bucket_city_key"] = city_key
+        return []
+
+    layer._build_top_temperature_buckets = _fake_build_top_temperature_buckets
+
+    scan = layer.build_market_scan(
+        city="Lau Fau Shan",
+        target_date="2026-04-23",
+        temperature_bucket={"temp": 30, "probability": 0.58},
+        model_probability=0.58,
+    )
+
+    assert captured["primary_city_key"] == "shenzhen"
+    assert captured["bucket_city_key"] == "shenzhen"
+    assert scan["city_key"] == "lau fau shan"
+    assert scan["market_city_key"] == "shenzhen"
+    assert scan["selected_slug"] == "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher"
+
+
 def test_hydrate_bucket_prices_uses_executable_quotes_without_midpoint():
     layer = PolymarketReadOnlyLayer()
     buckets = [

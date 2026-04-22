@@ -87,6 +87,17 @@ def _normalize_city_key(city: Any) -> str:
     return ALIASES.get(raw, raw)
 
 
+MARKET_CITY_ALIASES: Dict[str, str] = {
+    # Lau Fau Shan has its own HKO observation / settlement layer, but
+    # Polymarket lists this temperature market under nearby Shenzhen.
+    "lau fau shan": "shenzhen",
+}
+
+
+def _resolve_market_city_key(city_key: str) -> str:
+    return MARKET_CITY_ALIASES.get(city_key, city_key)
+
+
 def _contains_token(haystack: str, token: str) -> bool:
     token = _normalize_text(token)
     if not token:
@@ -433,11 +444,14 @@ class PolymarketReadOnlyLayer:
     ) -> Dict[str, Any]:
         date_str = _extract_iso_date(target_date) or str(target_date or "")
         city_key = _normalize_city_key(city)
+        market_city_key = _resolve_market_city_key(city_key)
         requested_slug = str(forced_market_slug or "").strip().lower() or None
 
         scan: Dict[str, Any] = {
             "available": False,
             "reason": None,
+            "city_key": city_key or None,
+            "market_city_key": market_city_key or None,
             "primary_market": None,
             "selected_date": date_str or None,
             "selected_condition_id": None,
@@ -474,9 +488,18 @@ class PolymarketReadOnlyLayer:
             self._debug_market_scan("unsupported_city", city=city, normalized=city_key)
             return scan
 
+        if not market_city_key or market_city_key not in CITY_REGISTRY:
+            scan["reason"] = "Mapped market city is not supported by the Polymarket market layer."
+            self._debug_market_scan(
+                "unsupported_market_city",
+                city=city_key,
+                market_city=market_city_key,
+            )
+            return scan
+
         if not date_str:
             scan["reason"] = "Missing target date for market discovery."
-            self._debug_market_scan("missing_date", city=city_key)
+            self._debug_market_scan("missing_date", city=city_key, market_city=market_city_key)
             return scan
 
         try:
@@ -484,15 +507,22 @@ class PolymarketReadOnlyLayer:
             if isinstance(temperature_bucket, dict):
                 preferred_temp = _safe_float(temperature_bucket.get("temp"))
             market, reason = self._find_primary_market(
-                city_key,
+                market_city_key,
                 date_str,
                 forced_market_slug=requested_slug,
                 preferred_temp=preferred_temp,
             )
         except Exception as exc:
-            logger.warning(f"Polymarket market discovery failed ({city_key}): {exc}")
+            logger.warning(
+                f"Polymarket market discovery failed ({city_key}->{market_city_key}): {exc}"
+            )
             scan["reason"] = "Market discovery failed."
-            self._debug_market_scan("discovery_exception", city=city_key, error=str(exc))
+            self._debug_market_scan(
+                "discovery_exception",
+                city=city_key,
+                market_city=market_city_key,
+                error=str(exc),
+            )
             return scan
 
         if not market:
@@ -500,6 +530,7 @@ class PolymarketReadOnlyLayer:
             self._debug_market_scan(
                 "no_market",
                 city=city_key,
+                market_city=market_city_key,
                 date=date_str,
                 forced_slug=requested_slug,
                 reason=scan["reason"],
@@ -557,6 +588,7 @@ class PolymarketReadOnlyLayer:
             self._debug_market_scan(
                 "not_tradable",
                 city=city_key,
+                market_city=market_city_key,
                 date=date_str,
                 slug=market_slug,
                 trade_state=trade_state,
@@ -575,6 +607,7 @@ class PolymarketReadOnlyLayer:
             self._debug_market_scan(
                 "missing_tokens",
                 city=city_key,
+                market_city=market_city_key,
                 date=date_str,
                 slug=market_slug,
                 token_count=len(tokens),
@@ -608,7 +641,7 @@ class PolymarketReadOnlyLayer:
             _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "8"), 8),
         )
         all_buckets = self._build_top_temperature_buckets(
-            city_key=city_key,
+            city_key=market_city_key,
             target_date=date_str,
             primary_market=market,
             limit=all_bucket_limit,
@@ -704,6 +737,7 @@ class PolymarketReadOnlyLayer:
         self._debug_market_scan(
             "scan_ready",
             city=city_key,
+            market_city=market_city_key,
             date=date_str,
             selected_slug=market_slug,
             market_price=scan.get("market_price"),
