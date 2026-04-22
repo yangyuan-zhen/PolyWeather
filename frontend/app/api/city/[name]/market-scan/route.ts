@@ -36,9 +36,7 @@ export async function GET(
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/market-scan?${params.toString()}`;
 
   try {
-    const auth = await buildBackendRequestHeaders(req, {
-      includeSupabaseIdentity: false,
-    });
+    const auth = await buildBackendRequestHeaders(req);
     const res = await fetch(url, {
       headers: auth.headers,
       cache: "no-store",

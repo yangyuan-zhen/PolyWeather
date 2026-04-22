@@ -197,6 +197,12 @@ function buildSparklinePoints(values: number[] | undefined) {
     .join(" ");
 }
 
+function readNumericField(source: unknown, key: string) {
+  if (!source || typeof source !== "object") return undefined;
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
@@ -237,13 +243,35 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const modelLabels = getModelLabels(detail);
   const marketScan = detail?.market_scan;
   const marketBucket = marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
+  const yesPrice =
+    marketScan?.yes_buy ??
+    readNumericField(marketBucket, "yes_buy") ??
+    marketScan?.yes_token?.buy_price ??
+    marketScan?.yes_token?.midpoint ??
+    marketScan?.price_analysis?.yes?.ask;
+  const noPrice =
+    marketScan?.no_buy ??
+    readNumericField(marketBucket, "no_buy") ??
+    marketScan?.no_token?.buy_price ??
+    marketScan?.no_token?.midpoint ??
+    marketScan?.price_analysis?.no?.ask;
+  const marketEdge =
+    marketScan?.edge_percent ??
+    marketScan?.price_analysis?.yes?.edge_percent ??
+    marketScan?.price_analysis?.yes?.edge ??
+    marketScan?.price_analysis?.no?.edge_percent ??
+    marketScan?.price_analysis?.no?.edge;
   const marketLabel = marketBucket
     ? getProbabilityLabel(marketBucket, symbol)
     : debPrediction != null
       ? `> ${formatTemperature(debPrediction, symbol)}`
       : "--";
   const marketProbability =
-    marketScan?.market_price ?? marketScan?.yes_buy ?? marketScan?.model_probability;
+    marketScan?.market_price ??
+    readNumericField(marketBucket, "market_price") ??
+    readNumericField(marketBucket, "yes_buy") ??
+    yesPrice ??
+    marketScan?.model_probability;
   const marketModelProbability = marketScan?.model_probability ?? marketBucket?.probability;
   const sparklinePoints = buildSparklinePoints(marketScan?.sparkline);
   const isLoading = store.loadingState.cityDetail && store.selectedCity === city.name;
@@ -258,7 +286,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
       : getRiskCopy(riskLevel, locale);
   const keySignals = [
     {
-      active: Number(marketScan?.edge_percent) > 0,
+      active: Number(marketEdge) > 0,
       label:
         locale === "en-US"
           ? "DEB > Market implied"
@@ -411,13 +439,13 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             <span>{marketScan?.selected_date || detail?.local_date || ""}</span>
           </div>
           <div className="home-market-prices">
-            <span className="yes">YES {formatCents(marketScan?.yes_buy)}</span>
-            <span className="no">NO {formatCents(marketScan?.no_buy)}</span>
+            <span className="yes">YES {formatCents(yesPrice)}</span>
+            <span className="no">NO {formatCents(noPrice)}</span>
           </div>
         </div>
         <div className="home-market-metrics">
           <span>
-            Edge <strong>{formatEdge(marketScan?.edge_percent)}</strong>
+            Edge <strong>{formatEdge(marketEdge)}</strong>
           </span>
           <span>
             Implied <strong>{formatProbability(marketProbability)}</strong>
@@ -531,6 +559,7 @@ function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
+  const preloadedOpportunityRef = useRef<Set<string>>(new Set());
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
     : null;
@@ -601,6 +630,18 @@ function DashboardScreen() {
 
     didAutoFocusRef.current = true;
     void store.focusCity(topOpportunity);
+  }, [homepageSnapshots, showHomepageChrome, store]);
+
+  useEffect(() => {
+    if (!showHomepageChrome) return;
+    const targets = homepageSnapshots.slice(0, 4).map((snapshot) => snapshot.city.name);
+    targets.forEach((cityName) => {
+      if (preloadedOpportunityRef.current.has(cityName)) return;
+      preloadedOpportunityRef.current.add(cityName);
+      void store.ensureCityDetail(cityName, false, "panel").catch(() => {
+        preloadedOpportunityRef.current.delete(cityName);
+      });
+    });
   }, [homepageSnapshots, showHomepageChrome, store]);
 
   return (

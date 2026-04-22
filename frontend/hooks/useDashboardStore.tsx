@@ -555,6 +555,31 @@ export function DashboardStoreProvider({
     return detail;
   };
 
+  const ensureCityMarketScan = async (cityName: string, force = false) => {
+    const cached = cityDetailsByName[cityName];
+    try {
+      const payload = await dashboardClient.getCityMarketScan(cityName, {
+        force,
+        targetDate: cached?.local_date || selectedForecastDate || null,
+      });
+      if (!payload.market_scan) return null;
+      setCityDetailsByName((current) => {
+        const detail = current[cityName];
+        if (!detail) return current;
+        return {
+          ...current,
+          [cityName]: {
+            ...detail,
+            market_scan: payload.market_scan || undefined,
+          },
+        };
+      });
+      return payload.market_scan;
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (proAccess.loading) return;
     if (!selectedCity) return;
@@ -826,6 +851,12 @@ export function DashboardStoreProvider({
         if (selectedCityRef.current !== cityName) return;
         if (detail.status === "fulfilled") {
           setSelectedForecastDate(detail.value.local_date);
+          if (
+            proAccessRef.current.subscriptionActive &&
+            !detail.value.market_scan
+          ) {
+            void ensureCityMarketScan(cityName, false);
+          }
         }
       })
       .finally(() => {
@@ -833,6 +864,15 @@ export function DashboardStoreProvider({
         setLoadingState((current) => ({ ...current, cityDetail: false }));
       });
   };
+
+  useEffect(() => {
+    if (!selectedCity) return;
+    if (!proAccess.subscriptionActive) return;
+    const detail = cityDetailsByName[selectedCity];
+    if (!detail) return;
+    if (detail.market_scan) return;
+    void ensureCityMarketScan(selectedCity, false);
+  }, [cityDetailsByName, proAccess.subscriptionActive, selectedCity]);
 
   const clearCityFocus = () => {
     selectedCityRef.current = null;
