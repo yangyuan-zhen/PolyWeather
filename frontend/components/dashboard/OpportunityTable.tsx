@@ -8,6 +8,11 @@ import type {
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
+import {
+  formatTemperatureValue,
+  normalizeTemperatureLabel,
+  normalizeTemperatureSymbol,
+} from "@/lib/dashboard-utils";
 
 type PhaseMeta = {
   label: string;
@@ -113,6 +118,7 @@ function ProbabilityPreview({
           Boolean(item && (item.label || item.value != null)),
       )
     : [];
+  const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
 
   if (!preview.length) {
     const targetBase =
@@ -121,11 +127,10 @@ function ProbabilityPreview({
       row.target_lower ??
       row.target_upper ??
       null;
-    const unit = row.target_unit || row.temp_symbol || "";
     const targetLabel =
       targetBase != null
-        ? `${Math.round(Number(targetBase))}${unit}`
-        : row.target_label || "--";
+        ? formatTemperatureValue(Number(targetBase), tempSymbol)
+        : normalizeTemperatureLabel(row.target_label, tempSymbol) || "--";
     preview.push({
       label: targetLabel,
       model_probability: row.model_event_probability,
@@ -141,7 +146,9 @@ function ProbabilityPreview({
           key={`${item.label}-${item.value ?? ""}`}
           className={`scan-distribution-card ${item.highlighted ? "featured" : ""}`}
         >
-          <strong>{item.label || "--"}</strong>
+          <strong>
+            {normalizeTemperatureLabel(item.label, tempSymbol) || item.label || "--"}
+          </strong>
           <span>
             {locale === "en-US" ? "Model" : "模型"}
             <br />

@@ -43,6 +43,10 @@ import {
   getLocalizedAirportName,
   getLocalizedCityName,
 } from "@/lib/dashboard-home-copy";
+import {
+  formatTemperatureValue,
+  normalizeTemperatureLabel,
+} from "@/lib/dashboard-utils";
 
 const DEFAULT_FILTERS: FilterState = {
   scan_mode: "tradable",
@@ -222,6 +226,7 @@ function DetailPanel({
     detailSignal && detailSignal.market_slug === row.market_slug
       ? detailSignal
       : row;
+  const tempSymbol = row.temp_symbol || displayRow.temp_symbol || "°C";
   const yesRow = getSideRow(marketScan, row, "yes");
   const noRow = getSideRow(marketScan, row, "no");
   const comparisonBuckets = buildComparisonBuckets(marketScan, row);
@@ -276,26 +281,33 @@ function DetailPanel({
           <div className="scan-kv">
             <span>{isEn ? "Current Temp" : "当前温度"}</span>
             <strong>
-              {row.current_temp != null ? `${row.current_temp}${row.temp_symbol || ""}` : "--"}
+              {row.current_temp != null
+                ? formatTemperatureValue(row.current_temp, tempSymbol)
+                : "--"}
             </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Day High (So Far)" : "今日最高（至今）"}</span>
             <strong>
               {row.current_max_so_far != null
-                ? `${row.current_max_so_far}${row.temp_symbol || ""}`
+                ? formatTemperatureValue(row.current_max_so_far, tempSymbol)
                 : "--"}
             </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Target" : "目标温度"}</span>
-            <strong>{displayRow.target_label || "--"}</strong>
+            <strong>
+              {normalizeTemperatureLabel(displayRow.target_label, tempSymbol) || "--"}
+            </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Gap To Target" : "距离目标"}</span>
             <strong className={Number(displayRow.gap_to_target || 0) <= 0 ? "warn" : "danger"}>
               {displayRow.gap_to_target != null
-                ? `${displayRow.gap_to_target >= 0 ? "+" : ""}${displayRow.gap_to_target.toFixed(1)}${row.temp_symbol || ""}`
+                ? formatTemperatureValue(displayRow.gap_to_target, tempSymbol, {
+                    signed: true,
+                    digits: 1,
+                  })
                 : "--"}
             </strong>
           </div>

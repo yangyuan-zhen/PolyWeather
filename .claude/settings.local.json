@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --prefix \"/e/web/PolyWeather/frontend\" run build)",
+      "mcp__Claude_Preview__preview_start"
+    ]
+  }
+}
