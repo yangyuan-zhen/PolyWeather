@@ -7187,3 +7187,284 @@
   border-color: rgba(34, 211, 238, 0.4);
   color: #fff;
 }
+
+.root :global(.home-ai-assistant) {
+  position: fixed;
+  right: 408px;
+  bottom: 210px;
+  z-index: 910;
+  width: min(380px, calc(100vw - var(--sidebar-width) - 72px));
+}
+
+.root :global(.home-ai-launcher),
+.root :global(.home-ai-panel) {
+  width: 100%;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 20px;
+  background:
+    radial-gradient(
+      circle at 100% 0%,
+      rgba(30, 64, 175, 0.18),
+      transparent 38%
+    ),
+    linear-gradient(180deg, rgba(5, 14, 28, 0.96), rgba(6, 16, 30, 0.92));
+  box-shadow:
+    0 24px 48px rgba(2, 6, 23, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(18px);
+}
+
+.root :global(.home-ai-launcher) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease;
+}
+
+.root :global(.home-ai-launcher:hover) {
+  transform: translateY(-1px);
+  border-color: rgba(34, 211, 238, 0.32);
+}
+
+.root :global(.home-ai-launcher-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.9), rgba(59, 130, 246, 0.86));
+  color: #04111d;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.root :global(.home-ai-launcher strong),
+.root :global(.home-ai-header strong) {
+  display: block;
+  color: #f8fafc;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.root :global(.home-ai-launcher span),
+.root :global(.home-ai-header span),
+.root :global(.home-ai-disclaimer),
+.root :global(.home-ai-error) {
+  color: rgba(148, 163, 184, 0.88);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.root :global(.home-ai-panel) {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.root :global(.home-ai-header) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.root :global(.home-ai-close) {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  background: rgba(15, 23, 42, 0.4);
+  color: rgba(226, 232, 240, 0.9);
+  cursor: pointer;
+}
+
+.root :global(.home-ai-disclaimer) {
+  padding: 10px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 14px;
+  background: rgba(6, 13, 24, 0.58);
+}
+
+.root :global(.home-ai-messages) {
+  display: grid;
+  gap: 10px;
+  max-height: 248px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.root :global(.home-ai-messages::-webkit-scrollbar) {
+  width: 4px;
+}
+
+.root :global(.home-ai-messages::-webkit-scrollbar-thumb) {
+  background: rgba(34, 211, 238, 0.22);
+  border-radius: 999px;
+}
+
+.root :global(.home-ai-message) {
+  max-width: calc(100% - 18px);
+  padding: 11px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  background: rgba(8, 15, 28, 0.8);
+}
+
+.root :global(.home-ai-message.user) {
+  margin-left: auto;
+  border-color: rgba(34, 211, 238, 0.22);
+  background: rgba(6, 18, 34, 0.92);
+}
+
+.root :global(.home-ai-message.assistant) {
+  margin-right: auto;
+}
+
+.root :global(.home-ai-message.loading) {
+  opacity: 0.8;
+}
+
+.root :global(.home-ai-message p) {
+  color: #e2e8f0;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.root :global(.home-ai-message small) {
+  display: inline-block;
+  margin-top: 6px;
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.root :global(.home-ai-starters) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.home-ai-starter) {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 999px;
+  padding: 7px 10px;
+  background: rgba(9, 16, 30, 0.7);
+  color: #cbd5e1;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.root :global(.home-ai-starter:hover) {
+  border-color: rgba(34, 211, 238, 0.28);
+  color: #f8fafc;
+}
+
+.root :global(.home-ai-composer) {
+  display: grid;
+  gap: 8px;
+}
+
+.root :global(.home-ai-input) {
+  resize: none;
+  width: 100%;
+  min-height: 84px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(4, 10, 20, 0.84);
+  color: #f8fafc;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.root :global(.home-ai-input:focus) {
+  outline: none;
+  border-color: rgba(34, 211, 238, 0.42);
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.16);
+}
+
+.root :global(.home-ai-composer-actions) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.root :global(.home-ai-send) {
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 12px;
+  padding: 9px 14px;
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.24), rgba(37, 99, 235, 0.24));
+  color: #e0f2fe;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.home-ai-send:disabled) {
+  cursor: not-allowed;
+  opacity: 0.52;
+}
+
+.root :global(.home-ai-paywall-backdrop) {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 6, 23, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+.root :global(.home-ai-paywall-shell) {
+  width: min(820px, calc(100vw - 32px));
+}
+
+:global(html.light) .root :global(.home-ai-launcher),
+:global(html.light) .root :global(.home-ai-panel) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(240, 248, 255, 0.94));
+  border-color: rgba(48, 77, 112, 0.16);
+}
+
+:global(html.light) .root :global(.home-ai-message),
+:global(html.light) .root :global(.home-ai-disclaimer),
+:global(html.light) .root :global(.home-ai-input),
+:global(html.light) .root :global(.home-ai-starter) {
+  background: rgba(255, 255, 255, 0.88);
+  border-color: rgba(48, 77, 112, 0.14);
+}
+
+:global(html.light) .root :global(.home-ai-message p),
+:global(html.light) .root :global(.home-ai-launcher strong),
+:global(html.light) .root :global(.home-ai-header strong) {
+  color: #0b1726;
+}
+
+@media (max-width: 1400px) {
+  .root :global(.home-ai-assistant) {
+    right: 24px;
+    bottom: 24px;
+    width: min(380px, calc(100vw - 48px));
+  }
+}
+
+@media (max-width: 960px) {
+  .root :global(.home-ai-assistant) {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    bottom: 16px;
+  }
+}

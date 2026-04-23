@@ -2,7 +2,7 @@
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
@@ -13,6 +13,7 @@ import {
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
+import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import type {
   CityDetail,
   CityListItem,
@@ -22,6 +23,11 @@ import type {
   ProbabilityBucket,
   RiskLevel,
 } from "@/lib/dashboard-types";
+import type {
+  AssistantContextPayload,
+  AssistantOpportunityContext,
+} from "@/lib/dashboard-client";
+import { dashboardClient, getCityRevision } from "@/lib/dashboard-client";
 import {
   getLocalizedAirportDisplay,
   getLocalizedCityDisplay,
@@ -281,6 +287,196 @@ function buildSparklinePoints(values: number[] | undefined) {
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     })
     .join(" ");
+}
+
+type AssistantMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+  cached?: boolean;
+};
+
+function hashSnapshotText(source: string) {
+  let hash = 5381;
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash * 33) ^ source.charCodeAt(index);
+  }
+  return Math.abs(hash >>> 0).toString(16);
+}
+
+function normalizeAssistantPercent(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+}
+
+function normalizeAssistantCents(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+}
+
+function buildAssistantOpportunityContext(
+  snapshot: CitySnapshot,
+  locale: string,
+): AssistantOpportunityContext {
+  const { city, detail, summary, tradableOpportunity } = snapshot;
+  const symbol = getTempSymbol(city, summary, detail);
+  const marketScan = detail?.market_scan;
+  const marketBucket =
+    marketScan?.temperature_bucket || marketScan?.top_buckets?.[0] || null;
+  const marketQuestion =
+    marketScan?.primary_market?.question ||
+    (marketBucket
+      ? `${getProbabilityLabel(marketBucket, symbol)} ${
+          marketScan?.selected_date || detail?.local_date || ""
+        }`
+      : null);
+  const localizedCityName = getLocalizedCityDisplay(
+    city,
+    locale,
+    summary,
+    detail,
+  );
+  const localizedAirport = getLocalizedAirportDisplay(city, locale, detail);
+  const marketProbability =
+    marketScan?.market_price ??
+    readNumericField(marketBucket, "market_price") ??
+    readNumericField(marketBucket, "yes_buy") ??
+    marketScan?.yes_buy;
+  const modelProbability =
+    marketScan?.model_probability ?? marketBucket?.probability ?? null;
+  return {
+    city_name: city.name,
+    city_display_name: localizedCityName,
+    airport: localizedAirport,
+    risk_level: String(
+      city.deb_recent_tier ||
+        city.risk_level ||
+        summary?.risk?.level ||
+        detail?.risk?.level ||
+        "",
+    ),
+    tradable: tradableOpportunity,
+    local_time: summary?.local_time || detail?.local_time || null,
+    current_temperature:
+      summary?.current?.temp ?? detail?.current?.temp ?? null,
+    deb_prediction: summary?.deb?.prediction ?? detail?.deb?.prediction ?? null,
+    market_question: marketQuestion,
+    market_label: marketBucket ? getProbabilityLabel(marketBucket, symbol) : null,
+    selected_date: marketScan?.selected_date || detail?.local_date || null,
+    best_side: marketScan?.price_analysis?.best_side || null,
+    yes_price: normalizeAssistantCents(
+      marketScan?.yes_buy ??
+        readNumericField(marketBucket, "yes_buy") ??
+        marketScan?.yes_token?.buy_price ??
+        marketScan?.yes_token?.midpoint,
+    ),
+    no_price: normalizeAssistantCents(
+      marketScan?.no_buy ??
+        readNumericField(marketBucket, "no_buy") ??
+        marketScan?.no_token?.buy_price ??
+        marketScan?.no_token?.midpoint,
+    ),
+    edge_percent: normalizeAssistantPercent(getMarketEdgeValue(detail)),
+    market_probability: normalizeAssistantPercent(marketProbability),
+    model_probability: normalizeAssistantPercent(modelProbability),
+    status: tradableOpportunity
+      ? "tradable"
+      : marketScan
+        ? "inactive"
+        : "market_pending",
+  };
+}
+
+function buildAssistantContextPayload(
+  snapshots: CitySnapshot[],
+  selectedCity: string | null,
+  locale: string,
+): AssistantContextPayload {
+  const opportunities = snapshots.map((snapshot) =>
+    buildAssistantOpportunityContext(snapshot, locale),
+  );
+  const revisionSeed = snapshots
+    .map((snapshot) => {
+      const revision =
+        getCityRevision(snapshot.detail) || getCityRevision(snapshot.summary);
+      return `${snapshot.city.name}:${revision}:${snapshot.tradableOpportunity ? 1 : 0}`;
+    })
+    .join("|");
+  const snapshotId = `home-${hashSnapshotText(revisionSeed || String(Date.now()))}`;
+  const selected =
+    opportunities.find((item) => item.city_name === selectedCity) || null;
+
+  return {
+    snapshot_id: snapshotId,
+    locale,
+    generated_at: new Date().toISOString(),
+    totals: {
+      cities: snapshots.length,
+      tradable_markets: opportunities.filter((item) => item.tradable).length,
+      high_risk: opportunities.filter((item) => item.risk_level === "high").length,
+      medium_risk: opportunities.filter((item) => item.risk_level === "medium")
+        .length,
+      low_risk: opportunities.filter((item) => item.risk_level === "low").length,
+    },
+    selected_city: selected,
+    opportunities,
+    glossary:
+      locale === "en-US"
+        ? [
+            {
+              term: "edge",
+              meaning:
+                "Edge is the gap between model probability and market-implied probability. Positive edge means the model is more optimistic than the market.",
+            },
+            {
+              term: "market probability",
+              meaning:
+                "Market probability is the implied probability backed out from the live YES/NO price.",
+            },
+            {
+              term: "DEB",
+              meaning:
+                "DEB is the internal forecast anchor for the day-max settlement temperature.",
+            },
+            {
+              term: "EMOS",
+              meaning:
+                "EMOS is the calibrated probability ladder for the 24-hour max-temperature outcome buckets.",
+            },
+          ]
+        : [
+            {
+              term: "edge",
+              meaning:
+                "edge 是模型概率和市场隐含概率之间的差值。正值表示模型比市场更乐观。",
+            },
+            {
+              term: "市场概率",
+              meaning: "市场概率来自 YES/NO 实时价格的隐含概率，而不是模型输出。",
+            },
+            {
+              term: "DEB",
+              meaning: "DEB 是系统对当日结算最高温的核心预测锚点之一。",
+            },
+            {
+              term: "EMOS",
+              meaning: "EMOS 是 24 小时最高温结果分桶使用的校准概率分布。",
+            },
+          ],
+  };
+}
+
+function buildAssistantGreeting(locale: string, selectedCityName?: string | null) {
+  if (locale === "en-US") {
+    return selectedCityName
+      ? `Ask about ${selectedCityName}, current opportunities, edge ranking, or how the metrics should be read.`
+      : "Ask about current opportunities, edge ranking, or how the metrics should be read.";
+  }
+  return selectedCityName
+    ? `可以直接问我 ${selectedCityName}、当前值得参与的市场、edge 排序，或者指标怎么解读。`
+    : "可以直接问我当前值得参与的市场、edge 排序，或者指标怎么解读。";
 }
 
 type HomeWeatherIconKind =
@@ -1359,6 +1555,273 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
   );
 }
 
+function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
+  const store = useDashboardStore();
+  const { locale } = useI18n();
+  const [isOpen, setIsOpen] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<AssistantMessage[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  const selectedSnapshot = useMemo(
+    () =>
+      store.selectedCity
+        ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity) ||
+          null
+        : null,
+    [snapshots, store.selectedCity],
+  );
+  const selectedCityName = selectedSnapshot
+    ? getLocalizedCityDisplay(
+        selectedSnapshot.city,
+        locale,
+        selectedSnapshot.summary,
+        selectedSnapshot.detail,
+      )
+    : null;
+  const assistantContext = useMemo(
+    () => buildAssistantContextPayload(snapshots, store.selectedCity, locale),
+    [locale, snapshots, store.selectedCity],
+  );
+  const starterPrompts = useMemo(() => {
+    if (locale === "en-US") {
+      return [
+        "Which market is worth buying now?",
+        "Rank the current markets by edge",
+        selectedCityName
+          ? `Why is ${selectedCityName} not recommended?`
+          : "Explain what edge means",
+      ];
+    }
+    return [
+      "当前有哪些值得参与的市场？",
+      "按 edge 排序",
+      selectedCityName ? `为什么 ${selectedCityName} 不建议参与？` : "解释一下 edge 是什么",
+    ];
+  }, [locale, selectedCityName]);
+
+  useEffect(() => {
+    if (messages.length) return;
+    setMessages([
+      {
+        id: "assistant-greeting",
+        role: "assistant",
+        content: buildAssistantGreeting(locale, selectedCityName),
+      },
+    ]);
+  }, [locale, messages.length, selectedCityName]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({
+      behavior: loading ? "auto" : "smooth",
+      block: "end",
+    });
+  }, [loading, messages]);
+
+  const openAssistant = () => {
+    if (!store.proAccess.subscriptionActive) {
+      setShowPaywall(true);
+      return;
+    }
+    setIsOpen(true);
+  };
+
+  const sendQuestion = async (rawQuestion?: string) => {
+    const question = String(rawQuestion ?? input).trim();
+    if (!question || loading) return;
+    if (!store.proAccess.subscriptionActive) {
+      setShowPaywall(true);
+      return;
+    }
+
+    setIsOpen(true);
+    setError(null);
+    setLoading(true);
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: question,
+      },
+    ]);
+    setInput("");
+
+    try {
+      const reply = await dashboardClient.askAssistant({
+        question,
+        locale,
+        snapshotId: assistantContext.snapshot_id,
+        context: assistantContext,
+      });
+      setMessages((current) => [
+        ...current,
+        {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: reply.answer,
+          cached: reply.cached,
+        },
+      ]);
+    } catch (submitError) {
+      const message = String(submitError);
+      if (message.includes("HTTP 402")) {
+        setShowPaywall(true);
+      } else {
+        setError(
+          locale === "en-US"
+            ? "Assistant is temporarily unavailable."
+            : "AI 助手暂时不可用。",
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitForm = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    await sendQuestion();
+  };
+
+  return (
+    <>
+      <div className="home-ai-assistant">
+        {!isOpen ? (
+          <button
+            type="button"
+            className="home-ai-launcher"
+            onClick={openAssistant}
+          >
+            <span className="home-ai-launcher-badge">AI</span>
+            <div>
+              <strong>
+                {locale === "en-US" ? "Market Assistant" : "AI 对话助手"}
+              </strong>
+              <span>
+                {store.proAccess.subscriptionActive
+                  ? locale === "en-US"
+                    ? "Ask using the current market snapshot"
+                    : "基于当前市场快照直接提问"
+                  : locale === "en-US"
+                    ? "Pro only"
+                    : "Pro 专属"}
+              </span>
+            </div>
+          </button>
+        ) : (
+          <section
+            className="home-ai-panel"
+            aria-label={locale === "en-US" ? "AI assistant" : "AI 助手"}
+          >
+            <div className="home-ai-header">
+              <div>
+                <strong>{locale === "en-US" ? "AI assistant" : "AI 对话助手"}</strong>
+                <span>
+                  {locale === "en-US"
+                    ? `Snapshot ${assistantContext.snapshot_id}`
+                    : `快照 ${assistantContext.snapshot_id}`}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="home-ai-close"
+                onClick={() => setIsOpen(false)}
+                aria-label={locale === "en-US" ? "Close assistant" : "关闭 AI 助手"}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="home-ai-disclaimer">
+              {locale === "en-US"
+                ? "Only explains the current system snapshot. It does not scan markets or calculate probabilities."
+                : "只解释当前系统快照，不参与市场扫描、概率计算或核心决策。"}
+            </div>
+
+            <div className="home-ai-messages">
+              {messages.map((message) => (
+                <div
+                  key={message.id}
+                  className={clsx(
+                    "home-ai-message",
+                    message.role === "user" ? "user" : "assistant",
+                  )}
+                >
+                  <p>{message.content}</p>
+                  {message.cached ? (
+                    <small>{locale === "en-US" ? "Cache hit" : "命中缓存"}</small>
+                  ) : null}
+                </div>
+              ))}
+              {loading ? (
+                <div className="home-ai-message assistant loading">
+                  <p>{locale === "en-US" ? "Thinking..." : "正在整理答案..."}</p>
+                </div>
+              ) : null}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <div className="home-ai-starters">
+              {starterPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  className="home-ai-starter"
+                  onClick={() => void sendQuestion(prompt)}
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+
+            <form className="home-ai-composer" onSubmit={submitForm}>
+              <textarea
+                className="home-ai-input"
+                rows={3}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder={
+                  locale === "en-US"
+                    ? "Ask about current opportunities, a city, or edge..."
+                    : "问当前机会、某个城市，或者 edge 怎么看..."
+                }
+              />
+              <div className="home-ai-composer-actions">
+                {error ? <span className="home-ai-error">{error}</span> : <span />}
+                <button
+                  type="submit"
+                  className="home-ai-send"
+                  disabled={loading || !input.trim()}
+                >
+                  {locale === "en-US" ? "Ask" : "发送"}
+                </button>
+              </div>
+            </form>
+          </section>
+        )}
+      </div>
+
+      {showPaywall ? (
+        <div className="home-ai-paywall-backdrop" onClick={() => setShowPaywall(false)}>
+          <div
+            className="home-ai-paywall-shell"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <ProFeaturePaywall
+              feature="assistant"
+              onClose={() => setShowPaywall(false)}
+            />
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
@@ -1464,6 +1927,7 @@ function DashboardScreen() {
         <>
           <HomeIntelligencePanel snapshots={homepageSnapshots} />
           <OpportunityStrip snapshots={homepageSnapshots} />
+          <HomeAssistantDock snapshots={homepageSnapshots} />
         </>
       ) : null}
       {showCitySyncToast ? (

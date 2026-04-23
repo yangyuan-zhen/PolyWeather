@@ -51,26 +51,6 @@ export function HeaderBar({
       label: locale === "en-US" ? "Dashboard" : "总览",
       active: pathname === "/",
     },
-    {
-      href: "/docs/intraday-signal",
-      label: locale === "en-US" ? "Markets" : "市场",
-      active: pathname?.startsWith("/docs/intraday-signal"),
-    },
-    {
-      href: "/docs/model-stack-deb",
-      label: locale === "en-US" ? "Analytics" : "分析",
-      active: pathname?.startsWith("/docs/model-stack-deb"),
-    },
-    {
-      href: "/docs/history-review",
-      label: locale === "en-US" ? "History" : "历史",
-      active: pathname?.startsWith("/docs/history-review"),
-    },
-    {
-      href: "/docs/alert-playbook",
-      label: locale === "en-US" ? "Alerts" : "预警",
-      active: pathname?.startsWith("/docs/alert-playbook"),
-    },
   ];
   const isRefreshing = refreshSpinning ?? store.loadingState.refresh;
   const handleRefresh = () => {
