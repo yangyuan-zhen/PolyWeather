@@ -1,13 +1,14 @@
 "use client";
 
+import Image from "next/image";
 import React from "react";
 import {
-  Bolt,
   CircleDot,
   Clock3,
   Info,
   Search,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ScanTerminalFilters } from "@/lib/dashboard-types";
@@ -17,7 +18,7 @@ export interface FilterState extends ScanTerminalFilters {}
 const SCAN_MODES = [
   {
     key: "tradable" as const,
-    icon: Bolt,
+    icon: Zap,
     labelEn: "Tradable",
     labelZh: "可交易机会",
     descEn: "Find the best immediate trade",
@@ -80,7 +81,13 @@ export function ScanFilterPanel({
     <aside className="scan-filter-panel">
       <div className="scan-sidebar-brand">
         <div className="scan-sidebar-brand-mark">
-          <Bolt size={22} strokeWidth={2.2} />
+          <Image
+            src="/favicon-32x32.png"
+            alt=""
+            width={24}
+            height={24}
+            priority
+          />
         </div>
         <div>
           <div className="scan-sidebar-brand-name">PolyWeather</div>
