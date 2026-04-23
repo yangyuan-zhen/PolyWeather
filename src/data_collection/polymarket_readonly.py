@@ -2623,7 +2623,6 @@ class PolymarketReadOnlyLayer:
     ) -> Dict[str, Any]:
         filters = self._normalize_scan_filters(scan_filters)
         window_meta = self._build_window_meta(target_date, scan_context)
-        rows: List[Dict[str, Any]] = []
         related_markets = self._collect_related_temperature_markets(
             city_key=city_key,
             target_date=target_date,
@@ -2772,6 +2771,44 @@ class PolymarketReadOnlyLayer:
             "score": distribution_bias_score,
             "valid_markets": len(bias_inputs),
         }
+        distribution_preview: List[Dict[str, Any]] = []
+        for entry in market_entries:
+            label = str(entry.get("target_label") or "").strip()
+            if not label:
+                continue
+            preview_item = {
+                "label": label,
+                "value": _safe_float(entry.get("bucket_temp")),
+                "unit": (
+                    entry.get("bucket_range")[2]
+                    if isinstance(entry.get("bucket_range"), tuple)
+                    and len(entry.get("bucket_range")) >= 3
+                    else ("F" if self._is_fahrenheit_symbol(temp_symbol) else "C")
+                ),
+                "model_probability": _clamp_probability(
+                    _safe_float(entry.get("model_event_probability"))
+                ),
+                "market_probability": _clamp_probability(
+                    _safe_float(entry.get("market_event_probability"))
+                ),
+                "highlighted": False,
+            }
+            distribution_preview.append(preview_item)
+
+        distribution_preview.sort(
+            key=lambda item: (
+                _safe_float(item.get("value"))
+                if _safe_float(item.get("value")) is not None
+                else float("inf"),
+                str(item.get("label") or ""),
+            )
+        )
+        if distribution_preview:
+            highlighted_index = max(
+                range(len(distribution_preview)),
+                key=lambda index: _safe_float(distribution_preview[index].get("model_probability")) or 0.0,
+            )
+            distribution_preview[highlighted_index]["highlighted"] = True
 
         current_reference_raw = _safe_float(
             (scan_context or {}).get("current_max_so_far")
@@ -2936,6 +2973,7 @@ class PolymarketReadOnlyLayer:
                 "distribution_bias_direction": distribution_bias_direction,
                 "distribution_bias_score": distribution_bias_score,
                 "distribution_bias_available": distribution_bias["available"],
+                "distribution_preview": distribution_preview[:6],
                 "current_reference": current_reference,
                 "gap_to_target": gap_to_target,
                 "touch_distance": abs(gap_to_target) if gap_to_target is not None else None,
@@ -3073,5 +3111,6 @@ class PolymarketReadOnlyLayer:
             "candidate_count": len(filtered_rows),
             "window_phase": window_meta.get("phase"),
             "window_score": window_meta.get("score"),
+            "distribution_preview": distribution_preview[:6],
             "resolved_market_type": "maxtemp",
         }

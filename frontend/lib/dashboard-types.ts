@@ -400,6 +400,7 @@ export interface MarketScan {
   scan_scope?: "lite" | "full" | string | null;
   websocket?: Record<string, unknown>;
   distribution_bias?: DistributionBias | null;
+  distribution_preview?: DistributionPreviewPoint[] | null;
   window_phase?: string | null;
   window_score?: number | null;
   primary_signal?: PrimarySignal | null;
@@ -414,6 +415,15 @@ export interface DistributionBias {
   value?: number | null;
   score?: number | null;
   direction?: "hotter" | "colder" | "balanced" | string | null;
+}
+
+export interface DistributionPreviewPoint {
+  label?: string | null;
+  value?: number | null;
+  unit?: string | null;
+  model_probability?: number | null;
+  market_probability?: number | null;
+  highlighted?: boolean;
 }
 
 export interface ScanTerminalFilters {
@@ -483,6 +493,7 @@ export interface ScanOpportunityRow {
   edge_score?: number | null;
   bias_score?: number | null;
   distribution_bias?: DistributionBias | null;
+  distribution_preview?: DistributionPreviewPoint[] | null;
   distribution_bias_direction?: string | null;
   distribution_bias_score?: number | null;
   distribution_bias_available?: boolean;

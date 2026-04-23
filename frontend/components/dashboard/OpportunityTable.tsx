@@ -3,8 +3,16 @@
 import React from "react";
 import { Star } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import type { ScanOpportunityRow } from "@/lib/dashboard-types";
+import type {
+  DistributionPreviewPoint,
+  ScanOpportunityRow,
+} from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
+
+type PhaseMeta = {
+  label: string;
+  tone: "green" | "amber" | "blue" | "red";
+};
 
 function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
@@ -44,12 +52,18 @@ function formatAction(row: ScanOpportunityRow, locale: string) {
   return "--";
 }
 
-function getPhaseMeta(
-  row: ScanOpportunityRow,
+export function getWindowPhaseMeta(
+  row: Pick<ScanOpportunityRow, "window_phase" | "trend_alignment">,
   locale: string,
-): { label: string; tone: "green" | "amber" | "blue" | "red" } {
+): PhaseMeta {
   const mode = String(row.window_phase || "").toLowerCase();
-  if (mode === "active_peak" || mode === "setup_today") {
+  if (mode === "active_peak") {
+    return {
+      label: locale === "en-US" ? "Peak Window" : "峰值窗口",
+      tone: "red",
+    };
+  }
+  if (mode === "setup_today" || mode === "early_today") {
     return {
       label: locale === "en-US" ? "Touch Play" : "触达博弈",
       tone: "red",
@@ -59,6 +73,12 @@ function getPhaseMeta(
     return {
       label: locale === "en-US" ? "Early" : "早期机会",
       tone: "blue",
+    };
+  }
+  if (mode === "post_peak") {
+    return {
+      label: locale === "en-US" ? "Post Peak" : "峰后确认",
+      tone: "amber",
     };
   }
   if (row.trend_alignment) {
@@ -87,35 +107,58 @@ function ProbabilityPreview({
   row: ScanOpportunityRow;
   locale: string;
 }) {
-  const targetBase =
-    row.target_value ??
-    row.target_threshold ??
-    row.target_lower ??
-    row.target_upper ??
-    null;
-  const unit = row.target_unit || row.temp_symbol || "";
-  const targetLabel =
-    targetBase != null
-      ? `${Math.round(Number(targetBase))}${unit}`
-      : row.target_label || "--";
+  const preview = Array.isArray(row.distribution_preview)
+    ? row.distribution_preview.filter(
+        (item): item is DistributionPreviewPoint =>
+          Boolean(item && (item.label || item.value != null)),
+      )
+    : [];
+
+  if (!preview.length) {
+    const targetBase =
+      row.target_value ??
+      row.target_threshold ??
+      row.target_lower ??
+      row.target_upper ??
+      null;
+    const unit = row.target_unit || row.temp_symbol || "";
+    const targetLabel =
+      targetBase != null
+        ? `${Math.round(Number(targetBase))}${unit}`
+        : row.target_label || "--";
+    preview.push({
+      label: targetLabel,
+      model_probability: row.model_event_probability,
+      market_probability: row.market_event_probability,
+      highlighted: true,
+    });
+  }
+
   return (
     <div className="scan-distribution-preview">
-      <div className="scan-distribution-card featured">
-        <strong>{targetLabel}</strong>
-        <span>{locale === "en-US" ? "Target" : "目标"}</span>
-      </div>
-      <div className="scan-distribution-card">
-        <strong>{formatPercent(row.model_event_probability != null ? row.model_event_probability * 100 : null)}</strong>
-        <span>{locale === "en-US" ? "Model" : "模型"}</span>
-      </div>
-      <div className="scan-distribution-card">
-        <strong>{formatPercent(row.market_event_probability != null ? row.market_event_probability * 100 : null)}</strong>
-        <span>{locale === "en-US" ? "Market" : "市场"}</span>
-      </div>
-      <div className="scan-distribution-card">
-        <strong>{formatPercent(row.distribution_bias_score)}</strong>
-        <span>{row.distribution_bias_direction || (locale === "en-US" ? "Bias" : "偏移")}</span>
-      </div>
+      {preview.slice(0, 6).map((item) => (
+        <div
+          key={`${item.label}-${item.value ?? ""}`}
+          className={`scan-distribution-card ${item.highlighted ? "featured" : ""}`}
+        >
+          <strong>{item.label || "--"}</strong>
+          <span>
+            {locale === "en-US" ? "Model" : "模型"}
+            <br />
+            {formatPercent(
+              item.model_probability != null ? item.model_probability * 100 : null,
+            )}
+          </span>
+          <br />
+          <span>
+            {locale === "en-US" ? "Market" : "市场"}
+            <br />
+            {formatPercent(
+              item.market_probability != null ? item.market_probability * 100 : null,
+            )}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -172,7 +215,7 @@ export function OpportunityTable({
 
       <div className="scan-table-body">
         {rows.map((row, index) => {
-          const phaseMeta = getPhaseMeta(row, locale);
+          const phaseMeta = getWindowPhaseMeta(row, locale);
           const localizedCityName = getLocalizedCityName(
             row.city,
             row.city_display_name || row.display_name || row.city,
@@ -194,9 +237,6 @@ export function OpportunityTable({
               </div>
 
               <div className="scan-city-cell">
-                <div className="scan-city-thumb">
-                  <div className="scan-city-thumb-fill" />
-                </div>
                 <div className="scan-city-copy">
                   <div className="scan-city-name">{localizedCityName}</div>
                   <div className="scan-city-sub">

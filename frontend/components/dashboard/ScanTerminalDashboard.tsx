@@ -1,10 +1,12 @@
 "use client";
 
 import clsx from "clsx";
+import Link from "next/link";
 import {
   Bell,
   Menu,
   RefreshCw,
+  UserRound,
   X,
 } from "lucide-react";
 import {
@@ -21,12 +23,17 @@ import {
   FilterState,
   ScanFilterPanel,
 } from "@/components/dashboard/ScanFilterPanel";
+import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
 import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
-import { DashboardStoreProvider } from "@/hooks/useDashboardStore";
+import {
+  DashboardStoreProvider,
+  useDashboardStore,
+} from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { dashboardClient } from "@/lib/dashboard-client";
 import type {
+  DistributionPreviewPoint,
   MarketScan,
   PrimarySignal,
   ScanOpportunityRow,
@@ -49,7 +56,14 @@ const DEFAULT_FILTERS: FilterState = {
   limit: 28,
 };
 
-const NAV_ITEMS = ["扫描台", "市场", "分析", "组合", "监控", "设置"];
+const NAV_ITEMS = [
+  { zh: "扫描台", en: "Terminal" },
+  { zh: "市场", en: "Markets" },
+  { zh: "分析", en: "Analysis" },
+  { zh: "组合", en: "Portfolio" },
+  { zh: "监控", en: "Monitor" },
+  { zh: "设置", en: "Settings" },
+];
 
 function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
@@ -128,6 +142,20 @@ function buildComparisonBuckets(
   marketScan: MarketScan | null | undefined,
   row: ScanOpportunityRow | null,
 ) {
+  const rowPreview = Array.isArray(row?.distribution_preview)
+    ? row.distribution_preview.filter(
+        (item): item is DistributionPreviewPoint =>
+          Boolean(item && (item.label || item.value != null)),
+      )
+    : [];
+  if (rowPreview.length) {
+    return rowPreview.slice(0, 6).map((item) => ({
+      label: String(item.label ?? item.value ?? "--"),
+      model: Number(item.model_probability ?? 0) * 100,
+      market: Number(item.market_probability ?? 0) * 100,
+      highlighted: Boolean(item.highlighted),
+    }));
+  }
   const buckets = Array.isArray(marketScan?.top_buckets)
     ? marketScan?.top_buckets
     : Array.isArray(marketScan?.all_buckets)
@@ -140,6 +168,7 @@ function buildComparisonBuckets(
         label: String(bucket.temp ?? bucket.value ?? bucket.label ?? "--"),
         model: Number(bucket.probability ?? 0) * 100,
         market: Number(bucket.market_price ?? bucket.yes_buy ?? 0) * 100,
+        highlighted: false,
       }))
       .filter((bucket) => bucket.label !== "--");
   }
@@ -150,6 +179,7 @@ function buildComparisonBuckets(
       label: row.target_label || "--",
       model: Number(row.model_event_probability || 0) * 100,
       market: Number(row.market_event_probability || 0) * 100,
+      highlighted: true,
     },
   ];
 }
@@ -200,19 +230,19 @@ function DetailPanel({
     ...comparisonBuckets.flatMap((bucket) => [bucket.model, bucket.market]),
   );
   const scoreClass = scoreTone(displayRow.final_score);
+  const phaseMeta = getWindowPhaseMeta(displayRow, locale);
 
   return (
     <aside className="scan-detail-panel">
       <div className="scan-detail-header">
         <div className="scan-detail-top">
-          <div className="scan-detail-hero-placeholder" />
           <div className="scan-detail-title-wrap">
             <div className="scan-detail-city-name">{localizedCityName}</div>
             <div className="scan-detail-city-sub">
               {displayRow.market_question || displayRow.target_label || "--"}
             </div>
-            <div className="scan-phase-badge red">
-              {displayRow.window_phase || (isEn ? "Main Signal" : "主信号")}
+            <div className={`scan-phase-badge ${phaseMeta.tone}`}>
+              {phaseMeta.label}
             </div>
           </div>
         </div>
@@ -309,7 +339,7 @@ function DetailPanel({
           />
         </div>
         <div className="scan-timeline-caption">
-          {displayRow.window_phase || (isEn ? "Window phase" : "窗口阶段")}
+          {phaseMeta.label}
         </div>
       </section>
 
@@ -329,7 +359,10 @@ function DetailPanel({
         </div>
         <div className="scan-chart-bars">
           {comparisonBuckets.map((bucket) => (
-            <div key={bucket.label} className="scan-chart-group">
+            <div
+              key={bucket.label}
+              className={`scan-chart-group ${bucket.highlighted ? "highlighted" : ""}`}
+            >
               <div
                 className="scan-chart-col model"
                 style={{ height: `${Math.max(8, (bucket.model / maxBar) * 120)}px` }}
@@ -397,8 +430,12 @@ function DetailPanel({
 }
 
 function ScanTerminalScreen() {
-  const { locale } = useI18n();
+  const store = useDashboardStore();
+  const { locale, toggleLocale } = useI18n();
   const isEn = locale === "en-US";
+  const accountHref = store.proAccess.authenticated
+    ? "/account"
+    : "/auth/login?next=%2Faccount";
   const [draftFilters, setDraftFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
@@ -496,15 +533,25 @@ function ScanTerminalScreen() {
             <div className="scan-topbar-tabs">
               {NAV_ITEMS.map((item, index) => (
                 <button
-                  key={item}
+                  key={item.zh}
                   type="button"
                   className={`scan-topbar-tab ${index === 0 ? "active" : ""}`}
                 >
-                  {item}
+                  {isEn ? item.en : item.zh}
                 </button>
               ))}
             </div>
             <div className="scan-topbar-actions">
+              <button
+                type="button"
+                className="scan-locale-switch"
+                aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
+                title={isEn ? "Switch to Chinese" : "切换到英文"}
+                onClick={toggleLocale}
+              >
+                <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
+                <span className={clsx(locale === "en-US" && "active")}>EN</span>
+              </button>
               <span className="scan-topbar-time">
                 {selectedRow?.local_time || terminalData?.generated_at?.replace("T", " ").slice(11, 19) || "--"}
               </span>
@@ -516,6 +563,14 @@ function ScanTerminalScreen() {
                 <Bell size={14} />
                 {isEn ? "Custom Alerts" : "自定义提醒"}
               </button>
+              <Link
+                href={accountHref}
+                className="scan-account-button"
+                aria-label={isEn ? "Account" : "账户"}
+                title={isEn ? "Account" : "账户"}
+              >
+                <UserRound size={15} />
+              </Link>
             </div>
           </div>
 

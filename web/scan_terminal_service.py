@@ -191,6 +191,7 @@ def _build_terminal_row(
         "airport": ((data.get("risk") or {}).get("airport") if isinstance(data.get("risk"), dict) else None),
         "risk_level": ((data.get("risk") or {}).get("level") if isinstance(data.get("risk"), dict) else None),
         "distribution_bias": scan.get("distribution_bias"),
+        "distribution_preview": scan.get("distribution_preview") or row.get("distribution_preview") or [],
         "window_phase": row.get("window_phase") or scan.get("window_phase"),
         "window_score": row.get("window_score") if row.get("window_score") is not None else scan.get("window_score"),
         "signal_status": scan.get("signal_status"),
