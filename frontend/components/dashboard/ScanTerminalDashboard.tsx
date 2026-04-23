@@ -7,7 +7,6 @@ import {
   Menu,
   RefreshCw,
   UserRound,
-  X,
 } from "lucide-react";
 import {
   startTransition,
@@ -27,6 +26,7 @@ import { MapCanvas } from "@/components/dashboard/MapCanvas";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
 import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
+import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import {
   DashboardStoreProvider,
   useDashboardStore,
@@ -247,8 +247,10 @@ function DetailPanel({
   marketScan?: MarketScan | null;
   loading?: boolean;
 }) {
+  const store = useDashboardStore();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
+  const isPro = store.proAccess.subscriptionActive;
 
   if (!row) {
     return (
@@ -287,6 +289,12 @@ function DetailPanel({
   const scoreClass = scoreTone(displayRow.final_score);
   const phaseMeta = getWindowPhaseMeta(displayRow, locale);
 
+  const openTodayAnalysis = async () => {
+    if (!row.city) return;
+    await store.selectCity(row.city);
+    await store.openTodayModal();
+  };
+
   return (
     <aside className="scan-detail-panel">
       <div className="scan-detail-header">
@@ -301,9 +309,6 @@ function DetailPanel({
             </div>
           </div>
         </div>
-        <button type="button" className="scan-detail-icon-button" aria-label="close">
-          <X size={16} />
-        </button>
       </div>
 
       <div className="scan-detail-volume-row">
@@ -316,6 +321,22 @@ function DetailPanel({
         </div>
         <button type="button" className="scan-detail-action-button">
           {isEn ? "Add Watch" : "添加自选"}
+        </button>
+      </div>
+
+      <div className="scan-detail-primary-actions">
+        <button
+          type="button"
+          className="scan-detail-analysis-button"
+          onClick={() => void openTodayAnalysis()}
+        >
+          {isPro
+            ? isEn
+              ? "Today's Intraday Analysis"
+              : "今日日内分析"
+            : isEn
+              ? "Today's Intraday Analysis · Pro"
+              : "今日日内分析 · Pro"}
         </button>
       </div>
 
@@ -804,15 +825,6 @@ function ScanTerminalScreen() {
           selectedRowId={selectedRowId}
           onSelectRow={(row) => setSelectedRowId(row.id)}
         />
-        {deferredRows.length ? (
-          <div className="scan-view-all-wrap">
-            <button type="button" className="scan-view-all-button">
-              {isEn
-                ? `View all ${deferredRows.length} opportunities`
-                : `查看全部 ${deferredRows.length} 个机会`}
-            </button>
-          </div>
-        ) : null}
       </>
     );
   };
@@ -985,6 +997,7 @@ export function ScanTerminalDashboard() {
     <I18nProvider>
       <DashboardStoreProvider>
         <ScanTerminalScreen />
+        <FutureForecastModal />
       </DashboardStoreProvider>
     </I18nProvider>
   );

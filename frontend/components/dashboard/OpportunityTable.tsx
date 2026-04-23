@@ -77,10 +77,16 @@ export function getWindowPhaseMeta(
       tone: "red",
     };
   }
-  if (mode === "setup_today" || mode === "early_today") {
+  if (mode === "setup_today") {
     return {
       label: locale === "en-US" ? "Touch Play" : "触达博弈",
       tone: "red",
+    };
+  }
+  if (mode === "early_today") {
+    return {
+      label: locale === "en-US" ? "Early Today" : "日内早段",
+      tone: "blue",
     };
   }
   if (mode === "tomorrow" || mode === "week_ahead") {
@@ -223,7 +229,7 @@ export function OpportunityTable({
         <span />
         <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
         <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
-        <span>{isEn ? "Model vs Market" : "模型分布 vs 市场分布"}</span>
+        <span>{isEn ? "EMOS vs Market" : "EMOS 分布 vs 市场分布"}</span>
         <span>{isEn ? "Best Opportunity" : "最佳机会"}</span>
         <span>{isEn ? "Edge" : "边际优势"}</span>
         <span>{isEn ? "Score" : "综合得分"}</span>
