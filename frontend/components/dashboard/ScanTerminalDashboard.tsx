@@ -142,6 +142,34 @@ function getSideRow(
   return null;
 }
 
+function getDetailSideAsk(
+  scanRow: ScanOpportunityRow | null,
+  marketScan: MarketScan | null | undefined,
+  side: "yes" | "no",
+) {
+  if (scanRow?.ask != null) return scanRow.ask;
+  if (side === "yes") {
+    if (scanRow?.yes_ask != null) return scanRow.yes_ask;
+    return marketScan?.yes_buy ?? null;
+  }
+  if (scanRow?.no_ask != null) return scanRow.no_ask;
+  return marketScan?.no_buy ?? null;
+}
+
+function getDetailSideBid(
+  scanRow: ScanOpportunityRow | null,
+  marketScan: MarketScan | null | undefined,
+  side: "yes" | "no",
+) {
+  if (scanRow?.bid != null) return scanRow.bid;
+  if (side === "yes") {
+    if (scanRow?.yes_bid != null) return scanRow.yes_bid;
+    return marketScan?.yes_sell ?? null;
+  }
+  if (scanRow?.no_bid != null) return scanRow.no_bid;
+  return marketScan?.no_sell ?? null;
+}
+
 function buildComparisonBuckets(
   marketScan: MarketScan | null | undefined,
   row: ScanOpportunityRow | null,
@@ -396,24 +424,30 @@ function DetailPanel({
               {isEn ? "Buy Yes" : "买入 Yes"} {displayRow.target_label || ""}
             </div>
             <p>
-              {formatPrice(yesRow?.ask ?? marketScan?.yes_buy)} →{" "}
+              {formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))} →{" "}
               {formatProbability(yesRow?.model_probability)}
             </p>
             <p className="positive">{formatPercent(yesRow?.edge_percent, true)} {isEn ? "edge" : "边际优势"}</p>
-            <p>{isEn ? "Spread" : "点差"} {formatPrice(yesRow?.spread)}</p>
+            <p>
+              {isEn ? "Bid / Ask" : "买卖价"} {formatPrice(getDetailSideBid(yesRow, marketScan, "yes"))} /{" "}
+              {formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))}
+            </p>
           </div>
           <div className="scan-trade-card sell">
             <div className="scan-trade-card-title">
               {isEn ? "Buy No" : "买入 No"} {displayRow.target_label || ""}
             </div>
             <p>
-              {formatPrice(noRow?.ask ?? marketScan?.no_buy)} →{" "}
+              {formatPrice(getDetailSideAsk(noRow, marketScan, "no"))} →{" "}
               {formatProbability(noRow?.model_probability)}
             </p>
             <p className={Number(noRow?.edge_percent || 0) >= 0 ? "positive" : "negative"}>
               {formatPercent(noRow?.edge_percent, true)} {isEn ? "edge" : "边际优势"}
             </p>
-            <p>{isEn ? "Spread" : "点差"} {formatPrice(noRow?.spread)}</p>
+            <p>
+              {isEn ? "Bid / Ask" : "买卖价"} {formatPrice(getDetailSideBid(noRow, marketScan, "no"))} /{" "}
+              {formatPrice(getDetailSideAsk(noRow, marketScan, "no"))}
+            </p>
           </div>
         </div>
       </section>

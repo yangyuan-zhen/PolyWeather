@@ -40,8 +40,8 @@ def test_extract_market_bucket_range_supports_fahrenheit_ranges():
 def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
     layer = PolymarketReadOnlyLayer()
     payloads = {
-        ("/price", "BUY"): {"price": "0.11"},
-        ("/price", "SELL"): {"price": "0.88"},
+        ("/price", "BUY"): {"price": "0.27"},
+        ("/price", "SELL"): {"price": "0.23"},
         ("/midpoint", None): {"midpoint": "0.50"},
         ("/last-trade-price", None): {"price": "0.49"},
         ("/book", None): {
@@ -66,6 +66,30 @@ def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
     assert data["midpoint"] == 0.5
     assert data["last_trade_price"] == 0.49
     assert data["quote_source"] == "polymarket_clob_rest"
+
+
+def test_fetch_token_market_data_keeps_buy_sell_semantics_without_orderbook():
+    layer = PolymarketReadOnlyLayer()
+    payloads = {
+        ("/price", "BUY"): {"price": "0.23"},
+        ("/price", "SELL"): {"price": "0.27"},
+        ("/midpoint", None): {"midpoint": "0.25"},
+        ("/last-trade-price", None): {"price": "0.24"},
+        ("/book", None): None,
+    }
+
+    def _fake_clob_get(path, params):
+        if path == "/price":
+            return payloads[(path, params.get("side"))]
+        return payloads[(path, None)]
+
+    layer._clob_get = _fake_clob_get
+
+    data = layer._fetch_token_market_data("token-1")
+
+    assert data["buy"] == 0.27
+    assert data["sell"] == 0.23
+    assert data["midpoint"] == 0.25
 
 
 def test_get_token_market_data_uses_price_cache_within_ttl():
