@@ -1237,12 +1237,13 @@ export function DashboardStoreProvider({
       },
       openHistory,
       openTodayModal: async (forceRefresh?: boolean) => {
-        if (!selectedCity) {
+        const activeCity = selectedCityRef.current || selectedCity;
+        if (!activeCity) {
           return;
         }
 
         mapStopMotionRef.current();
-        const cityName = selectedCity;
+        const cityName = activeCity;
         const modalSeq = (modalOpenSeqRef.current += 1);
         const isLatestModalRequest = () =>
           modalOpenSeqRef.current === modalSeq &&

@@ -153,33 +153,40 @@ function ProbabilityPreview({
     });
   }
 
+  const modelLabel = locale === "en-US" ? "M" : "模";
+  const marketLabel = locale === "en-US" ? "P" : "市";
+
   return (
     <div className="scan-distribution-preview">
-      {preview.slice(0, 6).map((item) => (
-        <div
-          key={`${item.label}-${item.value ?? ""}`}
-          className={`scan-distribution-card ${item.highlighted ? "featured" : ""}`}
-        >
-          <strong>
-            {normalizeTemperatureLabel(item.label, tempSymbol) || item.label || "--"}
-          </strong>
-          <span>
-            {locale === "en-US" ? "Model" : "模型"}
-            <br />
-            {formatPercent(
-              item.model_probability != null ? item.model_probability * 100 : null,
-            )}
-          </span>
-          <br />
-          <span>
-            {locale === "en-US" ? "Market" : "市场"}
-            <br />
-            {formatPercent(
-              item.market_probability != null ? item.market_probability * 100 : null,
-            )}
-          </span>
-        </div>
-      ))}
+      {preview.slice(0, 6).map((item) => {
+        const modelPercent =
+          item.model_probability != null ? item.model_probability * 100 : null;
+        const marketPercent =
+          item.market_probability != null ? item.market_probability * 100 : null;
+        const modelWidth = Math.max(3, Math.min(100, Number(modelPercent || 0)));
+        const marketWidth = Math.max(3, Math.min(100, Number(marketPercent || 0)));
+
+        return (
+          <div
+            key={`${item.label}-${item.value ?? ""}`}
+            className={`scan-distribution-card ${item.highlighted ? "featured" : ""}`}
+          >
+            <strong>
+              {normalizeTemperatureLabel(item.label, tempSymbol) || item.label || "--"}
+            </strong>
+            <span className="scan-distribution-line model">
+              <b>{modelLabel}</b>
+              <i style={{ width: `${modelWidth}%` }} />
+              <em>{formatPercent(modelPercent)}</em>
+            </span>
+            <span className="scan-distribution-line market">
+              <b>{marketLabel}</b>
+              <i style={{ width: `${marketWidth}%` }} />
+              <em>{formatPercent(marketPercent)}</em>
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }

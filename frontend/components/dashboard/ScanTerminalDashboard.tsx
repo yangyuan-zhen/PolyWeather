@@ -25,9 +25,9 @@ import {
   FilterState,
   ScanFilterPanel,
 } from "@/components/dashboard/ScanFilterPanel";
+import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
-import { ModelForecast } from "@/components/dashboard/PanelSections";
 import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
 import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
 import {
@@ -151,12 +151,11 @@ function formatShortDate(value?: string | null, locale = "zh-CN") {
     : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
-function formatUserLocalTime(locale = "zh-CN") {
-  return new Intl.DateTimeFormat(locale === "en-US" ? "en-US" : "zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  }).format(new Date());
+function formatUserLocalTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}`;
 }
 
 function getLocalDateIndex(value?: string | null) {
@@ -345,30 +344,15 @@ function DetailPanel({
   );
   const scoreClass = scoreTone(displayRow.final_score);
   const phaseMeta = getWindowPhaseMeta(displayRow, locale);
-  const analysisDetail =
+  const cityDetail =
     store.selectedDetail?.name?.toLowerCase() === row.city.toLowerCase()
       ? store.selectedDetail
       : store.cityDetailsByName[row.city] || null;
-  const [showInlineAnalysis, setShowInlineAnalysis] = useState(false);
-  const analysisLoading = Boolean(
-    showInlineAnalysis &&
-      row.city &&
-      !analysisDetail &&
-      store.loadingState.cityDetail,
-  );
-
-  useEffect(() => {
-    setShowInlineAnalysis(false);
-  }, [row.id]);
 
   const openTodayAnalysis = async () => {
     if (!row.city) return;
-    if (showInlineAnalysis && analysisDetail) {
-      setShowInlineAnalysis(false);
-      return;
-    }
-    setShowInlineAnalysis(true);
     await store.selectCity(row.city);
+    await store.openTodayModal();
   };
 
   return (
@@ -415,29 +399,6 @@ function DetailPanel({
               : "今日日内分析 · Pro"}
         </button>
       </div>
-
-      {showInlineAnalysis && (
-        <section className="scan-detail-section scan-detail-inline-analysis">
-          <div className="scan-detail-section-title">
-            {isEn ? "Today's Intraday Analysis" : "今日日内分析"}
-          </div>
-          {analysisLoading ? (
-            <div className="scan-inline-analysis-state">
-              {isEn ? "Loading model spread card..." : "正在加载模型分歧卡片..."}
-            </div>
-          ) : analysisDetail ? (
-            <ModelForecast
-              detail={analysisDetail}
-              hideTitle
-              targetDate={row.selected_date || null}
-            />
-          ) : (
-            <div className="scan-inline-analysis-state">
-              {isEn ? "No intraday model card available yet." : "当前还没有可展示的日内模型卡片。"}
-            </div>
-          )}
-        </section>
-      )}
 
       <section className="scan-detail-section">
         <div className="scan-detail-section-title">
@@ -503,8 +464,8 @@ function DetailPanel({
 
       <section className="scan-detail-section">
         <div className="scan-timeline-head">
-          <span>00:00</span>
-          <span>23:59</span>
+          <span>{cityDetail?.forecast?.sunrise || "--"}</span>
+          <span>{cityDetail?.forecast?.sunset || "--"}</span>
         </div>
         <div className="scan-timeline-bar">
           <span
@@ -521,7 +482,7 @@ function DetailPanel({
           />
         </div>
         <div className="scan-timeline-caption">
-          {phaseMeta.label}
+          {isEn ? "Sunrise / Sunset" : "日出 / 日落"} · {phaseMeta.label}
         </div>
       </section>
 
@@ -901,12 +862,12 @@ function ScanTerminalScreen() {
   }, [activeFilters]);
 
   useEffect(() => {
-    setUserLocalTime(formatUserLocalTime(locale));
+    setUserLocalTime(formatUserLocalTime());
     const intervalId = window.setInterval(() => {
-      setUserLocalTime(formatUserLocalTime(locale));
-    }, 30_000);
+      setUserLocalTime(formatUserLocalTime());
+    }, 10_000);
     return () => window.clearInterval(intervalId);
-  }, [locale]);
+  }, []);
 
   useEffect(() => {
     const stored = window.localStorage.getItem("polyweather_scan_theme");
@@ -932,6 +893,9 @@ function ScanTerminalScreen() {
   useEffect(() => {
     if (!activeDetailRow) return;
     void fetchDetail(activeDetailRow);
+    if (!store.cityDetailsByName[activeDetailRow.city]) {
+      void store.ensureCityDetail(activeDetailRow.city, false, "panel").catch(() => {});
+    }
   }, [activeDetailRow, detailByRowId]);
 
   const handleMapCitySelect = useCallback((cityName: string) => {
@@ -1171,6 +1135,7 @@ export function ScanTerminalDashboard() {
     <I18nProvider>
       <DashboardStoreProvider>
         <ScanTerminalScreen />
+        <FutureForecastModal />
       </DashboardStoreProvider>
     </I18nProvider>
   );

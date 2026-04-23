@@ -9879,25 +9879,70 @@
 
 .root :global(.scan-distribution-card) {
   min-width: 0;
-  text-align: center;
-  padding: 9px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 6px;
   border-radius: 10px;
   border: 1px solid rgba(87, 119, 166, 0.1);
   background: rgba(15, 28, 46, 0.72);
   color: #b4c7df;
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .root :global(.scan-distribution-card strong) {
   display: block;
-  margin-bottom: 8px;
+  margin-bottom: 1px;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.1;
+  text-align: center;
   overflow-wrap: anywhere;
 }
 
 .root :global(.scan-distribution-card.featured strong) {
   color: #22eb98;
+}
+
+.root :global(.scan-distribution-line) {
+  display: grid;
+  grid-template-columns: 12px minmax(22px, 1fr) auto;
+  gap: 4px;
+  align-items: center;
+  min-width: 0;
+  color: rgba(180, 199, 223, 0.9);
+}
+
+.root :global(.scan-distribution-line b) {
+  color: rgba(148, 163, 184, 0.78);
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.root :global(.scan-distribution-line i) {
+  display: block;
+  max-width: 100%;
+  height: 4px;
+  border-radius: 999px;
+}
+
+.root :global(.scan-distribution-line.model i) {
+  background: linear-gradient(90deg, #17d98b, #20e3d2);
+}
+
+.root :global(.scan-distribution-line.market i) {
+  background: linear-gradient(90deg, #3f8cff, #57a8ff);
+}
+
+.root :global(.scan-distribution-line em) {
+  overflow: hidden;
+  color: rgba(226, 237, 252, 0.92);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 760;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .root :global(.scan-trade-cell) {
@@ -10081,35 +10126,6 @@
 .root :global(.scan-detail-analysis-button:hover) {
   background: rgba(23, 217, 139, 0.18);
   border-color: rgba(23, 217, 139, 0.4);
-}
-
-.root :global(.scan-detail-inline-analysis) {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.root :global(.scan-detail-inline-analysis .models-section) {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-}
-
-.root :global(.scan-detail-inline-analysis .model-bars) {
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(90, 123, 166, 0.14);
-  background: rgba(10, 20, 35, 0.72);
-}
-
-.root :global(.scan-inline-analysis-state) {
-  padding: 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(90, 123, 166, 0.12);
-  color: #9bb0cb;
-  font-size: 13px;
-  background: rgba(10, 20, 35, 0.52);
 }
 
 .root :global(.scan-detail-section) {
@@ -10447,6 +10463,14 @@
   color: #647a98;
 }
 
+.root :global(.scan-terminal.light .scan-distribution-line em) {
+  color: #243b5a;
+}
+
+.root :global(.scan-terminal.light .scan-distribution-line b) {
+  color: #6f86a4;
+}
+
 .root :global(.scan-terminal.light .scan-mode-tab),
 .root :global(.scan-terminal.light .scan-table-shell),
 .root :global(.scan-terminal.light .scan-table-header),
@@ -10455,9 +10479,7 @@
 .root :global(.scan-terminal.light .scan-summary-card),
 .root :global(.scan-terminal.light .scan-settings-card),
 .root :global(.scan-terminal.light .scan-distribution-card),
-.root :global(.scan-terminal.light .scan-trade-card),
-.root :global(.scan-terminal.light .scan-detail-inline-analysis .model-bars),
-.root :global(.scan-terminal.light .scan-inline-analysis-state) {
+.root :global(.scan-terminal.light .scan-trade-card) {
   border-color: rgba(35, 72, 118, 0.12);
   background: rgba(255, 255, 255, 0.72);
 }
