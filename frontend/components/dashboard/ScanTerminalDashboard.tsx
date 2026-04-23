@@ -23,6 +23,7 @@ import {
   FilterState,
   ScanFilterPanel,
 } from "@/components/dashboard/ScanFilterPanel";
+import { MapCanvas } from "@/components/dashboard/MapCanvas";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
 import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
@@ -67,6 +68,17 @@ const NAV_ITEMS = [
   { zh: "组合", en: "Portfolio" },
   { zh: "监控", en: "Monitor" },
   { zh: "设置", en: "Settings" },
+];
+
+type TopSection = "terminal" | "markets" | "analysis" | "portfolio" | "monitor" | "settings";
+type ContentView = "list" | "map" | "calendar";
+const TOP_SECTION_ORDER: TopSection[] = [
+  "terminal",
+  "markets",
+  "analysis",
+  "portfolio",
+  "monitor",
+  "settings",
 ];
 
 function formatPercent(value?: number | null, signed = false) {
@@ -123,6 +135,16 @@ function confidenceLabel(score?: number | null, locale = "zh-CN") {
   if (numeric >= 85) return "高";
   if (numeric >= 70) return "中";
   return "观察";
+}
+
+function formatShortDate(value?: string | null, locale = "zh-CN") {
+  const text = String(value || "").trim();
+  if (!text) return "--";
+  const date = new Date(`${text}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return text;
+  return locale === "en-US"
+    ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
 function getSideRow(
@@ -421,7 +443,8 @@ function DetailPanel({
         <div className="scan-trade-cards">
           <div className="scan-trade-card buy">
             <div className="scan-trade-card-title">
-              {isEn ? "Buy Yes" : "买入 Yes"} {displayRow.target_label || ""}
+              {isEn ? "Buy Yes" : "买入 Yes"}{" "}
+              {normalizeTemperatureLabel(displayRow.target_label, tempSymbol) || ""}
             </div>
             <p>
               {formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))} →{" "}
@@ -435,7 +458,8 @@ function DetailPanel({
           </div>
           <div className="scan-trade-card sell">
             <div className="scan-trade-card-title">
-              {isEn ? "Buy No" : "买入 No"} {displayRow.target_label || ""}
+              {isEn ? "Buy No" : "买入 No"}{" "}
+              {normalizeTemperatureLabel(displayRow.target_label, tempSymbol) || ""}
             </div>
             <p>
               {formatPrice(getDetailSideAsk(noRow, marketScan, "no"))} →{" "}
@@ -475,6 +499,187 @@ function DetailPanel({
   );
 }
 
+function CalendarView({
+  rows,
+  locale,
+  selectedRowId,
+  onSelectRow,
+}: {
+  rows: ScanOpportunityRow[];
+  locale: string;
+  selectedRowId: string | null;
+  onSelectRow: (row: ScanOpportunityRow) => void;
+}) {
+  const groups = useMemo(() => {
+    const byDate = new Map<string, ScanOpportunityRow[]>();
+    rows.forEach((row) => {
+      const key = String(row.selected_date || row.local_date || "unknown");
+      const list = byDate.get(key) || [];
+      list.push(row);
+      byDate.set(key, list);
+    });
+    return Array.from(byDate.entries()).sort(([left], [right]) => left.localeCompare(right));
+  }, [rows]);
+
+  if (!groups.length) {
+    return (
+      <div className="scan-empty-state compact">
+        <div className="scan-empty-title">
+          {locale === "en-US" ? "No dated opportunities" : "当前没有日期机会"}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scan-calendar-view">
+      {groups.map(([date, items]) => (
+        <section key={date} className="scan-calendar-group">
+          <div className="scan-calendar-group-head">
+            <div className="scan-calendar-date">{formatShortDate(date, locale)}</div>
+            <div className="scan-calendar-count">
+              {locale === "en-US" ? `${items.length} rows` : `${items.length} 条`}
+            </div>
+          </div>
+          <div className="scan-calendar-grid">
+            {items.map((row) => (
+              <button
+                key={row.id}
+                type="button"
+                className={`scan-calendar-card ${selectedRowId === row.id ? "selected" : ""}`}
+                onClick={() => onSelectRow(row)}
+              >
+                <div className="scan-calendar-city">
+                  {getLocalizedCityName(
+                    row.city,
+                    row.city_display_name || row.display_name || row.city,
+                    locale,
+                  )}
+                </div>
+                <div className={`scan-calendar-action ${row.side === "no" ? "sell" : "buy"}`}>
+                  {row.action || row.target_label || "--"}
+                </div>
+                <div className="scan-calendar-meta">
+                  <span>{row.local_time || "--"}</span>
+                  <span>{formatPercent(row.edge_percent, true)}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function OverviewMapView({ locale }: { locale: string }) {
+  const store = useDashboardStore();
+
+  return (
+    <div className="scan-map-view">
+      <div className="scan-map-shell">
+        <MapCanvas />
+      </div>
+      <div className="scan-map-caption">
+        {locale === "en-US"
+          ? `Monitoring ${store.cities.length} cities on the original map canvas.`
+          : `正在用原地图画布监控 ${store.cities.length} 个城市。`}
+      </div>
+    </div>
+  );
+}
+
+function PortfolioView({
+  rows,
+  locale,
+}: {
+  rows: ScanOpportunityRow[];
+  locale: string;
+}) {
+  const yesCount = rows.filter((row) => row.side === "yes").length;
+  const noCount = rows.filter((row) => row.side === "no").length;
+  const avgScore =
+    rows.length > 0
+      ? rows.reduce((sum, row) => sum + Number(row.final_score || 0), 0) / rows.length
+      : null;
+
+  return (
+    <div className="scan-summary-grid">
+      <div className="scan-summary-card">
+        <div className="scan-summary-label">{locale === "en-US" ? "YES Ideas" : "YES 机会"}</div>
+        <div className="scan-summary-value">{yesCount}</div>
+      </div>
+      <div className="scan-summary-card">
+        <div className="scan-summary-label">{locale === "en-US" ? "NO Ideas" : "NO 机会"}</div>
+        <div className="scan-summary-value">{noCount}</div>
+      </div>
+      <div className="scan-summary-card wide">
+        <div className="scan-summary-label">{locale === "en-US" ? "Avg Score" : "平均评分"}</div>
+        <div className="scan-summary-value">
+          {avgScore != null ? `${avgScore.toFixed(0)}/100` : "--"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MonitorView({
+  rows,
+  locale,
+}: {
+  rows: ScanOpportunityRow[];
+  locale: string;
+}) {
+  const groups = useMemo(() => {
+    const result = new Map<string, number>();
+    rows.forEach((row) => {
+      const label = getWindowPhaseMeta(row, locale).label;
+      result.set(label, (result.get(label) || 0) + 1);
+    });
+    return Array.from(result.entries());
+  }, [rows, locale]);
+
+  return (
+    <div className="scan-summary-grid monitor">
+      {groups.map(([label, count]) => (
+        <div key={label} className="scan-summary-card">
+          <div className="scan-summary-label">{label}</div>
+          <div className="scan-summary-value">{count}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SettingsView({ locale }: { locale: string }) {
+  return (
+    <div className="scan-settings-view">
+      <div className="scan-settings-card">
+        <div className="scan-summary-label">{locale === "en-US" ? "Market Discovery" : "市场发现"}</div>
+        <div className="scan-settings-copy">
+          {locale === "en-US" ? "Gamma REST refreshes every 60s." : "Gamma REST 每 60 秒刷新一次。"}
+        </div>
+      </div>
+      <div className="scan-settings-card">
+        <div className="scan-summary-label">{locale === "en-US" ? "Price Layer" : "价格层"}</div>
+        <div className="scan-settings-copy">
+          {locale === "en-US"
+            ? "CLOB REST prices and books refresh every 30s."
+            : "CLOB REST 价格和盘口每 30 秒刷新一次。"}
+        </div>
+      </div>
+      <div className="scan-settings-card">
+        <div className="scan-summary-label">{locale === "en-US" ? "Server Profile" : "服务器配置"}</div>
+        <div className="scan-settings-copy">
+          {locale === "en-US"
+            ? "2GB profile: one polling loop, cached REST, no websocket fan-out."
+            : "2G 配置：单轮询、REST 缓存优先、不做 websocket 扇出。"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -490,6 +695,8 @@ function ScanTerminalScreen() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [detailByRowId, setDetailByRowId] = useState<Record<string, MarketScan | null>>({});
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<TopSection>("terminal");
+  const [activeView, setActiveView] = useState<ContentView>("list");
   const deferredRows = useDeferredValue(terminalData?.rows || []);
 
   const selectedRow = useMemo(() => {
@@ -560,6 +767,55 @@ function ScanTerminalScreen() {
   }, [selectedRow, detailByRowId]);
 
   const selectedDetail = selectedRow ? detailByRowId[selectedRow.id] : null;
+  const resolvedView: ContentView =
+    activeSection === "markets"
+      ? "map"
+      : activeSection === "analysis"
+        ? "calendar"
+        : activeView;
+
+  const renderMainView = () => {
+    if (activeSection === "portfolio") {
+      return <PortfolioView rows={deferredRows} locale={locale} />;
+    }
+    if (activeSection === "monitor") {
+      return <MonitorView rows={deferredRows} locale={locale} />;
+    }
+    if (activeSection === "settings") {
+      return <SettingsView locale={locale} />;
+    }
+    if (resolvedView === "map") {
+      return <OverviewMapView locale={locale} />;
+    }
+    if (resolvedView === "calendar") {
+      return (
+        <CalendarView
+          rows={deferredRows}
+          locale={locale}
+          selectedRowId={selectedRowId}
+          onSelectRow={(row) => setSelectedRowId(row.id)}
+        />
+      );
+    }
+    return (
+      <>
+        <OpportunityTable
+          rows={deferredRows}
+          selectedRowId={selectedRowId}
+          onSelectRow={(row) => setSelectedRowId(row.id)}
+        />
+        {deferredRows.length ? (
+          <div className="scan-view-all-wrap">
+            <button type="button" className="scan-view-all-button">
+              {isEn
+                ? `View all ${deferredRows.length} opportunities`
+                : `查看全部 ${deferredRows.length} 个机会`}
+            </button>
+          </div>
+        ) : null}
+      </>
+    );
+  };
 
   return (
     <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
@@ -581,7 +837,10 @@ function ScanTerminalScreen() {
                 <button
                   key={item.zh}
                   type="button"
-                  className={`scan-topbar-tab ${index === 0 ? "active" : ""}`}
+                  className={`scan-topbar-tab ${
+                    TOP_SECTION_ORDER[index] === activeSection ? "active" : ""
+                  }`}
+                  onClick={() => setActiveSection(TOP_SECTION_ORDER[index])}
                 >
                   {isEn ? item.en : item.zh}
                 </button>
@@ -647,15 +906,50 @@ function ScanTerminalScreen() {
           <section className="scan-list-section">
             <div className="scan-list-header">
               <div className="scan-list-tabs">
-                <button type="button" className="active">
+                <button
+                  type="button"
+                  className={activeSection === "terminal" && resolvedView === "list" ? "active" : ""}
+                  onClick={() => {
+                    setActiveSection("terminal");
+                    setActiveView("list");
+                  }}
+                >
                   {isEn ? "Opportunity List" : "机会列表"}
                 </button>
-                <button type="button">{isEn ? "Distribution View" : "分布视图"}</button>
-                <button type="button">{isEn ? "Calendar View" : "日历视图"}</button>
+                <button
+                  type="button"
+                  className={resolvedView === "map" ? "active" : ""}
+                  onClick={() => {
+                    setActiveSection("terminal");
+                    setActiveView("map");
+                  }}
+                >
+                  {isEn ? "Distribution View" : "分布视图"}
+                </button>
+                <button
+                  type="button"
+                  className={resolvedView === "calendar" ? "active" : ""}
+                  onClick={() => {
+                    setActiveSection("terminal");
+                    setActiveView("calendar");
+                  }}
+                >
+                  {isEn ? "Calendar View" : "日历视图"}
+                </button>
               </div>
               <div className="scan-list-controls">
                 <div className="scan-sort-pill">
-                  {isEn ? "Sort: Score" : "排序：综合得分"}
+                  {isEn
+                    ? resolvedView === "calendar"
+                      ? "Sort: Date"
+                      : resolvedView === "map"
+                        ? "Sort: City Map"
+                        : "Sort: Score"
+                    : resolvedView === "calendar"
+                      ? "排序：日期"
+                      : resolvedView === "map"
+                        ? "排序：地图"
+                        : "排序：综合得分"}
                 </div>
                 <button type="button" className="scan-icon-pill" aria-label="menu">
                   <Menu size={16} />
@@ -671,22 +965,7 @@ function ScanTerminalScreen() {
                 <div className="scan-empty-copy">{error}</div>
               </div>
             ) : (
-              <>
-                <OpportunityTable
-                  rows={deferredRows}
-                  selectedRowId={selectedRowId}
-                  onSelectRow={(row) => setSelectedRowId(row.id)}
-                />
-                {deferredRows.length ? (
-                  <div className="scan-view-all-wrap">
-                    <button type="button" className="scan-view-all-button">
-                      {isEn
-                        ? `View all ${deferredRows.length} opportunities`
-                        : `查看全部 ${deferredRows.length} 个机会`}
-                    </button>
-                  </div>
-                ) : null}
-              </>
+              renderMainView()
             )}
           </section>
         </main>

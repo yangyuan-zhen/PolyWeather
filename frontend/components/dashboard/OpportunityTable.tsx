@@ -46,13 +46,22 @@ function formatWindowMinutes(value: number | null | undefined, locale: string) {
   return `剩余 ${hours}h ${remains}m`;
 }
 
-function formatAction(row: ScanOpportunityRow, locale: string) {
-  if (row.action) return row.action;
+function formatAction(
+  row: ScanOpportunityRow,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const formattedTarget = normalizeTemperatureLabel(row.target_label, tempSymbol);
+  if (row.action) {
+    return row.target_label
+      ? row.action.replace(String(row.target_label), formattedTarget || String(row.target_label))
+      : row.action;
+  }
   if (row.side === "yes") {
-    return `${locale === "en-US" ? "Buy Yes" : "买入 Yes"} ${row.target_label || ""}`.trim();
+    return `${locale === "en-US" ? "Buy Yes" : "买入 Yes"} ${formattedTarget || ""}`.trim();
   }
   if (row.side === "no") {
-    return `${locale === "en-US" ? "Buy No" : "买入 No"} ${row.target_label || ""}`.trim();
+    return `${locale === "en-US" ? "Buy No" : "买入 No"} ${formattedTarget || ""}`.trim();
   }
   return "--";
 }
@@ -223,6 +232,7 @@ export function OpportunityTable({
       <div className="scan-table-body">
         {rows.map((row, index) => {
           const phaseMeta = getWindowPhaseMeta(row, locale);
+          const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
           const localizedCityName = getLocalizedCityName(
             row.city,
             row.city_display_name || row.display_name || row.city,
@@ -265,16 +275,18 @@ export function OpportunityTable({
 
               <ProbabilityPreview row={row} locale={locale} />
 
-              <div className="scan-trade-cell">
-                <div className={`scan-trade-main ${row.side === "no" ? "sell" : "buy"}`}>
-                  {formatAction(row, locale)}
-                </div>
+                <div className="scan-trade-cell">
+                  <div className={`scan-trade-main ${row.side === "no" ? "sell" : "buy"}`}>
+                  {formatAction(row, locale, tempSymbol)}
+                  </div>
                 <div className="scan-trade-sub">
                   {formatPercent(row.ask != null ? row.ask * 100 : null)} →{" "}
                   {formatPercent(row.model_probability != null ? row.model_probability * 100 : null)}
                 </div>
                 <div className="scan-trade-note">
-                  {row.target_label || row.market_direction || "--"}
+                  {normalizeTemperatureLabel(row.target_label, tempSymbol) ||
+                    row.market_direction ||
+                    "--"}
                 </div>
               </div>
 
