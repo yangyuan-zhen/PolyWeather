@@ -5,7 +5,11 @@ import "leaflet/dist/leaflet.css";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import { useLeafletMap } from "@/hooks/useLeafletMap";
 
-export function MapCanvas() {
+export function MapCanvas({
+  onCitySelect,
+}: {
+  onCitySelect?: (cityName: string) => void;
+} = {}) {
   const store = useDashboardStore();
   const { containerRef } = useLeafletMap({
     cities: store.cities,
@@ -16,6 +20,7 @@ export function MapCanvas() {
     onMapInteractionChange: store.setMapInteractionActive,
     onRegisterStopMotion: store.registerMapStopMotion,
     onSelectCity: (cityName) => {
+      onCitySelect?.(cityName);
       void store.focusCity(cityName);
     },
     selectedCity: store.selectedCity,

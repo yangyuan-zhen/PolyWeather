@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Star } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import type {
   DistributionPreviewPoint,
@@ -255,7 +254,7 @@ export function OpportunityTable({
             >
               <div className="scan-rank-cell">
                 <div className={`scan-rank-circle ${scoreClass}`}>
-                  {row.rank || index + 1}
+                  {index + 1}
                 </div>
               </div>
 
@@ -302,10 +301,6 @@ export function OpportunityTable({
 
               <div className="scan-score-cell">
                 <ScoreRing score={row.final_score} />
-              </div>
-
-              <div className="scan-row-fav">
-                <Star size={16} />
               </div>
             </button>
           );

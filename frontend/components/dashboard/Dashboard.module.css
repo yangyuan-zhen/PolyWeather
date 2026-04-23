@@ -9510,8 +9510,8 @@
 
 .root :global(.scan-table-header) {
   display: grid;
-  grid-template-columns: 54px minmax(220px, 1.15fr) minmax(170px, 0.82fr) minmax(250px, 1.15fr) minmax(180px, 0.92fr) 120px 112px;
-  gap: 12px;
+  grid-template-columns: 46px minmax(180px, 1.08fr) minmax(132px, 0.72fr) minmax(220px, 1.08fr) minmax(150px, 0.82fr) 92px 82px;
+  gap: 10px;
   align-items: center;
   padding: 14px 18px;
   background: rgba(11, 23, 40, 0.98);
@@ -9527,6 +9527,21 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.root :global(.scan-table-body::-webkit-scrollbar),
+.root :global(.scan-calendar-view::-webkit-scrollbar),
+.root :global(.scan-detail-panel::-webkit-scrollbar) {
+  display: none;
+}
+
+.root :global(.scan-calendar-view),
+.root :global(.scan-detail-panel) {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .root :global(.scan-map-view),
@@ -9709,8 +9724,8 @@
 
 .root :global(.scan-table-row) {
   display: grid;
-  grid-template-columns: 54px minmax(220px, 1.15fr) minmax(170px, 0.82fr) minmax(250px, 1.15fr) minmax(180px, 0.92fr) 120px 112px;
-  gap: 12px;
+  grid-template-columns: 46px minmax(180px, 1.08fr) minmax(132px, 0.72fr) minmax(220px, 1.08fr) minmax(150px, 0.82fr) 92px 82px;
+  gap: 10px;
   align-items: center;
   min-height: 132px;
   padding: 14px 18px;
@@ -10043,6 +10058,35 @@
 .root :global(.scan-detail-analysis-button:hover) {
   background: rgba(23, 217, 139, 0.18);
   border-color: rgba(23, 217, 139, 0.4);
+}
+
+.root :global(.scan-detail-inline-analysis) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.root :global(.scan-detail-inline-analysis .models-section) {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.root :global(.scan-detail-inline-analysis .model-bars) {
+  padding: 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(90, 123, 166, 0.14);
+  background: rgba(10, 20, 35, 0.72);
+}
+
+.root :global(.scan-inline-analysis-state) {
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  color: #9bb0cb;
+  font-size: 13px;
+  background: rgba(10, 20, 35, 0.52);
 }
 
 .root :global(.scan-detail-section) {
