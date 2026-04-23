@@ -62,8 +62,8 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
             tension: 0.28,
           },
           {
-            backgroundColor: "#22d3ee",
-            borderColor: "#22d3ee",
+            backgroundColor: "#00E0A4",
+            borderColor: "#00E0A4",
             borderWidth: 0,
             data: chartData.datasets.metarPoints,
             fill: false,
@@ -84,7 +84,7 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
           legend: { display: false },
           tooltip: {
             backgroundColor: "rgba(15, 23, 42, 0.95)",
-            borderColor: "rgba(34, 211, 238, 0.25)",
+            borderColor: "rgba(0, 224, 164, 0.25)",
             borderWidth: 1,
           },
         },
@@ -153,9 +153,13 @@ export function DetailPanel() {
   const isAuthenticated = store.proAccess.authenticated;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
-  const isOverlayOpen = Boolean(store.futureModalDate) || store.historyState.isOpen;
-  const isVisible = store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
-  const hasBasicPanelContent = Boolean(detail || selectedSummary || selectedCityItem);
+  const isOverlayOpen =
+    Boolean(store.futureModalDate) || store.historyState.isOpen;
+  const isVisible =
+    store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
+  const hasBasicPanelContent = Boolean(
+    detail || selectedSummary || selectedCityItem,
+  );
   const panelDisplayName =
     detail?.display_name ||
     selectedSummary?.display_name ||
@@ -196,8 +200,8 @@ export function DetailPanel() {
   const heroAirportLabel = detail?.risk?.airport || basicAirportLabel;
   const isSparsePanelDetail = Boolean(
     detail &&
-      (detail.detail_depth !== "full" ||
-        (detail.forecast?.daily?.length ?? 0) <= 1),
+    (detail.detail_depth !== "full" ||
+      (detail.forecast?.daily?.length ?? 0) <= 1),
   );
   const isPanelSyncing = store.loadingState.cityDetail;
   const isShowingCachedDetailDuringSync = Boolean(detail && isPanelSyncing);
@@ -249,7 +253,10 @@ export function DetailPanel() {
 
     if (!isVisible) {
       panel.setAttribute("inert", "");
-      if (typeof document !== "undefined" && panel.contains(document.activeElement)) {
+      if (
+        typeof document !== "undefined" &&
+        panel.contains(document.activeElement)
+      ) {
         const active = document.activeElement;
         if (active instanceof HTMLElement) {
           active.blur();
@@ -288,7 +295,11 @@ export function DetailPanel() {
 
     return () => {
       canceled = true;
-      if (win && idleId != null && typeof win.cancelIdleCallback === "function") {
+      if (
+        win &&
+        idleId != null &&
+        typeof win.cancelIdleCallback === "function"
+      ) {
         win.cancelIdleCallback(idleId);
       }
       if (timeoutId != null && typeof window !== "undefined") {
@@ -298,7 +309,10 @@ export function DetailPanel() {
   }, [detail, isVisible]);
 
   return (
-    <aside ref={panelRef} className={clsx("detail-panel", isVisible && "visible")}>
+    <aside
+      ref={panelRef}
+      className={clsx("detail-panel", isVisible && "visible")}
+    >
       <div className="panel-header">
         <button
           type="button"
@@ -311,7 +325,7 @@ export function DetailPanel() {
         >
           ×
         </button>
-          <div className="panel-title-area">
+        <div className="panel-title-area">
           <div className="panel-title-stack">
             <div className="panel-overline">
               <span>{locale === "en-US" ? "City briefing" : "城市简报"}</span>
@@ -321,7 +335,11 @@ export function DetailPanel() {
             <h2>{panelDisplayName}</h2>
           </div>
           {isPanelSyncing && (
-            <div className="panel-loading-hint" role="status" aria-live="polite">
+            <div
+              className="panel-loading-hint"
+              role="status"
+              aria-live="polite"
+            >
               <span className="panel-loading-spinner" aria-hidden="true" />
               <span>
                 {locale === "en-US"
@@ -338,8 +356,12 @@ export function DetailPanel() {
             <span className={clsx("risk-badge", panelRiskLevel)}>
               {getRiskBadgeLabel(panelRiskLevel, locale)}
             </span>
-            <span className="panel-meta-chip panel-meta-chip-strong">{heroSettlementLabel}</span>
-            <span className="panel-meta-chip panel-meta-chip-muted">{heroAirportLabel}</span>
+            <span className="panel-meta-chip panel-meta-chip-strong">
+              {heroSettlementLabel}
+            </span>
+            <span className="panel-meta-chip panel-meta-chip-muted">
+              {heroAirportLabel}
+            </span>
           </div>
           <div className="panel-actions">
             {marketUrl ? (
@@ -365,12 +387,16 @@ export function DetailPanel() {
                 !isPro && "pro-locked",
               )}
               title={
-                isPro ? t("detail.todayAnalysis") : `${t("detail.todayAnalysis")} (Pro)`
+                isPro
+                  ? t("detail.todayAnalysis")
+                  : `${t("detail.todayAnalysis")} (Pro)`
               }
               onClick={() => handleFeatureAccess("today")}
               disabled={!store.selectedCity}
             >
-              {isPro ? t("detail.todayAnalysis") : `${t("detail.todayAnalysis")} · Pro`}
+              {isPro
+                ? t("detail.todayAnalysis")
+                : `${t("detail.todayAnalysis")} · Pro`}
             </button>
             <button
               type="button"
@@ -379,7 +405,9 @@ export function DetailPanel() {
                 "panel-action-button-secondary",
                 !isPro && "pro-locked",
               )}
-              title={isPro ? t("detail.history") : `${t("detail.history")} (Pro)`}
+              title={
+                isPro ? t("detail.history") : `${t("detail.history")} (Pro)`
+              }
               onClick={() => handleFeatureAccess("history")}
               disabled={!store.selectedCity}
             >
@@ -389,7 +417,12 @@ export function DetailPanel() {
         </div>
       </div>
 
-      <div className={clsx("panel-body", isShowingCachedDetailDuringSync && "is-syncing")}>
+      <div
+        className={clsx(
+          "panel-body",
+          isShowingCachedDetailDuringSync && "is-syncing",
+        )}
+      >
         {isShowingCachedDetailDuringSync ? (
           <div className="panel-sync-blocker" role="status" aria-live="polite">
             <span className="panel-loading-spinner" aria-hidden="true" />
@@ -400,101 +433,121 @@ export function DetailPanel() {
             </span>
           </div>
         ) : null}
-        <div className={clsx(isShowingCachedDetailDuringSync && "panel-content-stale")}>
-        {!hasBasicPanelContent ? (
-          <section className="detail-summary-shell detail-empty-state">
-            <div className="detail-section-head">
-              <div>
-                <div className="detail-section-kicker">
-                  {locale === "en-US" ? "No city selected" : "尚未选择城市"}
-                </div>
-                <h3>{locale === "en-US" ? "Pick a city to start." : "先选择一个城市。"}</h3>
-              </div>
-            </div>
-            <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
-              {store.loadingState.cityDetail ? t("detail.loading") : t("detail.emptyHint")}
-            </div>
-          </section>
-        ) : !detail ? (
-          <div className="detail-mini-meta" role="status" aria-live="polite">
-            {store.loadingState.cityDetail
-              ? locale === "en-US"
-                ? "Loading city cards..."
-                : "正在加载城市卡片..."
-              : locale === "en-US"
-                ? "City cards will appear here."
-                : "城市卡片会显示在这里。"}
-          </div>
-        ) : (
-          <>
-            <section className="detail-structured-section">
+        <div
+          className={clsx(
+            isShowingCachedDetailDuringSync && "panel-content-stale",
+          )}
+        >
+          {!hasBasicPanelContent ? (
+            <section className="detail-summary-shell detail-empty-state">
               <div className="detail-section-head">
                 <div>
-                  <div className="detail-section-kicker">{locale === "en-US" ? "Profile" : "城市画像"}</div>
-                  <h3>{t("detail.profile")}</h3>
+                  <div className="detail-section-kicker">
+                    {locale === "en-US" ? "No city selected" : "尚未选择城市"}
+                  </div>
+                  <h3>
+                    {locale === "en-US"
+                      ? "Pick a city to start."
+                      : "先选择一个城市。"}
+                  </h3>
                 </div>
               </div>
-              <div className="detail-grid">
-                {profileStats.map((item) => (
-                  <article key={item.label} className="detail-card">
-                    <span className="detail-label">{item.label}</span>
-                    <span className="detail-value">{item.value}</span>
-                  </article>
-                ))}
+              <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
+                {store.loadingState.cityDetail
+                  ? t("detail.loading")
+                  : t("detail.emptyHint")}
               </div>
             </section>
-
-            {officialLinks.length > 0 ? (
+          ) : !detail ? (
+            <div className="detail-mini-meta" role="status" aria-live="polite">
+              {store.loadingState.cityDetail
+                ? locale === "en-US"
+                  ? "Loading city cards..."
+                  : "正在加载城市卡片..."
+                : locale === "en-US"
+                  ? "City cards will appear here."
+                  : "城市卡片会显示在这里。"}
+            </div>
+          ) : (
+            <>
               <section className="detail-structured-section">
                 <div className="detail-section-head">
                   <div>
                     <div className="detail-section-kicker">
-                      {locale === "en-US" ? "Primary references" : "官方参考"}
+                      {locale === "en-US" ? "Profile" : "城市画像"}
                     </div>
-                    <h3>{locale === "en-US" ? "Settlement and observation references" : "结算与观测参考来源"}</h3>
+                    <h3>{t("detail.profile")}</h3>
                   </div>
                 </div>
-                <p className="detail-source-note">
-                  {locale === "en-US"
-                    ? "AGENCY = national meteorological service, METAR = airport observation, AIRPORT = airport official page."
-                    : "AGENCY = 国家气象机构，METAR = 机场实测报文，AIRPORT = 机场官网页面。"}
-                </p>
-                <div className="detail-source-list">
-                  {officialLinks.map((link) => (
-                    <a
-                      key={`${link.label}-${link.href}`}
-                      className="detail-source-link"
-                      href={link.href}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      <span className="detail-source-kind">{link.kind.toUpperCase()}</span>
-                      <span className="detail-source-label">{link.label}</span>
-                    </a>
+                <div className="detail-grid">
+                  {profileStats.map((item) => (
+                    <article key={item.label} className="detail-card">
+                      <span className="detail-label">{item.label}</span>
+                      <span className="detail-value">{item.value}</span>
+                    </article>
                   ))}
                 </div>
               </section>
-            ) : null}
 
-            <section className="detail-structured-section rounded-2xl">
-              <div className="detail-section-head">
-                <div>
-                  <div className="detail-section-kicker">
-                    {locale === "en-US" ? "Mini trend" : "温度微趋势"}
+              {officialLinks.length > 0 ? (
+                <section className="detail-structured-section">
+                  <div className="detail-section-head">
+                    <div>
+                      <div className="detail-section-kicker">
+                        {locale === "en-US" ? "Primary references" : "官方参考"}
+                      </div>
+                      <h3>
+                        {locale === "en-US"
+                          ? "Settlement and observation references"
+                          : "结算与观测参考来源"}
+                      </h3>
+                    </div>
                   </div>
-                  <h3>{t("detail.todayMiniTrend")}</h3>
-                </div>
-              </div>
-              {heavyContentReady ? (
-                <DetailMiniTemperatureChart detail={detail} />
-              ) : (
-                <div className="detail-mini-meta">{t("detail.loading")}</div>
-              )}
-            </section>
+                  <p className="detail-source-note">
+                    {locale === "en-US"
+                      ? "AGENCY = national meteorological service, METAR = airport observation, AIRPORT = airport official page."
+                      : "AGENCY = 国家气象机构，METAR = 机场实测报文，AIRPORT = 机场官网页面。"}
+                  </p>
+                  <div className="detail-source-list">
+                    {officialLinks.map((link) => (
+                      <a
+                        key={`${link.label}-${link.href}`}
+                        className="detail-source-link"
+                        href={link.href}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        <span className="detail-source-kind">
+                          {link.kind.toUpperCase()}
+                        </span>
+                        <span className="detail-source-label">
+                          {link.label}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
 
-            {heavyContentReady ? <ForecastTable /> : null}
-          </>
-        )}
+              <section className="detail-structured-section rounded-2xl">
+                <div className="detail-section-head">
+                  <div>
+                    <div className="detail-section-kicker">
+                      {locale === "en-US" ? "Mini trend" : "温度微趋势"}
+                    </div>
+                    <h3>{t("detail.todayMiniTrend")}</h3>
+                  </div>
+                </div>
+                {heavyContentReady ? (
+                  <DetailMiniTemperatureChart detail={detail} />
+                ) : (
+                  <div className="detail-mini-meta">{t("detail.loading")}</div>
+                )}
+              </section>
+
+              {heavyContentReady ? <ForecastTable /> : null}
+            </>
+          )}
         </div>
       </div>
     </aside>

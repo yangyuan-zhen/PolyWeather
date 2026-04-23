@@ -36,7 +36,10 @@ import {
   normalizeObservationSourceCode,
   normalizeObservationSourceLabel,
 } from "@/lib/source-labels";
-import type { IntradayMeteorologySignal, MarketScan } from "@/lib/dashboard-types";
+import type {
+  IntradayMeteorologySignal,
+  MarketScan,
+} from "@/lib/dashboard-types";
 
 function normalizeMarketValue(value?: number | null) {
   if (value == null) return null;
@@ -182,7 +185,9 @@ function parsePercentFromText(value?: string | number | null) {
 }
 
 function formatConfidenceLabel(value?: string | null, locale = "zh-CN") {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "high") return locale === "en-US" ? "High" : "高";
   if (normalized === "medium") return locale === "en-US" ? "Medium" : "中";
   if (normalized === "low") return locale === "en-US" ? "Low" : "低";
@@ -190,21 +195,29 @@ function formatConfidenceLabel(value?: string | null, locale = "zh-CN") {
 }
 
 function formatSignalDirection(value?: string | null, locale = "zh-CN") {
-  const normalized = String(value || "").trim().toLowerCase();
-  if (normalized === "support") return locale === "en-US" ? "Support" : "支持升温";
-  if (normalized === "suppress") return locale === "en-US" ? "Suppress" : "压制峰值";
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (normalized === "support")
+    return locale === "en-US" ? "Support" : "支持升温";
+  if (normalized === "suppress")
+    return locale === "en-US" ? "Suppress" : "压制峰值";
   return locale === "en-US" ? "Neutral" : "中性";
 }
 
 function formatSignalStrength(value?: string | null, locale = "zh-CN") {
-  const normalized = String(value || "").trim().toLowerCase();
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
   if (normalized === "strong") return locale === "en-US" ? "Strong" : "强";
   if (normalized === "medium") return locale === "en-US" ? "Medium" : "中";
   return locale === "en-US" ? "Weak" : "弱";
 }
 
 function signalTone(signal?: IntradayMeteorologySignal | null) {
-  const direction = String(signal?.direction || "").trim().toLowerCase();
+  const direction = String(signal?.direction || "")
+    .trim()
+    .toLowerCase();
   if (direction === "support") return "cyan";
   if (direction === "suppress") return "amber";
   return "blue";
@@ -261,7 +274,7 @@ function getTrendMetricVisual(metric: {
     return {
       mode: "center" as const,
       percent: clamp(50 + (numeric / 4) * 50, 0, 100),
-      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+      tone: numeric >= 0 ? ("warm" as const) : ("cold" as const),
     };
   }
 
@@ -269,7 +282,7 @@ function getTrendMetricVisual(metric: {
     return {
       mode: "center" as const,
       percent: clamp(50 + (numeric / 3) * 50, 0, 100),
-      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+      tone: numeric >= 0 ? ("warm" as const) : ("cold" as const),
     };
   }
 
@@ -277,7 +290,7 @@ function getTrendMetricVisual(metric: {
     return {
       mode: "center" as const,
       percent: clamp(50 + (numeric / 4) * 50, 0, 100),
-      tone: numeric >= 0 ? "warm" as const : "cold" as const,
+      tone: numeric >= 0 ? ("warm" as const) : ("cold" as const),
     };
   }
 
@@ -285,7 +298,7 @@ function getTrendMetricVisual(metric: {
     return {
       mode: "center" as const,
       percent: clamp(50 + (numeric / 40) * 50, 0, 100),
-      tone: numeric >= 0 ? "cold" as const : "warm" as const,
+      tone: numeric >= 0 ? ("cold" as const) : ("warm" as const),
     };
   }
 
@@ -303,7 +316,8 @@ function DailyTemperatureChart({
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
   const view = detail ? getFutureModalView(detail, dateStr, locale) : null;
-  const isToday = forceToday || (detail ? dateStr === detail.local_date : false);
+  const isToday =
+    forceToday || (detail ? dateStr === detail.local_date : false);
   const todayChartData = useMemo(
     () => (detail && isToday ? getTemperatureChartData(detail, locale) : null),
     [detail, isToday, locale],
@@ -363,8 +377,8 @@ function DailyTemperatureChart({
       }
 
       datasets.push({
-        backgroundColor: "#22d3ee",
-        borderColor: "#22d3ee",
+        backgroundColor: "#00E0A4",
+        borderColor: "#00E0A4",
         borderWidth: 0,
         data: todayChartData.datasets.metarSeries,
         fill: false,
@@ -385,8 +399,7 @@ function DailyTemperatureChart({
           borderWidth: 1,
           data: todayChartData.datasets.airportMetarSeries,
           fill: false,
-          label:
-            locale === "en-US" ? "Airport METAR" : "机场 METAR",
+          label: locale === "en-US" ? "Airport METAR" : "机场 METAR",
           order: 0,
           parsing: false,
           pointHoverRadius: 6,
@@ -416,7 +429,7 @@ function DailyTemperatureChart({
         Math.abs(todayChartData.datasets.offset) > 0.3
       ) {
         datasets.push({
-          borderColor: "rgba(99, 102, 241, 0.2)",
+          borderColor: "rgba(123, 97, 255, 0.2)",
           borderDash: [2, 4],
           borderWidth: 1,
           data: todayChartData.datasets.tempsSeries,
@@ -484,7 +497,8 @@ function DailyTemperatureChart({
                 filter: (legendItem, chartData) => {
                   const text = String(legendItem.text || "");
                   if (!text) return false;
-                  if (text === "TAF Timing" || text === "TAF 时段") return false;
+                  if (text === "TAF Timing" || text === "TAF 时段")
+                    return false;
                   if (!text.includes("DEB")) return true;
 
                   const firstDebIndex = (chartData.datasets || []).findIndex(
@@ -497,17 +511,27 @@ function DailyTemperatureChart({
             },
             tooltip: {
               backgroundColor: "rgba(15, 23, 42, 0.96)",
-              borderColor: "rgba(34, 211, 238, 0.2)",
+              borderColor: "rgba(0, 224, 164, 0.2)",
               borderWidth: 1,
               callbacks: {
                 title: (items) => {
                   const rawX = items?.[0]?.parsed?.x;
-                  return rawX != null ? formatMinuteAxisLabel(Number(rawX)) : "";
+                  return rawX != null
+                    ? formatMinuteAxisLabel(Number(rawX))
+                    : "";
                 },
                 label: (ctx) => {
                   const label = String(ctx.dataset.label || "");
                   const raw = ctx.raw as
-                    | { marker?: { summary?: string; markerType?: string; displayType?: string; isCurrent?: boolean; isPeakWindow?: boolean } }
+                    | {
+                        marker?: {
+                          summary?: string;
+                          markerType?: string;
+                          displayType?: string;
+                          isCurrent?: boolean;
+                          isPeakWindow?: boolean;
+                        };
+                      }
                     | undefined;
                   if (
                     label === "TAF Timing" ||
@@ -539,7 +563,9 @@ function DailyTemperatureChart({
                               : "峰值窗口 TAF"
                             : label;
                     return `${prefix}: ${
-                      markerType ? summary.replace(markerType, displayType) : summary
+                      markerType
+                        ? summary.replace(markerType, displayType)
+                        : summary
                     }`;
                   }
                   const value = ctx.parsed.y;
@@ -598,8 +624,8 @@ function DailyTemperatureChart({
       data: {
         datasets: [
           {
-            backgroundColor: "rgba(34, 211, 238, 0.08)",
-            borderColor: "#22d3ee",
+            backgroundColor: "rgba(0, 224, 164, 0.08)",
+            borderColor: "#00E0A4",
             data: view.slice.map((point) => point.temp),
             fill: false,
             label:
@@ -632,7 +658,7 @@ function DailyTemperatureChart({
           },
           tooltip: {
             backgroundColor: "rgba(15, 23, 42, 0.96)",
-            borderColor: "rgba(34, 211, 238, 0.2)",
+            borderColor: "rgba(0, 224, 164, 0.2)",
             borderWidth: 1,
             callbacks: {
               label: (ctx) =>
@@ -685,8 +711,11 @@ export function FutureForecastModal() {
   const dateStr = store.futureModalDate;
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
-  const [showDeferredTodaySections, setShowDeferredTodaySections] = useState(false);
-  const [freshMarketScan, setFreshMarketScan] = useState<MarketScan | null>(null);
+  const [showDeferredTodaySections, setShowDeferredTodaySections] =
+    useState(false);
+  const [freshMarketScan, setFreshMarketScan] = useState<MarketScan | null>(
+    null,
+  );
 
   if (!detail || !dateStr) return null;
 
@@ -728,7 +757,8 @@ export function FutureForecastModal() {
     (store.forecastModalMode == null && dateStr === detail.local_date);
   const detailDepth = detail.detail_depth || "full";
   const isFullDetailReady = detailDepth === "full";
-  const isStructureSyncing = store.loadingState.futureDeep || !isFullDetailReady;
+  const isStructureSyncing =
+    store.loadingState.futureDeep || !isFullDetailReady;
   const isAnyLayerSyncing = isStructureSyncing;
   const isTodayBlockingRefresh = isToday && isStructureSyncing;
   const activeMarketScan = freshMarketScan || detail.market_scan || null;
@@ -763,7 +793,10 @@ export function FutureForecastModal() {
 
     refreshMarketScan();
     intervalId = setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
         return;
       }
       refreshMarketScan();
@@ -804,7 +837,10 @@ export function FutureForecastModal() {
     () => getProbabilityView(detail, dateStr),
     [dateStr, detail],
   );
-  const modelView = useMemo(() => getModelView(detail, dateStr), [dateStr, detail]);
+  const modelView = useMemo(
+    () => getModelView(detail, dateStr),
+    [dateStr, detail],
+  );
   const probabilityEngineKey = String(probabilityView?.engine || "")
     .trim()
     .toLowerCase();
@@ -816,12 +852,16 @@ export function FutureForecastModal() {
   const hasLgbmProbability = useMemo(
     () =>
       Object.keys(modelView?.models || {}).some((name) =>
-        String(name || "").toLowerCase().replace(/[\s_/-]/g, "").includes("lgbm"),
+        String(name || "")
+          .toLowerCase()
+          .replace(/[\s_/-]/g, "")
+          .includes("lgbm"),
       ),
     [modelView],
   );
   const hasEmosProbability =
-    probabilityEngineKey === "emos" || probabilityCalibrationMode.includes("emos");
+    probabilityEngineKey === "emos" ||
+    probabilityCalibrationMode.includes("emos");
   const probabilityEngineLabel = hasLgbmProbability
     ? locale === "en-US"
       ? "LGBM"
@@ -877,7 +917,9 @@ export function FutureForecastModal() {
     if (projected == null || !Number.isFinite(projected)) return null;
 
     const distances = [bounds.lower, bounds.upper]
-      .filter((value): value is number => value != null && Number.isFinite(value))
+      .filter(
+        (value): value is number => value != null && Number.isFinite(value),
+      )
       .map((value) => ({
         boundary: value,
         gap: Math.abs(projected - value),
@@ -911,7 +953,15 @@ export function FutureForecastModal() {
       tone,
       value: `${nearest.gap.toFixed(1)}${detail.temp_symbol}`,
     };
-  }, [detail.deb?.prediction, detail.temp_symbol, isToday, locale, paceView, showDeferredTodaySections, topProbabilityBucket]);
+  }, [
+    detail.deb?.prediction,
+    detail.temp_symbol,
+    isToday,
+    locale,
+    paceView,
+    showDeferredTodaySections,
+    topProbabilityBucket,
+  ]);
   const peakWindowStateView = useMemo(() => {
     if (!showDeferredTodaySections) return null;
     if (!isToday || !paceView) return null;
@@ -948,7 +998,15 @@ export function FutureForecastModal() {
       tone,
       value: paceView.peakWindowText,
     };
-  }, [detail.local_time, detail.peak?.first_h, detail.peak?.last_h, isToday, locale, paceView, showDeferredTodaySections]);
+  }, [
+    detail.local_time,
+    detail.peak?.first_h,
+    detail.peak?.last_h,
+    isToday,
+    locale,
+    paceView,
+    showDeferredTodaySections,
+  ]);
   const networkLeadView = useMemo(() => {
     if (!showDeferredTodaySections) return null;
     if (!isToday) return null;
@@ -958,8 +1016,12 @@ export function FutureForecastModal() {
     const leaderLabel =
       String(leadSignal?.leader_station_label || "").trim() ||
       String(leadSignal?.leader_station_code || "").trim();
-    const leaderSyncStatus = String(leadSignal?.leader_sync_status || "").trim().toLowerCase();
-    const leaderSyncDelta = Number(leadSignal?.leader_time_delta_vs_anchor_minutes);
+    const leaderSyncStatus = String(leadSignal?.leader_sync_status || "")
+      .trim()
+      .toLowerCase();
+    const leaderSyncDelta = Number(
+      leadSignal?.leader_time_delta_vs_anchor_minutes,
+    );
     const syncNote =
       leaderSyncStatus === "near_realtime" || leaderSyncStatus === "lagged"
         ? Number.isFinite(leaderSyncDelta)
@@ -987,8 +1049,7 @@ export function FutureForecastModal() {
           : locale === "en-US"
             ? "Tracking network"
             : "与站网齐平";
-    const tone =
-      delta <= -0.4 ? "amber" : delta >= 0.4 ? "cyan" : "blue";
+    const tone = delta <= -0.4 ? "amber" : delta >= 0.4 ? "cyan" : "blue";
     const note =
       delta <= -0.4
         ? locale === "en-US"
@@ -1008,7 +1069,14 @@ export function FutureForecastModal() {
       tone,
       value: `${delta > 0 ? "+" : ""}${delta.toFixed(1)}${detail.temp_symbol}`,
     };
-  }, [detail.airport_vs_network_delta, detail.network_lead_signal, detail.temp_symbol, isToday, locale, showDeferredTodaySections]);
+  }, [
+    detail.airport_vs_network_delta,
+    detail.network_lead_signal,
+    detail.temp_symbol,
+    isToday,
+    locale,
+    showDeferredTodaySections,
+  ]);
   const isNoaaSettlement =
     detail.current?.settlement_source === "noaa" ||
     detail.current?.settlement_source_label === "NOAA";
@@ -1056,7 +1124,8 @@ export function FutureForecastModal() {
         : "当前拿不到可用的模型分歧。";
     }
     const modelEntries = Object.entries(modelView?.models || {}).filter(
-      ([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)),
+      ([, value]) =>
+        value !== null && value !== undefined && Number.isFinite(Number(value)),
     );
     if (modelEntries.length === 1) {
       const [singleModelName, singleModelValue] = modelEntries[0];
@@ -1072,9 +1141,12 @@ export function FutureForecastModal() {
   const tafSignal = detail.taf?.signal || {};
   const upperAirCue = useMemo(() => {
     if (!showDeferredTodaySections) return null;
-    if (!isToday || (!upperAirSignal.source && !tafSignal.available)) return null;
+    if (!isToday || (!upperAirSignal.source && !tafSignal.available))
+      return null;
 
-    const setup = String(upperAirSignal.heating_setup || "neutral").toLowerCase();
+    const setup = String(
+      upperAirSignal.heating_setup || "neutral",
+    ).toLowerCase();
     const tafSuppression = String(
       tafSignal.suppression_level || "low",
     ).toLowerCase();
@@ -1228,7 +1300,9 @@ export function FutureForecastModal() {
     if (!showDeferredTodaySections) return [] as string[];
     const commentary = detail.dynamic_commentary || {};
     const headline = String(
-      locale === "en-US" ? commentary.headline_en || "" : commentary.headline_zh || "",
+      locale === "en-US"
+        ? commentary.headline_en || ""
+        : commentary.headline_zh || "",
     ).trim();
     const bullets = (
       locale === "en-US" ? commentary.bullets_en : commentary.bullets_zh
@@ -1275,9 +1349,19 @@ export function FutureForecastModal() {
       );
     }
     return lines.slice(0, 3);
-  }, [boundaryRiskView, isToday, locale, localizedAiCommentaryLines, networkLeadView, paceView, showDeferredTodaySections]);
+  }, [
+    boundaryRiskView,
+    isToday,
+    locale,
+    localizedAiCommentaryLines,
+    networkLeadView,
+    paceView,
+    showDeferredTodaySections,
+  ]);
   const intradayMeteorology = detail.intraday_meteorology || {};
-  const meteorologySignals = Array.isArray(intradayMeteorology.signal_contributions)
+  const meteorologySignals = Array.isArray(
+    intradayMeteorology.signal_contributions,
+  )
     ? intradayMeteorology.signal_contributions
     : [];
   const invalidationRules = localizedList(
@@ -1382,40 +1466,38 @@ export function FutureForecastModal() {
     {
       key: "base",
       state: isAnyLayerSyncing ? "syncing" : "ready",
-      label:
-        isAnyLayerSyncing
-          ? locale === "en-US"
-            ? "Refreshing base analysis"
-            : "正在刷新基础分析"
-          : locale === "en-US" ? "Base analysis ready" : "基础分析已加载",
-      note:
-        isAnyLayerSyncing
-          ? locale === "en-US"
-            ? "Latest anchor readings and forecast curve are being rebuilt."
-            : "正在重建最新锚点读数和预测曲线。"
-          : locale === "en-US"
-            ? "Forecast curve, anchor state, and the core intraday view are available."
-            : "预测曲线、锚点状态和核心日内视图已经可用。",
+      label: isAnyLayerSyncing
+        ? locale === "en-US"
+          ? "Refreshing base analysis"
+          : "正在刷新基础分析"
+        : locale === "en-US"
+          ? "Base analysis ready"
+          : "基础分析已加载",
+      note: isAnyLayerSyncing
+        ? locale === "en-US"
+          ? "Latest anchor readings and forecast curve are being rebuilt."
+          : "正在重建最新锚点读数和预测曲线。"
+        : locale === "en-US"
+          ? "Forecast curve, anchor state, and the core intraday view are available."
+          : "预测曲线、锚点状态和核心日内视图已经可用。",
     },
     {
       key: "market",
       state: isAnyLayerSyncing ? "syncing" : "ready",
-      label:
-        isAnyLayerSyncing
-          ? locale === "en-US"
-            ? "Refreshing probability layer"
-            : "正在刷新概率层"
-          : locale === "en-US"
-            ? "Probability layer ready"
-            : "概率层已加载",
-      note:
-        isAnyLayerSyncing
-          ? locale === "en-US"
-            ? "Model spread and calibrated buckets are updating."
-            : "模型分歧和校准概率桶正在更新。"
-          : locale === "en-US"
-            ? `Probability buckets are derived from the ${probabilityEngineLabel} layer.`
-            : `概率桶当前由 ${probabilityEngineLabel} 层推导。`,
+      label: isAnyLayerSyncing
+        ? locale === "en-US"
+          ? "Refreshing probability layer"
+          : "正在刷新概率层"
+        : locale === "en-US"
+          ? "Probability layer ready"
+          : "概率层已加载",
+      note: isAnyLayerSyncing
+        ? locale === "en-US"
+          ? "Model spread and calibrated buckets are updating."
+          : "模型分歧和校准概率桶正在更新。"
+        : locale === "en-US"
+          ? `Probability buckets are derived from the ${probabilityEngineLabel} layer.`
+          : `概率桶当前由 ${probabilityEngineLabel} 层推导。`,
     },
   ] as const;
 
@@ -1450,7 +1532,9 @@ export function FutureForecastModal() {
           <div className="modal-header">
             <div className="modal-title-stack">
               <div className="modal-overline">
-                <span>{locale === "en-US" ? "Analysis workspace" : "分析工作台"}</span>
+                <span>
+                  {locale === "en-US" ? "Analysis workspace" : "分析工作台"}
+                </span>
                 <span className="modal-overline-sep">•</span>
                 <span>{detail.display_name.toUpperCase()}</span>
               </div>
@@ -1534,8 +1618,15 @@ export function FutureForecastModal() {
             )}
           >
             {isTodayBlockingRefresh && (
-              <div className="future-v2-refresh-lock" role="status" aria-live="assertive">
-                <span className="future-v2-refresh-spinner" aria-hidden="true" />
+              <div
+                className="future-v2-refresh-lock"
+                role="status"
+                aria-live="assertive"
+              >
+                <span
+                  className="future-v2-refresh-spinner"
+                  aria-hidden="true"
+                />
                 <div>
                   <strong>
                     {locale === "en-US"
@@ -1555,19 +1646,27 @@ export function FutureForecastModal() {
                 <div className="future-v2-meteorology-copy">
                   <div className="future-v2-anchor-row">
                     <div className="modal-section-kicker">
-                      {locale === "en-US" ? "Professional meteorology read" : "专业气象判断"}
+                      {locale === "en-US"
+                        ? "Professional meteorology read"
+                        : "专业气象判断"}
                     </div>
-                    <span className="future-v2-anchor-source">{anchorSourceLabel}</span>
+                    <span className="future-v2-anchor-source">
+                      {anchorSourceLabel}
+                    </span>
                   </div>
                   <h3>{meteorologyHeadline}</h3>
                   <p className="future-v2-anchor-rule">{anchorRuleText}</p>
                   <div className="future-v2-meteorology-meta">
                     <span>
                       {locale === "en-US" ? "Confidence" : "置信度"} ·{" "}
-                      {formatConfidenceLabel(intradayMeteorology.confidence, locale)}
+                      {formatConfidenceLabel(
+                        intradayMeteorology.confidence,
+                        locale,
+                      )}
                     </span>
                     <span>
-                      {locale === "en-US" ? "Path state" : "路径状态"} · {pathStatus}
+                      {locale === "en-US" ? "Path state" : "路径状态"} ·{" "}
+                      {pathStatus}
                     </span>
                     <span>
                       {nextObservationLabel} · {nextObservationTime}
@@ -1587,14 +1686,20 @@ export function FutureForecastModal() {
                     </div>
                     <div>
                       <span>{locale === "en-US" ? "Upside" : "上修"}</span>
-                      <strong>{intradayMeteorology.upside_bucket || "--"}</strong>
+                      <strong>
+                        {intradayMeteorology.upside_bucket || "--"}
+                      </strong>
                     </div>
                     <div>
                       <span>{locale === "en-US" ? "Downside" : "下修"}</span>
-                      <strong>{intradayMeteorology.downside_bucket || "--"}</strong>
+                      <strong>
+                        {intradayMeteorology.downside_bucket || "--"}
+                      </strong>
                     </div>
                     <div>
-                      <span>{locale === "en-US" ? "Gap to base" : "距基准还差"}</span>
+                      <span>
+                        {locale === "en-US" ? "Gap to base" : "距基准还差"}
+                      </span>
                       <strong>{gapToBaseText}</strong>
                     </div>
                   </div>
@@ -1637,9 +1742,7 @@ export function FutureForecastModal() {
                   <section className="future-v2-card future-v2-hero-card">
                     <div className="future-v2-card-head">
                       <h3 className="future-v2-hero-title">
-                        {locale === "en-US"
-                          ? "Anchor Status"
-                          : "锚点状态"}
+                        {locale === "en-US" ? "Anchor Status" : "锚点状态"}
                       </h3>
                       <div className="future-v2-card-kicker">
                         {locale === "en-US"
@@ -1669,9 +1772,7 @@ export function FutureForecastModal() {
                       <div className="future-v2-daylight">
                         <div className="future-v2-daylight-head">
                           <span>
-                            {locale === "en-US"
-                              ? "Solar Window"
-                              : "昼夜进度"}
+                            {locale === "en-US" ? "Solar Window" : "昼夜进度"}
                           </span>
                           <strong>
                             {locale === "en-US"
@@ -1684,7 +1785,9 @@ export function FutureForecastModal() {
                           style={
                             {
                               "--daylight-progress": `${daylightProgress.percent}%`,
-                            } as CSSProperties & { "--daylight-progress": string }
+                            } as CSSProperties & {
+                              "--daylight-progress": string;
+                            }
                           }
                         />
                         <div className="future-v2-daylight-times">
@@ -1735,9 +1838,7 @@ export function FutureForecastModal() {
                         <span>
                           {locale === "en-US" ? "Sunset" : "日落时间"}
                         </span>
-                        <strong>
-                          {detail.forecast?.sunset || "--"}
-                        </strong>
+                        <strong>{detail.forecast?.sunset || "--"}</strong>
                       </div>
                     </div>
                   </section>
@@ -1835,10 +1936,17 @@ export function FutureForecastModal() {
                         </div>
                       </div>
                       <div className="future-v2-pace-signal-grid">
-                        {[boundaryRiskView, peakWindowStateView, networkLeadView]
+                        {[
+                          boundaryRiskView,
+                          peakWindowStateView,
+                          networkLeadView,
+                        ]
                           .filter((item) => item != null)
                           .map((item) => (
-                            <div key={item.label} className="future-v2-pace-signal-card">
+                            <div
+                              key={item.label}
+                              className="future-v2-pace-signal-card"
+                            >
                               <div className="future-v2-signal-head">
                                 <span>{item.label}</span>
                                 <em
@@ -1879,7 +1987,6 @@ export function FutureForecastModal() {
                       </div>
                     </section>
                   ) : null}
-
                 </aside>
 
                 <main className="future-v2-right">
@@ -1894,11 +2001,23 @@ export function FutureForecastModal() {
                           : "今日气温路径（锚点观测 + 模型）"}
                       </h3>
                     </div>
-                    <DailyTemperatureChart dateStr={dateStr} forceToday={isToday} />
+                    <DailyTemperatureChart
+                      dateStr={dateStr}
+                      forceToday={isToday}
+                    />
                     <div className="future-v2-chart-thresholds">
-                      <span>{locale === "en-US" ? "Base" : "基准"} · {baseCaseBucket || "--"}</span>
-                      <span>{locale === "en-US" ? "Upside" : "上修"} · {intradayMeteorology.upside_bucket || "--"}</span>
-                      <span>{locale === "en-US" ? "Invalidates at" : "失效观察"} · {nextObservationTime}</span>
+                      <span>
+                        {locale === "en-US" ? "Base" : "基准"} ·{" "}
+                        {baseCaseBucket || "--"}
+                      </span>
+                      <span>
+                        {locale === "en-US" ? "Upside" : "上修"} ·{" "}
+                        {intradayMeteorology.upside_bucket || "--"}
+                      </span>
+                      <span>
+                        {locale === "en-US" ? "Invalidates at" : "失效观察"} ·{" "}
+                        {nextObservationTime}
+                      </span>
                     </div>
                   </section>
 
@@ -1908,7 +2027,11 @@ export function FutureForecastModal() {
                         <div className="modal-section-kicker">
                           {locale === "en-US" ? "Evidence chain" : "气象证据链"}
                         </div>
-                        <h3>{locale === "en-US" ? "Signal Contributions" : "信号贡献"}</h3>
+                        <h3>
+                          {locale === "en-US"
+                            ? "Signal Contributions"
+                            : "信号贡献"}
+                        </h3>
                       </div>
                       <div className="future-v2-evidence-list">
                         {meteorologySignals.length > 0 ? (
@@ -1922,15 +2045,30 @@ export function FutureForecastModal() {
                             >
                               <div className="future-v2-evidence-head">
                                 <strong>
-                                  {localizedText(locale, signal.label, signal.label_en) || "--"}
+                                  {localizedText(
+                                    locale,
+                                    signal.label,
+                                    signal.label_en,
+                                  ) || "--"}
                                 </strong>
                                 <span>
-                                  {formatSignalDirection(signal.direction, locale)} ·{" "}
-                                  {formatSignalStrength(signal.strength, locale)}
+                                  {formatSignalDirection(
+                                    signal.direction,
+                                    locale,
+                                  )}{" "}
+                                  ·{" "}
+                                  {formatSignalStrength(
+                                    signal.strength,
+                                    locale,
+                                  )}
                                 </span>
                               </div>
                               <p>
-                                {localizedText(locale, signal.summary, signal.summary_en) || "--"}
+                                {localizedText(
+                                  locale,
+                                  signal.summary,
+                                  signal.summary_en,
+                                ) || "--"}
                               </p>
                             </div>
                           ))
@@ -1949,7 +2087,11 @@ export function FutureForecastModal() {
                         <div className="modal-section-kicker">
                           {locale === "en-US" ? "Failure modes" : "失效条件"}
                         </div>
-                        <h3>{locale === "en-US" ? "What Downgrades the Read" : "什么会让判断降级"}</h3>
+                        <h3>
+                          {locale === "en-US"
+                            ? "What Downgrades the Read"
+                            : "什么会让判断降级"}
+                        </h3>
                       </div>
                       <ul className="future-v2-rule-list">
                         {(invalidationRules.length > 0
@@ -1970,7 +2112,11 @@ export function FutureForecastModal() {
                         <div className="modal-section-kicker">
                           {locale === "en-US" ? "Confirmation" : "确认条件"}
                         </div>
-                        <h3>{locale === "en-US" ? "What Confirms the Path" : "什么会确认主路径"}</h3>
+                        <h3>
+                          {locale === "en-US"
+                            ? "What Confirms the Path"
+                            : "什么会确认主路径"}
+                        </h3>
                       </div>
                       <ul className="future-v2-rule-list">
                         {(confirmationRules.length > 0
@@ -1998,11 +2144,12 @@ export function FutureForecastModal() {
                         <div className="modal-section-kicker">
                           {locale === "en-US" ? "Probability read" : "概率判断"}
                         </div>
-                        <h3>
-                          {probabilityTitle}
-                        </h3>
+                        <h3>{probabilityTitle}</h3>
                       </div>
-                      <div className="future-text-block" style={{ marginBottom: "12px" }}>
+                      <div
+                        className="future-text-block"
+                        style={{ marginBottom: "12px" }}
+                      >
                         {probabilitySummary}
                       </div>
                       <div style={{ position: "relative", minHeight: "120px" }}>
@@ -2020,10 +2167,15 @@ export function FutureForecastModal() {
                           {locale === "en-US" ? "Model layer" : "模型层"}
                         </div>
                         <h3>
-                          {locale === "en-US" ? "Model Range & Spread" : "模型区间与分歧"}
+                          {locale === "en-US"
+                            ? "Model Range & Spread"
+                            : "模型区间与分歧"}
                         </h3>
                       </div>
-                      <div className="future-text-block" style={{ marginBottom: "12px" }}>
+                      <div
+                        className="future-text-block"
+                        style={{ marginBottom: "12px" }}
+                      >
                         {modelSummary}
                       </div>
                       <ModelForecast
@@ -2033,7 +2185,6 @@ export function FutureForecastModal() {
                       />
                     </section>
                   </div>
-
                 </main>
               </div>
             ) : (
@@ -2072,7 +2223,10 @@ export function FutureForecastModal() {
 
                 <section className="future-modal-section">
                   <h3>{t("future.targetTempTrend")}</h3>
-                  <DailyTemperatureChart dateStr={dateStr} forceToday={isToday} />
+                  <DailyTemperatureChart
+                    dateStr={dateStr}
+                    forceToday={isToday}
+                  />
                 </section>
 
                 <div className="future-modal-grid">
@@ -2101,4 +2255,3 @@ export function FutureForecastModal() {
     </div>
   );
 }
-

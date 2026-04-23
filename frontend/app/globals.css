@@ -21,16 +21,16 @@
     --color-text-muted: #64748b;
     --color-text-disabled: #475569;
 
-    /* ── Accent Colors ── */
-    --color-accent-primary: #00e5ff;
-    --color-accent-secondary: #6366f1;
+    /* ── Accent Colors (Fintech 3-Color) ── */
+    --color-accent-primary: #00e0a4;
+    --color-accent-secondary: #7b61ff;
     --color-accent-tertiary: #a78bfa;
 
     /* ── Signal / Semantic Colors ── */
-    --color-signal-success: #22c55e;
-    --color-signal-warning: #f59e0b;
-    --color-signal-danger: #ef4444;
-    --color-signal-info: #3b82f6;
+    --color-signal-success: #00e0a4;
+    --color-signal-warning: #ffb020;
+    --color-signal-danger: #ff4d6a;
+    --color-signal-info: #7b61ff;
 
     /* ── Risk Colors (aliased from signal) ── */
     --color-risk-high: var(--color-signal-danger);
@@ -38,16 +38,16 @@
     --color-risk-low: var(--color-signal-success);
 
     /* ── Border ── */
-    --color-border-default: rgba(99, 102, 241, 0.12);
-    --color-border-hover: rgba(99, 102, 241, 0.28);
+    --color-border-default: rgba(123, 97, 255, 0.12);
+    --color-border-hover: rgba(123, 97, 255, 0.28);
     --color-border-subtle: rgba(255, 255, 255, 0.06);
 
     /* ── Shadow / Elevation ── */
     --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-elevation-2: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-elevation-3: 0 20px 60px rgba(0, 0, 0, 0.6);
-    --shadow-glow-accent: 0 0 20px rgba(0, 229, 255, 0.2);
-    --shadow-glow-secondary: 0 0 20px rgba(99, 102, 241, 0.25);
+    --shadow-glow-accent: 0 0 20px rgba(0, 224, 164, 0.25);
+    --shadow-glow-secondary: 0 0 20px rgba(123, 97, 255, 0.25);
 
     /* ── Typography ── */
     --font-data:
@@ -96,7 +96,7 @@
     --foreground: 210 40% 98%;
     --card: 223 46% 8%;
     --card-foreground: 210 40% 98%;
-    --primary: 187 100% 50%;
+    --primary: 159 100% 44%;
     --primary-foreground: 222 47% 8%;
     --secondary: 224 30% 14%;
     --secondary-foreground: 210 40% 98%;
@@ -114,17 +114,17 @@
     background:
       radial-gradient(
         circle at 10% -10%,
-        rgba(0, 229, 255, 0.12),
+        rgba(0, 224, 164, 0.1),
         transparent 40%
       ),
       radial-gradient(
         circle at 90% 0%,
-        rgba(99, 102, 241, 0.1),
+        rgba(123, 97, 255, 0.08),
         transparent 36%
       ),
       radial-gradient(
         circle at 80% 100%,
-        rgba(8, 47, 73, 0.4),
+        rgba(0, 224, 164, 0.06),
         transparent 48%
       ),
       var(--color-bg-base);
@@ -188,7 +188,7 @@
   .map-pill.active {
     transform: translateY(-2px) scale(1.05);
     box-shadow:
-      0 8px 24px rgba(0, 229, 255, 0.35),
+      0 8px 24px rgba(0, 224, 164, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.35);
   }
 
@@ -354,11 +354,11 @@
     width: 6px;
   }
   .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: rgba(99, 102, 241, 0.2);
+    background: rgba(123, 97, 255, 0.2);
     border-radius: var(--radius-full);
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-    background: rgba(99, 102, 241, 0.35);
+    background: rgba(123, 97, 255, 0.35);
   }
 }
 
@@ -368,6 +368,6 @@
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   }
   50% {
-    box-shadow: 0 10px 26px rgba(0, 229, 255, 0.3);
+    box-shadow: 0 10px 26px rgba(0, 224, 164, 0.3);
   }
 }

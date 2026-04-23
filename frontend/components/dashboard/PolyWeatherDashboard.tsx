@@ -142,15 +142,11 @@ function buildSnapshot(
     detail?.risk?.level;
   const hitRate = Number(city.deb_recent_hit_rate ?? 0);
   const sampleCount = Number(city.deb_recent_sample_count ?? 0);
-  const edgePercent = Number(getMarketEdgeValue(detail));
-  const normalizedEdge =
-    Number.isFinite(edgePercent) && Math.abs(edgePercent) <= 1
-      ? edgePercent * 100
-      : edgePercent;
+  const normalizedEdge = normalizeEdgePercent(getMarketEdgeValue(detail));
   const tradableOpportunity = isTradableMarketOpportunity(detail);
   const score =
     (detail?.market_scan && !tradableOpportunity ? -10_000 : 0) +
-    (tradableOpportunity && Number.isFinite(normalizedEdge)
+    (tradableOpportunity && normalizedEdge != null
       ? 1000 + normalizedEdge * 10
       : 0) +
     (RISK_SCORE[String(tier || "")] || 0) * 100 +
@@ -303,6 +299,75 @@ function getBestSide(detail?: CityDetail | null) {
   if (bestSide.includes("yes")) return "yes";
   if (bestSide.includes("no")) return "no";
   return null;
+}
+
+function getSideEdgePercent(detail: CityDetail | null | undefined, side: "yes" | "no") {
+  const sideAnalysis = detail?.market_scan?.price_analysis?.[side];
+  return normalizeEdgePercent(sideAnalysis?.edge_percent ?? sideAnalysis?.edge);
+}
+
+function getExecutableEdgePercent(detail?: CityDetail | null) {
+  const bestSide = getBestSide(detail);
+  if (bestSide) {
+    const bestEdge = getSideEdgePercent(detail, bestSide);
+    if (bestEdge != null) return bestEdge;
+  }
+
+  const sideEdges = [
+    getSideEdgePercent(detail, "yes"),
+    getSideEdgePercent(detail, "no"),
+  ].filter((value): value is number => value != null && value > 0);
+  if (sideEdges.length) return Math.max(...sideEdges);
+
+  return normalizeEdgePercent(detail?.market_scan?.edge_percent);
+}
+
+function getBestSideModelProbability(detail?: CityDetail | null) {
+  const marketScan = detail?.market_scan;
+  const pYes = normalizeProbabilityValue(
+    marketScan?.price_analysis?.model_probability ??
+      marketScan?.model_probability ??
+      marketScan?.temperature_bucket?.probability,
+  );
+  if (pYes == null) return null;
+  return getBestSide(detail) === "no" ? 1 - pYes : pYes;
+}
+
+function getBestSideAsk(detail?: CityDetail | null) {
+  const marketScan = detail?.market_scan;
+  const side = getBestSide(detail);
+  if (side === "yes") {
+    return (
+      marketScan?.yes_buy ??
+      marketScan?.yes_token?.buy_price ??
+      marketScan?.price_analysis?.yes?.ask
+    );
+  }
+  if (side === "no") {
+    return (
+      marketScan?.no_buy ??
+      marketScan?.no_token?.buy_price ??
+      marketScan?.price_analysis?.no?.ask
+    );
+  }
+  return marketScan?.market_price ?? marketScan?.midpoint ?? null;
+}
+
+function getTradeSideLabel(side: "yes" | "no" | null, locale: string) {
+  if (side === "yes") return locale === "en-US" ? "BUY YES" : "买 YES";
+  if (side === "no") return locale === "en-US" ? "BUY NO" : "买 NO";
+  return locale === "en-US" ? "WATCH" : "观察";
+}
+
+function getTradeFormulaLabel(side: "yes" | "no" | null, locale: string) {
+  if (side === "no") {
+    return locale === "en-US"
+      ? "Edge = EMOS P(NO) - NO ask"
+      : "Edge = EMOS P(NO) - NO 买价";
+  }
+  return locale === "en-US"
+    ? "Edge = EMOS P(YES) - YES ask"
+    : "Edge = EMOS P(YES) - YES 买价";
 }
 
 function isLiveMarketScan(detail?: CityDetail | null) {
@@ -640,13 +705,6 @@ type HomeTrendChart = {
     label: string;
     temperatureText: string;
   }>;
-  hoverPoints: Array<{
-    cx: number;
-    cy: number;
-    key: string;
-    label: string;
-    temperatureText: string;
-  }>;
   yAxisLabels: Array<{ key: string; label: string; y: number }>;
   xAxisLabels: Array<{ key: string; label: string; x: number }>;
 };
@@ -904,23 +962,6 @@ function buildHomeTrendChart(
   });
   const hoverSource =
     observationSeries.length > 0 ? observationSeries : forecastSeries;
-  const hoverPoints = hoverSource.map((point, index) => {
-    const projected = projectHomeTrendPoint(
-      point.x,
-      point.y,
-      chartData.xMin,
-      chartData.xMax,
-      chartData.min,
-      chartData.max,
-    );
-    return {
-      cx: projected.cx,
-      cy: projected.cy,
-      key: `hover-${point.labelTime}-${index}`,
-      label: point.labelTime,
-      temperatureText: formatTemperature(point.y, detail.temp_symbol || "°C"),
-    };
-  });
   const hourlyReports = hoverSource
     .filter((point) => {
       const label = String(point.labelTime || "");
@@ -985,7 +1026,6 @@ function buildHomeTrendChart(
     legendText: chartData.legendText,
     observationDots,
     hourlyReports,
-    hoverPoints,
     yAxisLabels,
     xAxisLabels,
   };
@@ -1061,14 +1101,7 @@ function isBoundaryMarketPrice(value: number | null | undefined) {
 }
 
 function getMarketEdgeValue(detail?: CityDetail | null) {
-  const marketScan = detail?.market_scan;
-  return (
-    marketScan?.edge_percent ??
-    marketScan?.price_analysis?.yes?.edge_percent ??
-    marketScan?.price_analysis?.yes?.edge ??
-    marketScan?.price_analysis?.no?.edge_percent ??
-    marketScan?.price_analysis?.no?.edge
-  );
+  return getExecutableEdgePercent(detail);
 }
 
 function isTradableMarketOpportunity(detail?: CityDetail | null) {
@@ -1110,19 +1143,13 @@ function isTradableMarketOpportunity(detail?: CityDetail | null) {
     return false;
   }
   if (isBoundaryMarketPrice(marketPrice)) return false;
-  return Number.isFinite(Number(getMarketEdgeValue(detail)));
+  const executableEdge = getExecutableEdgePercent(detail);
+  return executableEdge != null && executableEdge > 0;
 }
 
 function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   const store = useDashboardStore();
   const { locale } = useI18n();
-  const [hoveredTrendPoint, setHoveredTrendPoint] = useState<{
-    cx: number;
-    cy: number;
-    key: string;
-    label: string;
-    temperatureText: string;
-  } | null>(null);
   const spotlight = useMemo(
     () =>
       store.selectedCity
@@ -1449,39 +1476,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 </span>
               ))}
             </div>
-            {trendChart.hoverPoints.map((point) => (
-              <button
-                key={point.key}
-                type="button"
-                className="home-intraday-hotspot"
-                style={{ left: `${point.cx}px`, top: `${point.cy}px` }}
-                aria-label={`${point.label} ${point.temperatureText}`}
-                onMouseEnter={() => setHoveredTrendPoint(point)}
-                onMouseLeave={() =>
-                  setHoveredTrendPoint((current) =>
-                    current?.key === point.key ? null : current,
-                  )
-                }
-                onFocus={() => setHoveredTrendPoint(point)}
-                onBlur={() =>
-                  setHoveredTrendPoint((current) =>
-                    current?.key === point.key ? null : current,
-                  )
-                }
-              />
-            ))}
-            {hoveredTrendPoint ? (
-              <div
-                className="home-intraday-tooltip"
-                style={{
-                  left: `${Math.min(248, Math.max(48, hoveredTrendPoint.cx))}px`,
-                  top: `${Math.max(8, hoveredTrendPoint.cy - 34)}px`,
-                }}
-              >
-                <strong>{hoveredTrendPoint.temperatureText}</strong>
-                <span>{hoveredTrendPoint.label}</span>
-              </div>
-            ) : null}
           </div>
           {trendChart.hourlyReports.length ? (
             <div className="home-intraday-reports">
@@ -1677,16 +1671,15 @@ function OpportunityStrip({
           bestTradableSnapshot.detail,
         )
       : "--";
-    const highCount = snapshots.filter(
-      (snapshot) => snapshot.city.deb_recent_tier === "high",
-    ).length;
-    const mediumCount = snapshots.filter(
-      (snapshot) => snapshot.city.deb_recent_tier === "medium",
-    ).length;
-    const lowCount = snapshots.filter(
-      (snapshot) => snapshot.city.deb_recent_tier === "low",
-    ).length;
-    const noEdgeCount = Math.max(completedCount - tradableSnapshots.length, 0);
+    const quoteReadyCount = liveSnapshots.filter((snapshot) => {
+      const marketScan = snapshot.detail?.market_scan;
+      return Boolean(
+        marketScan?.price_analysis?.available ||
+          marketScan?.yes_buy != null ||
+          marketScan?.no_buy != null,
+      );
+    }).length;
+    const noEdgeCount = Math.max(quoteReadyCount - tradableSnapshots.length, 0);
 
     return {
       items: tradableSnapshots.slice(0, 5),
@@ -1705,29 +1698,49 @@ function OpportunityStrip({
       bestTradableCityName,
       summaryCards: [
         {
-          key: "scan-progress",
-          title: locale === "en-US" ? "Scan Progress" : "扫描进度",
+          key: "data-chain",
+          title: locale === "en-US" ? "Data Chain" : "数据链路",
           items: [
             {
-              label: locale === "en-US" ? "Completed" : "已完成",
-              value: `${completedCount}/${totalCount}`,
+              label: locale === "en-US" ? "Markets" : "市场列表",
+              value: "Gamma",
               accent: "cyan" as const,
             },
             {
-              label: locale === "en-US" ? "Scanning" : "扫描中",
-              value: String(pendingCount),
-              accent: "amber" as const,
+              label: locale === "en-US" ? "Quotes" : "盘口价格",
+              value: "CLOB",
+              accent: "green" as const,
             },
             {
-              label: locale === "en-US" ? "Errors" : "异常",
-              value: String(errorCount),
-              accent: errorCount > 0 ? ("red" as const) : ("green" as const),
+              label: locale === "en-US" ? "Model" : "概率模型",
+              value: "EMOS",
+              accent: "amber" as const,
             },
           ],
         },
         {
-          key: "market-live",
-          title: locale === "en-US" ? "Market Status" : "盘口状态",
+          key: "refresh-cadence",
+          title: locale === "en-US" ? "Refresh Cadence" : "刷新节奏",
+          items: [
+            {
+              label: locale === "en-US" ? "Market list" : "市场列表",
+              value: "60s",
+              accent: "green" as const,
+            },
+            {
+              label: locale === "en-US" ? "YES/NO ask" : "YES/NO 买价",
+              value: "30s",
+              accent: "cyan" as const,
+            },
+            {
+              label: locale === "en-US" ? "Mode" : "模式",
+              value: "REST",
+            },
+          ],
+        },
+        {
+          key: "quote-filter",
+          title: locale === "en-US" ? "Quote Filter" : "报价筛选",
           items: [
             {
               label: locale === "en-US" ? "Live" : "在线",
@@ -1735,117 +1748,95 @@ function OpportunityStrip({
               accent: "green" as const,
             },
             {
-              label: locale === "en-US" ? "Tradable" : "可交易",
-              value: String(tradableSnapshots.length),
+              label: locale === "en-US" ? "Quoted" : "已报价",
+              value: String(quoteReadyCount),
               accent: "cyan" as const,
             },
             {
-              label: locale === "en-US" ? "No edge" : "无机会",
+              label: locale === "en-US" ? "No edge" : "无正 edge",
               value: String(noEdgeCount),
+              accent: "amber" as const,
             },
           ],
         },
         {
-          key: "market-quality",
-          title: locale === "en-US" ? "Opportunity Quality" : "机会质量",
+          key: "edge-decision",
+          title: locale === "en-US" ? "Decision" : "交易决策",
           items: [
             {
-              label: locale === "en-US" ? "Avg. edge" : "平均优势",
-              value: formatEdge(avgTradableEdge),
+              label: locale === "en-US" ? "Actionable" : "可买",
+              value: String(tradableSnapshots.length),
               accent: "green" as const,
             },
             {
-              label: locale === "en-US" ? "Best edge" : "最高优势",
-              value: bestTradableSnapshot
-                ? formatEdge(getMarketEdgeValue(bestTradableSnapshot.detail))
-                : "--",
-              accent: "cyan" as const,
+              label: locale === "en-US" ? "Avg edge" : "平均 edge",
+              value: formatEdge(avgTradableEdge),
+              accent: avgTradableEdge != null ? ("cyan" as const) : undefined,
             },
             {
-              label: locale === "en-US" ? "Focus" : "最佳城市",
+              label: locale === "en-US" ? "Focus" : "当前标的",
               value: bestTradableCityName,
               accent: "amber" as const,
             },
           ],
         },
-        {
-          key: "risk-summary",
-          title: locale === "en-US" ? "Risk Layer" : "风险层",
-          items: [
-            {
-              label: locale === "en-US" ? "High" : "高",
-              value: String(highCount),
-              accent: "red" as const,
-            },
-            {
-              label: locale === "en-US" ? "Medium" : "中",
-              value: String(mediumCount),
-              accent: "amber" as const,
-            },
-            {
-              label: locale === "en-US" ? "Low" : "低",
-              value: String(lowCount),
-              accent: "green" as const,
-            },
-          ],
-        },
       ],
       overviewKicker:
-        locale === "en-US" ? "EMOS Market Scanner" : "EMOS 交易扫描台",
+        locale === "en-US" ? "EMOS / CLOB Decision Layer" : "EMOS / CLOB 交易决策层",
       headingTitle:
         tradableSnapshots.length > 0
           ? locale === "en-US"
-            ? `${tradableSnapshots.length} tradable markets · focus ${bestTradableCityName}`
-            : `发现 ${tradableSnapshots.length} 个可交易市场 · 当前最佳 ${bestTradableCityName}`
+            ? `${getTradeSideLabel(getBestSide(bestTradableSnapshot?.detail), locale)} · ${bestTradableCityName} · ${formatEdge(bestTradableEdge)}`
+            : `${getTradeSideLabel(getBestSide(bestTradableSnapshot?.detail), locale)} · ${bestTradableCityName} · ${formatEdge(bestTradableEdge)}`
           : pendingCount > 0
             ? locale === "en-US"
-              ? `Scanning ${completedCount}/${totalCount} cities`
-              : `正在扫描 ${completedCount}/${totalCount} 个城市市场层`
+              ? "Waiting for executable CLOB quotes"
+              : "等待可执行 CLOB 报价"
             : locale === "en-US"
-              ? `Completed ${completedCount} scans · no tradable market`
-              : `已完成 ${completedCount} 个城市扫描 · 当前无可交易市场`,
+              ? "No positive EMOS edge right now"
+              : "当前没有正 EMOS edge",
       overviewBody:
         tradableSnapshots.length > 0
           ? locale === "en-US"
-            ? "Use EMOS distribution against the live CLOB quote and surface the highest executable edge first."
-            : "用 EMOS 概率分布对齐实时 CLOB 盘口，优先展示当前可执行 edge 最高的市场。"
+            ? "Decision rule: compare the EMOS probability for the exact market bucket with the executable YES/NO ask from CLOB REST."
+            : "决策规则：把具体温度桶的 EMOS 概率和 CLOB REST 可买 YES/NO 价格相减，只展示正 edge 的买入方向。"
           : pendingCount > 0
             ? locale === "en-US"
-              ? "The opportunity layer is filling active markets and will promote the first executable setup when quotes arrive."
-              : "机会层正在补齐活跃盘口，等最新报价返回后会直接抬出第一优先机会。"
+              ? "Gamma active markets are cached separately; the faster loop waits for CLOB YES/NO asks and recalculates edge locally."
+              : "Gamma 活跃市场单独缓存；更快的价格层等待 CLOB YES/NO 买价后在本地重算 edge。"
             : locale === "en-US"
-              ? "Scanner is live, but the current market prices do not beat the EMOS distribution yet."
-              : "扫描器在线，但当前盘口价格还没有跑赢 EMOS 概率分布。",
+              ? "Markets can still be live, but the current asks are not cheaper than the EMOS distribution."
+              : "盘口可以在线，但当前 ask 没有低于 EMOS 概率分布，先不提示买入。",
       tapeStats: [
         {
           key: "coverage",
-          label: locale === "en-US" ? "Coverage" : "覆盖城市",
-          value: `${completedCount}/${totalCount}`,
+          label: locale === "en-US" ? "Gamma" : "Gamma 市场",
+          value: "60s",
           accent: "cyan" as const,
         },
         {
           key: "live",
-          label: locale === "en-US" ? "Live" : "在线盘口",
-          value: String(liveSnapshots.length),
+          label: locale === "en-US" ? "CLOB asks" : "CLOB 报价",
+          value: "30s",
           accent: "green" as const,
         },
         {
           key: "tradable",
-          label: locale === "en-US" ? "Tradable" : "可交易",
+          label: locale === "en-US" ? "Actionable" : "可买机会",
           value: String(tradableSnapshots.length),
           accent: "cyan" as const,
         },
         {
           key: "avg-edge",
-          label: locale === "en-US" ? "Avg edge" : "平均优势",
-          value: formatEdge(avgTradableEdge),
-          accent: avgTradableEdge != null ? ("green" as const) : ("slate" as const),
+          label: locale === "en-US" ? "Best edge" : "最佳 edge",
+          value: formatEdge(bestTradableEdge),
+          accent: bestTradableEdge != null ? ("green" as const) : ("slate" as const),
         },
       ],
       yesCountLabel:
-        locale === "en-US" ? `YES bias ${yesCount}` : `YES 倾向 ${yesCount}`,
+        locale === "en-US" ? `BUY YES ${yesCount}` : `买 YES ${yesCount}`,
       noCountLabel:
-        locale === "en-US" ? `NO bias ${noCount}` : `NO 倾向 ${noCount}`,
+        locale === "en-US" ? `BUY NO ${noCount}` : `买 NO ${noCount}`,
     };
   }, [locale, marketScanStatusByCity, scanTargetNames, snapshots]);
 
@@ -1853,24 +1844,15 @@ function OpportunityStrip({
 
   const heroSnapshot = stripState.bestTradableSnapshot;
   const heroSide = getBestSide(heroSnapshot?.detail);
-  const heroSignalLabel =
-    heroSnapshot?.detail?.market_scan?.signal_label ||
-    (heroSide === "yes"
-      ? locale === "en-US"
-        ? "BUY YES"
-        : "买入 YES"
-      : heroSide === "no"
-        ? locale === "en-US"
-          ? "BUY NO"
-          : "买入 NO"
-        : locale === "en-US"
-          ? "MONITOR"
-          : "继续监控");
+  const heroSignalLabel = getTradeSideLabel(heroSide, locale);
   const heroSignalTone = heroSignalLabel.toLowerCase().includes("yes")
     ? "yes"
     : heroSignalLabel.toLowerCase().includes("no")
       ? "no"
       : "neutral";
+  const heroBestAsk = getBestSideAsk(heroSnapshot?.detail);
+  const heroBestProbability = getBestSideModelProbability(heroSnapshot?.detail);
+  const heroBestEdge = getExecutableEdgePercent(heroSnapshot?.detail);
   const heroSymbol = heroSnapshot
     ? getTempSymbol(heroSnapshot.city, heroSnapshot.summary, heroSnapshot.detail)
     : "°C";
@@ -1902,17 +1884,7 @@ function OpportunityStrip({
     if (engine.includes("emos")) return "EMOS";
     return engine.toUpperCase();
   })();
-  const heroModelProbability =
-    heroSnapshot?.detail?.market_scan?.model_probability ??
-    heroMarketBucket?.probability ??
-    null;
-  const heroMidpoint =
-    heroSnapshot?.detail?.market_scan?.midpoint ??
-    heroSnapshot?.detail?.market_scan?.market_price ??
-    null;
   const heroSpread = heroSnapshot?.detail?.market_scan?.spread ?? null;
-  const heroConfidence =
-    heroSnapshot?.detail?.market_scan?.confidence || null;
   const heroQuoteSource = heroSnapshot?.detail?.market_scan?.quote_source
     ? String(heroSnapshot.detail.market_scan.quote_source)
         .replaceAll("_", " ")
@@ -1992,7 +1964,7 @@ function OpportunityStrip({
               <div className="opportunity-hero-header">
                 <div className="opportunity-hero-copy">
                   <span className="opportunity-hero-kicker">
-                    {locale === "en-US" ? "Primary market" : "当前主机会"}
+                    {locale === "en-US" ? "Current action" : "当前交易建议"}
                   </span>
                   <div className="opportunity-hero-title-row">
                     <strong>{heroCityName}</strong>
@@ -2025,46 +1997,46 @@ function OpportunityStrip({
               <div className="opportunity-hero-body">
                 <div className="opportunity-hero-edgeblock">
                   <span>
-                    {locale === "en-US" ? "Executable edge" : "可执行优势"}
+                    {locale === "en-US" ? "Trade now" : "现在值得买什么"}
                   </span>
-                  <strong>{formatEdge(stripState.bestTradableEdge)}</strong>
+                  <strong>
+                    {heroSide
+                      ? `${getTradeSideLabel(heroSide, locale)} ${formatCents(heroBestAsk)}`
+                      : locale === "en-US"
+                        ? "WATCH"
+                        : "观察"}
+                  </strong>
                   <em>
-                    {heroSide === "yes"
-                      ? locale === "en-US"
-                        ? "Prefer lifting the YES ask"
-                        : "优先吃 YES 买价"
-                      : heroSide === "no"
-                        ? locale === "en-US"
-                          ? "Prefer lifting the NO ask"
-                          : "优先吃 NO 买价"
-                        : locale === "en-US"
-                          ? "Keep monitoring executable quotes"
-                          : "继续观察可执行报价"}
+                    {getTradeFormulaLabel(heroSide, locale)} ·{" "}
+                    {locale === "en-US" ? "edge" : "优势"}{" "}
+                    {formatEdge(heroBestEdge)}
                   </em>
                 </div>
 
                 <div className="opportunity-hero-metrics">
                   <div className="opportunity-hero-metric">
-                    <span>{locale === "en-US" ? "EMOS prob." : "EMOS 概率"}</span>
-                    <strong>{formatProbability(heroModelProbability)}</strong>
+                    <span>
+                      {heroSide === "no"
+                        ? locale === "en-US"
+                          ? "EMOS P(NO)"
+                          : "EMOS P(NO)"
+                        : locale === "en-US"
+                          ? "EMOS P(YES)"
+                          : "EMOS P(YES)"}
+                    </span>
+                    <strong>{formatProbability(heroBestProbability)}</strong>
                   </div>
                   <div className="opportunity-hero-metric">
-                    <span>{locale === "en-US" ? "Midpoint" : "盘口中位"}</span>
-                    <strong>{formatCents(heroMidpoint)}</strong>
+                    <span>{locale === "en-US" ? "CLOB ask" : "CLOB 买价"}</span>
+                    <strong>{formatCents(heroBestAsk)}</strong>
+                  </div>
+                  <div className="opportunity-hero-metric">
+                    <span>{locale === "en-US" ? "Edge" : "Edge"}</span>
+                    <strong>{formatEdge(heroBestEdge)}</strong>
                   </div>
                   <div className="opportunity-hero-metric">
                     <span>{locale === "en-US" ? "Spread" : "盘口点差"}</span>
                     <strong>{formatCents(heroSpread)}</strong>
-                  </div>
-                  <div className="opportunity-hero-metric">
-                    <span>{locale === "en-US" ? "Confidence" : "信号强度"}</span>
-                    <strong>
-                      {heroConfidence
-                        ? String(heroConfidence).toUpperCase()
-                        : locale === "en-US"
-                          ? "LIVE"
-                          : "在线"}
-                    </strong>
                   </div>
                 </div>
 

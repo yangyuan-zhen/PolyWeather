@@ -18,7 +18,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getToneColor(tone: string) {
-  if (tone === "cyan") return "#22d3ee";
+  if (tone === "cyan") return "#00E0A4";
   if (tone === "blue") return "#60a5fa";
   if (tone === "amber") return "#f59e0b";
   return "#94a3b8";
@@ -77,7 +77,7 @@ export function IntradaySignalScene({
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(2.8, 0.03, 18, 100),
       new THREE.MeshBasicMaterial({
-        color: new THREE.Color(score >= 0 ? "#22d3ee" : "#f59e0b"),
+        color: new THREE.Color(score >= 0 ? "#00E0A4" : "#FFB020"),
         transparent: true,
         opacity: 0.5,
       }),
@@ -134,7 +134,13 @@ export function IntradaySignalScene({
       glow.position.set(mesh.position.x, 0.06, 0);
       stage.add(glow);
 
-      bars.push({ mesh, cap, glow, baseY: cap.position.y, targetHeight: height });
+      bars.push({
+        mesh,
+        cap,
+        glow,
+        baseY: cap.position.y,
+        targetHeight: height,
+      });
     });
 
     const resize = () => {
@@ -195,7 +201,11 @@ export function IntradaySignalScene({
 
   return (
     <div className="intraday-scene-shell">
-      <div ref={containerRef} className="intraday-scene-frame" aria-hidden="true" />
+      <div
+        ref={containerRef}
+        className="intraday-scene-frame"
+        aria-hidden="true"
+      />
       <div className="intraday-scene-legend">
         {metrics.slice(0, 4).map((metric) => (
           <div key={metric.key} className="intraday-scene-chip">

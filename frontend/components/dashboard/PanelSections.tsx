@@ -80,7 +80,9 @@ function getMarketYesPrice(scan?: MarketScan | null) {
 }
 
 function isFahrenheitSymbol(symbol?: string | null) {
-  return String(symbol || "").toUpperCase().includes("F");
+  return String(symbol || "")
+    .toUpperCase()
+    .includes("F");
 }
 
 function displayTempToMarketCelsius(
@@ -120,17 +122,25 @@ function getMarketBucketUnit(bucket?: MarketTopBucket | null) {
 }
 
 function isMarketBucketAbove(bucket?: MarketTopBucket | null) {
-  const text = `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
-    .toLowerCase()
-    .replace(/\s+/g, "");
-  return text.includes("+") || text.includes("orhigher") || text.includes("or-higher");
+  const text =
+    `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
+      .toLowerCase()
+      .replace(/\s+/g, "");
+  return (
+    text.includes("+") ||
+    text.includes("orhigher") ||
+    text.includes("or-higher")
+  );
 }
 
 function isMarketBucketBelow(bucket?: MarketTopBucket | null) {
-  const text = `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
-    .toLowerCase()
-    .replace(/\s+/g, "");
-  return text.includes("<=") || text.includes("orlower") || text.includes("or-lower");
+  const text =
+    `${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`
+      .toLowerCase()
+      .replace(/\s+/g, "");
+  return (
+    text.includes("<=") || text.includes("orlower") || text.includes("or-lower")
+  );
 }
 
 function findMarketBucketForDisplayTemp(
@@ -182,11 +192,14 @@ function marketBucketContainsDisplayTemp(
   displayTemp: number | null,
   detail: Pick<CityDetail, "temp_symbol">,
 ) {
-  if (!bucket || displayTemp == null || !Number.isFinite(displayTemp)) return false;
+  if (!bucket || displayTemp == null || !Number.isFinite(displayTemp))
+    return false;
 
   const bucketUnit = getMarketBucketUnit(bucket);
   const compareTemp =
-    bucketUnit === "F" ? displayTemp : displayTempToMarketCelsius(displayTemp, detail);
+    bucketUnit === "F"
+      ? displayTemp
+      : displayTempToMarketCelsius(displayTemp, detail);
   if (compareTemp == null) return false;
 
   const lower = bucket.lower != null ? Number(bucket.lower) : null;
@@ -265,18 +278,26 @@ function formatMarketBucketDisplayLabel(
   }
 
   const unit =
-    getMarketBucketUnit(bucket) === "F" || isFahrenheitSymbol(detail.temp_symbol)
+    getMarketBucketUnit(bucket) === "F" ||
+    isFahrenheitSymbol(detail.temp_symbol)
       ? "°F"
       : "°C";
   const lower = bucket.lower != null ? Number(bucket.lower) : null;
   const upper = bucket.upper != null ? Number(bucket.upper) : null;
-  if (lower != null && upper != null && Number.isFinite(lower) && Number.isFinite(upper)) {
+  if (
+    lower != null &&
+    upper != null &&
+    Number.isFinite(lower) &&
+    Number.isFinite(upper)
+  ) {
     return `${lower}-${upper}${unit}`;
   }
   const value = bucket.value ?? bucket.temp ?? lower;
   const numeric = value != null ? Number(value) : null;
   if (numeric != null && Number.isFinite(numeric)) {
-    return isMarketBucketAbove(bucket) ? `${numeric}${unit}+` : `${numeric}${unit}`;
+    return isMarketBucketAbove(bucket)
+      ? `${numeric}${unit}+`
+      : `${numeric}${unit}`;
   }
   return "--";
 }
@@ -321,7 +342,8 @@ function getModelGroupMeta(
   ) {
     return {
       key: "north-america",
-      label: locale === "en-US" ? "North America high-resolution" : "北美高分辨率",
+      label:
+        locale === "en-US" ? "North America high-resolution" : "北美高分辨率",
       order: 3,
       tone: "amber",
     };
@@ -477,7 +499,7 @@ function getMarketTopBuckets(scan?: MarketScan | null) {
     .filter(
       (item): item is MarketTopBucket & { probability: number } =>
         item.probability != null,
-      );
+    );
 }
 
 function getMarketAllBuckets(scan?: MarketScan | null) {
@@ -530,11 +552,11 @@ function formatProbabilityEngineLabel(
 ) {
   const view = getProbabilityView(detail, targetDate);
   if (hasLgbmModel(detail, targetDate)) {
-    return locale === "en-US"
-      ? "LGBM-calibrated probability"
-      : "LGBM 校准概率";
+    return locale === "en-US" ? "LGBM-calibrated probability" : "LGBM 校准概率";
   }
-  const engine = String(view.engine || "").trim().toLowerCase();
+  const engine = String(view.engine || "")
+    .trim()
+    .toLowerCase();
   const calibrationMode = String(view.calibrationMode || "")
     .trim()
     .toLowerCase();
@@ -555,9 +577,7 @@ export function HeroSummary() {
   const settlementSourceCode = normalizeObservationSourceCode(
     current.settlement_source || "metar",
   );
-  const settlementIcao = String(
-    current.station_code || data.risk?.icao || "",
-  )
+  const settlementIcao = String(current.station_code || data.risk?.icao || "")
     .trim()
     .toUpperCase();
   const settlementSource =
@@ -605,9 +625,7 @@ export function HeroSummary() {
           <span className="label">
             {locale === "en-US" ? "Current Obs" : "当前实测"}
           </span>
-          <span className="value">
-            {currentObsText}
-          </span>
+          <span className="value">{currentObsText}</span>
         </div>
         <div className="hero-item">
           <span className="label">
@@ -699,8 +717,8 @@ export function TemperatureChart() {
     }
 
     datasets.push({
-      backgroundColor: "#22d3ee",
-      borderColor: "#22d3ee",
+      backgroundColor: "#00E0A4",
+      borderColor: "#00E0A4",
       borderWidth: 0,
       data: chartData.datasets.metarPoints,
       fill: false,
@@ -732,7 +750,7 @@ export function TemperatureChart() {
       Math.abs(chartData.datasets.offset) > 0.3
     ) {
       datasets.push({
-        borderColor: "rgba(99, 102, 241, 0.2)",
+        borderColor: "rgba(123, 97, 255, 0.2)",
         borderDash: [2, 4],
         borderWidth: 1,
         data: chartData.datasets.temps,
@@ -860,7 +878,9 @@ export function ProbabilityDistribution({
   const topProbabilityLabel = topProbability
     ? formatBucketDisplayLabel(topProbability, detail)
     : null;
-  const topProbabilityTemp = topProbability ? getBucketTemp(topProbability) : null;
+  const topProbabilityTemp = topProbability
+    ? getBucketTemp(topProbability)
+    : null;
   const probabilitiesForMarketContracts =
     view.probabilitiesAll?.length > 0
       ? view.probabilitiesAll
@@ -955,18 +975,23 @@ export function ProbabilityDistribution({
   const linkedNoAsk = linkedMarketBucket?.no_buy ?? noPriceView?.ask ?? null;
   const linkedContractLabel =
     topContractRow?.label ||
-    (linkedMarketBucket ? formatMarketBucketDisplayLabel(linkedMarketBucket, detail) : null) ||
+    (linkedMarketBucket
+      ? formatMarketBucketDisplayLabel(linkedMarketBucket, detail)
+      : null) ||
     topProbabilityLabel ||
     null;
-  const aggregatedMarketProbability = getAggregatedModelProbabilityForMarketBucket(
-    probabilitiesForMarketContracts,
-    linkedMarketBucket,
-    detail,
-  );
+  const aggregatedMarketProbability =
+    getAggregatedModelProbabilityForMarketBucket(
+      probabilitiesForMarketContracts,
+      linkedMarketBucket,
+      detail,
+    );
   const linkedMarketProbability =
     topContractRow?.probability ??
     aggregatedMarketProbability ??
-    (topProbability?.probability != null ? Number(topProbability.probability) : null);
+    (topProbability?.probability != null
+      ? Number(topProbability.probability)
+      : null);
   const linkedMarketProbabilityText = toPercent(linkedMarketProbability);
   const linkedMarketEdge =
     linkedMarketProbability != null && linkedMarketAsk != null
@@ -985,28 +1010,28 @@ export function ProbabilityDistribution({
   const linkedBestAsk = linkedBestSide === "no" ? linkedNoAsk : linkedMarketAsk;
   const linkedBestEdge =
     linkedBestSide === "no" ? linkedNoEdge : linkedMarketEdge;
-  const preferredPriceView =
-    linkedMarketBucket
-      ? {
-          ask: linkedBestAsk,
-          edge: linkedBestEdge,
-        }
-      : priceAnalysis?.best_side === "no"
-        ? noPriceView
-        : yesPriceView;
-  const preferredSideLabel =
-    linkedMarketBucket
-      ? linkedBestSide === "no"
-        ? "NO"
-        : "YES"
-      : priceAnalysis?.best_side === "no"
+  const preferredPriceView = linkedMarketBucket
+    ? {
+        ask: linkedBestAsk,
+        edge: linkedBestEdge,
+      }
+    : priceAnalysis?.best_side === "no"
+      ? noPriceView
+      : yesPriceView;
+  const preferredSideLabel = linkedMarketBucket
+    ? linkedBestSide === "no"
+      ? "NO"
+      : "YES"
+    : priceAnalysis?.best_side === "no"
       ? locale === "en-US"
         ? "NO"
         : "NO"
       : locale === "en-US"
         ? "YES"
         : "YES";
-  const yesDisplayPrice = linkedMarketBucket ? linkedMarketAsk : yesPriceView?.ask;
+  const yesDisplayPrice = linkedMarketBucket
+    ? linkedMarketAsk
+    : yesPriceView?.ask;
   const noDisplayPrice = linkedMarketBucket ? linkedNoAsk : noPriceView?.ask;
   const yesDisplayEdge = linkedMarketBucket
     ? linkedMarketEdge
@@ -1018,7 +1043,9 @@ export function ProbabilityDistribution({
       Boolean(marketScan) ||
       Boolean(topProbability));
   const lockEdge = normalizeSignedProbability(priceAnalysis?.lock?.edge);
-  const lockAvailable = Boolean(priceAnalysis?.lock?.available && lockEdge != null);
+  const lockAvailable = Boolean(
+    priceAnalysis?.lock?.available && lockEdge != null,
+  );
   const quoteSource =
     linkedMarketBucket?.quote_source ||
     marketScan?.yes_token?.quote_source ||
@@ -1047,53 +1074,54 @@ export function ProbabilityDistribution({
     linkedNoEdge != null &&
     linkedNoEdge > 0;
   const linkedContractOverpay =
-    linkedContractOverpriced && linkedMarketProbability != null && linkedMarketAsk != null
+    linkedContractOverpriced &&
+    linkedMarketProbability != null &&
+    linkedMarketAsk != null
       ? Number(linkedMarketAsk) - linkedMarketProbability
       : null;
-  const actionText =
-    !marketScan
+  const actionText = !marketScan
+    ? locale === "en-US"
+      ? "Waiting"
+      : "等待"
+    : !marketScan.available
       ? locale === "en-US"
-        ? "Waiting"
-        : "等待"
-      : !marketScan.available
+        ? "No market"
+        : "无盘口"
+      : actionableEdge == null
         ? locale === "en-US"
-          ? "No market"
-          : "无盘口"
-        : actionableEdge == null
-          ? locale === "en-US"
-            ? "No quote"
-            : "无报价"
-          : actionableEdge >= 0.02
+          ? "No quote"
+          : "无报价"
+        : actionableEdge >= 0.02
+          ? linkedContractOverpriced
+            ? locale === "en-US"
+              ? "Overpriced"
+              : "市场偏贵"
+            : locale === "en-US"
+              ? `Watch ${preferredSideLabel}`
+              : `可关注 ${preferredSideLabel}`
+          : actionableEdge > 0
             ? linkedContractOverpriced
               ? locale === "en-US"
-                ? "Overpriced"
-                : "市场偏贵"
+                ? "Slightly overpriced"
+                : "略偏贵"
               : locale === "en-US"
-                ? `Watch ${preferredSideLabel}`
-                : `可关注 ${preferredSideLabel}`
-            : actionableEdge > 0
-              ? linkedContractOverpriced
-                ? locale === "en-US"
-                  ? "Slightly overpriced"
-                  : "略偏贵"
-                : locale === "en-US"
-                  ? `Small ${preferredSideLabel}`
-                  : `${preferredSideLabel} 优势较小`
-              : locale === "en-US"
-                ? "No clear edge"
-                : "暂无优势";
+                ? `Small ${preferredSideLabel}`
+                : `${preferredSideLabel} 优势较小`
+            : locale === "en-US"
+              ? "No clear edge"
+              : "暂无优势";
   const actionNote =
     linkedContractOverpriced && linkedContractOverpay != null
       ? locale === "en-US"
         ? `YES above model by ${formatSignedPercent(linkedContractOverpay)}`
         : `YES 高于模型 ${formatSignedPercent(linkedContractOverpay)}`
       : actionableEdge != null && actionableEdge >= 0.02
-      ? locale === "en-US"
-        ? `${formatSignedPercent(actionableEdge)} vs ask`
-        : `相对买价 ${formatSignedPercent(actionableEdge)}`
-      : locale === "en-US"
-        ? `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`
-        : `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`;
+        ? locale === "en-US"
+          ? `${formatSignedPercent(actionableEdge)} vs ask`
+          : `相对买价 ${formatSignedPercent(actionableEdge)}`
+        : locale === "en-US"
+          ? `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`
+          : `${preferredSideLabel} ${formatSignedPercent(actionableEdge)}`;
 
   return (
     <section className="prob-section">
@@ -1140,7 +1168,7 @@ export function ProbabilityDistribution({
                 : `市场仅作参考：最高交易温度桶 ${topMarketBucketText}`
               : locale === "en-US"
                 ? `Market reference only: this bucket ${marketYesText}`
-              : `市场仅作参考：该温度桶 ${marketYesText}`}
+                : `市场仅作参考：该温度桶 ${marketYesText}`}
           </div>
         )}
         <div className="prob-distribution-panel">
@@ -1164,10 +1192,14 @@ export function ProbabilityDistribution({
             <EmptyState text={t("section.noProb")} />
           ) : (
             probabilityRows.map((row, index) => {
-              const probability = Math.round(Number(row.probability || 0) * 100);
+              const probability = Math.round(
+                Number(row.probability || 0) * 100,
+              );
               const rowMarketBucket = row.marketBucket;
               const rowMarketPrice =
-                rowMarketBucket?.yes_buy ?? rowMarketBucket?.market_price ?? null;
+                rowMarketBucket?.yes_buy ??
+                rowMarketBucket?.market_price ??
+                null;
               const yesPriceText = toPriceCents(rowMarketPrice);
               const marketTagFinal = rowMarketBucket
                 ? locale === "en-US"
@@ -1176,10 +1208,7 @@ export function ProbabilityDistribution({
                 : null;
 
               return (
-                <div
-                  key={`${row.key || index}`}
-                  className="prob-row"
-                >
+                <div key={`${row.key || index}`} className="prob-row">
                   <div className="prob-label">{row.label}</div>
                   <div className="prob-bar-track">
                     <div
@@ -1224,19 +1253,25 @@ export function ProbabilityDistribution({
                         ? `${actionText}: ${linkedContractLabel || "contract bucket"}`
                         : `${actionText}：${linkedContractLabel || "合约桶"}`
                       : preferredPriceView?.edge != null
-                  ? locale === "en-US"
-                    ? `${actionText} · edge ${formatSignedPercent(preferredPriceView.edge)}`
-                    : `${actionText} · 优势 ${formatSignedPercent(preferredPriceView.edge)}`
-                  : locale === "en-US"
-                    ? "Waiting for executable quote"
-                    : "等待可执行报价"}
+                        ? locale === "en-US"
+                          ? `${actionText} · edge ${formatSignedPercent(preferredPriceView.edge)}`
+                          : `${actionText} · 优势 ${formatSignedPercent(preferredPriceView.edge)}`
+                        : locale === "en-US"
+                          ? "Waiting for executable quote"
+                          : "等待可执行报价"}
               </strong>
             </div>
             <div className="prob-price-grid">
               <div>
-                <span>{locale === "en-US" ? "Contract bucket" : "合约桶口径"}</span>
-                <strong>{linkedContractLabel || topProbabilityLabel || "--"}</strong>
-                <em>{linkedMarketProbabilityText || topProbabilityText || "--"}</em>
+                <span>
+                  {locale === "en-US" ? "Contract bucket" : "合约桶口径"}
+                </span>
+                <strong>
+                  {linkedContractLabel || topProbabilityLabel || "--"}
+                </strong>
+                <em>
+                  {linkedMarketProbabilityText || topProbabilityText || "--"}
+                </em>
               </div>
               <div>
                 <span>{locale === "en-US" ? "Candidate" : "可关注"}</span>
@@ -1333,30 +1368,32 @@ export function ModelForecast({
   const sortedEntries = modelEntries.sort(
     (a, b) => Number(b[1] || 0) - Number(a[1] || 0),
   );
-  const groupedEntries = sortedEntries.reduce(
-    (acc, [name, value]) => {
-      const group = getModelGroupMeta(name, modelMetadata, locale);
-      const existing = acc.find((item) => item.key === group.key);
-      const entry = {
-        metaLine: formatModelMetaLine(name, modelMetadata, locale),
-        name,
-        value: Number(value),
-      };
-      if (existing) {
-        existing.entries.push(entry);
-      } else {
-        acc.push({ ...group, entries: [entry] });
-      }
-      return acc;
-    },
-    [] as Array<{
-      entries: Array<{ metaLine: string; name: string; value: number }>;
-      key: string;
-      label: string;
-      order: number;
-      tone: string;
-    }>,
-  ).sort((a, b) => a.order - b.order);
+  const groupedEntries = sortedEntries
+    .reduce(
+      (acc, [name, value]) => {
+        const group = getModelGroupMeta(name, modelMetadata, locale);
+        const existing = acc.find((item) => item.key === group.key);
+        const entry = {
+          metaLine: formatModelMetaLine(name, modelMetadata, locale),
+          name,
+          value: Number(value),
+        };
+        if (existing) {
+          existing.entries.push(entry);
+        } else {
+          acc.push({ ...group, entries: [entry] });
+        }
+        return acc;
+      },
+      [] as Array<{
+        entries: Array<{ metaLine: string; name: string; value: number }>;
+        key: string;
+        label: string;
+        order: number;
+        tone: string;
+      }>,
+    )
+    .sort((a, b) => a.order - b.order);
   const spread =
     numericValues.length >= 2
       ? Math.max(...numericValues) - Math.min(...numericValues)
@@ -1491,7 +1528,10 @@ export function ForecastTable() {
   const isForecastCompleting =
     store.loadingState.cityDetail &&
     (data.detail_depth !== "full" || isSparseDaily);
-  const resolveForecastTemp = (date: string, fallback: number | null | undefined) => {
+  const resolveForecastTemp = (
+    date: string,
+    fallback: number | null | undefined,
+  ) => {
     const debPrediction = data.multi_model_daily?.[date]?.deb?.prediction;
     return debPrediction ?? fallback ?? null;
   };
@@ -1513,62 +1553,66 @@ export function ForecastTable() {
         {daily.length === 0 ? (
           <EmptyState text={t("forecast.empty")} />
         ) : (
-          daily.map((day, index) => {
-            const isToday = day.date === data.local_date || index === 0;
-            const isSelected =
-              (isToday &&
-                store.forecastModalMode === "today" &&
-                Boolean(store.futureModalDate)) ||
-              (store.forecastModalMode !== "today" &&
-                store.futureModalDate === day.date) ||
-              store.selectedForecastDate === day.date;
-            return (
-              <button
-                key={day.date}
-                type="button"
-                className={clsx(
-                  "forecast-day",
-                  isToday && "today",
-                  isSelected && "selected",
-                )}
-                onClick={() => {
-                  startTransition(() => {
-                    if (isToday) {
-                      store.openTodayModal();
-                      return;
-                    }
-                    store.openFutureModal(day.date);
-                  });
-                }}
-              >
-                <div className="f-date">
-                  {isToday
-                    ? t("forecast.today")
-                    : day.date.substring(5).replace("-", "/")}
-                </div>
-                <div className="f-temp">
-                  {resolveForecastTemp(day.date, day.max_temp)}
-                  {data.temp_symbol}
-                </div>
-              </button>
-            );
-          }).concat(
-            isForecastCompleting
-              ? Array.from({ length: Math.max(0, 5 - daily.length) }).map((_, index) => (
-                  <button
-                    key={`forecast-sync-${index}`}
-                    type="button"
-                    className="forecast-day forecast-day-sync"
-                    disabled
-                  >
-                    <div className="f-date">
-                      {locale === "en-US" ? "Syncing" : "同步中"}
-                    </div>
-                    <div className="f-temp">--</div>
-                  </button>
-                ))
-              : [],
-          )
+          daily
+            .map((day, index) => {
+              const isToday = day.date === data.local_date || index === 0;
+              const isSelected =
+                (isToday &&
+                  store.forecastModalMode === "today" &&
+                  Boolean(store.futureModalDate)) ||
+                (store.forecastModalMode !== "today" &&
+                  store.futureModalDate === day.date) ||
+                store.selectedForecastDate === day.date;
+              return (
+                <button
+                  key={day.date}
+                  type="button"
+                  className={clsx(
+                    "forecast-day",
+                    isToday && "today",
+                    isSelected && "selected",
+                  )}
+                  onClick={() => {
+                    startTransition(() => {
+                      if (isToday) {
+                        store.openTodayModal();
+                        return;
+                      }
+                      store.openFutureModal(day.date);
+                    });
+                  }}
+                >
+                  <div className="f-date">
+                    {isToday
+                      ? t("forecast.today")
+                      : day.date.substring(5).replace("-", "/")}
+                  </div>
+                  <div className="f-temp">
+                    {resolveForecastTemp(day.date, day.max_temp)}
+                    {data.temp_symbol}
+                  </div>
+                </button>
+              );
+            })
+            .concat(
+              isForecastCompleting
+                ? Array.from({ length: Math.max(0, 5 - daily.length) }).map(
+                    (_, index) => (
+                      <button
+                        key={`forecast-sync-${index}`}
+                        type="button"
+                        className="forecast-day forecast-day-sync"
+                        disabled
+                      >
+                        <div className="f-date">
+                          {locale === "en-US" ? "Syncing" : "同步中"}
+                        </div>
+                        <div className="f-temp">--</div>
+                      </button>
+                    ),
+                  )
+                : [],
+            )
         )}
       </div>
     </section>

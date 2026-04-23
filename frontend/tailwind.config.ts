@@ -70,7 +70,7 @@ const config: Config = {
         "pw-xl": "var(--radius-xl)",
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(0, 229, 255, 0.15), 0 8px 32px rgba(8, 47, 73, 0.5)",
+        glow: "0 0 0 1px rgba(0, 224, 164, 0.15), 0 8px 32px rgba(8, 47, 73, 0.5)",
         "glow-accent": "var(--shadow-glow-accent)",
         "glow-secondary": "var(--shadow-glow-secondary)",
         "elevation-1": "var(--shadow-elevation-1)",
