@@ -232,6 +232,97 @@ def test_build_market_scan_lite_skips_related_buckets():
     assert called["bucket"] == 0
 
 
+def test_build_market_scan_aggregates_emos_probability_for_threshold_market():
+    layer = PolymarketReadOnlyLayer()
+
+    layer._find_primary_market = lambda *_args, **_kwargs: (
+        {
+            "id": "market-1",
+            "question": "Will the highest temperature in Shenzhen be 30C or higher on April 23?",
+            "slug": "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher",
+            "conditionId": "condition-1",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+        },
+        None,
+    )
+    layer._extract_market_tokens = lambda _market: [
+        {"outcome": "Yes", "token_id": "yes-token"},
+        {"outcome": "No", "token_id": "no-token"},
+    ]
+    layer._get_token_market_data = lambda token_id: (
+        {"buy": 0.42, "sell": 0.40, "midpoint": 0.41}
+        if token_id == "yes-token"
+        else {"buy": 0.61, "sell": 0.59, "midpoint": 0.60}
+    )
+    layer._build_top_temperature_buckets = lambda **_kwargs: []
+
+    scan = layer.build_market_scan(
+        city="Shenzhen",
+        target_date="2026-04-23",
+        temperature_bucket={"temp": 30, "probability": 0.30},
+        model_probability=0.30,
+        probability_distribution=[
+            {"value": 29, "probability": 0.20},
+            {"value": 30, "probability": 0.30},
+            {"value": 31, "probability": 0.50},
+        ],
+        temp_symbol="°C",
+    )
+
+    assert round(scan["model_probability"], 6) == 0.8
+    assert round(scan["edge_percent"], 6) == 39.0
+
+
+def test_build_top_temperature_buckets_use_aggregated_emos_probability():
+    layer = PolymarketReadOnlyLayer()
+
+    primary_market = {
+        "slug": "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher",
+        "question": "Will the highest temperature in Ankara be 14C or higher on March 12?",
+        "volumeNum": 1000,
+    }
+    markets = [
+        primary_market,
+        {
+            "slug": "highest-temperature-in-ankara-on-march-12-2026-15c-or-higher",
+            "question": "Will the highest temperature in Ankara be 15C or higher on March 12?",
+            "volumeNum": 900,
+        },
+    ]
+    layer._collect_related_temperature_markets = (
+        lambda city_key, target_date, primary_market: markets
+    )
+    layer._extract_market_tokens = lambda market: [
+        {"outcome": "Yes", "token_id": f"{market['slug']}|yes"},
+        {"outcome": "No", "token_id": f"{market['slug']}|no"},
+    ]
+    layer._get_token_market_data = lambda token_id: (
+        {"midpoint": 0.41, "buy": 0.42, "sell": 0.40}
+        if token_id.endswith("|yes")
+        else {"midpoint": 0.59, "buy": 0.60, "sell": 0.58}
+    )
+
+    rows = layer._build_top_temperature_buckets(
+        city_key="ankara",
+        target_date="2026-03-12",
+        primary_market=primary_market,
+        probability_distribution=[
+            {"value": 13, "probability": 0.10},
+            {"value": 14, "probability": 0.25},
+            {"value": 15, "probability": 0.35},
+            {"value": 16, "probability": 0.30},
+        ],
+        temp_symbol="°C",
+        limit=4,
+    )
+
+    assert round(rows[0]["probability"], 6) == 0.9
+    assert round(rows[0]["edge_percent"], 6) == 49.0
+    assert round(rows[1]["probability"], 6) == 0.65
+
+
 def test_hydrate_bucket_prices_uses_executable_quotes_without_midpoint():
     layer = PolymarketReadOnlyLayer()
     buckets = [

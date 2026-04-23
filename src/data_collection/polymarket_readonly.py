@@ -429,6 +429,8 @@ class PolymarketReadOnlyLayer:
         target_date: Any,
         temperature_bucket: Optional[Dict[str, Any]] = None,
         model_probability: Optional[float] = None,
+        probability_distribution: Optional[List[Dict[str, Any]]] = None,
+        temp_symbol: Optional[str] = None,
         fallback_sparkline: Optional[List[float]] = None,
         forced_market_slug: Optional[str] = None,
         include_related_buckets: bool = True,
@@ -629,6 +631,13 @@ class PolymarketReadOnlyLayer:
             or _extract_price(yes_prices.get("buy"))
             or _extract_price(yes_token.get("implied_probability"))
         )
+        distribution_model_probability = self._aggregate_distribution_probability_for_market(
+            market=market,
+            probability_distribution=probability_distribution,
+            temp_symbol=temp_symbol,
+        )
+        if distribution_model_probability is not None:
+            model_probability = distribution_model_probability
 
         edge_percent = None
         if model_probability is not None and market_price is not None:
@@ -651,6 +660,8 @@ class PolymarketReadOnlyLayer:
                 city_key=market_city_key,
                 target_date=date_str,
                 primary_market=market,
+                probability_distribution=probability_distribution,
+                temp_symbol=temp_symbol,
                 limit=all_bucket_limit,
             )
             top_buckets = list(all_buckets[:top_bucket_limit])
@@ -724,6 +735,7 @@ class PolymarketReadOnlyLayer:
                 "primary_market": primary_market_payload,
                 "selected_condition_id": condition_id,
                 "selected_slug": market_slug,
+                "model_probability": model_probability,
                 "market_price": market_price,
                 "midpoint": yes_midpoint if yes_midpoint is not None else market_price,
                 "spread": yes_spread,
@@ -1388,6 +1400,91 @@ class PolymarketReadOnlyLayer:
         month_name = dt.strftime("%B").lower()
         return f"highest-temperature-in-{city_slug}-on-{month_name}-{dt.day}-{dt.year}"
 
+    def _is_fahrenheit_symbol(self, symbol: Optional[str]) -> bool:
+        return "F" in str(symbol or "").upper()
+
+    def _convert_temp_to_market_unit(
+        self,
+        value: Optional[float],
+        source_symbol: Optional[str],
+        market_unit: Optional[str],
+    ) -> Optional[float]:
+        numeric = _safe_float(value)
+        if numeric is None:
+            return None
+        normalized_unit = str(market_unit or "").upper()
+        source_is_f = self._is_fahrenheit_symbol(source_symbol)
+        if normalized_unit == "F":
+            return numeric if source_is_f else (numeric * 9.0 / 5.0) + 32.0
+        return ((numeric - 32.0) * 5.0 / 9.0) if source_is_f else numeric
+
+    def _market_bucket_contains_distribution_temp(
+        self,
+        market: Dict[str, Any],
+        distribution_temp: Optional[float],
+        temp_symbol: Optional[str],
+    ) -> bool:
+        compare_temp = self._convert_temp_to_market_unit(
+            distribution_temp,
+            source_symbol=temp_symbol,
+            market_unit=(self._extract_market_bucket_range(market) or (None, None, "C"))[2],
+        )
+        if compare_temp is None:
+            return False
+
+        bucket_range = self._extract_market_bucket_range(market)
+        lower = bucket_range[0] if bucket_range else None
+        upper = bucket_range[1] if bucket_range else None
+        unit = bucket_range[2] if bucket_range else "C"
+        direction = self._extract_market_bucket_direction(market)
+
+        if lower is not None and upper is not None:
+            return compare_temp >= lower - 0.01 and compare_temp <= upper + 0.01
+        if lower is not None and direction == "above":
+            return compare_temp >= lower - 0.01
+        if lower is not None and direction == "below":
+            return compare_temp <= lower + 0.01
+
+        reference = self._extract_market_bucket_temp(market)
+        if reference is None:
+            return False
+        tolerance = 0.56 if str(unit or "").upper() == "F" else 0.26
+        return abs(compare_temp - reference) <= tolerance
+
+    def _aggregate_distribution_probability_for_market(
+        self,
+        market: Dict[str, Any],
+        probability_distribution: Optional[List[Dict[str, Any]]],
+        temp_symbol: Optional[str],
+    ) -> Optional[float]:
+        if not isinstance(probability_distribution, list) or not probability_distribution:
+            return None
+
+        total = 0.0
+        matched = 0
+        for row in probability_distribution:
+            if not isinstance(row, dict):
+                continue
+            distribution_temp = _safe_float(row.get("value"))
+            if distribution_temp is None:
+                continue
+            if not self._market_bucket_contains_distribution_temp(
+                market,
+                distribution_temp,
+                temp_symbol,
+            ):
+                continue
+            raw_probability = _safe_float(row.get("probability"))
+            if raw_probability is None:
+                continue
+            probability = raw_probability / 100.0 if raw_probability > 1.0 else raw_probability
+            probability = max(0.0, min(1.0, probability))
+            total += probability
+            matched += 1
+        if matched <= 0:
+            return None
+        return max(0.0, min(1.0, total))
+
     def _load_markets(self, active_only: bool = True) -> List[Dict[str, Any]]:
         now = time.time()
         with self._lock:
@@ -1644,6 +1741,8 @@ class PolymarketReadOnlyLayer:
         city_key: str,
         target_date: str,
         primary_market: Dict[str, Any],
+        probability_distribution: Optional[List[Dict[str, Any]]] = None,
+        temp_symbol: Optional[str] = None,
         limit: int = 4,
     ) -> List[Dict[str, Any]]:
         candidate_markets = self._collect_related_temperature_markets(
@@ -1656,6 +1755,7 @@ class PolymarketReadOnlyLayer:
 
         ranked: List[
             Tuple[
+                float,
                 float,
                 float,
                 float,
@@ -1701,6 +1801,11 @@ class PolymarketReadOnlyLayer:
                 continue
 
             market_prob = max(0.0, min(1.0, float(market_prob)))
+            model_prob = self._aggregate_distribution_probability_for_market(
+                market=market,
+                probability_distribution=probability_distribution,
+                temp_symbol=temp_symbol,
+            )
             volume = (
                 _extract_price(
                     market.get("volumeNum")
@@ -1711,9 +1816,10 @@ class PolymarketReadOnlyLayer:
             )
             ranked.append(
                 (
-                    market_prob,
+                    model_prob if model_prob is not None else market_prob,
                     volume,
                     bucket_temp,
+                    market_prob,
                     market,
                     yes_token,
                     no_token,
@@ -1735,9 +1841,10 @@ class PolymarketReadOnlyLayer:
 
         def _append_rows(enforce_primary_direction: bool) -> None:
             for (
-                market_prob,
+                model_prob,
                 _volume,
                 bucket_temp,
+                market_prob,
                 market,
                 yes_token,
                 no_token,
@@ -1779,8 +1886,14 @@ class PolymarketReadOnlyLayer:
                         "lower": bucket_range[0] if bucket_range else None,
                         "upper": bucket_range[1] if bucket_range else None,
                         "unit": bucket_range[2] if bucket_range else None,
-                        "probability": market_prob,
+                        "probability": model_prob,
+                        "model_probability": model_prob,
                         "market_price": yes_midpoint,
+                        "edge_percent": (
+                            (model_prob - yes_midpoint) * 100.0
+                            if model_prob is not None and yes_midpoint is not None
+                            else None
+                        ),
                         "yes_buy": yes_buy,
                         "yes_sell": yes_sell,
                         "no_buy": no_buy,

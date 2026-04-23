@@ -279,6 +279,7 @@ export interface DailyModelForecast {
     prediction?: number | null;
   };
   probabilities?: ProbabilityBucket[];
+  probabilities_all?: ProbabilityBucket[];
 }
 
 export interface MarketToken {

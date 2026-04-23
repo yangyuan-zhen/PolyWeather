@@ -381,6 +381,56 @@ function getNearbyMarkerDisplayOffset(
   return presets[index % presets.length];
 }
 
+function buildNearbyRenderSignature(
+  detail: CityDetail,
+  stations: NearbyStation[],
+) {
+  const uiLang =
+    typeof document !== "undefined"
+      ? String(document.documentElement.lang || "").toLowerCase()
+      : "";
+  const cityName = String(detail.name || "").trim().toLowerCase();
+  const cityLat = Number(detail.lat);
+  const cityLon = Number(detail.lon);
+  const stationSignature = stations
+    .map((station) =>
+      [
+        String(
+          station.station_code ||
+            station.station_label ||
+            station.name ||
+            station.icao ||
+            "",
+        )
+          .trim()
+          .toLowerCase(),
+        Number(station.lat).toFixed(5),
+        Number(station.lon).toFixed(5),
+        Number(station.temp ?? Number.NaN).toFixed(2),
+        String(station.obs_time_epoch || station.obs_time || "").trim(),
+        String(station.obs_time_label || "").trim(),
+        String(station.sync_status || "").trim().toLowerCase(),
+        Number(station.time_delta_vs_anchor_minutes ?? Number.NaN).toFixed(1),
+        Number(station.wind_dir ?? Number.NaN).toFixed(1),
+        Number(station.wind_speed ?? station.wind_speed_kt ?? Number.NaN).toFixed(
+          1,
+        ),
+        String(station.wind_direction_text || "").trim().toLowerCase(),
+        String(station.wind_power_text || "").trim().toLowerCase(),
+      ].join("|"),
+    )
+    .join("~");
+
+  return [
+    uiLang,
+    detail.temp_symbol || "",
+    cityName,
+    Number.isFinite(cityLat) ? cityLat.toFixed(5) : "",
+    Number.isFinite(cityLon) ? cityLon.toFixed(5) : "",
+    stationSignature,
+  ].join("::");
+}
+
 export function useLeafletMap({
   cities,
   cityDetailsByName,
@@ -422,6 +472,7 @@ export function useLeafletMap({
     null,
   );
   const lastNearbyRefreshAtRef = useRef<Record<string, number>>({});
+  const lastNearbyRenderSignatureRef = useRef<string | null>(null);
 
   useEffect(() => {
     onClosePanelRef.current = onClosePanel;
@@ -675,11 +726,29 @@ export function useLeafletMap({
         nearbyRefreshTimerRef.current = null;
       }
     };
+    const clearRenderedNearby = () => {
+      layer.clearLayers();
+      lastNearbyRenderSignatureRef.current = null;
+    };
 
     function renderNearbyStations(detail: CityDetail, preserveView = false) {
-      layer.clearLayers();
+      const nearbyStations = pickMapNearbyStations(detail).filter((station) => {
+        const sLat = Number(station.lat);
+        const sLon = Number(station.lon);
+        if (!Number.isFinite(sLat) || !Number.isFinite(sLon)) return false;
+        if (Math.abs(sLat) < 0.1 && Math.abs(sLon) < 0.1) return false;
+        return true;
+      });
+      const renderSignature = buildNearbyRenderSignature(detail, nearbyStations);
 
-      const nearbyStations = pickMapNearbyStations(detail);
+      if (
+        renderSignature === lastNearbyRenderSignatureRef.current &&
+        layer.getLayers().length === nearbyStations.length
+      ) {
+        return;
+      }
+
+      clearRenderedNearby();
 
       if (!nearbyStations.length) {
         if (!preserveView && detail.lat != null && detail.lon != null) {
@@ -692,6 +761,8 @@ export function useLeafletMap({
         return;
       }
 
+      lastNearbyRenderSignatureRef.current = renderSignature;
+
       const latLngs: Array<[number, number]> = [];
       if (detail.lat != null && detail.lon != null) {
         latLngs.push([detail.lat, detail.lon]);
@@ -700,10 +771,6 @@ export function useLeafletMap({
       nearbyStations.forEach((station) => {
         const sLat = Number(station.lat);
         const sLon = Number(station.lon);
-        // Ignore invalid (0,0) or null coordinates which cause global zoom-out
-        if (!Number.isFinite(sLat) || !Number.isFinite(sLon)) return;
-      if (Math.abs(sLat) < 0.1 && Math.abs(sLon) < 0.1) return;
-
         const displayOffset = getNearbyMarkerDisplayOffset(detail, station, latLngs.length);
         const styleAttr =
           displayOffset.x || displayOffset.y
@@ -772,7 +839,7 @@ export function useLeafletMap({
       if (selectedCity && isLoadingDetail) {
         autoNearbyCityRef.current = selectedCity;
         clearNearbyRefreshTimer();
-        layer.clearLayers();
+        clearRenderedNearby();
         return;
       }
 
@@ -803,7 +870,7 @@ export function useLeafletMap({
         if (map.getZoom() < AUTO_NEARBY_MIN_ZOOM) {
           autoNearbyCityRef.current = null;
           clearNearbyRefreshTimer();
-          layer.clearLayers();
+          clearRenderedNearby();
           return;
         }
 
@@ -824,7 +891,7 @@ export function useLeafletMap({
         if (!targetCity) {
           autoNearbyCityRef.current = null;
           clearNearbyRefreshTimer();
-          layer.clearLayers();
+          clearRenderedNearby();
           return;
         }
 

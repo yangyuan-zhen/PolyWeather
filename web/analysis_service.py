@@ -2267,6 +2267,7 @@ def _analyze(
             
             d_val, d_winfo = None, ""
             d_probs = []
+            d_probs_all = []
             if day_m:
                 try:
                     blended, winfo = calculate_dynamic_weights(city, day_m)
@@ -2285,6 +2286,7 @@ def _analyze(
                         
                         prob_obj = calculate_prob_distribution(d_val, d_sigma, None, sym)
                         d_probs = prob_obj.get("probabilities", [])
+                        d_probs_all = prob_obj.get("probabilities_all", d_probs)
                 except Exception:
                     pass
         
@@ -2292,7 +2294,8 @@ def _analyze(
             multi_model_daily[d_str] = {
                 "models": day_m,
                 "deb": {"prediction": d_val, "weights_info": d_winfo},
-                "probabilities": d_probs if i > 0 else probabilities # Use today's real prob for today
+                "probabilities": d_probs if i > 0 else probabilities, # Use today's real prob for today
+                "probabilities_all": d_probs_all if i > 0 else probabilities_all,
             }
 
     # ── Assemble result ──
@@ -2821,6 +2824,11 @@ def _build_city_market_scan_payload(
     distribution = selected_daily.get("probabilities")
     if not isinstance(distribution, list) or not distribution:
         distribution = data.get("probabilities", {}).get("distribution", []) or []
+    distribution_all = selected_daily.get("probabilities_all")
+    if not isinstance(distribution_all, list) or not distribution_all:
+        distribution_all = data.get("probabilities", {}).get("distribution_all", []) or []
+    if not distribution_all:
+        distribution_all = distribution
 
     model_map = selected_daily.get("models") or data.get("multi_model") or {}
     if not isinstance(model_map, dict):
@@ -2844,24 +2852,18 @@ def _build_city_market_scan_payload(
 
     primary_bucket = None
     if isinstance(distribution, list) and distribution:
-        if anchor_temp is None:
-            primary_bucket = distribution[0]
+        ranked_buckets = []
+        for idx, row in enumerate(distribution_all):
+            if not isinstance(row, dict):
+                continue
+            bucket_prob = _sf(row.get("probability"))
+            prob_rank = bucket_prob if bucket_prob is not None else -1.0
+            ranked_buckets.append((-prob_rank, idx, row))
+        if ranked_buckets:
+            ranked_buckets.sort(key=lambda x: (x[0], x[1]))
+            primary_bucket = ranked_buckets[0][2]
         else:
-            ranked_buckets = []
-            for idx, row in enumerate(distribution):
-                if not isinstance(row, dict):
-                    continue
-                bucket_temp = _sf(row.get("value"))
-                bucket_prob = _sf(row.get("probability"))
-                if bucket_temp is None:
-                    continue
-                prob_rank = bucket_prob if bucket_prob is not None else -1.0
-                ranked_buckets.append((abs(bucket_temp - anchor_temp), -prob_rank, idx, row))
-            if ranked_buckets:
-                ranked_buckets.sort(key=lambda x: (x[0], x[1], x[2]))
-                primary_bucket = ranked_buckets[0][3]
-            else:
-                primary_bucket = distribution[0]
+            primary_bucket = distribution[0]
 
     model_probability = None
     if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None:
@@ -2873,7 +2875,7 @@ def _build_city_market_scan_payload(
 
     fallback_sparkline = [
         p.get("probability", 0)
-        for p in distribution[:8]
+        for p in distribution_all[:8]
         if isinstance(p, dict)
     ]
     market_scan = _market_layer.build_market_scan(
@@ -2881,6 +2883,8 @@ def _build_city_market_scan_payload(
         target_date=selected_date or data.get("local_date"),
         temperature_bucket=primary_bucket if isinstance(primary_bucket, dict) else None,
         model_probability=model_probability,
+        probability_distribution=distribution_all,
+        temp_symbol=temp_symbol,
         fallback_sparkline=fallback_sparkline,
         forced_market_slug=market_slug,
         include_related_buckets=not lite,

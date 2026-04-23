@@ -1618,6 +1618,7 @@ function OpportunityStrip({
   const store = useDashboardStore();
   const stripState = useMemo(() => {
     const targetSet = new Set(scanTargetNames);
+    const totalCount = scanTargetNames.length || snapshots.length;
     const targetedSnapshots = (scanTargetNames.length
       ? snapshots.filter((snapshot) => targetSet.has(snapshot.city.name))
       : snapshots
@@ -1665,6 +1666,9 @@ function OpportunityStrip({
         }, 0) / tradableSnapshots.length
       : null;
     const bestTradableSnapshot = tradableSnapshots[0] || null;
+    const bestTradableEdge = bestTradableSnapshot
+      ? normalizeEdgePercent(getMarketEdgeValue(bestTradableSnapshot.detail))
+      : null;
     const bestTradableCityName = bestTradableSnapshot
       ? getLocalizedCityDisplay(
           bestTradableSnapshot.city,
@@ -1682,16 +1686,23 @@ function OpportunityStrip({
     const lowCount = snapshots.filter(
       (snapshot) => snapshot.city.deb_recent_tier === "low",
     ).length;
+    const noEdgeCount = Math.max(completedCount - tradableSnapshots.length, 0);
 
     return {
       items: tradableSnapshots.slice(0, 5),
+      totalCount,
       completedCount,
       pendingCount,
       errorCount,
       liveCount: liveSnapshots.length,
       tradableCount: tradableSnapshots.length,
+      noEdgeCount,
       yesCount,
       noCount,
+      avgTradableEdge,
+      bestTradableSnapshot,
+      bestTradableEdge,
+      bestTradableCityName,
       summaryCards: [
         {
           key: "scan-progress",
@@ -1699,7 +1710,7 @@ function OpportunityStrip({
           items: [
             {
               label: locale === "en-US" ? "Completed" : "已完成",
-              value: `${completedCount}/${scanTargetNames.length || snapshots.length}`,
+              value: `${completedCount}/${totalCount}`,
               accent: "cyan" as const,
             },
             {
@@ -1730,7 +1741,7 @@ function OpportunityStrip({
             },
             {
               label: locale === "en-US" ? "No edge" : "无机会",
-              value: String(Math.max(completedCount - tradableSnapshots.length, 0)),
+              value: String(noEdgeCount),
             },
           ],
         },
@@ -1779,6 +1790,8 @@ function OpportunityStrip({
           ],
         },
       ],
+      overviewKicker:
+        locale === "en-US" ? "EMOS Market Scanner" : "EMOS 交易扫描台",
       headingTitle:
         tradableSnapshots.length > 0
           ? locale === "en-US"
@@ -1786,11 +1799,49 @@ function OpportunityStrip({
             : `发现 ${tradableSnapshots.length} 个可交易市场 · 当前最佳 ${bestTradableCityName}`
           : pendingCount > 0
             ? locale === "en-US"
-              ? `Scanning ${completedCount}/${scanTargetNames.length || snapshots.length} cities`
-              : `正在扫描 ${completedCount}/${scanTargetNames.length || snapshots.length} 个城市市场层`
+              ? `Scanning ${completedCount}/${totalCount} cities`
+              : `正在扫描 ${completedCount}/${totalCount} 个城市市场层`
             : locale === "en-US"
               ? `Completed ${completedCount} scans · no tradable market`
               : `已完成 ${completedCount} 个城市扫描 · 当前无可交易市场`,
+      overviewBody:
+        tradableSnapshots.length > 0
+          ? locale === "en-US"
+            ? "Use EMOS distribution against the live CLOB quote and surface the highest executable edge first."
+            : "用 EMOS 概率分布对齐实时 CLOB 盘口，优先展示当前可执行 edge 最高的市场。"
+          : pendingCount > 0
+            ? locale === "en-US"
+              ? "The opportunity layer is filling active markets and will promote the first executable setup when quotes arrive."
+              : "机会层正在补齐活跃盘口，等最新报价返回后会直接抬出第一优先机会。"
+            : locale === "en-US"
+              ? "Scanner is live, but the current market prices do not beat the EMOS distribution yet."
+              : "扫描器在线，但当前盘口价格还没有跑赢 EMOS 概率分布。",
+      tapeStats: [
+        {
+          key: "coverage",
+          label: locale === "en-US" ? "Coverage" : "覆盖城市",
+          value: `${completedCount}/${totalCount}`,
+          accent: "cyan" as const,
+        },
+        {
+          key: "live",
+          label: locale === "en-US" ? "Live" : "在线盘口",
+          value: String(liveSnapshots.length),
+          accent: "green" as const,
+        },
+        {
+          key: "tradable",
+          label: locale === "en-US" ? "Tradable" : "可交易",
+          value: String(tradableSnapshots.length),
+          accent: "cyan" as const,
+        },
+        {
+          key: "avg-edge",
+          label: locale === "en-US" ? "Avg edge" : "平均优势",
+          value: formatEdge(avgTradableEdge),
+          accent: avgTradableEdge != null ? ("green" as const) : ("slate" as const),
+        },
+      ],
       yesCountLabel:
         locale === "en-US" ? `YES bias ${yesCount}` : `YES 倾向 ${yesCount}`,
       noCountLabel:
@@ -1800,84 +1851,293 @@ function OpportunityStrip({
 
   if (!snapshots.length) return null;
 
+  const heroSnapshot = stripState.bestTradableSnapshot;
+  const heroSide = getBestSide(heroSnapshot?.detail);
+  const heroSignalLabel =
+    heroSnapshot?.detail?.market_scan?.signal_label ||
+    (heroSide === "yes"
+      ? locale === "en-US"
+        ? "BUY YES"
+        : "买入 YES"
+      : heroSide === "no"
+        ? locale === "en-US"
+          ? "BUY NO"
+          : "买入 NO"
+        : locale === "en-US"
+          ? "MONITOR"
+          : "继续监控");
+  const heroSignalTone = heroSignalLabel.toLowerCase().includes("yes")
+    ? "yes"
+    : heroSignalLabel.toLowerCase().includes("no")
+      ? "no"
+      : "neutral";
+  const heroSymbol = heroSnapshot
+    ? getTempSymbol(heroSnapshot.city, heroSnapshot.summary, heroSnapshot.detail)
+    : "°C";
+  const heroTier =
+    heroSnapshot?.city.deb_recent_tier ||
+    heroSnapshot?.city.risk_level ||
+    heroSnapshot?.summary?.risk?.level ||
+    heroSnapshot?.detail?.risk?.level;
+  const heroCityName = heroSnapshot
+    ? getLocalizedCityDisplay(
+        heroSnapshot.city,
+        locale,
+        heroSnapshot.summary,
+        heroSnapshot.detail,
+      )
+    : "--";
+  const heroMarketBucket = heroSnapshot?.detail?.market_scan?.temperature_bucket;
+  const heroQuestion =
+    heroSnapshot?.detail?.market_scan?.primary_market?.question ||
+    `${getProbabilityLabel(heroMarketBucket || {}, heroSymbol)} ${
+      heroSnapshot?.detail?.market_scan?.selected_date ||
+      heroSnapshot?.detail?.local_date ||
+      ""
+    }`;
+  const heroEngine = (() => {
+    const engine = String(
+      heroSnapshot?.detail?.market_scan?.probability_engine || "EMOS",
+    ).toLowerCase();
+    if (engine.includes("emos")) return "EMOS";
+    return engine.toUpperCase();
+  })();
+  const heroModelProbability =
+    heroSnapshot?.detail?.market_scan?.model_probability ??
+    heroMarketBucket?.probability ??
+    null;
+  const heroMidpoint =
+    heroSnapshot?.detail?.market_scan?.midpoint ??
+    heroSnapshot?.detail?.market_scan?.market_price ??
+    null;
+  const heroSpread = heroSnapshot?.detail?.market_scan?.spread ?? null;
+  const heroConfidence =
+    heroSnapshot?.detail?.market_scan?.confidence || null;
+  const heroQuoteSource = heroSnapshot?.detail?.market_scan?.quote_source
+    ? String(heroSnapshot.detail.market_scan.quote_source)
+        .replaceAll("_", " ")
+        .toUpperCase()
+    : "CLOB REST";
+  const heroDateLabel =
+    heroSnapshot?.detail?.market_scan?.selected_date ||
+    heroSnapshot?.detail?.local_date ||
+    "--";
+  const heroSparkline = buildSparklinePoints(
+    heroSnapshot?.detail?.market_scan?.sparkline?.length
+      ? heroSnapshot.detail.market_scan.sparkline
+      : [
+          Number(
+            heroSnapshot?.summary?.current?.temp ??
+              heroSnapshot?.detail?.current?.temp ??
+              0,
+          ),
+          Number(
+            heroSnapshot?.summary?.deb?.prediction ??
+              heroSnapshot?.detail?.deb?.prediction ??
+              0,
+          ),
+          Number(
+            heroSnapshot?.detail?.forecast?.today_high ??
+              heroSnapshot?.summary?.deb?.prediction ??
+              0,
+          ),
+        ],
+  );
+  const secondaryItems = heroSnapshot
+    ? stripState.items.filter((snapshot) => snapshot.city.name !== heroSnapshot.city.name)
+    : [];
+
   return (
     <section
       className="home-opportunity-strip"
       aria-label={locale === "en-US" ? "Opportunity strip" : "机会条"}
     >
-      <div className="home-summary-grid">
-        {stripState.summaryCards.map((card) => (
-          <div key={card.key} className="home-summary-card">
-            <div className="home-summary-card-head">
-              <strong>{card.title}</strong>
+      <div className="opportunity-strip-topline">
+        <div className="opportunity-strip-copy">
+          <span className="opportunity-strip-kicker">
+            {stripState.overviewKicker}
+          </span>
+          <strong>{stripState.headingTitle}</strong>
+          <p>{stripState.overviewBody}</p>
+        </div>
+        <div className="opportunity-strip-tape" aria-live="polite">
+          {stripState.tapeStats.map((item) => (
+            <div
+              key={item.key}
+              className={clsx(
+                "opportunity-tape-pill",
+                item.accent ? `accent-${item.accent}` : undefined,
+              )}
+            >
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
             </div>
-            <div className="home-summary-card-body">
-              {card.items.map((item) => (
-                <div
-                  key={`${card.key}-${item.label}`}
-                  className="home-summary-stat"
-                >
-                  <b
-                    className={
-                      item.accent ? `accent-${item.accent}` : undefined
-                    }
+          ))}
+          <div className="opportunity-tape-pill accent-outline">
+            <span>{stripState.yesCountLabel}</span>
+          </div>
+          <div className="opportunity-tape-pill accent-outline">
+            <span>{stripState.noCountLabel}</span>
+          </div>
+        </div>
+      </div>
+      {heroSnapshot ? (
+        <>
+          <div className="opportunity-strip-main">
+            <button
+              type="button"
+              className="opportunity-hero-card"
+              onClick={() => void store.focusCity(heroSnapshot.city.name)}
+            >
+              <div className="opportunity-hero-header">
+                <div className="opportunity-hero-copy">
+                  <span className="opportunity-hero-kicker">
+                    {locale === "en-US" ? "Primary market" : "当前主机会"}
+                  </span>
+                  <div className="opportunity-hero-title-row">
+                    <strong>{heroCityName}</strong>
+                    <span className="opportunity-hero-date">{heroDateLabel}</span>
+                  </div>
+                  <p>{heroQuestion}</p>
+                </div>
+                <div className="opportunity-hero-tags">
+                  <span className="opportunity-hero-tag engine">{heroEngine}</span>
+                  <span
+                    className={clsx(
+                      "opportunity-hero-tag",
+                      `signal-${heroSignalTone}`,
+                    )}
                   >
-                    {item.value}
-                  </b>
-                  <span>{item.label}</span>
+                    {heroSignalLabel}
+                  </span>
+                  <span
+                    className={clsx(
+                      "opportunity-hero-tag",
+                      "risk",
+                      String(heroTier || "other"),
+                    )}
+                  >
+                    {getRiskCopy(heroTier as RiskLevel | undefined, locale)}
+                  </span>
+                </div>
+              </div>
+
+              <div className="opportunity-hero-body">
+                <div className="opportunity-hero-edgeblock">
+                  <span>
+                    {locale === "en-US" ? "Executable edge" : "可执行优势"}
+                  </span>
+                  <strong>{formatEdge(stripState.bestTradableEdge)}</strong>
+                  <em>
+                    {heroSide === "yes"
+                      ? locale === "en-US"
+                        ? "Prefer lifting the YES ask"
+                        : "优先吃 YES 买价"
+                      : heroSide === "no"
+                        ? locale === "en-US"
+                          ? "Prefer lifting the NO ask"
+                          : "优先吃 NO 买价"
+                        : locale === "en-US"
+                          ? "Keep monitoring executable quotes"
+                          : "继续观察可执行报价"}
+                  </em>
+                </div>
+
+                <div className="opportunity-hero-metrics">
+                  <div className="opportunity-hero-metric">
+                    <span>{locale === "en-US" ? "EMOS prob." : "EMOS 概率"}</span>
+                    <strong>{formatProbability(heroModelProbability)}</strong>
+                  </div>
+                  <div className="opportunity-hero-metric">
+                    <span>{locale === "en-US" ? "Midpoint" : "盘口中位"}</span>
+                    <strong>{formatCents(heroMidpoint)}</strong>
+                  </div>
+                  <div className="opportunity-hero-metric">
+                    <span>{locale === "en-US" ? "Spread" : "盘口点差"}</span>
+                    <strong>{formatCents(heroSpread)}</strong>
+                  </div>
+                  <div className="opportunity-hero-metric">
+                    <span>{locale === "en-US" ? "Confidence" : "信号强度"}</span>
+                    <strong>
+                      {heroConfidence
+                        ? String(heroConfidence).toUpperCase()
+                        : locale === "en-US"
+                          ? "LIVE"
+                          : "在线"}
+                    </strong>
+                  </div>
+                </div>
+
+                <div className="opportunity-hero-book">
+                  <div className="opportunity-book-side yes">
+                    <span>YES</span>
+                    <strong>{formatCents(heroSnapshot.detail?.market_scan?.yes_buy)}</strong>
+                  </div>
+                  <div className="opportunity-book-side no">
+                    <span>NO</span>
+                    <strong>{formatCents(heroSnapshot.detail?.market_scan?.no_buy)}</strong>
+                  </div>
+                  <div className="opportunity-hero-sparkline-wrap">
+                    <span>
+                      {locale === "en-US" ? "Market path" : "盘口走势"}
+                    </span>
+                    <svg
+                      className="opportunity-hero-sparkline"
+                      viewBox="0 0 132 44"
+                      aria-hidden="true"
+                    >
+                      {heroSparkline ? <polyline points={heroSparkline} /> : null}
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div className="opportunity-hero-footer">
+                <span>
+                  {heroQuoteSource} ·{" "}
+                  {locale === "en-US"
+                    ? "click for city detail"
+                    : "点击查看城市详情"}
+                </span>
+                <span>
+                  {locale === "en-US"
+                    ? `Avg edge ${formatEdge(stripState.avgTradableEdge)}`
+                    : `平均优势 ${formatEdge(stripState.avgTradableEdge)}`}
+                </span>
+              </div>
+            </button>
+
+            <div className="opportunity-side-grid">
+              {stripState.summaryCards.map((card) => (
+                <div key={card.key} className="opportunity-side-tile">
+                  <div className="opportunity-side-tile-head">
+                    <span>{card.title}</span>
+                  </div>
+                  <div className="opportunity-side-tile-body">
+                    {card.items.map((item) => (
+                      <div
+                        key={`${card.key}-${item.label}`}
+                        className="opportunity-side-stat"
+                      >
+                        <b
+                          className={
+                            item.accent ? `accent-${item.accent}` : undefined
+                          }
+                        >
+                          {item.value}
+                        </b>
+                        <span>{item.label}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
-        ))}
-      </div>
 
-      <div className="opportunity-strip-heading">
-        <div>
-          <span>
-            {locale === "en-US"
-              ? "Live Market Scan"
-              : "实时市场扫描"}
-          </span>
-          <strong>{stripState.headingTitle}</strong>
-        </div>
-        <div className="opportunity-strip-status" aria-live="polite">
-          <span className={clsx("opportunity-status-chip", "live")}>
-            {locale === "en-US"
-              ? `Live ${stripState.liveCount}`
-              : `在线 ${stripState.liveCount}`}
-          </span>
-          <span
-            className={clsx(
-              "opportunity-status-chip",
-              stripState.pendingCount > 0 ? "pending" : "muted",
-            )}
-          >
-            {locale === "en-US"
-              ? `Pending ${stripState.pendingCount}`
-              : `待补齐 ${stripState.pendingCount}`}
-          </span>
-          <span
-            className={clsx(
-              "opportunity-status-chip",
-              stripState.tradableCount > 0 ? "tradable" : "muted",
-            )}
-          >
-            {locale === "en-US"
-              ? `Tradable ${stripState.tradableCount}`
-              : `可交易 ${stripState.tradableCount}`}
-          </span>
-          <span className={clsx("opportunity-status-chip", "side")}>
-            {stripState.yesCountLabel}
-          </span>
-          <span className={clsx("opportunity-status-chip", "side")}>
-            {stripState.noCountLabel}
-          </span>
-        </div>
-      </div>
-      {stripState.items.length > 0 ? (
-        <div className="opportunity-card-grid top-opportunities">
-          {stripState.items.map(({ city, detail, summary }, index) => {
+          {secondaryItems.length > 0 ? (
+            <div className="opportunity-mini-grid">
+              {secondaryItems.map(({ city, detail, summary }, index) => {
                 const symbol = getTempSymbol(city, summary, detail);
                 const debPrediction =
                   summary?.deb?.prediction ?? detail?.deb?.prediction;
@@ -1917,14 +2177,17 @@ function OpportunityStrip({
                   <button
                     key={city.name}
                     type="button"
-                    className="opportunity-card"
+                    className="opportunity-mini-card"
                     onClick={() => void store.focusCity(city.name)}
                   >
-                    <div className="opportunity-card-header">
-                      <span className="opportunity-rank">{index + 1}</span>
-                      <span className="opportunity-city">
-                        {localizedCityName}
-                      </span>
+                    <div className="opportunity-mini-head">
+                      <div className="opportunity-mini-rank">
+                        <span>{index + 2}</span>
+                      </div>
+                      <div className="opportunity-mini-copy">
+                        <strong>{localizedCityName}</strong>
+                        <p>{marketQuestion}</p>
+                      </div>
                       <span
                         className={clsx(
                           "opportunity-pill",
@@ -1934,23 +2197,24 @@ function OpportunityStrip({
                         {getRiskCopy(tier as RiskLevel | undefined, locale)}
                       </span>
                     </div>
-                    <span className="opportunity-meta">
-                      {marketQuestion}
-                    </span>
-                    <div className="opportunity-card-footer">
-                      <div className="opportunity-price-pair">
-                        <span className="opportunity-yes">
-                          YES {formatCents(detail?.market_scan?.yes_buy)}
-                        </span>
-                        <span className="opportunity-no">
-                          NO {formatCents(detail?.market_scan?.no_buy)}
-                        </span>
-                      </div>
+
+                    <div className="opportunity-mini-metrics">
+                      <span className="opportunity-yes">
+                        YES {formatCents(detail?.market_scan?.yes_buy)}
+                      </span>
+                      <span className="opportunity-no">
+                        NO {formatCents(detail?.market_scan?.no_buy)}
+                      </span>
                       <span className="opportunity-edge">
                         {formatEdge(getMarketEdgeValue(detail))}
                       </span>
                     </div>
-                    <svg className="opportunity-sparkline" viewBox="0 0 92 28" aria-hidden="true">
+
+                    <svg
+                      className="opportunity-mini-sparkline"
+                      viewBox="0 0 96 28"
+                      aria-hidden="true"
+                    >
                       {opportunitySparkline ? (
                         <polyline points={opportunitySparkline} />
                       ) : null}
@@ -1958,7 +2222,9 @@ function OpportunityStrip({
                   </button>
                 );
               })}
-        </div>
+            </div>
+          ) : null}
+        </>
       ) : (
         <div className="opportunity-empty-state">
           <div className="opportunity-empty-copy">
@@ -1973,8 +2239,8 @@ function OpportunityStrip({
             </strong>
             <span>
               {locale === "en-US"
-                ? `Completed ${stripState.completedCount} cities, live ${stripState.liveCount}, tradable ${stripState.tradableCount}.`
-                : `已完成 ${stripState.completedCount} 个城市扫描，在线盘口 ${stripState.liveCount} 个，可交易机会 ${stripState.tradableCount} 个。`}
+                ? `Completed ${stripState.completedCount}/${stripState.totalCount} cities, live ${stripState.liveCount}, tradable ${stripState.tradableCount}.`
+                : `已完成 ${stripState.completedCount}/${stripState.totalCount} 个城市扫描，在线盘口 ${stripState.liveCount} 个，可交易机会 ${stripState.tradableCount} 个。`}
             </span>
           </div>
         </div>
