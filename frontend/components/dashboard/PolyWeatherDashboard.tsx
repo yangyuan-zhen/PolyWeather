@@ -21,6 +21,9 @@ import {
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { CitySidebar } from "@/components/dashboard/CitySidebar";
 import { HeaderBar } from "@/components/dashboard/HeaderBar";
+import { ScanFilterPanel } from "@/components/dashboard/ScanFilterPanel";
+import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
+import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import type {
   CityDetail,
@@ -163,8 +166,10 @@ function getProbabilityLabel(
   },
   symbol: string,
 ) {
-  if (bucket.label) return normalizeTemperatureBucketLabel(bucket.label, symbol);
-  if (bucket.bucket) return normalizeTemperatureBucketLabel(bucket.bucket, symbol);
+  if (bucket.label)
+    return normalizeTemperatureBucketLabel(bucket.label, symbol);
+  if (bucket.bucket)
+    return normalizeTemperatureBucketLabel(bucket.bucket, symbol);
   if (Number.isFinite(Number(bucket.value))) {
     return `≥ ${Math.round(Number(bucket.value))}${symbol}`;
   }
@@ -206,7 +211,9 @@ function getBucketMatchKey(bucket?: {
 }) {
   const threshold = parseBucketThreshold(bucket);
   if (threshold != null) return `t:${threshold.toFixed(2)}`;
-  return `l:${String(bucket?.label || bucket?.bucket || bucket?.range || "").trim().toLowerCase()}`;
+  return `l:${String(bucket?.label || bucket?.bucket || bucket?.range || "")
+    .trim()
+    .toLowerCase()}`;
 }
 
 function normalizeProbabilityValue(value: number | null | undefined) {
@@ -286,6 +293,31 @@ function formatEdge(value: number | null | undefined) {
   return `${sign}${normalized.toFixed(1)}%`;
 }
 
+function getScanStatusLabel(detail?: CityDetail | null): string {
+  const scan = detail?.market_scan;
+  if (!scan?.available) return "无盘口";
+  const pa = scan?.price_analysis;
+  const bestSide = pa?.best_side;
+  const sideView = bestSide === "no" ? pa?.no : pa?.yes;
+  const edgeVal =
+    sideView?.edge != null
+      ? Math.abs(Number(sideView.edge)) > 1
+        ? Number(sideView.edge) / 100
+        : Number(sideView.edge)
+      : null;
+  if (edgeVal != null && edgeVal >= 0.05) return "触达博弈";
+  if (edgeVal != null && edgeVal >= 0.02) return "即时确认";
+  if (edgeVal != null && edgeVal > 0) return "早期机会";
+  return "市场";
+}
+
+function formatVolume(value?: number | null): string {
+  if (value == null) return "--";
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `$${Math.round(value / 1_000)}K`;
+  return `$${value.toFixed(0)}`;
+}
+
 function normalizeEdgePercent(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return null;
   const numeric = Number(value);
@@ -301,7 +333,10 @@ function getBestSide(detail?: CityDetail | null) {
   return null;
 }
 
-function getSideEdgePercent(detail: CityDetail | null | undefined, side: "yes" | "no") {
+function getSideEdgePercent(
+  detail: CityDetail | null | undefined,
+  side: "yes" | "no",
+) {
   const sideAnalysis = detail?.market_scan?.price_analysis?.[side];
   return normalizeEdgePercent(sideAnalysis?.edge_percent ?? sideAnalysis?.edge);
 }
@@ -571,7 +606,9 @@ function buildAssistantOpportunityContext(
       detail?.airport_current?.max_so_far ??
       null,
     market_question: marketQuestion,
-    market_label: marketBucket ? getProbabilityLabel(marketBucket, symbol) : null,
+    market_label: marketBucket
+      ? getProbabilityLabel(marketBucket, symbol)
+      : null,
     selected_date: marketScan?.selected_date || detail?.local_date || null,
     best_side: marketScan?.price_analysis?.best_side || null,
     yes_price: normalizeAssistantCents(
@@ -623,10 +660,12 @@ function buildAssistantContextPayload(
     totals: {
       cities: snapshots.length,
       tradable_markets: opportunities.filter((item) => item.tradable).length,
-      high_risk: opportunities.filter((item) => item.risk_level === "high").length,
+      high_risk: opportunities.filter((item) => item.risk_level === "high")
+        .length,
       medium_risk: opportunities.filter((item) => item.risk_level === "medium")
         .length,
-      low_risk: opportunities.filter((item) => item.risk_level === "low").length,
+      low_risk: opportunities.filter((item) => item.risk_level === "low")
+        .length,
     },
     selected_city: selected,
     opportunities,
@@ -662,7 +701,8 @@ function buildAssistantContextPayload(
             },
             {
               term: "市场概率",
-              meaning: "市场概率来自 YES/NO 实时价格的隐含概率，而不是模型输出。",
+              meaning:
+                "市场概率来自 YES/NO 实时价格的隐含概率，而不是模型输出。",
             },
             {
               term: "DEB",
@@ -676,7 +716,10 @@ function buildAssistantContextPayload(
   };
 }
 
-function buildAssistantGreeting(locale: string, selectedCityName?: string | null) {
+function buildAssistantGreeting(
+  locale: string,
+  selectedCityName?: string | null,
+) {
   if (locale === "en-US") {
     return selectedCityName
       ? `Ask about ${selectedCityName}'s current temperature, today's forecast high, market edge, or live opportunities.`
@@ -1361,7 +1404,7 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 : "最佳机会"
               : locale === "en-US"
                 ? "FOCUS CITY"
-              : "焦点城市"}
+                : "焦点城市"}
           </span>
         </div>
       </div>
@@ -1547,54 +1590,55 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
 
       {tradableOpportunity ? (
         <div className={clsx("home-card-section market", !isPro && "locked")}>
-        <div className="home-market-header">
-          <h3>
-            {marketTitle} <small>ⓘ</small>
-          </h3>
-          <span>
-            {marketScan && !tradableOpportunity
-              ? locale === "en-US"
-                ? "Market closed"
-                : "市场已结束"
-              : locale === "en-US"
-                ? "Updated now"
-                : "刚刚更新"}
-          </span>
-        </div>
-        <div className="home-market-ticket">
-          <div className="home-market-question">
-            <strong>{marketLabel}</strong>
-            <span>{marketScan?.selected_date || detail?.local_date || ""}</span>
+          <div className="home-market-header">
+            <h3>
+              {marketTitle} <small>ⓘ</small>
+            </h3>
+            <span>
+              {marketScan && !tradableOpportunity
+                ? locale === "en-US"
+                  ? "Market closed"
+                  : "市场已结束"
+                : locale === "en-US"
+                  ? "Updated now"
+                  : "刚刚更新"}
+            </span>
           </div>
-          <div className="home-market-prices">
-            <span className="yes">YES {formatCents(yesPrice)}</span>
-            <span className="no">NO {formatCents(noPrice)}</span>
+          <div className="home-market-ticket">
+            <div className="home-market-question">
+              <strong>{marketLabel}</strong>
+              <span>
+                {marketScan?.selected_date || detail?.local_date || ""}
+              </span>
+            </div>
+            <div className="home-market-prices">
+              <span className="yes">YES {formatCents(yesPrice)}</span>
+              <span className="no">NO {formatCents(noPrice)}</span>
+            </div>
           </div>
-        </div>
-        <div className="home-market-metrics">
-          <span>
-            {marketEdgeLabel} <strong>{formatEdge(marketEdge)}</strong>
-          </span>
-          <span>
-            {marketImpliedLabel}{" "}
-            <strong>{formatProbability(marketProbability)}</strong>
-          </span>
-          <span>
-            {marketModelLabel}{" "}
-            <strong>{formatProbability(marketModelProbability)}</strong>
-          </span>
-          <svg viewBox="0 0 96 32" aria-hidden="true">
-            {sparklinePoints ? <polyline points={sparklinePoints} /> : null}
-          </svg>
-        </div>
-        {!isPro ? (
-          <Link href="/account" className="home-market-lock">
-            {locale === "en-US" ? "Unlock market layer" : "解锁市场层"}
-          </Link>
-        ) : null}
+          <div className="home-market-metrics">
+            <span>
+              {marketEdgeLabel} <strong>{formatEdge(marketEdge)}</strong>
+            </span>
+            <span>
+              {marketImpliedLabel}{" "}
+              <strong>{formatProbability(marketProbability)}</strong>
+            </span>
+            <span>
+              {marketModelLabel}{" "}
+              <strong>{formatProbability(marketModelProbability)}</strong>
+            </span>
+            <svg viewBox="0 0 96 32" aria-hidden="true">
+              {sparklinePoints ? <polyline points={sparklinePoints} /> : null}
+            </svg>
+          </div>
+          {!isPro ? (
+            <Link href="/account" className="home-market-lock">
+              {locale === "en-US" ? "Unlock market layer" : "解锁市场层"}
+            </Link>
+          ) : null}
         </div>
       ) : null}
-
     </aside>
   );
 }
@@ -1613,9 +1657,10 @@ function OpportunityStrip({
   const stripState = useMemo(() => {
     const targetSet = new Set(scanTargetNames);
     const totalCount = scanTargetNames.length || snapshots.length;
-    const targetedSnapshots = (scanTargetNames.length
-      ? snapshots.filter((snapshot) => targetSet.has(snapshot.city.name))
-      : snapshots
+    const targetedSnapshots = (
+      scanTargetNames.length
+        ? snapshots.filter((snapshot) => targetSet.has(snapshot.city.name))
+        : snapshots
     ).slice(0, Math.max(scanTargetNames.length, 1));
     const effectiveStatusByCity = Object.fromEntries(
       targetedSnapshots.map((snapshot) => [
@@ -1641,10 +1686,13 @@ function OpportunityStrip({
       .filter((snapshot) => snapshot.tradableOpportunity)
       .sort((left, right) => {
         const leftEdge = normalizeEdgePercent(getMarketEdgeValue(left.detail));
-        const rightEdge = normalizeEdgePercent(getMarketEdgeValue(right.detail));
+        const rightEdge = normalizeEdgePercent(
+          getMarketEdgeValue(right.detail),
+        );
         return (
           Number(rightEdge ?? Number.NEGATIVE_INFINITY) -
-            Number(leftEdge ?? Number.NEGATIVE_INFINITY) || right.score - left.score
+            Number(leftEdge ?? Number.NEGATIVE_INFINITY) ||
+          right.score - left.score
         );
       });
     const yesCount = liveSnapshots.filter(
@@ -1655,7 +1703,9 @@ function OpportunityStrip({
     ).length;
     const avgTradableEdge = tradableSnapshots.length
       ? tradableSnapshots.reduce((sum, snapshot) => {
-          const edge = normalizeEdgePercent(getMarketEdgeValue(snapshot.detail));
+          const edge = normalizeEdgePercent(
+            getMarketEdgeValue(snapshot.detail),
+          );
           return sum + (edge ?? 0);
         }, 0) / tradableSnapshots.length
       : null;
@@ -1675,8 +1725,8 @@ function OpportunityStrip({
       const marketScan = snapshot.detail?.market_scan;
       return Boolean(
         marketScan?.price_analysis?.available ||
-          marketScan?.yes_buy != null ||
-          marketScan?.no_buy != null,
+        marketScan?.yes_buy != null ||
+        marketScan?.no_buy != null,
       );
     }).length;
     const noEdgeCount = Math.max(quoteReadyCount - tradableSnapshots.length, 0);
@@ -1782,7 +1832,9 @@ function OpportunityStrip({
         },
       ],
       overviewKicker:
-        locale === "en-US" ? "EMOS / CLOB Decision Layer" : "EMOS / CLOB 交易决策层",
+        locale === "en-US"
+          ? "EMOS / CLOB Decision Layer"
+          : "EMOS / CLOB 交易决策层",
       headingTitle:
         tradableSnapshots.length > 0
           ? locale === "en-US"
@@ -1830,7 +1882,8 @@ function OpportunityStrip({
           key: "avg-edge",
           label: locale === "en-US" ? "Best edge" : "最佳 edge",
           value: formatEdge(bestTradableEdge),
-          accent: bestTradableEdge != null ? ("green" as const) : ("slate" as const),
+          accent:
+            bestTradableEdge != null ? ("green" as const) : ("slate" as const),
         },
       ],
       yesCountLabel:
@@ -1854,7 +1907,11 @@ function OpportunityStrip({
   const heroBestProbability = getBestSideModelProbability(heroSnapshot?.detail);
   const heroBestEdge = getExecutableEdgePercent(heroSnapshot?.detail);
   const heroSymbol = heroSnapshot
-    ? getTempSymbol(heroSnapshot.city, heroSnapshot.summary, heroSnapshot.detail)
+    ? getTempSymbol(
+        heroSnapshot.city,
+        heroSnapshot.summary,
+        heroSnapshot.detail,
+      )
     : "°C";
   const heroTier =
     heroSnapshot?.city.deb_recent_tier ||
@@ -1869,7 +1926,8 @@ function OpportunityStrip({
         heroSnapshot.detail,
       )
     : "--";
-  const heroMarketBucket = heroSnapshot?.detail?.market_scan?.temperature_bucket;
+  const heroMarketBucket =
+    heroSnapshot?.detail?.market_scan?.temperature_bucket;
   const heroQuestion =
     heroSnapshot?.detail?.market_scan?.primary_market?.question ||
     `${getProbabilityLabel(heroMarketBucket || {}, heroSymbol)} ${
@@ -1916,7 +1974,9 @@ function OpportunityStrip({
         ],
   );
   const secondaryItems = heroSnapshot
-    ? stripState.items.filter((snapshot) => snapshot.city.name !== heroSnapshot.city.name)
+    ? stripState.items.filter(
+        (snapshot) => snapshot.city.name !== heroSnapshot.city.name,
+      )
     : [];
 
   return (
@@ -1968,12 +2028,16 @@ function OpportunityStrip({
                   </span>
                   <div className="opportunity-hero-title-row">
                     <strong>{heroCityName}</strong>
-                    <span className="opportunity-hero-date">{heroDateLabel}</span>
+                    <span className="opportunity-hero-date">
+                      {heroDateLabel}
+                    </span>
                   </div>
                   <p>{heroQuestion}</p>
                 </div>
                 <div className="opportunity-hero-tags">
-                  <span className="opportunity-hero-tag engine">{heroEngine}</span>
+                  <span className="opportunity-hero-tag engine">
+                    {heroEngine}
+                  </span>
                   <span
                     className={clsx(
                       "opportunity-hero-tag",
@@ -2043,11 +2107,15 @@ function OpportunityStrip({
                 <div className="opportunity-hero-book">
                   <div className="opportunity-book-side yes">
                     <span>YES</span>
-                    <strong>{formatCents(heroSnapshot.detail?.market_scan?.yes_buy)}</strong>
+                    <strong>
+                      {formatCents(heroSnapshot.detail?.market_scan?.yes_buy)}
+                    </strong>
                   </div>
                   <div className="opportunity-book-side no">
                     <span>NO</span>
-                    <strong>{formatCents(heroSnapshot.detail?.market_scan?.no_buy)}</strong>
+                    <strong>
+                      {formatCents(heroSnapshot.detail?.market_scan?.no_buy)}
+                    </strong>
                   </div>
                   <div className="opportunity-hero-sparkline-wrap">
                     <span>
@@ -2058,7 +2126,9 @@ function OpportunityStrip({
                       viewBox="0 0 132 44"
                       aria-hidden="true"
                     >
-                      {heroSparkline ? <polyline points={heroSparkline} /> : null}
+                      {heroSparkline ? (
+                        <polyline points={heroSparkline} />
+                      ) : null}
                     </svg>
                   </div>
                 </div>
@@ -2242,8 +2312,9 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
   const selectedSnapshot = useMemo(
     () =>
       store.selectedCity
-        ? snapshots.find((snapshot) => snapshot.city.name === store.selectedCity) ||
-          null
+        ? snapshots.find(
+            (snapshot) => snapshot.city.name === store.selectedCity,
+          ) || null
         : null,
     [snapshots, store.selectedCity],
   );
@@ -2310,7 +2381,9 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
       }
       setDockPosition((current) =>
         clampAssistantDockPosition(
-          current || readAssistantDockPosition() || getDefaultAssistantDockPosition(),
+          current ||
+            readAssistantDockPosition() ||
+            getDefaultAssistantDockPosition(),
           dockRef.current,
         ),
       );
@@ -2496,7 +2569,9 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
             onPointerMove={updateDockDrag}
             onPointerUp={endDockDrag}
             onPointerCancel={endDockDrag}
-            aria-label={locale === "en-US" ? "Open AI assistant" : "打开 AI 助手"}
+            aria-label={
+              locale === "en-US" ? "Open AI assistant" : "打开 AI 助手"
+            }
           >
             <Image
               src="/favicon-32x32.png"
@@ -2513,7 +2588,9 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
           >
             <div className="home-ai-header">
               <div>
-                <strong>{locale === "en-US" ? "AI assistant" : "AI 对话助手"}</strong>
+                <strong>
+                  {locale === "en-US" ? "AI assistant" : "AI 对话助手"}
+                </strong>
                 <span>
                   {locale === "en-US"
                     ? "Ask about cities, forecast highs, edge, and live opportunities"
@@ -2536,7 +2613,9 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                   type="button"
                   className="home-ai-close"
                   onClick={() => setIsOpen(false)}
-                  aria-label={locale === "en-US" ? "Close assistant" : "关闭 AI 助手"}
+                  aria-label={
+                    locale === "en-US" ? "Close assistant" : "关闭 AI 助手"
+                  }
                 >
                   ×
                 </button>
@@ -2560,13 +2639,17 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                 >
                   <p>{message.content}</p>
                   {message.cached ? (
-                    <small>{locale === "en-US" ? "Cache hit" : "命中缓存"}</small>
+                    <small>
+                      {locale === "en-US" ? "Cache hit" : "命中缓存"}
+                    </small>
                   ) : null}
                 </div>
               ))}
               {loading ? (
                 <div className="home-ai-message assistant loading">
-                  <p>{locale === "en-US" ? "Thinking..." : "正在整理答案..."}</p>
+                  <p>
+                    {locale === "en-US" ? "Thinking..." : "正在整理答案..."}
+                  </p>
                 </div>
               ) : null}
               <div ref={messagesEndRef} />
@@ -2598,7 +2681,11 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                 }
               />
               <div className="home-ai-composer-actions">
-                {error ? <span className="home-ai-error">{error}</span> : <span />}
+                {error ? (
+                  <span className="home-ai-error">{error}</span>
+                ) : (
+                  <span />
+                )}
                 <button
                   type="submit"
                   className="home-ai-send"
@@ -2613,7 +2700,10 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
       </div>
 
       {showPaywall ? (
-        <div className="home-ai-paywall-backdrop" onClick={() => setShowPaywall(false)}>
+        <div
+          className="home-ai-paywall-backdrop"
+          onClick={() => setShowPaywall(false)}
+        >
           <div
             className="home-ai-paywall-shell"
             onClick={(event) => event.stopPropagation()}
@@ -2822,7 +2912,10 @@ function DashboardScreen() {
 
     void refreshAllMarketScans();
     intervalId = window.setInterval(() => {
-      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+      if (
+        typeof document !== "undefined" &&
+        document.visibilityState === "hidden"
+      ) {
         return;
       }
       void refreshAllMarketScans();
@@ -2851,28 +2944,328 @@ function DashboardScreen() {
         modalChromeStyles.root,
       )}
     >
-      <MapCanvas />
       <HeaderBar />
-      <CitySidebar />
-      {showHomepageChrome ? (
-        <>
-          <HomeIntelligencePanel snapshots={homepageSnapshots} />
-          <OpportunityStrip
-            snapshots={homepageSnapshots}
-            marketScanStatusByCity={marketScanStatusByCity}
-            scanTargetNames={marketScanTargetNames}
+      <div className="scan-terminal">
+        {/* Left — Filter Panel */}
+        <ScanFilterPanel />
+
+        {/* Center — Data Grid */}
+        <div className="scan-data-grid">
+          <div className="scan-data-grid-header">
+            <div>
+              <div className="scan-data-grid-title">
+                {t("dashboard.opportunityTitle") || "可交易机会"}
+              </div>
+              <div className="scan-data-grid-subtitle">
+                {t("dashboard.opportunitySubtitle") ||
+                  "基于当前时间、实况数据和模型预测，筛选出最具交易价值的市场"}
+              </div>
+            </div>
+          </div>
+
+          <ScanKPIBar
+            data={{
+              recommendedCount: homepageSnapshots.filter(
+                (s) => s.tradableOpportunity,
+              ).length,
+              avgEdge: (() => {
+                const tradable = homepageSnapshots.filter(
+                  (s) => s.tradableOpportunity,
+                );
+                if (!tradable.length) return null;
+                const sum = tradable.reduce((acc, s) => {
+                  const edge = normalizeEdgePercent(
+                    getMarketEdgeValue(s.detail),
+                  );
+                  return acc + (edge ?? 0);
+                }, 0);
+                return (sum / tradable.length) * 100;
+              })(),
+              totalWinRate: (() => {
+                const tradable = homepageSnapshots.filter(
+                  (s) => s.tradableOpportunity,
+                );
+                if (!tradable.length) return null;
+                const modelProbs = tradable
+                  .map((s) => s.detail?.market_scan?.model_probability)
+                  .filter((v): v is number => v != null);
+                if (!modelProbs.length) return null;
+                return (
+                  (modelProbs.reduce((a, b) => a + b, 0) / modelProbs.length) *
+                  100
+                );
+              })(),
+              tradableMarkets: homepageSnapshots.filter(
+                (s) => s.tradableOpportunity,
+              ).length,
+              filteredTotal: homepageSnapshots.length,
+              totalVolume: homepageSnapshots.reduce((sum, s) => {
+                const vol =
+                  s.detail?.market_scan?.volume ??
+                  s.detail?.market_scan?.primary_market?.volume ??
+                  0;
+                return sum + vol;
+              }, 0),
+            }}
           />
-          <HomeAssistantDock snapshots={homepageSnapshots} />
-        </>
-      ) : null}
-      {showCitySyncToast ? (
-        <div className="city-loading-toast" role="status" aria-live="polite">
-          <span className="city-loading-dot" aria-hidden="true" />
-          <span className="city-loading-copy">
-            {t("dashboard.loading")} {activeCityName}
-          </span>
+
+          <div className="scan-view-tabs">
+            <button className="scan-view-tab active">
+              {t("dashboard.opportunityList") || "机会列表"}
+            </button>
+            <button className="scan-view-tab">
+              {t("dashboard.distributionView") || "分布视图"}
+            </button>
+            <button className="scan-view-tab">
+              {t("dashboard.calendarView") || "日历视图"}
+            </button>
+          </div>
+
+          <OpportunityTable
+            rows={homepageSnapshots.map((snapshot, index) => ({
+              rank: index + 1,
+              city: snapshot.city,
+              summary: snapshot.summary,
+              detail: snapshot.detail,
+              score: snapshot.score,
+              tradable: snapshot.tradableOpportunity,
+            }))}
+          />
         </div>
-      ) : null}
+
+        {/* Right — Scan Detail Panel */}
+        {store.selectedDetail ? (
+          <aside className="scan-detail-panel">
+            {/* City Header */}
+            <div className="scan-detail-header">
+              <span className="scan-detail-hero-placeholder" />
+              <div className="scan-detail-city-info">
+                <div className="scan-detail-city-name">{activeCityName}</div>
+                <div className="scan-detail-city-sub">
+                  {getScanStatusLabel(store.selectedDetail)}
+                  {" · "}
+                  {store.selectedDetail.temp_symbol === "°F" ? "≥ " : "≥ "}
+                  {store.selectedDetail.forecast?.today_high != null
+                    ? `${store.selectedDetail.forecast.today_high}${store.selectedDetail.temp_symbol}`
+                    : "--"}
+                </div>
+                <div className="scan-detail-volume">
+                  {formatVolume(store.selectedDetail.market_scan?.volume)} · 24h{" "}
+                  {store.selectedDetail.market_scan?.primary_market
+                    ?.liquidity != null
+                    ? `$${store.selectedDetail.market_scan.primary_market.liquidity.toLocaleString()}`
+                    : ""}
+                </div>
+              </div>
+            </div>
+
+            {/* Current Conditions */}
+            <div className="scan-detail-section">
+              <div className="scan-detail-section-title">
+                {t("section.currentConditions") || "当前概况"}
+              </div>
+              <div className="scan-conditions-table">
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.localTime") || "当前时间"}
+                  </span>
+                  <span className="scan-condition-value">
+                    {store.selectedDetail.local_time}
+                  </span>
+                </div>
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.currentTemp") || "当前温度"}
+                  </span>
+                  <span className="scan-condition-value accent-green">
+                    {store.selectedDetail.current?.temp != null
+                      ? `${store.selectedDetail.current.temp.toFixed(1)}${store.selectedDetail.temp_symbol}`
+                      : "--"}
+                  </span>
+                </div>
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.todayHigh") || "今日最高"}
+                  </span>
+                  <span className="scan-condition-value">
+                    {store.selectedDetail.current?.max_so_far != null
+                      ? `${store.selectedDetail.current.max_so_far.toFixed(1)}${store.selectedDetail.temp_symbol}`
+                      : "--"}
+                  </span>
+                </div>
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.targetTemp") || "目标温度"}
+                  </span>
+                  <span className="scan-condition-value">
+                    {store.selectedDetail.deb?.prediction != null
+                      ? `${store.selectedDetail.deb.prediction.toFixed(1)}${store.selectedDetail.temp_symbol}`
+                      : "--"}
+                  </span>
+                </div>
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.gap") || "距目标差距"}
+                  </span>
+                  <span
+                    className={`scan-condition-value ${
+                      store.selectedDetail.current?.temp != null &&
+                      store.selectedDetail.deb?.prediction != null
+                        ? store.selectedDetail.deb.prediction -
+                            (store.selectedDetail.current.max_so_far ??
+                              store.selectedDetail.current.temp) >
+                          0
+                          ? "accent-red"
+                          : "accent-green"
+                        : ""
+                    }`}
+                  >
+                    {store.selectedDetail.current?.temp != null &&
+                    store.selectedDetail.deb?.prediction != null
+                      ? `${(store.selectedDetail.deb.prediction - (store.selectedDetail.current.max_so_far ?? store.selectedDetail.current.temp)).toFixed(1)}${store.selectedDetail.temp_symbol}`
+                      : "--"}
+                  </span>
+                </div>
+                <div className="scan-condition-item">
+                  <span className="scan-condition-label">
+                    {t("detail.peakWindow") || "预计峰值"}
+                  </span>
+                  <span className="scan-condition-value">
+                    {store.selectedDetail.peak?.hours?.join(" - ") || "--"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Trade Recommendation */}
+            {store.selectedDetail.market_scan?.price_analysis && (
+              <div className="scan-detail-section">
+                <div className="scan-detail-section-title">
+                  {t("section.tradeRecommendation") || "推荐交易"}
+                </div>
+                <div className="scan-trade-cards">
+                  <div className="scan-trade-card yes">
+                    <div className="scan-trade-card-title">
+                      买入 Yes{" "}
+                      {store.selectedDetail.market_scan?.temperature_bucket
+                        ?.label || ""}
+                    </div>
+                    <div className="scan-trade-card-price">
+                      {store.selectedDetail.market_scan?.price_analysis?.yes
+                        ?.ask != null
+                        ? `${(store.selectedDetail.market_scan.price_analysis.yes.ask * 100).toFixed(0)}%`
+                        : "--"}
+                      {" → "}
+                      {store.selectedDetail.market_scan?.price_analysis?.yes
+                        ?.model_probability != null
+                        ? `${(store.selectedDetail.market_scan.price_analysis.yes.model_probability * 100).toFixed(0)}%`
+                        : "--"}
+                    </div>
+                    <div
+                      className={`scan-trade-card-edge ${
+                        (store.selectedDetail.market_scan?.price_analysis?.yes
+                          ?.edge ?? 0) > 0
+                          ? "positive"
+                          : "negative"
+                      }`}
+                    >
+                      {store.selectedDetail.market_scan?.price_analysis?.yes
+                        ?.edge != null
+                        ? `${store.selectedDetail.market_scan.price_analysis.yes.edge > 0 ? "+" : ""}${(store.selectedDetail.market_scan.price_analysis.yes.edge * 100).toFixed(1)}% 边际优势`
+                        : "--"}
+                    </div>
+                  </div>
+                  <div className="scan-trade-card no">
+                    <div className="scan-trade-card-title">
+                      卖出 Yes{" "}
+                      {store.selectedDetail.market_scan?.temperature_bucket
+                        ?.label || ""}
+                    </div>
+                    <div className="scan-trade-card-price">
+                      {store.selectedDetail.market_scan?.price_analysis?.no
+                        ?.ask != null
+                        ? `${(store.selectedDetail.market_scan.price_analysis.no.ask * 100).toFixed(0)}%`
+                        : "--"}
+                      {" → "}
+                      {store.selectedDetail.market_scan?.price_analysis?.no
+                        ?.model_probability != null
+                        ? `${(1 - store.selectedDetail.market_scan.price_analysis.no.model_probability) * 100 > 0 ? `${((1 - store.selectedDetail.market_scan.price_analysis.no.model_probability) * 100).toFixed(0)}%` : "--"}`
+                        : "--"}
+                    </div>
+                    <div
+                      className={`scan-trade-card-edge ${
+                        (store.selectedDetail.market_scan?.price_analysis?.no
+                          ?.edge ?? 0) > 0
+                          ? "positive"
+                          : "negative"
+                      }`}
+                    >
+                      {store.selectedDetail.market_scan?.price_analysis?.no
+                        ?.edge != null
+                        ? `${store.selectedDetail.market_scan.price_analysis.no.edge > 0 ? "+" : ""}${(store.selectedDetail.market_scan.price_analysis.no.edge * 100).toFixed(1)}% 边际优势`
+                        : "--"}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Score */}
+            <div className="scan-detail-score">
+              <div>
+                <span
+                  className="scan-detail-score-big"
+                  style={{
+                    color: (() => {
+                      const snap = homepageSnapshots.find(
+                        (s) => s.city.name === store.selectedCity,
+                      );
+                      const score = snap?.score ?? 0;
+                      return score >= 80
+                        ? "#00E0A4"
+                        : score >= 60
+                          ? "#FFB020"
+                          : "#FF4D6A";
+                    })(),
+                  }}
+                >
+                  {homepageSnapshots.find(
+                    (s) => s.city.name === store.selectedCity,
+                  )?.score ?? "--"}
+                </span>
+                <span className="scan-detail-score-suffix"> /100</span>
+              </div>
+              <div>
+                <div className="scan-detail-score-label">
+                  {t("detail.compositeScore") || "综合得分"}
+                </div>
+                <div className="scan-confidence-dots">
+                  {[1, 2, 3, 4, 5].map((i) => {
+                    const snap = homepageSnapshots.find(
+                      (s) => s.city.name === store.selectedCity,
+                    );
+                    const score = snap?.score ?? 0;
+                    const filled = score >= i * 20;
+                    return (
+                      <span
+                        key={i}
+                        className={`scan-confidence-dot ${filled ? "filled" : ""} ${score < 60 ? "red" : score < 80 ? "amber" : ""}`}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </aside>
+        ) : (
+          <aside className="scan-detail-panel">
+            <div className="scan-detail-empty">
+              {t("detail.selectCity") || "← 点击左侧行查看详情"}
+            </div>
+          </aside>
+        )}
+      </div>
+
       {store.historyState.isOpen && <HistoryModal />}
       {store.futureModalDate && <FutureForecastModal />}
       {showLoading && (
@@ -2882,31 +3275,11 @@ function DashboardScreen() {
               <span className="loading-cloud loading-cloud-1" />
               <span className="loading-cloud loading-cloud-2" />
             </div>
-            <div className="loading-windfield" aria-hidden="true">
-              <span className="loading-windline loading-windline-1" />
-              <span className="loading-windline loading-windline-2" />
-              <span className="loading-windline loading-windline-3" />
-            </div>
             <div className="loading-radar" aria-hidden="true">
               <div className="loading-radar-core" />
               <div className="loading-radar-ring loading-radar-ring-1" />
               <div className="loading-radar-ring loading-radar-ring-2" />
               <div className="loading-radar-sweep" />
-              <div className="loading-radar-blip loading-radar-blip-1" />
-              <div className="loading-radar-blip loading-radar-blip-2" />
-            </div>
-            <div className="loading-thermals" aria-hidden="true">
-              <span className="loading-thermal loading-thermal-1" />
-              <span className="loading-thermal loading-thermal-2" />
-              <span className="loading-thermal loading-thermal-3" />
-              <span className="loading-thermal loading-thermal-4" />
-            </div>
-            <div className="loading-drizzle" aria-hidden="true">
-              <span className="loading-drizzle-drop loading-drizzle-drop-1" />
-              <span className="loading-drizzle-drop loading-drizzle-drop-2" />
-              <span className="loading-drizzle-drop loading-drizzle-drop-3" />
-              <span className="loading-drizzle-drop loading-drizzle-drop-4" />
-              <span className="loading-drizzle-drop loading-drizzle-drop-5" />
             </div>
             <div className="loading-copy">
               <strong>PolyWeather</strong>
