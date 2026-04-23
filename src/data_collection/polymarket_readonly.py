@@ -189,6 +189,27 @@ def _clamp_probability(value: Optional[float]) -> Optional[float]:
     return value
 
 
+def _clamp_float(value: Optional[float], lower: float, upper: float) -> Optional[float]:
+    if value is None:
+        return None
+    return max(lower, min(upper, float(value)))
+
+
+def _parse_hhmm_to_minutes(value: Any) -> Optional[int]:
+    text = str(value or "").strip()
+    if not text or ":" not in text:
+        return None
+    try:
+        hh, mm = text.split(":", 1)
+        hour = int(hh)
+        minute = int(mm[:2])
+    except Exception:
+        return None
+    if hour < 0 or hour > 23 or minute < 0 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+
 def _extract_iso_date(value: Any) -> Optional[str]:
     if not value:
         return None
@@ -434,6 +455,8 @@ class PolymarketReadOnlyLayer:
         fallback_sparkline: Optional[List[float]] = None,
         forced_market_slug: Optional[str] = None,
         include_related_buckets: bool = True,
+        scan_filters: Optional[Dict[str, Any]] = None,
+        scan_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         date_str = _extract_iso_date(target_date) or str(target_date or "")
         city_key = _normalize_city_key(city)
@@ -478,6 +501,14 @@ class PolymarketReadOnlyLayer:
             "all_buckets": [],
             "recent_trades": [],
             "scan_scope": "full" if include_related_buckets else "lite",
+            "distribution_bias": None,
+            "window_phase": None,
+            "window_score": None,
+            "primary_signal": None,
+            "signal_status": "no_market",
+            "candidate_count": 0,
+            "scan_rows": [],
+            "resolved_market_type": "maxtemp",
             "websocket": {
                 "enabled": False,
                 "status": "disabled_rest_only",
@@ -713,6 +744,28 @@ class PolymarketReadOnlyLayer:
             no_buy=no_buy,
             no_sell=no_sell,
         )
+        distribution_scan = self._build_distribution_scan_pack(
+            city_key=market_city_key,
+            target_date=date_str,
+            primary_market=market,
+            probability_distribution=probability_distribution,
+            temp_symbol=temp_symbol,
+            scan_context=scan_context,
+            scan_filters=scan_filters,
+        )
+        primary_signal = distribution_scan.get("primary_signal")
+        if isinstance(primary_signal, dict):
+            signal_label = str(primary_signal.get("action") or signal_label or "").strip() or signal_label
+            signal_score = _safe_float(primary_signal.get("final_score"))
+            if signal_score is not None and signal_score >= 85.0:
+                confidence = "high"
+            elif signal_score is not None and signal_score >= 70.0:
+                confidence = "medium"
+            elif signal_score is not None:
+                confidence = "low"
+            signal_edge = _safe_float(primary_signal.get("edge_percent"))
+            if signal_edge is not None:
+                edge_percent = signal_edge
 
         sparkline_values: List[float] = []
         for candidate in (
@@ -761,6 +814,14 @@ class PolymarketReadOnlyLayer:
                 "sparkline": sparkline_values,
                 "top_buckets": top_buckets,
                 "all_buckets": all_buckets,
+                "distribution_bias": distribution_scan.get("distribution_bias"),
+                "window_phase": distribution_scan.get("window_phase"),
+                "window_score": distribution_scan.get("window_score"),
+                "primary_signal": primary_signal,
+                "signal_status": distribution_scan.get("signal_status"),
+                "candidate_count": distribution_scan.get("candidate_count"),
+                "scan_rows": distribution_scan.get("rows") or [],
+                "resolved_market_type": distribution_scan.get("resolved_market_type") or "maxtemp",
                 "websocket": {
                     "enabled": False,
                     "status": "disabled_rest_only",
@@ -1682,8 +1743,8 @@ class PolymarketReadOnlyLayer:
 
     def _fetch_token_market_data(self, token_id: str) -> Dict[str, Any]:
         # REST-only path: CLOB public endpoints.
-        buy = _extract_price(self._clob_get("/price", {"token_id": token_id, "side": "BUY"}))
-        sell = _extract_price(
+        bid = _extract_price(self._clob_get("/price", {"token_id": token_id, "side": "BUY"}))
+        ask = _extract_price(
             self._clob_get("/price", {"token_id": token_id, "side": "SELL"})
         )
         midpoint = _extract_price(self._clob_get("/midpoint", {"token_id": token_id}))
@@ -1692,7 +1753,7 @@ class PolymarketReadOnlyLayer:
         )
         orderbook_raw = self._clob_get("/book", {"token_id": token_id})
         book, book_liquidity = self._normalize_orderbook(orderbook_raw)
-        buy, sell = self._resolve_trade_prices(buy=buy, sell=sell, book=book)
+        buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=book)
         return {
             "buy": buy,
             "sell": sell,
@@ -2120,3 +2181,897 @@ class PolymarketReadOnlyLayer:
         ):
             return "below"
         return "exact"
+
+    def _clob_post(self, path: str, payload: Any) -> Any:
+        url = f"{self.clob_url}{path}"
+        try:
+            resp = self._session.post(url, json=payload, timeout=self.http_timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception:
+            return None
+
+    def _batch_chunks(self, values: List[str], size: int = 200) -> List[List[str]]:
+        if not values:
+            return []
+        chunk_size = max(1, min(int(size or 200), 500))
+        return [values[index : index + chunk_size] for index in range(0, len(values), chunk_size)]
+
+    def _extract_payload_token_id(self, payload: Any) -> Optional[str]:
+        item = _to_plain_dict(payload)
+        if not item and isinstance(payload, dict):
+            item = payload
+        if not item:
+            return None
+        token_id = str(
+            item.get("asset_id")
+            or item.get("assetId")
+            or item.get("token_id")
+            or item.get("tokenId")
+            or item.get("id")
+            or ""
+        ).strip()
+        return token_id or None
+
+    def _extract_batch_scalar_map(self, payload: Any) -> Dict[str, float]:
+        if not payload:
+            return {}
+        data = payload
+        if isinstance(data, dict):
+            for key in ("data", "midpoints", "spreads", "items", "results"):
+                nested = data.get(key)
+                if isinstance(nested, (dict, list)):
+                    data = nested
+                    break
+        result: Dict[str, float] = {}
+        if isinstance(data, dict):
+            for key, value in data.items():
+                numeric = _extract_price(value)
+                if numeric is None:
+                    continue
+                result[str(key).strip()] = numeric
+            return result
+        if isinstance(data, list):
+            for item in data:
+                token_id = self._extract_payload_token_id(item)
+                if not token_id:
+                    continue
+                item_dict = _to_plain_dict(item)
+                numeric = _extract_price(
+                    item_dict.get("midpoint")
+                    or item_dict.get("mid_price")
+                    or item_dict.get("spread")
+                    or item_dict.get("price")
+                    or item_dict.get("last_trade_price")
+                    or item_dict.get("value")
+                )
+                if numeric is None:
+                    continue
+                result[token_id] = numeric
+        return result
+
+    def _extract_batch_price_map(self, payload: Any, side: str) -> Dict[str, float]:
+        if not payload:
+            return {}
+        data = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+        result: Dict[str, float] = {}
+        if not isinstance(data, dict):
+            return result
+        for token_id, side_map in data.items():
+            token_key = str(token_id).strip()
+            if not token_key:
+                continue
+            item = _to_plain_dict(side_map)
+            if not item and isinstance(side_map, dict):
+                item = side_map
+            numeric = _extract_price(item.get(side) if item else side_map)
+            if numeric is None:
+                continue
+            result[token_key] = numeric
+        return result
+
+    def _extract_batch_book_map(self, payload: Any) -> Dict[str, Dict[str, Any]]:
+        if not payload:
+            return {}
+        data = payload
+        if isinstance(data, dict):
+            for key in ("data", "books", "items", "results"):
+                nested = data.get(key)
+                if isinstance(nested, (dict, list)):
+                    data = nested
+                    break
+        result: Dict[str, Dict[str, Any]] = {}
+        if isinstance(data, dict):
+            for token_id, book in data.items():
+                token_key = str(token_id).strip()
+                book_dict = _to_plain_dict(book)
+                if not token_key or not book_dict:
+                    continue
+                result[token_key] = book_dict
+            return result
+        if isinstance(data, list):
+            for item in data:
+                token_id = self._extract_payload_token_id(item)
+                book_dict = _to_plain_dict(item)
+                if not token_id or not book_dict:
+                    continue
+                result[token_id] = book_dict
+        return result
+
+    def _batch_get_token_market_data(
+        self,
+        token_ids: List[str],
+        *,
+        include_books: bool = False,
+    ) -> Dict[str, Dict[str, Any]]:
+        unique_tokens = []
+        seen = set()
+        for token_id in token_ids:
+            normalized = str(token_id or "").strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            unique_tokens.append(normalized)
+
+        if not unique_tokens:
+            return {}
+
+        now = time.time()
+        results: Dict[str, Dict[str, Any]] = {}
+        missing: List[str] = []
+        with self._lock:
+            for token_id in unique_tokens:
+                cached = self._price_cache.get(token_id)
+                if not cached or now - cached.get("t", 0) >= self.price_cache_ttl:
+                    missing.append(token_id)
+                    continue
+                cached_data = cached.get("data", {}) or {}
+                if include_books and not cached_data.get("book") and cached_data.get("book_liquidity") is None:
+                    missing.append(token_id)
+                    continue
+                results[token_id] = dict(cached_data)
+
+        if not missing:
+            return results
+
+        ask_map: Dict[str, float] = {}
+        bid_map: Dict[str, float] = {}
+        midpoint_map: Dict[str, float] = {}
+        spread_map: Dict[str, float] = {}
+        last_trade_map: Dict[str, float] = {}
+        book_map: Dict[str, Dict[str, Any]] = {}
+
+        for chunk in self._batch_chunks(missing):
+            sell_payload = self._clob_post(
+                "/prices",
+                [{"token_id": token_id, "side": "SELL"} for token_id in chunk],
+            )
+            buy_payload = self._clob_post(
+                "/prices",
+                [{"token_id": token_id, "side": "BUY"} for token_id in chunk],
+            )
+            midpoint_payload = self._clob_post(
+                "/midpoints",
+                [{"token_id": token_id} for token_id in chunk],
+            )
+            spread_payload = self._clob_post(
+                "/spreads",
+                [{"token_id": token_id} for token_id in chunk],
+            )
+            last_trade_payload = self._clob_post(
+                "/last-trade-prices",
+                [{"token_id": token_id} for token_id in chunk],
+            )
+            books_payload = (
+                self._clob_post(
+                    "/books",
+                    [{"token_id": token_id} for token_id in chunk],
+                )
+                if include_books
+                else None
+            )
+            ask_map.update(self._extract_batch_price_map(sell_payload, "SELL"))
+            bid_map.update(self._extract_batch_price_map(buy_payload, "BUY"))
+            midpoint_map.update(self._extract_batch_scalar_map(midpoint_payload))
+            spread_map.update(self._extract_batch_scalar_map(spread_payload))
+            last_trade_map.update(self._extract_batch_scalar_map(last_trade_payload))
+            if include_books:
+                book_map.update(self._extract_batch_book_map(books_payload))
+
+        fetched: Dict[str, Dict[str, Any]] = {}
+        unresolved: List[str] = []
+        for token_id in missing:
+            raw_book = book_map.get(token_id)
+            book, book_liquidity = self._normalize_orderbook(raw_book)
+            ask = _extract_price(ask_map.get(token_id))
+            bid = _extract_price(bid_map.get(token_id))
+            midpoint = _extract_price(midpoint_map.get(token_id))
+            spread = _extract_price(spread_map.get(token_id))
+            last_trade = _extract_price(last_trade_map.get(token_id))
+
+            buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=book)
+            if midpoint is None and buy is not None and sell is not None:
+                midpoint = (buy + sell) / 2.0
+            if midpoint is None:
+                midpoint = _extract_price(raw_book.get("last_trade_price") if isinstance(raw_book, dict) else None)
+            if spread is None and buy is not None and sell is not None:
+                spread = max(0.0, float(buy) - float(sell))
+            if spread is not None and midpoint is not None:
+                midpoint = _clamp_probability(midpoint)
+            if buy is None and midpoint is not None and spread is not None:
+                buy = _clamp_probability(midpoint + spread / 2.0)
+            if sell is None and midpoint is not None and spread is not None:
+                sell = _clamp_probability(midpoint - spread / 2.0)
+
+            if (
+                buy is None
+                and sell is None
+                and midpoint is None
+                and last_trade is None
+                and book is None
+            ):
+                unresolved.append(token_id)
+                continue
+
+            fetched[token_id] = {
+                "buy": buy,
+                "sell": sell,
+                "midpoint": midpoint,
+                "spread": spread,
+                "last_trade_price": last_trade,
+                "quote_source": "polymarket_clob_rest_batch",
+                "quote_age_ms": 0,
+                "book": book,
+                "book_liquidity": book_liquidity,
+            }
+
+        for token_id in unresolved:
+            fetched[token_id] = self._fetch_token_market_data(token_id)
+
+        with self._lock:
+            for token_id, data in fetched.items():
+                self._price_cache[token_id] = {"data": data, "t": now}
+
+        results.update(fetched)
+        return results
+
+    def _normalize_scan_filters(self, scan_filters: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        raw = scan_filters if isinstance(scan_filters, dict) else {}
+        min_price = _clamp_float(_safe_float(raw.get("min_price")), 0.0, 1.0)
+        max_price = _clamp_float(_safe_float(raw.get("max_price")), 0.0, 1.0)
+        if min_price is None:
+            min_price = 0.05
+        if max_price is None:
+            max_price = 0.95
+        if min_price > max_price:
+            min_price, max_price = max_price, min_price
+
+        high_liquidity_only = bool(_safe_bool(raw.get("high_liquidity_only")))
+        min_liquidity = _safe_float(raw.get("min_liquidity"))
+        if min_liquidity is None:
+            min_liquidity = 5000.0 if high_liquidity_only else float(self.min_liquidity_for_signal or 500.0)
+        if high_liquidity_only:
+            min_liquidity = max(min_liquidity, 5000.0)
+
+        return {
+            "scan_mode": str(raw.get("scan_mode") or "tradable").strip().lower() or "tradable",
+            "min_price": float(min_price),
+            "max_price": float(max_price),
+            "min_edge_pct": max(0.0, _safe_float(raw.get("min_edge_pct")) or float(self.edge_threshold or 2.0)),
+            "min_liquidity": max(0.0, float(min_liquidity)),
+            "high_liquidity_only": high_liquidity_only,
+            "market_type": str(raw.get("market_type") or "maxtemp").strip().lower() or "maxtemp",
+            "time_range": str(raw.get("time_range") or "today").strip().lower() or "today",
+            "limit": max(1, _safe_int(raw.get("limit"), 60)),
+            "max_spread": max(0.0, _safe_float(raw.get("max_spread")) or 0.03),
+        }
+
+    def _build_window_meta(
+        self,
+        target_date: str,
+        scan_context: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        context = scan_context if isinstance(scan_context, dict) else {}
+        local_date = _extract_iso_date(context.get("local_date")) or _extract_iso_date(target_date)
+        local_time = context.get("local_time")
+        peak = context.get("peak") if isinstance(context.get("peak"), dict) else {}
+        first_h = int(_safe_float(peak.get("first_h")) or 13)
+        last_h = int(_safe_float(peak.get("last_h")) or 15)
+        target_iso = _extract_iso_date(target_date)
+        if not local_date or not target_iso:
+            return {
+                "phase": "today_default",
+                "score": 0.65,
+                "remaining_minutes": None,
+                "same_day": True,
+            }
+
+        try:
+            diff_days = (
+                datetime.fromisoformat(target_iso).date()
+                - datetime.fromisoformat(local_date).date()
+            ).days
+        except Exception:
+            diff_days = 0
+
+        if diff_days >= 2:
+            return {
+                "phase": "week_ahead",
+                "score": 0.45,
+                "remaining_minutes": None,
+                "same_day": False,
+            }
+        if diff_days == 1:
+            return {
+                "phase": "tomorrow",
+                "score": 0.60,
+                "remaining_minutes": None,
+                "same_day": False,
+            }
+        if diff_days < 0:
+            return {
+                "phase": "past",
+                "score": 0.0,
+                "remaining_minutes": None,
+                "same_day": False,
+            }
+
+        now_minutes = _parse_hhmm_to_minutes(local_time)
+        if now_minutes is None:
+            return {
+                "phase": "today_default",
+                "score": 0.65,
+                "remaining_minutes": None,
+                "same_day": True,
+            }
+
+        first_minutes = max(0, first_h * 60)
+        last_minutes = min(23 * 60 + 59, last_h * 60)
+        if now_minutes > last_minutes + 120:
+            return {
+                "phase": "post_peak",
+                "score": 0.50,
+                "remaining_minutes": 0,
+                "same_day": True,
+            }
+        if first_minutes <= now_minutes <= last_minutes + 120:
+            return {
+                "phase": "active_peak",
+                "score": 1.00,
+                "remaining_minutes": max(0, last_minutes + 120 - now_minutes),
+                "same_day": True,
+            }
+        if first_minutes - 180 <= now_minutes < first_minutes:
+            return {
+                "phase": "setup_today",
+                "score": 0.85,
+                "remaining_minutes": max(0, last_minutes + 120 - now_minutes),
+                "same_day": True,
+            }
+        return {
+            "phase": "early_today",
+            "score": 0.70,
+            "remaining_minutes": max(0, first_minutes - now_minutes),
+            "same_day": True,
+        }
+
+    def _resolve_market_target_threshold(
+        self,
+        market_direction: str,
+        bucket_range: Optional[Tuple[float, Optional[float], str]],
+        bucket_temp: Optional[float],
+    ) -> Optional[float]:
+        if not bucket_range:
+            return bucket_temp
+        lower, upper, _unit = bucket_range
+        if market_direction in {"above", "below"}:
+            return lower
+        if upper is not None:
+            return (lower + upper) / 2.0
+        return lower
+
+    def _resolve_temperature_direction(
+        self,
+        *,
+        side: str,
+        market_direction: str,
+        target_threshold: Optional[float],
+        current_reference: Optional[float],
+    ) -> str:
+        if market_direction == "above":
+            return "hotter" if side == "yes" else "colder"
+        if market_direction == "below":
+            return "colder" if side == "yes" else "hotter"
+        hotter_bias = True
+        if target_threshold is not None and current_reference is not None:
+            hotter_bias = target_threshold >= current_reference
+        if side == "yes":
+            return "hotter" if hotter_bias else "colder"
+        return "colder" if hotter_bias else "hotter"
+
+    def _is_trend_aligned(
+        self,
+        *,
+        temperature_direction: str,
+        trend_info: Optional[Dict[str, Any]],
+        network_lead_signal: Optional[Dict[str, Any]],
+    ) -> bool:
+        trend = trend_info if isinstance(trend_info, dict) else {}
+        network = network_lead_signal if isinstance(network_lead_signal, dict) else {}
+        trend_direction = _normalize_text(trend.get("direction"))
+        if temperature_direction == "hotter" and trend_direction == "rising":
+            return True
+        if temperature_direction == "colder" and trend_direction in {"falling", "stagnant"}:
+            return True
+        lead_delta = _safe_float(network.get("delta"))
+        if lead_delta is None:
+            return False
+        if temperature_direction == "hotter":
+            return lead_delta > 0
+        return lead_delta < 0
+
+    def _build_distribution_scan_pack(
+        self,
+        *,
+        city_key: str,
+        target_date: str,
+        primary_market: Dict[str, Any],
+        probability_distribution: Optional[List[Dict[str, Any]]] = None,
+        temp_symbol: Optional[str] = None,
+        scan_context: Optional[Dict[str, Any]] = None,
+        scan_filters: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        filters = self._normalize_scan_filters(scan_filters)
+        window_meta = self._build_window_meta(target_date, scan_context)
+        rows: List[Dict[str, Any]] = []
+        related_markets = self._collect_related_temperature_markets(
+            city_key=city_key,
+            target_date=target_date,
+            primary_market=primary_market,
+        )
+        if not related_markets:
+            return {
+                "rows": [],
+                "distribution_bias": {
+                    "available": False,
+                    "value": None,
+                    "direction": "balanced",
+                    "score": 0.0,
+                    "valid_markets": 0,
+                },
+                "primary_signal": None,
+                "signal_status": "no_market",
+                "candidate_count": 0,
+                "window_phase": window_meta.get("phase"),
+                "window_score": window_meta.get("score"),
+                "resolved_market_type": "maxtemp",
+            }
+
+        market_entries: List[Dict[str, Any]] = []
+        token_ids: List[str] = []
+        for market in related_markets:
+            tokens = self._extract_market_tokens(market)
+            yes_token, no_token = self._resolve_yes_no_tokens(tokens)
+            if not yes_token or not no_token:
+                continue
+            yes_token_id = str(yes_token.get("token_id") or "").strip()
+            no_token_id = str(no_token.get("token_id") or "").strip()
+            if not yes_token_id or not no_token_id:
+                continue
+            bucket_range = self._extract_market_bucket_range(market)
+            bucket_temp = self._extract_market_bucket_temp(market)
+            raw_direction = self._extract_market_bucket_direction(market)
+            market_direction = "range" if bucket_range and bucket_range[1] is not None else raw_direction
+            model_event_probability = self._aggregate_distribution_probability_for_market(
+                market=market,
+                probability_distribution=probability_distribution,
+                temp_symbol=temp_symbol,
+            )
+            token_ids.extend([yes_token_id, no_token_id])
+            market_entries.append(
+                {
+                    "market": market,
+                    "yes_token": yes_token,
+                    "no_token": no_token,
+                    "yes_token_id": yes_token_id,
+                    "no_token_id": no_token_id,
+                    "bucket_range": bucket_range,
+                    "bucket_temp": bucket_temp,
+                    "market_direction": market_direction,
+                    "target_threshold": self._resolve_market_target_threshold(
+                        market_direction,
+                        bucket_range,
+                        bucket_temp,
+                    ),
+                    "target_label": self._extract_market_bucket_label(market, bucket_temp),
+                    "model_event_probability": model_event_probability,
+                    "market_liquidity": _extract_price(
+                        market.get("liquidityNum")
+                        or market.get("liquidity")
+                        or market.get("liquidityClob")
+                    ),
+                    "volume": _extract_price(
+                        market.get("volumeNum")
+                        or market.get("volume")
+                        or market.get("volume24hr")
+                    ),
+                    "trade_state": self._market_trade_state(market),
+                    "enable_order_book": bool(
+                        market.get("enableOrderBook", market.get("enable_order_book", False))
+                    ),
+                }
+            )
+
+        broad_quotes = self._batch_get_token_market_data(token_ids, include_books=False)
+        bias_inputs: List[Tuple[float, float]] = []
+        for entry in market_entries:
+            yes_quote = broad_quotes.get(entry["yes_token_id"], {})
+            no_quote = broad_quotes.get(entry["no_token_id"], {})
+            market_event_probability = (
+                _extract_price(yes_quote.get("midpoint"))
+                or _extract_price(yes_quote.get("buy"))
+                or _extract_price(yes_quote.get("sell"))
+                or _extract_price(entry["yes_token"].get("implied_probability"))
+            )
+            if market_event_probability is not None:
+                market_event_probability = _clamp_probability(market_event_probability)
+            yes_ask = _extract_price(yes_quote.get("buy"))
+            yes_bid = _extract_price(yes_quote.get("sell"))
+            no_ask = _extract_price(no_quote.get("buy"))
+            no_bid = _extract_price(no_quote.get("sell"))
+            if no_ask is None and yes_ask is not None:
+                no_ask = _clamp_probability(1.0 - yes_bid) if yes_bid is not None else None
+            if no_bid is None and yes_bid is not None:
+                no_bid = _clamp_probability(1.0 - yes_ask) if yes_ask is not None else None
+            spread = _extract_price(yes_quote.get("spread"))
+            if spread is None and yes_ask is not None and yes_bid is not None:
+                spread = max(0.0, yes_ask - yes_bid)
+
+            entry["market_event_probability"] = market_event_probability
+            entry["yes_ask"] = yes_ask
+            entry["yes_bid"] = yes_bid
+            entry["no_ask"] = no_ask
+            entry["no_bid"] = no_bid
+            entry["midpoint"] = _extract_price(yes_quote.get("midpoint")) or market_event_probability
+            entry["spread"] = spread
+            entry["yes_book_liquidity"] = _extract_price(yes_quote.get("book_liquidity"))
+            entry["no_book_liquidity"] = _extract_price(no_quote.get("book_liquidity"))
+            entry["quote_source"] = yes_quote.get("quote_source") or no_quote.get("quote_source")
+            entry["quote_age_ms"] = _safe_int(
+                yes_quote.get("quote_age_ms") if yes_quote.get("quote_age_ms") is not None else no_quote.get("quote_age_ms"),
+                0,
+            )
+
+            model_event_probability = _clamp_probability(_safe_float(entry.get("model_event_probability")))
+            if (
+                model_event_probability is not None
+                and market_event_probability is not None
+                and entry["market_direction"] in {"above", "below"}
+            ):
+                gap = model_event_probability - market_event_probability
+                signed_gap = -gap if entry["market_direction"] == "below" else gap
+                bias_inputs.append((max(model_event_probability, 0.08), signed_gap))
+
+        distribution_bias_value = None
+        distribution_bias_score = 0.0
+        distribution_bias_direction = "balanced"
+        if len(bias_inputs) >= 3:
+            total_weight = sum(weight for weight, _signed_gap in bias_inputs)
+            if total_weight > 0:
+                distribution_bias_value = sum(weight * signed_gap for weight, signed_gap in bias_inputs) / total_weight
+                distribution_bias_score = max(0.0, min(abs(distribution_bias_value) / 0.08, 1.0)) * 100.0
+                if distribution_bias_value >= 0.015:
+                    distribution_bias_direction = "hotter"
+                elif distribution_bias_value <= -0.015:
+                    distribution_bias_direction = "colder"
+
+        distribution_bias = {
+            "available": len(bias_inputs) >= 3 and distribution_bias_value is not None,
+            "value": distribution_bias_value,
+            "direction": distribution_bias_direction,
+            "score": distribution_bias_score,
+            "valid_markets": len(bias_inputs),
+        }
+
+        current_reference_raw = _safe_float(
+            (scan_context or {}).get("current_max_so_far")
+            or (scan_context or {}).get("current_temp")
+        )
+
+        def _row_from_entry(entry: Dict[str, Any], side: str) -> Optional[Dict[str, Any]]:
+            model_event_probability = _clamp_probability(_safe_float(entry.get("model_event_probability")))
+            market_event_probability = _clamp_probability(_safe_float(entry.get("market_event_probability")))
+            ask = _clamp_probability(_safe_float(entry.get("yes_ask") if side == "yes" else entry.get("no_ask")))
+            bid = _clamp_probability(_safe_float(entry.get("yes_bid") if side == "yes" else entry.get("no_bid")))
+            if model_event_probability is None or ask is None:
+                return None
+
+            model_probability = (
+                model_event_probability
+                if side == "yes"
+                else _clamp_probability(1.0 - model_event_probability)
+            )
+            market_probability = (
+                market_event_probability
+                if side == "yes"
+                else _clamp_probability(1.0 - market_event_probability)
+            )
+            if model_probability is None:
+                return None
+
+            market = entry["market"]
+            target_threshold = _safe_float(entry.get("target_threshold"))
+            bucket_range = entry.get("bucket_range")
+            market_unit = bucket_range[2] if bucket_range else ("F" if self._is_fahrenheit_symbol(temp_symbol) else "C")
+            current_reference = self._convert_temp_to_market_unit(
+                current_reference_raw,
+                source_symbol=temp_symbol,
+                market_unit=market_unit,
+            )
+            gap_to_target = (
+                target_threshold - current_reference
+                if target_threshold is not None and current_reference is not None
+                else None
+            )
+            temperature_direction = self._resolve_temperature_direction(
+                side=side,
+                market_direction=str(entry.get("market_direction") or "exact"),
+                target_threshold=target_threshold,
+                current_reference=current_reference,
+            )
+            trend_alignment = self._is_trend_aligned(
+                temperature_direction=temperature_direction,
+                trend_info=(scan_context or {}).get("trend"),
+                network_lead_signal=(scan_context or {}).get("network_lead_signal"),
+            )
+            edge = model_probability - ask
+            edge_percent = edge * 100.0
+            liquidity_reference = max(
+                _safe_float(
+                    entry.get("yes_book_liquidity") if side == "yes" else entry.get("no_book_liquidity")
+                ) or 0.0,
+                _safe_float(entry.get("market_liquidity")) or 0.0,
+            )
+            if liquidity_reference >= 10000:
+                liquidity_score = 1.0
+            elif liquidity_reference >= 5000:
+                liquidity_score = 0.8
+            elif liquidity_reference >= 1000:
+                liquidity_score = 0.6
+            else:
+                liquidity_score = 0.4
+            if 0.10 <= ask <= 0.90:
+                price_usefulness_score = 1.0
+            elif 0.05 <= ask < 0.10 or 0.90 < ask <= 0.95:
+                price_usefulness_score = 0.7
+            else:
+                price_usefulness_score = 0.0
+            bias_score = 0.0
+            if distribution_bias["available"]:
+                if distribution_bias_direction == "balanced" or distribution_bias_direction == temperature_direction:
+                    bias_score = distribution_bias_score / 100.0
+            spread = _safe_float(entry.get("spread"))
+            spread_penalty = max(
+                0.0,
+                min(((spread or 0.0) - 0.01) / 0.02, 1.0),
+            ) * 15.0
+            edge_score = max(0.0, min(edge_percent / 12.0, 1.0))
+            final_score = 100.0 * (
+                0.35 * edge_score
+                + 0.25 * bias_score
+                + 0.20 * float(window_meta.get("score") or 0.0)
+                + 0.10 * liquidity_score
+                + 0.10 * price_usefulness_score
+            ) - spread_penalty
+            market_slug = str(market.get("slug") or "").strip()
+            target_label = str(entry.get("target_label") or "").strip()
+            action = f"BUY {'YES' if side == 'yes' else 'NO'}"
+            if target_label:
+                action = f"{action} {target_label}"
+            return {
+                "id": f"{city_key}|{target_date}|{market_slug}|{side}",
+                "city": city_key,
+                "selected_date": target_date,
+                "market_slug": market_slug or None,
+                "market_question": market.get("question") or market.get("title"),
+                "market_url": self._build_market_url(market),
+                "side": side,
+                "action": action,
+                "market_direction": entry.get("market_direction"),
+                "temperature_direction": temperature_direction,
+                "target_label": entry.get("target_label"),
+                "target_value": entry.get("bucket_temp"),
+                "target_threshold": target_threshold,
+                "target_lower": bucket_range[0] if bucket_range else None,
+                "target_upper": bucket_range[1] if bucket_range else None,
+                "target_unit": market_unit,
+                "model_probability": model_probability,
+                "market_probability": market_probability,
+                "model_event_probability": model_event_probability,
+                "market_event_probability": market_event_probability,
+                "gap": (
+                    model_event_probability - market_event_probability
+                    if model_event_probability is not None and market_event_probability is not None
+                    else None
+                ),
+                "signed_gap": (
+                    -1.0 * (model_event_probability - market_event_probability)
+                    if model_event_probability is not None
+                    and market_event_probability is not None
+                    and entry.get("market_direction") == "below"
+                    else (
+                        model_event_probability - market_event_probability
+                        if model_event_probability is not None and market_event_probability is not None
+                        else None
+                    )
+                ),
+                "yes_token_id": entry.get("yes_token_id"),
+                "no_token_id": entry.get("no_token_id"),
+                "yes_ask": entry.get("yes_ask"),
+                "yes_bid": entry.get("yes_bid"),
+                "no_ask": entry.get("no_ask"),
+                "no_bid": entry.get("no_bid"),
+                "ask": ask,
+                "bid": bid,
+                "midpoint": entry.get("midpoint"),
+                "spread": spread,
+                "book_liquidity": _safe_float(
+                    entry.get("yes_book_liquidity") if side == "yes" else entry.get("no_book_liquidity")
+                ),
+                "market_liquidity": entry.get("market_liquidity"),
+                "volume": entry.get("volume"),
+                "quote_source": entry.get("quote_source"),
+                "quote_age_ms": entry.get("quote_age_ms"),
+                "edge": edge,
+                "edge_percent": edge_percent,
+                "edge_score": edge_score,
+                "bias_score": bias_score,
+                "window_phase": window_meta.get("phase"),
+                "window_score": window_meta.get("score"),
+                "remaining_window_minutes": window_meta.get("remaining_minutes"),
+                "liquidity_score": liquidity_score,
+                "price_usefulness_score": price_usefulness_score,
+                "spread_penalty": spread_penalty,
+                "final_score": final_score,
+                "distribution_bias_direction": distribution_bias_direction,
+                "distribution_bias_score": distribution_bias_score,
+                "distribution_bias_available": distribution_bias["available"],
+                "current_reference": current_reference,
+                "gap_to_target": gap_to_target,
+                "touch_distance": abs(gap_to_target) if gap_to_target is not None else None,
+                "trend_alignment": trend_alignment,
+                "tradable": bool(entry["trade_state"].get("tradable")),
+                "active": entry["trade_state"].get("active"),
+                "closed": entry["trade_state"].get("closed"),
+                "accepting_orders": entry["trade_state"].get("accepting_orders"),
+                "enable_order_book": entry.get("enable_order_book"),
+                "is_primary_market": bool(
+                    str(primary_market.get("slug") or "").strip().lower()
+                    and market_slug
+                    and str(primary_market.get("slug") or "").strip().lower() == market_slug.lower()
+                ),
+            }
+
+        preliminary_rows: List[Dict[str, Any]] = []
+        for entry in market_entries:
+            row_yes = _row_from_entry(entry, "yes")
+            row_no = _row_from_entry(entry, "no")
+            if row_yes:
+                preliminary_rows.append(row_yes)
+            if row_no:
+                preliminary_rows.append(row_no)
+
+        preliminary_rows.sort(key=lambda row: float(row.get("final_score") or 0.0), reverse=True)
+        shortlist_market_slugs = []
+        seen_slugs = set()
+        for row in preliminary_rows:
+            market_slug = str(row.get("market_slug") or "").strip()
+            if not market_slug or market_slug in seen_slugs:
+                continue
+            seen_slugs.add(market_slug)
+            shortlist_market_slugs.append(market_slug)
+            if len(shortlist_market_slugs) >= 10:
+                break
+
+        shortlisted_tokens: List[str] = []
+        for entry in market_entries:
+            market_slug = str(entry["market"].get("slug") or "").strip()
+            if market_slug not in seen_slugs:
+                continue
+            shortlisted_tokens.extend([entry["yes_token_id"], entry["no_token_id"]])
+
+        precise_quotes = self._batch_get_token_market_data(shortlisted_tokens, include_books=True)
+        for entry in market_entries:
+            market_slug = str(entry["market"].get("slug") or "").strip()
+            if market_slug not in seen_slugs:
+                continue
+            yes_quote = precise_quotes.get(entry["yes_token_id"], {})
+            no_quote = precise_quotes.get(entry["no_token_id"], {})
+            if yes_quote:
+                entry["yes_ask"] = _extract_price(yes_quote.get("buy")) or entry.get("yes_ask")
+                entry["yes_bid"] = _extract_price(yes_quote.get("sell")) or entry.get("yes_bid")
+                entry["midpoint"] = _extract_price(yes_quote.get("midpoint")) or entry.get("midpoint")
+                entry["spread"] = _extract_price(yes_quote.get("spread")) or entry.get("spread")
+                entry["yes_book_liquidity"] = _extract_price(yes_quote.get("book_liquidity")) or entry.get("yes_book_liquidity")
+                entry["quote_source"] = yes_quote.get("quote_source") or entry.get("quote_source")
+            if no_quote:
+                entry["no_ask"] = _extract_price(no_quote.get("buy")) or entry.get("no_ask")
+                entry["no_bid"] = _extract_price(no_quote.get("sell")) or entry.get("no_bid")
+                entry["no_book_liquidity"] = _extract_price(no_quote.get("book_liquidity")) or entry.get("no_book_liquidity")
+                entry["quote_source"] = no_quote.get("quote_source") or entry.get("quote_source")
+            if entry.get("spread") is None and entry.get("yes_ask") is not None and entry.get("yes_bid") is not None:
+                entry["spread"] = max(0.0, float(entry["yes_ask"]) - float(entry["yes_bid"]))
+
+        final_rows: List[Dict[str, Any]] = []
+        for entry in market_entries:
+            for side in ("yes", "no"):
+                row = _row_from_entry(entry, side)
+                if row:
+                    final_rows.append(row)
+
+        def _passes_hard_filters(row: Dict[str, Any]) -> bool:
+            ask = _safe_float(row.get("ask"))
+            edge_percent = _safe_float(row.get("edge_percent"))
+            spread = _safe_float(row.get("spread"))
+            liquidity = max(
+                _safe_float(row.get("book_liquidity")) or 0.0,
+                _safe_float(row.get("market_liquidity")) or 0.0,
+            )
+            if ask is None or edge_percent is None:
+                return False
+            if not row.get("tradable") or row.get("accepting_orders") is False:
+                return False
+            if row.get("enable_order_book") is False:
+                return False
+            if ask < filters["min_price"] or ask > filters["max_price"]:
+                return False
+            if edge_percent < filters["min_edge_pct"]:
+                return False
+            if spread is None or spread > filters["max_spread"]:
+                return False
+            if liquidity < filters["min_liquidity"]:
+                return False
+            return True
+
+        def _passes_mode_filters(row: Dict[str, Any]) -> bool:
+            scan_mode = filters["scan_mode"]
+            if scan_mode == "tradable":
+                return float(row.get("window_score") or 0.0) >= 0.65
+            if scan_mode == "early":
+                return str(row.get("window_phase") or "") in {"tomorrow", "week_ahead", "early_today"}
+            if scan_mode == "touch":
+                return (
+                    bool(window_meta.get("same_day"))
+                    and str(row.get("window_phase") or "") in {"setup_today", "active_peak"}
+                    and (_safe_float(row.get("touch_distance")) is not None)
+                    and float(row.get("touch_distance")) <= 2.0
+                )
+            if scan_mode == "trend":
+                return bool(row.get("trend_alignment"))
+            return True
+
+        filtered_rows = [
+            row
+            for row in final_rows
+            if _passes_hard_filters(row) and _passes_mode_filters(row)
+        ]
+        filtered_rows.sort(
+            key=lambda row: (
+                float(row.get("final_score") or 0.0),
+                float(row.get("edge_percent") or 0.0),
+            ),
+            reverse=True,
+        )
+
+        primary_signal = filtered_rows[0] if filtered_rows else None
+        signal_status = "ready" if primary_signal else "no_signal"
+        return {
+            "rows": filtered_rows[: filters["limit"]],
+            "distribution_bias": distribution_bias,
+            "primary_signal": primary_signal,
+            "signal_status": signal_status,
+            "candidate_count": len(filtered_rows),
+            "window_phase": window_meta.get("phase"),
+            "window_score": window_meta.get("score"),
+            "resolved_market_type": "maxtemp",
+        }

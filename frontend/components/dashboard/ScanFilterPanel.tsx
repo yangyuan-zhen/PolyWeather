@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import {
   Crosshair,
   Clock,
@@ -10,16 +10,9 @@ import {
   Search,
 } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import styles from "./Dashboard.module.css";
+import type { ScanTerminalFilters } from "@/lib/dashboard-types";
 
-interface FilterState {
-  mode: "tradable" | "early" | "touch" | "trend";
-  priceRange: [number, number];
-  minEdge: number;
-  highLiquidityOnly: boolean;
-  marketType: "maxtemp" | "all";
-  timeRange: "today" | "tomorrow" | "week";
-}
+export interface FilterState extends ScanTerminalFilters {}
 
 const SCAN_MODES = [
   {
@@ -57,29 +50,27 @@ const SCAN_MODES = [
 ] as const;
 
 export function ScanFilterPanel({
+  value,
+  onChange,
   onScan,
   isScanning,
 }: {
+  value: FilterState;
+  onChange?: (filters: FilterState) => void;
   onScan?: (filters: FilterState) => void;
   isScanning?: boolean;
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
 
-  const [filters, setFilters] = useState<FilterState>({
-    mode: "tradable",
-    priceRange: [0.05, 0.95],
-    minEdge: 2,
-    highLiquidityOnly: false,
-    marketType: "maxtemp",
-    timeRange: "today",
-  });
-
   const updateFilter = <K extends keyof FilterState>(
     key: K,
-    value: FilterState[K],
+    nextValue: FilterState[K],
   ) => {
-    setFilters((prev) => ({ ...prev, [key]: value }));
+    onChange?.({
+      ...value,
+      [key]: nextValue,
+    });
   };
 
   return (
@@ -92,12 +83,12 @@ export function ScanFilterPanel({
         <div className="scan-mode-tabs">
           {SCAN_MODES.map((mode) => {
             const Icon = mode.icon;
-            const isActive = filters.mode === mode.key;
+            const isActive = value.scan_mode === mode.key;
             return (
               <button
                 key={mode.key}
                 className={`scan-mode-tab ${isActive ? "active" : ""}`}
-                onClick={() => updateFilter("mode", mode.key)}
+                onClick={() => updateFilter("scan_mode", mode.key)}
                 title={isEn ? mode.descEn : mode.descZh}
               >
                 <Icon size={16} />
@@ -124,17 +115,17 @@ export function ScanFilterPanel({
             {isEn ? "Price Range" : "价格范围"}
           </span>
           <div className="scan-range-display">
-            <span>{filters.priceRange[0].toFixed(2)}</span>
+            <span>{value.min_price.toFixed(2)}</span>
             <input
               type="range"
               min={0}
               max={100}
-              value={filters.priceRange[0] * 100}
+              value={value.min_price * 100}
               onChange={(e) =>
-                updateFilter("priceRange", [
-                  Number(e.target.value) / 100,
-                  filters.priceRange[1],
-                ])
+                updateFilter(
+                  "min_price",
+                  Math.min(Number(e.target.value) / 100, value.max_price),
+                )
               }
               className="scan-range-slider"
             />
@@ -142,16 +133,16 @@ export function ScanFilterPanel({
               type="range"
               min={0}
               max={100}
-              value={filters.priceRange[1] * 100}
+              value={value.max_price * 100}
               onChange={(e) =>
-                updateFilter("priceRange", [
-                  filters.priceRange[0],
-                  Number(e.target.value) / 100,
-                ])
+                updateFilter(
+                  "max_price",
+                  Math.max(Number(e.target.value) / 100, value.min_price),
+                )
               }
               className="scan-range-slider"
             />
-            <span>{filters.priceRange[1].toFixed(2)}</span>
+            <span>{value.max_price.toFixed(2)}</span>
           </div>
         </div>
 
@@ -161,13 +152,15 @@ export function ScanFilterPanel({
             {isEn ? "Min Edge" : "最小边际优势"}
           </span>
           <div className="scan-range-display">
-            <span>{filters.minEdge}%</span>
+            <span>{value.min_edge_pct}%</span>
             <input
               type="range"
               min={0}
               max={20}
-              value={filters.minEdge}
-              onChange={(e) => updateFilter("minEdge", Number(e.target.value))}
+              value={value.min_edge_pct}
+              onChange={(e) =>
+                updateFilter("min_edge_pct", Number(e.target.value))
+              }
               className="scan-range-slider"
             />
           </div>
@@ -179,10 +172,17 @@ export function ScanFilterPanel({
             {isEn ? "High Liquidity Only" : "只看高流动性"}
           </span>
           <button
-            className={`scan-toggle ${filters.highLiquidityOnly ? "active" : ""}`}
-            onClick={() =>
-              updateFilter("highLiquidityOnly", !filters.highLiquidityOnly)
-            }
+            className={`scan-toggle ${value.high_liquidity_only ? "active" : ""}`}
+            onClick={() => {
+              const nextValue = !value.high_liquidity_only;
+              onChange?.({
+                ...value,
+                high_liquidity_only: nextValue,
+                min_liquidity: nextValue
+                  ? Math.max(value.min_liquidity, 5000)
+                  : 500,
+              });
+            }}
           >
             <span className="scan-toggle-knob" />
           </button>
@@ -195,11 +195,11 @@ export function ScanFilterPanel({
           </span>
           <select
             className="scan-select"
-            value={filters.marketType}
+            value={value.market_type}
             onChange={(e) =>
               updateFilter(
-                "marketType",
-                e.target.value as FilterState["marketType"],
+                "market_type",
+                e.target.value as FilterState["market_type"],
               )
             }
           >
@@ -217,11 +217,11 @@ export function ScanFilterPanel({
           </span>
           <select
             className="scan-select"
-            value={filters.timeRange}
+            value={value.time_range}
             onChange={(e) =>
               updateFilter(
-                "timeRange",
-                e.target.value as FilterState["timeRange"],
+                "time_range",
+                e.target.value as FilterState["time_range"],
               )
             }
           >
@@ -235,7 +235,7 @@ export function ScanFilterPanel({
       {/* === CTA === */}
       <button
         className="scan-cta-button"
-        onClick={() => onScan?.(filters)}
+        onClick={() => onScan?.(value)}
         disabled={isScanning}
       >
         <Search size={16} />

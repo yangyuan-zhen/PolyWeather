@@ -1,160 +1,63 @@
 "use client";
 
-import React, { useMemo } from "react";
-import Image from "next/image";
+import React from "react";
 import { Star } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
-import type {
-  CityDetail,
-  CityListItem,
-  CitySummary,
-} from "@/lib/dashboard-types";
-import { getLocalizedCityDisplay } from "@/lib/dashboard-home-copy";
+import type { ScanOpportunityRow } from "@/lib/dashboard-types";
+import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 
-interface OpportunityRow {
-  rank: number;
-  city: CityListItem;
-  summary?: CitySummary | null;
-  detail?: CityDetail | null;
-  score: number;
-  tradable: boolean;
-}
-
-function getTodayHighLabel(detail?: CityDetail | null, symbol = "°C"): string {
-  const current = detail?.current;
-  if (current?.temp != null) return `${current.temp.toFixed(1)}${symbol}`;
-  return "--";
-}
-
-function getTimeLabel(detail?: CityDetail | null): string {
-  if (!detail?.local_time) return "--";
-  return detail.local_time;
-}
-
-function getTimezone(detail?: CityDetail | null): string {
-  if (detail?.utc_offset_seconds != null) {
-    const hours = Math.round(detail.utc_offset_seconds / 3600);
-    return `UTC${hours >= 0 ? "+" : ""}${hours}`;
+function getStatusMeta(
+  row: ScanOpportunityRow,
+  locale: string,
+): { label: string; tone: "green" | "amber" | "purple" | "neutral" } {
+  const phase = String(row.window_phase || "").toLowerCase();
+  if (phase === "active_peak" || phase === "setup_today") {
+    return { label: locale === "en-US" ? "Tradable" : "可交易", tone: "green" };
   }
-  return "";
-}
-
-function getMarketVolume(detail?: CityDetail | null): string {
-  const vol =
-    detail?.market_scan?.volume ?? detail?.market_scan?.primary_market?.volume;
-  if (vol == null) return "--";
-  if (vol >= 1_000_000) return `$${(vol / 1_000_000).toFixed(1)}M`;
-  if (vol >= 1_000) return `$${Math.round(vol / 1_000)}K`;
-  return `$${vol.toFixed(0)}`;
-}
-
-function getScanStatus(
-  detail?: CityDetail | null,
-  locale = "zh-CN",
-): { label: string; tone: string } {
-  const scan = detail?.market_scan;
-  if (!scan?.available)
-    return {
-      label: locale === "en-US" ? "No Market" : "无盘口",
-      tone: "neutral",
-    };
-  const pa = scan?.price_analysis;
-  const bestSide = pa?.best_side;
-  const sideView = bestSide === "no" ? pa?.no : pa?.yes;
-  const edgeVal =
-    sideView?.edge != null
-      ? Math.abs(Number(sideView.edge)) > 1
-        ? Number(sideView.edge) / 100
-        : Number(sideView.edge)
-      : null;
-  if (edgeVal != null && edgeVal >= 0.05)
-    return {
-      label: locale === "en-US" ? "Touch Play" : "触达博弈",
-      tone: "amber",
-    };
-  if (edgeVal != null && edgeVal >= 0.02)
-    return {
-      label: locale === "en-US" ? "Tradable" : "即时确认",
-      tone: "green",
-    };
-  if (edgeVal != null && edgeVal > 0)
+  if (phase === "tomorrow" || phase === "week_ahead") {
     return { label: locale === "en-US" ? "Early" : "早期机会", tone: "purple" };
-  return { label: locale === "en-US" ? "Market" : "市场", tone: "neutral" };
-}
-
-function getBestAction(detail?: CityDetail | null, locale = "zh-CN"): string {
-  const scan = detail?.market_scan;
-  if (!scan?.available) return "--";
-  const pa = scan?.price_analysis;
-  const side = pa?.best_side;
-  const topBucket = scan?.top_buckets?.[0];
-  const label = topBucket?.label || topBucket?.slug || "";
-  if (side === "yes" && label)
-    return `${locale === "en-US" ? "Buy" : "买入"} Yes ${label}`;
-  if (side === "no" && label)
-    return `${locale === "en-US" ? "Buy" : "买入"} No ${label}`;
-  return "--";
-}
-
-function getEdge(detail?: CityDetail | null): number | null {
-  const pa = detail?.market_scan?.price_analysis;
-  const bestSide = pa?.best_side;
-  const sideView = bestSide === "no" ? pa?.no : pa?.yes;
-  const edge = sideView?.edge;
-  if (edge == null) return null;
-  const val = Number(edge);
-  return Math.abs(val) > 1 ? val / 100 : val;
-}
-
-function getProbabilityBuckets(
-  detail?: CityDetail | null,
-): Array<{ label: string; probability: number }> {
-  const view = detail?.probabilities?.distribution || [];
-  if (!Array.isArray(view)) return [];
-  return view.slice(0, 8).map((b) => ({
-    label: String(b.label || b.value || ""),
-    probability: Number(b.probability || 0),
-  }));
-}
-
-function MiniProbabilityChart({
-  buckets,
-}: {
-  buckets: Array<{ label: string; probability: number }>;
-}) {
-  if (!buckets.length) return <span className="scan-no-data">--</span>;
-  const maxProb = Math.max(...buckets.map((b) => b.probability), 0.01);
-  return (
-    <div className="scan-mini-chart">
-      {buckets.map((bucket, i) => (
-        <div key={i} className="scan-mini-bar-col">
-          <div
-            className="scan-mini-bar"
-            style={{
-              height: `${Math.max((bucket.probability / maxProb) * 100, 4)}%`,
-            }}
-            title={`${bucket.label}: ${(bucket.probability * 100).toFixed(1)}%`}
-          />
-          <span className="scan-mini-bar-label">
-            {bucket.label.replace(/[°CF]/g, "")}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function getDisplayScore(rawScore: number): number {
-  if (rawScore <= 0) return Math.max(0, 70 + rawScore / 1000);
-  if (rawScore > 1000) {
-    return Math.min(100, 80 + (rawScore - 1000) / 30);
   }
-  return Math.min(80, Math.max(0, (rawScore / 1000) * 80));
+  if (phase === "post_peak") {
+    return { label: locale === "en-US" ? "Post Peak" : "峰后确认", tone: "amber" };
+  }
+  return { label: locale === "en-US" ? "Watching" : "观察中", tone: "neutral" };
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const displayScore = getDisplayScore(score);
+function formatPercent(value?: number | null, signed = false) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const numeric = Number(value);
+  if (!signed) return `${numeric.toFixed(1)}%`;
+  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
+}
+
+function formatTimeBlock(row: ScanOpportunityRow, locale: string) {
+  const parts: string[] = [];
+  if (row.local_time) {
+    parts.push(row.local_time);
+  }
+  if (row.selected_date) {
+    parts.push(row.selected_date);
+  }
+  return parts.join(" · ") || (locale === "en-US" ? "No time" : "暂无时间");
+}
+
+function formatAction(row: ScanOpportunityRow, locale: string) {
+  if (row.side === "yes") {
+    return `${locale === "en-US" ? "Buy" : "买入"} Yes ${row.target_label || ""}`.trim();
+  }
+  if (row.side === "no") {
+    return `${locale === "en-US" ? "Buy" : "买入"} No ${row.target_label || ""}`.trim();
+  }
+  return row.action || "--";
+}
+
+function formatProbability(value?: number | null) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  return `${(Number(value) * 100).toFixed(0)}%`;
+}
+
+function ScoreRing({ score }: { score?: number | null }) {
+  const displayScore = Math.max(0, Math.min(100, Number(score || 0)));
   const radius = 20;
   const circumference = 2 * Math.PI * radius;
   const progress = (displayScore / 100) * circumference;
@@ -191,27 +94,33 @@ function ScoreRing({ score }: { score: number }) {
   );
 }
 
-export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
+export function OpportunityTable({
+  rows,
+  selectedRowId,
+  onSelectRow,
+}: {
+  rows: ScanOpportunityRow[];
+  selectedRowId?: string | null;
+  onSelectRow?: (row: ScanOpportunityRow) => void;
+}) {
   const { locale } = useI18n();
-  const store = useDashboardStore();
   const isEn = locale === "en-US";
 
   return (
     <div className="scan-table-container">
-      {/* Header */}
       <div className="scan-table-header">
         <span className="scan-th scan-th-rank">#</span>
         <span className="scan-th scan-th-city">
           {isEn ? "City / Market" : "城市 / 市场"}
         </span>
         <span className="scan-th scan-th-time">
-          {isEn ? "Local Time / Status" : "当前时间 / 阶段"}
+          {isEn ? "Time / Phase" : "时间 / 阶段"}
         </span>
         <span className="scan-th scan-th-prob">
-          {isEn ? "Prob. Dist. vs Market" : "模型分布 vs 市场分布"}
+          {isEn ? "EMOS vs Market" : "EMOS vs 市场"}
         </span>
         <span className="scan-th scan-th-action">
-          {isEn ? "Best Action" : "最佳机会"}
+          {isEn ? "Best Action" : "最佳动作"}
         </span>
         <span className="scan-th scan-th-edge">
           {isEn ? "Edge" : "边际优势"}
@@ -222,90 +131,99 @@ export function OpportunityTable({ rows }: { rows: OpportunityRow[] }) {
         <span className="scan-th scan-th-fav" />
       </div>
 
-      {/* Rows */}
-      {rows.map((row) => {
-        const cityName = getLocalizedCityDisplay(
+      {rows.map((row, index) => {
+        const status = getStatusMeta(row, locale);
+        const localizedCityName = getLocalizedCityName(
           row.city,
+          row.city_display_name || row.display_name || row.city,
           locale,
-          row.summary,
-          row.detail,
         );
-        const status = getScanStatus(row.detail, locale);
-        const edge = getEdge(row.detail);
-        const buckets = getProbabilityBuckets(row.detail);
-        const isSelected = store.selectedCity === row.city.name;
-        const symbol = row.detail?.temp_symbol || "°C";
+        const selected = selectedRowId === row.id;
+        const finalScore = Number(row.final_score || 0);
 
         return (
-          <div
-            key={row.city.name}
-            className={`scan-table-row ${isSelected ? "selected" : ""} ${row.tradable ? "tradable" : ""}`}
-            onClick={() => store.focusCity(row.city.name)}
+          <button
+            key={row.id}
+            type="button"
+            className={`scan-table-row ${selected ? "selected" : ""} ${row.tradable ? "tradable" : ""}`}
+            onClick={() => onSelectRow?.(row)}
           >
-            {/* Rank */}
             <span className={`scan-td scan-td-rank rank-${status.tone}`}>
-              <span className="scan-rank-circle">{row.rank}</span>
+              <span className="scan-rank-circle">{row.rank || index + 1}</span>
             </span>
 
-            {/* City */}
             <span className="scan-td scan-td-city">
               <span className="scan-city-thumb">
                 <span className="scan-city-img-placeholder" />
               </span>
               <span className="scan-city-info">
-                <span className="scan-city-name">{cityName}</span>
+                <span className="scan-city-name">{localizedCityName}</span>
                 <span className="scan-city-sub">
-                  {isEn ? "Today's high" : "今日最高温"} ·{" "}
-                  {getMarketVolume(row.detail)}
+                  {row.target_label || row.market_question || "--"}
                 </span>
               </span>
             </span>
 
-            {/* Time + Status */}
             <span className="scan-td scan-td-time">
-              <span className="scan-time-text">
-                {getTimeLabel(row.detail)} ({getTimezone(row.detail)})
-              </span>
+              <span className="scan-time-text">{formatTimeBlock(row, locale)}</span>
               <span className={`scan-status-badge tone-${status.tone}`}>
                 {status.label}
               </span>
             </span>
 
-            {/* Probability Chart */}
             <span className="scan-td scan-td-prob">
-              <MiniProbabilityChart buckets={buckets} />
+              <div className="scan-city-info">
+                <span className="scan-city-name">
+                  {formatProbability(row.model_event_probability)} /{" "}
+                  {formatProbability(row.market_event_probability)}
+                </span>
+                <span className="scan-city-sub">
+                  {isEn ? "Bias" : "偏移"}{" "}
+                  {row.distribution_bias_direction || "--"} ·{" "}
+                  {formatPercent(row.distribution_bias_score)}
+                </span>
+              </div>
             </span>
 
-            {/* Best Action */}
             <span className="scan-td scan-td-action">
               <span className="scan-action-text">
-                {getBestAction(row.detail, locale)}
+                {formatAction(row, locale)}
               </span>
             </span>
 
-            {/* Edge */}
             <span className="scan-td scan-td-edge">
               <span
-                className={`scan-edge-value ${edge != null && edge > 0 ? "positive" : "neutral"}`}
+                className={`scan-edge-value ${finalScore > 0 ? "positive" : "neutral"}`}
               >
-                {edge != null
-                  ? `${edge > 0 ? "+" : ""}${(edge * 100).toFixed(1)}%`
-                  : "--"}
+                {formatPercent(row.edge_percent, true)}
               </span>
             </span>
 
-            {/* Score */}
             <span className="scan-td scan-td-score">
-              <ScoreRing score={row.score} />
+              <ScoreRing score={row.final_score} />
             </span>
 
-            {/* Favorite */}
             <span className="scan-td scan-td-fav">
               <Star size={16} className="scan-fav-icon" />
             </span>
-          </div>
+          </button>
         );
       })}
+
+      {!rows.length ? (
+        <div className="scan-detail-empty">
+          <div>
+            <div className="scan-detail-section-title">
+              {isEn ? "No primary signal" : "当前无主信号"}
+            </div>
+            <p className="scan-city-sub">
+              {isEn
+                ? "No opportunity passed the price, spread, liquidity, and edge filters."
+                : "当前没有机会同时满足价格、点差、流动性和 edge 过滤。"}
+            </p>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

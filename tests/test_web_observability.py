@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
+from web.scan_terminal_service import _scan_terminal_cache_key
 from src.database.db_manager import DBManager
 from src.database.runtime_state import TruthRecordRepository, TrainingFeatureRecordRepository
 
@@ -258,6 +259,69 @@ def test_ops_truth_history_returns_filtered_rows(monkeypatch):
     assert payload["filters"]["city"] == "taipei"
     assert payload["items"][0]["city"] == "taipei"
     assert payload["items"][0]["settlement_station_code"] == "RCSS"
+
+
+def test_scan_terminal_endpoint_forwards_filters(monkeypatch):
+    monkeypatch.setattr(routes, "_assert_entitlement", lambda request: None)
+
+    captured = {}
+
+    def _fake_build_scan_terminal_payload(filters, *, force_refresh=False):
+        captured["filters"] = dict(filters)
+        captured["force_refresh"] = force_refresh
+        return {
+            "generated_at": "2026-04-23T00:00:00Z",
+            "filters": filters,
+            "summary": {
+                "recommended_count": 1,
+                "visible_count": 1,
+                "candidate_total": 3,
+                "avg_edge_percent": 4.2,
+                "avg_primary_confidence": 88.0,
+                "tradable_market_count": 1,
+                "total_volume": 1500,
+                "resolved_market_type": "maxtemp",
+            },
+            "top_signal": None,
+            "rows": [],
+        }
+
+    monkeypatch.setattr(routes, "build_scan_terminal_payload", _fake_build_scan_terminal_payload)
+
+    response = client.get(
+        "/api/scan/terminal?scan_mode=trend&min_price=0.1&max_price=0.8&min_edge_pct=3"
+        "&min_liquidity=700&high_liquidity_only=true&market_type=all&time_range=week&limit=12&force_refresh=true"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["summary"]["recommended_count"] == 1
+    assert captured["force_refresh"] is True
+    assert captured["filters"]["scan_mode"] == "trend"
+    assert captured["filters"]["market_type"] == "all"
+    assert captured["filters"]["time_range"] == "week"
+    assert captured["filters"]["limit"] == 12
+
+
+def test_scan_terminal_cache_key_includes_filter_dimensions():
+    first = _scan_terminal_cache_key(
+        {
+            "scan_mode": "tradable",
+            "time_range": "today",
+            "limit": 25,
+        }
+    )
+    second = _scan_terminal_cache_key(
+        {
+            "scan_mode": "trend",
+            "time_range": "week",
+            "limit": 10,
+        }
+    )
+
+    assert first != second
+    assert "trend" in second
+    assert "week" in second
 
 
 def test_city_history_is_read_only_and_uses_sqlite_truth_and_features(monkeypatch):

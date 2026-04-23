@@ -32,6 +32,7 @@ from web.analysis_service import (
     _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
+from web.scan_terminal_service import build_scan_terminal_payload
 from web.core import (
     AnalyticsEventRequest,
     CITIES,
@@ -1692,5 +1693,38 @@ async def city_market_scan(
         market_slug,
         target_date,
         lite,
+    )
+
+
+@router.get("/api/scan/terminal")
+async def scan_terminal(
+    request: Request,
+    scan_mode: str = "tradable",
+    min_price: float = 0.05,
+    max_price: float = 0.95,
+    min_edge_pct: float = 2.0,
+    min_liquidity: float = 500.0,
+    high_liquidity_only: bool = False,
+    market_type: str = "maxtemp",
+    time_range: str = "today",
+    limit: int = 25,
+    force_refresh: bool = False,
+):
+    _assert_entitlement(request)
+    filters = {
+        "scan_mode": scan_mode,
+        "min_price": min_price,
+        "max_price": max_price,
+        "min_edge_pct": min_edge_pct,
+        "min_liquidity": min_liquidity,
+        "high_liquidity_only": high_liquidity_only,
+        "market_type": market_type,
+        "time_range": time_range,
+        "limit": limit,
+    }
+    return await run_in_threadpool(
+        build_scan_terminal_payload,
+        filters,
+        force_refresh=force_refresh,
     )
 

@@ -2805,6 +2805,7 @@ def _build_city_market_scan_payload(
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
     lite: bool = False,
+    scan_filters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     city = str(data.get("name") or "").strip().lower()
     local_date = str(data.get("local_date") or "").strip()
@@ -2878,6 +2879,16 @@ def _build_city_market_scan_payload(
         for p in distribution_all[:8]
         if isinstance(p, dict)
     ]
+    current = data.get("current") or {}
+    scan_context = {
+        "local_date": data.get("local_date"),
+        "local_time": data.get("local_time"),
+        "peak": data.get("peak") or {},
+        "current_max_so_far": current.get("max_so_far"),
+        "current_temp": current.get("temp"),
+        "trend": data.get("trend") or {},
+        "network_lead_signal": data.get("network_lead_signal") or {},
+    }
     market_scan = _market_layer.build_market_scan(
         city=data.get("name"),
         target_date=selected_date or data.get("local_date"),
@@ -2888,6 +2899,8 @@ def _build_city_market_scan_payload(
         fallback_sparkline=fallback_sparkline,
         forced_market_slug=market_slug,
         include_related_buckets=not lite,
+        scan_filters=scan_filters,
+        scan_context=scan_context,
     )
     if isinstance(market_scan, dict):
         market_scan["anchor_model"] = anchor_model

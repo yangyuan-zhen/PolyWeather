@@ -6,6 +6,8 @@ import {
   CitySummary,
   HistoryPayload,
   MarketScan,
+  ScanTerminalFilters,
+  ScanTerminalResponse,
 } from "@/lib/dashboard-types";
 
 export type AssistantOpportunityContext = {
@@ -73,6 +75,7 @@ const pendingCityMarketScanRequests = new Map<
   }>
 >();
 const pendingAssistantRequests = new Map<string, Promise<AssistantChatResponse>>();
+const pendingScanTerminalRequests = new Map<string, Promise<ScanTerminalResponse>>();
 const PRIORITY_WARM_SESSION_KEY = "polyWeather_priority_warm_v1";
 
 type CityCacheMeta = {
@@ -346,6 +349,41 @@ export const dashboardClient = {
     );
     if (!force) {
       pendingCityMarketScanRequests.set(requestKey, request);
+    }
+    return request;
+  },
+
+  async getScanTerminal(
+    filters: ScanTerminalFilters,
+    options?: { force?: boolean },
+  ) {
+    const force = options?.force ?? false;
+    const params = new URLSearchParams({
+      scan_mode: String(filters.scan_mode),
+      min_price: String(filters.min_price),
+      max_price: String(filters.max_price),
+      min_edge_pct: String(filters.min_edge_pct),
+      min_liquidity: String(filters.min_liquidity),
+      high_liquidity_only: String(filters.high_liquidity_only),
+      market_type: String(filters.market_type),
+      time_range: String(filters.time_range),
+      limit: String(filters.limit),
+      force_refresh: String(force),
+    });
+    const requestKey = `${params.toString()}::${force ? "force" : "cached"}`;
+    if (!force) {
+      const existing = pendingScanTerminalRequests.get(requestKey);
+      if (existing) {
+        return existing;
+      }
+    }
+    const request = fetchJson<ScanTerminalResponse>(
+      `/api/scan/terminal?${params.toString()}`,
+    ).finally(() => {
+      pendingScanTerminalRequests.delete(requestKey);
+    });
+    if (!force) {
+      pendingScanTerminalRequests.set(requestKey, request);
     }
     return request;
   },

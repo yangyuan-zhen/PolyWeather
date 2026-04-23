@@ -3,10 +3,10 @@
 import dynamic from "next/dynamic";
 import { DashboardShellSkeleton } from "@/components/dashboard/DashboardShellSkeleton";
 
-const PolyWeatherDashboard = dynamic(
+const ScanTerminalDashboard = dynamic(
   () =>
-    import("@/components/dashboard/PolyWeatherDashboard").then(
-      (module) => module.PolyWeatherDashboard,
+    import("@/components/dashboard/ScanTerminalDashboard").then(
+      (module) => module.ScanTerminalDashboard,
     ),
   {
     ssr: false,
@@ -15,5 +15,5 @@ const PolyWeatherDashboard = dynamic(
 );
 
 export function DashboardEntry() {
-  return <PolyWeatherDashboard />;
+  return <ScanTerminalDashboard />;
 }

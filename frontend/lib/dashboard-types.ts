@@ -399,6 +399,134 @@ export interface MarketScan {
   recent_trades?: unknown[];
   scan_scope?: "lite" | "full" | string | null;
   websocket?: Record<string, unknown>;
+  distribution_bias?: DistributionBias | null;
+  window_phase?: string | null;
+  window_score?: number | null;
+  primary_signal?: PrimarySignal | null;
+  signal_status?: string | null;
+  candidate_count?: number | null;
+  scan_rows?: ScanOpportunityRow[] | null;
+  resolved_market_type?: string | null;
+}
+
+export interface DistributionBias {
+  available?: boolean;
+  value?: number | null;
+  score?: number | null;
+  direction?: "hotter" | "colder" | "balanced" | string | null;
+}
+
+export interface ScanTerminalFilters {
+  scan_mode: "tradable" | "early" | "touch" | "trend";
+  min_price: number;
+  max_price: number;
+  min_edge_pct: number;
+  min_liquidity: number;
+  high_liquidity_only: boolean;
+  market_type: "maxtemp" | "all" | string;
+  time_range: "today" | "tomorrow" | "week" | string;
+  limit: number;
+}
+
+export interface ScanOpportunityRow {
+  id: string;
+  rank?: number | null;
+  city: string;
+  city_display_name?: string | null;
+  display_name?: string | null;
+  selected_date?: string | null;
+  local_date?: string | null;
+  local_time?: string | null;
+  temp_symbol?: string | null;
+  current_temp?: number | null;
+  current_max_so_far?: number | null;
+  deb_prediction?: number | null;
+  airport?: string | null;
+  risk_level?: RiskLevel | null;
+  market_slug?: string | null;
+  market_question?: string | null;
+  market_url?: string | null;
+  market_key?: string | null;
+  side?: "yes" | "no" | string | null;
+  action?: string | null;
+  market_direction?: string | null;
+  temperature_direction?: string | null;
+  target_label?: string | null;
+  target_value?: number | null;
+  target_threshold?: number | null;
+  target_lower?: number | null;
+  target_upper?: number | null;
+  target_unit?: string | null;
+  model_probability?: number | null;
+  market_probability?: number | null;
+  model_event_probability?: number | null;
+  market_event_probability?: number | null;
+  gap?: number | null;
+  signed_gap?: number | null;
+  yes_token_id?: string | null;
+  no_token_id?: string | null;
+  yes_ask?: number | null;
+  yes_bid?: number | null;
+  no_ask?: number | null;
+  no_bid?: number | null;
+  ask?: number | null;
+  bid?: number | null;
+  midpoint?: number | null;
+  spread?: number | null;
+  book_liquidity?: number | null;
+  market_liquidity?: number | null;
+  volume?: number | null;
+  quote_source?: string | null;
+  quote_age_ms?: number | null;
+  edge?: number | null;
+  edge_percent?: number | null;
+  edge_score?: number | null;
+  bias_score?: number | null;
+  distribution_bias?: DistributionBias | null;
+  distribution_bias_direction?: string | null;
+  distribution_bias_score?: number | null;
+  distribution_bias_available?: boolean;
+  window_phase?: string | null;
+  window_score?: number | null;
+  remaining_window_minutes?: number | null;
+  liquidity_score?: number | null;
+  price_usefulness_score?: number | null;
+  spread_penalty?: number | null;
+  final_score?: number | null;
+  current_reference?: number | null;
+  gap_to_target?: number | null;
+  touch_distance?: number | null;
+  trend_alignment?: boolean;
+  tradable?: boolean;
+  active?: boolean;
+  closed?: boolean;
+  accepting_orders?: boolean;
+  enable_order_book?: boolean;
+  is_primary_market?: boolean;
+  is_primary_signal?: boolean;
+  signal_confidence?: number | null;
+  signal_status?: string | null;
+  candidate_count?: number | null;
+  resolved_market_type?: string | null;
+}
+
+export interface PrimarySignal extends ScanOpportunityRow {}
+
+export interface ScanTerminalResponse {
+  generated_at: string;
+  filters: ScanTerminalFilters;
+  summary: {
+    recommended_count: number;
+    visible_count: number;
+    candidate_total: number;
+    avg_edge_percent?: number | null;
+    avg_primary_confidence?: number | null;
+    tradable_market_count: number;
+    total_volume: number;
+    resolved_market_type?: string | null;
+  };
+  top_signal?: PrimarySignal | null;
+  rows: ScanOpportunityRow[];
 }
 
 export interface IntradayMeteorologySignal {

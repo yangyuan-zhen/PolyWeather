@@ -484,3 +484,193 @@ def test_find_primary_market_prefers_preferred_temperature_and_cache_key():
     assert reason_22 is None
     assert selected_27["slug"] == "highest-temperature-in-madrid-on-april-23-2026-27c"
     assert selected_22["slug"] == "highest-temperature-in-madrid-on-april-23-2026-22corbelow"
+
+
+def _build_scan_test_layer():
+    layer = PolymarketReadOnlyLayer()
+    markets = [
+        {
+            "id": "m-above-14",
+            "slug": "highest-temperature-in-wellington-on-april-24-2026-14c-or-higher",
+            "question": "Will the highest temperature in Wellington be 14C or higher on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 12000,
+            "volumeNum": 4000,
+            "_model_prob": 0.60,
+        },
+        {
+            "id": "m-below-16",
+            "slug": "highest-temperature-in-wellington-on-april-24-2026-16c-or-lower",
+            "question": "Will the highest temperature in Wellington be 16C or lower on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 9000,
+            "volumeNum": 3500,
+            "_model_prob": 0.30,
+        },
+        {
+            "id": "m-above-17",
+            "slug": "highest-temperature-in-wellington-on-april-24-2026-17c-or-higher",
+            "question": "Will the highest temperature in Wellington be 17C or higher on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 7000,
+            "volumeNum": 2800,
+            "_model_prob": 0.20,
+        },
+    ]
+    token_map = {
+        "m-above-14": {"yes": "yes-14", "no": "no-14"},
+        "m-below-16": {"yes": "yes-16", "no": "no-16"},
+        "m-above-17": {"yes": "yes-17", "no": "no-17"},
+    }
+    quote_map = {
+        "yes-14": {"buy": 0.48, "sell": 0.46, "midpoint": 0.40, "spread": 0.02, "book_liquidity": 14000},
+        "no-14": {"buy": 0.54, "sell": 0.52, "midpoint": 0.60, "spread": 0.02, "book_liquidity": 14000},
+        "yes-16": {"buy": 0.42, "sell": 0.40, "midpoint": 0.50, "spread": 0.02, "book_liquidity": 9000},
+        "no-16": {"buy": 0.56, "sell": 0.54, "midpoint": 0.50, "spread": 0.02, "book_liquidity": 9000},
+        "yes-17": {"buy": 0.08, "sell": 0.07, "midpoint": 0.10, "spread": 0.01, "book_liquidity": 7500},
+        "no-17": {"buy": 0.92, "sell": 0.91, "midpoint": 0.90, "spread": 0.01, "book_liquidity": 7500},
+    }
+
+    layer._collect_related_temperature_markets = lambda **_kwargs: markets
+    layer._aggregate_distribution_probability_for_market = (
+        lambda market, **_kwargs: market.get("_model_prob")
+    )
+    layer._extract_market_tokens = lambda market: [
+        {"outcome": "Yes", "token_id": token_map[market["id"]]["yes"]},
+        {"outcome": "No", "token_id": token_map[market["id"]]["no"]},
+    ]
+    layer._batch_get_token_market_data = (
+        lambda token_ids, include_books=False: {
+            token_id: dict(quote_map[token_id])
+            for token_id in token_ids
+            if token_id in quote_map
+        }
+    )
+    return layer, markets
+
+
+def test_distribution_scan_bias_flips_below_markets_into_hotter_signal():
+    layer, markets = _build_scan_test_layer()
+
+    scan = layer._build_distribution_scan_pack(
+        city_key="wellington",
+        target_date="2026-04-24",
+        primary_market=markets[0],
+        probability_distribution=[],
+        temp_symbol="°C",
+        scan_context={
+            "local_date": "2026-04-24",
+            "local_time": "13:10",
+            "peak": {"first_h": 14, "last_h": 16},
+            "current_max_so_far": 13.4,
+            "current_temp": 13.0,
+            "trend": {"recent": []},
+            "network_lead_signal": {},
+        },
+        scan_filters={"limit": 10},
+    )
+
+    bias = scan["distribution_bias"]
+    assert bias["available"] is True
+    assert bias["direction"] == "hotter"
+    assert bias["score"] > 0
+
+
+def test_distribution_scan_returns_single_primary_signal_from_yes_no_mix():
+    layer, markets = _build_scan_test_layer()
+
+    scan = layer._build_distribution_scan_pack(
+        city_key="wellington",
+        target_date="2026-04-24",
+        primary_market=markets[0],
+        probability_distribution=[],
+        temp_symbol="°C",
+        scan_context={
+            "local_date": "2026-04-24",
+            "local_time": "13:10",
+            "peak": {"first_h": 14, "last_h": 16},
+            "current_max_so_far": 13.6,
+            "current_temp": 13.2,
+            "trend": {"recent": []},
+            "network_lead_signal": {},
+        },
+        scan_filters={"limit": 10, "min_edge_pct": 2},
+    )
+
+    assert scan["candidate_count"] >= 2
+    assert isinstance(scan["primary_signal"], dict)
+    assert scan["primary_signal"]["side"] == "yes"
+    assert scan["primary_signal"]["id"] == scan["rows"][0]["id"]
+    assert scan["signal_status"] == "ready"
+
+
+def test_distribution_scan_hard_filters_block_unusable_extreme_quotes():
+    layer, markets = _build_scan_test_layer()
+    layer._batch_get_token_market_data = (
+        lambda token_ids, include_books=False: {
+            token_id: {
+                "buy": 0.99 if token_id.startswith("yes") else 0.01,
+                "sell": 0.95 if token_id.startswith("yes") else 0.0,
+                "midpoint": 0.97 if token_id.startswith("yes") else 0.03,
+                "spread": 0.04,
+                "book_liquidity": 100,
+            }
+            for token_id in token_ids
+        }
+    )
+
+    scan = layer._build_distribution_scan_pack(
+        city_key="wellington",
+        target_date="2026-04-24",
+        primary_market=markets[0],
+        probability_distribution=[],
+        temp_symbol="°C",
+        scan_context={
+            "local_date": "2026-04-24",
+            "local_time": "13:10",
+            "peak": {"first_h": 14, "last_h": 16},
+            "current_max_so_far": 13.6,
+            "current_temp": 13.2,
+            "trend": {"recent": []},
+            "network_lead_signal": {},
+        },
+        scan_filters={"limit": 10},
+    )
+
+    assert scan["signal_status"] == "no_signal"
+    assert scan["candidate_count"] == 0
+    assert scan["rows"] == []
+
+
+def test_batch_token_market_data_falls_back_to_single_fetch_when_batch_fails():
+    layer = PolymarketReadOnlyLayer()
+    layer._clob_post = lambda *_args, **_kwargs: None
+    layer._fetch_token_market_data = lambda token_id: {
+        "buy": 0.33,
+        "sell": 0.31,
+        "midpoint": 0.32,
+        "quote_source": f"fallback:{token_id}",
+    }
+
+    result = layer._batch_get_token_market_data(["token-a", "token-b"])
+
+    assert result["token-a"]["midpoint"] == 0.32
+    assert result["token-b"]["quote_source"] == "fallback:token-b"
+
+
+def test_normalize_scan_filters_raises_liquidity_floor_when_high_liquidity_only():
+    layer = PolymarketReadOnlyLayer()
+
+    filters = layer._normalize_scan_filters({"high_liquidity_only": True})
+
+    assert filters["high_liquidity_only"] is True
+    assert filters["min_liquidity"] >= 5000
