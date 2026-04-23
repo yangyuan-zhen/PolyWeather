@@ -5,7 +5,6 @@ import {
   startTransition,
   useDeferredValue,
   useEffect,
-  useEffectEvent,
   useMemo,
   useState,
 } from "react";
@@ -348,7 +347,7 @@ function ScanTerminalScreen() {
     );
   }, [deferredRows, selectedRowId]);
 
-  const fetchTerminal = useEffectEvent(async (filters: FilterState, force = false) => {
+  const fetchTerminal = async (filters: FilterState, force = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -368,9 +367,9 @@ function ScanTerminalScreen() {
     } finally {
       setLoading(false);
     }
-  });
+  };
 
-  const fetchDetail = useEffectEvent(async (row: ScanOpportunityRow) => {
+  const fetchDetail = async (row: ScanOpportunityRow) => {
     if (!row.market_slug || !row.selected_date) return;
     if (detailByRowId[row.id] !== undefined) return;
     setDetailLoadingId(row.id);
@@ -392,11 +391,11 @@ function ScanTerminalScreen() {
     } finally {
       setDetailLoadingId((current) => (current === row.id ? null : current));
     }
-  });
+  };
 
   useEffect(() => {
     void fetchTerminal(DEFAULT_FILTERS, false);
-  }, [fetchTerminal]);
+  }, []);
 
   useEffect(() => {
     const intervalId = window.setInterval(() => {
@@ -405,12 +404,12 @@ function ScanTerminalScreen() {
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [activeFilters, fetchTerminal]);
+  }, [activeFilters]);
 
   useEffect(() => {
     if (!selectedRow) return;
     void fetchDetail(selectedRow);
-  }, [selectedRow, fetchDetail]);
+  }, [selectedRow, detailByRowId]);
 
   const selectedDetail = selectedRow ? detailByRowId[selectedRow.id] : null;
 
