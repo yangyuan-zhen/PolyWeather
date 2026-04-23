@@ -6,12 +6,12 @@ const DEFAULT_LOCALE: Locale = "zh-CN";
 export const LOCALE_STORAGE_KEY = "polyweather.locale";
 
 const MESSAGES: Record<Locale, Record<string, string>> = {
-    "zh-CN": {
-      "header.subtitle": "天气衍生品智能分析",
-      "header.home": "主页",
-      "header.homeAria": "返回主地图主页",
-      "header.docs": "文档",
-      "header.docsAria": "打开产品文档中心",
+  "zh-CN": {
+    "header.subtitle": "天气衍生品智能分析",
+    "header.home": "主页",
+    "header.homeAria": "返回主地图主页",
+    "header.docs": "文档",
+    "header.docsAria": "打开产品文档中心",
     "header.info": "技术说明",
     "header.infoAria": "查看系统技术说明",
     "header.account": "账户",
@@ -34,6 +34,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "sidebar.group.other": "样本不足",
 
     "dashboard.loading": "正在同步站点观测与结算站点信息，请稍候...",
+    "dashboard.opportunityTitle": "可交易机会",
+    "dashboard.opportunitySubtitle":
+      "基于当前时间、实况数据和模型预测，筛选出最具交易价值的市场",
+    "dashboard.opportunityList": "机会列表",
+    "dashboard.distributionView": "分布视图",
+    "dashboard.calendarView": "日历视图",
 
     "detail.closeAria": "关闭城市详情面板",
     "detail.waitSelect": "等待选择城市",
@@ -48,6 +54,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "detail.profile": "城市档案",
     "detail.todayMiniTrend": "今日日内走势（简版）",
     "detail.chartLegendEmpty": "暂无小时级实测或预测曲线。",
+    "detail.currentTemp": "当前温度",
+    "detail.todayHigh": "今日最高",
+    "detail.targetTemp": "目标温度",
+    "detail.gap": "距目标差距",
+    "detail.peakWindow": "预计峰值",
+    "detail.compositeScore": "综合得分",
+    "detail.selectCity": "← 点击左侧行查看详情",
+    "detail.localTime": "当前时间",
 
     "forecast.title": "多日预报",
     "forecast.empty": "暂无多日预报",
@@ -122,6 +136,22 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "section.airport": "机场",
     "section.distance": "距离",
     "section.note": "注意",
+    "section.currentConditions": "当前概况",
+    "section.tradeRecommendation": "推荐交易",
+
+    "filter.mode": "扫描模式",
+    "filter.tradable": "可交易机会",
+    "filter.early": "早期机会",
+    "filter.touch": "触达博弈",
+    "filter.trend": "趋势确认",
+    "filter.conditions": "匹配条件",
+    "filter.priceRange": "价格区间",
+    "filter.edgeRange": "最小边际优势",
+    "filter.onlyTradable": "只允许可交易",
+    "filter.liquidity": "流动性级别",
+    "filter.liquidityHigh": "最高流动性",
+    "filter.timeRange": "时间周期",
+    "filter.scanCta": "开始扫描",
 
     "account.title": "账户中心",
     "account.subtitle": "查看身份、权限与 Bot 绑定信息",
@@ -171,12 +201,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "common.na": "--",
   },
-    "en-US": {
-      "header.subtitle": "Weather Derivatives Intelligence",
-      "header.home": "Home",
-      "header.homeAria": "Return to the main map homepage",
-      "header.docs": "Docs",
-      "header.docsAria": "Open product documentation",
+  "en-US": {
+    "header.subtitle": "Weather Derivatives Intelligence",
+    "header.home": "Home",
+    "header.homeAria": "Return to the main map homepage",
+    "header.docs": "Docs",
+    "header.docsAria": "Open product documentation",
     "header.info": "Tech Notes",
     "header.infoAria": "Open system technical notes",
     "header.account": "Account",
@@ -200,6 +230,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
     "dashboard.loading":
       "Synchronizing station observations and settlement station data...",
+    "dashboard.opportunityTitle": "Tradable Opportunities",
+    "dashboard.opportunitySubtitle":
+      "Identify high-value markets based on real-time data, model predictions, and current time window.",
+    "dashboard.opportunityList": "Opportunity List",
+    "dashboard.distributionView": "Distribution",
+    "dashboard.calendarView": "Calendar",
 
     "detail.closeAria": "Close city detail panel",
     "detail.waitSelect": "Waiting for city selection",
@@ -215,6 +251,14 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "detail.todayMiniTrend": "Today's Intraday Trend (Compact)",
     "detail.chartLegendEmpty":
       "No hourly observations or forecast curve available.",
+    "detail.currentTemp": "Current Temp",
+    "detail.todayHigh": "Today's High",
+    "detail.targetTemp": "Target Temp",
+    "detail.gap": "Gap to Target",
+    "detail.peakWindow": "Peak Window",
+    "detail.compositeScore": "Composite Score",
+    "detail.selectCity": "← Select a city from the list",
+    "detail.localTime": "Local Time",
 
     "forecast.title": "Multi-day Forecast",
     "forecast.empty": "No multi-day forecast available",
@@ -292,6 +336,22 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     "section.airport": "Airport",
     "section.distance": "Distance",
     "section.note": "Note",
+    "section.currentConditions": "Current Conditions",
+    "section.tradeRecommendation": "Recommendation",
+
+    "filter.mode": "Scan Mode",
+    "filter.tradable": "Tradable",
+    "filter.early": "Early Stage",
+    "filter.touch": "Touch Play",
+    "filter.trend": "Trend Confirm",
+    "filter.conditions": "Conditions",
+    "filter.priceRange": "Price Range",
+    "filter.edgeRange": "Min Edge",
+    "filter.onlyTradable": "Only Tradable",
+    "filter.liquidity": "Liquidity",
+    "filter.liquidityHigh": "High Liquidity",
+    "filter.timeRange": "Time Period",
+    "filter.scanCta": "Start Scan",
 
     "account.title": "Account Center",
     "account.subtitle": "Review identity, access status, and bot binding info",

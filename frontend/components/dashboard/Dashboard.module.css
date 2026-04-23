@@ -5089,6 +5089,28 @@
   transition: all 0.2s;
   margin-left: 8px;
 }
+
+.root :global(.scan-select) {
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #00e0a4, #00b383);
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 224, 164, 0.2);
+}
+
+.root :global(.scan-cta-button:hover:not(:disabled)) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 224, 164, 0.4);
+  filter: brightness(1.1);
+}
+
+.root :global(.scan-cta-button:active:not(:disabled)) {
+  transform: translateY(1px);
+}
+
 .root :global(.history-btn:hover) {
   background: rgba(34, 211, 238, 0.2);
   border-color: var(--accent-cyan);
@@ -8231,6 +8253,7 @@
   color: var(--text-primary);
   outline: none;
   cursor: pointer;
+  width: 100%;
 }
 
 .root :global(.scan-select:focus) {
@@ -8310,18 +8333,44 @@
 }
 
 .root :global(.scan-kpi-card) {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  padding: 14px 16px;
+  background: rgba(13, 17, 23, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  transition: border-color 0.2s;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .root :global(.scan-kpi-card:hover) {
-  border-color: var(--border-glass);
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(0, 224, 164, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px -8px rgba(0, 0, 0, 0.5);
+}
+
+.root :global(.scan-kpi-card::after) {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(0, 224, 164, 0.5),
+    transparent
+  );
+  transform: translateX(-100%);
+  transition: transform 0.5s;
+}
+
+.root :global(.scan-kpi-card:hover::after) {
+  transform: translateX(100%);
 }
 
 .root :global(.scan-kpi-green) {
@@ -8403,7 +8452,9 @@
   right: 0;
   height: 2px;
   background: #00e0a4;
-  border-radius: 2px 2px 0 0;
+  border-radius: 4px;
+  opacity: 0.8;
+  transition: all 0.3s ease;
 }
 
 /* ── Opportunity Table ── */
@@ -8435,19 +8486,25 @@
   display: grid;
   grid-template-columns: 48px 200px 160px 1fr 150px 90px 64px 40px;
   align-items: center;
-  padding: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  background: rgba(13, 17, 23, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.15s ease;
+  user-select: none;
+  padding: 12px;
 }
 
 .root :global(.scan-table-row:hover) {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: scale(1.002);
 }
 
 .root :global(.scan-table-row.selected) {
-  background: rgba(0, 224, 164, 0.04);
-  border-left: 2px solid #00e0a4;
+  background: rgba(0, 224, 164, 0.08);
+  border-color: rgba(0, 224, 164, 0.3);
+  box-shadow: inset 0 0 12px rgba(0, 224, 164, 0.05);
 }
 
 .root :global(.scan-table-row.tradable) {

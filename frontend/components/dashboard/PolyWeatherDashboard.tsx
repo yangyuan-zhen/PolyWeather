@@ -11,6 +11,7 @@ import {
   type FormEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
+import { Search } from "lucide-react";
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
@@ -218,8 +219,18 @@ function getBucketMatchKey(bucket?: {
 
 function normalizeProbabilityValue(value: number | null | undefined) {
   if (!Number.isFinite(Number(value))) return null;
-  const numeric = Number(value);
-  return Math.abs(numeric) <= 1 ? numeric : numeric / 100;
+  return Number(value);
+}
+
+function getDisplayScore(rawScore: number): number {
+  if (rawScore <= 0) return Math.max(0, 70 + rawScore / 1000); // Penalty cases
+  // Scale the positive scores to 80-100
+  // rawScore for tradable is roughly 1000 + edge*10 + risk*100 + hitRate*100
+  // typical high score is 1000 + 50 + 400 + 90 = 1540
+  if (rawScore > 1000) {
+    return Math.min(100, 80 + (rawScore - 1000) / 30);
+  }
+  return Math.min(80, Math.max(0, (rawScore / 1000) * 80));
 }
 
 function buildMarketAlignedProbabilities(
@@ -2979,7 +2990,7 @@ function DashboardScreen() {
                   );
                   return acc + (edge ?? 0);
                 }, 0);
-                return (sum / tradable.length) * 100;
+                return sum / tradable.length;
               })(),
               totalWinRate: (() => {
                 const tradable = homepageSnapshots.filter(
@@ -3011,13 +3022,13 @@ function DashboardScreen() {
 
           <div className="scan-view-tabs">
             <button className="scan-view-tab active">
-              {t("dashboard.opportunityList") || "机会列表"}
+              {t("dashboard.opportunityList")}
             </button>
             <button className="scan-view-tab">
-              {t("dashboard.distributionView") || "分布视图"}
+              {t("dashboard.distributionView")}
             </button>
             <button className="scan-view-tab">
-              {t("dashboard.calendarView") || "日历视图"}
+              {t("dashboard.calendarView")}
             </button>
           </div>
 
@@ -3220,18 +3231,21 @@ function DashboardScreen() {
                       const snap = homepageSnapshots.find(
                         (s) => s.city.name === store.selectedCity,
                       );
-                      const score = snap?.score ?? 0;
-                      return score >= 80
+                      const displayScore = getDisplayScore(snap?.score ?? 0);
+                      return displayScore >= 85
                         ? "#00E0A4"
-                        : score >= 60
+                        : displayScore >= 70
                           ? "#FFB020"
                           : "#FF4D6A";
                     })(),
                   }}
                 >
-                  {homepageSnapshots.find(
-                    (s) => s.city.name === store.selectedCity,
-                  )?.score ?? "--"}
+                  {(() => {
+                    const snap = homepageSnapshots.find(
+                      (s) => s.city.name === store.selectedCity,
+                    );
+                    return snap ? getDisplayScore(snap.score).toFixed(1) : "--";
+                  })()}
                 </span>
                 <span className="scan-detail-score-suffix"> /100</span>
               </div>
@@ -3244,12 +3258,12 @@ function DashboardScreen() {
                     const snap = homepageSnapshots.find(
                       (s) => s.city.name === store.selectedCity,
                     );
-                    const score = snap?.score ?? 0;
-                    const filled = score >= i * 20;
+                    const displayScore = getDisplayScore(snap?.score ?? 0);
+                    const filled = displayScore >= i * 20;
                     return (
                       <span
                         key={i}
-                        className={`scan-confidence-dot ${filled ? "filled" : ""} ${score < 60 ? "red" : score < 80 ? "amber" : ""}`}
+                        className={`scan-confidence-dot ${filled ? "filled" : ""} ${displayScore < 70 ? "red" : displayScore < 85 ? "amber" : ""}`}
                       />
                     );
                   })}
@@ -3258,9 +3272,10 @@ function DashboardScreen() {
             </div>
           </aside>
         ) : (
-          <aside className="scan-detail-panel">
-            <div className="scan-detail-empty">
-              {t("detail.selectCity") || "← 点击左侧行查看详情"}
+          <aside className="scan-detail-panel scan-detail-empty">
+            <div className="scan-empty-state">
+              <Search size={48} />
+              <p>{t("detail.selectCity") || "← 点击左侧行查看详情"}</p>
             </div>
           </aside>
         )}

@@ -145,11 +145,21 @@ function MiniProbabilityChart({
   );
 }
 
+function getDisplayScore(rawScore: number): number {
+  if (rawScore <= 0) return Math.max(0, 70 + rawScore / 1000);
+  if (rawScore > 1000) {
+    return Math.min(100, 80 + (rawScore - 1000) / 30);
+  }
+  return Math.min(80, Math.max(0, (rawScore / 1000) * 80));
+}
+
 function ScoreRing({ score }: { score: number }) {
+  const displayScore = getDisplayScore(score);
   const radius = 20;
   const circumference = 2 * Math.PI * radius;
-  const progress = (score / 100) * circumference;
-  const color = score >= 80 ? "#00E0A4" : score >= 60 ? "#FFB020" : "#FF4D6A";
+  const progress = (displayScore / 100) * circumference;
+  const color =
+    displayScore >= 85 ? "#00E0A4" : displayScore >= 70 ? "#FFB020" : "#FF4D6A";
 
   return (
     <div className="scan-score-ring">
@@ -175,7 +185,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <span className="scan-score-value" style={{ color }}>
-        {score}
+        {displayScore.toFixed(0)}
       </span>
     </div>
   );
