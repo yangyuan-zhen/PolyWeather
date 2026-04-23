@@ -1637,12 +1637,48 @@
 
 .root :global(.home-intraday-chart) {
   position: relative;
-  padding: 6px 0 0;
+  padding: 6px 0 18px 34px;
 }
 
 .root :global(.home-intraday-chart svg) {
-  width: 100%;
+  width: calc(100% - 34px);
+  margin-left: 34px;
   height: 78px;
+}
+
+.root :global(.home-intraday-y-axis) {
+  position: absolute;
+  inset: 0 auto 18px 0;
+  width: 30px;
+  pointer-events: none;
+}
+
+.root :global(.home-intraday-y-label) {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.root :global(.home-intraday-x-axis) {
+  position: absolute;
+  left: 34px;
+  right: 10px;
+  bottom: 0;
+  height: 14px;
+  pointer-events: none;
+}
+
+.root :global(.home-intraday-x-label) {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: rgba(148, 163, 184, 0.72);
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .root :global(.home-intraday-chart line) {
@@ -1843,16 +1879,6 @@
   border-radius: inherit;
   background: linear-gradient(90deg, #3b82f6, #18e6d4);
   box-shadow: 0 0 10px rgba(34, 211, 238, 0.14);
-}
-
-.root :global(.home-probability-row:nth-child(3) i),
-.root :global(.home-probability-ladder-row:nth-child(3) i) {
-  background: linear-gradient(90deg, #f59e0b, #fbbf24);
-}
-
-.root :global(.home-probability-row:nth-child(n + 4) i),
-.root :global(.home-probability-ladder-row:nth-child(n + 4) i) {
-  background: linear-gradient(90deg, #ef4444, #fb7185);
 }
 
 .root :global(.home-probability-row strong),
@@ -7266,10 +7292,14 @@
 
 .root :global(.home-ai-assistant) {
   position: fixed;
-  right: 408px;
-  bottom: 210px;
+  right: 24px;
+  bottom: 24px;
   z-index: 910;
-  width: min(380px, calc(100vw - var(--sidebar-width) - 72px));
+  width: min(340px, calc(100vw - 48px));
+}
+
+.root :global(.home-ai-assistant.collapsed) {
+  width: 56px;
 }
 
 .root :global(.home-ai-assistant.dragging) {
@@ -7295,11 +7325,12 @@
 }
 
 .root :global(.home-ai-launcher) {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  padding: 14px 16px;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -7307,6 +7338,13 @@
     transform 160ms ease,
     border-color 160ms ease,
     background 160ms ease;
+}
+
+.root :global(.home-ai-launcher-icon) {
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
 }
 
 .root :global(.home-ai-launcher:hover) {
@@ -7577,15 +7615,19 @@
   .root :global(.home-ai-assistant) {
     right: 24px;
     bottom: 24px;
-    width: min(380px, calc(100vw - 48px));
+    width: min(340px, calc(100vw - 48px));
   }
 }
 
 @media (max-width: 960px) {
   .root :global(.home-ai-assistant) {
-    left: 16px;
+    left: auto;
     right: 16px;
-    width: auto;
+    width: min(340px, calc(100vw - 32px));
     bottom: 16px;
+  }
+
+  .root :global(.home-ai-assistant.collapsed) {
+    width: 56px;
   }
 }

@@ -17,6 +17,8 @@ export type AssistantOpportunityContext = {
   local_time?: string | null;
   current_temperature?: number | null;
   deb_prediction?: number | null;
+  temp_symbol?: string | null;
+  today_high?: number | null;
   market_question?: string | null;
   market_label?: string | null;
   selected_date?: string | null;

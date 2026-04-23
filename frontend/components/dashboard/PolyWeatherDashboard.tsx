@@ -1,6 +1,7 @@
 "use client";
 import clsx from "clsx";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import Link from "next/link";
 import {
   useEffect,
@@ -8,7 +9,6 @@ import {
   useRef,
   useState,
   type FormEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
   type PointerEvent as ReactPointerEvent,
 } from "react";
 import styles from "./Dashboard.module.css";
@@ -167,12 +167,22 @@ function getProbabilityLabel(
   },
   symbol: string,
 ) {
-  if (bucket.label) return bucket.label;
-  if (bucket.bucket) return bucket.bucket;
+  if (bucket.label) return normalizeTemperatureBucketLabel(bucket.label, symbol);
+  if (bucket.bucket) return normalizeTemperatureBucketLabel(bucket.bucket, symbol);
   if (Number.isFinite(Number(bucket.value))) {
     return `≥ ${Math.round(Number(bucket.value))}${symbol}`;
   }
   return "--";
+}
+
+function normalizeTemperatureBucketLabel(label: string, symbol: string) {
+  const normalizedSymbol = symbol.includes("F") ? "°F" : "°C";
+  return String(label || "")
+    .trim()
+    .replace(
+      /(-?\d+(?:\.\d+)?)\s*°?\s*[CF]\b/gi,
+      (_, value) => `${Math.round(Number(value))}${normalizedSymbol}`,
+    );
 }
 
 function parseBucketThreshold(bucket?: {
@@ -352,7 +362,7 @@ type AssistantDockDragState = {
 };
 
 const HOME_AI_DOCK_POSITION_STORAGE_KEY =
-  "polyweather_home_ai_dock_position_v1";
+  "polyweather_home_ai_dock_position_v2";
 
 function readAssistantDockPosition() {
   if (typeof window === "undefined") return null;
@@ -392,21 +402,9 @@ function getDefaultAssistantDockPosition() {
   if (typeof window === "undefined" || window.innerWidth <= 960) {
     return null;
   }
-  const detailPanel = document.querySelector(
-    ".home-intelligence-panel.full",
-  ) as HTMLElement | null;
-  const opportunityStrip = document.querySelector(
-    ".home-opportunity-strip",
-  ) as HTMLElement | null;
-  const panelRect = detailPanel?.getBoundingClientRect();
-  const stripRect = opportunityStrip?.getBoundingClientRect();
   return {
-    right: panelRect
-      ? Math.max(24, window.innerWidth - panelRect.left + 18)
-      : 408,
-    bottom: stripRect
-      ? Math.max(24, window.innerHeight - stripRect.top + 18)
-      : 340,
+    right: 24,
+    bottom: 24,
   };
 }
 
@@ -418,7 +416,7 @@ function clampAssistantDockPosition(
     return null;
   }
   const rect = dockElement?.getBoundingClientRect();
-  const width = rect?.width || 380;
+  const width = rect?.width || 340;
   const height = rect?.height || 88;
   const minOffset = 24;
   const maxRight = Math.max(minOffset, window.innerWidth - width - minOffset);
@@ -500,6 +498,12 @@ function buildAssistantOpportunityContext(
     current_temperature:
       summary?.current?.temp ?? detail?.current?.temp ?? null,
     deb_prediction: summary?.deb?.prediction ?? detail?.deb?.prediction ?? null,
+    temp_symbol: symbol,
+    today_high:
+      detail?.forecast?.today_high ??
+      detail?.current?.max_so_far ??
+      detail?.airport_current?.max_so_far ??
+      null,
     market_question: marketQuestion,
     market_label: marketBucket ? getProbabilityLabel(marketBucket, symbol) : null,
     selected_date: marketScan?.selected_date || detail?.local_date || null,
@@ -609,12 +613,12 @@ function buildAssistantContextPayload(
 function buildAssistantGreeting(locale: string, selectedCityName?: string | null) {
   if (locale === "en-US") {
     return selectedCityName
-      ? `Ask about ${selectedCityName}, current opportunities, edge ranking, or how the metrics should be read.`
-      : "Ask about current opportunities, edge ranking, or how the metrics should be read.";
+      ? `Ask about ${selectedCityName}'s current temperature, today's forecast high, market edge, or live opportunities.`
+      : "Ask about current temperature, today's forecast high, market edge, or live opportunities.";
   }
   return selectedCityName
-    ? `可以直接问我 ${selectedCityName}、当前值得参与的市场、edge 排序，或者指标怎么解读。`
-    : "可以直接问我当前值得参与的市场、edge 排序，或者指标怎么解读。";
+    ? `可以直接问我 ${selectedCityName} 的当前温度、今日最高温预测、市场 edge 或实时机会。`
+    : "可以直接问我当前温度、今日最高温预测、市场 edge 或实时机会。";
 }
 
 type HomeWeatherIconKind =
@@ -642,6 +646,8 @@ type HomeTrendChart = {
     label: string;
     temperatureText: string;
   }>;
+  yAxisLabels: Array<{ key: string; label: string; y: number }>;
+  xAxisLabels: Array<{ key: string; label: string; x: number }>;
 };
 
 type HomeForecastDay = {
@@ -926,12 +932,61 @@ function buildHomeTrendChart(
       temperatureText: formatTemperature(point.y, detail.temp_symbol || "°C"),
     }));
 
+  const yAxisLabels = [
+    {
+      key: "max",
+      label: formatTemperature(chartData.max, detail.temp_symbol || "°C"),
+      y: 14,
+    },
+    {
+      key: "mid",
+      label: formatTemperature(
+        (chartData.max + chartData.min) / 2,
+        detail.temp_symbol || "°C",
+      ),
+      y: 36,
+    },
+    {
+      key: "min",
+      label: formatTemperature(chartData.min, detail.temp_symbol || "°C"),
+      y: 58,
+    },
+  ];
+
+  const xAxisSource =
+    hoverSource.length <= 4
+      ? hoverSource
+      : [
+          hoverSource[0],
+          hoverSource[Math.floor((hoverSource.length - 1) / 3)],
+          hoverSource[Math.floor(((hoverSource.length - 1) * 2) / 3)],
+          hoverSource[hoverSource.length - 1],
+        ];
+
+  const xAxisLabels = xAxisSource.map((point, index) => {
+    const projected = projectHomeTrendPoint(
+      point.x,
+      point.y,
+      chartData.xMin,
+      chartData.xMax,
+      chartData.min,
+      chartData.max,
+    );
+    return {
+      key: `axis-${point.labelTime}-${index}`,
+      label: point.labelTime,
+      x: Number(((projected.cx / 296) * 100).toFixed(2)),
+    };
+  });
+
   return {
     forecastPath,
     legendText: chartData.legendText,
     observationDots,
     hourlyReports,
     hoverPoints,
+    yAxisLabels,
+    xAxisLabels,
   };
 }
 
@@ -1243,15 +1298,13 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
     <div className={clsx("home-pro-card", isPro && "active")}>
       <div>
         <span>{proLabel}</span>
-        <strong>
-          {isPro
-            ? locale === "en-US"
-              ? "Today intraday analysis is the primary paid workflow."
-              : "今日日内分析是当前主要付费工作流。"
-            : locale === "en-US"
+        {!isPro ? (
+          <strong>
+            {locale === "en-US"
               ? "History review and future dates stay paid."
               : "历史复盘和未来日期保持付费。"}
-        </strong>
+          </strong>
+        ) : null}
       </div>
       {isPro ? (
         <button type="button" onClick={() => void store.openTodayModal()}>
@@ -1319,10 +1372,6 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             {locale === "en-US" ? "Observed now" : "当前实况"}
           </span>
           <strong>{formatTemperature(currentTemp, symbol)}</strong>
-          <span className="home-weather-sub">
-            {locale === "en-US" ? "Feels near" : "体感接近"}{" "}
-            {formatTemperature(currentTemp, symbol)}
-          </span>
         </div>
         <div className="home-weather-side">
           <div
@@ -1366,6 +1415,17 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
             <small>{locale === "en-US" ? "1h cadence" : "1h 级别"}</small>
           </h3>
           <div className="home-intraday-chart">
+            <div className="home-intraday-y-axis" aria-hidden="true">
+              {trendChart.yAxisLabels.map((axisLabel) => (
+                <span
+                  key={axisLabel.key}
+                  className="home-intraday-y-label"
+                  style={{ top: `${axisLabel.y}px` }}
+                >
+                  {axisLabel.label}
+                </span>
+              ))}
+            </div>
             <svg viewBox="0 0 296 78" aria-hidden="true">
               <line x1="10" y1="14" x2="286" y2="14" />
               <line x1="10" y1="36" x2="286" y2="36" />
@@ -1377,6 +1437,17 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
                 <circle key={point.key} cx={point.cx} cy={point.cy} r="3.2" />
               ))}
             </svg>
+            <div className="home-intraday-x-axis" aria-hidden="true">
+              {trendChart.xAxisLabels.map((axisLabel) => (
+                <span
+                  key={axisLabel.key}
+                  className="home-intraday-x-label"
+                  style={{ left: `${axisLabel.x}%` }}
+                >
+                  {axisLabel.label}
+                </span>
+              ))}
+            </div>
             {trendChart.hoverPoints.map((point) => (
               <button
                 key={point.key}
@@ -1952,17 +2023,19 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
   const starterPrompts = useMemo(() => {
     if (locale === "en-US") {
       return [
-        "Which market is worth buying now?",
-        "Rank the current markets by edge",
         selectedCityName
-          ? `Why is ${selectedCityName} not recommended?`
-          : "Explain what edge means",
+          ? `What is today's forecast high for ${selectedCityName}?`
+          : "What is today's forecast high for the focus city?",
+        "Which market is worth buying now?",
+        "Rank current opportunities by edge",
       ];
     }
     return [
+      selectedCityName
+        ? `${selectedCityName} 今天预测最高温是多少？`
+        : "当前焦点城市今天预测最高温是多少？",
       "当前有哪些值得参与的市场？",
       "按 edge 排序",
-      selectedCityName ? `为什么 ${selectedCityName} 不建议参与？` : "解释一下 edge 是什么",
     ];
   }, [locale, selectedCityName]);
 
@@ -2099,14 +2172,6 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
     setIsDragging(false);
   };
 
-  const handleLauncherKeyDown = (
-    event: ReactKeyboardEvent<HTMLDivElement>,
-  ) => {
-    if (event.key !== "Enter" && event.key !== " ") return;
-    event.preventDefault();
-    openAssistant();
-  };
-
   const sendQuestion = async (rawQuestion?: string) => {
     const question = String(rawQuestion ?? input).trim();
     if (!question || loading) return;
@@ -2169,7 +2234,11 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
     <>
       <div
         ref={dockRef}
-        className={clsx("home-ai-assistant", isDragging && "dragging")}
+        className={clsx(
+          "home-ai-assistant",
+          !isOpen && "collapsed",
+          isDragging && "dragging",
+        )}
         style={
           dockPosition
             ? {
@@ -2180,40 +2249,24 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
         }
       >
         {!isOpen ? (
-          <div
+          <button
+            type="button"
             className="home-ai-launcher"
-            role="button"
-            tabIndex={0}
             onClick={openAssistant}
-            onKeyDown={handleLauncherKeyDown}
             onPointerDown={beginDockDrag}
             onPointerMove={updateDockDrag}
             onPointerUp={endDockDrag}
             onPointerCancel={endDockDrag}
+            aria-label={locale === "en-US" ? "Open AI assistant" : "打开 AI 助手"}
           >
-            <span className="home-ai-launcher-badge">AI</span>
-            <div className="home-ai-launcher-copy">
-              <strong>
-                {locale === "en-US" ? "Market Assistant" : "AI 对话助手"}
-              </strong>
-              <span>
-                {store.proAccess.subscriptionActive
-                  ? locale === "en-US"
-                    ? "Ask using the current market snapshot"
-                    : "基于当前市场快照直接提问"
-                  : locale === "en-US"
-                    ? "Pro only"
-                    : "Pro 专属"}
-              </span>
-            </div>
-            <span
-              className="home-ai-drag-handle"
-              title={locale === "en-US" ? "Move assistant" : "拖动助手"}
-              aria-hidden="true"
-            >
-              ⋮⋮
-            </span>
-          </div>
+            <Image
+              src="/favicon-32x32.png"
+              alt=""
+              width={22}
+              height={22}
+              className="home-ai-launcher-icon"
+            />
+          </button>
         ) : (
           <section
             className="home-ai-panel"
@@ -2224,8 +2277,8 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                 <strong>{locale === "en-US" ? "AI assistant" : "AI 对话助手"}</strong>
                 <span>
                   {locale === "en-US"
-                    ? `Snapshot ${assistantContext.snapshot_id}`
-                    : `快照 ${assistantContext.snapshot_id}`}
+                    ? "Ask about cities, forecast highs, edge, and live opportunities"
+                    : "可直接问城市、最高温预测、edge 和实时市场机会"}
                 </span>
               </div>
               <div className="home-ai-header-actions">
@@ -2253,8 +2306,8 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
 
             <div className="home-ai-disclaimer">
               {locale === "en-US"
-                ? "Only explains the current system snapshot. It does not scan markets or calculate probabilities."
-                : "只解释当前系统快照，不参与市场扫描、概率计算或核心决策。"}
+                ? "You can ask about current temperature, today's forecast high, market opportunities, edge, and risk reasons."
+                : "可直接问当前温度、今日最高温、市场机会、edge 和风险原因。"}
             </div>
 
             <div className="home-ai-messages">
@@ -2301,8 +2354,8 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={
                   locale === "en-US"
-                    ? "Ask about current opportunities, a city, or edge..."
-                    : "问当前机会、某个城市，或者 edge 怎么看..."
+                    ? "Ask about a city's current temperature, today's forecast high, or market edge..."
+                    : "可以问某个城市当前温度、今日最高温，或者市场 edge..."
                 }
               />
               <div className="home-ai-composer-actions">
@@ -2461,10 +2514,9 @@ function DashboardScreen() {
           [cityName]: "pending",
         }));
         try {
-          const detail = await store.ensureCityDetail(cityName, false, "panel");
-          if (cancelled) return;
+          const existingDetail = store.cityDetailsByName[cityName];
           const marketScan =
-            detail.market_scan ||
+            existingDetail?.market_scan ||
             (await store.ensureCityMarketScan(cityName, false));
           if (cancelled) return;
           setMarketScanStatusByCity((current) => ({
@@ -2484,7 +2536,7 @@ function DashboardScreen() {
     };
 
     void Promise.allSettled(
-      Array.from({ length: Math.min(4, queue.length) }, () => runWorker()),
+      Array.from({ length: Math.min(2, queue.length) }, () => runWorker()),
     );
 
     return () => {
@@ -2494,7 +2546,10 @@ function DashboardScreen() {
     marketScanStatusByCity,
     marketScanTargetNames,
     showHomepageChrome,
-    store,
+    store.cityDetailsByName,
+    store.ensureCityMarketScan,
+    store.proAccess.authenticated,
+    store.proAccess.loading,
   ]);
 
   return (

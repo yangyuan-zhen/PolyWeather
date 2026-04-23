@@ -23,6 +23,8 @@ type AssistantOpportunityContext = {
   local_time?: string | null;
   current_temperature?: number | null;
   deb_prediction?: number | null;
+  temp_symbol?: string | null;
+  today_high?: number | null;
   market_question?: string | null;
   market_label?: string | null;
   selected_date?: string | null;
@@ -142,6 +144,12 @@ function sanitizeContext(input?: AssistantContextPayload | null) {
           deb_prediction: Number.isFinite(Number(item.deb_prediction))
             ? Number(item.deb_prediction)
             : null,
+          temp_symbol: item.temp_symbol
+            ? String(item.temp_symbol).slice(0, 4)
+            : null,
+          today_high: Number.isFinite(Number(item.today_high))
+            ? Number(item.today_high)
+            : null,
           market_question: item.market_question
             ? String(item.market_question).slice(0, 240)
             : null,
@@ -206,19 +214,19 @@ function buildSuggestions(
 ) {
   if (locale === "en-US") {
     return [
+      selectedCity?.city_display_name
+        ? `What is today's forecast high for ${selectedCity.city_display_name}?`
+        : "What is today's forecast high for the focus city?",
       "Which market is worth buying now?",
       "Rank current opportunities by edge",
-      selectedCity?.city_display_name
-        ? `Why is ${selectedCity.city_display_name} not recommended?`
-        : "Explain what edge means",
     ];
   }
   return [
+    selectedCity?.city_display_name
+      ? `${selectedCity.city_display_name} 今天预测最高温是多少？`
+      : "当前焦点城市今天预测最高温是多少？",
     "当前有哪些值得参与的市场？",
     "按 edge 排序",
-    selectedCity?.city_display_name
-      ? `为什么 ${selectedCity.city_display_name} 不建议参与？`
-      : "解释一下 edge 是什么",
   ];
 }
 
@@ -238,6 +246,27 @@ function findMentionedCity(
         .filter(Boolean);
       return candidates.some((candidate) => normalizedQuestion.includes(candidate));
     }) || null
+  );
+}
+
+function normalizeTempSymbol(value?: string | null) {
+  return String(value || "").toUpperCase().includes("F") ? "°F" : "°C";
+}
+
+function formatContextTemperature(
+  value: number | null | undefined,
+  symbol?: string | null,
+) {
+  if (!Number.isFinite(Number(value))) return "--";
+  const numeric = Number(value);
+  const rounded =
+    Math.abs(numeric) >= 10 ? Math.round(numeric) : Number(numeric.toFixed(1));
+  return `${rounded}${normalizeTempSymbol(symbol)}`;
+}
+
+function isForecastQuestion(question: string) {
+  return /最高温|最高气温|预测最高|今天.*多少度|今日.*多少度|当前温度|当前气温|现在多少度|多少度|几度|today high|max temp|max temperature|forecast high|current temperature|temperature/i.test(
+    question,
   );
 }
 
@@ -339,6 +368,15 @@ function buildCityAnswer(
     city.market_probability == null
       ? "--"
       : `${city.market_probability.toFixed(1)}%`;
+  const currentText = formatContextTemperature(
+    city.current_temperature,
+    city.temp_symbol,
+  );
+  const debText = formatContextTemperature(city.deb_prediction, city.temp_symbol);
+  const highText = formatContextTemperature(
+    city.today_high ?? city.deb_prediction ?? null,
+    city.temp_symbol,
+  );
 
   if (locale === "en-US") {
     return [
@@ -346,11 +384,7 @@ function buildCityAnswer(
       city.tradable
         ? `The active market is ${city.market_label || city.market_question || "unavailable"}, preferred side ${city.best_side || "unavailable"}, edge ${edgeText}, YES ${yesText}, NO ${noText}.`
         : `This city does not have a tradable market in the current snapshot.`,
-      `Model probability ${modelText}, market-implied probability ${marketText}, current temperature ${
-        city.current_temperature ?? "--"
-      }, DEB ${
-        city.deb_prediction ?? "--"
-      }.`,
+      `Model probability ${modelText}, market-implied probability ${marketText}, current temperature ${currentText}, forecast high ${highText}, DEB ${debText}.`,
     ].join(" ");
   }
 
@@ -359,12 +393,26 @@ function buildCityAnswer(
     city.tradable
       ? `当前可交易市场是 ${city.market_label || city.market_question || "暂无"}，系统倾向 ${city.best_side || "待定"}，edge ${edgeText}，YES ${yesText}，NO ${noText}。`
       : "这个城市在当前快照里没有可交易市场。",
-    `模型概率 ${modelText}，市场隐含概率 ${marketText}，当前温度 ${
-      city.current_temperature ?? "--"
-    }，DEB ${
-      city.deb_prediction ?? "--"
-    }。`,
+    `模型概率 ${modelText}，市场隐含概率 ${marketText}，当前温度 ${currentText}，最高温预测 ${highText}，DEB ${debText}。`,
   ].join("");
+}
+
+function buildForecastAnswer(
+  locale: string,
+  city: AssistantOpportunityContext,
+) {
+  const currentText = formatContextTemperature(
+    city.current_temperature,
+    city.temp_symbol,
+  );
+  const highText = formatContextTemperature(
+    city.today_high ?? city.deb_prediction ?? null,
+    city.temp_symbol,
+  );
+  if (locale === "en-US") {
+    return `${city.city_display_name} currently reads ${currentText}. The best available forecast for today's high is ${highText}.`;
+  }
+  return `${city.city_display_name} 当前温度是 ${currentText}，今天最高温预测是 ${highText}。`;
 }
 
 function detectUnsupported(question: string) {
@@ -386,6 +434,12 @@ function buildFallbackAnswer(
   }
 
   const mentionedCity = findMentionedCity(question, context);
+  if (mentionedCity && isForecastQuestion(question)) {
+    return {
+      answer: buildForecastAnswer(locale, mentionedCity),
+      refused: false,
+    };
+  }
   if (mentionedCity) {
     return {
       answer: buildCityAnswer(locale, mentionedCity),
@@ -398,6 +452,16 @@ function buildFallbackAnswer(
       answer: buildExplainAnswer(question, locale, context),
       refused: false,
     };
+  }
+
+  if (isForecastQuestion(question)) {
+    const fallbackCity = context.selected_city || context.opportunities[0] || null;
+    if (fallbackCity) {
+      return {
+        answer: buildForecastAnswer(locale, fallbackCity),
+        refused: false,
+      };
+    }
   }
 
   return {
@@ -439,8 +503,8 @@ async function generateWithGroq(params: {
             role: "system",
             content:
               params.locale === "en-US"
-                ? "You are the PolyWeather AI assistant. Answer only from the provided snapshot JSON. Do not invent cities, prices, probabilities, timing, or market status. If the snapshot lacks the needed data, say so directly. Refuse non-product or non-market questions."
-                : "你是 PolyWeather AI 助手。只能基于提供的快照 JSON 回答，不得编造城市、价格、概率、时间或市场状态。如果快照没有所需数据，要直接说明。对于非产品、非市场问题要拒答。",
+                ? "You are the PolyWeather AI assistant. Answer only from the provided snapshot JSON. Do not invent cities, prices, probabilities, timing, weather forecasts, or market status. You may answer current temperature, forecast high, market opportunities, edge, risk reasons, and metric explanations. If the snapshot lacks the needed data, say so directly. Refuse non-product, non-market, or unsupported general-knowledge questions."
+                : "你是 PolyWeather AI 助手。只能基于提供的快照 JSON 回答，不得编造城市、价格、概率、时间、天气预测或市场状态。你可以回答当前温度、今日最高温预测、市场机会、edge、风险原因和指标解释；如果快照没有所需数据，要直接说明。对于非产品、非市场或缺少数据支撑的问题要拒答。",
           },
           {
             role: "user",

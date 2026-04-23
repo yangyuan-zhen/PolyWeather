@@ -570,15 +570,18 @@ export function DashboardStoreProvider({
   };
 
   const ensureCityMarketScan = async (cityName: string, force = false) => {
-    const cached = cityDetailsByName[cityName];
+    let cached = cityDetailsByName[cityName];
     try {
+      if (!cached) {
+        cached = await ensureCityDetail(cityName, false, "panel");
+      }
       const payload = await dashboardClient.getCityMarketScan(cityName, {
         force,
         targetDate: cached?.local_date || selectedForecastDate || null,
       });
       if (!payload.market_scan) return null;
       setCityDetailsByName((current) => {
-        const detail = current[cityName];
+        const detail = current[cityName] || cached;
         if (!detail) return current;
         return {
           ...current,
