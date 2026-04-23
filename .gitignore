@@ -45,3 +45,4 @@ frontend/*.tsbuildinfo
 # Browser extension build artifacts
 /extension.zip
 /extension-*.zip
+

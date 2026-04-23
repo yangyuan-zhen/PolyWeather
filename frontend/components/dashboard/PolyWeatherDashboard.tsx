@@ -2,7 +2,15 @@
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
@@ -272,6 +280,37 @@ function formatEdge(value: number | null | undefined) {
   return `${sign}${normalized.toFixed(1)}%`;
 }
 
+function normalizeEdgePercent(value: number | null | undefined) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+}
+
+function getBestSide(detail?: CityDetail | null) {
+  const bestSide = String(
+    detail?.market_scan?.price_analysis?.best_side || "",
+  ).toLowerCase();
+  if (bestSide.includes("yes")) return "yes";
+  if (bestSide.includes("no")) return "no";
+  return null;
+}
+
+function isLiveMarketScan(detail?: CityDetail | null) {
+  const marketScan = detail?.market_scan;
+  if (!marketScan) return false;
+  if (marketScan.available === false) return false;
+  if (marketScan.primary_market?.closed === true) return false;
+  if (marketScan.primary_market?.active === false) return false;
+  if (marketScan.selected_date && detail?.local_date) {
+    if (marketScan.selected_date < detail.local_date) return false;
+  }
+  const endDateMs = marketScan.primary_market?.end_date
+    ? Date.parse(marketScan.primary_market.end_date)
+    : Number.NaN;
+  if (Number.isFinite(endDateMs) && endDateMs < Date.now()) return false;
+  return true;
+}
+
 function buildSparklinePoints(values: number[] | undefined) {
   if (!values?.length) return "";
   const width = 92;
@@ -295,6 +334,105 @@ type AssistantMessage = {
   content: string;
   cached?: boolean;
 };
+
+type OpportunityScanState = "pending" | "complete" | "empty" | "error";
+
+type AssistantDockPosition = {
+  right: number;
+  bottom: number;
+};
+
+type AssistantDockDragState = {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  right: number;
+  bottom: number;
+  hasMoved: boolean;
+};
+
+const HOME_AI_DOCK_POSITION_STORAGE_KEY =
+  "polyweather_home_ai_dock_position_v1";
+
+function readAssistantDockPosition() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(HOME_AI_DOCK_POSITION_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as AssistantDockPosition | null;
+    if (
+      parsed &&
+      Number.isFinite(Number(parsed.right)) &&
+      Number.isFinite(Number(parsed.bottom))
+    ) {
+      return {
+        right: Number(parsed.right),
+        bottom: Number(parsed.bottom),
+      };
+    }
+  } catch {
+    // Ignore malformed dock position cache.
+  }
+  return null;
+}
+
+function writeAssistantDockPosition(position: AssistantDockPosition | null) {
+  if (typeof window === "undefined") return;
+  if (!position) {
+    window.localStorage.removeItem(HOME_AI_DOCK_POSITION_STORAGE_KEY);
+    return;
+  }
+  window.localStorage.setItem(
+    HOME_AI_DOCK_POSITION_STORAGE_KEY,
+    JSON.stringify(position),
+  );
+}
+
+function getDefaultAssistantDockPosition() {
+  if (typeof window === "undefined" || window.innerWidth <= 960) {
+    return null;
+  }
+  const detailPanel = document.querySelector(
+    ".home-intelligence-panel.full",
+  ) as HTMLElement | null;
+  const opportunityStrip = document.querySelector(
+    ".home-opportunity-strip",
+  ) as HTMLElement | null;
+  const panelRect = detailPanel?.getBoundingClientRect();
+  const stripRect = opportunityStrip?.getBoundingClientRect();
+  return {
+    right: panelRect
+      ? Math.max(24, window.innerWidth - panelRect.left + 18)
+      : 408,
+    bottom: stripRect
+      ? Math.max(24, window.innerHeight - stripRect.top + 18)
+      : 340,
+  };
+}
+
+function clampAssistantDockPosition(
+  position: AssistantDockPosition | null,
+  dockElement?: HTMLElement | null,
+) {
+  if (typeof window === "undefined" || window.innerWidth <= 960) {
+    return null;
+  }
+  const rect = dockElement?.getBoundingClientRect();
+  const width = rect?.width || 380;
+  const height = rect?.height || 88;
+  const minOffset = 24;
+  const maxRight = Math.max(minOffset, window.innerWidth - width - minOffset);
+  const maxBottom = Math.max(
+    minOffset,
+    window.innerHeight - height - minOffset,
+  );
+  const base = position || getDefaultAssistantDockPosition();
+  if (!base) return null;
+  return {
+    right: Math.min(maxRight, Math.max(minOffset, Number(base.right))),
+    bottom: Math.min(maxBottom, Math.max(minOffset, Number(base.bottom))),
+  };
+}
 
 function hashSnapshotText(source: string) {
   let hash = 5381;
@@ -1395,23 +1533,199 @@ function HomeIntelligencePanel({ snapshots }: { snapshots: CitySnapshot[] }) {
   );
 }
 
-function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
+function OpportunityStrip({
+  snapshots,
+  marketScanStatusByCity,
+  scanTargetNames,
+}: {
+  snapshots: CitySnapshot[];
+  marketScanStatusByCity: Record<string, OpportunityScanState>;
+  scanTargetNames: string[];
+}) {
   const { locale } = useI18n();
   const store = useDashboardStore();
-  const summaryCards = useMemo(
-    () => buildDashboardSummaryCards(snapshots, locale),
-    [locale, snapshots],
-  );
+  const stripState = useMemo(() => {
+    const targetSet = new Set(scanTargetNames);
+    const targetedSnapshots = (scanTargetNames.length
+      ? snapshots.filter((snapshot) => targetSet.has(snapshot.city.name))
+      : snapshots
+    ).slice(0, Math.max(scanTargetNames.length, 1));
+    const effectiveStatusByCity = Object.fromEntries(
+      targetedSnapshots.map((snapshot) => [
+        snapshot.city.name,
+        marketScanStatusByCity[snapshot.city.name] ||
+          (snapshot.detail?.market_scan ? "complete" : undefined),
+      ]),
+    ) as Record<string, OpportunityScanState | undefined>;
+    const completedCount = scanTargetNames.filter((cityName) => {
+      const status = effectiveStatusByCity[cityName];
+      return status === "complete" || status === "empty";
+    }).length;
+    const pendingCount = scanTargetNames.filter(
+      (cityName) => effectiveStatusByCity[cityName] === "pending",
+    ).length;
+    const errorCount = scanTargetNames.filter(
+      (cityName) => effectiveStatusByCity[cityName] === "error",
+    ).length;
+    const liveSnapshots = targetedSnapshots.filter((snapshot) =>
+      isLiveMarketScan(snapshot.detail),
+    );
+    const tradableSnapshots = targetedSnapshots
+      .filter((snapshot) => snapshot.tradableOpportunity)
+      .sort((left, right) => {
+        const leftEdge = normalizeEdgePercent(getMarketEdgeValue(left.detail));
+        const rightEdge = normalizeEdgePercent(getMarketEdgeValue(right.detail));
+        return (
+          Number(rightEdge ?? Number.NEGATIVE_INFINITY) -
+            Number(leftEdge ?? Number.NEGATIVE_INFINITY) || right.score - left.score
+        );
+      });
+    const yesCount = liveSnapshots.filter(
+      (snapshot) => getBestSide(snapshot.detail) === "yes",
+    ).length;
+    const noCount = liveSnapshots.filter(
+      (snapshot) => getBestSide(snapshot.detail) === "no",
+    ).length;
+    const avgTradableEdge = tradableSnapshots.length
+      ? tradableSnapshots.reduce((sum, snapshot) => {
+          const edge = normalizeEdgePercent(getMarketEdgeValue(snapshot.detail));
+          return sum + (edge ?? 0);
+        }, 0) / tradableSnapshots.length
+      : null;
+    const bestTradableSnapshot = tradableSnapshots[0] || null;
+    const bestTradableCityName = bestTradableSnapshot
+      ? getLocalizedCityDisplay(
+          bestTradableSnapshot.city,
+          locale,
+          bestTradableSnapshot.summary,
+          bestTradableSnapshot.detail,
+        )
+      : "--";
+    const highCount = snapshots.filter(
+      (snapshot) => snapshot.city.deb_recent_tier === "high",
+    ).length;
+    const mediumCount = snapshots.filter(
+      (snapshot) => snapshot.city.deb_recent_tier === "medium",
+    ).length;
+    const lowCount = snapshots.filter(
+      (snapshot) => snapshot.city.deb_recent_tier === "low",
+    ).length;
 
-  const items = useMemo(
-    () =>
-      snapshots
-        .filter((snapshot) => snapshot.tradableOpportunity)
-        .slice(0, 5),
-    [snapshots],
-  );
+    return {
+      items: tradableSnapshots.slice(0, 5),
+      completedCount,
+      pendingCount,
+      errorCount,
+      liveCount: liveSnapshots.length,
+      tradableCount: tradableSnapshots.length,
+      yesCount,
+      noCount,
+      summaryCards: [
+        {
+          key: "scan-progress",
+          title: locale === "en-US" ? "Scan Progress" : "扫描进度",
+          items: [
+            {
+              label: locale === "en-US" ? "Completed" : "已完成",
+              value: `${completedCount}/${scanTargetNames.length || snapshots.length}`,
+              accent: "cyan" as const,
+            },
+            {
+              label: locale === "en-US" ? "Scanning" : "扫描中",
+              value: String(pendingCount),
+              accent: "amber" as const,
+            },
+            {
+              label: locale === "en-US" ? "Errors" : "异常",
+              value: String(errorCount),
+              accent: errorCount > 0 ? ("red" as const) : ("green" as const),
+            },
+          ],
+        },
+        {
+          key: "market-live",
+          title: locale === "en-US" ? "Market Status" : "盘口状态",
+          items: [
+            {
+              label: locale === "en-US" ? "Live" : "在线",
+              value: String(liveSnapshots.length),
+              accent: "green" as const,
+            },
+            {
+              label: locale === "en-US" ? "Tradable" : "可交易",
+              value: String(tradableSnapshots.length),
+              accent: "cyan" as const,
+            },
+            {
+              label: locale === "en-US" ? "No edge" : "无机会",
+              value: String(Math.max(completedCount - tradableSnapshots.length, 0)),
+            },
+          ],
+        },
+        {
+          key: "market-quality",
+          title: locale === "en-US" ? "Opportunity Quality" : "机会质量",
+          items: [
+            {
+              label: locale === "en-US" ? "Avg. edge" : "平均优势",
+              value: formatEdge(avgTradableEdge),
+              accent: "green" as const,
+            },
+            {
+              label: locale === "en-US" ? "Best edge" : "最高优势",
+              value: bestTradableSnapshot
+                ? formatEdge(getMarketEdgeValue(bestTradableSnapshot.detail))
+                : "--",
+              accent: "cyan" as const,
+            },
+            {
+              label: locale === "en-US" ? "Focus" : "最佳城市",
+              value: bestTradableCityName,
+              accent: "amber" as const,
+            },
+          ],
+        },
+        {
+          key: "risk-summary",
+          title: locale === "en-US" ? "Risk Layer" : "风险层",
+          items: [
+            {
+              label: locale === "en-US" ? "High" : "高",
+              value: String(highCount),
+              accent: "red" as const,
+            },
+            {
+              label: locale === "en-US" ? "Medium" : "中",
+              value: String(mediumCount),
+              accent: "amber" as const,
+            },
+            {
+              label: locale === "en-US" ? "Low" : "低",
+              value: String(lowCount),
+              accent: "green" as const,
+            },
+          ],
+        },
+      ],
+      headingTitle:
+        tradableSnapshots.length > 0
+          ? locale === "en-US"
+            ? `${tradableSnapshots.length} tradable markets · focus ${bestTradableCityName}`
+            : `发现 ${tradableSnapshots.length} 个可交易市场 · 当前最佳 ${bestTradableCityName}`
+          : pendingCount > 0
+            ? locale === "en-US"
+              ? `Scanning ${completedCount}/${scanTargetNames.length || snapshots.length} cities`
+              : `正在扫描 ${completedCount}/${scanTargetNames.length || snapshots.length} 个城市市场层`
+            : locale === "en-US"
+              ? `Completed ${completedCount} scans · no tradable market`
+              : `已完成 ${completedCount} 个城市扫描 · 当前无可交易市场`,
+      yesCountLabel:
+        locale === "en-US" ? `YES bias ${yesCount}` : `YES 倾向 ${yesCount}`,
+      noCountLabel:
+        locale === "en-US" ? `NO bias ${noCount}` : `NO 倾向 ${noCount}`,
+    };
+  }, [locale, marketScanStatusByCity, scanTargetNames, snapshots]);
 
-  // Always render: summary cards should be visible even without tradable opportunities
   if (!snapshots.length) return null;
 
   return (
@@ -1420,7 +1734,7 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
       aria-label={locale === "en-US" ? "Opportunity strip" : "机会条"}
     >
       <div className="home-summary-grid">
-        {summaryCards.map((card) => (
+        {stripState.summaryCards.map((card) => (
           <div key={card.key} className="home-summary-card">
             <div className="home-summary-card-head">
               <strong>{card.title}</strong>
@@ -1450,19 +1764,48 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
         <div>
           <span>
             {locale === "en-US"
-              ? "Current Best Markets"
-              : "当前最佳机会市场"}
+              ? "Live Market Scan"
+              : "实时市场扫描"}
           </span>
-          <strong>
+          <strong>{stripState.headingTitle}</strong>
+        </div>
+        <div className="opportunity-strip-status" aria-live="polite">
+          <span className={clsx("opportunity-status-chip", "live")}>
             {locale === "en-US"
-              ? "Live market question · YES/NO · Edge · Trend"
-              : "当前市场问题 · YES/NO 价格 · Edge · 小趋势线"}
-          </strong>
+              ? `Live ${stripState.liveCount}`
+              : `在线 ${stripState.liveCount}`}
+          </span>
+          <span
+            className={clsx(
+              "opportunity-status-chip",
+              stripState.pendingCount > 0 ? "pending" : "muted",
+            )}
+          >
+            {locale === "en-US"
+              ? `Pending ${stripState.pendingCount}`
+              : `待补齐 ${stripState.pendingCount}`}
+          </span>
+          <span
+            className={clsx(
+              "opportunity-status-chip",
+              stripState.tradableCount > 0 ? "tradable" : "muted",
+            )}
+          >
+            {locale === "en-US"
+              ? `Tradable ${stripState.tradableCount}`
+              : `可交易 ${stripState.tradableCount}`}
+          </span>
+          <span className={clsx("opportunity-status-chip", "side")}>
+            {stripState.yesCountLabel}
+          </span>
+          <span className={clsx("opportunity-status-chip", "side")}>
+            {stripState.noCountLabel}
+          </span>
         </div>
       </div>
-      {items.length > 0 ? (
+      {stripState.items.length > 0 ? (
         <div className="opportunity-card-grid top-opportunities">
-          {items.map(({ city, detail, summary }, index) => {
+          {stripState.items.map(({ city, detail, summary }, index) => {
                 const symbol = getTempSymbol(city, summary, detail);
                 const debPrediction =
                   summary?.deb?.prediction ?? detail?.deb?.prediction;
@@ -1546,9 +1889,22 @@ function OpportunityStrip({ snapshots }: { snapshots: CitySnapshot[] }) {
         </div>
       ) : (
         <div className="opportunity-empty-state">
-          {locale === "en-US"
-            ? "No active opportunity market right now."
-            : "当前暂无可交易机会市场"}
+          <div className="opportunity-empty-copy">
+            <strong>
+              {stripState.pendingCount > 0
+                ? locale === "en-US"
+                  ? "Scanning current market layers..."
+                  : "正在扫描当前市场层..."
+                : locale === "en-US"
+                  ? "No tradable market at the moment"
+                  : "当前没有满足条件的可交易市场"}
+            </strong>
+            <span>
+              {locale === "en-US"
+                ? `Completed ${stripState.completedCount} cities, live ${stripState.liveCount}, tradable ${stripState.tradableCount}.`
+                : `已完成 ${stripState.completedCount} 个城市扫描，在线盘口 ${stripState.liveCount} 个，可交易机会 ${stripState.tradableCount} 个。`}
+            </span>
+          </div>
         </div>
       )}
     </section>
@@ -1564,6 +1920,13 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dockPosition, setDockPosition] =
+    useState<AssistantDockPosition | null>(null);
+  const dockRef = useRef<HTMLDivElement | null>(null);
+  const dockPositionRef = useRef<AssistantDockPosition | null>(null);
+  const dragStateRef = useRef<AssistantDockDragState | null>(null);
+  const suppressLauncherClickRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const selectedSnapshot = useMemo(
@@ -1621,12 +1984,127 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
     });
   }, [loading, messages]);
 
+  useEffect(() => {
+    dockPositionRef.current = dockPosition;
+  }, [dockPosition]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncDockPosition = () => {
+      if (window.innerWidth <= 960) {
+        setDockPosition(null);
+        return;
+      }
+      setDockPosition((current) =>
+        clampAssistantDockPosition(
+          current || readAssistantDockPosition() || getDefaultAssistantDockPosition(),
+          dockRef.current,
+        ),
+      );
+    };
+
+    syncDockPosition();
+    window.addEventListener("resize", syncDockPosition);
+    return () => {
+      window.removeEventListener("resize", syncDockPosition);
+    };
+  }, [isOpen]);
+
   const openAssistant = () => {
+    if (suppressLauncherClickRef.current) {
+      suppressLauncherClickRef.current = false;
+      return;
+    }
     if (!store.proAccess.subscriptionActive) {
       setShowPaywall(true);
       return;
     }
     setIsOpen(true);
+  };
+
+  const beginDockDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    if (typeof window === "undefined" || window.innerWidth <= 960) return;
+    const basePosition = clampAssistantDockPosition(
+      dockPositionRef.current ||
+        readAssistantDockPosition() ||
+        getDefaultAssistantDockPosition(),
+      dockRef.current,
+    );
+    if (!basePosition) return;
+    event.preventDefault();
+    event.stopPropagation();
+    dragStateRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      right: basePosition.right,
+      bottom: basePosition.bottom,
+      hasMoved: false,
+    };
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    dockPositionRef.current = basePosition;
+    setDockPosition(basePosition);
+    setIsDragging(true);
+  };
+
+  const updateDockDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const deltaX = event.clientX - dragState.startX;
+    const deltaY = event.clientY - dragState.startY;
+    if (!dragState.hasMoved && Math.abs(deltaX) + Math.abs(deltaY) >= 6) {
+      dragState.hasMoved = true;
+    }
+    const nextPosition = clampAssistantDockPosition(
+      {
+        right: dragState.right - deltaX,
+        bottom: dragState.bottom - deltaY,
+      },
+      dockRef.current,
+    );
+    if (!nextPosition) return;
+    dockPositionRef.current = nextPosition;
+    setDockPosition(nextPosition);
+  };
+
+  const endDockDrag = (event: ReactPointerEvent<HTMLElement>) => {
+    const dragState = dragStateRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+      // Pointer capture may already be released by the browser.
+    }
+    const finalPosition = clampAssistantDockPosition(
+      dockPositionRef.current || {
+        right: dragState.right,
+        bottom: dragState.bottom,
+      },
+      dockRef.current,
+    );
+    if (dragState.hasMoved) {
+      suppressLauncherClickRef.current = true;
+    }
+    dockPositionRef.current = finalPosition;
+    setDockPosition(finalPosition);
+    writeAssistantDockPosition(finalPosition);
+    dragStateRef.current = null;
+    setIsDragging(false);
+  };
+
+  const handleLauncherKeyDown = (
+    event: ReactKeyboardEvent<HTMLDivElement>,
+  ) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    openAssistant();
   };
 
   const sendQuestion = async (rawQuestion?: string) => {
@@ -1689,15 +2167,32 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
 
   return (
     <>
-      <div className="home-ai-assistant">
+      <div
+        ref={dockRef}
+        className={clsx("home-ai-assistant", isDragging && "dragging")}
+        style={
+          dockPosition
+            ? {
+                right: `${dockPosition.right}px`,
+                bottom: `${dockPosition.bottom}px`,
+              }
+            : undefined
+        }
+      >
         {!isOpen ? (
-          <button
-            type="button"
+          <div
             className="home-ai-launcher"
+            role="button"
+            tabIndex={0}
             onClick={openAssistant}
+            onKeyDown={handleLauncherKeyDown}
+            onPointerDown={beginDockDrag}
+            onPointerMove={updateDockDrag}
+            onPointerUp={endDockDrag}
+            onPointerCancel={endDockDrag}
           >
             <span className="home-ai-launcher-badge">AI</span>
-            <div>
+            <div className="home-ai-launcher-copy">
               <strong>
                 {locale === "en-US" ? "Market Assistant" : "AI 对话助手"}
               </strong>
@@ -1711,7 +2206,14 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                     : "Pro 专属"}
               </span>
             </div>
-          </button>
+            <span
+              className="home-ai-drag-handle"
+              title={locale === "en-US" ? "Move assistant" : "拖动助手"}
+              aria-hidden="true"
+            >
+              ⋮⋮
+            </span>
+          </div>
         ) : (
           <section
             className="home-ai-panel"
@@ -1726,14 +2228,27 @@ function HomeAssistantDock({ snapshots }: { snapshots: CitySnapshot[] }) {
                     : `快照 ${assistantContext.snapshot_id}`}
                 </span>
               </div>
-              <button
-                type="button"
-                className="home-ai-close"
-                onClick={() => setIsOpen(false)}
-                aria-label={locale === "en-US" ? "Close assistant" : "关闭 AI 助手"}
-              >
-                ×
-              </button>
+              <div className="home-ai-header-actions">
+                <span
+                  className="home-ai-drag-handle"
+                  title={locale === "en-US" ? "Move assistant" : "拖动助手"}
+                  aria-hidden="true"
+                  onPointerDown={beginDockDrag}
+                  onPointerMove={updateDockDrag}
+                  onPointerUp={endDockDrag}
+                  onPointerCancel={endDockDrag}
+                >
+                  ⋮⋮
+                </span>
+                <button
+                  type="button"
+                  className="home-ai-close"
+                  onClick={() => setIsOpen(false)}
+                  aria-label={locale === "en-US" ? "Close assistant" : "关闭 AI 助手"}
+                >
+                  ×
+                </button>
+              </div>
             </div>
 
             <div className="home-ai-disclaimer">
@@ -1826,7 +2341,10 @@ function DashboardScreen() {
   const store = useDashboardStore();
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
-  const preloadedOpportunityRef = useRef<Set<string>>(new Set());
+  const marketScanInflightRef = useRef<Set<string>>(new Set());
+  const [marketScanStatusByCity, setMarketScanStatusByCity] = useState<
+    Record<string, OpportunityScanState>
+  >({});
   const activeSummary = store.selectedCity
     ? store.citySummariesByName[store.selectedCity] || null
     : null;
@@ -1884,6 +2402,10 @@ function DashboardScreen() {
         ),
     [store.cities, store.cityDetailsByName, store.citySummariesByName],
   );
+  const marketScanTargetNames = useMemo(
+    () => homepageSnapshots.map((snapshot) => snapshot.city.name),
+    [homepageSnapshots],
+  );
   const showHomepageChrome =
     !store.historyState.isOpen && !store.futureModalDate;
 
@@ -1899,18 +2421,81 @@ function DashboardScreen() {
   }, [homepageSnapshots, showHomepageChrome, store]);
 
   useEffect(() => {
+    if (store.loadingState.refresh) {
+      marketScanInflightRef.current.clear();
+      setMarketScanStatusByCity({});
+    }
+  }, [store.loadingState.refresh]);
+
+  useEffect(() => {
+    if (store.proAccess.loading) return;
+    if (store.proAccess.authenticated) return;
+    marketScanInflightRef.current.clear();
+    setMarketScanStatusByCity({});
+  }, [store.proAccess.authenticated, store.proAccess.loading]);
+
+  useEffect(() => {
     if (!showHomepageChrome) return;
-    const targets = homepageSnapshots
-      .slice(0, 4)
-      .map((snapshot) => snapshot.city.name);
-    targets.forEach((cityName) => {
-      if (preloadedOpportunityRef.current.has(cityName)) return;
-      preloadedOpportunityRef.current.add(cityName);
-      void store.ensureCityDetail(cityName, false, "panel").catch(() => {
-        preloadedOpportunityRef.current.delete(cityName);
-      });
+    if (store.proAccess.loading || !store.proAccess.authenticated) return;
+    if (!marketScanTargetNames.length) return;
+
+    let cancelled = false;
+    const queue = marketScanTargetNames.filter((cityName) => {
+      const status = marketScanStatusByCity[cityName];
+      const existingMarketScan = store.cityDetailsByName[cityName]?.market_scan;
+      return (
+        !status &&
+        !existingMarketScan &&
+        !marketScanInflightRef.current.has(cityName)
+      );
     });
-  }, [homepageSnapshots, showHomepageChrome, store]);
+    if (!queue.length) return;
+
+    const runWorker = async () => {
+      while (!cancelled) {
+        const cityName = queue.shift();
+        if (!cityName) return;
+        marketScanInflightRef.current.add(cityName);
+        setMarketScanStatusByCity((current) => ({
+          ...current,
+          [cityName]: "pending",
+        }));
+        try {
+          const detail = await store.ensureCityDetail(cityName, false, "panel");
+          if (cancelled) return;
+          const marketScan =
+            detail.market_scan ||
+            (await store.ensureCityMarketScan(cityName, false));
+          if (cancelled) return;
+          setMarketScanStatusByCity((current) => ({
+            ...current,
+            [cityName]: marketScan ? "complete" : "empty",
+          }));
+        } catch {
+          if (cancelled) return;
+          setMarketScanStatusByCity((current) => ({
+            ...current,
+            [cityName]: "error",
+          }));
+        } finally {
+          marketScanInflightRef.current.delete(cityName);
+        }
+      }
+    };
+
+    void Promise.allSettled(
+      Array.from({ length: Math.min(4, queue.length) }, () => runWorker()),
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    marketScanStatusByCity,
+    marketScanTargetNames,
+    showHomepageChrome,
+    store,
+  ]);
 
   return (
     <div
@@ -1926,7 +2511,11 @@ function DashboardScreen() {
       {showHomepageChrome ? (
         <>
           <HomeIntelligencePanel snapshots={homepageSnapshots} />
-          <OpportunityStrip snapshots={homepageSnapshots} />
+          <OpportunityStrip
+            snapshots={homepageSnapshots}
+            marketScanStatusByCity={marketScanStatusByCity}
+            scanTargetNames={marketScanTargetNames}
+          />
           <HomeAssistantDock snapshots={homepageSnapshots} />
         </>
       ) : null}

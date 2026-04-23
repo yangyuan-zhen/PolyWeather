@@ -42,6 +42,10 @@ interface DashboardStoreValue extends DashboardState {
     force?: boolean,
     depth?: "panel" | "market" | "nearby" | "full",
   ) => Promise<CityDetail>;
+  ensureCityMarketScan: (
+    cityName: string,
+    force?: boolean,
+  ) => Promise<CityDetail["market_scan"] | null>;
   focusCity: (cityName: string) => Promise<void>;
   forecastModalMode: ForecastModalMode | null;
   futureModalDate: string | null;
@@ -1113,6 +1117,7 @@ export function DashboardStoreProvider({
         setIsPanelOpen(false);
       },
       ensureCityDetail,
+      ensureCityMarketScan,
       focusCity,
       forecastModalMode,
       futureModalDate,
