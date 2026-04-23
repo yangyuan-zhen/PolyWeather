@@ -2,12 +2,12 @@
 
 import React from "react";
 import {
-  Crosshair,
-  Clock,
-  Zap,
-  TrendingUp,
-  SlidersHorizontal,
+  Bolt,
+  CircleDot,
+  Clock3,
+  Info,
   Search,
+  TrendingUp,
 } from "lucide-react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ScanTerminalFilters } from "@/lib/dashboard-types";
@@ -17,37 +17,40 @@ export interface FilterState extends ScanTerminalFilters {}
 const SCAN_MODES = [
   {
     key: "tradable" as const,
-    icon: Crosshair,
+    icon: Bolt,
     labelEn: "Tradable",
     labelZh: "可交易机会",
-    descEn: "Markets with immediate trading value",
-    descZh: "交易价值最高的市场",
+    descEn: "Find the best immediate trade",
+    descZh: "发现当前最值得交易的市场",
   },
   {
     key: "early" as const,
-    icon: Clock,
+    icon: Clock3,
     labelEn: "Early",
     labelZh: "早期机会",
-    descEn: "Long-horizon positions",
-    descZh: "长周期布局",
+    descEn: "Long-horizon, lower-priced setups",
+    descZh: "长时间布局，低价市场",
   },
   {
     key: "touch" as const,
-    icon: Zap,
+    icon: CircleDot,
     labelEn: "Touch Play",
     labelZh: "触达博弈",
-    descEn: "Approaching settle threshold",
-    descZh: "触达博弈最高的市场",
+    descEn: "Markets approaching the settle line",
+    descZh: "接近决策，博弈是否触达",
   },
   {
     key: "trend" as const,
     icon: TrendingUp,
     labelEn: "Trend",
     labelZh: "趋势确认",
-    descEn: "Trend-confirmed opportunities",
-    descZh: "趋势确认、顺势加仓",
+    descEn: "Trend-confirmed follow-through",
+    descZh: "趋势明朗，顺势交易",
   },
 ] as const;
+
+const LIQUIDITY_OPTIONS = [500, 1000, 5000, 10000];
+const EDGE_OPTIONS = [1, 2, 3, 5, 8];
 
 export function ScanFilterPanel({
   value,
@@ -75,10 +78,19 @@ export function ScanFilterPanel({
 
   return (
     <aside className="scan-filter-panel">
-      {/* === Scan Mode Section === */}
-      <div className="scan-filter-section">
-        <div className="scan-filter-label">
-          {isEn ? "Scan Mode" : "扫描模式"}
+      <div className="scan-sidebar-brand">
+        <div className="scan-sidebar-brand-mark">
+          <Bolt size={22} strokeWidth={2.2} />
+        </div>
+        <div>
+          <div className="scan-sidebar-brand-name">PolyWeather</div>
+        </div>
+      </div>
+
+      <section className="scan-filter-section">
+        <div className="scan-filter-heading">
+          <span>{isEn ? "Scan Mode" : "扫描模式"}</span>
+          <Info size={14} />
         </div>
         <div className="scan-mode-tabs">
           {SCAN_MODES.map((mode) => {
@@ -87,91 +99,111 @@ export function ScanFilterPanel({
             return (
               <button
                 key={mode.key}
+                type="button"
                 className={`scan-mode-tab ${isActive ? "active" : ""}`}
                 onClick={() => updateFilter("scan_mode", mode.key)}
-                title={isEn ? mode.descEn : mode.descZh}
               >
-                <Icon size={16} />
-                <span className="scan-mode-tab-label">
-                  {isEn ? mode.labelEn : mode.labelZh}
+                <span className="scan-mode-icon">
+                  <Icon size={16} />
                 </span>
-                {isActive && <span className="scan-mode-tab-indicator" />}
+                <span className="scan-mode-copy">
+                  <span className="scan-mode-tab-label">
+                    {isEn ? mode.labelEn : mode.labelZh}
+                  </span>
+                  <span className="scan-mode-tab-sub">
+                    {isEn ? mode.descEn : mode.descZh}
+                  </span>
+                </span>
               </button>
             );
           })}
         </div>
-      </div>
+      </section>
 
-      {/* === Filter Controls === */}
-      <div className="scan-filter-section">
-        <div className="scan-filter-label">
-          <SlidersHorizontal size={14} />
-          {isEn ? "Filter Criteria" : "筛选条件"}
+      <section className="scan-filter-section">
+        <div className="scan-filter-heading">
+          <span>{isEn ? "Filters" : "筛选条件"}</span>
+          <Info size={14} />
         </div>
 
-        {/* Price Range */}
-        <div className="scan-filter-row">
-          <span className="scan-filter-row-label">
+        <div className="scan-range-card">
+          <div className="scan-filter-row-title">
             {isEn ? "Price Range" : "价格范围"}
-          </span>
-          <div className="scan-range-display">
-            <span>{value.min_price.toFixed(2)}</span>
+          </div>
+          <div className="scan-range-track-wrap">
             <input
               type="range"
               min={0}
               max={100}
-              value={value.min_price * 100}
+              value={Math.round(value.min_price * 100)}
               onChange={(e) =>
                 updateFilter(
                   "min_price",
                   Math.min(Number(e.target.value) / 100, value.max_price),
                 )
               }
-              className="scan-range-slider"
+              className="scan-range-slider min"
             />
             <input
               type="range"
               min={0}
               max={100}
-              value={value.max_price * 100}
+              value={Math.round(value.max_price * 100)}
               onChange={(e) =>
                 updateFilter(
                   "max_price",
                   Math.max(Number(e.target.value) / 100, value.min_price),
                 )
               }
-              className="scan-range-slider"
+              className="scan-range-slider max"
             />
+          </div>
+          <div className="scan-range-labels">
+            <span>{value.min_price.toFixed(2)}</span>
             <span>{value.max_price.toFixed(2)}</span>
           </div>
         </div>
 
-        {/* Min Edge */}
-        <div className="scan-filter-row">
+        <label className="scan-filter-row">
+          <span className="scan-filter-row-label">
+            {isEn ? "Min Liquidity" : "最小成交量"}
+          </span>
+          <select
+            className="scan-select"
+            value={value.min_liquidity}
+            onChange={(e) => updateFilter("min_liquidity", Number(e.target.value))}
+          >
+            {LIQUIDITY_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                ${option.toLocaleString("en-US")}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="scan-filter-row">
           <span className="scan-filter-row-label">
             {isEn ? "Min Edge" : "最小边际优势"}
           </span>
-          <div className="scan-range-display">
-            <span>{value.min_edge_pct}%</span>
-            <input
-              type="range"
-              min={0}
-              max={20}
-              value={value.min_edge_pct}
-              onChange={(e) =>
-                updateFilter("min_edge_pct", Number(e.target.value))
-              }
-              className="scan-range-slider"
-            />
-          </div>
-        </div>
+          <select
+            className="scan-select"
+            value={value.min_edge_pct}
+            onChange={(e) => updateFilter("min_edge_pct", Number(e.target.value))}
+          >
+            {EDGE_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}%
+              </option>
+            ))}
+          </select>
+        </label>
 
-        {/* High Liquidity Only */}
-        <div className="scan-filter-row">
+        <div className="scan-filter-row inline">
           <span className="scan-filter-row-label">
             {isEn ? "High Liquidity Only" : "只看高流动性"}
           </span>
           <button
+            type="button"
             className={`scan-toggle ${value.high_liquidity_only ? "active" : ""}`}
             onClick={() => {
               const nextValue = !value.high_liquidity_only;
@@ -180,16 +212,16 @@ export function ScanFilterPanel({
                 high_liquidity_only: nextValue,
                 min_liquidity: nextValue
                   ? Math.max(value.min_liquidity, 5000)
-                  : 500,
+                  : value.min_liquidity,
               });
             }}
+            aria-pressed={value.high_liquidity_only}
           >
             <span className="scan-toggle-knob" />
           </button>
         </div>
 
-        {/* Market Type */}
-        <div className="scan-filter-row">
+        <label className="scan-filter-row">
           <span className="scan-filter-row-label">
             {isEn ? "Market Type" : "市场类型"}
           </span>
@@ -208,12 +240,11 @@ export function ScanFilterPanel({
             </option>
             <option value="all">{isEn ? "All Markets" : "所有市场"}</option>
           </select>
-        </div>
+        </label>
 
-        {/* Time Range */}
-        <div className="scan-filter-row">
+        <label className="scan-filter-row">
           <span className="scan-filter-row-label">
-            {isEn ? "Time Range" : "时间周期"}
+            {isEn ? "Time Range" : "时间范围"}
           </span>
           <select
             className="scan-select"
@@ -229,11 +260,11 @@ export function ScanFilterPanel({
             <option value="tomorrow">{isEn ? "Tomorrow" : "明天"}</option>
             <option value="week">{isEn ? "This Week" : "本周"}</option>
           </select>
-        </div>
-      </div>
+        </label>
+      </section>
 
-      {/* === CTA === */}
       <button
+        type="button"
         className="scan-cta-button"
         onClick={() => onScan?.(value)}
         disabled={isScanning}

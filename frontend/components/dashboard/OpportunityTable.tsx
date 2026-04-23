@@ -6,90 +6,125 @@ import { useI18n } from "@/hooks/useI18n";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 
-function getStatusMeta(
-  row: ScanOpportunityRow,
-  locale: string,
-): { label: string; tone: "green" | "amber" | "purple" | "neutral" } {
-  const phase = String(row.window_phase || "").toLowerCase();
-  if (phase === "active_peak" || phase === "setup_today") {
-    return { label: locale === "en-US" ? "Tradable" : "可交易", tone: "green" };
-  }
-  if (phase === "tomorrow" || phase === "week_ahead") {
-    return { label: locale === "en-US" ? "Early" : "早期机会", tone: "purple" };
-  }
-  if (phase === "post_peak") {
-    return { label: locale === "en-US" ? "Post Peak" : "峰后确认", tone: "amber" };
-  }
-  return { label: locale === "en-US" ? "Watching" : "观察中", tone: "neutral" };
-}
-
 function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   const numeric = Number(value);
-  if (!signed) return `${numeric.toFixed(1)}%`;
-  return `${numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
+  return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
 }
 
-function formatTimeBlock(row: ScanOpportunityRow, locale: string) {
-  const parts: string[] = [];
-  if (row.local_time) {
-    parts.push(row.local_time);
+function formatVolume(value?: number | null) {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return "--";
+  if (numeric >= 1_000_000) return `$${(numeric / 1_000_000).toFixed(1)}M`;
+  if (numeric >= 1_000) return `$${(numeric / 1_000).toFixed(0)}K`;
+  return `$${numeric.toFixed(0)}`;
+}
+
+function formatWindowMinutes(value: number | null | undefined, locale: string) {
+  if (value == null || !Number.isFinite(Number(value))) return "--";
+  const minutes = Math.max(0, Math.round(Number(value)));
+  const hours = Math.floor(minutes / 60);
+  const remains = minutes % 60;
+  if (locale === "en-US") {
+    if (hours <= 0) return `${remains}m left`;
+    return `${hours}h ${remains}m left`;
   }
-  if (row.selected_date) {
-    parts.push(row.selected_date);
-  }
-  return parts.join(" · ") || (locale === "en-US" ? "No time" : "暂无时间");
+  if (hours <= 0) return `剩余 ${remains} 分钟`;
+  return `剩余 ${hours}h ${remains}m`;
 }
 
 function formatAction(row: ScanOpportunityRow, locale: string) {
+  if (row.action) return row.action;
   if (row.side === "yes") {
-    return `${locale === "en-US" ? "Buy" : "买入"} Yes ${row.target_label || ""}`.trim();
+    return `${locale === "en-US" ? "Buy Yes" : "买入 Yes"} ${row.target_label || ""}`.trim();
   }
   if (row.side === "no") {
-    return `${locale === "en-US" ? "Buy" : "买入"} No ${row.target_label || ""}`.trim();
+    return `${locale === "en-US" ? "Buy No" : "买入 No"} ${row.target_label || ""}`.trim();
   }
-  return row.action || "--";
+  return "--";
 }
 
-function formatProbability(value?: number | null) {
-  if (value == null || Number.isNaN(Number(value))) return "--";
-  return `${(Number(value) * 100).toFixed(0)}%`;
+function getPhaseMeta(
+  row: ScanOpportunityRow,
+  locale: string,
+): { label: string; tone: "green" | "amber" | "blue" | "red" } {
+  const mode = String(row.window_phase || "").toLowerCase();
+  if (mode === "active_peak" || mode === "setup_today") {
+    return {
+      label: locale === "en-US" ? "Touch Play" : "触达博弈",
+      tone: "red",
+    };
+  }
+  if (mode === "tomorrow" || mode === "week_ahead") {
+    return {
+      label: locale === "en-US" ? "Early" : "早期机会",
+      tone: "blue",
+    };
+  }
+  if (row.trend_alignment) {
+    return {
+      label: locale === "en-US" ? "Trend" : "趋势确认",
+      tone: "amber",
+    };
+  }
+  return {
+    label: locale === "en-US" ? "Tradable" : "可交易",
+    tone: "green",
+  };
+}
+
+function scoreTone(score?: number | null) {
+  const numeric = Number(score || 0);
+  if (numeric >= 85) return "green";
+  if (numeric >= 70) return "yellow";
+  return "gray";
+}
+
+function ProbabilityPreview({
+  row,
+  locale,
+}: {
+  row: ScanOpportunityRow;
+  locale: string;
+}) {
+  const targetBase =
+    row.target_value ??
+    row.target_threshold ??
+    row.target_lower ??
+    row.target_upper ??
+    null;
+  const unit = row.target_unit || row.temp_symbol || "";
+  const targetLabel =
+    targetBase != null
+      ? `${Math.round(Number(targetBase))}${unit}`
+      : row.target_label || "--";
+  return (
+    <div className="scan-distribution-preview">
+      <div className="scan-distribution-card featured">
+        <strong>{targetLabel}</strong>
+        <span>{locale === "en-US" ? "Target" : "目标"}</span>
+      </div>
+      <div className="scan-distribution-card">
+        <strong>{formatPercent(row.model_event_probability != null ? row.model_event_probability * 100 : null)}</strong>
+        <span>{locale === "en-US" ? "Model" : "模型"}</span>
+      </div>
+      <div className="scan-distribution-card">
+        <strong>{formatPercent(row.market_event_probability != null ? row.market_event_probability * 100 : null)}</strong>
+        <span>{locale === "en-US" ? "Market" : "市场"}</span>
+      </div>
+      <div className="scan-distribution-card">
+        <strong>{formatPercent(row.distribution_bias_score)}</strong>
+        <span>{row.distribution_bias_direction || (locale === "en-US" ? "Bias" : "偏移")}</span>
+      </div>
+    </div>
+  );
 }
 
 function ScoreRing({ score }: { score?: number | null }) {
   const displayScore = Math.max(0, Math.min(100, Number(score || 0)));
-  const radius = 20;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (displayScore / 100) * circumference;
-  const color =
-    displayScore >= 85 ? "#00E0A4" : displayScore >= 70 ? "#FFB020" : "#FF4D6A";
-
   return (
-    <div className="scan-score-ring">
-      <svg viewBox="0 0 48 48" width={48} height={48}>
-        <circle
-          cx={24}
-          cy={24}
-          r={radius}
-          fill="none"
-          stroke="rgba(255,255,255,0.06)"
-          strokeWidth={3}
-        />
-        <circle
-          cx={24}
-          cy={24}
-          r={radius}
-          fill="none"
-          stroke={color}
-          strokeWidth={3}
-          strokeDasharray={`${progress} ${circumference - progress}`}
-          strokeLinecap="round"
-          transform="rotate(-90 24 24)"
-        />
-      </svg>
-      <span className="scan-score-value" style={{ color }}>
-        {displayScore.toFixed(0)}
-      </span>
+    <div className={`scan-score-ring tone-${scoreTone(displayScore)}`}>
+      <span>{displayScore.toFixed(0)}</span>
     </div>
   );
 }
@@ -106,124 +141,111 @@ export function OpportunityTable({
   const { locale } = useI18n();
   const isEn = locale === "en-US";
 
-  return (
-    <div className="scan-table-container">
-      <div className="scan-table-header">
-        <span className="scan-th scan-th-rank">#</span>
-        <span className="scan-th scan-th-city">
-          {isEn ? "City / Market" : "城市 / 市场"}
-        </span>
-        <span className="scan-th scan-th-time">
-          {isEn ? "Time / Phase" : "时间 / 阶段"}
-        </span>
-        <span className="scan-th scan-th-prob">
-          {isEn ? "EMOS vs Market" : "EMOS vs 市场"}
-        </span>
-        <span className="scan-th scan-th-action">
-          {isEn ? "Best Action" : "最佳动作"}
-        </span>
-        <span className="scan-th scan-th-edge">
-          {isEn ? "Edge" : "边际优势"}
-        </span>
-        <span className="scan-th scan-th-score">
-          {isEn ? "Score" : "综合得分"}
-        </span>
-        <span className="scan-th scan-th-fav" />
-      </div>
-
-      {rows.map((row, index) => {
-        const status = getStatusMeta(row, locale);
-        const localizedCityName = getLocalizedCityName(
-          row.city,
-          row.city_display_name || row.display_name || row.city,
-          locale,
-        );
-        const selected = selectedRowId === row.id;
-        const finalScore = Number(row.final_score || 0);
-
-        return (
-          <button
-            key={row.id}
-            type="button"
-            className={`scan-table-row ${selected ? "selected" : ""} ${row.tradable ? "tradable" : ""}`}
-            onClick={() => onSelectRow?.(row)}
-          >
-            <span className={`scan-td scan-td-rank rank-${status.tone}`}>
-              <span className="scan-rank-circle">{row.rank || index + 1}</span>
-            </span>
-
-            <span className="scan-td scan-td-city">
-              <span className="scan-city-thumb">
-                <span className="scan-city-img-placeholder" />
-              </span>
-              <span className="scan-city-info">
-                <span className="scan-city-name">{localizedCityName}</span>
-                <span className="scan-city-sub">
-                  {row.target_label || row.market_question || "--"}
-                </span>
-              </span>
-            </span>
-
-            <span className="scan-td scan-td-time">
-              <span className="scan-time-text">{formatTimeBlock(row, locale)}</span>
-              <span className={`scan-status-badge tone-${status.tone}`}>
-                {status.label}
-              </span>
-            </span>
-
-            <span className="scan-td scan-td-prob">
-              <div className="scan-city-info">
-                <span className="scan-city-name">
-                  {formatProbability(row.model_event_probability)} /{" "}
-                  {formatProbability(row.market_event_probability)}
-                </span>
-                <span className="scan-city-sub">
-                  {isEn ? "Bias" : "偏移"}{" "}
-                  {row.distribution_bias_direction || "--"} ·{" "}
-                  {formatPercent(row.distribution_bias_score)}
-                </span>
-              </div>
-            </span>
-
-            <span className="scan-td scan-td-action">
-              <span className="scan-action-text">
-                {formatAction(row, locale)}
-              </span>
-            </span>
-
-            <span className="scan-td scan-td-edge">
-              <span
-                className={`scan-edge-value ${finalScore > 0 ? "positive" : "neutral"}`}
-              >
-                {formatPercent(row.edge_percent, true)}
-              </span>
-            </span>
-
-            <span className="scan-td scan-td-score">
-              <ScoreRing score={row.final_score} />
-            </span>
-
-            <span className="scan-td scan-td-fav">
-              <Star size={16} className="scan-fav-icon" />
-            </span>
-          </button>
-        );
-      })}
-
-      {!rows.length ? (
-        <div className="scan-detail-empty">
-          <div>
-            <div className="scan-detail-section-title">
-              {isEn ? "No primary signal" : "当前无主信号"}
-            </div>
-            <p className="scan-city-sub">
-              {isEn
-                ? "No opportunity passed the price, spread, liquidity, and edge filters."
-                : "当前没有机会同时满足价格、点差、流动性和 edge 过滤。"}
-            </p>
+  if (!rows.length) {
+    return (
+      <div className="scan-table-shell empty">
+        <div className="scan-empty-state">
+          <div className="scan-empty-title">
+            {isEn ? "No main signal right now" : "当前无主信号"}
+          </div>
+          <div className="scan-empty-copy">
+            {isEn
+              ? "No row passed the price, spread, liquidity, and edge thresholds."
+              : "当前没有机会同时满足价格、点差、流动性和 edge 过滤。"}
           </div>
         </div>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="scan-table-shell">
+      <div className="scan-table-header">
+        <span />
+        <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
+        <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
+        <span>{isEn ? "Model vs Market" : "模型分布 vs 市场分布"}</span>
+        <span>{isEn ? "Best Opportunity" : "最佳机会"}</span>
+        <span>{isEn ? "Edge" : "边际优势"}</span>
+        <span>{isEn ? "Score" : "综合得分"}</span>
+      </div>
+
+      <div className="scan-table-body">
+        {rows.map((row, index) => {
+          const phaseMeta = getPhaseMeta(row, locale);
+          const localizedCityName = getLocalizedCityName(
+            row.city,
+            row.city_display_name || row.display_name || row.city,
+            locale,
+          );
+          const selected = selectedRowId === row.id;
+          const scoreClass = scoreTone(row.final_score);
+          return (
+            <button
+              key={row.id}
+              type="button"
+              className={`scan-table-row ${selected ? "selected" : ""}`}
+              onClick={() => onSelectRow?.(row)}
+            >
+              <div className="scan-rank-cell">
+                <div className={`scan-rank-circle ${scoreClass}`}>
+                  {row.rank || index + 1}
+                </div>
+              </div>
+
+              <div className="scan-city-cell">
+                <div className="scan-city-thumb">
+                  <div className="scan-city-thumb-fill" />
+                </div>
+                <div className="scan-city-copy">
+                  <div className="scan-city-name">{localizedCityName}</div>
+                  <div className="scan-city-sub">
+                    {row.market_question || row.target_label || "--"}
+                  </div>
+                  <div className="scan-city-volume">{formatVolume(row.volume)}</div>
+                </div>
+              </div>
+
+              <div className="scan-time-cell">
+                <div className="scan-time-main">{row.local_time || "--"}</div>
+                <div className={`scan-phase-badge ${phaseMeta.tone}`}>
+                  {phaseMeta.label}
+                </div>
+                <div className="scan-time-remaining">
+                  {formatWindowMinutes(row.remaining_window_minutes, locale)}
+                </div>
+              </div>
+
+              <ProbabilityPreview row={row} locale={locale} />
+
+              <div className="scan-trade-cell">
+                <div className={`scan-trade-main ${row.side === "no" ? "sell" : "buy"}`}>
+                  {formatAction(row, locale)}
+                </div>
+                <div className="scan-trade-sub">
+                  {formatPercent(row.ask != null ? row.ask * 100 : null)} →{" "}
+                  {formatPercent(row.model_probability != null ? row.model_probability * 100 : null)}
+                </div>
+                <div className="scan-trade-note">
+                  {row.target_label || row.market_direction || "--"}
+                </div>
+              </div>
+
+              <div className={`scan-edge-cell ${Number(row.edge_percent || 0) >= 0 ? "positive" : "negative"}`}>
+                {formatPercent(row.edge_percent, true)}
+              </div>
+
+              <div className="scan-score-cell">
+                <ScoreRing score={row.final_score} />
+              </div>
+
+              <div className="scan-row-fav">
+                <Star size={16} />
+              </div>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
