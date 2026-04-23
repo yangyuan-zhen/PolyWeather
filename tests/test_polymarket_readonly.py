@@ -442,3 +442,45 @@ def test_build_top_temperature_buckets_dedupes_same_temperature():
         "highest-temperature-in-ankara-on-march-12-2026-14c-or-higher|yes"
     )
     assert all(not str(row.get("label") or "").startswith("<=") for row in rows)
+
+
+def test_find_primary_market_prefers_preferred_temperature_and_cache_key():
+    layer = PolymarketReadOnlyLayer()
+    markets = [
+        {
+            "slug": "highest-temperature-in-madrid-on-april-23-2026-22corbelow",
+            "question": "Will the highest temperature in Madrid be 22C or below on April 23?",
+            "volumeNum": 900000,
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+        },
+        {
+            "slug": "highest-temperature-in-madrid-on-april-23-2026-27c",
+            "question": "Will the highest temperature in Madrid be 27C on April 23?",
+            "volumeNum": 1000,
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+        },
+    ]
+
+    layer._load_markets = lambda active_only=True: markets
+
+    selected_27, reason_27 = layer._find_primary_market(
+        "madrid",
+        "2026-04-23",
+        preferred_temp=27.0,
+    )
+    selected_22, reason_22 = layer._find_primary_market(
+        "madrid",
+        "2026-04-23",
+        preferred_temp=22.0,
+    )
+
+    assert reason_27 is None
+    assert reason_22 is None
+    assert selected_27["slug"] == "highest-temperature-in-madrid-on-april-23-2026-27c"
+    assert selected_22["slug"] == "highest-temperature-in-madrid-on-april-23-2026-22corbelow"

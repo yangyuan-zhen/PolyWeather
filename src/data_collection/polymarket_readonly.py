@@ -1023,7 +1023,12 @@ class PolymarketReadOnlyLayer:
                 preferred_temp=preferred_temp,
             )
 
-        cache_key = f"{city_key}|{target_date}"
+        preferred_temp_key = (
+            f"{float(preferred_temp):.2f}"
+            if preferred_temp is not None
+            else "none"
+        )
+        cache_key = f"{city_key}|{target_date}|{preferred_temp_key}"
         now = time.time()
 
         with self._lock:
@@ -1037,7 +1042,12 @@ class PolymarketReadOnlyLayer:
 
         scored: List[Tuple[float, Dict[str, Any]]] = []
         for market in markets:
-            score = self._score_market(city_key, target_date, market)
+            score = self._score_market(
+                city_key,
+                target_date,
+                market,
+                preferred_temp=preferred_temp,
+            )
             if score <= 0:
                 continue
             scored.append((score, market))
@@ -1046,7 +1056,12 @@ class PolymarketReadOnlyLayer:
         if not scored:
             broader = self._load_markets(active_only=False)
             for market in broader:
-                score = self._score_market(city_key, target_date, market)
+                score = self._score_market(
+                    city_key,
+                    target_date,
+                    market,
+                    preferred_temp=preferred_temp,
+                )
                 if score <= 0:
                     continue
                 scored.append((score, market))
@@ -1196,7 +1211,13 @@ class PolymarketReadOnlyLayer:
 
         return None, f"Specified market_slug not found: {normalized_slug}"
 
-    def _score_market(self, city_key: str, target_date: str, market: Dict[str, Any]) -> float:
+    def _score_market(
+        self,
+        city_key: str,
+        target_date: str,
+        market: Dict[str, Any],
+        preferred_temp: Optional[float] = None,
+    ) -> float:
         city_tokens = CITY_TOKEN_INDEX.get(city_key, [city_key])
         text_parts = [
             market.get("question"),
@@ -1271,6 +1292,32 @@ class PolymarketReadOnlyLayer:
             or 0.0
         )
         score += min(volume / 50000.0, 8.0)
+
+        if preferred_temp is not None:
+            market_temp = self._extract_market_bucket_temp(market)
+            bucket_range = self._extract_market_bucket_range(market)
+            direction = self._extract_market_bucket_direction(market)
+            if market_temp is not None:
+                diff = abs(float(market_temp) - float(preferred_temp))
+                score += max(-40.0, 60.0 - diff * 15.0)
+
+            if bucket_range is not None:
+                lower, upper, _unit = bucket_range
+                contains_preferred = False
+                if upper is not None:
+                    contains_preferred = lower <= float(preferred_temp) <= upper
+                elif direction == "above":
+                    contains_preferred = float(preferred_temp) >= lower
+                elif direction == "below":
+                    contains_preferred = float(preferred_temp) <= lower
+                else:
+                    contains_preferred = abs(float(preferred_temp) - lower) <= 0.51
+
+                if contains_preferred:
+                    if upper is not None or direction == "exact":
+                        score += 28.0
+                    else:
+                        score += 18.0
         return score
 
     def _is_temperature_market(self, market: Dict[str, Any]) -> bool:
