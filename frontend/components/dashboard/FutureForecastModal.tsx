@@ -711,15 +711,18 @@ export function FutureForecastModal() {
   const dateStr = store.futureModalDate;
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
+  const hasModalContext = Boolean(detail && dateStr);
   const [showDeferredTodaySections, setShowDeferredTodaySections] =
     useState(false);
   const [freshMarketScan, setFreshMarketScan] = useState<MarketScan | null>(
     null,
   );
 
-  if (!detail || !dateStr) return null;
-
   useEffect(() => {
+    if (!hasModalContext) {
+      setShowDeferredTodaySections(false);
+      return;
+    }
     setShowDeferredTodaySections(false);
     if (typeof window === "undefined") {
       setShowDeferredTodaySections(true);
@@ -750,23 +753,23 @@ export function FutureForecastModal() {
         clearTimeout(timeoutId);
       }
     };
-  }, [dateStr, detail]);
+  }, [dateStr, detail, hasModalContext]);
 
   const isToday =
     store.forecastModalMode === "today" ||
-    (store.forecastModalMode == null && dateStr === detail.local_date);
-  const detailDepth = detail.detail_depth || "full";
+    (store.forecastModalMode == null && dateStr === detail?.local_date);
+  const detailDepth = detail?.detail_depth || "full";
   const isFullDetailReady = detailDepth === "full";
   const isStructureSyncing =
     store.loadingState.futureDeep || !isFullDetailReady;
   const isAnyLayerSyncing = isStructureSyncing;
   const isTodayBlockingRefresh = isToday && isStructureSyncing;
-  const activeMarketScan = freshMarketScan || detail.market_scan || null;
+  const activeMarketScan = freshMarketScan || detail?.market_scan || null;
 
   useEffect(() => {
     setFreshMarketScan(null);
-    if (!isToday || !isFullDetailReady || !isPro) return;
-    const cityName = String(detail.name || detail.display_name || "").trim();
+    if (!hasModalContext || !isToday || !isFullDetailReady || !isPro) return;
+    const cityName = String(detail?.name || detail?.display_name || "").trim();
     if (!cityName || !dateStr) return;
 
     let cancelled = false;
@@ -777,7 +780,7 @@ export function FutureForecastModal() {
         .getCityMarketScan(cityName, {
           force: false,
           lite: false,
-          marketSlug: detail.market_scan?.primary_market?.slug || null,
+          marketSlug: detail?.market_scan?.primary_market?.slug || null,
           targetDate: dateStr,
         })
         .then((payload) => {
@@ -810,15 +813,18 @@ export function FutureForecastModal() {
     };
   }, [
     dateStr,
-    detail.display_name,
-    detail.local_date,
-    detail.market_scan?.primary_market?.slug,
-    detail.name,
-    detail.updated_at,
+    detail?.display_name,
+    detail?.local_date,
+    detail?.market_scan?.primary_market?.slug,
+    detail?.name,
+    detail?.updated_at,
+    hasModalContext,
     isFullDetailReady,
     isPro,
     isToday,
   ]);
+
+  if (!detail || !dateStr) return null;
 
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;

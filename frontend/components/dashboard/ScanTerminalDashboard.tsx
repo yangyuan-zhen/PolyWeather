@@ -34,6 +34,7 @@ import {
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { dashboardClient } from "@/lib/dashboard-client";
 import type {
+  CityDetail,
   DistributionPreviewPoint,
   MarketScan,
   PrimarySignal,
@@ -236,6 +237,122 @@ function buildComparisonBuckets(
       highlighted: true,
     },
   ];
+}
+
+function MapCityDetailPanel({ detail }: { detail: CityDetail | null }) {
+  const { locale } = useI18n();
+  const isEn = locale === "en-US";
+
+  if (!detail) {
+    return (
+      <aside className="scan-detail-panel">
+        <div className="scan-empty-state">
+          <div className="scan-empty-title">
+            {isEn ? "Pick a city" : "选择一个城市"}
+          </div>
+          <div className="scan-empty-copy">
+            {isEn ? "The right rail will show city context from the map." : "右侧会展示地图里当前城市的信息。"}
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  const cityName = getLocalizedCityName(
+    detail.name,
+    detail.display_name || detail.name,
+    locale,
+  );
+  const tempSymbol = detail.temp_symbol || "°C";
+  const currentTemp = detail.current?.temp;
+  const dayHigh =
+    detail.current?.max_so_far ??
+    detail.airport_current?.max_so_far ??
+    detail.airport_primary?.max_so_far ??
+    null;
+  const airportLabel = getLocalizedAirportName(
+    detail.name,
+    detail.risk?.airport || detail.risk?.icao || "",
+    locale,
+  );
+  const peakLabel =
+    Number.isFinite(Number(detail.peak?.first_h)) && Number.isFinite(Number(detail.peak?.last_h))
+      ? `${String(Number(detail.peak?.first_h)).padStart(2, "0")}:00-${String(
+          Number(detail.peak?.last_h) + 1,
+        ).padStart(2, "0")}:00`
+      : "--";
+
+  return (
+    <aside className="scan-detail-panel">
+      <div className="scan-detail-header">
+        <div className="scan-detail-top">
+          <div className="scan-detail-title-wrap">
+            <div className="scan-detail-city-name">{cityName}</div>
+            <div className="scan-detail-city-sub">
+              {airportLabel || (isEn ? "Airport anchor pending" : "机场锚点待确认")}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="scan-detail-volume-row">
+        <div>
+          <div className="scan-detail-volume-big">
+            {currentTemp != null
+              ? formatTemperatureValue(currentTemp, tempSymbol)
+              : "--"}
+          </div>
+          <div className="scan-detail-volume-caption">
+            {isEn ? "Current observed temperature" : "当前实测温度"}
+          </div>
+        </div>
+      </div>
+
+      <section className="scan-detail-section">
+        <div className="scan-detail-section-title">
+          {isEn ? "Current Context" : "当前概况"}
+        </div>
+        <div className="scan-kv-list">
+          <div className="scan-kv">
+            <span>{isEn ? "Local Time" : "当前时间"}</span>
+            <strong>{detail.local_time || "--"}</strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "Current Temp" : "当前温度"}</span>
+            <strong>
+              {currentTemp != null
+                ? formatTemperatureValue(currentTemp, tempSymbol)
+                : "--"}
+            </strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "Day High (So Far)" : "今日最高（至今）"}</span>
+            <strong>
+              {dayHigh != null
+                ? formatTemperatureValue(dayHigh, tempSymbol)
+                : "--"}
+            </strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "DEB Forecast" : "DEB 预测"}</span>
+            <strong>
+              {detail.deb?.prediction != null
+                ? formatTemperatureValue(detail.deb.prediction, tempSymbol)
+                : "--"}
+            </strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "Peak Window" : "预计峰值"}</span>
+            <strong>{peakLabel}</strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "Airport" : "机场锚点"}</span>
+            <strong>{airportLabel || "--"}</strong>
+          </div>
+        </div>
+      </section>
+    </aside>
+  );
 }
 
 function DetailPanel({
@@ -788,6 +905,8 @@ function ScanTerminalScreen() {
   }, [selectedRow, detailByRowId]);
 
   const selectedDetail = selectedRow ? detailByRowId[selectedRow.id] : null;
+  const mapFocusedDetail = store.selectedDetail;
+  const mapFocusedCity = store.selectedCity;
   const resolvedView: ContentView =
     activeSection === "markets"
       ? "map"
@@ -982,11 +1101,15 @@ function ScanTerminalScreen() {
           </section>
         </main>
 
-        <DetailPanel
-          row={selectedRow}
-          marketScan={selectedDetail}
-          loading={detailLoadingId === selectedRow?.id}
-        />
+        {resolvedView === "map" && mapFocusedCity ? (
+          <MapCityDetailPanel detail={mapFocusedDetail} />
+        ) : (
+          <DetailPanel
+            row={selectedRow}
+            marketScan={selectedDetail}
+            loading={detailLoadingId === selectedRow?.id}
+          />
+        )}
       </div>
     </div>
   );
