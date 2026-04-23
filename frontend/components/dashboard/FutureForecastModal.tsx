@@ -746,6 +746,7 @@ export function FutureForecastModal() {
       dashboardClient
         .getCityMarketScan(cityName, {
           force: false,
+          lite: false,
           marketSlug: detail.market_scan?.primary_market?.slug || null,
           targetDate: dateStr,
         })
@@ -766,7 +767,7 @@ export function FutureForecastModal() {
         return;
       }
       refreshMarketScan();
-    }, 3000);
+    }, 30_000);
 
     return () => {
       cancelled = true;

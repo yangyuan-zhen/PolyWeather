@@ -45,6 +45,11 @@ interface DashboardStoreValue extends DashboardState {
   ensureCityMarketScan: (
     cityName: string,
     force?: boolean,
+    options?: {
+      lite?: boolean;
+      marketSlug?: string | null;
+      targetDate?: string | null;
+    },
   ) => Promise<CityDetail["market_scan"] | null>;
   focusCity: (cityName: string) => Promise<void>;
   forecastModalMode: ForecastModalMode | null;
@@ -295,6 +300,39 @@ function mergeCityDetail(
       current.network_lead_signal || incoming.network_lead_signal,
     airport_vs_network_delta:
       current.airport_vs_network_delta ?? incoming.airport_vs_network_delta,
+  };
+}
+
+function mergeMarketScan(
+  current: CityDetail["market_scan"] | undefined,
+  incoming: CityDetail["market_scan"] | null | undefined,
+): CityDetail["market_scan"] | undefined {
+  if (!incoming) return current;
+  if (!current) return incoming || undefined;
+
+  const preserveHeavySlices = incoming.scan_scope === "lite";
+  const nextTopBuckets =
+    preserveHeavySlices &&
+    (!Array.isArray(incoming.top_buckets) || incoming.top_buckets.length === 0)
+      ? current.top_buckets
+      : incoming.top_buckets;
+  const nextAllBuckets =
+    preserveHeavySlices &&
+    (!Array.isArray(incoming.all_buckets) || incoming.all_buckets.length === 0)
+      ? current.all_buckets
+      : incoming.all_buckets;
+  const nextRecentTrades =
+    preserveHeavySlices &&
+    (!Array.isArray(incoming.recent_trades) || incoming.recent_trades.length === 0)
+      ? current.recent_trades
+      : incoming.recent_trades;
+
+  return {
+    ...current,
+    ...incoming,
+    top_buckets: nextTopBuckets,
+    all_buckets: nextAllBuckets,
+    recent_trades: nextRecentTrades,
   };
 }
 
@@ -569,7 +607,15 @@ export function DashboardStoreProvider({
     return detail;
   };
 
-  const ensureCityMarketScan = async (cityName: string, force = false) => {
+  const ensureCityMarketScan = async (
+    cityName: string,
+    force = false,
+    options?: {
+      lite?: boolean;
+      marketSlug?: string | null;
+      targetDate?: string | null;
+    },
+  ) => {
     let cached = cityDetailsByName[cityName];
     try {
       if (!cached) {
@@ -577,7 +623,10 @@ export function DashboardStoreProvider({
       }
       const payload = await dashboardClient.getCityMarketScan(cityName, {
         force,
-        targetDate: cached?.local_date || selectedForecastDate || null,
+        lite: options?.lite === true,
+        marketSlug: options?.marketSlug || null,
+        targetDate:
+          options?.targetDate || cached?.local_date || selectedForecastDate || null,
       });
       if (!payload.market_scan) return null;
       setCityDetailsByName((current) => {
@@ -587,7 +636,7 @@ export function DashboardStoreProvider({
           ...current,
           [cityName]: {
             ...detail,
-            market_scan: payload.market_scan || undefined,
+            market_scan: mergeMarketScan(detail.market_scan, payload.market_scan),
           },
         };
       });

@@ -369,23 +369,34 @@ export interface MarketScan {
   temperature_bucket?: ProbabilityBucket | null;
   model_probability?: number | null;
   market_price?: number | null;
+  midpoint?: number | null;
+  spread?: number | null;
   edge_percent?: number | null;
   signal_label?: string | null;
   confidence?: string | null;
+  probability_engine?: string | null;
+  probability_calibration_mode?: string | null;
   yes_token?: MarketToken | null;
   no_token?: MarketToken | null;
   yes_buy?: number | null;
   yes_sell?: number | null;
+  yes_midpoint?: number | null;
+  yes_spread?: number | null;
   no_buy?: number | null;
   no_sell?: number | null;
+  no_midpoint?: number | null;
+  no_spread?: number | null;
   last_trade_price?: number | null;
   liquidity?: number | null;
   volume?: number | null;
+  quote_source?: string | null;
+  quote_age_ms?: number | null;
   price_analysis?: MarketPriceAnalysis | null;
   sparkline?: number[];
   top_buckets?: MarketTopBucket[] | null;
   all_buckets?: MarketTopBucket[] | null;
   recent_trades?: unknown[];
+  scan_scope?: "lite" | "full" | string | null;
   websocket?: Record<string, unknown>;
 }
 

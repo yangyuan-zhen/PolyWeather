@@ -37,31 +37,25 @@ def test_extract_market_bucket_range_supports_fahrenheit_ranges():
     assert layer._extract_market_bucket_label(market, 80.5) == "80-81F"
 
 
-def test_fetch_token_market_data_prefers_orderbook_executable_prices():
-    class FakeClob:
-        @staticmethod
-        def get_price(_token_id: str, side: str):
-            if side == "BUY":
-                return {"price": "0.11"}
-            return {"price": "0.88"}
-
-        @staticmethod
-        def get_midpoint(_token_id: str):
-            return {"midpoint": "0.50"}
-
-        @staticmethod
-        def get_last_trade_price(_token_id: str):
-            return {"price": "0.49"}
-
-        @staticmethod
-        def get_order_book(_token_id: str):
-            return {
-                "bids": [{"price": "0.24", "size": "10"}],
-                "asks": [{"price": "0.26", "size": "12"}],
-            }
-
+def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
     layer = PolymarketReadOnlyLayer()
-    layer._get_clob_client = lambda: FakeClob()
+    payloads = {
+        ("/price", "BUY"): {"price": "0.11"},
+        ("/price", "SELL"): {"price": "0.88"},
+        ("/midpoint", None): {"midpoint": "0.50"},
+        ("/last-trade-price", None): {"price": "0.49"},
+        ("/book", None): {
+            "bids": [{"price": "0.24", "size": "10"}],
+            "asks": [{"price": "0.26", "size": "12"}],
+        },
+    }
+
+    def _fake_clob_get(path, params):
+        if path == "/price":
+            return payloads[(path, params.get("side"))]
+        return payloads[(path, None)]
+
+    layer._clob_get = _fake_clob_get
 
     data = layer._fetch_token_market_data("token-1")
 
@@ -71,36 +65,25 @@ def test_fetch_token_market_data_prefers_orderbook_executable_prices():
     assert data["sell"] == 0.24
     assert data["midpoint"] == 0.5
     assert data["last_trade_price"] == 0.49
-    assert data["quote_source"] == "polymarket_clob_client"
+    assert data["quote_source"] == "polymarket_clob_rest"
 
 
-def test_get_token_market_data_prefers_fresh_ws_cache():
+def test_get_token_market_data_uses_price_cache_within_ttl():
     layer = PolymarketReadOnlyLayer()
+    calls = []
 
-    class FakeWsCache:
-        enabled = True
+    def _fake_fetch(_token_id):
+        calls.append(_token_id)
+        return {"buy": 0.33, "sell": 0.31, "midpoint": 0.32}
 
-        def subscribe(self, asset_ids):
-            self.asset_ids = list(asset_ids)
+    layer._fetch_token_market_data = _fake_fetch
 
-        @staticmethod
-        def get_market_data(_token_id):
-            return {
-                "buy": 0.33,
-                "sell": 0.31,
-                "midpoint": 0.32,
-                "quote_source": "polymarket_ws",
-                "quote_age_ms": 80,
-            }
+    first = layer._get_token_market_data("token-1")
+    second = layer._get_token_market_data("token-1")
 
-    layer._ws_quote_cache = FakeWsCache()
-    layer._fetch_token_market_data = lambda _token_id: {"buy": 0.99}
-
-    data = layer._get_token_market_data("token-1")
-
-    assert data["buy"] == 0.33
-    assert data["sell"] == 0.31
-    assert data["quote_source"] == "polymarket_ws"
+    assert first["buy"] == 0.33
+    assert second["midpoint"] == 0.32
+    assert calls == ["token-1"]
 
 
 def test_price_analysis_computes_edge_kelly_and_lock():
@@ -198,6 +181,55 @@ def test_lau_fau_shan_uses_shenzhen_market_city():
     assert scan["city_key"] == "lau fau shan"
     assert scan["market_city_key"] == "shenzhen"
     assert scan["selected_slug"] == "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher"
+
+
+def test_build_market_scan_lite_skips_related_buckets():
+    layer = PolymarketReadOnlyLayer()
+
+    layer._find_primary_market = lambda *_args, **_kwargs: (
+        {
+            "id": "market-1",
+            "question": "Will the highest temperature in Shenzhen be 30C or higher on April 23?",
+            "slug": "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher",
+            "conditionId": "condition-1",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+        },
+        None,
+    )
+    layer._extract_market_tokens = lambda _market: [
+        {"outcome": "Yes", "token_id": "yes-token"},
+        {"outcome": "No", "token_id": "no-token"},
+    ]
+    layer._get_token_market_data = lambda token_id: (
+        {"buy": 0.42, "sell": 0.40, "midpoint": 0.41}
+        if token_id == "yes-token"
+        else {"buy": 0.61, "sell": 0.59, "midpoint": 0.60}
+    )
+
+    called = {"bucket": 0}
+
+    def _fake_build_top_temperature_buckets(**_kwargs):
+        called["bucket"] += 1
+        return [{"value": 30.0, "market_price": 0.41}]
+
+    layer._build_top_temperature_buckets = _fake_build_top_temperature_buckets
+
+    scan = layer.build_market_scan(
+        city="Shenzhen",
+        target_date="2026-04-23",
+        temperature_bucket={"temp": 30, "probability": 0.58},
+        model_probability=0.58,
+        include_related_buckets=False,
+    )
+
+    assert scan["scan_scope"] == "lite"
+    assert scan["midpoint"] == 0.41
+    assert round(scan["spread"], 6) == 0.02
+    assert scan["top_buckets"] == []
+    assert scan["all_buckets"] == []
+    assert called["bucket"] == 0
 
 
 def test_hydrate_bucket_prices_uses_executable_quotes_without_midpoint():

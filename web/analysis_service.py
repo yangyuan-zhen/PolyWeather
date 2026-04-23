@@ -2801,6 +2801,7 @@ def _build_city_market_scan_payload(
     data: Dict[str, Any],
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ) -> Dict[str, Any]:
     city = str(data.get("name") or "").strip().lower()
     local_date = str(data.get("local_date") or "").strip()
@@ -2882,12 +2883,20 @@ def _build_city_market_scan_payload(
         model_probability=model_probability,
         fallback_sparkline=fallback_sparkline,
         forced_market_slug=market_slug,
+        include_related_buckets=not lite,
     )
     if isinstance(market_scan, dict):
         market_scan["anchor_model"] = anchor_model
         market_scan["anchor_high"] = anchor_temp
         market_scan["anchor_settlement"] = anchor_settlement
         market_scan["open_meteo_settlement"] = anchor_settlement
+        probabilities = data.get("probabilities") or {}
+        market_scan["probability_engine"] = str(
+            probabilities.get("engine") or "legacy"
+        ).strip() or "legacy"
+        market_scan["probability_calibration_mode"] = str(
+            probabilities.get("calibration_mode") or "legacy"
+        ).strip() or "legacy"
     return {
         "market_scan": market_scan,
         "selected_date": selected_date or data.get("local_date"),

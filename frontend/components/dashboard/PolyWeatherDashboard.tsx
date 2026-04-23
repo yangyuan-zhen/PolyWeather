@@ -346,6 +346,7 @@ type AssistantMessage = {
 };
 
 type OpportunityScanState = "pending" | "complete" | "empty" | "error";
+const HOME_OPPORTUNITY_REFRESH_MS = 30_000;
 
 type AssistantDockPosition = {
   right: number;
@@ -2395,6 +2396,7 @@ function DashboardScreen() {
   const { t } = useI18n();
   const didAutoFocusRef = useRef(false);
   const marketScanInflightRef = useRef<Set<string>>(new Set());
+  const marketScanPollingRef = useRef(false);
   const [marketScanStatusByCity, setMarketScanStatusByCity] = useState<
     Record<string, OpportunityScanState>
   >({});
@@ -2517,7 +2519,7 @@ function DashboardScreen() {
           const existingDetail = store.cityDetailsByName[cityName];
           const marketScan =
             existingDetail?.market_scan ||
-            (await store.ensureCityMarketScan(cityName, false));
+            (await store.ensureCityMarketScan(cityName, false, { lite: true }));
           if (cancelled) return;
           setMarketScanStatusByCity((current) => ({
             ...current,
@@ -2547,6 +2549,57 @@ function DashboardScreen() {
     marketScanTargetNames,
     showHomepageChrome,
     store.cityDetailsByName,
+    store.ensureCityMarketScan,
+    store.proAccess.authenticated,
+    store.proAccess.loading,
+  ]);
+
+  useEffect(() => {
+    if (!showHomepageChrome) return;
+    if (store.proAccess.loading || !store.proAccess.authenticated) return;
+    if (!marketScanTargetNames.length) return;
+
+    let cancelled = false;
+    let intervalId: number | null = null;
+
+    const refreshAllMarketScans = async () => {
+      if (cancelled || marketScanPollingRef.current) return;
+      marketScanPollingRef.current = true;
+      const queue = [...marketScanTargetNames];
+      try {
+        const runWorker = async () => {
+          while (!cancelled) {
+            const cityName = queue.shift();
+            if (!cityName) return;
+            await store.ensureCityMarketScan(cityName, false, { lite: true });
+          }
+        };
+        await Promise.allSettled(
+          Array.from({ length: Math.min(3, queue.length) }, () => runWorker()),
+        );
+      } finally {
+        marketScanPollingRef.current = false;
+      }
+    };
+
+    void refreshAllMarketScans();
+    intervalId = window.setInterval(() => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        return;
+      }
+      void refreshAllMarketScans();
+    }, HOME_OPPORTUNITY_REFRESH_MS);
+
+    return () => {
+      cancelled = true;
+      marketScanPollingRef.current = false;
+      if (intervalId != null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [
+    marketScanTargetNames,
+    showHomepageChrome,
     store.ensureCityMarketScan,
     store.proAccess.authenticated,
     store.proAccess.loading,

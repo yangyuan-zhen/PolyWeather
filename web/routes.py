@@ -148,7 +148,7 @@ CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE
 CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "900")))
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
-    int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "20")),
+    int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
 )
 CITY_HISTORY_PREVIEW_CACHE_TTL_SEC = max(
     60,
@@ -181,6 +181,7 @@ def _market_scan_cache_key(
     data: dict,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ) -> str:
     local_date = str(data.get("local_date") or "").strip()
     requested_date = str(target_date or "").strip()
@@ -189,7 +190,7 @@ def _market_scan_cache_key(
     if requested_date and isinstance(multi_model_daily, dict) and requested_date not in multi_model_daily:
         selected_date = local_date
     normalized_slug = str(market_slug or "").strip().lower()
-    return f"{selected_date}|{normalized_slug}"
+    return f"{selected_date}|{normalized_slug}|lite={1 if lite else 0}"
 
 
 def _attach_market_scan_payload(
@@ -197,6 +198,7 @@ def _attach_market_scan_payload(
     *,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ) -> dict:
     if not isinstance(payload, dict):
         return payload
@@ -204,6 +206,7 @@ def _attach_market_scan_payload(
         payload,
         market_slug=market_slug,
         target_date=target_date,
+        lite=lite,
     )
     now_ts = time.time()
     payload["market_scan_payload"] = scan_payload
@@ -213,6 +216,7 @@ def _attach_market_scan_payload(
         payload,
         market_slug=market_slug,
         target_date=target_date,
+        lite=lite,
     )
     return payload
 
@@ -222,6 +226,7 @@ def _get_cached_market_scan_payload(
     *,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ) -> Optional[dict]:
     if not isinstance(payload, dict):
         return None
@@ -232,6 +237,7 @@ def _get_cached_market_scan_payload(
         payload,
         market_slug=market_slug,
         target_date=target_date,
+        lite=lite,
     )
     cached_key = str(payload.get("market_scan_cache_key") or "")
     if cached_key != expected_key:
@@ -250,11 +256,13 @@ def _refresh_market_scan_payload_from_cached_analysis(
     *,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ) -> dict:
     _attach_market_scan_payload(
         payload,
         market_slug=market_slug,
         target_date=target_date,
+        lite=lite,
     )
     _CACHE_DB.set_city_cache(
         "market",
@@ -1629,6 +1637,7 @@ async def city_market_scan(
     force_refresh: bool = False,
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
+    lite: bool = False,
 ):
     _assert_entitlement(request)
     city = _normalize_city_or_404(name)
@@ -1638,6 +1647,7 @@ async def city_market_scan(
             data,
             market_slug=market_slug,
             target_date=target_date,
+            lite=lite,
         )
         if cached_scan is not None:
             return cached_scan
@@ -1649,6 +1659,7 @@ async def city_market_scan(
                 data,
                 market_slug=market_slug,
                 target_date=target_date,
+                lite=lite,
             )
             if cached_scan is not None:
                 if not _market_analysis_cache_is_fresh(cached_entry):
@@ -1661,6 +1672,7 @@ async def city_market_scan(
                     data,
                     market_slug=market_slug,
                     target_date=target_date,
+                    lite=lite,
                 )
             else:
                 _schedule_cache_refresh(background_tasks, kind="market", city=city)
@@ -1670,6 +1682,7 @@ async def city_market_scan(
                 data,
                 market_slug=market_slug,
                 target_date=target_date,
+                lite=lite,
             )
             if cached_scan is not None:
                 return cached_scan
@@ -1678,5 +1691,6 @@ async def city_market_scan(
         data,
         market_slug,
         target_date,
+        lite,
     )
 

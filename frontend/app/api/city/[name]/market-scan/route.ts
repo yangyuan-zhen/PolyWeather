@@ -33,6 +33,11 @@ export async function GET(
     params.set("market_slug", marketSlug);
   }
 
+  const lite = req.nextUrl.searchParams.get("lite");
+  if (lite) {
+    params.set("lite", lite);
+  }
+
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/market-scan?${params.toString()}`;
 
   try {

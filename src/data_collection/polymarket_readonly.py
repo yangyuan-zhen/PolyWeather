@@ -3,7 +3,7 @@ Polymarket read-only market layer.
 
 P0 scope:
 - Market discovery from Gamma REST
-- Price / orderbook read from py-clob-client public methods (fallback to CLOB REST)
+- Price / midpoint / spread / orderbook read from CLOB REST
 - No signing, no order placement
 """
 
@@ -23,12 +23,6 @@ import httpx
 from loguru import logger
 
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
-from src.data_collection.polymarket_ws_cache import PolymarketWsQuoteCache
-
-try:
-    from py_clob_client.client import ClobClient  # type: ignore
-except Exception:  # pragma: no cover - optional dependency in P0
-    ClobClient = None
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -382,15 +376,14 @@ class PolymarketReadOnlyLayer:
             .strip()
             .rstrip("/")
         )
-        self.chain_id = _safe_int(os.getenv("POLYMARKET_CHAIN_ID", "137"), 137)
         self.http_timeout = _safe_float(os.getenv("POLYMARKET_HTTP_TIMEOUT_SEC")) or 8.0
         self.market_cache_ttl = _safe_int(
-            os.getenv("POLYMARKET_MARKET_CACHE_TTL_SEC", "180"),
-            180,
+            os.getenv("POLYMARKET_MARKET_CACHE_TTL_SEC", "60"),
+            60,
         )
         self.price_cache_ttl = _safe_int(
-            os.getenv("POLYMARKET_PRICE_CACHE_TTL_SEC", "10"),
-            10,
+            os.getenv("POLYMARKET_PRICE_CACHE_TTL_SEC", "30"),
+            30,
         )
         self.discovery_pages = _safe_int(
             os.getenv("POLYMARKET_DISCOVERY_PAGES", "6"),
@@ -414,9 +407,6 @@ class PolymarketReadOnlyLayer:
         self._broad_markets_cache: Dict[str, Any] = {"data": [], "t": 0.0}
         self._price_cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
-        self._clob_client: Any = None
-        self._clob_unavailable_reason: Optional[str] = None
-        self._ws_quote_cache = PolymarketWsQuoteCache.from_env()
 
     def _market_scan_debug_enabled(self) -> bool:
         return (
@@ -441,6 +431,7 @@ class PolymarketReadOnlyLayer:
         model_probability: Optional[float] = None,
         fallback_sparkline: Optional[List[float]] = None,
         forced_market_slug: Optional[str] = None,
+        include_related_buckets: bool = True,
     ) -> Dict[str, Any]:
         date_str = _extract_iso_date(target_date) or str(target_date or "")
         city_key = _normalize_city_key(city)
@@ -459,6 +450,8 @@ class PolymarketReadOnlyLayer:
             "temperature_bucket": temperature_bucket,
             "model_probability": model_probability,
             "market_price": None,
+            "midpoint": None,
+            "spread": None,
             "edge_percent": None,
             "signal_label": "MONITOR",
             "confidence": "low",
@@ -466,16 +459,27 @@ class PolymarketReadOnlyLayer:
             "no_token": None,
             "yes_buy": None,
             "yes_sell": None,
+            "yes_midpoint": None,
+            "yes_spread": None,
             "no_buy": None,
             "no_sell": None,
+            "no_midpoint": None,
+            "no_spread": None,
             "last_trade_price": None,
             "liquidity": None,
             "volume": None,
+            "quote_source": None,
+            "quote_age_ms": None,
             "price_analysis": None,
             "sparkline": fallback_sparkline or [],
             "top_buckets": [],
+            "all_buckets": [],
             "recent_trades": [],
-            "websocket": {},
+            "scan_scope": "full" if include_related_buckets else "lite",
+            "websocket": {
+                "enabled": False,
+                "status": "disabled_rest_only",
+            },
         }
 
         if not self.enabled:
@@ -632,21 +636,24 @@ class PolymarketReadOnlyLayer:
 
         signal_label, confidence = self._derive_signal(edge_percent, liquidity)
 
-        top_bucket_limit = max(
-            1,
-            _safe_int(os.getenv("POLYMARKET_TOP_BUCKET_LIMIT", "4"), 4),
-        )
-        all_bucket_limit = max(
-            top_bucket_limit,
-            _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "8"), 8),
-        )
-        all_buckets = self._build_top_temperature_buckets(
-            city_key=market_city_key,
-            target_date=date_str,
-            primary_market=market,
-            limit=all_bucket_limit,
-        )
-        top_buckets = list(all_buckets[:top_bucket_limit])
+        top_buckets: List[Dict[str, Any]] = []
+        all_buckets: List[Dict[str, Any]] = []
+        if include_related_buckets:
+            top_bucket_limit = max(
+                1,
+                _safe_int(os.getenv("POLYMARKET_TOP_BUCKET_LIMIT", "4"), 4),
+            )
+            all_bucket_limit = max(
+                top_bucket_limit,
+                _safe_int(os.getenv("POLYMARKET_ALL_BUCKET_LIMIT", "8"), 8),
+            )
+            all_buckets = self._build_top_temperature_buckets(
+                city_key=market_city_key,
+                target_date=date_str,
+                primary_market=market,
+                limit=all_bucket_limit,
+            )
+            top_buckets = list(all_buckets[:top_bucket_limit])
 
         yes_payload = {
             "outcome": yes_token.get("outcome") or "Yes",
@@ -672,12 +679,28 @@ class PolymarketReadOnlyLayer:
             "quote_age_ms": _safe_int(no_prices.get("quote_age_ms"), 0),
             "book": no_prices.get("book"),
         }
+        yes_midpoint = _extract_price(yes_payload.get("midpoint"))
+        no_midpoint = _extract_price(no_payload.get("midpoint"))
+        yes_buy = _extract_price(yes_payload.get("buy_price"))
+        yes_sell = _extract_price(yes_payload.get("sell_price"))
+        no_buy = _extract_price(no_payload.get("buy_price"))
+        no_sell = _extract_price(no_payload.get("sell_price"))
+        yes_spread = (
+            max(0.0, float(yes_buy) - float(yes_sell))
+            if yes_buy is not None and yes_sell is not None
+            else None
+        )
+        no_spread = (
+            max(0.0, float(no_buy) - float(no_sell))
+            if no_buy is not None and no_sell is not None
+            else None
+        )
         price_analysis = self._build_price_analysis(
             model_probability=model_probability,
-            yes_buy=_extract_price(yes_payload.get("buy_price")),
-            yes_sell=_extract_price(yes_payload.get("sell_price")),
-            no_buy=_extract_price(no_payload.get("buy_price")),
-            no_sell=_extract_price(no_payload.get("sell_price")),
+            yes_buy=yes_buy,
+            yes_sell=yes_sell,
+            no_buy=no_buy,
+            no_sell=no_sell,
         )
 
         sparkline_values: List[float] = []
@@ -702,27 +725,35 @@ class PolymarketReadOnlyLayer:
                 "selected_condition_id": condition_id,
                 "selected_slug": market_slug,
                 "market_price": market_price,
+                "midpoint": yes_midpoint if yes_midpoint is not None else market_price,
+                "spread": yes_spread,
                 "edge_percent": edge_percent,
                 "signal_label": signal_label,
                 "confidence": confidence,
                 "yes_token": yes_payload,
                 "no_token": no_payload,
-                "yes_buy": _extract_price(yes_payload.get("buy_price")),
-                "yes_sell": _extract_price(yes_payload.get("sell_price")),
-                "no_buy": _extract_price(no_payload.get("buy_price")),
-                "no_sell": _extract_price(no_payload.get("sell_price")),
+                "yes_buy": yes_buy,
+                "yes_sell": yes_sell,
+                "yes_midpoint": yes_midpoint,
+                "yes_spread": yes_spread,
+                "no_buy": no_buy,
+                "no_sell": no_sell,
+                "no_midpoint": no_midpoint,
+                "no_spread": no_spread,
                 "last_trade_price": last_trade_price,
                 "liquidity": liquidity,
                 "volume": volume,
+                "quote_source": yes_prices.get("quote_source"),
+                "quote_age_ms": _safe_int(yes_prices.get("quote_age_ms"), 0),
                 "price_analysis": price_analysis,
                 "sparkline": sparkline_values,
                 "top_buckets": top_buckets,
                 "all_buckets": all_buckets,
-            "websocket": {
-                "enabled": self._ws_quote_cache.enabled,
-                "status": self._ws_quote_cache.status(),
-                "market_url": market_url,
-                "asset_ids": [
+                "websocket": {
+                    "enabled": False,
+                    "status": "disabled_rest_only",
+                    "market_url": market_url,
+                    "asset_ids": [
                         token
                         for token in [
                             yes_payload.get("token_id"),
@@ -1488,31 +1519,10 @@ class PolymarketReadOnlyLayer:
 
         return None, None
 
-    def _get_clob_client(self) -> Optional[Any]:
-        if self._clob_unavailable_reason:
-            return None
-        if self._clob_client is not None:
-            return self._clob_client
-        if ClobClient is None:
-            self._clob_unavailable_reason = "py-clob-client is not installed."
-            return None
-        try:
-            self._clob_client = ClobClient(host=self.clob_url, chain_id=self.chain_id)
-            return self._clob_client
-        except Exception as exc:
-            self._clob_unavailable_reason = f"ClobClient init failed: {exc}"
-            logger.warning(self._clob_unavailable_reason)
-            return None
-
     def _get_token_market_data(self, token_id: str) -> Dict[str, Any]:
         token_id = str(token_id or "").strip()
         if not token_id:
             return {}
-
-        self._ws_quote_cache.subscribe([token_id])
-        ws_data = self._ws_quote_cache.get_market_data(token_id)
-        if ws_data is not None:
-            return ws_data
 
         now = time.time()
         with self._lock:
@@ -1527,33 +1537,7 @@ class PolymarketReadOnlyLayer:
         return data
 
     def _fetch_token_market_data(self, token_id: str) -> Dict[str, Any]:
-        # 1) Preferred path: py-clob-client public methods.
-        clob = self._get_clob_client()
-        if clob is not None:
-            try:
-                buy = _extract_price(self._safe_call(clob, "get_price", token_id, "BUY"))
-                sell = _extract_price(self._safe_call(clob, "get_price", token_id, "SELL"))
-                midpoint = _extract_price(self._safe_call(clob, "get_midpoint", token_id))
-                last_trade = _extract_price(
-                    self._safe_call(clob, "get_last_trade_price", token_id)
-                )
-                orderbook_raw = self._safe_call(clob, "get_order_book", token_id)
-                book, book_liquidity = self._normalize_orderbook(orderbook_raw)
-                buy, sell = self._resolve_trade_prices(buy=buy, sell=sell, book=book)
-                return {
-                    "buy": buy,
-                    "sell": sell,
-                    "midpoint": midpoint,
-                    "last_trade_price": last_trade,
-                    "quote_source": "polymarket_clob_client",
-                    "quote_age_ms": 0,
-                    "book": book,
-                    "book_liquidity": book_liquidity,
-                }
-            except Exception as exc:
-                logger.warning(f"py-clob-client read failed for {token_id}: {exc}")
-
-        # 2) Fallback path: direct CLOB REST.
+        # REST-only path: CLOB public endpoints.
         buy = _extract_price(self._clob_get("/price", {"token_id": token_id, "side": "BUY"}))
         sell = _extract_price(
             self._clob_get("/price", {"token_id": token_id, "side": "SELL"})
@@ -1575,12 +1559,6 @@ class PolymarketReadOnlyLayer:
             "book": book,
             "book_liquidity": book_liquidity,
         }
-
-    def _safe_call(self, client: Any, method: str, *args: Any) -> Any:
-        fn = getattr(client, method, None)
-        if not callable(fn):
-            return None
-        return fn(*args)
 
     def _clob_get(self, path: str, params: Dict[str, Any]) -> Any:
         url = f"{self.clob_url}{path}"

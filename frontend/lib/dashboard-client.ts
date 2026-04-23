@@ -303,6 +303,7 @@ export const dashboardClient = {
     cityName: string,
     options?: {
       force?: boolean;
+      lite?: boolean;
       marketSlug?: string | null;
       targetDate?: string | null;
     },
@@ -318,9 +319,13 @@ export const dashboardClient = {
     if (options?.marketSlug) {
       params.set("market_slug", options.marketSlug);
     }
+    if (options?.lite) {
+      params.set("lite", "true");
+    }
     const requestKey = [
       cityName,
       force ? "force" : "cached",
+      options?.lite ? "lite" : "full",
       options?.targetDate || "",
       options?.marketSlug || "",
     ].join("::");
