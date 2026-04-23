@@ -6,10 +6,13 @@ import {
   Bell,
   Menu,
   RefreshCw,
+  Moon,
+  Sun,
   UserRound,
 } from "lucide-react";
 import {
   startTransition,
+  useCallback,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -34,8 +37,6 @@ import {
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { dashboardClient } from "@/lib/dashboard-client";
 import type {
-  CityDetail,
-  CitySummary,
   DistributionPreviewPoint,
   MarketScan,
   PrimarySignal,
@@ -74,6 +75,7 @@ const NAV_ITEMS = [
 
 type TopSection = "terminal" | "markets" | "analysis" | "portfolio" | "monitor" | "settings";
 type ContentView = "list" | "map" | "calendar";
+type ThemeMode = "dark" | "light";
 const TOP_SECTION_ORDER: TopSection[] = [
   "terminal",
   "markets",
@@ -147,6 +149,14 @@ function formatShortDate(value?: string | null, locale = "zh-CN") {
   return locale === "en-US"
     ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+function formatUserLocalTime(locale = "zh-CN") {
+  return new Intl.DateTimeFormat(locale === "en-US" ? "en-US" : "zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date());
 }
 
 function getLocalDateIndex(value?: string | null) {
@@ -283,147 +293,6 @@ function buildComparisonBuckets(
       highlighted: true,
     },
   ];
-}
-
-function MapCityDetailPanel({
-  cityName: selectedCityName,
-  detail,
-  summary,
-  loading,
-}: {
-  cityName: string | null;
-  detail: CityDetail | null;
-  summary: CitySummary | null;
-  loading?: boolean;
-}) {
-  const { locale } = useI18n();
-  const isEn = locale === "en-US";
-  const pendingCityLabel =
-    selectedCityName || detail?.display_name || summary?.display_name || "--";
-
-  if (!selectedCityName && !detail && !summary) {
-    return (
-      <aside className="scan-detail-panel">
-        <div className="scan-empty-state">
-          <div className="scan-empty-title">
-            {isEn ? "Pick a city" : "选择一个城市"}
-          </div>
-          <div className="scan-empty-copy">
-            {isEn ? "The right rail will show city context from the map." : "右侧会展示地图里当前城市的信息。"}
-          </div>
-        </div>
-      </aside>
-    );
-  }
-
-  if (loading && !detail) {
-    return (
-      <aside className="scan-detail-panel">
-        <div className="scan-empty-state">
-          <div className="scan-empty-title">
-            {isEn ? "Loading city context" : "正在加载城市信息"}
-          </div>
-          <div className="scan-empty-copy">{pendingCityLabel}</div>
-        </div>
-      </aside>
-    );
-  }
-
-  const displayCityName = getLocalizedCityName(
-    detail?.name || summary?.name || selectedCityName || "",
-    detail?.display_name || summary?.display_name || selectedCityName || "",
-    locale,
-  );
-  const tempSymbol = detail?.temp_symbol || summary?.temp_symbol || "°C";
-  const currentTemp = detail?.current?.temp ?? summary?.current?.temp ?? null;
-  const dayHigh =
-    detail?.current?.max_so_far ??
-    detail?.airport_current?.max_so_far ??
-    detail?.airport_primary?.max_so_far ??
-    null;
-  const airportLabel = getLocalizedAirportName(
-    detail?.name || summary?.name || selectedCityName || "",
-    detail?.risk?.airport || detail?.risk?.icao || summary?.icao || "",
-    locale,
-  );
-  const peakLabel =
-    Number.isFinite(Number(detail?.peak?.first_h)) && Number.isFinite(Number(detail?.peak?.last_h))
-      ? `${String(Number(detail?.peak?.first_h)).padStart(2, "0")}:00-${String(
-          Number(detail?.peak?.last_h) + 1,
-        ).padStart(2, "0")}:00`
-      : "--";
-
-  return (
-    <aside className="scan-detail-panel">
-      <div className="scan-detail-header">
-        <div className="scan-detail-top">
-          <div className="scan-detail-title-wrap">
-            <div className="scan-detail-city-name">{displayCityName}</div>
-            <div className="scan-detail-city-sub">
-              {airportLabel || (isEn ? "Airport anchor pending" : "机场锚点待确认")}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="scan-detail-volume-row">
-        <div>
-          <div className="scan-detail-volume-big">
-            {currentTemp != null
-              ? formatTemperatureValue(currentTemp, tempSymbol)
-              : "--"}
-          </div>
-          <div className="scan-detail-volume-caption">
-            {isEn ? "Current observed temperature" : "当前实测温度"}
-          </div>
-        </div>
-      </div>
-
-      <section className="scan-detail-section">
-        <div className="scan-detail-section-title">
-          {isEn ? "Current Context" : "当前概况"}
-        </div>
-        <div className="scan-kv-list">
-          <div className="scan-kv">
-            <span>{isEn ? "Local Time" : "当前时间"}</span>
-            <strong>{detail?.local_time || summary?.local_time || "--"}</strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "Current Temp" : "当前温度"}</span>
-            <strong>
-              {currentTemp != null
-                ? formatTemperatureValue(currentTemp, tempSymbol)
-                : "--"}
-            </strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "Day High (So Far)" : "今日最高（至今）"}</span>
-            <strong>
-              {dayHigh != null
-                ? formatTemperatureValue(dayHigh, tempSymbol)
-                : "--"}
-            </strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "DEB Forecast" : "DEB 预测"}</span>
-            <strong>
-              {detail?.deb?.prediction != null
-                ? formatTemperatureValue(detail.deb.prediction, tempSymbol)
-                : "--"}
-            </strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "Peak Window" : "预计峰值"}</span>
-            <strong>{peakLabel}</strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "Airport" : "机场锚点"}</span>
-            <strong>{airportLabel || "--"}</strong>
-          </div>
-        </div>
-      </section>
-    </aside>
-  );
 }
 
 function DetailPanel({
@@ -949,6 +818,8 @@ function ScanTerminalScreen() {
   const [activeSection, setActiveSection] = useState<TopSection>("terminal");
   const [activeView, setActiveView] = useState<ContentView>("list");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
+  const [userLocalTime, setUserLocalTime] = useState("--");
+  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const deferredRows = useDeferredValue(terminalData?.rows || []);
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(deferredRows),
@@ -959,6 +830,18 @@ function ScanTerminalScreen() {
     if (!timeSortedRows.length) return null;
     return timeSortedRows.find((row) => row.id === selectedRowId) || timeSortedRows[0] || null;
   }, [timeSortedRows, selectedRowId]);
+
+  const mapFocusedRow = useMemo(() => {
+    const cityName = String(mapSelectedCityName || store.selectedCity || "").toLowerCase();
+    if (!cityName) return null;
+    return (
+      timeSortedRows.find(
+        (row) =>
+          row.city.toLowerCase() === cityName ||
+          String(row.city_display_name || row.display_name || "").toLowerCase() === cityName,
+      ) || null
+    );
+  }, [mapSelectedCityName, store.selectedCity, timeSortedRows]);
 
   const fetchTerminal = async (filters: FilterState, force = false) => {
     setLoading(true);
@@ -1018,27 +901,53 @@ function ScanTerminalScreen() {
   }, [activeFilters]);
 
   useEffect(() => {
-    if (!selectedRow) return;
-    void fetchDetail(selectedRow);
-  }, [selectedRow, detailByRowId]);
+    setUserLocalTime(formatUserLocalTime(locale));
+    const intervalId = window.setInterval(() => {
+      setUserLocalTime(formatUserLocalTime(locale));
+    }, 30_000);
+    return () => window.clearInterval(intervalId);
+  }, [locale]);
 
-  const selectedDetail = selectedRow ? detailByRowId[selectedRow.id] : null;
+  useEffect(() => {
+    const stored = window.localStorage.getItem("polyweather_scan_theme");
+    if (stored === "light") {
+      setThemeMode("light");
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("polyweather_scan_theme", themeMode);
+  }, [themeMode]);
+
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
-  const mapFocusedDetail =
-    mapFocusedCity && store.selectedDetail?.name?.toLowerCase() === mapFocusedCity.toLowerCase()
-      ? store.selectedDetail
-      : mapFocusedCity
-        ? store.cityDetailsByName[mapFocusedCity] || null
-        : null;
-  const mapFocusedSummary = mapFocusedCity
-    ? store.citySummariesByName[mapFocusedCity] || null
-    : null;
   const resolvedView: ContentView =
     activeSection === "markets"
       ? "map"
       : activeSection === "analysis"
         ? "calendar"
         : activeView;
+  const activeDetailRow = resolvedView === "map" && mapFocusedCity ? mapFocusedRow : selectedRow;
+  const selectedDetail = activeDetailRow ? detailByRowId[activeDetailRow.id] : null;
+
+  useEffect(() => {
+    if (!activeDetailRow) return;
+    void fetchDetail(activeDetailRow);
+  }, [activeDetailRow, detailByRowId]);
+
+  const handleMapCitySelect = useCallback((cityName: string) => {
+    setMapSelectedCityName(cityName);
+    const matchedRow =
+      timeSortedRows.find(
+        (row) =>
+          row.city.toLowerCase() === cityName.toLowerCase() ||
+          String(row.city_display_name || row.display_name || "").toLowerCase() === cityName.toLowerCase(),
+      ) || null;
+    setSelectedRowId(matchedRow?.id || null);
+  }, [timeSortedRows]);
+
+  const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
+    setSelectedRowId(row.id);
+  }, []);
 
   const renderMainView = () => {
     if (activeSection === "portfolio") {
@@ -1054,7 +963,7 @@ function ScanTerminalScreen() {
       return (
         <div className="scan-map-view">
           <div className="scan-map-shell">
-            <MapCanvas onCitySelect={setMapSelectedCityName} />
+            <MapCanvas onCitySelect={handleMapCitySelect} />
           </div>
           <div className="scan-map-caption">
             {locale === "en-US"
@@ -1070,7 +979,7 @@ function ScanTerminalScreen() {
           rows={timeSortedRows}
           locale={locale}
           selectedRowId={selectedRowId}
-          onSelectRow={(row) => setSelectedRowId(row.id)}
+          onSelectRow={handleSelectRow}
         />
       );
     }
@@ -1079,7 +988,7 @@ function ScanTerminalScreen() {
         <OpportunityTable
           rows={timeSortedRows}
           selectedRowId={selectedRowId}
-          onSelectRow={(row) => setSelectedRowId(row.id)}
+          onSelectRow={handleSelectRow}
         />
       </>
     );
@@ -1087,7 +996,7 @@ function ScanTerminalScreen() {
 
   return (
     <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
-      <div className="scan-terminal">
+      <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
         <ScanFilterPanel
           value={draftFilters}
           onChange={setDraftFilters}
@@ -1126,8 +1035,17 @@ function ScanTerminalScreen() {
                 <span className={clsx(locale === "en-US" && "active")}>EN</span>
               </button>
               <span className="scan-topbar-time">
-                {selectedRow?.local_time || terminalData?.generated_at?.replace("T", " ").slice(11, 19) || "--"}
+                {userLocalTime}
               </span>
+              <button
+                type="button"
+                className="scan-theme-button"
+                aria-label={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
+                title={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
+                onClick={() => setThemeMode((current) => (current === "light" ? "dark" : "light"))}
+              >
+                {themeMode === "light" ? <Moon size={15} /> : <Sun size={15} />}
+              </button>
               <button type="button" className="scan-ghost-button" onClick={() => void fetchTerminal(activeFilters, true)}>
                 <RefreshCw size={14} className={loading ? "spin" : undefined} />
                 {isEn ? "Refresh" : "筛选"}
@@ -1238,20 +1156,11 @@ function ScanTerminalScreen() {
           </section>
         </main>
 
-        {resolvedView === "map" && mapFocusedCity ? (
-          <MapCityDetailPanel
-            cityName={mapFocusedCity}
-            detail={mapFocusedDetail}
-            summary={mapFocusedSummary}
-            loading={Boolean(mapFocusedCity && !mapFocusedDetail && store.loadingState.cityDetail)}
-          />
-        ) : (
-          <DetailPanel
-            row={selectedRow}
-            marketScan={selectedDetail}
-            loading={detailLoadingId === selectedRow?.id}
-          />
-        )}
+        <DetailPanel
+          row={activeDetailRow}
+          marketScan={selectedDetail}
+          loading={detailLoadingId === activeDetailRow?.id}
+        />
       </div>
     </div>
   );

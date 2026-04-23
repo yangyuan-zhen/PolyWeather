@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import React from "react";
 import {
   CircleDot,
@@ -77,15 +76,6 @@ export function ScanFilterPanel({
   return (
     <aside className="scan-filter-panel">
       <div className="scan-sidebar-brand">
-        <div className="scan-sidebar-brand-mark">
-          <Image
-            src="/favicon-32x32.png"
-            alt=""
-            width={24}
-            height={24}
-            priority
-          />
-        </div>
         <div>
           <div className="scan-sidebar-brand-name">PolyWeather</div>
         </div>

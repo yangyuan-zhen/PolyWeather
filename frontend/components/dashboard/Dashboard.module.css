@@ -9007,8 +9007,8 @@
 .root :global(.scan-sidebar-brand) {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 10px 18px;
+  gap: 0;
+  padding: 8px 4px 18px;
   border-bottom: 1px solid rgba(118, 146, 188, 0.12);
 }
 
@@ -9026,7 +9026,7 @@
 .root :global(.scan-sidebar-brand-name) {
   font-size: 30px;
   font-weight: 800;
-  letter-spacing: -0.04em;
+  letter-spacing: 0;
   color: #eef5ff;
 }
 
@@ -9328,6 +9328,7 @@
 
 .root :global(.scan-ghost-button),
 .root :global(.scan-cta-ghost),
+.root :global(.scan-theme-button),
 .root :global(.scan-sort-pill),
 .root :global(.scan-icon-pill),
 .root :global(.scan-detail-action-button),
@@ -9370,6 +9371,15 @@
 .root :global(.scan-account-button:hover) {
   border-color: rgba(63, 140, 255, 0.28);
   background: rgba(12, 26, 44, 0.96);
+}
+
+.root :global(.scan-theme-button) {
+  width: 36px;
+  height: 36px;
+  display: inline-grid;
+  place-items: center;
+  color: #d7e5f7;
+  cursor: pointer;
 }
 
 .root :global(.scan-ghost-button .spin) {
@@ -9736,6 +9746,11 @@
   text-align: left;
 }
 
+.root :global(.scan-table-row > *),
+.root :global(.scan-table-header > *) {
+  min-width: 0;
+}
+
 .root :global(.scan-table-row:hover) {
   transform: none;
   background: linear-gradient(180deg, rgba(11, 24, 40, 0.96), rgba(8, 18, 31, 0.96));
@@ -9797,6 +9812,10 @@
 .root :global(.scan-city-sub) {
   font-size: 14px;
   color: #a5bad5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .root :global(.scan-city-volume) {
@@ -9854,12 +9873,14 @@
 .root :global(.scan-distribution-preview) {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .root :global(.scan-distribution-card) {
+  min-width: 0;
   text-align: center;
-  padding: 10px 6px;
+  padding: 9px 5px;
   border-radius: 10px;
   border: 1px solid rgba(87, 119, 166, 0.1);
   background: rgba(15, 28, 46, 0.72);
@@ -9871,7 +9892,8 @@
   display: block;
   margin-bottom: 8px;
   color: #fff;
-  font-size: 15px;
+  font-size: 14px;
+  overflow-wrap: anywhere;
 }
 
 .root :global(.scan-distribution-card.featured strong) {
@@ -9885,8 +9907,9 @@
 }
 
 .root :global(.scan-trade-main) {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
 .root :global(.scan-trade-main.buy) {
@@ -10365,6 +10388,129 @@
   font-size: 14px;
   color: #8fa4c3;
   line-height: 1.6;
+}
+
+.root :global(.scan-terminal.light) {
+  background:
+    radial-gradient(circle at top, rgba(65, 120, 190, 0.14), transparent 34%),
+    linear-gradient(180deg, #f4f8fd 0%, #e9f0f8 100%);
+  color: #102033;
+}
+
+.root :global(.scan-terminal.light .scan-filter-panel),
+.root :global(.scan-terminal.light .scan-data-grid),
+.root :global(.scan-terminal.light .scan-detail-panel) {
+  border-color: rgba(35, 72, 118, 0.14);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 247, 253, 0.94));
+  box-shadow: 0 16px 34px rgba(40, 70, 110, 0.12);
+}
+
+.root :global(.scan-terminal.light .scan-sidebar-brand-name),
+.root :global(.scan-terminal.light .scan-topbar-tab.active),
+.root :global(.scan-terminal.light .scan-hero h1),
+.root :global(.scan-terminal.light .scan-city-name),
+.root :global(.scan-terminal.light .scan-detail-city-name),
+.root :global(.scan-terminal.light .scan-empty-title),
+.root :global(.scan-terminal.light .scan-detail-section-title),
+.root :global(.scan-terminal.light .scan-detail-volume-big),
+.root :global(.scan-terminal.light .scan-kv strong),
+.root :global(.scan-terminal.light .scan-time-main),
+.root :global(.scan-terminal.light .scan-calendar-date),
+.root :global(.scan-terminal.light .scan-summary-value),
+.root :global(.scan-terminal.light .scan-distribution-card strong),
+.root :global(.scan-terminal.light .scan-table-header),
+.root :global(.scan-terminal.light .scan-list-tabs button.active) {
+  color: #122033;
+}
+
+.root :global(.scan-terminal.light .scan-filter-heading),
+.root :global(.scan-terminal.light .scan-topbar-actions),
+.root :global(.scan-terminal.light .scan-topbar-time),
+.root :global(.scan-terminal.light .scan-hero p),
+.root :global(.scan-terminal.light .scan-city-sub),
+.root :global(.scan-terminal.light .scan-time-remaining),
+.root :global(.scan-terminal.light .scan-detail-city-sub),
+.root :global(.scan-terminal.light .scan-detail-volume-caption),
+.root :global(.scan-terminal.light .scan-empty-copy),
+.root :global(.scan-terminal.light .scan-kv span:first-child),
+.root :global(.scan-terminal.light .scan-chart-label),
+.root :global(.scan-terminal.light .scan-trade-sub),
+.root :global(.scan-terminal.light .scan-trade-note) {
+  color: #58708f;
+}
+
+.root :global(.scan-terminal.light .scan-list-tabs button),
+.root :global(.scan-terminal.light .scan-mode-tab-sub),
+.root :global(.scan-terminal.light .scan-distribution-card),
+.root :global(.scan-terminal.light .scan-chart-legend),
+.root :global(.scan-terminal.light .scan-kpi-note) {
+  color: #647a98;
+}
+
+.root :global(.scan-terminal.light .scan-mode-tab),
+.root :global(.scan-terminal.light .scan-table-shell),
+.root :global(.scan-terminal.light .scan-table-header),
+.root :global(.scan-terminal.light .scan-calendar-group),
+.root :global(.scan-terminal.light .scan-calendar-card),
+.root :global(.scan-terminal.light .scan-summary-card),
+.root :global(.scan-terminal.light .scan-settings-card),
+.root :global(.scan-terminal.light .scan-distribution-card),
+.root :global(.scan-terminal.light .scan-trade-card),
+.root :global(.scan-terminal.light .scan-detail-inline-analysis .model-bars),
+.root :global(.scan-terminal.light .scan-inline-analysis-state) {
+  border-color: rgba(35, 72, 118, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.root :global(.scan-terminal.light .scan-mode-tab.active),
+.root :global(.scan-terminal.light .scan-table-row.selected) {
+  background: linear-gradient(180deg, rgba(228, 252, 242, 0.92), rgba(241, 250, 247, 0.96));
+  border-color: rgba(10, 160, 100, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(10, 160, 100, 0.18);
+}
+
+.root :global(.scan-terminal.light .scan-table-row) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(247, 250, 254, 0.9));
+  border-bottom-color: rgba(35, 72, 118, 0.08);
+}
+
+.root :global(.scan-terminal.light .scan-table-row:hover) {
+  background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(238, 247, 255, 0.96));
+}
+
+.root :global(.scan-terminal.light .scan-locale-switch),
+.root :global(.scan-terminal.light .scan-ghost-button),
+.root :global(.scan-terminal.light .scan-theme-button),
+.root :global(.scan-terminal.light .scan-sort-pill),
+.root :global(.scan-terminal.light .scan-icon-pill),
+.root :global(.scan-terminal.light .scan-account-button),
+.root :global(.scan-terminal.light .scan-detail-action-button) {
+  border-color: rgba(35, 72, 118, 0.14);
+  background: rgba(255, 255, 255, 0.78);
+  color: #1f3654;
+}
+
+.root :global(.scan-terminal.light .scan-cta-ghost),
+.root :global(.scan-terminal.light .scan-detail-analysis-button) {
+  border-color: rgba(7, 160, 100, 0.24);
+  background: rgba(11, 188, 116, 0.12);
+  color: #057a4d;
+}
+
+.root :global(.scan-terminal.light .scan-score-ring::after) {
+  background: #f5f9fe;
+}
+
+.root :global(.scan-terminal.light .scan-score-ring span) {
+  color: #122033;
+}
+
+.root :global(.scan-terminal.light .scan-trade-card p) {
+  color: #405977;
+}
+
+.root :global(.scan-terminal.light .scan-map-shell) {
+  background: rgba(255, 255, 255, 0.72);
 }
 
 @media (max-width: 1480px) {

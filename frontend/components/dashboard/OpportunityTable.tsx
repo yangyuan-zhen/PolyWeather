@@ -193,7 +193,7 @@ function ScoreRing({ score }: { score?: number | null }) {
   );
 }
 
-export function OpportunityTable({
+export const OpportunityTable = React.memo(function OpportunityTable({
   rows,
   selectedRowId,
   onSelectRow,
@@ -308,4 +308,4 @@ export function OpportunityTable({
       </div>
     </div>
   );
-}
+});
