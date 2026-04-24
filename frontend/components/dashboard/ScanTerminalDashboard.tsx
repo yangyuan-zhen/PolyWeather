@@ -226,27 +226,11 @@ function CalendarView({
   );
 }
 
-function OverviewMapView({ locale }: { locale: string }) {
-  const store = useDashboardStore();
-
-  return (
-    <div className="scan-map-view">
-      <div className="scan-map-shell">
-        <MapCanvas />
-      </div>
-      <div className="scan-map-caption">
-        {locale === "en-US"
-          ? `Monitoring ${store.cities.length} cities on the original map canvas.`
-          : `正在用原地图画布监控 ${store.cities.length} 个城市。`}
-      </div>
-    </div>
-  );
-}
-
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
   const isEn = locale === "en-US";
+  const isPro = store.proAccess.subscriptionActive;
   const accountHref = store.proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
@@ -368,7 +352,7 @@ function ScanTerminalScreen() {
   ]);
 
   const fetchTerminal = async (filters: FilterState, force = false) => {
-    if (!store.proAccess.subscriptionActive) return;
+    if (!isPro) return;
     setLoading(true);
     setAiError(null);
     try {
@@ -419,17 +403,23 @@ function ScanTerminalScreen() {
   };
 
   useEffect(() => {
-    if (!store.proAccess.subscriptionActive) return;
+    if (!isPro) return;
     void fetchTerminal(DEFAULT_FILTERS, false);
-  }, [store.proAccess.subscriptionActive]);
+  }, [isPro]);
 
   useEffect(() => {
-    if (!store.proAccess.subscriptionActive) return;
+    if (!isPro) return;
     const intervalId = window.setInterval(() => {
       void fetchTerminal(activeFilters, false);
     }, SCAN_AUTO_REFRESH_MS);
     return () => window.clearInterval(intervalId);
-  }, [activeFilters, store.proAccess.subscriptionActive]);
+  }, [activeFilters, isPro]);
+
+  useEffect(() => {
+    if (!isPro && activeView !== "map") {
+      setActiveView("map");
+    }
+  }, [activeView, isPro]);
 
   useEffect(() => {
     setUserLocalTime(formatUserLocalTime());
@@ -510,10 +500,21 @@ function ScanTerminalScreen() {
               selectionMode="select"
             />
           </div>
-          <div className="scan-map-caption">
-            {locale === "en-US"
-              ? `Monitoring ${store.cities.length} cities on the original map canvas.`
-              : `正在用原地图画布监控 ${store.cities.length} 个城市。`}
+        </div>
+      );
+    }
+    if (!isPro) {
+      return (
+        <div className="scan-table-shell empty">
+          <div className="scan-empty-state">
+            <div className="scan-empty-title">
+              {isEn ? "Scan is available on Pro" : "扫描功能需 Pro 权限"}
+            </div>
+            <div className="scan-empty-copy">
+              {isEn
+                ? "Distribution view and city briefing remain available."
+                : "分布视图和右侧城市简报仍可查看。"}
+            </div>
           </div>
         </div>
       );
@@ -560,53 +561,6 @@ function ScanTerminalScreen() {
     );
   }
 
-  if (!store.proAccess.subscriptionActive) {
-    return (
-      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
-        <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
-          <main className="scan-data-grid">
-            <div className="scan-topbar">
-              <div className="scan-topbar-title">
-                <strong>{isEn ? "Market Scan Terminal" : "市场扫描台"}</strong>
-                <span>{isEn ? "Pro access required" : "需要 Pro 权限"}</span>
-              </div>
-              <div className="scan-topbar-actions">
-                <button
-                  type="button"
-                  className="scan-locale-switch"
-                  aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
-                  title={isEn ? "Switch to Chinese" : "切换到英文"}
-                  onClick={toggleLocale}
-                >
-                  <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
-                  <span className={clsx(locale === "en-US" && "active")}>EN</span>
-                </button>
-                <Link href={accountHref} className="scan-primary-button">
-                  <UserRound size={14} />
-                  {store.proAccess.authenticated
-                    ? isEn ? "Upgrade Pro" : "升级 Pro"
-                    : isEn ? "Sign in" : "登录"}
-                </Link>
-              </div>
-            </div>
-            <div className="scan-table-shell empty">
-              <div className="scan-empty-state">
-                <div className="scan-empty-title">
-                  {isEn ? "Market scan is a Pro feature" : "市场扫描是 Pro 功能"}
-                </div>
-                <div className="scan-empty-copy">
-                  {isEn
-                    ? "Free accounts do not trigger rule scans or V4-Flash scans."
-                    : "免费用户不会触发规则扫描，也不会消耗 V4-Flash 扫描资源。"}
-                </div>
-              </div>
-            </div>
-          </main>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
@@ -624,8 +578,12 @@ function ScanTerminalScreen() {
                       ? "Showing the last successful snapshot"
                       : "当前显示上次成功快照"
                     : isEn
-                      ? "Read-only market scan with peak-first main signal"
-                      : "只读市场扫描，主信号按 EMOS 主峰优先"}
+                      ? isPro
+                        ? "Read-only market scan with peak-first main signal"
+                        : "Free preview: distribution view and city briefing"
+                      : isPro
+                        ? "只读市场扫描，主信号按 EMOS 主峰优先"
+                        : "免费预览：分布视图和城市简报可查看"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -642,37 +600,48 @@ function ScanTerminalScreen() {
               <span className="scan-topbar-time">
                 {userLocalTime}
               </span>
-              <button
-                type="button"
-                className="scan-primary-button"
-                onClick={() => void fetchTerminal(activeFilters, true)}
-                disabled={loading}
-              >
-                <Search size={14} />
-                {loading
-                  ? isEn
-                    ? "Scanning..."
-                    : "扫描中..."
-                  : isEn
-                    ? "Start Scan"
-                    : "开始扫描"}
-              </button>
-              <button
-                type="button"
-                className="scan-ai-button"
-                onClick={() => void runAiReview()}
-                disabled={aiLoading || loading || !terminalData?.rows.length}
-                title={isEn ? "Run V4-Flash deep scan" : "运行 V4-Flash 深度扫描"}
-              >
-                <Sparkles size={14} className={aiLoading ? "spin" : undefined} />
-                {aiLoading
-                  ? isEn
-                    ? "V4..."
-                    : "V4 扫描中"
-                  : isEn
-                    ? "AI Deep Scan"
-                    : "AI 深度扫描"}
-              </button>
+              {isPro ? (
+                <>
+                  <button
+                    type="button"
+                    className="scan-primary-button"
+                    onClick={() => void fetchTerminal(activeFilters, true)}
+                    disabled={loading}
+                  >
+                    <Search size={14} />
+                    {loading
+                      ? isEn
+                        ? "Scanning..."
+                        : "扫描中..."
+                      : isEn
+                        ? "Start Scan"
+                        : "开始扫描"}
+                  </button>
+                  <button
+                    type="button"
+                    className="scan-ai-button"
+                    onClick={() => void runAiReview()}
+                    disabled={aiLoading || loading || !terminalData?.rows.length}
+                    title={isEn ? "Run V4-Flash deep scan" : "运行 V4-Flash 深度扫描"}
+                  >
+                    <Sparkles size={14} className={aiLoading ? "spin" : undefined} />
+                    {aiLoading
+                      ? isEn
+                        ? "V4..."
+                        : "V4 扫描中"
+                      : isEn
+                        ? "AI Deep Scan"
+                        : "AI 深度扫描"}
+                  </button>
+                </>
+              ) : (
+                <Link href={accountHref} className="scan-primary-button">
+                  <UserRound size={14} />
+                  {store.proAccess.authenticated
+                    ? isEn ? "Upgrade Pro" : "升级 Pro"
+                    : isEn ? "Sign in" : "登录"}
+                </Link>
+              )}
               <button
                 type="button"
                 className="scan-theme-button"
@@ -682,10 +651,12 @@ function ScanTerminalScreen() {
               >
                 {themeMode === "light" ? <Moon size={15} /> : <Sun size={15} />}
               </button>
-              <button type="button" className="scan-ghost-button" onClick={() => void fetchTerminal(activeFilters, true)}>
-                <RefreshCw size={14} className={loading ? "spin" : undefined} />
-                {isEn ? "Refresh" : "刷新"}
-              </button>
+              {isPro ? (
+                <button type="button" className="scan-ghost-button" onClick={() => void fetchTerminal(activeFilters, true)}>
+                  <RefreshCw size={14} className={loading ? "spin" : undefined} />
+                  {isEn ? "Refresh" : "刷新"}
+                </button>
+              ) : null}
               <Link
                 href={accountHref}
                 className="scan-account-button"
@@ -697,12 +668,14 @@ function ScanTerminalScreen() {
             </div>
           </div>
 
-          <ScanKPIBar
-            response={terminalData}
-            rows={timeSortedRows}
-            totalCities={store.cities.length}
-            loading={loading}
-          />
+          {isPro ? (
+            <ScanKPIBar
+              response={terminalData}
+              rows={timeSortedRows}
+              totalCities={store.cities.length}
+              loading={loading}
+            />
+          ) : null}
 
           <section className="scan-list-section">
             <div className="scan-list-header">
@@ -719,7 +692,10 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "list" ? "active" : ""}
+                  disabled={!isPro}
+                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
+                    if (!isPro) return;
                     setActiveView("list");
                   }}
                 >
@@ -728,7 +704,10 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
+                  disabled={!isPro}
+                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
+                    if (!isPro) return;
                     setActiveView("calendar");
                   }}
                 >

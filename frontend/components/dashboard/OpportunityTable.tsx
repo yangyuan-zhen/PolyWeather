@@ -170,7 +170,8 @@ function getDistributionPreview(row: ScanOpportunityRow, tempSymbol?: string | n
         : normalizeTemperatureLabel(row.target_label, tempSymbol) || "--";
     preview.push({
       label: targetLabel,
-      model_probability: row.model_event_probability,
+      model_probability:
+        row.raw_model_event_probability ?? row.model_event_probability,
       market_probability: row.market_event_probability,
       highlighted: true,
     });
@@ -331,7 +332,14 @@ export const OpportunityTable = React.memo(function OpportunityTable({
       <div className="scan-table-body scan-opportunity-groups">
         {groups.map((group) => (
           <section key={group.key} className="scan-opportunity-group">
-            <div className="scan-opportunity-group-head">
+            <button
+              type="button"
+              className="scan-opportunity-group-head"
+              onClick={() => {
+                const firstRow = group.rows[0];
+                if (firstRow) onSelectRow?.(firstRow);
+              }}
+            >
               <div className="scan-opportunity-city">
                 <strong>{group.cityName}</strong>
                 <div className="scan-opportunity-models">
@@ -358,7 +366,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                 </b>
                 <em>{formatWindowMinutes(group.remainingMinutes, locale)}</em>
               </div>
-            </div>
+            </button>
 
             <div className="scan-opportunity-items">
               {group.rows.map((row, rowIndex) => {
@@ -366,16 +374,12 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                 const selected = selectedRowId === row.id;
                 const side = String(row.side || "").toLowerCase();
                 const modelProbability =
-                  row.model_probability != null
-                    ? row.model_probability * 100
+                  row.raw_model_event_probability != null
+                    ? row.raw_model_event_probability * 100
                     : row.model_event_probability != null
                       ? row.model_event_probability * 100
                       : null;
-                const modelLabel = row.cluster_adjusted
-                  ? isEn
-                    ? "Model"
-                    : "模型"
-                  : "EMOS";
+                const modelLabel = "EMOS";
                 const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
                 const edgePositive = Number(row.edge_percent || 0) >= 0;
                 const aiMeta = getAiMeta(row, locale);

@@ -9551,6 +9551,11 @@
   cursor: pointer;
 }
 
+.root :global(.scan-list-tabs button:disabled) {
+  opacity: 0.42;
+  cursor: not-allowed;
+}
+
 .root :global(.scan-list-tabs button.active) {
   color: #fff;
 }
@@ -9678,9 +9683,24 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
+  width: 100%;
   padding: 16px 18px 14px;
+  border: 0;
   border-bottom: 1px solid rgba(90, 123, 166, 0.1);
   background: rgba(13, 28, 48, 0.62);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.root :global(.scan-opportunity-group-head:hover) {
+  background: rgba(18, 38, 64, 0.78);
+}
+
+.root :global(.scan-opportunity-group-head:focus-visible) {
+  outline: 2px solid rgba(34, 211, 238, 0.72);
+  outline-offset: -2px;
 }
 
 .root :global(.scan-opportunity-city) {
