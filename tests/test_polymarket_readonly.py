@@ -39,6 +39,7 @@ def test_extract_market_bucket_range_supports_fahrenheit_ranges():
 
 def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
     layer = PolymarketReadOnlyLayer()
+    layer.fast_price_only = False
     payloads = {
         ("/price", "BUY"): {"price": "0.27"},
         ("/price", "SELL"): {"price": "0.23"},
@@ -68,8 +69,37 @@ def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
     assert data["quote_source"] == "polymarket_clob_rest"
 
 
+def test_fetch_token_market_data_fast_price_only_skips_heavy_endpoints():
+    layer = PolymarketReadOnlyLayer()
+    calls = []
+    payloads = {
+        ("/price", "BUY"): {"price": "0.23"},
+        ("/price", "SELL"): {"price": "0.27"},
+    }
+
+    def _fake_clob_get(path, params):
+        calls.append((path, params.get("side")))
+        if path == "/price":
+            return payloads[(path, params.get("side"))]
+        return None
+
+    layer._clob_get = _fake_clob_get
+
+    data = layer._fetch_token_market_data("token-1")
+
+    assert calls == [("/price", "BUY"), ("/price", "SELL")]
+    assert data["buy"] == 0.27
+    assert data["sell"] == 0.23
+    assert data["midpoint"] == 0.25
+    assert round(data["spread"], 6) == 0.04
+    assert data["last_trade_price"] is None
+    assert data["book"] is None
+    assert data["quote_source"] == "polymarket_clob_fast_price"
+
+
 def test_fetch_token_market_data_keeps_buy_sell_semantics_without_orderbook():
     layer = PolymarketReadOnlyLayer()
+    layer.fast_price_only = False
     payloads = {
         ("/price", "BUY"): {"price": "0.23"},
         ("/price", "SELL"): {"price": "0.27"},

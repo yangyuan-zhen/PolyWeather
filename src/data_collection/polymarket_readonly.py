@@ -418,6 +418,8 @@ class PolymarketReadOnlyLayer:
             _safe_float(os.getenv("POLYMARKET_SIGNAL_MIN_LIQUIDITY")) or 500.0
         )
         self.edge_threshold = _safe_float(os.getenv("POLYMARKET_SIGNAL_EDGE_PCT")) or 2.0
+        fast_price_only = _safe_bool(os.getenv("POLYMARKET_FAST_PRICE_ONLY", "true"))
+        self.fast_price_only = True if fast_price_only is None else bool(fast_price_only)
 
         self._session = httpx.Client(
             timeout=self.http_timeout,
@@ -1747,6 +1749,22 @@ class PolymarketReadOnlyLayer:
         ask = _extract_price(
             self._clob_get("/price", {"token_id": token_id, "side": "SELL"})
         )
+        if self.fast_price_only:
+            buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=None)
+            midpoint = (buy + sell) / 2.0 if buy is not None and sell is not None else (buy or sell)
+            spread = max(0.0, float(buy) - float(sell)) if buy is not None and sell is not None else None
+            return {
+                "buy": buy,
+                "sell": sell,
+                "midpoint": _clamp_probability(midpoint),
+                "spread": spread,
+                "last_trade_price": None,
+                "quote_source": "polymarket_clob_fast_price",
+                "quote_age_ms": 0,
+                "book": None,
+                "book_liquidity": None,
+            }
+
         midpoint = _extract_price(self._clob_get("/midpoint", {"token_id": token_id}))
         last_trade = _extract_price(
             self._clob_get("/last-trade-price", {"token_id": token_id})
@@ -1754,10 +1772,14 @@ class PolymarketReadOnlyLayer:
         orderbook_raw = self._clob_get("/book", {"token_id": token_id})
         book, book_liquidity = self._normalize_orderbook(orderbook_raw)
         buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=book)
+        if midpoint is None and buy is not None and sell is not None:
+            midpoint = (buy + sell) / 2.0
+        spread = max(0.0, float(buy) - float(sell)) if buy is not None and sell is not None else None
         return {
             "buy": buy,
             "sell": sell,
             "midpoint": midpoint,
+            "spread": spread,
             "last_trade_price": last_trade,
             "quote_source": "polymarket_clob_rest",
             "quote_age_ms": 0,
@@ -2326,7 +2348,12 @@ class PolymarketReadOnlyLayer:
                     missing.append(token_id)
                     continue
                 cached_data = cached.get("data", {}) or {}
-                if include_books and not cached_data.get("book") and cached_data.get("book_liquidity") is None:
+                if (
+                    include_books
+                    and not self.fast_price_only
+                    and not cached_data.get("book")
+                    and cached_data.get("book_liquidity") is None
+                ):
                     missing.append(token_id)
                     continue
                 results[token_id] = dict(cached_data)
@@ -2350,24 +2377,36 @@ class PolymarketReadOnlyLayer:
                 "/prices",
                 [{"token_id": token_id, "side": "BUY"} for token_id in chunk],
             )
-            midpoint_payload = self._clob_post(
-                "/midpoints",
-                [{"token_id": token_id} for token_id in chunk],
+            midpoint_payload = (
+                self._clob_post(
+                    "/midpoints",
+                    [{"token_id": token_id} for token_id in chunk],
+                )
+                if not self.fast_price_only
+                else None
             )
-            spread_payload = self._clob_post(
-                "/spreads",
-                [{"token_id": token_id} for token_id in chunk],
+            spread_payload = (
+                self._clob_post(
+                    "/spreads",
+                    [{"token_id": token_id} for token_id in chunk],
+                )
+                if not self.fast_price_only
+                else None
             )
-            last_trade_payload = self._clob_post(
-                "/last-trade-prices",
-                [{"token_id": token_id} for token_id in chunk],
+            last_trade_payload = (
+                self._clob_post(
+                    "/last-trade-prices",
+                    [{"token_id": token_id} for token_id in chunk],
+                )
+                if not self.fast_price_only
+                else None
             )
             books_payload = (
                 self._clob_post(
                     "/books",
                     [{"token_id": token_id} for token_id in chunk],
                 )
-                if include_books
+                if include_books and not self.fast_price_only
                 else None
             )
             ask_map.update(self._extract_batch_price_map(sell_payload, "SELL"))
@@ -2419,7 +2458,11 @@ class PolymarketReadOnlyLayer:
                 "midpoint": midpoint,
                 "spread": spread,
                 "last_trade_price": last_trade,
-                "quote_source": "polymarket_clob_rest_batch",
+                "quote_source": (
+                    "polymarket_clob_fast_batch"
+                    if self.fast_price_only
+                    else "polymarket_clob_rest_batch"
+                ),
                 "quote_age_ms": 0,
                 "book": book,
                 "book_liquidity": book_liquidity,
@@ -3087,7 +3130,10 @@ class PolymarketReadOnlyLayer:
                 continue
             shortlisted_tokens.extend([entry["yes_token_id"], entry["no_token_id"]])
 
-        precise_quotes = self._batch_get_token_market_data(shortlisted_tokens, include_books=True)
+        precise_quotes = self._batch_get_token_market_data(
+            shortlisted_tokens,
+            include_books=not self.fast_price_only,
+        )
         for entry in market_entries:
             market_slug = str(entry["market"].get("slug") or "").strip()
             if market_slug not in seen_slugs:

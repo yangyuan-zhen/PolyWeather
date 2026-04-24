@@ -9572,7 +9572,7 @@
 
 .root :global(.scan-table-header) {
   display: grid;
-  grid-template-columns: 46px minmax(180px, 1.08fr) minmax(132px, 0.72fr) minmax(220px, 1.08fr) minmax(150px, 0.82fr) 92px 82px;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(132px, 0.72fr) minmax(220px, 1.12fr) minmax(150px, 0.82fr) 96px;
   gap: 10px;
   align-items: center;
   padding: 14px 18px;
@@ -9786,7 +9786,7 @@
 
 .root :global(.scan-table-row) {
   display: grid;
-  grid-template-columns: 46px minmax(180px, 1.08fr) minmax(132px, 0.72fr) minmax(220px, 1.08fr) minmax(150px, 0.82fr) 92px 82px;
+  grid-template-columns: minmax(210px, 1.1fr) minmax(132px, 0.72fr) minmax(220px, 1.12fr) minmax(150px, 0.82fr) 96px;
   gap: 10px;
   align-items: center;
   min-height: 132px;
@@ -9813,36 +9813,10 @@
   box-shadow: inset 0 0 0 1px rgba(23, 217, 139, 0.48);
 }
 
-.root :global(.scan-rank-cell),
-.root :global(.scan-score-cell),
 .root :global(.scan-edge-cell) {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.root :global(.scan-rank-circle) {
-  width: 34px;
-  height: 34px;
-  font-size: 16px;
-  font-weight: 800;
-  color: #06150d;
-  background: linear-gradient(180deg, #24e495, #11b86f);
-}
-
-.root :global(.scan-rank-circle.yellow) {
-  color: #281a00;
-  background: linear-gradient(180deg, #ffd95f, #ffb61c);
-}
-
-.root :global(.scan-rank-circle.gray) {
-  color: #08131f;
-  background: linear-gradient(180deg, #d6e3f7, #94a7c4);
-}
-
-.root :global(.scan-rank-circle.red) {
-  color: #fff3f3;
-  background: linear-gradient(180deg, #ff7373, #df4747);
 }
 
 .root :global(.scan-city-cell) {
@@ -9868,11 +9842,6 @@
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
-}
-
-.root :global(.scan-city-volume) {
-  font-size: 14px;
-  color: #dbe7f8;
 }
 
 .root :global(.scan-time-cell) {
@@ -10034,38 +10003,6 @@
 
 .root :global(.scan-edge-cell.negative) {
   color: #ff6868;
-}
-
-.root :global(.scan-score-ring) {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  background: conic-gradient(#20df91 0 85%, rgba(255, 255, 255, 0.06) 85% 100%);
-}
-
-.root :global(.scan-score-ring.tone-yellow) {
-  background: conic-gradient(#ffbe26 0 72%, rgba(255, 255, 255, 0.06) 72% 100%);
-}
-
-.root :global(.scan-score-ring.tone-red) {
-  background: conic-gradient(#ff5d5d 0 58%, rgba(255, 255, 255, 0.06) 58% 100%);
-}
-
-.root :global(.scan-score-ring::after) {
-  content: "";
-  position: absolute;
-  inset: 5px;
-  border-radius: 50%;
-  background: #0b1728;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-}
-
-.root :global(.scan-score-ring span) {
-  position: relative;
-  z-index: 1;
-  font-size: 18px;
-  font-weight: 800;
-  color: #ecf4ff;
 }
 
 .root :global(.scan-row-fav) {

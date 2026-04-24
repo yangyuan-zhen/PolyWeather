@@ -24,14 +24,6 @@ function formatPercent(value?: number | null, signed = false) {
   return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
 }
 
-function formatVolume(value?: number | null) {
-  const numeric = Number(value || 0);
-  if (!Number.isFinite(numeric) || numeric <= 0) return "--";
-  if (numeric >= 1_000_000) return `$${(numeric / 1_000_000).toFixed(1)}M`;
-  if (numeric >= 1_000) return `$${(numeric / 1_000).toFixed(0)}K`;
-  return `$${numeric.toFixed(0)}`;
-}
-
 function formatWindowMinutes(value: number | null | undefined, locale: string) {
   if (value == null || !Number.isFinite(Number(value))) return "--";
   const minutes = Math.max(0, Math.round(Number(value)));
@@ -118,13 +110,6 @@ export function getWindowPhaseMeta(
   };
 }
 
-function scoreTone(score?: number | null) {
-  const numeric = Number(score || 0);
-  if (numeric >= 85) return "green";
-  if (numeric >= 70) return "yellow";
-  return "gray";
-}
-
 function ProbabilityPreview({
   row,
   locale,
@@ -197,15 +182,6 @@ function ProbabilityPreview({
   );
 }
 
-function ScoreRing({ score }: { score?: number | null }) {
-  const displayScore = Math.max(0, Math.min(100, Number(score || 0)));
-  return (
-    <div className={`scan-score-ring tone-${scoreTone(displayScore)}`}>
-      <span>{displayScore.toFixed(0)}</span>
-    </div>
-  );
-}
-
 export const OpportunityTable = React.memo(function OpportunityTable({
   rows,
   status,
@@ -271,17 +247,15 @@ export const OpportunityTable = React.memo(function OpportunityTable({
         </div>
       ) : null}
       <div className="scan-table-header">
-        <span />
         <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
         <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
         <span>{isEn ? "EMOS / Market" : "EMOS / 市场"}</span>
         <span>{isEn ? "Quote / Model" : "买价 / 模型"}</span>
         <span>{isEn ? "Edge" : "边际优势"}</span>
-        <span>{isEn ? "Score" : "综合得分"}</span>
       </div>
 
       <div className="scan-table-body">
-        {rows.map((row, index) => {
+        {rows.map((row) => {
           const phaseMeta = getWindowPhaseMeta(row, locale);
           const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
           const localizedCityName = getLocalizedCityName(
@@ -290,7 +264,6 @@ export const OpportunityTable = React.memo(function OpportunityTable({
             locale,
           );
           const selected = selectedRowId === row.id;
-          const scoreClass = scoreTone(row.final_score);
           return (
             <button
               key={row.id}
@@ -298,19 +271,12 @@ export const OpportunityTable = React.memo(function OpportunityTable({
               className={`scan-table-row ${selected ? "selected" : ""}`}
               onClick={() => onSelectRow?.(row)}
             >
-              <div className="scan-rank-cell">
-                <div className={`scan-rank-circle ${scoreClass}`}>
-                  {index + 1}
-                </div>
-              </div>
-
               <div className="scan-city-cell">
                 <div className="scan-city-copy">
                   <div className="scan-city-name">{localizedCityName}</div>
                   <div className="scan-city-sub">
                     {row.market_question || row.target_label || "--"}
                   </div>
-                  <div className="scan-city-volume">{formatVolume(row.volume)}</div>
                 </div>
               </div>
 
@@ -343,10 +309,6 @@ export const OpportunityTable = React.memo(function OpportunityTable({
 
               <div className={`scan-edge-cell ${Number(row.edge_percent || 0) >= 0 ? "positive" : "negative"}`}>
                 {formatPercent(row.edge_percent, true)}
-              </div>
-
-              <div className="scan-score-cell">
-                <ScoreRing score={row.final_score} />
               </div>
             </button>
           );
