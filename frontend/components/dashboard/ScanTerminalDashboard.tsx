@@ -405,7 +405,7 @@ function ScanAiAnalysisView({
     <div className="scan-ai-analysis-view">
       <section className="scan-ai-summary-card">
         <div>
-          <strong>{isEn ? "V4 city analysis" : "V4 城市级分析"}</strong>
+          <strong>{isEn ? "AI city forecast" : "AI 城市级预测"}</strong>
           <p>
             {aiScan?.status === "ready"
               ? (isEn ? aiScan.summary_en || aiScan.summary_zh : aiScan.summary_zh || aiScan.summary_en) ||
@@ -457,7 +457,7 @@ function ScanAiAnalysisView({
             (isEn
               ? group.thesis?.thesis_en || group.thesis?.summary_en || group.rows[0]?.ai_city_thesis_en
               : group.thesis?.thesis_zh || group.thesis?.summary_zh || group.rows[0]?.ai_city_thesis_zh) ||
-            (isEn ? "Waiting for V4 city thesis." : "等待 V4 城市研判。");
+            (isEn ? "Waiting for AI city forecast." : "等待 AI 城市预测。");
           const clusterNote =
             group.thesis?.model_cluster_note || group.rows[0]?.ai_city_model_cluster_note || null;
           return (
@@ -483,7 +483,7 @@ function ScanAiAnalysisView({
                     <div key={row.id} className={`scan-ai-contract ${decision}`}>
                       <div>
                         <b>
-                          {normalizeTemperatureLabel(row.action || row.target_label, tempSymbol) ||
+                          {normalizeTemperatureLabel(row.target_label, tempSymbol) ||
                             row.market_question ||
                             row.id}
                         </b>
@@ -491,7 +491,11 @@ function ScanAiAnalysisView({
                           {row.deb_prediction != null
                             ? `DEB ${formatTemperatureValue(row.deb_prediction, tempSymbol)} · `
                             : ""}
-                          {row.edge_percent != null ? `edge ${Number(row.edge_percent).toFixed(1)}%` : "--"}
+                          {row.ai_forecast_confidence
+                            ? `${isEn ? "confidence" : "信心"} ${row.ai_forecast_confidence}`
+                            : isEn
+                              ? "forecast mapping"
+                              : "预测映射"}
                         </small>
                       </div>
                       <span>{getAiDecisionLabel(row, locale)}</span>
@@ -1202,10 +1206,10 @@ function ScanTerminalScreen() {
                       : "当前显示上次成功快照"
                     : isEn
                       ? isPro
-                        ? "Read-only market scan with peak-first main signal"
+                        ? "Read-only market scan with DEB-first win-rate signal"
                         : "Free preview: distribution view and city briefing"
                       : isPro
-                        ? "只读市场扫描，主信号按 EMOS 主峰优先"
+                        ? "只读市场扫描，主信号按 DEB 最终融合预测优先"
                         : "免费预览：分布视图和城市简报可查看"}
               </span>
             </div>

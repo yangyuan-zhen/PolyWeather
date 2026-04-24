@@ -5,10 +5,9 @@ import { useI18n } from "@/hooks/useI18n";
 import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
 import { getMarketFocus } from "@/lib/scan-market-focus";
 
-function formatPercent(value?: number | null, signed = false): string {
+function formatTemperature(value?: number | null, unit?: string | null): string {
   if (value == null || Number.isNaN(Number(value))) return "--";
-  const numeric = Number(value);
-  return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
+  return `${Number(value).toFixed(1)}${unit || "°C"}`;
 }
 
 function countByRisk(rows: ScanOpportunityRow[]) {
@@ -37,7 +36,6 @@ export function ScanKPIBar({
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
-  const summary = response?.summary;
   const riskCounts = countByRisk(rows);
   const tradableRows = rows.filter((row) => row.tradable && !row.closed);
   const liveRows = rows.filter((row) => row.active || row.accepting_orders);
@@ -79,14 +77,14 @@ export function ScanKPIBar({
     {
       label: isEn ? "Book Status" : "盘口状态",
       value: `${liveRows.length}`,
-      note: `${isEn ? "Tradable" : "可交易"} ${tradableRows.length} · ${isEn ? "No edge" : "无机会"} ${Math.max(0, rows.length - tradableRows.length)}`,
+      note: `${isEn ? "Evaluable" : "可评估"} ${tradableRows.length} · ${isEn ? "Pending" : "待评估"} ${Math.max(0, rows.length - tradableRows.length)}`,
       tone: "blue",
     },
     {
-      label: isEn ? "Opportunity Quality" : "机会质量",
-      value: formatPercent(summary?.avg_edge_percent, true),
+      label: isEn ? "Win-rate Basis" : "胜率依据",
+      value: bestRow ? formatTemperature(bestRow.deb_prediction, bestRow.temp_symbol || bestRow.target_unit) : "--",
       note: bestRow
-        ? `${isEn ? "Best" : "最佳"} ${bestRow.city_display_name || bestRow.display_name || bestRow.city} · ${formatPercent(bestRow.edge_percent, true)}`
+        ? `${isEn ? "Focus" : "焦点"} ${bestRow.city_display_name || bestRow.display_name || bestRow.city} · DEB / ${isEn ? "models" : "模型"} / METAR`
         : isEn
           ? "No active market now"
           : "当前没有活跃市场",

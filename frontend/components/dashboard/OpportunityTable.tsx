@@ -319,13 +319,13 @@ function getOpportunityStrength(edgePercent?: number | null, locale = "zh-CN") {
   const normalized = Number.isFinite(edge) ? edge : 0;
   if (normalized >= 20) {
     return {
-      label: locale === "en-US" ? "Strong" : "强机会",
+      label: locale === "en-US" ? "High confidence" : "高胜率",
       tone: "strong",
     };
   }
   if (normalized >= 10) {
     return {
-      label: locale === "en-US" ? "Medium" : "中机会",
+      label: locale === "en-US" ? "Medium confidence" : "中等胜率",
       tone: "medium",
     };
   }
