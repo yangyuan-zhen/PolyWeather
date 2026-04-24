@@ -709,9 +709,36 @@ export function FutureForecastModal() {
   const { locale, t } = useI18n();
   const detail = store.selectedDetail;
   const dateStr = store.futureModalDate;
+
+  if (!detail || !dateStr) return null;
+
+  return (
+    <FutureForecastModalContent
+      store={store}
+      locale={locale}
+      t={t}
+      detail={detail}
+      dateStr={dateStr}
+    />
+  );
+}
+
+function FutureForecastModalContent({
+  store,
+  locale,
+  t,
+  detail,
+  dateStr,
+}: {
+  store: ReturnType<typeof useDashboardStore>;
+  locale: ReturnType<typeof useI18n>["locale"];
+  t: ReturnType<typeof useI18n>["t"];
+  detail: NonNullable<ReturnType<typeof useDashboardStore>["selectedDetail"]>;
+  dateStr: string;
+}) {
   const isPro = store.proAccess.subscriptionActive;
   const isProLoading = store.proAccess.loading;
-  const hasModalContext = Boolean(detail && dateStr);
+  const hasModalContext = true;
   const [showDeferredTodaySections, setShowDeferredTodaySections] =
     useState(false);
   const [freshMarketScan, setFreshMarketScan] = useState<MarketScan | null>(
@@ -823,8 +850,6 @@ export function FutureForecastModal() {
     isPro,
     isToday,
   ]);
-
-  if (!detail || !dateStr) return null;
 
   const view = getFutureModalView(detail, dateStr, locale);
   const scorePosition = `${50 + view.front.score / 2}%`;
