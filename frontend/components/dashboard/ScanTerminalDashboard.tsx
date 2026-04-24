@@ -44,6 +44,11 @@ import {
   formatTemperatureValue,
   normalizeTemperatureLabel,
 } from "@/lib/dashboard-utils";
+import {
+  getMarketFocus,
+  getRowMarketRegion,
+  getRowPeakSortValue,
+} from "@/lib/scan-market-focus";
 
 const DEFAULT_FILTERS: FilterState = {
   scan_mode: "tradable",
@@ -222,15 +227,31 @@ function getPhaseUrgency(row: ScanOpportunityRow) {
   const phase = String(row.window_phase || "").toLowerCase();
   if (phase === "active_peak") return 0;
   if (phase === "setup_today") return 1;
-  if (phase === "early_today") return 2;
-  if (phase === "post_peak") return 3;
+  if (phase === "post_peak") return 2;
+  if (phase === "early_today") return 3;
   if (phase === "tomorrow") return 4;
   if (phase === "week_ahead") return 5;
   return 6;
 }
 
 function sortRowsByUserTime(rows: ScanOpportunityRow[]) {
+  const focus = getMarketFocus(rows);
   return [...rows].sort((left, right) => {
+    if (focus) {
+      const leftFocusRank = getRowMarketRegion(left) === focus.key ? 0 : 1;
+      const rightFocusRank = getRowMarketRegion(right) === focus.key ? 0 : 1;
+      if (leftFocusRank !== rightFocusRank) return leftFocusRank - rightFocusRank;
+    }
+
+    const leftPeakSort = getRowPeakSortValue(left);
+    const rightPeakSort = getRowPeakSortValue(right);
+    if (leftPeakSort.stage.rank !== rightPeakSort.stage.rank) {
+      return leftPeakSort.stage.rank - rightPeakSort.stage.rank;
+    }
+    if (leftPeakSort.countdown !== rightPeakSort.countdown) {
+      return leftPeakSort.countdown - rightPeakSort.countdown;
+    }
+
     const leftDateIndex = getLocalDateIndex(left.selected_date || left.local_date);
     const rightDateIndex = getLocalDateIndex(right.selected_date || right.local_date);
     if (leftDateIndex !== rightDateIndex) return leftDateIndex - rightDateIndex;
@@ -251,6 +272,31 @@ function sortRowsByUserTime(rows: ScanOpportunityRow[]) {
     if (scoreDelta !== 0) return scoreDelta;
     return Number(right.edge_percent || 0) - Number(left.edge_percent || 0);
   });
+}
+
+function mergeRefreshingScanSnapshot(
+  previous: ScanTerminalResponse | null,
+  next: ScanTerminalResponse,
+  locale = "zh-CN",
+): ScanTerminalResponse {
+  if (next.rows.length || !previous?.rows.length) return next;
+  const nextStatus = String(next.status || "").toLowerCase();
+  if (!["partial", "stale", "scanning", "loading", "failed"].includes(nextStatus)) {
+    return next;
+  }
+  return {
+    ...previous,
+    generated_at: previous.generated_at || next.generated_at,
+    status: nextStatus === "failed" ? "stale" : next.status || "stale",
+    stale: true,
+    stale_reason:
+      next.stale_reason ||
+      (locale === "en-US"
+        ? "Refreshing a new scan; showing the previous snapshot until it is ready."
+        : "新扫描仍在刷新中，当前继续展示上一轮快照。"),
+    last_failed_at: next.last_failed_at || previous.last_failed_at,
+    filters: next.filters || previous.filters,
+  };
 }
 
 function normalizeCityKey(value?: string | null) {
@@ -671,6 +717,10 @@ function ScanTerminalScreen() {
     () => sortRowsByUserTime(deferredRows),
     [deferredRows],
   );
+  const marketFocus = useMemo(
+    () => getMarketFocus(timeSortedRows, locale),
+    [locale, timeSortedRows],
+  );
 
   const selectedRow = useMemo(() => {
     if (!timeSortedRows.length) return null;
@@ -778,26 +828,31 @@ function ScanTerminalScreen() {
     setAiError(null);
     try {
       const response = await dashboardClient.getScanTerminal(filters, { force });
+      const displayRows = response.rows.length
+        ? response.rows
+        : terminalData?.rows || [];
       startTransition(() => {
-        setTerminalData(response);
+        setTerminalData((current) =>
+          mergeRefreshingScanSnapshot(current, response, locale),
+        );
         setActiveFilters(filters);
         setError(response.status === "failed" ? response.stale_reason || null : null);
         setSelectedRowId((current) => {
-          if (current && response.rows.some((row) => row.id === current)) {
+          if (current && displayRows.some((row) => row.id === current)) {
             return current;
           }
-          return sortRowsByUserTime(response.rows)[0]?.id || response.top_signal?.id || null;
+          return sortRowsByUserTime(displayRows)[0]?.id || response.top_signal?.id || null;
         });
       });
       prependAiLogs([
         {
           id: `rule-${Date.now()}`,
           time: formatLogTime(),
-          tone: response.rows.length ? "success" : "warning",
+          tone: displayRows.length ? "success" : "warning",
           title: isEn ? "Rule scan snapshot ready" : "规则扫描快照已就绪",
           detail: isEn
-            ? `snapshot ${response.snapshot_id || "--"} · ${response.rows.length} visible rows`
-            : `快照 ${response.snapshot_id || "--"} · 可见候选 ${response.rows.length} 条`,
+            ? `snapshot ${response.snapshot_id || "--"} · ${displayRows.length} visible rows`
+            : `快照 ${response.snapshot_id || "--"} · 可见候选 ${displayRows.length} 条`,
         },
       ]);
     } catch (fetchError) {
@@ -1248,6 +1303,13 @@ function ScanTerminalScreen() {
                 </button>
               </div>
               <div className="scan-list-status">
+                {marketFocus ? (
+                  <span className="scan-status-chip focus">
+                    {isEn
+                      ? `Focus: ${marketFocus.label}`
+                      : `当前主盘：${marketFocus.label}`}
+                  </span>
+                ) : null}
                 {terminalData?.stale ? (
                   <span className="scan-status-chip stale">
                     {isEn ? "Delayed snapshot" : "延迟快照"}

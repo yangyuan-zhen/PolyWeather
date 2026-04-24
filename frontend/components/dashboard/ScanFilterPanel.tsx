@@ -5,7 +5,6 @@ import {
   CircleDot,
   Clock3,
   Info,
-  Search,
   TrendingUp,
   Zap,
 } from "lucide-react";
@@ -52,13 +51,9 @@ const SCAN_MODES = [
 export function ScanFilterPanel({
   value,
   onChange,
-  onScan,
-  isScanning,
 }: {
   value: FilterState;
   onChange?: (filters: FilterState) => void;
-  onScan?: (filters: FilterState) => void;
-  isScanning?: boolean;
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
@@ -114,21 +109,6 @@ export function ScanFilterPanel({
         </div>
       </section>
 
-      <button
-        type="button"
-        className="scan-cta-button"
-        onClick={() => onScan?.(value)}
-        disabled={isScanning}
-      >
-        <Search size={16} />
-        {isScanning
-          ? isEn
-            ? "Scanning..."
-            : "扫描中..."
-          : isEn
-            ? "Start Scan"
-            : "开始扫描"}
-      </button>
     </aside>
   );
 }

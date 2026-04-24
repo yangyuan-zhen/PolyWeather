@@ -9600,6 +9600,12 @@
   color: #87fff1;
 }
 
+.root :global(.scan-status-chip.focus) {
+  border-color: rgba(255, 176, 32, 0.3);
+  background: rgba(255, 176, 32, 0.12);
+  color: #ffd078;
+}
+
 .root :global(.scan-table-shell) {
   display: flex;
   flex-direction: column;

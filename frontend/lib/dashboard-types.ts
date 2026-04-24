@@ -445,6 +445,10 @@ export interface ScanOpportunityRow {
   city: string;
   city_display_name?: string | null;
   display_name?: string | null;
+  trading_region?: string | null;
+  trading_region_label?: string | null;
+  trading_region_label_zh?: string | null;
+  tz_offset_seconds?: number | null;
   selected_date?: string | null;
   local_date?: string | null;
   local_time?: string | null;

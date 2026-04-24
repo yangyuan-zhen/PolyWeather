@@ -3343,6 +3343,15 @@ class PolymarketReadOnlyLayer:
                 return False
             if edge_percent < filters["min_edge_pct"]:
                 return False
+            side = str(row.get("side") or "").lower()
+            market_direction = str(row.get("market_direction") or "").lower()
+            if (
+                side == "no"
+                and market_direction in {"exact", "range"}
+                and ask >= 0.80
+                and edge_percent < 10.0
+            ):
+                return False
             if spread is None or spread > filters["max_spread"]:
                 return False
             if liquidity < filters["min_liquidity"]:

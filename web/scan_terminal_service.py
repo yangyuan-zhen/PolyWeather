@@ -111,6 +111,27 @@ def _normalize_scan_terminal_filters(
     }
 
 
+def _market_region_from_tz_offset(tz_offset_seconds: Any) -> Dict[str, str]:
+    tz_offset = _safe_int(tz_offset_seconds, 0)
+    if tz_offset <= -7200:
+        return {
+            "key": "americas",
+            "label_en": "Americas",
+            "label_zh": "美洲",
+        }
+    if tz_offset >= 14400:
+        return {
+            "key": "asia_pacific",
+            "label_en": "Asia-Pacific",
+            "label_zh": "亚太",
+        }
+    return {
+        "key": "europe_africa",
+        "label_en": "Europe / Africa",
+        "label_zh": "欧洲 / 非洲",
+    }
+
+
 def _scan_terminal_cache_key(filters: Dict[str, Any]) -> str:
     normalized = _normalize_scan_terminal_filters(filters)
     return json.dumps(normalized, ensure_ascii=True, sort_keys=True)
@@ -810,12 +831,19 @@ def _build_terminal_row(
     final_score = _safe_float(row.get("final_score"))
     volume = _safe_float(row.get("volume")) or 0.0
     primary_signal = scan.get("primary_signal") or {}
+    city_meta = CITIES.get(city) or {}
+    tz_offset = _safe_int(city_meta.get("tz"), 0)
+    market_region = _market_region_from_tz_offset(tz_offset)
 
     return {
         **row,
         "id": str(row.get("id") or f"{city}|{selected_date}|{market_slug}|{side}"),
         "city": city,
         "city_display_name": display_name,
+        "trading_region": market_region["key"],
+        "trading_region_label": market_region["label_en"],
+        "trading_region_label_zh": market_region["label_zh"],
+        "tz_offset_seconds": tz_offset,
         "selected_date": selected_date or None,
         "local_date": data.get("local_date"),
         "local_time": data.get("local_time"),
@@ -1003,6 +1031,16 @@ def _build_scan_terminal_payload_uncached(
                     "rank": index,
                 }
             )
+
+        if timed_out and not ranked_rows:
+            success_payload = cached_entry.get("success_payload")
+            if isinstance(success_payload, dict) and success_payload.get("rows"):
+                return _build_stale_scan_terminal_payload(
+                    filters=filters,
+                    success_payload=success_payload,
+                    error_message=timeout_message or "市场扫描快照正在刷新中",
+                    failed_at=cached_entry.get("last_failed_at"),
+                )
 
         unique_market_volume: Dict[str, float] = {}
         for row in primary_rows:

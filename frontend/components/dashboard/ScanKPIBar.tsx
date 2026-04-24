@@ -3,6 +3,7 @@
 import React from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
+import { getMarketFocus } from "@/lib/scan-market-focus";
 
 function formatPercent(value?: number | null, signed = false): string {
   if (value == null || Number.isNaN(Number(value))) return "--";
@@ -41,6 +42,7 @@ export function ScanKPIBar({
   const tradableRows = rows.filter((row) => row.tradable && !row.closed);
   const liveRows = rows.filter((row) => row.active || row.accepting_orders);
   const bestRow = rows[0] || null;
+  const marketFocus = getMarketFocus(rows, locale);
   const statusLabel =
     loading && !response
       ? isEn
@@ -91,10 +93,14 @@ export function ScanKPIBar({
       tone: "green",
     },
     {
-      label: isEn ? "Risk Layers" : "风险层",
-      value: `${riskCounts.high} / ${riskCounts.medium} / ${riskCounts.low}`,
-      note: `${isEn ? "High / Med / Low" : "高 / 中 / 低"}`,
-      tone: "purple",
+      label: isEn ? "Current Region" : "当前主盘",
+      value: marketFocus?.label || "--",
+      note: marketFocus
+        ? isEn
+          ? `${marketFocus.stageLabel} · ${marketFocus.activeCityCount || 1} cities in focus`
+          : `${marketFocus.stageLabel} · ${marketFocus.activeCityCount || 1} 个城市在焦点窗口`
+        : `${isEn ? "Risk" : "风险"} ${riskCounts.high} / ${riskCounts.medium} / ${riskCounts.low}`,
+      tone: "orange",
     },
   ];
 
