@@ -372,19 +372,24 @@ def _scan_city_terminal_rows(
         )
         scan = payload.get("market_scan") or {}
         candidate_total += int(scan.get("candidate_count") or 0)
-        primary_signal = scan.get("primary_signal")
-        if not isinstance(primary_signal, dict) or not primary_signal:
+        raw_rows = scan.get("scan_rows")
+        if not isinstance(raw_rows, list) or not raw_rows:
+            raw_rows = [scan.get("primary_signal")] if isinstance(scan.get("primary_signal"), dict) else []
+        if not raw_rows:
             continue
-        row = _build_terminal_row(
-            city=city,
-            data=data,
-            scan=scan,
-            row=primary_signal,
-        )
-        rows.append(row)
-        score = _safe_float(row.get("final_score"))
-        if score is not None:
-            primary_scores.append(score)
+        for raw_row in raw_rows:
+            if not isinstance(raw_row, dict) or not raw_row:
+                continue
+            row = _build_terminal_row(
+                city=city,
+                data=data,
+                scan=scan,
+                row=raw_row,
+            )
+            rows.append(row)
+            score = _safe_float(row.get("final_score"))
+            if score is not None and row.get("is_primary_signal"):
+                primary_scores.append(score)
 
     return {
         "city": city,

@@ -24,14 +24,6 @@ function formatPercent(value?: number | null, signed = false) {
   return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
 }
 
-function formatSignedTemperatureDelta(value?: number | null, tempSymbol?: string | null) {
-  if (value == null || Number.isNaN(Number(value))) return "--";
-  const numeric = Number(value);
-  if (Math.abs(numeric) < 0.05) return "0";
-  const absValue = formatTemperatureValue(Math.abs(numeric), tempSymbol);
-  return `${numeric > 0 ? "+" : "-"}${absValue}`;
-}
-
 function formatWindowMinutes(value: number | null | undefined, locale: string) {
   if (value == null || !Number.isFinite(Number(value))) return "--";
   const minutes = Math.max(0, Math.round(Number(value)));
@@ -118,20 +110,23 @@ export function getWindowPhaseMeta(
   };
 }
 
-function ProbabilityPreview({
-  row,
-  locale,
-}: {
-  row: ScanOpportunityRow;
-  locale: string;
-}) {
+function formatQuoteCents(value?: number | null) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const cents = Number(value) * 100;
+  const text =
+    cents < 1 || cents >= 99 || Math.abs(cents - Math.round(cents)) >= 0.05
+      ? cents.toFixed(1)
+      : Math.round(cents).toFixed(0);
+  return `${text.replace(/\.0$/, "")}¢`;
+}
+
+function getDistributionPreview(row: ScanOpportunityRow, tempSymbol?: string | null) {
   const preview = Array.isArray(row.distribution_preview)
     ? row.distribution_preview.filter(
         (item): item is DistributionPreviewPoint =>
           Boolean(item && (item.label || item.value != null)),
       )
     : [];
-  const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
 
   if (!preview.length) {
     const targetBase =
@@ -151,7 +146,11 @@ function ProbabilityPreview({
       highlighted: true,
     });
   }
+  return preview;
+}
 
+function getEmosPeak(row: ScanOpportunityRow, tempSymbol?: string | null) {
+  const preview = getDistributionPreview(row, tempSymbol);
   const peak =
     preview.reduce<DistributionPreviewPoint | null>((best, item) => {
       const probability = Number(item.model_probability ?? -1);
@@ -159,53 +158,77 @@ function ProbabilityPreview({
       return probability > bestProbability ? item : best;
     }, null) || preview.find((item) => item.highlighted) || preview[0];
   const peakValue = peak?.value ?? row.peak_value ?? null;
-  const peakLabel =
-    peakValue != null
-      ? formatTemperatureValue(Number(peakValue), tempSymbol)
-      : normalizeTemperatureLabel(peak?.label, tempSymbol) || "--";
+  const peakLabel = normalizeTemperatureLabel(peak?.label, tempSymbol) ||
+    (peakValue != null ? formatTemperatureValue(Number(peakValue), tempSymbol) : "--");
   const peakProbability =
     peak?.model_probability != null
       ? Number(peak.model_probability) * 100
       : row.peak_probability != null
         ? Number(row.peak_probability) * 100
         : null;
-  const debLabel =
-    row.deb_prediction != null
-      ? formatTemperatureValue(Number(row.deb_prediction), tempSymbol)
-      : "--";
-  const delta =
-    peakValue != null && row.deb_prediction != null
-      ? Number(peakValue) - Number(row.deb_prediction)
-      : null;
-  const targetLabel =
-    normalizeTemperatureLabel(row.target_label, tempSymbol) ||
-    (row.target_value != null ? formatTemperatureValue(Number(row.target_value), tempSymbol) : "--");
-  const targetProbability =
-    row.model_event_probability != null ? Number(row.model_event_probability) * 100 : null;
+  return { label: peakLabel, probability: peakProbability };
+}
 
-  return (
-    <div className="scan-distribution-preview">
-      <div className="scan-model-compare">
-        <div className="scan-model-primary">
-          <span>{locale === "en-US" ? "EMOS peak" : "EMOS峰值"}</span>
-          <strong>{peakLabel}</strong>
-          <em>{formatPercent(peakProbability)}</em>
-        </div>
-        <div className="scan-model-rows">
-          <span>
-            <b>DEB</b>
-            <strong>{debLabel}</strong>
-            <em>{delta == null ? "--" : formatSignedTemperatureDelta(delta, tempSymbol)}</em>
-          </span>
-          <span>
-            <b>{locale === "en-US" ? "Target" : "目标"}</b>
-            <strong>{targetLabel}</strong>
-            <em>EMOS {formatPercent(targetProbability)}</em>
-          </span>
-        </div>
-      </div>
-    </div>
-  );
+type OpportunityGroup = {
+  key: string;
+  cityName: string;
+  date?: string | null;
+  tempSymbol?: string | null;
+  debLabel: string;
+  peakLabel: string;
+  peakProbability?: number | null;
+  phaseMeta: PhaseMeta;
+  localTime?: string | null;
+  remainingMinutes?: number | null;
+  rows: ScanOpportunityRow[];
+};
+
+function buildOpportunityGroups(rows: ScanOpportunityRow[], locale: string): OpportunityGroup[] {
+  const groups = new Map<string, OpportunityGroup>();
+  for (const row of rows) {
+    const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
+    const cityName = getLocalizedCityName(
+      row.city,
+      row.city_display_name || row.display_name || row.city,
+      locale,
+    );
+    const date = row.selected_date || row.local_date || "";
+    const key = `${row.city || cityName}|${date}`;
+    const peak = getEmosPeak(row, tempSymbol);
+    const existing = groups.get(key);
+    if (!existing) {
+      groups.set(key, {
+        key,
+        cityName,
+        date,
+        tempSymbol,
+        debLabel:
+          row.deb_prediction != null
+            ? formatTemperatureValue(Number(row.deb_prediction), tempSymbol, { digits: 1 })
+            : "--",
+        peakLabel: peak.label,
+        peakProbability: peak.probability,
+        phaseMeta: getWindowPhaseMeta(row, locale),
+        localTime: row.local_time,
+        remainingMinutes: row.remaining_window_minutes,
+        rows: [row],
+      });
+      continue;
+    }
+    existing.rows.push(row);
+    if ((peak.probability ?? -1) > (existing.peakProbability ?? -1)) {
+      existing.peakLabel = peak.label;
+      existing.peakProbability = peak.probability;
+    }
+  }
+  return Array.from(groups.values()).map((group) => ({
+    ...group,
+    rows: [...group.rows].sort(
+      (a, b) =>
+        Number(b.edge_percent ?? -Infinity) - Number(a.edge_percent ?? -Infinity) ||
+        Number(b.final_score ?? -Infinity) - Number(a.final_score ?? -Infinity),
+    ),
+  }));
 }
 
 export const OpportunityTable = React.memo(function OpportunityTable({
@@ -230,6 +253,10 @@ export const OpportunityTable = React.memo(function OpportunityTable({
   const hasRows = rows.length > 0;
   const scanInProgress =
     loading || status === "partial" || status === "scanning";
+  const groups = React.useMemo(
+    () => buildOpportunityGroups(rows, locale),
+    [rows, locale],
+  );
 
   if (!hasRows) {
     const title =
@@ -272,73 +299,65 @@ export const OpportunityTable = React.memo(function OpportunityTable({
           <span>{staleReason || (isEn ? "Latest refresh failed, fallback to the last successful scan." : "最新刷新失败，已回退到上次成功扫描结果。")}</span>
         </div>
       ) : null}
-      <div className="scan-table-header">
-        <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
-        <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
-        <span>{isEn ? "EMOS / DEB" : "EMOS / DEB"}</span>
-        <span>{isEn ? "Quote / Model" : "买价 / 模型"}</span>
-        <span>{isEn ? "Edge" : "边际优势"}</span>
-      </div>
-
-      <div className="scan-table-body">
-        {rows.map((row) => {
-          const phaseMeta = getWindowPhaseMeta(row, locale);
-          const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
-          const localizedCityName = getLocalizedCityName(
-            row.city,
-            row.city_display_name || row.display_name || row.city,
-            locale,
-          );
-          const selected = selectedRowId === row.id;
-          return (
-            <button
-              key={row.id}
-              type="button"
-              className={`scan-table-row ${selected ? "selected" : ""}`}
-              onClick={() => onSelectRow?.(row)}
-            >
-              <div className="scan-city-cell">
-                <div className="scan-city-copy">
-                  <div className="scan-city-name">{localizedCityName}</div>
-                  <div className="scan-city-sub">
-                    {row.market_question || row.target_label || "--"}
-                  </div>
-                </div>
+      <div className="scan-table-body scan-opportunity-groups">
+        {groups.map((group) => (
+          <section key={group.key} className="scan-opportunity-group">
+            <div className="scan-opportunity-group-head">
+              <div className="scan-opportunity-city">
+                <strong>{group.cityName}</strong>
+                <span>
+                  DEB {group.debLabel} · EMOS peak {group.peakLabel}
+                  {group.peakProbability != null ? ` · ${formatPercent(group.peakProbability)}` : ""}
+                </span>
               </div>
-
-              <div className="scan-time-cell">
-                <div className="scan-time-main">{row.local_time || "--"}</div>
-                <div className={`scan-phase-badge ${phaseMeta.tone}`}>
-                  {phaseMeta.label}
-                </div>
-                <div className="scan-time-remaining">
-                  {formatWindowMinutes(row.remaining_window_minutes, locale)}
-                </div>
+              <div className="scan-opportunity-phase">
+                <span>{group.localTime || "--"}</span>
+                <b className={`scan-phase-badge ${group.phaseMeta.tone}`}>
+                  {group.phaseMeta.label}
+                </b>
+                <em>{formatWindowMinutes(group.remainingMinutes, locale)}</em>
               </div>
+            </div>
 
-              <ProbabilityPreview row={row} locale={locale} />
-
-                <div className="scan-trade-cell">
-                  <div className={`scan-trade-main ${row.side === "no" ? "sell" : "buy"}`}>
-                  {formatAction(row, locale, tempSymbol)}
-                  </div>
-                <div className="scan-trade-sub">
-                  {isEn ? "Buy" : "买价"} {row.ask != null ? `${Math.round(row.ask * 100)}¢` : "--"} ·{" "}
-                  EMOS {formatPercent(row.model_probability != null ? row.model_probability * 100 : null)}
-                </div>
-                <div className="scan-trade-note">
-                  {normalizeTemperatureLabel(row.target_label, tempSymbol) ||
-                    row.market_direction ||
-                    "--"}
-                </div>
-              </div>
-
-              <div className={`scan-edge-cell ${Number(row.edge_percent || 0) >= 0 ? "positive" : "negative"}`}>
-                {formatPercent(row.edge_percent, true)}
-              </div>
-            </button>
-          );
-        })}
+            <div className="scan-opportunity-items">
+              {group.rows.map((row, rowIndex) => {
+                const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
+                const selected = selectedRowId === row.id;
+                const side = String(row.side || "").toLowerCase();
+                const modelProbability =
+                  row.model_probability != null
+                    ? row.model_probability * 100
+                    : row.model_event_probability != null
+                      ? row.model_event_probability * 100
+                      : null;
+                const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
+                const edgePositive = Number(row.edge_percent || 0) >= 0;
+                return (
+                  <button
+                    key={row.id}
+                    type="button"
+                    className={`scan-opportunity-item ${selected ? "selected" : ""}`}
+                    onClick={() => onSelectRow?.(row)}
+                  >
+                    <span className="scan-opportunity-branch">
+                      {rowIndex === group.rows.length - 1 ? "└" : "├"}
+                    </span>
+                    <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
+                      {formatAction(row, locale, tempSymbol)}
+                    </strong>
+                    <span>EMOS {formatPercent(modelProbability)}</span>
+                    <span>
+                      {priceLabel} {formatQuoteCents(row.ask)}
+                    </span>
+                    <em className={edgePositive ? "positive" : "negative"}>
+                      edge {formatPercent(row.edge_percent, true)}
+                    </em>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        ))}
       </div>
     </div>
   );

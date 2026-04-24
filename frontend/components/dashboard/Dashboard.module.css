@@ -9594,6 +9594,155 @@
   -ms-overflow-style: none;
 }
 
+.root :global(.scan-opportunity-groups) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 18px 18px;
+}
+
+.root :global(.scan-opportunity-group) {
+  border: 1px solid rgba(90, 123, 166, 0.14);
+  border-radius: 16px;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(10, 21, 36, 0.94), rgba(8, 17, 29, 0.94));
+}
+
+.root :global(.scan-opportunity-group:has(.scan-opportunity-item.selected)) {
+  border-color: rgba(23, 217, 139, 0.42);
+  box-shadow: inset 0 0 0 1px rgba(23, 217, 139, 0.18);
+}
+
+.root :global(.scan-opportunity-group-head) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(90, 123, 166, 0.1);
+  background: rgba(13, 28, 48, 0.62);
+}
+
+.root :global(.scan-opportunity-city) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.root :global(.scan-opportunity-city strong) {
+  color: #eef7ff;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.root :global(.scan-opportunity-city span) {
+  overflow: hidden;
+  color: #9fb4cf;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-phase) {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: #9fb4cf;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-phase > span) {
+  color: #eef7ff;
+  font-weight: 800;
+}
+
+.root :global(.scan-opportunity-phase em) {
+  color: #9fb4cf;
+  font-style: normal;
+}
+
+.root :global(.scan-opportunity-items) {
+  display: flex;
+  flex-direction: column;
+}
+
+.root :global(.scan-opportunity-item) {
+  display: grid;
+  grid-template-columns: 24px minmax(190px, 1.1fr) minmax(92px, 0.45fr) minmax(92px, 0.45fr) minmax(90px, 0.38fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 18px;
+  border: 0;
+  border-bottom: 1px solid rgba(90, 123, 166, 0.08);
+  background: transparent;
+  color: #b8c9e1;
+  text-align: left;
+}
+
+.root :global(.scan-opportunity-item:last-child) {
+  border-bottom: 0;
+}
+
+.root :global(.scan-opportunity-item:hover) {
+  background: rgba(30, 70, 110, 0.18);
+}
+
+.root :global(.scan-opportunity-item.selected) {
+  background: rgba(10, 74, 65, 0.38);
+  box-shadow: inset 3px 0 0 rgba(23, 217, 139, 0.78);
+}
+
+.root :global(.scan-opportunity-branch) {
+  color: rgba(159, 180, 207, 0.72);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+}
+
+.root :global(.scan-opportunity-action) {
+  overflow: hidden;
+  font-size: 15px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-action.buy) {
+  color: #22e895;
+}
+
+.root :global(.scan-opportunity-action.sell) {
+  color: #ff7474;
+}
+
+.root :global(.scan-opportunity-item span:not(.scan-opportunity-branch)) {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-item em) {
+  justify-self: end;
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-item em.positive) {
+  color: #1de28f;
+}
+
+.root :global(.scan-opportunity-item em.negative) {
+  color: #ff6868;
+}
+
 .root :global(.scan-table-body::-webkit-scrollbar),
 .root :global(.scan-calendar-view::-webkit-scrollbar),
 .root :global(.scan-detail-panel::-webkit-scrollbar) {
@@ -10414,6 +10563,7 @@
 .root :global(.scan-terminal.light .scan-topbar-tab.active),
 .root :global(.scan-terminal.light .scan-hero h1),
 .root :global(.scan-terminal.light .scan-city-name),
+.root :global(.scan-terminal.light .scan-opportunity-city strong),
 .root :global(.scan-terminal.light .scan-detail-city-name),
 .root :global(.scan-terminal.light .scan-empty-title),
 .root :global(.scan-terminal.light .scan-detail-section-title),
@@ -10433,6 +10583,9 @@
 .root :global(.scan-terminal.light .scan-topbar-time),
 .root :global(.scan-terminal.light .scan-hero p),
 .root :global(.scan-terminal.light .scan-city-sub),
+.root :global(.scan-terminal.light .scan-opportunity-city span),
+.root :global(.scan-terminal.light .scan-opportunity-phase),
+.root :global(.scan-terminal.light .scan-opportunity-phase em),
 .root :global(.scan-terminal.light .scan-time-remaining),
 .root :global(.scan-terminal.light .scan-detail-city-sub),
 .root :global(.scan-terminal.light .scan-detail-volume-caption),
@@ -10468,6 +10621,7 @@
 .root :global(.scan-terminal.light .scan-summary-card),
 .root :global(.scan-terminal.light .scan-settings-card),
 .root :global(.scan-terminal.light .scan-distribution-card),
+.root :global(.scan-terminal.light .scan-opportunity-group),
 .root :global(.scan-terminal.light .scan-trade-card) {
   border-color: rgba(35, 72, 118, 0.12);
   background: rgba(255, 255, 255, 0.72);
@@ -10487,6 +10641,24 @@
 
 .root :global(.scan-terminal.light .scan-table-row:hover) {
   background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(238, 247, 255, 0.96));
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-group-head) {
+  background: rgba(246, 250, 255, 0.78);
+  border-bottom-color: rgba(35, 72, 118, 0.1);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-item) {
+  color: #405977;
+  border-bottom-color: rgba(35, 72, 118, 0.08);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-item:hover) {
+  background: rgba(230, 242, 255, 0.76);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-item.selected) {
+  background: rgba(222, 250, 238, 0.82);
 }
 
 .root :global(.scan-terminal.light .scan-locale-switch),
@@ -10570,6 +10742,23 @@
     display: none;
   }
 
+  .root :global(.scan-opportunity-group-head),
+  .root :global(.scan-opportunity-item) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-opportunity-phase) {
+    flex-wrap: wrap;
+  }
+
+  .root :global(.scan-opportunity-branch) {
+    display: none;
+  }
+
+  .root :global(.scan-opportunity-item em) {
+    justify-self: start;
+  }
+
   .root :global(.scan-trade-cards) {
     grid-template-columns: 1fr;
   }
@@ -10594,7 +10783,11 @@
     align-items: flex-start;
   }
 
-  .root :global(.scan-distribution-preview) {
-    grid-template-columns: repeat(2, 1fr);
+  .root :global(.scan-opportunity-groups) {
+    padding: 12px;
+  }
+
+  .root :global(.scan-opportunity-city span) {
+    white-space: normal;
   }
 }
