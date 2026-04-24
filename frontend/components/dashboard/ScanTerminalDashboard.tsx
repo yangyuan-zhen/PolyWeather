@@ -668,6 +668,7 @@ function ScanTerminalScreen() {
           loading={loading}
           selectedRowId={selectedRowId}
           onSelectRow={handleSelectRow}
+          cityDetailsByName={store.cityDetailsByName}
         />
       </>
     );

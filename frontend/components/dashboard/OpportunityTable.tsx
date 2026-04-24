@@ -3,12 +3,15 @@
 import React from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type {
+  CityDetail,
   DistributionPreviewPoint,
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import {
   formatTemperatureValue,
+  getModelView,
+  getProbabilityView,
   normalizeTemperatureLabel,
   normalizeTemperatureSymbol,
 } from "@/lib/dashboard-utils";
@@ -22,6 +25,13 @@ function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
   const numeric = Number(value);
   return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
+}
+
+function normalizeProbability(value?: number | null) {
+  if (value == null) return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.max(0, Math.min(1, numeric > 1 ? numeric / 100 : numeric));
 }
 
 function formatWindowMinutes(value: number | null | undefined, locale: string) {
@@ -199,6 +209,84 @@ function getEmosPeak(row: ScanOpportunityRow, tempSymbol?: string | null) {
   return { label: peakLabel, probability: peakProbability };
 }
 
+function getDetailForRow(
+  row: Pick<ScanOpportunityRow, "city" | "city_display_name" | "display_name">,
+  cityDetailsByName?: Record<string, CityDetail>,
+) {
+  if (!cityDetailsByName) return null;
+  const rowKeys = [row.city, row.city_display_name, row.display_name]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  return (
+    Object.entries(cityDetailsByName).find(([name, detail]) => {
+      const detailKeys = [name, detail.name, detail.display_name]
+        .map((value) => String(value || "").trim().toLowerCase())
+        .filter(Boolean);
+      return rowKeys.some((key) => detailKeys.includes(key));
+    })?.[1] || null
+  );
+}
+
+function getDetailPeak(
+  detail: CityDetail | null,
+  targetDate?: string | null,
+  tempSymbol?: string | null,
+) {
+  if (!detail) return null;
+  const view = getProbabilityView(detail, targetDate);
+  const buckets = Array.isArray(view.probabilitiesAll)
+    ? view.probabilitiesAll
+    : [];
+  const peak = [...buckets]
+    .filter((bucket) => normalizeProbability(bucket?.probability) != null)
+    .sort(
+      (a, b) =>
+        Number(normalizeProbability(b?.probability)) -
+        Number(normalizeProbability(a?.probability)),
+    )[0];
+  if (!peak) return null;
+  const peakValue = peak.value ?? null;
+  return {
+    label:
+      normalizeTemperatureLabel(peak.label || peak.bucket || peak.range, tempSymbol) ||
+      (peakValue != null ? formatTemperatureValue(Number(peakValue), tempSymbol) : "--"),
+    probability: Number(normalizeProbability(peak.probability)) * 100,
+  };
+}
+
+function getDetailBucketEventProbability(
+  detail: CityDetail | null,
+  row: ScanOpportunityRow,
+  tempSymbol?: string | null,
+) {
+  if (!detail) return null;
+  const view = getProbabilityView(detail, row.selected_date || row.local_date);
+  const buckets = Array.isArray(view.probabilitiesAll)
+    ? view.probabilitiesAll
+    : [];
+  if (!buckets.length) return null;
+  const targetLabel = normalizeTemperatureLabel(row.target_label, tempSymbol);
+  const targetValue =
+    row.target_value ?? row.target_threshold ?? row.target_lower ?? row.target_upper ?? null;
+  const matched =
+    buckets.find((bucket) => {
+      const label = normalizeTemperatureLabel(
+        bucket.label || bucket.bucket || bucket.range,
+        tempSymbol,
+      );
+      return Boolean(targetLabel && label && label === targetLabel);
+    }) ||
+    buckets.find((bucket) => {
+      const value = bucket.value;
+      return (
+        value != null &&
+        targetValue != null &&
+        Math.abs(Number(value) - Number(targetValue)) < 0.01
+      );
+    });
+  return normalizeProbability(matched?.probability);
+}
+
 type OpportunityGroup = {
   key: string;
   cityName: string;
@@ -213,10 +301,15 @@ type OpportunityGroup = {
   rows: ScanOpportunityRow[];
 };
 
-function buildOpportunityGroups(rows: ScanOpportunityRow[], locale: string): OpportunityGroup[] {
+function buildOpportunityGroups(
+  rows: ScanOpportunityRow[],
+  locale: string,
+  cityDetailsByName?: Record<string, CityDetail>,
+): OpportunityGroup[] {
   const groups = new Map<string, OpportunityGroup>();
   for (const row of rows) {
     const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
+    const detail = getDetailForRow(row, cityDetailsByName);
     const cityName = getLocalizedCityName(
       row.city,
       row.city_display_name || row.display_name || row.city,
@@ -224,7 +317,9 @@ function buildOpportunityGroups(rows: ScanOpportunityRow[], locale: string): Opp
     );
     const date = row.selected_date || row.local_date || "";
     const key = `${row.city || cityName}|${date}`;
-    const peak = getEmosPeak(row, tempSymbol);
+    const peak = getDetailPeak(detail, date, tempSymbol) || getEmosPeak(row, tempSymbol);
+    const modelView = detail ? getModelView(detail, date) : null;
+    const debPrediction = modelView?.deb ?? row.deb_prediction ?? null;
     const existing = groups.get(key);
     if (!existing) {
       groups.set(key, {
@@ -233,8 +328,8 @@ function buildOpportunityGroups(rows: ScanOpportunityRow[], locale: string): Opp
         date,
         tempSymbol,
         debLabel:
-          row.deb_prediction != null
-            ? formatTemperatureValue(Number(row.deb_prediction), tempSymbol, { digits: 1 })
+          debPrediction != null
+            ? formatTemperatureValue(Number(debPrediction), tempSymbol, { digits: 1 })
             : "--",
         peakLabel: peak.label,
         peakProbability: peak.probability,
@@ -269,6 +364,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
   loading,
   selectedRowId,
   onSelectRow,
+  cityDetailsByName,
 }: {
   rows: ScanOpportunityRow[];
   status?: string | null;
@@ -277,6 +373,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
   loading?: boolean;
   selectedRowId?: string | null;
   onSelectRow?: (row: ScanOpportunityRow) => void;
+  cityDetailsByName?: Record<string, CityDetail>;
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
@@ -284,8 +381,8 @@ export const OpportunityTable = React.memo(function OpportunityTable({
   const scanInProgress =
     loading || status === "partial" || status === "scanning";
   const groups = React.useMemo(
-    () => buildOpportunityGroups(rows, locale),
-    [rows, locale],
+    () => buildOpportunityGroups(rows, locale, cityDetailsByName),
+    [rows, locale, cityDetailsByName],
   );
 
   if (!hasRows) {
@@ -330,8 +427,13 @@ export const OpportunityTable = React.memo(function OpportunityTable({
         </div>
       ) : null}
       <div className="scan-table-body scan-opportunity-groups">
-        {groups.map((group) => (
-          <section key={group.key} className="scan-opportunity-group">
+        {groups.map((group) => {
+          const groupSelected = group.rows.some((row) => row.id === selectedRowId);
+          return (
+          <section
+            key={group.key}
+            className={`scan-opportunity-group ${groupSelected ? "selected" : ""}`}
+          >
             <button
               type="button"
               className="scan-opportunity-group-head"
@@ -371,24 +473,39 @@ export const OpportunityTable = React.memo(function OpportunityTable({
             <div className="scan-opportunity-items">
               {group.rows.map((row, rowIndex) => {
                 const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
-                const selected = selectedRowId === row.id;
                 const side = String(row.side || "").toLowerCase();
+                const detail = getDetailForRow(row, cityDetailsByName);
+                const detailEventProbability = getDetailBucketEventProbability(
+                  detail,
+                  row,
+                  tempSymbol,
+                );
                 const modelProbability =
-                  row.raw_model_event_probability != null
-                    ? row.raw_model_event_probability * 100
+                  detailEventProbability != null
+                    ? (side === "no" ? 1 - detailEventProbability : detailEventProbability) * 100
+                    : row.model_probability != null
+                      ? Number(row.model_probability) * 100
+                    : row.raw_model_event_probability != null
+                      ? (side === "no"
+                          ? 1 - Number(row.raw_model_event_probability)
+                          : Number(row.raw_model_event_probability)) * 100
                     : row.model_event_probability != null
-                      ? row.model_event_probability * 100
+                      ? (side === "no"
+                          ? 1 - Number(row.model_event_probability)
+                          : Number(row.model_event_probability)) * 100
                       : null;
+                const edgePercent =
+                  modelProbability != null && row.ask != null
+                    ? modelProbability - Number(row.ask) * 100
+                    : row.edge_percent;
                 const modelLabel = "EMOS";
                 const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
-                const edgePositive = Number(row.edge_percent || 0) >= 0;
+                const edgePositive = Number(edgePercent || 0) >= 0;
                 const aiMeta = getAiMeta(row, locale);
                 return (
-                  <button
+                  <div
                     key={row.id}
-                    type="button"
-                    className={`scan-opportunity-item ${selected ? "selected" : ""} ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
-                    onClick={() => onSelectRow?.(row)}
+                    className={`scan-opportunity-item ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
                   >
                     <span className="scan-opportunity-branch" aria-hidden="true">
                       <i />
@@ -409,7 +526,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                     <span className="scan-opportunity-stat edge">
                       <small>edge</small>
                       <b className={edgePositive ? "positive" : "negative"}>
-                        {formatPercent(row.edge_percent, true)}
+                        {formatPercent(edgePercent, true)}
                       </b>
                     </span>
                     {aiMeta ? (
@@ -418,12 +535,13 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                         {aiMeta.reason ? <small>{aiMeta.reason}</small> : null}
                       </span>
                     ) : null}
-                  </button>
+                  </div>
                 );
               })}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
