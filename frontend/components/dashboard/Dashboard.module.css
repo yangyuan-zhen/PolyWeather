@@ -10385,6 +10385,110 @@
   font-weight: 700;
 }
 
+.root :global(.scan-ai-log-panel) {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(68, 100, 150, 0.18);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(9, 23, 38, 0.92), rgba(7, 17, 30, 0.92)),
+    radial-gradient(circle at 0 0, rgba(34, 211, 238, 0.12), transparent 34%);
+}
+
+.root :global(.scan-ai-log-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.root :global(.scan-ai-log-head strong) {
+  color: #e9f5ff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-log-head span) {
+  color: #8fa8c7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-ai-log-list) {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.root :global(.scan-ai-log-list::-webkit-scrollbar) {
+  height: 5px;
+}
+
+.root :global(.scan-ai-log-list::-webkit-scrollbar-thumb) {
+  background: rgba(88, 125, 180, 0.26);
+  border-radius: 999px;
+}
+
+.root :global(.scan-ai-log-item) {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  gap: 8px;
+  min-width: 260px;
+  padding: 9px 10px;
+  border: 1px solid rgba(68, 100, 150, 0.16);
+  border-radius: 12px;
+  background: rgba(14, 29, 48, 0.76);
+}
+
+.root :global(.scan-ai-log-item b) {
+  display: block;
+  color: #edf7ff;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.root :global(.scan-ai-log-item small) {
+  display: block;
+  margin-top: 3px;
+  color: #9fb4d2;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.root :global(.scan-ai-log-time) {
+  color: #7892b1;
+  font-size: 11px;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.root :global(.scan-ai-log-item.info) {
+  border-color: rgba(56, 189, 248, 0.22);
+}
+
+.root :global(.scan-ai-log-item.success) {
+  border-color: rgba(16, 185, 129, 0.32);
+}
+
+.root :global(.scan-ai-log-item.warning) {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.root :global(.scan-ai-log-item.error) {
+  border-color: rgba(248, 113, 113, 0.34);
+}
+
+.root :global(.scan-ai-log-empty) {
+  color: #8fa8c7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .root :global(.scan-detail-panel) {
   width: auto;
   min-width: 0;
@@ -10990,6 +11094,47 @@
 
 .root :global(.scan-terminal.light .scan-opportunity-ai small) {
   color: #647a98;
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-panel) {
+  border-color: rgba(35, 72, 118, 0.12);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(246, 250, 255, 0.9));
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-head strong),
+.root :global(.scan-terminal.light .scan-ai-log-item b) {
+  color: #122033;
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-head span),
+.root :global(.scan-terminal.light .scan-ai-log-time),
+.root :global(.scan-terminal.light .scan-ai-log-empty) {
+  color: #647a98;
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item) {
+  border-color: rgba(35, 72, 118, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item small) {
+  color: #58708f;
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item.info) {
+  border-color: rgba(14, 165, 233, 0.24);
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item.success) {
+  border-color: rgba(10, 160, 100, 0.28);
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item.warning) {
+  border-color: rgba(217, 119, 6, 0.28);
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-item.error) {
+  border-color: rgba(220, 38, 38, 0.28);
 }
 
 .root :global(.scan-terminal.light .scan-cta-ghost),

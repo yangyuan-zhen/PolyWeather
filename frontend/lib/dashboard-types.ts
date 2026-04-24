@@ -547,9 +547,26 @@ export interface PrimarySignal extends ScanOpportunityRow {}
 
 export interface ScanAiReview {
   status?: "ready" | "disabled" | "missing_key" | "failed" | "no_rows" | "no_snapshot" | "snapshot_mismatch" | string;
+  stage?: "completed" | "fallback" | string | null;
   model?: string | null;
   cached?: boolean;
   generated_at?: string | null;
+  snapshot_id?: string | null;
+  input_rows?: number | null;
+  sent_rows?: number | null;
+  duration_ms?: number | null;
+  timeout_sec?: number | null;
+  cache_ttl_sec?: number | null;
+  provider?: string | null;
+  base_url?: string | null;
+  finish_reason?: string | null;
+  usage?: {
+    prompt_tokens?: number | null;
+    completion_tokens?: number | null;
+    total_tokens?: number | null;
+    prompt_cache_hit_tokens?: number | null;
+    prompt_cache_miss_tokens?: number | null;
+  } | null;
   reason?: string | null;
   summary_zh?: string | null;
   summary_en?: string | null;

@@ -437,7 +437,13 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(data, dict)
         else None
     )
-    return _extract_ai_json_object(str(content or ""))
+    parsed = _extract_ai_json_object(str(content or ""))
+    if isinstance(data, dict):
+        parsed["_polyweather_meta"] = {
+            "usage": data.get("usage"),
+            "finish_reason": ((data.get("choices") or [{}])[0] or {}).get("finish_reason"),
+        }
+    return parsed
 
 
 def _normalize_ai_items(raw_items: Any) -> List[Dict[str, Any]]:
@@ -454,7 +460,14 @@ def _normalize_ai_items(raw_items: Any) -> List[Dict[str, Any]]:
     return out
 
 
-def _merge_scan_ai_result(payload: Dict[str, Any], ai_raw: Dict[str, Any], *, cached: bool = False) -> Dict[str, Any]:
+def _merge_scan_ai_result(
+    payload: Dict[str, Any],
+    ai_raw: Dict[str, Any],
+    *,
+    cached: bool = False,
+    duration_ms: Optional[int] = None,
+    input_rows: Optional[int] = None,
+) -> Dict[str, Any]:
     rows = [dict(row) for row in (payload.get("rows") or []) if isinstance(row, dict)]
     by_id = {str(row.get("id")): row for row in rows if row.get("id")}
     recommendations = _normalize_ai_items(ai_raw.get("recommendations"))
@@ -523,15 +536,28 @@ def _merge_scan_ai_result(payload: Dict[str, Any], ai_raw: Dict[str, Any], *, ca
     )
     ai_scan = {
         "status": "ready",
+        "stage": "completed",
         "model": SCAN_AI_MODEL,
         "cached": cached,
         "generated_at": datetime.utcnow().isoformat() + "Z",
+        "snapshot_id": payload.get("snapshot_id"),
+        "input_rows": input_rows if input_rows is not None else len(payload.get("rows") or []),
+        "sent_rows": min(len(payload.get("rows") or []), SCAN_AI_MAX_ROWS),
+        "duration_ms": duration_ms,
+        "timeout_sec": SCAN_AI_TIMEOUT_SEC,
+        "cache_ttl_sec": SCAN_AI_CACHE_TTL_SEC,
+        "provider": "deepseek",
+        "base_url": SCAN_AI_BASE_URL,
         "summary_zh": ai_raw.get("summary_zh"),
         "summary_en": ai_raw.get("summary_en"),
         "recommended_count": sum(1 for row in rows if row.get("ai_rank") is not None),
         "vetoed_count": sum(1 for row in rows if row.get("ai_decision") == "veto"),
         "downgraded_count": sum(1 for row in rows if row.get("ai_decision") == "downgrade"),
     }
+    meta = ai_raw.get("_polyweather_meta")
+    if isinstance(meta, dict):
+        ai_scan["usage"] = meta.get("usage")
+        ai_scan["finish_reason"] = meta.get("finish_reason")
     merged = {
         **payload,
         "rows": rows,
@@ -546,14 +572,24 @@ def _build_scan_ai_unavailable_payload(
     *,
     status: str,
     reason: str,
+    duration_ms: Optional[int] = None,
 ) -> Dict[str, Any]:
     return {
         **payload,
         "ai_scan": {
             "status": status,
+            "stage": "fallback",
             "model": SCAN_AI_MODEL,
             "cached": False,
             "generated_at": datetime.utcnow().isoformat() + "Z",
+            "snapshot_id": payload.get("snapshot_id"),
+            "input_rows": len(payload.get("rows") or []),
+            "sent_rows": min(len(payload.get("rows") or []), SCAN_AI_MAX_ROWS),
+            "duration_ms": duration_ms,
+            "timeout_sec": SCAN_AI_TIMEOUT_SEC,
+            "cache_ttl_sec": SCAN_AI_CACHE_TTL_SEC,
+            "provider": "deepseek",
+            "base_url": SCAN_AI_BASE_URL,
             "reason": reason,
         },
     }
@@ -926,6 +962,7 @@ def build_scan_terminal_ai_payload(
     *,
     snapshot_id: Optional[str] = None,
 ) -> Dict[str, Any]:
+    ai_started_at = time.time()
     filters = _normalize_scan_terminal_filters(raw_filters)
     payload = build_scan_terminal_payload(filters, force_refresh=False)
     current_snapshot_id = str(payload.get("snapshot_id") or "").strip()
@@ -963,17 +1000,58 @@ def build_scan_terminal_ai_payload(
 
     cached = _get_cached_scan_ai_result(current_snapshot_id, filters)
     if cached is not None:
-        return _merge_scan_ai_result(payload, cached, cached=True)
+        logger.info(
+            "scan terminal AI cache hit snapshot={} rows={}",
+            current_snapshot_id,
+            len(payload.get("rows") or []),
+        )
+        return _merge_scan_ai_result(
+            payload,
+            cached,
+            cached=True,
+            duration_ms=0,
+            input_rows=len(payload.get("rows") or []),
+        )
 
     try:
         ai_input = _build_scan_ai_prompt(payload)
+        sent_rows = len(ai_input.get("candidates") or [])
+        logger.info(
+            "scan terminal AI review start snapshot={} rows={} sent_rows={} model={}",
+            current_snapshot_id,
+            len(payload.get("rows") or []),
+            sent_rows,
+            SCAN_AI_MODEL,
+        )
         ai_raw = _call_deepseek_scan_ai(ai_input)
         _set_cached_scan_ai_result(current_snapshot_id, filters, ai_raw)
-        return _merge_scan_ai_result(payload, ai_raw, cached=False)
+        duration_ms = int((time.time() - ai_started_at) * 1000)
+        logger.info(
+            "scan terminal AI review complete snapshot={} duration_ms={} recommendations={} vetoed={} downgraded={}",
+            current_snapshot_id,
+            duration_ms,
+            len(_normalize_ai_items(ai_raw.get("recommendations"))),
+            len(_normalize_ai_items(ai_raw.get("vetoed"))),
+            len(_normalize_ai_items(ai_raw.get("downgraded"))),
+        )
+        return _merge_scan_ai_result(
+            payload,
+            ai_raw,
+            cached=False,
+            duration_ms=duration_ms,
+            input_rows=len(payload.get("rows") or []),
+        )
     except Exception as exc:
-        logger.warning("scan terminal AI review failed: {}", exc)
+        duration_ms = int((time.time() - ai_started_at) * 1000)
+        logger.warning(
+            "scan terminal AI review failed snapshot={} duration_ms={} error={}",
+            current_snapshot_id,
+            duration_ms,
+            exc,
+        )
         return _build_scan_ai_unavailable_payload(
             payload,
             status="failed",
             reason=str(exc),
+            duration_ms=duration_ms,
         )

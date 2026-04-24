@@ -60,6 +60,29 @@ interface FilterState extends ScanTerminalFilters {}
 
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
+type ScanAiLogTone = "info" | "success" | "warning" | "error";
+
+type ScanAiLogEntry = {
+  id: string;
+  time: string;
+  tone: ScanAiLogTone;
+  title: string;
+  detail?: string | null;
+};
+
+function formatLogTime() {
+  const now = new Date();
+  return `${String(now.getHours()).padStart(2, "0")}:${String(
+    now.getMinutes(),
+  ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
+}
+
+function formatDuration(ms?: number | null) {
+  if (ms == null || !Number.isFinite(Number(ms))) return "--";
+  if (Number(ms) < 1000) return `${Math.round(Number(ms))}ms`;
+  return `${(Number(ms) / 1000).toFixed(1)}s`;
+}
+
 function formatShortDate(value?: string | null, locale = "zh-CN") {
   const text = String(value || "").trim();
   if (!text) return "--";
@@ -245,9 +268,14 @@ function ScanTerminalScreen() {
   const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
+  const [aiLogs, setAiLogs] = useState<ScanAiLogEntry[]>([]);
   const [userLocalTime, setUserLocalTime] = useState("--");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const deferredRows = useDeferredValue(terminalData?.rows || []);
+
+  const prependAiLogs = (entries: ScanAiLogEntry[]) => {
+    setAiLogs((current) => [...entries, ...current].slice(0, 8));
+  };
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(deferredRows),
     [deferredRows],
@@ -370,6 +398,17 @@ function ScanTerminalScreen() {
           return sortRowsByUserTime(response.rows)[0]?.id || response.top_signal?.id || null;
         });
       });
+      prependAiLogs([
+        {
+          id: `rule-${Date.now()}`,
+          time: formatLogTime(),
+          tone: response.rows.length ? "success" : "warning",
+          title: isEn ? "Rule scan snapshot ready" : "规则扫描快照已就绪",
+          detail: isEn
+            ? `snapshot ${response.snapshot_id || "--"} · ${response.rows.length} visible rows`
+            : `快照 ${response.snapshot_id || "--"} · 可见候选 ${response.rows.length} 条`,
+        },
+      ]);
     } catch (fetchError) {
       setError(String(fetchError));
     } finally {
@@ -378,14 +417,51 @@ function ScanTerminalScreen() {
   };
 
   const runAiReview = async () => {
-    if (!terminalData?.rows.length || aiLoading) return;
+    if (aiLoading) return;
+    if (!terminalData?.rows.length) {
+      prependAiLogs([
+        {
+          id: `no-rows-${Date.now()}`,
+          time: formatLogTime(),
+          tone: "warning",
+          title: isEn ? "V4 not started" : "V4 未启动",
+          detail: isEn
+            ? "Run the rule scan first. V4 only reviews existing candidate rows."
+            : "需要先完成规则扫描。V4 只复核已有候选，不会凭空抓市场。",
+        },
+      ]);
+      return;
+    }
+    const snapshotId = terminalData.snapshot_id || null;
+    const rowCount = terminalData.rows.length;
+    prependAiLogs([
+      {
+        id: `queued-${Date.now()}`,
+        time: formatLogTime(),
+        tone: "info",
+        title: isEn ? "V4 review queued" : "V4 复核已排队",
+        detail: isEn
+          ? `snapshot ${snapshotId || "--"} · ${rowCount} rule candidates`
+          : `快照 ${snapshotId || "--"} · 规则候选 ${rowCount} 条`,
+      },
+      {
+        id: `send-${Date.now() + 1}`,
+        time: formatLogTime(),
+        tone: "info",
+        title: isEn ? "Sending compact candidate set" : "正在发送精简候选集",
+        detail: isEn
+          ? "VPS will call DeepSeek; Vercel only proxies the request."
+          : "由 VPS 调用 DeepSeek，Vercel 只做短代理。",
+      },
+    ]);
     setAiLoading(true);
     setAiError(null);
     try {
       const response = await dashboardClient.reviewScanTerminalWithAi({
         filters: terminalData.filters || activeFilters,
-        snapshotId: terminalData.snapshot_id || null,
+        snapshotId,
       });
+      const review = response.ai_scan;
       startTransition(() => {
         setTerminalData(response);
         setActiveFilters(response.filters || activeFilters);
@@ -397,8 +473,55 @@ function ScanTerminalScreen() {
           return sortRowsByUserTime(response.rows)[0]?.id || response.top_signal?.id || null;
         });
       });
+      prependAiLogs([
+        {
+          id: `done-${Date.now()}`,
+          time: formatLogTime(),
+          tone: review?.status === "ready" ? "success" : "warning",
+          title:
+            review?.status === "ready"
+              ? review.cached
+                ? isEn
+                  ? "V4 cache hit"
+                  : "V4 命中缓存"
+                : isEn
+                  ? "V4 review completed"
+                  : "V4 复核完成"
+              : isEn
+                ? "V4 fell back to rule scan"
+                : "V4 已回退规则扫描",
+          detail:
+            review?.status === "ready"
+              ? isEn
+                ? `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · sent ${review.sent_rows ?? "--"} rows · ${review.recommended_count ?? 0} picks / ${review.vetoed_count ?? 0} veto`
+                : `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · 发送 ${review.sent_rows ?? "--"} 条 · 推荐 ${review.recommended_count ?? 0} / 排除 ${review.vetoed_count ?? 0}`
+              : review?.reason || (isEn ? "No AI result returned." : "没有返回 AI 结果。"),
+        },
+        ...(review?.usage
+          ? [
+              {
+                id: `usage-${Date.now() + 1}`,
+                time: formatLogTime(),
+                tone: "info" as const,
+                title: isEn ? "Token usage" : "Token 用量",
+                detail: isEn
+                  ? `input ${review.usage.prompt_tokens ?? "--"} · output ${review.usage.completion_tokens ?? "--"} · total ${review.usage.total_tokens ?? "--"}`
+                  : `输入 ${review.usage.prompt_tokens ?? "--"} · 输出 ${review.usage.completion_tokens ?? "--"} · 总计 ${review.usage.total_tokens ?? "--"}`,
+              },
+            ]
+          : []),
+      ]);
     } catch (reviewError) {
       setAiError(String(reviewError));
+      prependAiLogs([
+        {
+          id: `error-${Date.now()}`,
+          time: formatLogTime(),
+          tone: "error",
+          title: isEn ? "V4 request failed" : "V4 请求失败",
+          detail: String(reviewError),
+        },
+      ]);
     } finally {
       setAiLoading(false);
     }
@@ -746,6 +869,43 @@ function ScanTerminalScreen() {
                 ) : null}
               </div>
             </div>
+            {isPro ? (
+              <div className="scan-ai-log-panel">
+                <div className="scan-ai-log-head">
+                  <strong>{isEn ? "V4 run log" : "V4 运行日志"}</strong>
+                  <span>
+                    {aiLoading
+                      ? isEn
+                        ? "Waiting for DeepSeek response"
+                        : "正在等待 DeepSeek 返回"
+                      : aiScan?.status
+                        ? `${aiScan.model || "V4"} · ${aiScan.status}`
+                        : isEn
+                          ? "No V4 request yet"
+                          : "还没有发起 V4 请求"}
+                  </span>
+                </div>
+                <div className="scan-ai-log-list">
+                  {aiLogs.length ? (
+                    aiLogs.map((entry) => (
+                      <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
+                        <span className="scan-ai-log-time">{entry.time}</span>
+                        <div>
+                          <b>{entry.title}</b>
+                          {entry.detail ? <small>{entry.detail}</small> : null}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="scan-ai-log-empty">
+                      {isEn
+                        ? "After a rule scan, click AI Deep Scan to see request and result logs here."
+                        : "规则扫描完成后点击 AI 深度扫描，这里会显示请求和返回日志。"}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : null}
 
             {scanStatus === "failed" && !terminalData ? (
               <div className="scan-empty-state">
