@@ -9380,6 +9380,7 @@
   color: #031411;
   font-size: 14px;
   font-weight: 900;
+  text-decoration: none;
   box-shadow: 0 10px 24px rgba(14, 185, 109, 0.18);
   cursor: pointer;
 }
@@ -10216,9 +10217,16 @@
   color: #8fa4c3;
 }
 
+.root :global(.scan-calendar-subtitle) {
+  margin-top: 4px;
+  color: #7f96b6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .root :global(.scan-calendar-grid) {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 12px;
   padding: 14px;
 }
@@ -10234,10 +10242,24 @@
 .root :global(.scan-calendar-card) {
   text-align: left;
   padding: 14px;
+  cursor: pointer;
 }
 
 .root :global(.scan-calendar-card.selected) {
   box-shadow: inset 0 0 0 1px rgba(23, 217, 139, 0.42);
+}
+
+.root :global(.scan-calendar-card.peak-active) {
+  border-color: rgba(23, 217, 139, 0.34);
+  background: linear-gradient(180deg, rgba(12, 42, 38, 0.9), rgba(8, 20, 30, 0.94));
+}
+
+.root :global(.scan-calendar-card.peak-next) {
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+.root :global(.scan-calendar-card.peak-past) {
+  opacity: 0.78;
 }
 
 .root :global(.scan-calendar-city) {
@@ -10248,8 +10270,25 @@
 
 .root :global(.scan-calendar-action) {
   margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 15px;
   font-weight: 800;
+  color: #dcecff;
+}
+
+.root :global(.scan-calendar-action span) {
+  color: #8fa4c3;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-calendar-action b) {
+  color: #eef7ff;
+  font-size: 16px;
+  font-weight: 900;
 }
 
 .root :global(.scan-calendar-action.buy) {
@@ -10264,8 +10303,28 @@
   margin-top: 10px;
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   color: #8fa4c3;
   font-size: 13px;
+}
+
+.root :global(.scan-calendar-countdown) {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 12px;
+  background: rgba(20, 184, 166, 0.1);
+  color: #5fffe8;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.root :global(.scan-calendar-countdown small) {
+  display: block;
+  margin-top: 4px;
+  color: #9fb4d2;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .root :global(.scan-summary-grid) {
@@ -11367,6 +11426,27 @@
 
 .root :global(.scan-terminal.light .scan-mode-tab.active .scan-mode-tab-sub) {
   color: #426b5f;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-subtitle),
+.root :global(.scan-terminal.light .scan-calendar-action span),
+.root :global(.scan-terminal.light .scan-calendar-countdown small) {
+  color: #647a98;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-action b) {
+  color: #122033;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-countdown) {
+  border-color: rgba(10, 160, 100, 0.18);
+  background: rgba(220, 252, 239, 0.68);
+  color: #087b55;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-card.peak-active) {
+  border-color: rgba(10, 160, 100, 0.34);
+  background: linear-gradient(180deg, rgba(220, 252, 239, 0.84), rgba(255, 255, 255, 0.86));
 }
 
 .root :global(.scan-terminal.light .scan-mode-tab.active .scan-mode-icon) {

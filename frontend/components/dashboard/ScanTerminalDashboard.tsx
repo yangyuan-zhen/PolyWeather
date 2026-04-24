@@ -3,10 +3,9 @@
 import clsx from "clsx";
 import Link from "next/link";
 import {
+  LogIn,
   RefreshCw,
   Moon,
-  Search,
-  Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -41,7 +40,10 @@ import type {
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
-import { formatTemperatureValue } from "@/lib/dashboard-utils";
+import {
+  formatTemperatureValue,
+  normalizeTemperatureLabel,
+} from "@/lib/dashboard-utils";
 
 const DEFAULT_FILTERS: FilterState = {
   scan_mode: "tradable",
@@ -92,6 +94,111 @@ function formatShortDate(value?: string | null, locale = "zh-CN") {
   return locale === "en-US"
     ? date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+}
+
+function formatCountdownMinutes(value?: number | null, locale = "zh-CN") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "--";
+  const minutes = Math.max(0, Math.round(Math.abs(numeric)));
+  const hours = Math.floor(minutes / 60);
+  const remains = minutes % 60;
+  if (locale === "en-US") {
+    if (hours <= 0) return `${remains}m`;
+    if (remains <= 0) return `${hours}h`;
+    return `${hours}h ${remains}m`;
+  }
+  if (hours <= 0) return `${remains} 分钟`;
+  if (remains <= 0) return `${hours} 小时`;
+  return `${hours} 小时 ${remains} 分钟`;
+}
+
+function getPeakWindowLabel(row: ScanOpportunityRow) {
+  const direct = String(row.peak_window_label || "").trim();
+  if (direct) return direct;
+  const start = String(row.peak_window_start || "").trim();
+  const end = String(row.peak_window_end || "").trim();
+  if (start && end) return `${start}-${end}`;
+  return "--";
+}
+
+function getPeakCountdownMeta(row: ScanOpportunityRow, locale = "zh-CN") {
+  const isEn = locale === "en-US";
+  const phase = String(row.window_phase || "").toLowerCase();
+  const startDelta = Number(row.minutes_until_peak_start);
+  const endDelta = Number(row.minutes_until_peak_end);
+  const hasStart = Number.isFinite(startDelta);
+  const hasEnd = Number.isFinite(endDelta);
+
+  if (phase === "active_peak" || (hasStart && startDelta <= 0 && hasEnd && endDelta >= 0)) {
+    return {
+      key: "active",
+      groupLabel: isEn ? "Peak window now" : "峰值窗口进行中",
+      tone: "active",
+      sort: 0,
+      title: isEn ? "At peak window" : "已进入峰值窗口",
+      detail:
+        hasEnd && endDelta >= 0
+          ? isEn
+            ? `${formatCountdownMinutes(endDelta, locale)} left`
+            : `剩余 ${formatCountdownMinutes(endDelta, locale)}`
+          : getPeakWindowLabel(row),
+    };
+  }
+
+  if (hasStart && startDelta > 0 && startDelta <= 180) {
+    return {
+      key: "next",
+      groupLabel: isEn ? "Next 3 hours" : "未来 3 小时到峰值",
+      tone: "next",
+      sort: 1000 + startDelta,
+      title: isEn
+        ? `${formatCountdownMinutes(startDelta, locale)} to peak`
+        : `还有 ${formatCountdownMinutes(startDelta, locale)} 到峰值`,
+      detail: getPeakWindowLabel(row),
+    };
+  }
+
+  if (hasStart && startDelta > 0 && startDelta <= 1440) {
+    return {
+      key: "today",
+      groupLabel: isEn ? "Later today" : "今日稍后",
+      tone: "upcoming",
+      sort: 2000 + startDelta,
+      title: isEn
+        ? `${formatCountdownMinutes(startDelta, locale)} to peak`
+        : `还有 ${formatCountdownMinutes(startDelta, locale)} 到峰值`,
+      detail: getPeakWindowLabel(row),
+    };
+  }
+
+  if (hasStart && startDelta > 1440) {
+    return {
+      key: "later",
+      groupLabel: isEn ? "Later sessions" : "后续交易时段",
+      tone: "later",
+      sort: 3000 + startDelta,
+      title: isEn
+        ? `${formatCountdownMinutes(startDelta, locale)} to peak`
+        : `还有 ${formatCountdownMinutes(startDelta, locale)} 到峰值`,
+      detail: getPeakWindowLabel(row),
+    };
+  }
+
+  return {
+    key: "past",
+    groupLabel: isEn ? "Past peak" : "峰值已过",
+    tone: "past",
+    sort: 9000 + Math.abs(startDelta || 0),
+    title:
+      hasEnd && endDelta < 0
+        ? isEn
+          ? `Peak passed ${formatCountdownMinutes(endDelta, locale)} ago`
+          : `峰值已过 ${formatCountdownMinutes(endDelta, locale)}`
+        : isEn
+          ? "Peak window passed"
+          : "峰值窗口已过",
+    detail: getPeakWindowLabel(row),
+  };
 }
 
 function formatUserLocalTime() {
@@ -194,18 +301,14 @@ function ScanAiAnalysisView({
   response,
   rows,
   logs,
-  loading,
   error,
   locale,
-  onRunAi,
 }: {
   response: ScanTerminalResponse | null;
   rows: ScanOpportunityRow[];
   logs: ScanAiLogEntry[];
-  loading: boolean;
   error?: string | null;
   locale: string;
-  onRunAi: () => void;
 }) {
   const isEn = locale === "en-US";
   const aiScan = response?.ai_scan || null;
@@ -264,25 +367,10 @@ function ScanAiAnalysisView({
               : error ||
                 aiScan?.reason ||
                 (isEn
-                  ? "Click AI Deep Scan after a rule scan to generate city theses and contract decisions."
-                  : "规则扫描后点击 AI 深度扫描，生成每城 thesis 和合约推荐/排除理由。")}
+                  ? "V4 analysis appears inside each opportunity row when AI review data is available."
+                  : "当 AI 复核数据可用时，V4 分析会展示在每条机会的展开层中。")}
           </p>
         </div>
-        <button
-          type="button"
-          className="scan-ai-inline-button"
-          onClick={onRunAi}
-          disabled={loading || !rows.length}
-        >
-          <Sparkles size={14} className={loading ? "spin" : undefined} />
-          {loading
-            ? isEn
-              ? "Analyzing..."
-              : "分析中..."
-            : isEn
-              ? "Run V4"
-              : "运行 V4"}
-        </button>
       </section>
 
       <section className="scan-ai-log-panel in-tab">
@@ -348,7 +436,11 @@ function ScanAiAnalysisView({
                   return (
                     <div key={row.id} className={`scan-ai-contract ${decision}`}>
                       <div>
-                        <b>{row.action || row.target_label || row.market_question || row.id}</b>
+                        <b>
+                          {normalizeTemperatureLabel(row.action || row.target_label, tempSymbol) ||
+                            row.market_question ||
+                            row.id}
+                        </b>
                         <small>
                           {row.deb_prediction != null
                             ? `DEB ${formatTemperatureValue(row.deb_prediction, tempSymbol)} · `
@@ -440,15 +532,36 @@ function CalendarView({
   onSelectRow: (row: ScanOpportunityRow) => void;
 }) {
   const groups = useMemo(() => {
-    const byDate = new Map<string, ScanOpportunityRow[]>();
+    const order = ["active", "next", "today", "later", "past"];
+    const byPhase = new Map<
+      string,
+      {
+        label: string;
+        sort: number;
+        items: Array<{ row: ScanOpportunityRow; meta: ReturnType<typeof getPeakCountdownMeta> }>;
+      }
+    >();
     rows.forEach((row) => {
-      const key = String(row.selected_date || row.local_date || "unknown");
-      const list = byDate.get(key) || [];
-      list.push(row);
-      byDate.set(key, list);
+      const meta = getPeakCountdownMeta(row, locale);
+      const current = byPhase.get(meta.key) || {
+        label: meta.groupLabel,
+        sort: order.indexOf(meta.key) >= 0 ? order.indexOf(meta.key) : order.length,
+        items: [],
+      };
+      current.items.push({ row, meta });
+      byPhase.set(meta.key, current);
     });
-    return Array.from(byDate.entries()).sort(([left], [right]) => left.localeCompare(right));
-  }, [rows]);
+    return Array.from(byPhase.entries())
+      .sort(([, left], [, right]) => left.sort - right.sort)
+      .map(([key, group]) => ({
+        key,
+        label: group.label,
+        items: group.items.sort((left, right) => {
+          if (left.meta.sort !== right.meta.sort) return left.meta.sort - right.meta.sort;
+          return Number(right.row.edge_percent || 0) - Number(left.row.edge_percent || 0);
+        }),
+      }));
+  }, [locale, rows]);
 
   if (!groups.length) {
     return (
@@ -462,20 +575,27 @@ function CalendarView({
 
   return (
     <div className="scan-calendar-view">
-      {groups.map(([date, items]) => (
-        <section key={date} className="scan-calendar-group">
+      {groups.map((group) => (
+        <section key={group.key} className="scan-calendar-group">
           <div className="scan-calendar-group-head">
-            <div className="scan-calendar-date">{formatShortDate(date, locale)}</div>
+            <div>
+              <div className="scan-calendar-date">{group.label}</div>
+              <div className="scan-calendar-subtitle">
+                {locale === "en-US"
+                  ? "Ordered by DEB peak-window countdown"
+                  : "按 DEB 峰值窗口倒计时排序"}
+              </div>
+            </div>
             <div className="scan-calendar-count">
-              {locale === "en-US" ? `${items.length} rows` : `${items.length} 条`}
+              {locale === "en-US" ? `${group.items.length} rows` : `${group.items.length} 条`}
             </div>
           </div>
           <div className="scan-calendar-grid">
-            {items.map((row) => (
+            {group.items.map(({ row, meta }) => (
               <button
                 key={row.id}
                 type="button"
-                className={`scan-calendar-card ${selectedRowId === row.id ? "selected" : ""}`}
+                className={`scan-calendar-card peak-${meta.tone} ${selectedRowId === row.id ? "selected" : ""}`}
                 onClick={() => onSelectRow(row)}
               >
                 {(() => {
@@ -490,14 +610,22 @@ function CalendarView({
                     locale,
                   )}
                 </div>
+                <div className="scan-calendar-countdown">
+                  {meta.title}
+                  <small>{meta.detail}</small>
+                </div>
                 <div className="scan-calendar-action">
-                  {locale === "en-US" ? "DEB high" : "DEB 预测高点"} ·{" "}
-                  {row.deb_prediction != null
-                    ? formatTemperatureValue(row.deb_prediction, tempSymbol)
-                    : "--"}
+                  <span>{locale === "en-US" ? "DEB high" : "DEB 预测高点"}</span>
+                  <b>
+                    {row.deb_prediction != null
+                      ? formatTemperatureValue(row.deb_prediction, tempSymbol)
+                      : "--"}
+                  </b>
                 </div>
                 <div className="scan-calendar-meta">
-                  <span>{row.local_time || "--"}</span>
+                  <span>
+                    {formatShortDate(row.selected_date || row.local_date, locale)} · {row.local_time || "--"}
+                  </span>
                   <span>{phaseMeta.label}</span>
                 </div>
                     </>
@@ -1026,51 +1154,20 @@ function ScanTerminalScreen() {
               <span className="scan-topbar-time">
                 {userLocalTime}
               </span>
-              {isPro ? (
-                <>
-                  <button
-                    type="button"
-                    className="scan-primary-button"
-                    onClick={() => void fetchTerminal(activeFilters, true)}
-                    disabled={loading}
-                  >
-                    <Search size={14} />
-                    {loading
-                      ? isEn
-                        ? "Scanning..."
-                        : "扫描中..."
-                      : isEn
-                        ? "Start Scan"
-                        : "开始扫描"}
-                  </button>
-                  <button
-                    type="button"
-                    className="scan-ai-button"
-                    onClick={() => void runAiReview()}
-                    disabled={aiLoading || loading || !terminalData?.rows.length}
-                    title={isEn ? "Run V4-Flash deep scan" : "运行 V4-Flash 深度扫描"}
-                  >
-                    <Sparkles size={14} className={aiLoading ? "spin" : undefined} />
-                    {aiLoading
-                      ? isEn
-                        ? "V4..."
-                        : "V4 扫描中"
-                      : isEn
-                        ? "AI Deep Scan"
-                        : "AI 深度扫描"}
-                  </button>
-                </>
-              ) : (
+              {isPro ? null : store.proAccess.authenticated ? (
                 <button
                   type="button"
                   className="scan-primary-button"
                   onClick={openScanPaywall}
                 >
                   <UserRound size={14} />
-                  {store.proAccess.authenticated
-                    ? isEn ? "Upgrade Pro" : "升级 Pro"
-                    : isEn ? "Sign in" : "登录"}
+                  {isEn ? "Upgrade Pro" : "升级 Pro"}
                 </button>
+              ) : (
+                <Link href={accountHref} className="scan-primary-button">
+                  <LogIn size={14} />
+                  {isEn ? "Sign in" : "登录"}
+                </Link>
               )}
               <button
                 type="button"
@@ -1087,14 +1184,16 @@ function ScanTerminalScreen() {
                   {isEn ? "Refresh" : "刷新"}
                 </button>
               ) : null}
-              <Link
-                href={accountHref}
-                className="scan-account-button"
-                aria-label={isEn ? "Account" : "账户"}
-                title={isEn ? "Account" : "账户"}
-              >
-                <UserRound size={15} />
-              </Link>
+              {store.proAccess.authenticated ? (
+                <Link
+                  href={accountHref}
+                  className="scan-account-button"
+                  aria-label={isEn ? "Account" : "账户"}
+                  title={isEn ? "Account" : "账户"}
+                >
+                  <UserRound size={15} />
+                </Link>
+              ) : null}
             </div>
           </div>
 

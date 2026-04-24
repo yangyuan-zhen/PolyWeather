@@ -55,9 +55,10 @@ function formatAction(
 ) {
   const formattedTarget = normalizeTemperatureLabel(row.target_label, tempSymbol);
   if (row.action) {
-    return row.target_label
+    const normalizedAction = row.target_label
       ? row.action.replace(String(row.target_label), formattedTarget || String(row.target_label))
       : row.action;
+    return normalizeTemperatureLabel(normalizedAction, tempSymbol);
   }
   if (row.side === "yes") {
     return `${locale === "en-US" ? "Buy Yes" : "买入 Yes"} ${formattedTarget || ""}`.trim();
@@ -131,13 +132,19 @@ function formatQuoteCents(value?: number | null) {
   return `${text.replace(/\.0$/, "")}¢`;
 }
 
-function formatTradeSide(row: ScanOpportunityRow, locale: string) {
+function formatTradeSide(
+  row: ScanOpportunityRow,
+  locale: string,
+  tempSymbol?: string | null,
+) {
   const side = String(row.side || "").toLowerCase();
   if (side === "yes") return "BUY YES";
   if (side === "no") return "BUY NO";
   if (row.action) {
-    return String(row.action)
-      .replace(String(row.target_label || ""), "")
+    return normalizeTemperatureLabel(
+      String(row.action).replace(String(row.target_label || ""), ""),
+      tempSymbol,
+    )
       .replace(/\s+/g, " ")
       .trim()
       .toUpperCase();
@@ -866,8 +873,8 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                   ) ||
                   getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en) ||
                   (isEn
-                    ? `${group.cityName} thesis: validate this ${formatTradeSide(row, locale)} against the full model cluster before sizing.`
-                    : `${group.cityName} thesis：该 ${formatTradeSide(row, locale)} 需要先结合全部模型集群确认，再考虑仓位。`);
+                    ? `${group.cityName} thesis: validate this ${formatTradeSide(row, locale, tempSymbol)} against the full model cluster before sizing.`
+                    : `${group.cityName} thesis：该 ${formatTradeSide(row, locale, tempSymbol)} 需要先结合全部模型集群确认，再考虑仓位。`);
                 const modelSources = formatModelSources(row, tempSymbol);
                 return (
                   <div
@@ -880,7 +887,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                     </span>
                     <span className="scan-opportunity-trade">
                       <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
-                        {formatTradeSide(row, locale)}
+                        {formatTradeSide(row, locale, tempSymbol)}
                       </strong>
                     </span>
                     <span className="scan-opportunity-stat threshold">

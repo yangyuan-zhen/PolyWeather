@@ -521,6 +521,11 @@ export interface ScanOpportunityRow {
   window_phase?: string | null;
   window_score?: number | null;
   remaining_window_minutes?: number | null;
+  peak_window_start?: string | null;
+  peak_window_end?: string | null;
+  peak_window_label?: string | null;
+  minutes_until_peak_start?: number | null;
+  minutes_until_peak_end?: number | null;
   liquidity_score?: number | null;
   price_usefulness_score?: number | null;
   spread_penalty?: number | null;

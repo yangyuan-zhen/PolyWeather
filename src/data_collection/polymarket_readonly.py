@@ -2153,7 +2153,8 @@ class PolymarketReadOnlyLayer:
         question = str(market.get("question") or market.get("title") or "").strip()
         direction = self._extract_market_bucket_direction(market)
         bucket_range = self._extract_market_bucket_range(market)
-        unit = bucket_range[2] if bucket_range else "C"
+        raw_unit = bucket_range[2] if bucket_range else "C"
+        unit = "°F" if str(raw_unit).upper().endswith("F") else "°C"
         if bucket_range and bucket_range[1] is not None:
             return f"{bucket_range[0]:g}-{bucket_range[1]:g}{unit}"
         if bucket_temp is not None:
@@ -2520,6 +2521,18 @@ class PolymarketReadOnlyLayer:
         peak = context.get("peak") if isinstance(context.get("peak"), dict) else {}
         first_h = int(_safe_float(peak.get("first_h")) or 13)
         last_h = int(_safe_float(peak.get("last_h")) or 15)
+        first_minutes = max(0, first_h * 60)
+        last_minutes = min(23 * 60 + 59, last_h * 60)
+        display_last_minutes = min(23 * 60 + 59, last_h * 60 + 59)
+        peak_fields: Dict[str, Any] = {
+            "peak_window_start": f"{first_h:02d}:00",
+            "peak_window_end": f"{last_h:02d}:59",
+            "peak_window_label": f"{first_h:02d}:00-{last_h:02d}:59",
+            "minutes_until_peak_start": None,
+            "minutes_until_peak_end": None,
+            "peak_start_minutes": first_minutes,
+            "peak_end_minutes": display_last_minutes,
+        }
         target_iso = _extract_iso_date(target_date)
         if not local_date or not target_iso:
             return {
@@ -2527,6 +2540,7 @@ class PolymarketReadOnlyLayer:
                 "score": 0.65,
                 "remaining_minutes": None,
                 "same_day": True,
+                **peak_fields,
             }
 
         try:
@@ -2537,19 +2551,26 @@ class PolymarketReadOnlyLayer:
         except Exception:
             diff_days = 0
 
+        now_minutes = _parse_hhmm_to_minutes(local_time)
+        if now_minutes is not None:
+            peak_fields["minutes_until_peak_start"] = diff_days * 1440 + first_minutes - now_minutes
+            peak_fields["minutes_until_peak_end"] = diff_days * 1440 + display_last_minutes - now_minutes
+
         if diff_days >= 2:
             return {
                 "phase": "week_ahead",
                 "score": 0.45,
-                "remaining_minutes": None,
+                "remaining_minutes": peak_fields["minutes_until_peak_start"],
                 "same_day": False,
+                **peak_fields,
             }
         if diff_days == 1:
             return {
                 "phase": "tomorrow",
                 "score": 0.60,
-                "remaining_minutes": None,
+                "remaining_minutes": peak_fields["minutes_until_peak_start"],
                 "same_day": False,
+                **peak_fields,
             }
         if diff_days < 0:
             return {
@@ -2557,25 +2578,25 @@ class PolymarketReadOnlyLayer:
                 "score": 0.0,
                 "remaining_minutes": None,
                 "same_day": False,
+                **peak_fields,
             }
 
-        now_minutes = _parse_hhmm_to_minutes(local_time)
         if now_minutes is None:
             return {
                 "phase": "today_default",
                 "score": 0.65,
                 "remaining_minutes": None,
                 "same_day": True,
+                **peak_fields,
             }
 
-        first_minutes = max(0, first_h * 60)
-        last_minutes = min(23 * 60 + 59, last_h * 60)
         if now_minutes > last_minutes + 120:
             return {
                 "phase": "post_peak",
                 "score": 0.50,
                 "remaining_minutes": 0,
                 "same_day": True,
+                **peak_fields,
             }
         if first_minutes <= now_minutes <= last_minutes + 120:
             return {
@@ -2583,6 +2604,7 @@ class PolymarketReadOnlyLayer:
                 "score": 1.00,
                 "remaining_minutes": max(0, last_minutes + 120 - now_minutes),
                 "same_day": True,
+                **peak_fields,
             }
         if first_minutes - 180 <= now_minutes < first_minutes:
             return {
@@ -2590,12 +2612,14 @@ class PolymarketReadOnlyLayer:
                 "score": 0.85,
                 "remaining_minutes": max(0, last_minutes + 120 - now_minutes),
                 "same_day": True,
+                **peak_fields,
             }
         return {
             "phase": "early_today",
             "score": 0.70,
             "remaining_minutes": max(0, first_minutes - now_minutes),
             "same_day": True,
+            **peak_fields,
         }
 
     def _resolve_market_target_threshold(
@@ -3198,6 +3222,11 @@ class PolymarketReadOnlyLayer:
                 "window_phase": window_meta.get("phase"),
                 "window_score": window_meta.get("score"),
                 "remaining_window_minutes": window_meta.get("remaining_minutes"),
+                "peak_window_start": window_meta.get("peak_window_start"),
+                "peak_window_end": window_meta.get("peak_window_end"),
+                "peak_window_label": window_meta.get("peak_window_label"),
+                "minutes_until_peak_start": window_meta.get("minutes_until_peak_start"),
+                "minutes_until_peak_end": window_meta.get("minutes_until_peak_end"),
                 "liquidity_score": liquidity_score,
                 "price_usefulness_score": price_usefulness_score,
                 "spread_penalty": spread_penalty,
