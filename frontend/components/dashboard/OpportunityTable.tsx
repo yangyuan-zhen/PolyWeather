@@ -120,6 +120,35 @@ function formatQuoteCents(value?: number | null) {
   return `${text.replace(/\.0$/, "")}¢`;
 }
 
+function getAiMeta(row: ScanOpportunityRow, locale: string) {
+  const decision = String(row.ai_decision || "").toLowerCase();
+  if (decision === "veto") {
+    return {
+      label: locale === "en-US" ? "AI veto" : "AI 排除",
+      tone: "veto",
+      reason: locale === "en-US" ? row.ai_reason_en || row.ai_reason_zh : row.ai_reason_zh || row.ai_reason_en,
+    };
+  }
+  if (decision === "downgrade") {
+    return {
+      label: locale === "en-US" ? "AI downgrade" : "AI 降级",
+      tone: "downgrade",
+      reason: locale === "en-US" ? row.ai_reason_en || row.ai_reason_zh : row.ai_reason_zh || row.ai_reason_en,
+    };
+  }
+  if (row.ai_rank != null || decision === "approve") {
+    return {
+      label: locale === "en-US" ? `AI pick ${row.ai_rank || ""}`.trim() : `AI 推荐 ${row.ai_rank || ""}`.trim(),
+      tone: "approve",
+      reason:
+        (locale === "en-US" ? row.ai_reason_en || row.ai_reason_zh : row.ai_reason_zh || row.ai_reason_en) ||
+        row.ai_model_cluster_note ||
+        null,
+    };
+  }
+  return null;
+}
+
 function getDistributionPreview(row: ScanOpportunityRow, tempSymbol?: string | null) {
   const preview = Array.isArray(row.distribution_preview)
     ? row.distribution_preview.filter(
@@ -349,11 +378,12 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                   : "EMOS";
                 const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
                 const edgePositive = Number(row.edge_percent || 0) >= 0;
+                const aiMeta = getAiMeta(row, locale);
                 return (
                   <button
                     key={row.id}
                     type="button"
-                    className={`scan-opportunity-item ${selected ? "selected" : ""}`}
+                    className={`scan-opportunity-item ${selected ? "selected" : ""} ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
                     onClick={() => onSelectRow?.(row)}
                   >
                     <span className="scan-opportunity-branch" aria-hidden="true">
@@ -378,6 +408,12 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                         {formatPercent(row.edge_percent, true)}
                       </b>
                     </span>
+                    {aiMeta ? (
+                      <span className={`scan-opportunity-ai ${aiMeta.tone}`}>
+                        <b>{aiMeta.label}</b>
+                        {aiMeta.reason ? <small>{aiMeta.reason}</small> : null}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

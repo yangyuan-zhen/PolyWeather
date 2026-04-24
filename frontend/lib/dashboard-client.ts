@@ -77,6 +77,7 @@ const pendingCityMarketScanRequests = new Map<
 >();
 const pendingAssistantRequests = new Map<string, Promise<AssistantChatResponse>>();
 const pendingScanTerminalRequests = new Map<string, Promise<ScanTerminalResponse>>();
+const pendingScanTerminalAiRequests = new Map<string, Promise<ScanTerminalResponse>>();
 const PRIORITY_WARM_SESSION_KEY = "polyWeather_priority_warm_v1";
 
 type CityCacheMeta = {
@@ -435,6 +436,44 @@ export const dashboardClient = {
     if (!force) {
       pendingScanTerminalRequests.set(requestKey, request);
     }
+    return request;
+  },
+
+  async reviewScanTerminalWithAi(payload: {
+    filters: ScanTerminalFilters;
+    snapshotId?: string | null;
+  }) {
+    const snapshotId = String(payload.snapshotId || "").trim();
+    const requestKey = [
+      snapshotId || "latest",
+      JSON.stringify(payload.filters || {}),
+    ].join("::");
+    const existing = pendingScanTerminalAiRequests.get(requestKey);
+    if (existing) {
+      return existing;
+    }
+    const request = fetch("/api/scan/terminal/ai", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        filters: payload.filters,
+        snapshot_id: snapshotId || null,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json() as Promise<ScanTerminalResponse>;
+      })
+      .finally(() => {
+        pendingScanTerminalAiRequests.delete(requestKey);
+      });
+    pendingScanTerminalAiRequests.set(requestKey, request);
     return request;
   },
 

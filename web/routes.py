@@ -32,7 +32,10 @@ from web.analysis_service import (
     _build_city_market_scan_payload,
     _build_city_summary_payload,
 )
-from web.scan_terminal_service import build_scan_terminal_payload
+from web.scan_terminal_service import (
+    build_scan_terminal_ai_payload,
+    build_scan_terminal_payload,
+)
 from web.core import (
     AnalyticsEventRequest,
     CITIES,
@@ -1726,5 +1729,23 @@ async def scan_terminal(
         build_scan_terminal_payload,
         filters,
         force_refresh=force_refresh,
+    )
+
+
+@router.post("/api/scan/terminal/ai")
+async def scan_terminal_ai(request: Request):
+    _assert_entitlement(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    filters = body.get("filters") if isinstance(body.get("filters"), dict) else {}
+    snapshot_id = str(body.get("snapshot_id") or "").strip() or None
+    return await run_in_threadpool(
+        build_scan_terminal_ai_payload,
+        filters,
+        snapshot_id=snapshot_id,
     )
 

@@ -6,6 +6,7 @@ import {
   RefreshCw,
   Moon,
   Search,
+  Sparkles,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -252,6 +253,8 @@ function ScanTerminalScreen() {
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ContentView>("map");
@@ -365,7 +368,9 @@ function ScanTerminalScreen() {
   ]);
 
   const fetchTerminal = async (filters: FilterState, force = false) => {
+    if (!store.proAccess.subscriptionActive) return;
     setLoading(true);
+    setAiError(null);
     try {
       const response = await dashboardClient.getScanTerminal(filters, { force });
       startTransition(() => {
@@ -386,16 +391,45 @@ function ScanTerminalScreen() {
     }
   };
 
-  useEffect(() => {
-    void fetchTerminal(DEFAULT_FILTERS, false);
-  }, []);
+  const runAiReview = async () => {
+    if (!terminalData?.rows.length || aiLoading) return;
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const response = await dashboardClient.reviewScanTerminalWithAi({
+        filters: terminalData.filters || activeFilters,
+        snapshotId: terminalData.snapshot_id || null,
+      });
+      startTransition(() => {
+        setTerminalData(response);
+        setActiveFilters(response.filters || activeFilters);
+        setError(response.status === "failed" ? response.stale_reason || null : null);
+        setSelectedRowId((current) => {
+          if (current && response.rows.some((row) => row.id === current)) {
+            return current;
+          }
+          return sortRowsByUserTime(response.rows)[0]?.id || response.top_signal?.id || null;
+        });
+      });
+    } catch (reviewError) {
+      setAiError(String(reviewError));
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   useEffect(() => {
+    if (!store.proAccess.subscriptionActive) return;
+    void fetchTerminal(DEFAULT_FILTERS, false);
+  }, [store.proAccess.subscriptionActive]);
+
+  useEffect(() => {
+    if (!store.proAccess.subscriptionActive) return;
     const intervalId = window.setInterval(() => {
       void fetchTerminal(activeFilters, false);
     }, SCAN_AUTO_REFRESH_MS);
     return () => window.clearInterval(intervalId);
-  }, [activeFilters]);
+  }, [activeFilters, store.proAccess.subscriptionActive]);
 
   useEffect(() => {
     setUserLocalTime(formatUserLocalTime());
@@ -425,6 +459,28 @@ function ScanTerminalScreen() {
   const scanStatus = terminalData?.status || (loading ? "loading" : error ? "failed" : "ready");
   const staleReason =
     terminalData?.stale_reason || error || null;
+  const aiScan = terminalData?.ai_scan || null;
+  const aiStatusText = aiLoading
+    ? isEn
+      ? "V4 reviewing"
+      : "V4 复核中"
+    : aiError
+      ? isEn
+        ? "V4 failed"
+        : "V4 失败"
+      : aiScan?.status === "ready"
+        ? isEn
+          ? aiScan.cached
+            ? "V4 cached"
+            : "V4 reviewed"
+          : aiScan.cached
+            ? "V4 缓存"
+            : "V4 已复核"
+        : aiScan?.status
+          ? isEn
+            ? "Rule scan"
+            : "使用规则扫描"
+          : null;
 
   useEffect(() => {
     if (!activeDetailRow) return;
@@ -487,6 +543,70 @@ function ScanTerminalScreen() {
     );
   };
 
+  if (store.proAccess.loading) {
+    return (
+      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
+        <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
+          <main className="scan-data-grid">
+            <div className="scan-empty-state">
+              <div className="scan-empty-title">{isEn ? "Checking access" : "正在检查权限"}</div>
+              <div className="scan-empty-copy">
+                {isEn ? "Preparing your market scan terminal." : "正在准备市场扫描台。"}
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  if (!store.proAccess.subscriptionActive) {
+    return (
+      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
+        <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
+          <main className="scan-data-grid">
+            <div className="scan-topbar">
+              <div className="scan-topbar-title">
+                <strong>{isEn ? "Market Scan Terminal" : "市场扫描台"}</strong>
+                <span>{isEn ? "Pro access required" : "需要 Pro 权限"}</span>
+              </div>
+              <div className="scan-topbar-actions">
+                <button
+                  type="button"
+                  className="scan-locale-switch"
+                  aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
+                  title={isEn ? "Switch to Chinese" : "切换到英文"}
+                  onClick={toggleLocale}
+                >
+                  <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
+                  <span className={clsx(locale === "en-US" && "active")}>EN</span>
+                </button>
+                <Link href={accountHref} className="scan-primary-button">
+                  <UserRound size={14} />
+                  {store.proAccess.authenticated
+                    ? isEn ? "Upgrade Pro" : "升级 Pro"
+                    : isEn ? "Sign in" : "登录"}
+                </Link>
+              </div>
+            </div>
+            <div className="scan-table-shell empty">
+              <div className="scan-empty-state">
+                <div className="scan-empty-title">
+                  {isEn ? "Market scan is a Pro feature" : "市场扫描是 Pro 功能"}
+                </div>
+                <div className="scan-empty-copy">
+                  {isEn
+                    ? "Free accounts do not trigger rule scans or V4-Flash scans."
+                    : "免费用户不会触发规则扫描，也不会消耗 V4-Flash 扫描资源。"}
+                </div>
+              </div>
+            </div>
+          </main>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
@@ -536,6 +656,22 @@ function ScanTerminalScreen() {
                   : isEn
                     ? "Start Scan"
                     : "开始扫描"}
+              </button>
+              <button
+                type="button"
+                className="scan-ai-button"
+                onClick={() => void runAiReview()}
+                disabled={aiLoading || loading || !terminalData?.rows.length}
+                title={isEn ? "Run V4-Flash deep scan" : "运行 V4-Flash 深度扫描"}
+              >
+                <Sparkles size={14} className={aiLoading ? "spin" : undefined} />
+                {aiLoading
+                  ? isEn
+                    ? "V4..."
+                    : "V4 扫描中"
+                  : isEn
+                    ? "AI Deep Scan"
+                    : "AI 深度扫描"}
               </button>
               <button
                 type="button"
@@ -608,6 +744,11 @@ function ScanTerminalScreen() {
                 {loading ? (
                   <span className="scan-status-chip live">
                     {isEn ? "Refreshing" : "刷新中"}
+                  </span>
+                ) : null}
+                {aiStatusText ? (
+                  <span className={`scan-status-chip ${aiScan?.status === "ready" ? "ai" : "stale"}`}>
+                    {aiStatusText}
                   </span>
                 ) : null}
               </div>

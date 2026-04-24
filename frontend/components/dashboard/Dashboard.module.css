@@ -9391,6 +9391,31 @@
   opacity: 0.68;
 }
 
+.root :global(.scan-ai-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 11px 14px;
+  border: 1px solid rgba(94, 234, 212, 0.3);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.22), rgba(14, 116, 144, 0.18));
+  color: #a7fff2;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.root :global(.scan-ai-button:hover:not(:disabled)) {
+  border-color: rgba(94, 234, 212, 0.5);
+  background: linear-gradient(180deg, rgba(20, 184, 166, 0.32), rgba(14, 116, 144, 0.24));
+}
+
+.root :global(.scan-ai-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .root :global(.scan-cta-ghost) {
   color: #27ea98;
   border-color: rgba(23, 217, 139, 0.3);
@@ -9559,6 +9584,12 @@
   border-color: rgba(255, 184, 79, 0.24);
   background: rgba(255, 184, 79, 0.1);
   color: #ffc765;
+}
+
+.root :global(.scan-status-chip.ai) {
+  border-color: rgba(94, 234, 212, 0.28);
+  background: rgba(20, 184, 166, 0.12);
+  color: #87fff1;
 }
 
 .root :global(.scan-table-shell) {
@@ -9759,6 +9790,18 @@
   box-shadow: inset 3px 0 0 rgba(23, 217, 139, 0.82);
 }
 
+.root :global(.scan-opportunity-item.ai-approve) {
+  border-color: rgba(94, 234, 212, 0.28);
+}
+
+.root :global(.scan-opportunity-item.ai-veto) {
+  opacity: 0.72;
+}
+
+.root :global(.scan-opportunity-item.ai-veto .scan-opportunity-action) {
+  color: #94a3b8;
+}
+
 .root :global(.scan-opportunity-branch) {
   position: relative;
   align-self: stretch;
@@ -9855,6 +9898,43 @@
 
 .root :global(.scan-opportunity-stat b.negative) {
   color: #ff6868;
+}
+
+.root :global(.scan-opportunity-ai) {
+  grid-column: 2 / -1;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  background: rgba(5, 14, 25, 0.5);
+}
+
+.root :global(.scan-opportunity-ai b) {
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.root :global(.scan-opportunity-ai small) {
+  overflow: hidden;
+  color: #8aa1bf;
+  font-size: 12px;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-ai.approve b) {
+  color: #7dfbe7;
+}
+
+.root :global(.scan-opportunity-ai.downgrade b) {
+  color: #ffc765;
+}
+
+.root :global(.scan-opportunity-ai.veto b) {
+  color: #ff8585;
 }
 
 .root :global(.scan-table-body::-webkit-scrollbar),
@@ -10873,6 +10953,21 @@
   color: #032019;
   border-color: rgba(10, 160, 100, 0.34);
   background: linear-gradient(180deg, #25d990, #10b870);
+}
+
+.root :global(.scan-terminal.light .scan-ai-button) {
+  color: #075f5a;
+  border-color: rgba(10, 160, 150, 0.28);
+  background: linear-gradient(180deg, rgba(214, 250, 246, 0.94), rgba(231, 247, 252, 0.96));
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-ai) {
+  border-color: rgba(35, 72, 118, 0.1);
+  background: rgba(248, 252, 255, 0.76);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-ai small) {
+  color: #647a98;
 }
 
 .root :global(.scan-terminal.light .scan-cta-ghost),

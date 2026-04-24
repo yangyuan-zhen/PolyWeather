@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
+import httpx
 from loguru import logger
 
 from web.analysis_service import _analyze, _build_city_market_scan_payload
@@ -18,6 +19,8 @@ from web.core import CITIES
 _SCAN_TERMINAL_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
 _SCAN_TERMINAL_REFRESHING: set[str] = set()
+_SCAN_TERMINAL_AI_CACHE_LOCK = threading.Lock()
+_SCAN_TERMINAL_AI_CACHE: Dict[str, Dict[str, Any]] = {}
 SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "30")),
@@ -25,6 +28,27 @@ SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
 SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     8,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
+)
+SCAN_AI_MODEL = str(
+    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-flash"
+).strip()
+SCAN_AI_BASE_URL = str(
+    os.getenv("POLYWEATHER_DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
+).strip().rstrip("/")
+SCAN_AI_ENABLED = str(
+    os.getenv("POLYWEATHER_SCAN_AI_ENABLED") or "false"
+).strip().lower() in {"1", "true", "yes", "on"}
+SCAN_AI_TIMEOUT_SEC = max(
+    3,
+    int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "12")),
+)
+SCAN_AI_CACHE_TTL_SEC = max(
+    30,
+    int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "600")),
+)
+SCAN_AI_MAX_ROWS = max(
+    1,
+    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_ROWS", "40")),
 )
 
 
@@ -247,6 +271,291 @@ def _build_failed_scan_terminal_payload(
         },
         "top_signal": None,
         "rows": [],
+    }
+
+
+def _extract_ai_json_object(raw_text: str) -> Dict[str, Any]:
+    text = str(raw_text or "").strip()
+    if not text:
+        raise ValueError("empty AI content")
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, dict):
+            return parsed
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        parsed = json.loads(text[start : end + 1])
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("AI content is not a JSON object")
+
+
+def _scan_ai_cache_key(snapshot_id: str, filters: Dict[str, Any]) -> str:
+    raw = json.dumps(
+        {
+            "snapshot_id": snapshot_id,
+            "filters": _normalize_scan_terminal_filters(filters),
+            "model": SCAN_AI_MODEL,
+            "max_rows": SCAN_AI_MAX_ROWS,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _get_cached_scan_ai_result(snapshot_id: str, filters: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cache_key = _scan_ai_cache_key(snapshot_id, filters)
+    now = time.time()
+    with _SCAN_TERMINAL_AI_CACHE_LOCK:
+        cached = _SCAN_TERMINAL_AI_CACHE.get(cache_key)
+        if not cached:
+            return None
+        cached_at = float(cached.get("cached_at") or 0.0)
+        if now - cached_at >= float(SCAN_AI_CACHE_TTL_SEC):
+            return None
+        result = cached.get("result")
+        if isinstance(result, dict):
+            return dict(result)
+    return None
+
+
+def _set_cached_scan_ai_result(snapshot_id: str, filters: Dict[str, Any], result: Dict[str, Any]) -> None:
+    cache_key = _scan_ai_cache_key(snapshot_id, filters)
+    with _SCAN_TERMINAL_AI_CACHE_LOCK:
+        _SCAN_TERMINAL_AI_CACHE[cache_key] = {
+            "cached_at": time.time(),
+            "result": result,
+        }
+
+
+def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "city": row.get("city_display_name") or row.get("display_name") or row.get("city"),
+        "local_time": row.get("local_time"),
+        "current_temp": row.get("current_temp"),
+        "current_max_so_far": row.get("current_max_so_far"),
+        "deb_prediction": row.get("deb_prediction"),
+        "action": row.get("action"),
+        "side": row.get("side"),
+        "target_label": row.get("target_label"),
+        "target_value": row.get("target_value"),
+        "target_threshold": row.get("target_threshold"),
+        "target_unit": row.get("target_unit"),
+        "model_probability": row.get("model_probability"),
+        "market_probability": row.get("market_probability"),
+        "model_event_probability": row.get("model_event_probability"),
+        "market_event_probability": row.get("market_event_probability"),
+        "yes_ask": row.get("yes_ask"),
+        "no_ask": row.get("no_ask"),
+        "ask": row.get("ask"),
+        "spread": row.get("spread"),
+        "quote_age_ms": row.get("quote_age_ms"),
+        "edge_percent": row.get("edge_percent"),
+        "final_score": row.get("final_score"),
+        "window_phase": row.get("window_phase"),
+        "remaining_window_minutes": row.get("remaining_window_minutes"),
+        "distribution_preview": (row.get("distribution_preview") or [])[:6],
+        "peak_value": row.get("peak_value"),
+        "peak_probability": row.get("peak_probability"),
+        "cluster_role": row.get("cluster_role"),
+        "cluster_core_low": row.get("cluster_core_low"),
+        "cluster_core_high": row.get("cluster_core_high"),
+        "cluster_median": row.get("cluster_median"),
+        "cluster_deb_reference": row.get("cluster_deb_reference"),
+        "cluster_model_count": row.get("cluster_model_count"),
+        "trend_alignment": row.get("trend_alignment"),
+        "tradable": row.get("tradable"),
+        "accepting_orders": row.get("accepting_orders"),
+    }
+
+
+def _build_scan_ai_prompt(payload: Dict[str, Any]) -> Dict[str, Any]:
+    rows = [
+        _compact_ai_candidate(row)
+        for row in (payload.get("rows") or [])[:SCAN_AI_MAX_ROWS]
+        if isinstance(row, dict) and row.get("id")
+    ]
+    return {
+        "snapshot_id": payload.get("snapshot_id"),
+        "generated_at": payload.get("generated_at"),
+        "summary": payload.get("summary") or {},
+        "filters": payload.get("filters") or {},
+        "candidates": rows,
+    }
+
+
+def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
+    api_key = str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
+
+    system_prompt = (
+        "你是 PolyWeather 的付费市场扫描员。你只能基于用户提供的 JSON 快照做判断，"
+        "不得编造城市、价格、概率、盘口或天气数据。你的任务是从候选 rows 中选择真正值得看的机会，"
+        "尤其要检查 DEB、EMOS 分布、模型集群、当前实测、峰值窗口和盘口价格是否一致。"
+        "若模型集群不支持某个 YES，不要机械推荐 YES；可以 veto 或改为偏向 NO 候选。"
+        "只能引用输入中的 row id。必须输出 JSON object，字段为 recommendations、vetoed、downgraded、summary_zh、summary_en。"
+    )
+    user_payload = {
+        "task": (
+            "Review these existing PolyWeather market candidates. "
+            "Return strict JSON only. recommendations items need row_id, rank, decision, confidence, "
+            "reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id and reason."
+        ),
+        "snapshot": ai_input,
+    }
+    with httpx.Client(timeout=float(SCAN_AI_TIMEOUT_SEC)) as client:
+        response = client.post(
+            f"{SCAN_AI_BASE_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": SCAN_AI_MODEL,
+                "temperature": 0.1,
+                "max_tokens": 2200,
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(user_payload, ensure_ascii=False),
+                    },
+                ],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+    content = (
+        ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+        if isinstance(data, dict)
+        else None
+    )
+    return _extract_ai_json_object(str(content or ""))
+
+
+def _normalize_ai_items(raw_items: Any) -> List[Dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw_items:
+        if isinstance(item, str):
+            out.append({"row_id": item})
+        elif isinstance(item, dict):
+            row_id = str(item.get("row_id") or item.get("id") or "").strip()
+            if row_id:
+                out.append({**item, "row_id": row_id})
+    return out
+
+
+def _merge_scan_ai_result(payload: Dict[str, Any], ai_raw: Dict[str, Any], *, cached: bool = False) -> Dict[str, Any]:
+    rows = [dict(row) for row in (payload.get("rows") or []) if isinstance(row, dict)]
+    by_id = {str(row.get("id")): row for row in rows if row.get("id")}
+    recommendations = _normalize_ai_items(ai_raw.get("recommendations"))
+    vetoed = _normalize_ai_items(ai_raw.get("vetoed"))
+    downgraded = _normalize_ai_items(ai_raw.get("downgraded"))
+
+    veto_ids = {str(item.get("row_id")) for item in vetoed}
+    downgrade_ids = {str(item.get("row_id")) for item in downgraded}
+    recommended_ids: set[str] = set()
+
+    for item in vetoed:
+        row = by_id.get(str(item.get("row_id")))
+        if not row:
+            continue
+        row["ai_decision"] = "veto"
+        row["ai_reason_zh"] = item.get("reason_zh") or item.get("reason")
+        row["ai_reason_en"] = item.get("reason_en")
+    for item in downgraded:
+        row = by_id.get(str(item.get("row_id")))
+        if not row:
+            continue
+        row["ai_decision"] = "downgrade"
+        row["ai_reason_zh"] = item.get("reason_zh") or item.get("reason")
+        row["ai_reason_en"] = item.get("reason_en")
+    for fallback_rank, item in enumerate(recommendations, start=1):
+        row_id = str(item.get("row_id"))
+        row = by_id.get(row_id)
+        if not row:
+            continue
+        if row_id in veto_ids:
+            continue
+        recommended_ids.add(row_id)
+        row["ai_decision"] = str(item.get("decision") or "approve").strip().lower() or "approve"
+        row["ai_rank"] = _safe_int(item.get("rank"), fallback_rank)
+        row["ai_confidence"] = item.get("confidence")
+        row["ai_reason_zh"] = item.get("reason_zh") or item.get("reason")
+        row["ai_reason_en"] = item.get("reason_en")
+        row["ai_model_cluster_note"] = item.get("model_cluster_note")
+
+    for row in rows:
+        row_id = str(row.get("id"))
+        if row_id not in recommended_ids and row_id not in veto_ids and row_id not in downgrade_ids:
+            row["ai_decision"] = row.get("ai_decision") or "neutral"
+
+    def _ai_sort_key(row: Dict[str, Any]) -> tuple:
+        decision = str(row.get("ai_decision") or "").lower()
+        if decision == "veto":
+            tier = 3
+        elif decision == "downgrade":
+            tier = 2
+        elif row.get("ai_rank") is not None:
+            tier = 0
+        else:
+            tier = 1
+        return (
+            tier,
+            _safe_int(row.get("ai_rank"), 999),
+            -float(row.get("final_score") or 0.0),
+            -float(row.get("edge_percent") or 0.0),
+        )
+
+    rows.sort(key=_ai_sort_key)
+    top_signal = next(
+        (row for row in rows if str(row.get("ai_decision") or "").lower() != "veto"),
+        rows[0] if rows else None,
+    )
+    ai_scan = {
+        "status": "ready",
+        "model": SCAN_AI_MODEL,
+        "cached": cached,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "summary_zh": ai_raw.get("summary_zh"),
+        "summary_en": ai_raw.get("summary_en"),
+        "recommended_count": sum(1 for row in rows if row.get("ai_rank") is not None),
+        "vetoed_count": sum(1 for row in rows if row.get("ai_decision") == "veto"),
+        "downgraded_count": sum(1 for row in rows if row.get("ai_decision") == "downgrade"),
+    }
+    merged = {
+        **payload,
+        "rows": rows,
+        "top_signal": top_signal,
+        "ai_scan": ai_scan,
+    }
+    return merged
+
+
+def _build_scan_ai_unavailable_payload(
+    payload: Dict[str, Any],
+    *,
+    status: str,
+    reason: str,
+) -> Dict[str, Any]:
+    return {
+        **payload,
+        "ai_scan": {
+            "status": status,
+            "model": SCAN_AI_MODEL,
+            "cached": False,
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "reason": reason,
+        },
     }
 
 
@@ -610,3 +919,61 @@ def build_scan_terminal_payload(
             )
 
     return _build_scan_terminal_payload_uncached(filters, force_refresh=force_refresh)
+
+
+def build_scan_terminal_ai_payload(
+    raw_filters: Optional[Dict[str, Any]] = None,
+    *,
+    snapshot_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    filters = _normalize_scan_terminal_filters(raw_filters)
+    payload = build_scan_terminal_payload(filters, force_refresh=False)
+    current_snapshot_id = str(payload.get("snapshot_id") or "").strip()
+    requested_snapshot_id = str(snapshot_id or "").strip()
+    if requested_snapshot_id and current_snapshot_id and requested_snapshot_id != current_snapshot_id:
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="snapshot_mismatch",
+            reason="scan snapshot changed; refresh the scan before running AI review",
+        )
+    if not current_snapshot_id:
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="no_snapshot",
+            reason="no scan snapshot is available for AI review",
+        )
+    if not payload.get("rows"):
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="no_rows",
+            reason="no candidate rows are available for AI review",
+        )
+    if not SCAN_AI_ENABLED:
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="disabled",
+            reason="POLYWEATHER_SCAN_AI_ENABLED is not enabled",
+        )
+    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="missing_key",
+            reason="POLYWEATHER_DEEPSEEK_API_KEY is not configured",
+        )
+
+    cached = _get_cached_scan_ai_result(current_snapshot_id, filters)
+    if cached is not None:
+        return _merge_scan_ai_result(payload, cached, cached=True)
+
+    try:
+        ai_input = _build_scan_ai_prompt(payload)
+        ai_raw = _call_deepseek_scan_ai(ai_input)
+        _set_cached_scan_ai_result(current_snapshot_id, filters, ai_raw)
+        return _merge_scan_ai_result(payload, ai_raw, cached=False)
+    except Exception as exc:
+        logger.warning("scan terminal AI review failed: {}", exc)
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="failed",
+            reason=str(exc),
+        )

@@ -535,9 +535,28 @@ export interface ScanOpportunityRow {
   signal_status?: string | null;
   candidate_count?: number | null;
   resolved_market_type?: string | null;
+  ai_decision?: "approve" | "veto" | "downgrade" | "neutral" | string | null;
+  ai_rank?: number | null;
+  ai_confidence?: string | null;
+  ai_reason_zh?: string | null;
+  ai_reason_en?: string | null;
+  ai_model_cluster_note?: string | null;
 }
 
 export interface PrimarySignal extends ScanOpportunityRow {}
+
+export interface ScanAiReview {
+  status?: "ready" | "disabled" | "missing_key" | "failed" | "no_rows" | "no_snapshot" | "snapshot_mismatch" | string;
+  model?: string | null;
+  cached?: boolean;
+  generated_at?: string | null;
+  reason?: string | null;
+  summary_zh?: string | null;
+  summary_en?: string | null;
+  recommended_count?: number | null;
+  vetoed_count?: number | null;
+  downgraded_count?: number | null;
+}
 
 export interface ScanTerminalResponse {
   generated_at: string;
@@ -563,6 +582,7 @@ export interface ScanTerminalResponse {
   };
   top_signal?: PrimarySignal | null;
   rows: ScanOpportunityRow[];
+  ai_scan?: ScanAiReview | null;
 }
 
 export interface IntradayMeteorologySignal {
