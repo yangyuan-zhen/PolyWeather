@@ -9721,21 +9721,21 @@
 
 .root :global(.scan-opportunity-items) {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   padding: 10px 12px 12px;
 }
 
 .root :global(.scan-opportunity-item) {
   display: grid;
-  grid-template-columns: 18px minmax(190px, 1fr) minmax(96px, 0.42fr) minmax(88px, 0.36fr) minmax(98px, 0.38fr);
-  gap: 14px;
+  grid-template-columns: 16px minmax(180px, 1fr) max-content max-content max-content;
+  gap: 10px;
   align-items: center;
   width: 100%;
-  min-height: 56px;
-  padding: 10px 14px;
+  min-height: 52px;
+  padding: 8px 14px;
   border: 1px solid rgba(90, 123, 166, 0.1);
   border-radius: 12px;
-  background: rgba(5, 14, 25, 0.42);
+  background: rgba(4, 12, 22, 0.48);
   color: #b8c9e1;
   text-align: left;
   transition:
@@ -9754,7 +9754,7 @@
 }
 
 .root :global(.scan-opportunity-item.selected) {
-  background: linear-gradient(180deg, rgba(6, 50, 47, 0.72), rgba(7, 35, 39, 0.72));
+  background: linear-gradient(180deg, rgba(5, 43, 42, 0.72), rgba(6, 30, 34, 0.72));
   border-color: rgba(23, 217, 139, 0.42);
   box-shadow: inset 3px 0 0 rgba(23, 217, 139, 0.82);
 }
@@ -9762,14 +9762,14 @@
 .root :global(.scan-opportunity-branch) {
   position: relative;
   align-self: stretch;
-  width: 18px;
+  width: 16px;
 }
 
 .root :global(.scan-opportunity-branch::before) {
   position: absolute;
   top: -18px;
   bottom: 50%;
-  left: 8px;
+  left: 7px;
   width: 1px;
   background: rgba(122, 154, 196, 0.28);
   content: "";
@@ -9778,8 +9778,8 @@
 .root :global(.scan-opportunity-branch i) {
   position: absolute;
   top: 50%;
-  left: 8px;
-  width: 10px;
+  left: 7px;
+  width: 8px;
   height: 1px;
   background: rgba(122, 154, 196, 0.32);
 }
@@ -9794,6 +9794,7 @@
   overflow: hidden;
   font-size: 15px;
   font-weight: 900;
+  line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9807,10 +9808,15 @@
 }
 
 .root :global(.scan-opportunity-stat) {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-  justify-items: start;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 76px;
+  max-width: 132px;
+  padding: 6px 8px;
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  border-radius: 9px;
+  background: rgba(13, 28, 48, 0.46);
   color: #d0ddf0;
 }
 
@@ -9818,7 +9824,7 @@
   overflow: hidden;
   max-width: 100%;
   color: #718bac;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 900;
   line-height: 1.1;
   text-overflow: ellipsis;
@@ -9830,7 +9836,7 @@
   overflow: hidden;
   max-width: 100%;
   color: #dceaff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 900;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -9839,7 +9845,8 @@
 
 .root :global(.scan-opportunity-stat.edge) {
   justify-self: end;
-  justify-items: end;
+  min-width: 92px;
+  justify-content: flex-end;
 }
 
 .root :global(.scan-opportunity-stat b.positive) {
@@ -10818,6 +10825,11 @@
 .root :global(.scan-terminal.light .scan-opportunity-models span) {
   border-color: rgba(35, 72, 118, 0.1);
   background: rgba(255, 255, 255, 0.68);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-stat) {
+  border-color: rgba(35, 72, 118, 0.1);
+  background: rgba(248, 252, 255, 0.76);
 }
 
 .root :global(.scan-terminal.light .scan-opportunity-models b),
