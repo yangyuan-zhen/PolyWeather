@@ -70,6 +70,12 @@ export function getWindowPhaseMeta(
   locale: string,
 ): PhaseMeta {
   const mode = String(row.window_phase || "").toLowerCase();
+  if (mode === "city_snapshot") {
+    return {
+      label: locale === "en-US" ? "City Snapshot" : "城市概况",
+      tone: "blue",
+    };
+  }
   if (mode === "active_peak") {
     return {
       label: locale === "en-US" ? "Peak Window" : "峰值窗口",

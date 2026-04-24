@@ -193,6 +193,27 @@ function sortRowsByUserTime(rows: ScanOpportunityRow[]) {
   });
 }
 
+function normalizeCityKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+function rowMatchesCity(row: ScanOpportunityRow, cityName: string) {
+  const cityKey = normalizeCityKey(cityName);
+  if (!cityKey) return false;
+  return [row.city, row.city_display_name, row.display_name].some(
+    (value) => normalizeCityKey(value) === cityKey,
+  );
+}
+
+function findRowForCity(rows: ScanOpportunityRow[], cityName?: string | null) {
+  const normalized = normalizeCityKey(cityName);
+  if (!normalized) return null;
+  return rows.find((row) => rowMatchesCity(row, cityName || "")) || null;
+}
+
 function getSideRow(
   marketScan: MarketScan | null | undefined,
   selectedRow: ScanOpportunityRow,
@@ -493,6 +514,9 @@ function DetailPanel({
   );
   const scoreClass = scoreTone(displayRow.final_score);
   const phaseMeta = getWindowPhaseMeta(displayRow, locale);
+  const isCitySnapshot =
+    String(row.window_phase || "").toLowerCase() === "city_snapshot" ||
+    !row.market_slug;
   const cityDetail =
     store.selectedDetail?.name?.toLowerCase() === row.city.toLowerCase()
       ? store.selectedDetail
@@ -664,28 +688,40 @@ function DetailPanel({
         <div className="scan-kv-list compact">
           <div className="scan-kv">
             <span>{isEn ? "Best Side" : "主方向"}</span>
-            <strong>{displayRow.side === "no" ? "NO" : "YES"}</strong>
+            <strong>
+              {isCitySnapshot
+                ? isEn
+                  ? "Watch"
+                  : "观察"
+                : displayRow.side === "no"
+                  ? "NO"
+                  : "YES"}
+            </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Best Buy" : "最优买价"}</span>
             <strong>
-              {displayRow.side === "no"
-                ? formatPrice(getDetailSideAsk(noRow, marketScan, "no"))
-                : formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))}
+              {isCitySnapshot
+                ? "--"
+                : displayRow.side === "no"
+                  ? formatPrice(getDetailSideAsk(noRow, marketScan, "no"))
+                  : formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))}
             </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "EMOS" : "EMOS 概率"}</span>
             <strong>
-              {displayRow.side === "no"
-                ? formatProbability(noRow?.model_probability)
-                : formatProbability(yesRow?.model_probability)}
+              {isCitySnapshot
+                ? "--"
+                : displayRow.side === "no"
+                  ? formatProbability(noRow?.model_probability)
+                  : formatProbability(yesRow?.model_probability)}
             </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Edge" : "边际优势"}</span>
             <strong className={Number(displayRow.edge_percent || 0) >= 0 ? "positive" : "negative"}>
-              {formatPercent(displayRow.edge_percent, true)}
+              {isCitySnapshot ? "--" : formatPercent(displayRow.edge_percent, true)}
             </strong>
           </div>
         </div>
@@ -702,8 +738,8 @@ function DetailPanel({
             </div>
           </div>
           <div className={`scan-detail-score-value ${scoreClass}`}>
-            {Number(displayRow.final_score || 0).toFixed(0)}
-            <span>/100</span>
+            {isCitySnapshot ? "--" : Number(displayRow.final_score || 0).toFixed(0)}
+            {!isCitySnapshot ? <span>/100</span> : null}
           </div>
         </div>
         <div className="scan-detail-score-line">
@@ -1204,16 +1240,99 @@ function ScanTerminalScreen() {
   }, [timeSortedRows, selectedRowId]);
 
   const mapFocusedRow = useMemo(() => {
-    const cityName = String(mapSelectedCityName || store.selectedCity || "").toLowerCase();
-    if (!cityName) return null;
-    return (
-      timeSortedRows.find(
-        (row) =>
-          row.city.toLowerCase() === cityName ||
-          String(row.city_display_name || row.display_name || "").toLowerCase() === cityName,
-      ) || null
+    return findRowForCity(
+      timeSortedRows,
+      mapSelectedCityName || store.selectedCity,
     );
   }, [mapSelectedCityName, store.selectedCity, timeSortedRows]);
+
+  const mapFallbackRow = useMemo(() => {
+    const rawCityName = mapSelectedCityName || store.selectedCity;
+    const cityKey = normalizeCityKey(rawCityName);
+    if (!cityKey || mapFocusedRow) return null;
+    const selectedDetail =
+      store.selectedDetail && normalizeCityKey(store.selectedDetail.name) === cityKey
+        ? store.selectedDetail
+        : Object.values(store.cityDetailsByName).find(
+            (detail) => normalizeCityKey(detail?.name) === cityKey,
+          ) || null;
+    const selectedSummary =
+      Object.values(store.citySummariesByName).find(
+        (summary) => normalizeCityKey(summary?.name) === cityKey,
+      ) || null;
+    const selectedCityItem =
+      store.cities.find(
+        (city) =>
+          normalizeCityKey(city.name) === cityKey ||
+          normalizeCityKey(city.display_name) === cityKey,
+      ) || null;
+    const canonicalCity =
+      selectedDetail?.name ||
+      selectedSummary?.name ||
+      selectedCityItem?.name ||
+      String(rawCityName || "").trim();
+    if (!canonicalCity) return null;
+
+    const tempSymbol =
+      selectedDetail?.temp_symbol ||
+      selectedSummary?.temp_symbol ||
+      (selectedCityItem?.temp_unit === "fahrenheit" ? "°F" : "°C");
+    const displayName =
+      selectedDetail?.display_name ||
+      selectedSummary?.display_name ||
+      selectedCityItem?.display_name ||
+      canonicalCity;
+    const currentTemp =
+      selectedDetail?.current?.temp ?? selectedSummary?.current?.temp ?? null;
+
+    return {
+      id: `map-city:${canonicalCity}`,
+      city: canonicalCity,
+      city_display_name: displayName,
+      display_name: displayName,
+      selected_date: selectedDetail?.local_date || null,
+      local_date: selectedDetail?.local_date || null,
+      local_time: selectedDetail?.local_time || selectedSummary?.local_time || null,
+      temp_symbol: tempSymbol,
+      current_temp: currentTemp,
+      current_max_so_far:
+        selectedDetail?.current?.max_so_far ?? currentTemp ?? null,
+      deb_prediction:
+        selectedDetail?.deb?.prediction ??
+        selectedSummary?.deb?.prediction ??
+        null,
+      airport:
+        selectedDetail?.risk?.airport ||
+        selectedCityItem?.airport ||
+        selectedCityItem?.settlement_station_label ||
+        null,
+      risk_level:
+        selectedDetail?.risk?.level ||
+        selectedSummary?.risk?.level ||
+        selectedCityItem?.risk_level ||
+        "low",
+      market_slug: null,
+      market_question: isEn ? "Current city snapshot" : "当前城市概况",
+      target_label: isEn ? "City snapshot" : "城市概况",
+      side: null,
+      edge_percent: null,
+      final_score: null,
+      window_phase: "city_snapshot",
+      tradable: false,
+      active: false,
+      closed: false,
+      accepting_orders: false,
+    } satisfies ScanOpportunityRow;
+  }, [
+    isEn,
+    mapFocusedRow,
+    mapSelectedCityName,
+    store.cityDetailsByName,
+    store.citySummariesByName,
+    store.cities,
+    store.selectedCity,
+    store.selectedDetail,
+  ]);
 
   const fetchTerminal = async (filters: FilterState, force = false) => {
     setLoading(true);
@@ -1293,7 +1412,10 @@ function ScanTerminalScreen() {
 
   const resolvedView: ContentView = activeView;
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
-  const activeDetailRow = resolvedView === "map" && mapFocusedCity ? mapFocusedRow : selectedRow;
+  const activeDetailRow =
+    resolvedView === "map" && mapFocusedCity
+      ? mapFocusedRow || mapFallbackRow
+      : selectedRow;
   const selectedDetail = activeDetailRow ? detailByRowId[activeDetailRow.id] : null;
   const scanStatus = terminalData?.status || (loading ? "loading" : error ? "failed" : "ready");
   const staleReason =
@@ -1309,12 +1431,7 @@ function ScanTerminalScreen() {
 
   const handleMapCitySelect = useCallback((cityName: string) => {
     setMapSelectedCityName(cityName);
-    const matchedRow =
-      timeSortedRows.find(
-        (row) =>
-          row.city.toLowerCase() === cityName.toLowerCase() ||
-          String(row.city_display_name || row.display_name || "").toLowerCase() === cityName.toLowerCase(),
-      ) || null;
+    const matchedRow = findRowForCity(timeSortedRows, cityName);
     setSelectedRowId(matchedRow?.id || null);
   }, [timeSortedRows]);
 
