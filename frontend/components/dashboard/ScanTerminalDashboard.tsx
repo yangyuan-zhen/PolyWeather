@@ -16,6 +16,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import styles from "./Dashboard.module.css";
@@ -475,6 +476,7 @@ function ScanTerminalScreen() {
   const [userLocalTime, setUserLocalTime] = useState("--");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const deferredRows = useDeferredValue(terminalData?.rows || []);
+  const preloadedSnapshotRef = useRef<string | null>(null);
 
   const prependAiLogs = (entries: ScanAiLogEntry[]) => {
     setAiLogs((current) => [...entries, ...current].slice(0, 8));
@@ -735,6 +737,37 @@ function ScanTerminalScreen() {
     if (!isPro) return;
     void fetchTerminal(DEFAULT_FILTERS, false);
   }, [isPro]);
+
+  useEffect(() => {
+    if (!isPro || !terminalData?.rows.length) return;
+    const snapshotKey =
+      terminalData.snapshot_id ||
+      terminalData.generated_at ||
+      terminalData.rows.map((row) => row.id).join("|");
+    if (!snapshotKey || preloadedSnapshotRef.current === snapshotKey) return;
+    preloadedSnapshotRef.current = snapshotKey;
+
+    const seen = new Set<string>();
+    const cities = sortRowsByUserTime(terminalData.rows)
+      .map((row) => String(row.city || row.city_display_name || row.display_name || "").trim())
+      .filter((city) => {
+        const key = normalizeCityKey(city);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 12);
+
+    cities.forEach((cityName) => {
+      void store.ensureCityDetail(cityName, true, "market").catch(() => {});
+    });
+  }, [
+    isPro,
+    store.ensureCityDetail,
+    terminalData?.rows,
+    terminalData?.generated_at,
+    terminalData?.snapshot_id,
+  ]);
 
   useEffect(() => {
     if (!isPro) return;

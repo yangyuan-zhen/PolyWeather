@@ -219,31 +219,118 @@ function getEmosPeak(row: ScanOpportunityRow, tempSymbol?: string | null) {
   return { label: peakLabel, probability: peakProbability };
 }
 
+function normalizeLookupKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
 function getDetailForRow(
   row: Pick<ScanOpportunityRow, "city" | "city_display_name" | "display_name">,
   cityDetailsByName?: Record<string, CityDetail>,
 ) {
   if (!cityDetailsByName) return null;
   const rowKeys = [row.city, row.city_display_name, row.display_name]
-    .map((value) => String(value || "").trim().toLowerCase())
+    .map(normalizeLookupKey)
     .filter(Boolean);
   return (
     Object.entries(cityDetailsByName).find(([name, detail]) => {
       const detailKeys = [name, detail.name, detail.display_name]
-        .map((value) => String(value || "").trim().toLowerCase())
+        .map(normalizeLookupKey)
         .filter(Boolean);
       return rowKeys.some((key) => detailKeys.includes(key));
     })?.[1] || null
   );
 }
 
+function getDetailViewDate(detail: CityDetail, row?: ScanOpportunityRow | null) {
+  if (!row) return detail.local_date;
+  const rawDate = row.selected_date || row.local_date || "";
+  const phase = String(row.window_phase || "").toLowerCase();
+  if ((phase === "tomorrow" || phase === "week_ahead") && rawDate) return rawDate;
+  if (!rawDate || rawDate === detail.local_date || row.local_date === detail.local_date) {
+    return detail.local_date;
+  }
+  return detail.local_date || rawDate;
+}
+
+function normalizeBucketLabel(value?: string | null, tempSymbol?: string | null) {
+  return normalizeTemperatureLabel(value, tempSymbol)
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/℃/g, "°c");
+}
+
+function extractNumbers(value?: string | null) {
+  return Array.from(String(value || "").matchAll(/-?\d+(?:\.\d+)?/g)).map((match) =>
+    Number(match[0]),
+  );
+}
+
+function getBucketText(bucket: { label?: string | null; bucket?: string | null; range?: string | null }) {
+  return [bucket.label, bucket.bucket, bucket.range]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+}
+
+function bucketMatchesRow(
+  bucket: {
+    label?: string | null;
+    bucket?: string | null;
+    range?: string | null;
+    value?: number | string | null;
+  },
+  row: ScanOpportunityRow,
+  tempSymbol?: string | null,
+) {
+  const targetLabel = normalizeBucketLabel(row.target_label, tempSymbol);
+  const bucketLabels = getBucketText(bucket).map((label) =>
+    normalizeBucketLabel(label, tempSymbol),
+  );
+  if (targetLabel && bucketLabels.some((label) => label === targetLabel)) {
+    return true;
+  }
+
+  const rawTargetLabel = String(row.target_label || "");
+  const targetNumbers = extractNumbers(rawTargetLabel);
+  const targetValue =
+    row.target_value ?? row.target_threshold ?? row.target_lower ?? row.target_upper ?? targetNumbers[0] ?? null;
+  if (targetValue == null || !Number.isFinite(Number(targetValue))) return false;
+
+  const bucketNumbers = [
+    ...(bucket.value != null && Number.isFinite(Number(bucket.value))
+      ? [Number(bucket.value)]
+      : []),
+    ...getBucketText(bucket).flatMap(extractNumbers),
+  ];
+  const matchesNumber = bucketNumbers.some(
+    (value) => Math.abs(Number(value) - Number(targetValue)) < 0.05,
+  );
+  if (!matchesNumber) return false;
+
+  const targetIsUpper =
+    /(\+|以上|or\s*above|above|greater|>=|≥)/i.test(rawTargetLabel) ||
+    (row.target_lower != null && row.target_upper == null);
+  const targetIsLower =
+    /(<=|≤|below|or\s*below|以下)/i.test(rawTargetLabel) ||
+    (row.target_upper != null && row.target_lower == null);
+  const bucketRaw = getBucketText(bucket).join(" ");
+  const bucketIsUpper = /(\+|以上|or\s*above|above|greater|>=|≥|inf|∞)/i.test(bucketRaw);
+  const bucketIsLower = /(<=|≤|below|or\s*below|以下|-inf|-∞)/i.test(bucketRaw);
+
+  if (targetIsUpper || bucketIsUpper) return targetIsUpper === bucketIsUpper;
+  if (targetIsLower || bucketIsLower) return targetIsLower === bucketIsLower;
+  return true;
+}
+
 function getDetailPeak(
   detail: CityDetail | null,
-  targetDate?: string | null,
+  row?: ScanOpportunityRow | null,
   tempSymbol?: string | null,
 ) {
   if (!detail) return null;
-  const view = getProbabilityView(detail, targetDate);
+  const view = getProbabilityView(detail, getDetailViewDate(detail, row));
   const buckets = Array.isArray(view.probabilitiesAll)
     ? view.probabilitiesAll
     : [];
@@ -270,30 +357,12 @@ function getDetailBucketEventProbability(
   tempSymbol?: string | null,
 ) {
   if (!detail) return null;
-  const view = getProbabilityView(detail, row.selected_date || row.local_date);
+  const view = getProbabilityView(detail, getDetailViewDate(detail, row));
   const buckets = Array.isArray(view.probabilitiesAll)
     ? view.probabilitiesAll
     : [];
   if (!buckets.length) return null;
-  const targetLabel = normalizeTemperatureLabel(row.target_label, tempSymbol);
-  const targetValue =
-    row.target_value ?? row.target_threshold ?? row.target_lower ?? row.target_upper ?? null;
-  const matched =
-    buckets.find((bucket) => {
-      const label = normalizeTemperatureLabel(
-        bucket.label || bucket.bucket || bucket.range,
-        tempSymbol,
-      );
-      return Boolean(targetLabel && label && label === targetLabel);
-    }) ||
-    buckets.find((bucket) => {
-      const value = bucket.value;
-      return (
-        value != null &&
-        targetValue != null &&
-        Math.abs(Number(value) - Number(targetValue)) < 0.01
-      );
-    });
+  const matched = buckets.find((bucket) => bucketMatchesRow(bucket, row, tempSymbol));
   return normalizeProbability(matched?.probability);
 }
 
@@ -325,9 +394,9 @@ function buildOpportunityGroups(
       row.city_display_name || row.display_name || row.city,
       locale,
     );
-    const date = row.selected_date || row.local_date || "";
+    const date = detail ? getDetailViewDate(detail, row) : row.selected_date || row.local_date || "";
     const key = `${row.city || cityName}|${date}`;
-    const peak = getDetailPeak(detail, date, tempSymbol) || getEmosPeak(row, tempSymbol);
+    const peak = getDetailPeak(detail, row, tempSymbol) || getEmosPeak(row, tempSymbol);
     const modelView = detail ? getModelView(detail, date) : null;
     const debPrediction = modelView?.deb ?? row.deb_prediction ?? null;
     const existing = groups.get(key);

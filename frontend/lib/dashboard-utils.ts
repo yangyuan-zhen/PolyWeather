@@ -1271,7 +1271,7 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
     engine: null,
     mu: daily?.deb?.prediction ?? null,
     probabilities: daily?.probabilities || [],
-    probabilitiesAll: daily?.probabilities || [],
+    probabilitiesAll: daily?.probabilities_all || daily?.probabilities || [],
     shadowProbabilities: [],
     shadowProbabilitiesAll: [],
   };
