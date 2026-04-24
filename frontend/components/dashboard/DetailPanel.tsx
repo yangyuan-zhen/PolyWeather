@@ -130,10 +130,15 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
   );
 }
 
-export function DetailPanel() {
+export function DetailPanel({
+  variant = "overlay",
+}: {
+  variant?: "overlay" | "rail";
+} = {}) {
   const store = useDashboardStore();
   const { locale, t } = useI18n();
   const router = useRouter();
+  const isRail = variant === "rail";
   const detail = store.selectedDetail;
   const selectedCityItem = useMemo(
     () =>
@@ -155,8 +160,9 @@ export function DetailPanel() {
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
     Boolean(store.futureModalDate) || store.historyState.isOpen;
-  const isVisible =
-    store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
+  const isVisible = isRail
+    ? Boolean(store.selectedCity) && !isOverlayOpen
+    : store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
   const hasBasicPanelContent = Boolean(
     detail || selectedSummary || selectedCityItem,
   );
@@ -311,20 +317,26 @@ export function DetailPanel() {
   return (
     <aside
       ref={panelRef}
-      className={clsx("detail-panel", isVisible && "visible")}
+      className={clsx(
+        "detail-panel",
+        isRail && "scan-city-detail-rail",
+        (isVisible || isRail) && "visible",
+      )}
     >
       <div className="panel-header">
-        <button
-          type="button"
-          className="panel-close"
-          aria-label={t("detail.closeAria")}
-          onClick={() => {
-            blurActiveElement();
-            store.closePanel();
-          }}
-        >
-          ×
-        </button>
+        {!isRail ? (
+          <button
+            type="button"
+            className="panel-close"
+            aria-label={t("detail.closeAria")}
+            onClick={() => {
+              blurActiveElement();
+              store.closePanel();
+            }}
+          >
+            ×
+          </button>
+        ) : null}
         <div className="panel-title-area">
           <div className="panel-title-stack">
             <div className="panel-overline">

@@ -68,6 +68,8 @@ const DEFAULT_FILTERS: FilterState = {
   limit: 28,
 };
 
+const SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
+
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
 type AssistantMessage = {
@@ -1223,8 +1225,6 @@ function ScanTerminalScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [detailByRowId, setDetailByRowId] = useState<Record<string, MarketScan | null>>({});
-  const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ContentView>("list");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [userLocalTime, setUserLocalTime] = useState("--");
@@ -1357,30 +1357,6 @@ function ScanTerminalScreen() {
     }
   };
 
-  const fetchDetail = async (row: ScanOpportunityRow) => {
-    if (!row.market_slug || !row.selected_date || row.closed) return;
-    if (detailByRowId[row.id] !== undefined) return;
-    setDetailLoadingId(row.id);
-    try {
-      const response = await dashboardClient.getCityMarketScan(row.city, {
-        force: false,
-        marketSlug: row.market_slug,
-        targetDate: row.selected_date,
-      });
-      setDetailByRowId((current) => ({
-        ...current,
-        [row.id]: response.market_scan || null,
-      }));
-    } catch {
-      setDetailByRowId((current) => ({
-        ...current,
-        [row.id]: null,
-      }));
-    } finally {
-      setDetailLoadingId((current) => (current === row.id ? null : current));
-    }
-  };
-
   useEffect(() => {
     void fetchTerminal(DEFAULT_FILTERS, false);
   }, []);
@@ -1388,7 +1364,7 @@ function ScanTerminalScreen() {
   useEffect(() => {
     const intervalId = window.setInterval(() => {
       void fetchTerminal(activeFilters, false);
-    }, 30_000);
+    }, SCAN_AUTO_REFRESH_MS);
     return () => window.clearInterval(intervalId);
   }, [activeFilters]);
 
@@ -1417,18 +1393,16 @@ function ScanTerminalScreen() {
     resolvedView === "map" && mapFocusedCity
       ? mapFocusedRow || mapFallbackRow
       : selectedRow;
-  const selectedDetail = activeDetailRow ? detailByRowId[activeDetailRow.id] : null;
   const scanStatus = terminalData?.status || (loading ? "loading" : error ? "failed" : "ready");
   const staleReason =
     terminalData?.stale_reason || error || null;
 
   useEffect(() => {
     if (!activeDetailRow) return;
-    void fetchDetail(activeDetailRow);
     if (!store.cityDetailsByName[activeDetailRow.city]) {
       void store.ensureCityDetail(activeDetailRow.city, false, "panel").catch(() => {});
     }
-  }, [activeDetailRow, detailByRowId]);
+  }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
 
   const handleMapCitySelect = useCallback((cityName: string) => {
     setMapSelectedCityName(cityName);
@@ -1618,19 +1592,7 @@ function ScanTerminalScreen() {
           </section>
         </main>
 
-        <ScanOpportunityDetailPanel
-          row={activeDetailRow}
-          marketScan={selectedDetail}
-          loading={detailLoadingId === activeDetailRow?.id}
-        />
-        <CityDetailPanel />
-        <AssistantWidget
-          terminalData={terminalData}
-          rows={timeSortedRows}
-          selectedRow={activeDetailRow}
-          locale={locale}
-          totalCities={store.cities.length}
-        />
+        <CityDetailPanel variant="rail" />
       </div>
     </div>
   );

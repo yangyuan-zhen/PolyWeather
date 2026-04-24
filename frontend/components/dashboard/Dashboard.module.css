@@ -3107,6 +3107,33 @@
   transform: translateX(0);
 }
 
+.root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
+  position: relative;
+  inset: auto;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: calc(100vh - 32px);
+  z-index: auto;
+  transform: none;
+  transition: none;
+  border: 1px solid rgba(82, 114, 161, 0.18);
+  border-left: 1px solid rgba(82, 114, 161, 0.18);
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(15, 28, 47, 0.94), rgba(9, 18, 32, 0.94));
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(14px);
+  align-self: stretch;
+}
+
+.root :global(.scan-terminal > .detail-panel.scan-city-detail-rail.visible) {
+  transform: none;
+}
+
+.root :global(.scan-city-detail-rail .panel-header) {
+  padding: 20px 16px 16px;
+}
+
 .root :global(.panel-header) {
   padding: 20px 20px 16px;
   border-bottom: 1px solid var(--border-subtle);
@@ -10565,6 +10592,11 @@
     grid-template-columns: 240px minmax(0, 1fr);
   }
 
+  .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+
   .root :global(.scan-detail-panel) {
     grid-column: 1 / -1;
     min-height: auto;
@@ -10578,7 +10610,8 @@
 
   .root :global(.scan-filter-panel),
   .root :global(.scan-data-grid),
-  .root :global(.scan-detail-panel) {
+  .root :global(.scan-detail-panel),
+  .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
     min-height: auto;
   }
 

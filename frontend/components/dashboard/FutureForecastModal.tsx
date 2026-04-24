@@ -41,6 +41,8 @@ import type {
   MarketScan,
 } from "@/lib/dashboard-types";
 
+const TODAY_MARKET_SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
+
 function normalizeMarketValue(value?: number | null) {
   if (value == null) return null;
   const numeric = Number(value);
@@ -830,7 +832,7 @@ function FutureForecastModalContent({
         return;
       }
       refreshMarketScan();
-    }, 30_000);
+    }, TODAY_MARKET_SCAN_AUTO_REFRESH_MS);
 
     return () => {
       cancelled = true;
