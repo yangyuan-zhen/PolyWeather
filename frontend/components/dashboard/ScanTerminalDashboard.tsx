@@ -24,6 +24,7 @@ import {
   FilterState,
   ScanFilterPanel,
 } from "@/components/dashboard/ScanFilterPanel";
+import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
@@ -464,7 +465,7 @@ function buildAssistantContext(params: {
   };
 }
 
-function DetailPanel({
+function ScanOpportunityDetailPanel({
   row,
   marketScan,
   loading,
@@ -1437,14 +1438,18 @@ function ScanTerminalScreen() {
 
   const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
     setSelectedRowId(row.id);
-  }, []);
+    void store.selectCity(row.city);
+  }, [store]);
 
   const renderMainView = () => {
     if (resolvedView === "map") {
       return (
         <div className="scan-map-view">
           <div className="scan-map-shell">
-            <MapCanvas onCitySelect={handleMapCitySelect} />
+            <MapCanvas
+              onCitySelect={handleMapCitySelect}
+              selectionMode="select"
+            />
           </div>
           <div className="scan-map-caption">
             {locale === "en-US"
@@ -1613,11 +1618,12 @@ function ScanTerminalScreen() {
           </section>
         </main>
 
-        <DetailPanel
+        <ScanOpportunityDetailPanel
           row={activeDetailRow}
           marketScan={selectedDetail}
           loading={detailLoadingId === activeDetailRow?.id}
         />
+        <CityDetailPanel />
         <AssistantWidget
           terminalData={terminalData}
           rows={timeSortedRows}
