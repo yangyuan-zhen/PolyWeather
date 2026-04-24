@@ -56,11 +56,13 @@ type UnlockProOverlayProps = {
 
 const FEATURES = {
   "zh-CN": [
+    "市场扫描台 + V4-Flash 深度复核",
     "今日日内机场报文规则分析（含高温时段）",
     "历史对账 + 未来日期分析",
     "全平台智能气象推送",
   ],
   "en-US": [
+    "Market Scan Terminal + V4-Flash review",
     "Intraday METAR rule-based analysis with peak-time window",
     "Historical reconciliation + future-date analysis",
     "Cross-platform alerts",

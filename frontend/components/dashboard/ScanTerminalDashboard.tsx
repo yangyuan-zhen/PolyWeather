@@ -27,6 +27,7 @@ import { MapCanvas } from "@/components/dashboard/MapCanvas";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
 import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
+import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
   useDashboardStore,
@@ -243,6 +244,7 @@ function ScanTerminalScreen() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
+  const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [userLocalTime, setUserLocalTime] = useState("--");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const deferredRows = useDeferredValue(terminalData?.rows || []);
@@ -490,6 +492,10 @@ function ScanTerminalScreen() {
     void store.selectCity(row.city);
   }, [store]);
 
+  const openScanPaywall = useCallback(() => {
+    setShowScanPaywall(true);
+  }, []);
+
   const renderMainView = () => {
     if (resolvedView === "map") {
       return (
@@ -635,12 +641,16 @@ function ScanTerminalScreen() {
                   </button>
                 </>
               ) : (
-                <Link href={accountHref} className="scan-primary-button">
+                <button
+                  type="button"
+                  className="scan-primary-button"
+                  onClick={openScanPaywall}
+                >
                   <UserRound size={14} />
                   {store.proAccess.authenticated
                     ? isEn ? "Upgrade Pro" : "升级 Pro"
                     : isEn ? "Sign in" : "登录"}
-                </Link>
+                </button>
               )}
               <button
                 type="button"
@@ -692,10 +702,12 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "list" ? "active" : ""}
-                  disabled={!isPro}
                   title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
-                    if (!isPro) return;
+                    if (!isPro) {
+                      openScanPaywall();
+                      return;
+                    }
                     setActiveView("list");
                   }}
                 >
@@ -704,10 +716,12 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
-                  disabled={!isPro}
                   title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
-                    if (!isPro) return;
+                    if (!isPro) {
+                      openScanPaywall();
+                      return;
+                    }
                     setActiveView("calendar");
                   }}
                 >
@@ -749,6 +763,24 @@ function ScanTerminalScreen() {
         <CityDetailPanel variant="rail" />
       </div>
       <FutureForecastModal />
+      {showScanPaywall ? (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={isEn ? "Unlock market scan" : "解锁市场扫描"}
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowScanPaywall(false);
+            }
+          }}
+        >
+          <ProFeaturePaywall
+            feature="scan"
+            onClose={() => setShowScanPaywall(false)}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
