@@ -153,8 +153,8 @@ function ProbabilityPreview({
     });
   }
 
-  const modelLabel = locale === "en-US" ? "M" : "模";
-  const marketLabel = locale === "en-US" ? "P" : "市";
+  const modelLabel = "EMOS";
+  const marketLabel = locale === "en-US" ? "Market" : "市场";
 
   return (
     <div className="scan-distribution-preview">
@@ -202,28 +202,53 @@ function ScoreRing({ score }: { score?: number | null }) {
 
 export const OpportunityTable = React.memo(function OpportunityTable({
   rows,
+  status,
+  stale,
+  staleReason,
+  loading,
   selectedRowId,
   onSelectRow,
 }: {
   rows: ScanOpportunityRow[];
+  status?: string | null;
+  stale?: boolean;
+  staleReason?: string | null;
+  loading?: boolean;
   selectedRowId?: string | null;
   onSelectRow?: (row: ScanOpportunityRow) => void;
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
+  const hasRows = rows.length > 0;
 
-  if (!rows.length) {
+  if (!hasRows) {
+    const title =
+      loading
+        ? isEn
+          ? "Scanning markets"
+          : "正在扫描市场"
+        : status === "failed"
+          ? isEn
+            ? "Scan failed"
+            : "扫描失败"
+          : isEn
+            ? "No tradable market right now"
+            : "当前暂无可交易市场";
+    const copy =
+      loading
+        ? isEn
+          ? "Waiting for the latest market snapshot. Existing data will stay on screen when available."
+          : "正在等待最新市场快照；如果有旧数据，会继续保留在页面上。"
+        : status === "failed"
+          ? staleReason || (isEn ? "No valid market snapshot is available." : "当前没有可用的市场快照。")
+          : isEn
+            ? "The current snapshot does not contain a tradable main signal."
+            : "当前快照里还没有可交易的主信号。";
     return (
       <div className="scan-table-shell empty">
         <div className="scan-empty-state">
-          <div className="scan-empty-title">
-            {isEn ? "No main signal right now" : "当前无主信号"}
-          </div>
-          <div className="scan-empty-copy">
-            {isEn
-              ? "No row passed the price, spread, liquidity, and edge thresholds."
-              : "当前没有机会同时满足价格、点差、流动性和 edge 过滤。"}
-          </div>
+          <div className="scan-empty-title">{title}</div>
+          <div className="scan-empty-copy">{copy}</div>
         </div>
       </div>
     );
@@ -231,12 +256,18 @@ export const OpportunityTable = React.memo(function OpportunityTable({
 
   return (
     <div className="scan-table-shell">
+      {stale ? (
+        <div className="scan-table-banner">
+          <strong>{isEn ? "Showing delayed snapshot" : "当前显示延迟快照"}</strong>
+          <span>{staleReason || (isEn ? "Latest refresh failed, fallback to the last successful scan." : "最新刷新失败，已回退到上次成功扫描结果。")}</span>
+        </div>
+      ) : null}
       <div className="scan-table-header">
         <span />
         <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
         <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
-        <span>{isEn ? "EMOS vs Market" : "EMOS 分布 vs 市场分布"}</span>
-        <span>{isEn ? "Best Opportunity" : "最佳机会"}</span>
+        <span>{isEn ? "EMOS / Market" : "EMOS / 市场"}</span>
+        <span>{isEn ? "Quote / Model" : "买价 / 模型"}</span>
         <span>{isEn ? "Edge" : "边际优势"}</span>
         <span>{isEn ? "Score" : "综合得分"}</span>
       </div>
@@ -292,8 +323,8 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                   {formatAction(row, locale, tempSymbol)}
                   </div>
                 <div className="scan-trade-sub">
-                  {formatPercent(row.ask != null ? row.ask * 100 : null)} →{" "}
-                  {formatPercent(row.model_probability != null ? row.model_probability * 100 : null)}
+                  {isEn ? "Buy" : "买价"} {row.ask != null ? `${Math.round(row.ask * 100)}¢` : "--"} ·{" "}
+                  EMOS {formatPercent(row.model_probability != null ? row.model_probability * 100 : null)}
                 </div>
                 <div className="scan-trade-note">
                   {normalizeTemperatureLabel(row.target_label, tempSymbol) ||

@@ -2,56 +2,99 @@
 
 import React from "react";
 import { useI18n } from "@/hooks/useI18n";
-import type { ScanTerminalResponse } from "@/lib/dashboard-types";
+import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
 
-type KPIData = ScanTerminalResponse["summary"];
-
-function formatVolume(value: number): string {
-  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `$${(value / 1_000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+function formatPercent(value?: number | null, signed = false): string {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const numeric = Number(value);
+  return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
 }
 
-export function ScanKPIBar({ data }: { data: KPIData }) {
+function countByRisk(rows: ScanOpportunityRow[]) {
+  return rows.reduce(
+    (acc, row) => {
+      const risk = String(row.risk_level || "").toLowerCase();
+      if (risk.includes("high")) acc.high += 1;
+      else if (risk.includes("medium")) acc.medium += 1;
+      else acc.low += 1;
+      return acc;
+    },
+    { high: 0, medium: 0, low: 0 },
+  );
+}
+
+export function ScanKPIBar({
+  response,
+  rows,
+  totalCities,
+  loading,
+}: {
+  response: ScanTerminalResponse | null;
+  rows: ScanOpportunityRow[];
+  totalCities: number;
+  loading: boolean;
+}) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
+  const summary = response?.summary;
+  const riskCounts = countByRisk(rows);
+  const tradableRows = rows.filter((row) => row.tradable && !row.closed);
+  const liveRows = rows.filter((row) => row.active || row.accepting_orders);
+  const bestRow = rows[0] || null;
+  const statusLabel =
+    loading && !response
+      ? isEn
+        ? "Scanning"
+        : "扫描中"
+      : response?.status === "stale"
+        ? isEn
+          ? "Stale"
+          : "旧数据"
+        : response?.status === "failed"
+          ? isEn
+            ? "Failed"
+            : "失败"
+          : isEn
+            ? "Live"
+            : "最新";
 
   const cards = [
     {
-      label: isEn ? "Recommended" : "推荐机会",
-      value: String(data.recommended_count),
-      note: `${isEn ? "Visible" : "当前展示"} ${data.visible_count}`,
-      tone: "green",
+      label: isEn ? "Scan Status" : "扫描状态",
+      value: `${rows.length}/${totalCities || 0}`,
+      note:
+        loading && response
+          ? isEn
+            ? "Refreshing latest snapshot"
+            : "正在刷新最新快照"
+          : response?.status === "stale"
+            ? response.stale_reason || (isEn ? "Using last good snapshot" : "正在使用上次成功快照")
+            : response?.status === "failed"
+              ? response.stale_reason || (isEn ? "No valid snapshot" : "当前没有可用快照")
+              : `${isEn ? "Snapshot" : "快照"} · ${statusLabel}`,
+      tone: response?.status === "failed" ? "red" : response?.status === "stale" ? "amber" : "cyan",
     },
     {
-      label: isEn ? "Avg Edge" : "平均边际优势",
-      value:
-        data.avg_edge_percent != null
-          ? `+${data.avg_edge_percent.toFixed(1)}%`
-          : "--",
-      note: `${isEn ? "Candidates" : "候选总数"} ${data.candidate_total}`,
-      tone: "purple",
-    },
-    {
-      label: isEn ? "Avg Confidence" : "平均主信号置信度",
-      value:
-        data.avg_primary_confidence != null
-          ? `+${data.avg_primary_confidence.toFixed(1)}%`
-          : "--",
-      note: isEn ? "Main signal score" : "主信号评分",
+      label: isEn ? "Book Status" : "盘口状态",
+      value: `${liveRows.length}`,
+      note: `${isEn ? "Tradable" : "可交易"} ${tradableRows.length} · ${isEn ? "No edge" : "无机会"} ${Math.max(0, rows.length - tradableRows.length)}`,
       tone: "blue",
     },
     {
-      label: isEn ? "Tradable Markets" : "可交易市场",
-      value: String(data.tradable_market_count),
-      note: `${isEn ? "Filtered" : "过滤后"} / ${data.candidate_total || 0}`,
-      tone: "orange",
+      label: isEn ? "Opportunity Quality" : "机会质量",
+      value: formatPercent(summary?.avg_edge_percent, true),
+      note: bestRow
+        ? `${isEn ? "Best" : "最佳"} ${bestRow.city_display_name || bestRow.display_name || bestRow.city} · ${formatPercent(bestRow.edge_percent, true)}`
+        : isEn
+          ? "No active market now"
+          : "当前没有活跃市场",
+      tone: "green",
     },
     {
-      label: isEn ? "Total Volume" : "总成交量",
-      value: formatVolume(data.total_volume),
-      note: isEn ? "Past 24 hours" : "过去 24 小时",
-      tone: "neutral",
+      label: isEn ? "Risk Layers" : "风险层",
+      value: `${riskCounts.high} / ${riskCounts.medium} / ${riskCounts.low}`,
+      note: `${isEn ? "High / Med / Low" : "高 / 中 / 低"}`,
+      tone: "purple",
     },
   ];
 

@@ -4,6 +4,7 @@ import json
 import os
 import threading
 import time
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -99,16 +100,123 @@ def _get_cached_scan_terminal_payload(
         return dict(payload)
 
 
+def _get_scan_terminal_cache_entry(filters: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    cache_key = _scan_terminal_cache_key(filters)
+    with _SCAN_TERMINAL_CACHE_LOCK:
+        cached = _SCAN_TERMINAL_CACHE.get(cache_key)
+        if not isinstance(cached, dict):
+            return None
+        return dict(cached)
+
+
+def _build_scan_terminal_snapshot_id(
+    filters: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    summary: Dict[str, Any],
+    top_signal: Optional[Dict[str, Any]],
+) -> str:
+    seed_payload = {
+        "filters": filters,
+        "summary": {
+            "candidate_total": summary.get("candidate_total"),
+            "tradable_market_count": summary.get("tradable_market_count"),
+            "avg_edge_percent": summary.get("avg_edge_percent"),
+        },
+        "top_signal": {
+            "id": (top_signal or {}).get("id"),
+            "edge_percent": (top_signal or {}).get("edge_percent"),
+            "final_score": (top_signal or {}).get("final_score"),
+        },
+        "rows": [
+            {
+                "id": row.get("id"),
+                "edge_percent": row.get("edge_percent"),
+                "final_score": row.get("final_score"),
+            }
+            for row in rows[:10]
+        ],
+    }
+    digest = hashlib.md5(
+        json.dumps(seed_payload, ensure_ascii=True, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    return f"scan-{digest[:10]}"
+
+
 def _set_cached_scan_terminal_payload(
     filters: Dict[str, Any],
     payload: Dict[str, Any],
 ) -> None:
     cache_key = _scan_terminal_cache_key(filters)
+    existing = _get_scan_terminal_cache_entry(filters) or {}
     with _SCAN_TERMINAL_CACHE_LOCK:
         _SCAN_TERMINAL_CACHE[cache_key] = {
             "t": time.time(),
             "payload": dict(payload),
+            "success_t": time.time(),
+            "success_payload": dict(payload),
+            "last_error": existing.get("last_error"),
+            "last_failed_at": existing.get("last_failed_at"),
         }
+
+
+def _set_scan_terminal_failure_state(
+    filters: Dict[str, Any],
+    *,
+    error_message: str,
+) -> None:
+    cache_key = _scan_terminal_cache_key(filters)
+    with _SCAN_TERMINAL_CACHE_LOCK:
+        existing = _SCAN_TERMINAL_CACHE.get(cache_key) or {}
+        existing["last_error"] = error_message
+        existing["last_failed_at"] = datetime.utcnow().isoformat() + "Z"
+        _SCAN_TERMINAL_CACHE[cache_key] = existing
+
+
+def _build_stale_scan_terminal_payload(
+    *,
+    filters: Dict[str, Any],
+    success_payload: Dict[str, Any],
+    error_message: str,
+    failed_at: Optional[str],
+) -> Dict[str, Any]:
+    payload = dict(success_payload)
+    payload["status"] = "stale"
+    payload["stale"] = True
+    payload["stale_reason"] = error_message
+    payload["last_success_at"] = success_payload.get("generated_at")
+    payload["last_failed_at"] = failed_at
+    payload["filters"] = filters
+    return payload
+
+
+def _build_failed_scan_terminal_payload(
+    *,
+    filters: Dict[str, Any],
+    error_message: str,
+    failed_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    return {
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        "snapshot_id": None,
+        "status": "failed",
+        "stale": False,
+        "stale_reason": error_message,
+        "last_success_at": None,
+        "last_failed_at": failed_at or (datetime.utcnow().isoformat() + "Z"),
+        "filters": filters,
+        "summary": {
+            "recommended_count": 0,
+            "visible_count": 0,
+            "candidate_total": 0,
+            "avg_edge_percent": None,
+            "avg_primary_confidence": None,
+            "tradable_market_count": 0,
+            "total_volume": 0.0,
+            "resolved_market_type": "maxtemp",
+        },
+        "top_signal": None,
+        "rows": [],
+    }
 
 
 def _resolve_time_range_dates(data: Dict[str, Any], time_range: str) -> List[str]:
@@ -265,83 +373,105 @@ def build_scan_terminal_payload(
         cached = _get_cached_scan_terminal_payload(filters)
         if cached is not None:
             return cached
+    cached_entry = _get_scan_terminal_cache_entry(filters) or {}
 
-    city_names = list(CITIES.keys())
-    max_workers = max(1, min(6, len(city_names)))
-    city_results: List[Dict[str, Any]] = []
+    try:
+        city_names = list(CITIES.keys())
+        max_workers = max(1, min(4, len(city_names)))
+        city_results: List[Dict[str, Any]] = []
+        failed_cities: List[str] = []
+        failed_reasons: List[str] = []
 
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        future_map = {
-            executor.submit(
-                _scan_city_terminal_rows,
-                city_name,
-                filters,
-                force_refresh=force_refresh,
-            ): city_name
-            for city_name in city_names
-        }
-        for future in as_completed(future_map):
-            city_name = future_map[future]
-            try:
-                city_results.append(future.result())
-            except Exception as exc:
-                logger.warning("scan terminal city failed city={}: {}", city_name, exc)
-
-    primary_rows: List[Dict[str, Any]] = []
-    primary_scores: List[float] = []
-    candidate_total = 0
-
-    for result in city_results:
-        candidate_total += int(result.get("candidate_total") or 0)
-        primary_rows.extend(result.get("rows") or [])
-        primary_scores.extend(result.get("primary_scores") or [])
-
-    primary_rows.sort(
-        key=lambda row: (
-            float(row.get("final_score") or 0.0),
-            float(row.get("edge_percent") or 0.0),
-        ),
-        reverse=True,
-    )
-
-    ranked_rows: List[Dict[str, Any]] = []
-    for index, row in enumerate(primary_rows[: filters["limit"]], start=1):
-        ranked_rows.append(
-            {
-                **row,
-                "rank": index,
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_map = {
+                executor.submit(
+                    _scan_city_terminal_rows,
+                    city_name,
+                    filters,
+                    force_refresh=force_refresh,
+                ): city_name
+                for city_name in city_names
             }
+            for future in as_completed(future_map):
+                city_name = future_map[future]
+                try:
+                    city_results.append(future.result())
+                except Exception as exc:
+                    failed_cities.append(city_name)
+                    failed_reasons.append(str(exc))
+                    logger.warning("scan terminal city failed city={}: {}", city_name, exc)
+
+        if city_names and len(failed_cities) >= len(city_names):
+            error_message = failed_reasons[0] if failed_reasons else "all city market scans failed"
+            _set_scan_terminal_failure_state(filters, error_message=error_message)
+            failed_entry = _get_scan_terminal_cache_entry(filters) or {}
+            success_payload = failed_entry.get("success_payload")
+            failed_at = failed_entry.get("last_failed_at")
+            if isinstance(success_payload, dict) and success_payload:
+                return _build_stale_scan_terminal_payload(
+                    filters=filters,
+                    success_payload=success_payload,
+                    error_message=error_message,
+                    failed_at=failed_at,
+                )
+            return _build_failed_scan_terminal_payload(
+                filters=filters,
+                error_message=error_message,
+                failed_at=failed_at,
+            )
+
+        primary_rows: List[Dict[str, Any]] = []
+        primary_scores: List[float] = []
+        candidate_total = 0
+
+        for result in city_results:
+            candidate_total += int(result.get("candidate_total") or 0)
+            primary_rows.extend(result.get("rows") or [])
+            primary_scores.extend(result.get("primary_scores") or [])
+
+        primary_rows.sort(
+            key=lambda row: (
+                float(row.get("final_score") or 0.0),
+                float(row.get("edge_percent") or 0.0),
+            ),
+            reverse=True,
         )
 
-    unique_market_volume: Dict[str, float] = {}
-    for row in primary_rows:
-        market_key = str(row.get("market_key") or row.get("id") or "").strip()
-        if not market_key:
-            continue
-        unique_market_volume[market_key] = max(
-            unique_market_volume.get(market_key, 0.0),
-            float(row.get("volume") or 0.0),
-        )
+        ranked_rows: List[Dict[str, Any]] = []
+        for index, row in enumerate(primary_rows[: filters["limit"]], start=1):
+            ranked_rows.append(
+                {
+                    **row,
+                    "rank": index,
+                }
+            )
 
-    avg_edge = None
-    if primary_rows:
-        edge_values = [
-            float(row.get("edge_percent") or 0.0)
-            for row in primary_rows
-            if _safe_float(row.get("edge_percent")) is not None
-        ]
-        if edge_values:
-            avg_edge = sum(edge_values) / len(edge_values)
+        unique_market_volume: Dict[str, float] = {}
+        for row in primary_rows:
+            market_key = str(row.get("market_key") or row.get("id") or "").strip()
+            if not market_key:
+                continue
+            unique_market_volume[market_key] = max(
+                unique_market_volume.get(market_key, 0.0),
+                float(row.get("volume") or 0.0),
+            )
 
-    avg_confidence = None
-    if primary_scores:
-        avg_confidence = sum(primary_scores) / len(primary_scores)
+        avg_edge = None
+        if primary_rows:
+            edge_values = [
+                float(row.get("edge_percent") or 0.0)
+                for row in primary_rows
+                if _safe_float(row.get("edge_percent")) is not None
+            ]
+            if edge_values:
+                avg_edge = sum(edge_values) / len(edge_values)
 
-    top_signal = ranked_rows[0] if ranked_rows else None
-    payload = {
-        "generated_at": datetime.utcnow().isoformat() + "Z",
-        "filters": filters,
-        "summary": {
+        avg_confidence = None
+        if primary_scores:
+            avg_confidence = sum(primary_scores) / len(primary_scores)
+
+        top_signal = ranked_rows[0] if ranked_rows else None
+        summary = {
             "recommended_count": len(primary_rows),
             "visible_count": len(ranked_rows),
             "candidate_total": candidate_total,
@@ -350,10 +480,43 @@ def build_scan_terminal_payload(
             "tradable_market_count": len(unique_market_volume),
             "total_volume": sum(unique_market_volume.values()),
             "resolved_market_type": "maxtemp",
-        },
-        "top_signal": top_signal,
-        "rows": ranked_rows,
-    }
+        }
+        payload = {
+            "generated_at": datetime.utcnow().isoformat() + "Z",
+            "filters": filters,
+            "summary": summary,
+            "top_signal": top_signal,
+            "rows": ranked_rows,
+            "status": "ready",
+            "stale": False,
+            "stale_reason": None,
+            "last_success_at": None,
+            "last_failed_at": None,
+        }
+        payload["snapshot_id"] = _build_scan_terminal_snapshot_id(
+            filters,
+            ranked_rows,
+            summary,
+            top_signal,
+        )
 
-    _set_cached_scan_terminal_payload(filters, payload)
-    return payload
+        _set_cached_scan_terminal_payload(filters, payload)
+        return payload
+    except Exception as exc:
+        error_message = str(exc)
+        logger.exception("scan terminal payload build failed: {}", error_message)
+        _set_scan_terminal_failure_state(filters, error_message=error_message)
+        success_payload = cached_entry.get("success_payload")
+        failed_at = _get_scan_terminal_cache_entry(filters).get("last_failed_at") if _get_scan_terminal_cache_entry(filters) else None
+        if isinstance(success_payload, dict) and success_payload:
+            return _build_stale_scan_terminal_payload(
+                filters=filters,
+                success_payload=success_payload,
+                error_message=error_message,
+                failed_at=failed_at,
+            )
+        return _build_failed_scan_terminal_payload(
+            filters=filters,
+            error_message=error_message,
+            failed_at=failed_at,
+        )

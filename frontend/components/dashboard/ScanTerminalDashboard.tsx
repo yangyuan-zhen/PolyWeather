@@ -3,8 +3,6 @@
 import clsx from "clsx";
 import Link from "next/link";
 import {
-  Bell,
-  Menu,
   RefreshCw,
   Moon,
   Sun,
@@ -64,26 +62,8 @@ const DEFAULT_FILTERS: FilterState = {
   limit: 28,
 };
 
-const NAV_ITEMS = [
-  { zh: "扫描台", en: "Terminal" },
-  { zh: "市场", en: "Markets" },
-  { zh: "分析", en: "Analysis" },
-  { zh: "组合", en: "Portfolio" },
-  { zh: "监控", en: "Monitor" },
-  { zh: "设置", en: "Settings" },
-];
-
-type TopSection = "terminal" | "markets" | "analysis" | "portfolio" | "monitor" | "settings";
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
-const TOP_SECTION_ORDER: TopSection[] = [
-  "terminal",
-  "markets",
-  "analysis",
-  "portfolio",
-  "monitor",
-  "settings",
-];
 
 function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
@@ -379,9 +359,6 @@ function DetailPanel({
             {loading ? ` · ${isEn ? "loading" : "载入中"}` : ""}
           </div>
         </div>
-        <button type="button" className="scan-detail-action-button">
-          {isEn ? "Add Watch" : "添加自选"}
-        </button>
       </div>
 
       <div className="scan-detail-primary-actions">
@@ -443,17 +420,8 @@ function DetailPanel({
             </strong>
           </div>
           <div className="scan-kv">
-            <span>{isEn ? "Window Left" : "剩余有效时间"}</span>
+            <span>{isEn ? "Time To Peak" : "距离预测峰值"}</span>
             <strong>{formatRemainingWindow(displayRow.remaining_window_minutes, locale)}</strong>
-          </div>
-          <div className="scan-kv">
-            <span>{isEn ? "Bias" : "分布偏移"}</span>
-            <strong>
-              {displayRow.distribution_bias_direction || "--"} ·{" "}
-              {displayRow.distribution_bias_score != null
-                ? displayRow.distribution_bias_score.toFixed(0)
-                : "--"}
-            </strong>
           </div>
           <div className="scan-kv">
             <span>{isEn ? "Airport" : "机场锚点"}</span>
@@ -521,38 +489,35 @@ function DetailPanel({
       </section>
 
       <section className="scan-detail-section">
-        <div className="scan-trade-cards">
-          <div className="scan-trade-card buy">
-            <div className="scan-trade-card-title">
-              {isEn ? "Buy Yes" : "买入 Yes"}{" "}
-              {normalizeTemperatureLabel(displayRow.target_label, tempSymbol) || ""}
-            </div>
-            <p>
-              {formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))} →{" "}
-              {formatProbability(yesRow?.model_probability)}
-            </p>
-            <p className="positive">{formatPercent(yesRow?.edge_percent, true)} {isEn ? "edge" : "边际优势"}</p>
-            <p>
-              {isEn ? "Bid / Ask" : "买卖价"} {formatPrice(getDetailSideBid(yesRow, marketScan, "yes"))} /{" "}
-              {formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))}
-            </p>
+        <div className="scan-detail-section-title">
+          {isEn ? "Main Signal" : "主信号概况"}
+        </div>
+        <div className="scan-kv-list compact">
+          <div className="scan-kv">
+            <span>{isEn ? "Best Side" : "主方向"}</span>
+            <strong>{displayRow.side === "no" ? "NO" : "YES"}</strong>
           </div>
-          <div className="scan-trade-card sell">
-            <div className="scan-trade-card-title">
-              {isEn ? "Buy No" : "买入 No"}{" "}
-              {normalizeTemperatureLabel(displayRow.target_label, tempSymbol) || ""}
-            </div>
-            <p>
-              {formatPrice(getDetailSideAsk(noRow, marketScan, "no"))} →{" "}
-              {formatProbability(noRow?.model_probability)}
-            </p>
-            <p className={Number(noRow?.edge_percent || 0) >= 0 ? "positive" : "negative"}>
-              {formatPercent(noRow?.edge_percent, true)} {isEn ? "edge" : "边际优势"}
-            </p>
-            <p>
-              {isEn ? "Bid / Ask" : "买卖价"} {formatPrice(getDetailSideBid(noRow, marketScan, "no"))} /{" "}
-              {formatPrice(getDetailSideAsk(noRow, marketScan, "no"))}
-            </p>
+          <div className="scan-kv">
+            <span>{isEn ? "Best Buy" : "最优买价"}</span>
+            <strong>
+              {displayRow.side === "no"
+                ? formatPrice(getDetailSideAsk(noRow, marketScan, "no"))
+                : formatPrice(getDetailSideAsk(yesRow, marketScan, "yes"))}
+            </strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "EMOS" : "EMOS 概率"}</span>
+            <strong>
+              {displayRow.side === "no"
+                ? formatProbability(noRow?.model_probability)
+                : formatProbability(yesRow?.model_probability)}
+            </strong>
+          </div>
+          <div className="scan-kv">
+            <span>{isEn ? "Edge" : "边际优势"}</span>
+            <strong className={Number(displayRow.edge_percent || 0) >= 0 ? "positive" : "negative"}>
+              {formatPercent(displayRow.edge_percent, true)}
+            </strong>
           </div>
         </div>
       </section>
@@ -630,6 +595,11 @@ function CalendarView({
                 className={`scan-calendar-card ${selectedRowId === row.id ? "selected" : ""}`}
                 onClick={() => onSelectRow(row)}
               >
+                {(() => {
+                  const tempSymbol = row.temp_symbol || "°C";
+                  const phaseMeta = getWindowPhaseMeta(row, locale);
+                  return (
+                    <>
                 <div className="scan-calendar-city">
                   {getLocalizedCityName(
                     row.city,
@@ -637,13 +607,19 @@ function CalendarView({
                     locale,
                   )}
                 </div>
-                <div className={`scan-calendar-action ${row.side === "no" ? "sell" : "buy"}`}>
-                  {row.action || row.target_label || "--"}
+                <div className="scan-calendar-action">
+                  {locale === "en-US" ? "DEB high" : "DEB 预测高点"} ·{" "}
+                  {row.deb_prediction != null
+                    ? formatTemperatureValue(row.deb_prediction, tempSymbol)
+                    : "--"}
                 </div>
                 <div className="scan-calendar-meta">
                   <span>{row.local_time || "--"}</span>
-                  <span>{formatPercent(row.edge_percent, true)}</span>
+                  <span>{phaseMeta.label}</span>
                 </div>
+                    </>
+                  );
+                })()}
               </button>
             ))}
           </div>
@@ -670,97 +646,6 @@ function OverviewMapView({ locale }: { locale: string }) {
   );
 }
 
-function PortfolioView({
-  rows,
-  locale,
-}: {
-  rows: ScanOpportunityRow[];
-  locale: string;
-}) {
-  const yesCount = rows.filter((row) => row.side === "yes").length;
-  const noCount = rows.filter((row) => row.side === "no").length;
-  const avgScore =
-    rows.length > 0
-      ? rows.reduce((sum, row) => sum + Number(row.final_score || 0), 0) / rows.length
-      : null;
-
-  return (
-    <div className="scan-summary-grid">
-      <div className="scan-summary-card">
-        <div className="scan-summary-label">{locale === "en-US" ? "YES Ideas" : "YES 机会"}</div>
-        <div className="scan-summary-value">{yesCount}</div>
-      </div>
-      <div className="scan-summary-card">
-        <div className="scan-summary-label">{locale === "en-US" ? "NO Ideas" : "NO 机会"}</div>
-        <div className="scan-summary-value">{noCount}</div>
-      </div>
-      <div className="scan-summary-card wide">
-        <div className="scan-summary-label">{locale === "en-US" ? "Avg Score" : "平均评分"}</div>
-        <div className="scan-summary-value">
-          {avgScore != null ? `${avgScore.toFixed(0)}/100` : "--"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MonitorView({
-  rows,
-  locale,
-}: {
-  rows: ScanOpportunityRow[];
-  locale: string;
-}) {
-  const groups = useMemo(() => {
-    const result = new Map<string, number>();
-    rows.forEach((row) => {
-      const label = getWindowPhaseMeta(row, locale).label;
-      result.set(label, (result.get(label) || 0) + 1);
-    });
-    return Array.from(result.entries());
-  }, [rows, locale]);
-
-  return (
-    <div className="scan-summary-grid monitor">
-      {groups.map(([label, count]) => (
-        <div key={label} className="scan-summary-card">
-          <div className="scan-summary-label">{label}</div>
-          <div className="scan-summary-value">{count}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function SettingsView({ locale }: { locale: string }) {
-  return (
-    <div className="scan-settings-view">
-      <div className="scan-settings-card">
-        <div className="scan-summary-label">{locale === "en-US" ? "Market Discovery" : "市场发现"}</div>
-        <div className="scan-settings-copy">
-          {locale === "en-US" ? "Gamma REST refreshes every 60s." : "Gamma REST 每 60 秒刷新一次。"}
-        </div>
-      </div>
-      <div className="scan-settings-card">
-        <div className="scan-summary-label">{locale === "en-US" ? "Price Layer" : "价格层"}</div>
-        <div className="scan-settings-copy">
-          {locale === "en-US"
-            ? "CLOB REST prices and books refresh every 30s."
-            : "CLOB REST 价格和盘口每 30 秒刷新一次。"}
-        </div>
-      </div>
-      <div className="scan-settings-card">
-        <div className="scan-summary-label">{locale === "en-US" ? "Server Profile" : "服务器配置"}</div>
-        <div className="scan-settings-copy">
-          {locale === "en-US"
-            ? "2GB profile: one polling loop, cached REST, no websocket fan-out."
-            : "2G 配置：单轮询、REST 缓存优先、不做 websocket 扇出。"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -776,7 +661,6 @@ function ScanTerminalScreen() {
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [detailByRowId, setDetailByRowId] = useState<Record<string, MarketScan | null>>({});
   const [detailLoadingId, setDetailLoadingId] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<TopSection>("terminal");
   const [activeView, setActiveView] = useState<ContentView>("list");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [userLocalTime, setUserLocalTime] = useState("--");
@@ -806,12 +690,12 @@ function ScanTerminalScreen() {
 
   const fetchTerminal = async (filters: FilterState, force = false) => {
     setLoading(true);
-    setError(null);
     try {
       const response = await dashboardClient.getScanTerminal(filters, { force });
       startTransition(() => {
         setTerminalData(response);
         setActiveFilters(filters);
+        setError(response.status === "failed" ? response.stale_reason || null : null);
         setSelectedRowId((current) => {
           if (current && response.rows.some((row) => row.id === current)) {
             return current;
@@ -827,7 +711,7 @@ function ScanTerminalScreen() {
   };
 
   const fetchDetail = async (row: ScanOpportunityRow) => {
-    if (!row.market_slug || !row.selected_date) return;
+    if (!row.market_slug || !row.selected_date || row.closed) return;
     if (detailByRowId[row.id] !== undefined) return;
     setDetailLoadingId(row.id);
     try {
@@ -880,15 +764,13 @@ function ScanTerminalScreen() {
     window.localStorage.setItem("polyweather_scan_theme", themeMode);
   }, [themeMode]);
 
+  const resolvedView: ContentView = activeView;
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
-  const resolvedView: ContentView =
-    activeSection === "markets"
-      ? "map"
-      : activeSection === "analysis"
-        ? "calendar"
-        : activeView;
   const activeDetailRow = resolvedView === "map" && mapFocusedCity ? mapFocusedRow : selectedRow;
   const selectedDetail = activeDetailRow ? detailByRowId[activeDetailRow.id] : null;
+  const scanStatus = terminalData?.status || (loading ? "loading" : error ? "failed" : "ready");
+  const staleReason =
+    terminalData?.stale_reason || error || null;
 
   useEffect(() => {
     if (!activeDetailRow) return;
@@ -914,15 +796,6 @@ function ScanTerminalScreen() {
   }, []);
 
   const renderMainView = () => {
-    if (activeSection === "portfolio") {
-      return <PortfolioView rows={timeSortedRows} locale={locale} />;
-    }
-    if (activeSection === "monitor") {
-      return <MonitorView rows={timeSortedRows} locale={locale} />;
-    }
-    if (activeSection === "settings") {
-      return <SettingsView locale={locale} />;
-    }
     if (resolvedView === "map") {
       return (
         <div className="scan-map-view">
@@ -951,6 +824,10 @@ function ScanTerminalScreen() {
       <>
         <OpportunityTable
           rows={timeSortedRows}
+          status={scanStatus}
+          stale={Boolean(terminalData?.stale)}
+          staleReason={staleReason}
+          loading={loading}
           selectedRowId={selectedRowId}
           onSelectRow={handleSelectRow}
         />
@@ -973,19 +850,21 @@ function ScanTerminalScreen() {
 
         <main className="scan-data-grid">
           <div className="scan-topbar">
-            <div className="scan-topbar-tabs">
-              {NAV_ITEMS.map((item, index) => (
-                <button
-                  key={item.zh}
-                  type="button"
-                  className={`scan-topbar-tab ${
-                    TOP_SECTION_ORDER[index] === activeSection ? "active" : ""
-                  }`}
-                  onClick={() => setActiveSection(TOP_SECTION_ORDER[index])}
-                >
-                  {isEn ? item.en : item.zh}
-                </button>
-              ))}
+            <div className="scan-topbar-title">
+              <strong>{isEn ? "Market Scan Terminal" : "市场扫描台"}</strong>
+              <span>
+                {loading
+                  ? isEn
+                    ? "Refreshing current market snapshot"
+                    : "正在刷新当前市场快照"
+                  : terminalData?.stale
+                    ? isEn
+                      ? "Showing the last successful snapshot"
+                      : "当前显示上次成功快照"
+                    : isEn
+                      ? "Read-only market scan with peak-first main signal"
+                      : "只读市场扫描，主信号按 EMOS 主峰优先"}
+              </span>
             </div>
             <div className="scan-topbar-actions">
               <button
@@ -1012,11 +891,7 @@ function ScanTerminalScreen() {
               </button>
               <button type="button" className="scan-ghost-button" onClick={() => void fetchTerminal(activeFilters, true)}>
                 <RefreshCw size={14} className={loading ? "spin" : undefined} />
-                {isEn ? "Refresh" : "筛选"}
-              </button>
-              <button type="button" className="scan-cta-ghost">
-                <Bell size={14} />
-                {isEn ? "Custom Alerts" : "自定义提醒"}
+                {isEn ? "Refresh" : "刷新"}
               </button>
               <Link
                 href={accountHref}
@@ -1029,28 +904,11 @@ function ScanTerminalScreen() {
             </div>
           </div>
 
-          <section className="scan-hero">
-            <h1>{isEn ? "Tradable Opportunities" : "可交易机会"}</h1>
-            <p>
-              {isEn
-                ? "Use EMOS distribution, live order book, and timing windows to isolate the one actionable signal."
-                : "基于当前时间、实况数据和模型预测，筛选出最具交易价值的市场。"}
-            </p>
-          </section>
-
           <ScanKPIBar
-            data={
-              terminalData?.summary || {
-                recommended_count: 0,
-                visible_count: 0,
-                candidate_total: 0,
-                avg_edge_percent: null,
-                avg_primary_confidence: null,
-                tradable_market_count: 0,
-                total_volume: 0,
-                resolved_market_type: "maxtemp",
-              }
-            }
+            response={terminalData}
+            rows={timeSortedRows}
+            totalCities={store.cities.length}
+            loading={loading}
           />
 
           <section className="scan-list-section">
@@ -1058,9 +916,8 @@ function ScanTerminalScreen() {
               <div className="scan-list-tabs">
                 <button
                   type="button"
-                  className={activeSection === "terminal" && resolvedView === "list" ? "active" : ""}
+                  className={resolvedView === "list" ? "active" : ""}
                   onClick={() => {
-                    setActiveSection("terminal");
                     setActiveView("list");
                   }}
                 >
@@ -1070,7 +927,6 @@ function ScanTerminalScreen() {
                   type="button"
                   className={resolvedView === "map" ? "active" : ""}
                   onClick={() => {
-                    setActiveSection("terminal");
                     setActiveView("map");
                   }}
                 >
@@ -1080,39 +936,32 @@ function ScanTerminalScreen() {
                   type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
                   onClick={() => {
-                    setActiveSection("terminal");
                     setActiveView("calendar");
                   }}
                 >
                   {isEn ? "Calendar View" : "日历视图"}
                 </button>
               </div>
-              <div className="scan-list-controls">
-                <div className="scan-sort-pill">
-                  {isEn
-                    ? resolvedView === "calendar"
-                      ? "Sort: Date"
-                    : resolvedView === "map"
-                        ? "Sort: City Map"
-                        : "Sort: Your Time"
-                    : resolvedView === "calendar"
-                      ? "排序：日期"
-                      : resolvedView === "map"
-                        ? "排序：地图"
-                        : "排序：用户时区时间"}
-                </div>
-                <button type="button" className="scan-icon-pill" aria-label="menu">
-                  <Menu size={16} />
-                </button>
+              <div className="scan-list-status">
+                {terminalData?.stale ? (
+                  <span className="scan-status-chip stale">
+                    {isEn ? "Delayed snapshot" : "延迟快照"}
+                  </span>
+                ) : null}
+                {loading ? (
+                  <span className="scan-status-chip live">
+                    {isEn ? "Refreshing" : "刷新中"}
+                  </span>
+                ) : null}
               </div>
             </div>
 
-            {error ? (
+            {scanStatus === "failed" && !terminalData ? (
               <div className="scan-empty-state">
                 <div className="scan-empty-title">
                   {isEn ? "Scan failed" : "扫描失败"}
                 </div>
-                <div className="scan-empty-copy">{error}</div>
+                <div className="scan-empty-copy">{staleReason}</div>
               </div>
             ) : (
               renderMainView()

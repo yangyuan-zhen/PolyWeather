@@ -497,6 +497,11 @@ export interface ScanOpportunityRow {
   distribution_bias_direction?: string | null;
   distribution_bias_score?: number | null;
   distribution_bias_available?: boolean;
+  peak_probability?: number | null;
+  peak_value?: number | null;
+  peak_distance?: number | null;
+  peak_alignment_score?: number | null;
+  is_peak_candidate?: boolean;
   window_phase?: string | null;
   window_score?: number | null;
   remaining_window_minutes?: number | null;
@@ -525,6 +530,12 @@ export interface PrimarySignal extends ScanOpportunityRow {}
 
 export interface ScanTerminalResponse {
   generated_at: string;
+  snapshot_id?: string | null;
+  status?: "ready" | "stale" | "failed" | string;
+  stale?: boolean;
+  stale_reason?: string | null;
+  last_success_at?: string | null;
+  last_failed_at?: string | null;
   filters: ScanTerminalFilters;
   summary: {
     recommended_count: number;

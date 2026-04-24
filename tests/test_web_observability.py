@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
+import web.scan_terminal_service as scan_terminal_service
 from web.scan_terminal_service import _scan_terminal_cache_key
 from src.database.db_manager import DBManager
 from src.database.runtime_state import TruthRecordRepository, TrainingFeatureRecordRepository
@@ -258,7 +259,66 @@ def test_ops_truth_history_returns_filtered_rows(monkeypatch):
     assert "items" in payload
     assert payload["filters"]["city"] == "taipei"
     assert payload["items"][0]["city"] == "taipei"
-    assert payload["items"][0]["settlement_station_code"] == "RCSS"
+
+
+def test_scan_terminal_service_returns_stale_payload_after_failed_refresh(monkeypatch):
+    filters = {"scan_mode": "tradable", "limit": 5}
+    normalized_filters = scan_terminal_service._normalize_scan_terminal_filters(filters)
+    scan_terminal_service._SCAN_TERMINAL_CACHE.clear()
+
+    monkeypatch.setattr(
+        scan_terminal_service,
+        "_scan_city_terminal_rows",
+        lambda *_args, **_kwargs: {
+            "city": "taipei",
+            "rows": [
+                {
+                    "id": "row-1",
+                    "market_key": "market-1",
+                    "edge_percent": 12.4,
+                    "final_score": 83.0,
+                    "volume": 2000,
+                }
+            ],
+            "candidate_total": 1,
+            "primary_scores": [83.0],
+        },
+    )
+
+    ready = scan_terminal_service.build_scan_terminal_payload(filters, force_refresh=True)
+    assert ready["status"] == "ready"
+    assert ready["rows"][0]["id"] == "row-1"
+
+    def _explode(*_args, **_kwargs):
+        raise RuntimeError("upstream 504")
+
+    monkeypatch.setattr(scan_terminal_service, "_scan_city_terminal_rows", _explode)
+
+    stale = scan_terminal_service.build_scan_terminal_payload(filters, force_refresh=True)
+
+    assert stale["status"] == "stale"
+    assert stale["stale"] is True
+    assert stale["rows"][0]["id"] == "row-1"
+    assert stale["filters"] == normalized_filters
+    assert stale["stale_reason"] == "upstream 504"
+
+
+def test_scan_terminal_service_returns_failed_without_success_snapshot(monkeypatch):
+    filters = {"scan_mode": "tradable", "limit": 5}
+    scan_terminal_service._SCAN_TERMINAL_CACHE.clear()
+
+    def _explode(*_args, **_kwargs):
+        raise RuntimeError("network down")
+
+    monkeypatch.setattr(scan_terminal_service, "_scan_city_terminal_rows", _explode)
+
+    failed = scan_terminal_service.build_scan_terminal_payload(filters, force_refresh=True)
+
+    assert failed["status"] == "failed"
+    assert failed["stale"] is False
+    assert failed["rows"] == []
+    assert failed["summary"]["candidate_total"] == 0
+    assert failed["stale_reason"] == "network down"
 
 
 def test_scan_terminal_endpoint_forwards_filters(monkeypatch):

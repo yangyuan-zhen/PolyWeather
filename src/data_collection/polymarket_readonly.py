@@ -2810,12 +2810,60 @@ class PolymarketReadOnlyLayer:
             )
             distribution_preview[highlighted_index]["highlighted"] = True
 
+        peak_probability = None
+        peak_value = None
+        if distribution_preview:
+            highlighted_preview = next(
+                (item for item in distribution_preview if item.get("highlighted")),
+                None,
+            )
+            if isinstance(highlighted_preview, dict):
+                peak_probability = _safe_float(highlighted_preview.get("model_probability"))
+                peak_value = _safe_float(highlighted_preview.get("value"))
+
+        ordered_entry_indices = sorted(
+            range(len(market_entries)),
+            key=lambda index: (
+                _safe_float(market_entries[index].get("bucket_temp"))
+                if _safe_float(market_entries[index].get("bucket_temp")) is not None
+                else float("inf"),
+                str(market_entries[index].get("target_label") or ""),
+            ),
+        )
+        entry_order_map = {
+            ordered_entry_indices[position]: position
+            for position in range(len(ordered_entry_indices))
+        }
+        peak_entry_order = None
+        if peak_value is not None and ordered_entry_indices:
+            peak_entry_order = min(
+                range(len(ordered_entry_indices)),
+                key=lambda position: abs(
+                    (
+                        _safe_float(
+                            market_entries[ordered_entry_indices[position]].get("bucket_temp")
+                        )
+                        if _safe_float(
+                            market_entries[ordered_entry_indices[position]].get("bucket_temp")
+                        )
+                        is not None
+                        else peak_value
+                    )
+                    - peak_value
+                ),
+            )
+
         current_reference_raw = _safe_float(
             (scan_context or {}).get("current_max_so_far")
             or (scan_context or {}).get("current_temp")
         )
 
-        def _row_from_entry(entry: Dict[str, Any], side: str) -> Optional[Dict[str, Any]]:
+        def _row_from_entry(
+            entry: Dict[str, Any],
+            side: str,
+            *,
+            entry_index: int,
+        ) -> Optional[Dict[str, Any]]:
             model_event_probability = _clamp_probability(_safe_float(entry.get("model_event_probability")))
             market_event_probability = _clamp_probability(_safe_float(entry.get("market_event_probability")))
             ask = _clamp_probability(_safe_float(entry.get("yes_ask") if side == "yes" else entry.get("no_ask")))
@@ -2850,6 +2898,21 @@ class PolymarketReadOnlyLayer:
                 if target_threshold is not None and current_reference is not None
                 else None
             )
+            entry_order = entry_order_map.get(entry_index)
+            peak_distance = None
+            is_peak_candidate = False
+            if entry_order is not None and peak_entry_order is not None:
+                peak_distance = abs(entry_order - peak_entry_order)
+                is_peak_candidate = peak_distance <= 1
+            peak_alignment_score = 0.0
+            if peak_distance is None:
+                peak_alignment_score = 0.35
+            elif peak_distance == 0:
+                peak_alignment_score = 1.0
+            elif peak_distance == 1:
+                peak_alignment_score = 0.8
+            else:
+                peak_alignment_score = max(0.0, 0.55 - 0.15 * float(peak_distance - 2))
             temperature_direction = self._resolve_temperature_direction(
                 side=side,
                 market_direction=str(entry.get("market_direction") or "exact"),
@@ -2899,6 +2962,7 @@ class PolymarketReadOnlyLayer:
                 + 0.20 * float(window_meta.get("score") or 0.0)
                 + 0.10 * liquidity_score
                 + 0.10 * price_usefulness_score
+                + 0.08 * peak_alignment_score
             ) - spread_penalty
             market_slug = str(market.get("slug") or "").strip()
             target_label = str(entry.get("target_label") or "").strip()
@@ -2974,6 +3038,11 @@ class PolymarketReadOnlyLayer:
                 "distribution_bias_score": distribution_bias_score,
                 "distribution_bias_available": distribution_bias["available"],
                 "distribution_preview": distribution_preview[:6],
+                "peak_probability": peak_probability,
+                "peak_value": peak_value,
+                "peak_distance": peak_distance,
+                "peak_alignment_score": peak_alignment_score,
+                "is_peak_candidate": is_peak_candidate,
                 "current_reference": current_reference,
                 "gap_to_target": gap_to_target,
                 "touch_distance": abs(gap_to_target) if gap_to_target is not None else None,
@@ -2991,9 +3060,9 @@ class PolymarketReadOnlyLayer:
             }
 
         preliminary_rows: List[Dict[str, Any]] = []
-        for entry in market_entries:
-            row_yes = _row_from_entry(entry, "yes")
-            row_no = _row_from_entry(entry, "no")
+        for entry_index, entry in enumerate(market_entries):
+            row_yes = _row_from_entry(entry, "yes", entry_index=entry_index)
+            row_no = _row_from_entry(entry, "no", entry_index=entry_index)
             if row_yes:
                 preliminary_rows.append(row_yes)
             if row_no:
@@ -3041,9 +3110,9 @@ class PolymarketReadOnlyLayer:
                 entry["spread"] = max(0.0, float(entry["yes_ask"]) - float(entry["yes_bid"]))
 
         final_rows: List[Dict[str, Any]] = []
-        for entry in market_entries:
+        for entry_index, entry in enumerate(market_entries):
             for side in ("yes", "no"):
-                row = _row_from_entry(entry, side)
+                row = _row_from_entry(entry, side, entry_index=entry_index)
                 if row:
                     final_rows.append(row)
 
@@ -3074,7 +3143,10 @@ class PolymarketReadOnlyLayer:
         def _passes_mode_filters(row: Dict[str, Any]) -> bool:
             scan_mode = filters["scan_mode"]
             if scan_mode == "tradable":
-                return float(row.get("window_score") or 0.0) >= 0.65
+                return (
+                    float(row.get("window_score") or 0.0) >= 0.65
+                    and bool(row.get("is_peak_candidate"))
+                )
             if scan_mode == "early":
                 return str(row.get("window_phase") or "") in {"tomorrow", "week_ahead", "early_today"}
             if scan_mode == "touch":
@@ -3095,6 +3167,7 @@ class PolymarketReadOnlyLayer:
         ]
         filtered_rows.sort(
             key=lambda row: (
+                1.0 if bool(row.get("is_peak_candidate")) else 0.0,
                 float(row.get("final_score") or 0.0),
                 float(row.get("edge_percent") or 0.0),
             ),

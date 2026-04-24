@@ -675,6 +675,39 @@ def test_distribution_scan_hard_filters_block_unusable_extreme_quotes():
     assert scan["rows"] == []
 
 
+def test_distribution_scan_tradable_prefers_peak_bucket_and_adjacent_only():
+    layer, markets = _build_scan_test_layer()
+
+    scan = layer._build_distribution_scan_pack(
+        city_key="wellington",
+        target_date="2026-04-24",
+        primary_market=markets[0],
+        probability_distribution=[
+            {"value": 14, "probability": 20},
+            {"value": 15, "probability": 48},
+            {"value": 16, "probability": 24},
+            {"value": 17, "probability": 8},
+        ],
+        temp_symbol="°C",
+        scan_context={
+            "local_date": "2026-04-24",
+            "local_time": "13:10",
+            "peak": {"first_h": 14, "last_h": 16},
+            "current_max_so_far": 13.6,
+            "current_temp": 13.2,
+            "trend": {"recent": []},
+            "network_lead_signal": {},
+        },
+        scan_filters={"limit": 10, "scan_mode": "tradable", "min_edge_pct": 2},
+    )
+
+    assert scan["signal_status"] == "ready"
+    assert scan["primary_signal"]["is_peak_candidate"] is True
+    assert scan["primary_signal"]["peak_distance"] in {0, 1}
+    assert all(bool(row.get("is_peak_candidate")) for row in scan["rows"])
+    assert all((row.get("peak_distance") or 0) <= 1 for row in scan["rows"])
+
+
 def test_batch_token_market_data_falls_back_to_single_fetch_when_batch_fails():
     layer = PolymarketReadOnlyLayer()
     layer._clob_post = lambda *_args, **_kwargs: None
