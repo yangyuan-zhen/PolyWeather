@@ -39,8 +39,8 @@ SCAN_AI_ENABLED = str(
     os.getenv("POLYWEATHER_SCAN_AI_ENABLED") or "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
 SCAN_AI_TIMEOUT_SEC = max(
-    3,
-    int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "12")),
+    30,
+    int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "40")),
 )
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
@@ -49,6 +49,10 @@ SCAN_AI_CACHE_TTL_SEC = max(
 SCAN_AI_MAX_ROWS = max(
     1,
     int(os.getenv("POLYWEATHER_SCAN_AI_MAX_ROWS", "40")),
+)
+SCAN_AI_MAX_TOKENS = max(
+    600,
+    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "1600")),
 )
 
 
@@ -490,11 +494,19 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
             "city_theses items need city, thesis_zh, thesis_en, model_cluster_note, confidence, "
             "recommended_row_ids, vetoed_row_ids. recommendations items need row_id, rank, decision, "
             "confidence, reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id, "
-            "reason_zh/reason_en. watchlist items are optional and need row_id plus reason."
+            "reason_zh/reason_en. watchlist items are optional and need row_id plus reason. "
+            "Keep every thesis and reason concise: one sentence only, no markdown, no repeated data tables."
         ),
         "snapshot": model_snapshot,
     }
-    with httpx.Client(timeout=float(SCAN_AI_TIMEOUT_SEC)) as client:
+    timeout = httpx.Timeout(
+        timeout=float(SCAN_AI_TIMEOUT_SEC),
+        connect=min(8.0, float(SCAN_AI_TIMEOUT_SEC)),
+        read=float(SCAN_AI_TIMEOUT_SEC),
+        write=10.0,
+        pool=5.0,
+    )
+    with httpx.Client(timeout=timeout) as client:
         response = client.post(
             f"{SCAN_AI_BASE_URL}/chat/completions",
             headers={
@@ -504,7 +516,7 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
             json={
                 "model": SCAN_AI_MODEL,
                 "temperature": 0.1,
-                "max_tokens": 2200,
+                "max_tokens": SCAN_AI_MAX_TOKENS,
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {"role": "system", "content": system_prompt},
@@ -1181,6 +1193,21 @@ def build_scan_terminal_ai_payload(
             cached=False,
             duration_ms=duration_ms,
             input_rows=len(payload.get("rows") or []),
+        )
+    except httpx.TimeoutException as exc:
+        duration_ms = int((time.time() - ai_started_at) * 1000)
+        reason = f"V4 provider timed out after {SCAN_AI_TIMEOUT_SEC}s"
+        logger.warning(
+            "scan terminal AI review timeout snapshot={} duration_ms={} error={}",
+            current_snapshot_id,
+            duration_ms,
+            exc,
+        )
+        return _build_scan_ai_unavailable_payload(
+            payload,
+            status="timeout",
+            reason=reason,
+            duration_ms=duration_ms,
         )
     except Exception as exc:
         duration_ms = int((time.time() - ai_started_at) * 1000)

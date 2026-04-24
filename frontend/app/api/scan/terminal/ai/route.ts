@@ -5,12 +5,13 @@ import {
 } from "@/lib/backend-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
-const SCAN_AI_PROXY_TIMEOUT_MS = Number(
-  process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS || "18000",
+const SCAN_AI_PROXY_TIMEOUT_MS = Math.max(
+  35_000,
+  Number(process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS || "45000") || 45_000,
 );
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 20;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!API_BASE) {
