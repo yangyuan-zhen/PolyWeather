@@ -63,6 +63,7 @@ export type AssistantChatResponse = {
 
 const CACHE_KEY = "polyWeather_v1";
 const CACHE_TTL_MS = 5 * 60 * 1000;
+const SCAN_TERMINAL_CLIENT_TIMEOUT_MS = 35_000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
@@ -99,11 +100,30 @@ function normalizeDetailDepth(depth?: "panel" | "market" | "nearby" | "full") {
   return "panel";
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
+async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Promise<T> {
+  const timeoutMs = options?.timeoutMs;
+  const controller = timeoutMs ? new AbortController() : null;
+  const timeoutId = controller
+    ? window.setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+      signal: controller?.signal,
+    });
+  } catch (error) {
+    if (controller?.signal.aborted) {
+      throw new Error("Request timed out");
+    }
+    throw error;
+  } finally {
+    if (timeoutId != null) {
+      window.clearTimeout(timeoutId);
+    }
+  }
 
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -408,6 +428,7 @@ export const dashboardClient = {
     }
     const request = fetchJson<ScanTerminalResponse>(
       `/api/scan/terminal?${params.toString()}`,
+      { timeoutMs: SCAN_TERMINAL_CLIENT_TIMEOUT_MS },
     ).finally(() => {
       pendingScanTerminalRequests.delete(requestKey);
     });

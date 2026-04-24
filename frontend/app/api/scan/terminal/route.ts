@@ -5,6 +5,12 @@ import {
 } from "@/lib/backend-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
+const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
+  process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "28000",
+);
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
   if (!API_BASE) {
@@ -35,11 +41,16 @@ export async function GET(req: NextRequest) {
 
   const url = `${API_BASE}/api/scan/terminal?${params.toString()}`;
 
+  let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), SCAN_TERMINAL_PROXY_TIMEOUT_MS);
+
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    auth = await buildBackendRequestHeaders(req);
     const res = await fetch(url, {
       headers: auth.headers,
       cache: "no-store",
+      signal: controller.signal,
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -57,9 +68,18 @@ export async function GET(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch scan terminal data", detail: String(error) },
-      { status: 500 },
+    const timedOut = controller.signal.aborted;
+    const response = NextResponse.json(
+      {
+        error: timedOut
+          ? "Scan terminal request timed out"
+          : "Failed to fetch scan terminal data",
+        detail: String(error),
+      },
+      { status: timedOut ? 504 : 500 },
     );
+    return auth ? applyAuthResponseCookies(response, auth.response) : response;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
