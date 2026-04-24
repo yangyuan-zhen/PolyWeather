@@ -546,6 +546,9 @@ export interface ScanTerminalResponse {
     tradable_market_count: number;
     total_volume: number;
     resolved_market_type?: string | null;
+    total_city_count?: number | null;
+    scanned_city_count?: number | null;
+    failed_city_count?: number | null;
   };
   top_signal?: PrimarySignal | null;
   rows: ScanOpportunityRow[];

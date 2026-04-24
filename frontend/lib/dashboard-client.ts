@@ -112,6 +112,19 @@ async function fetchJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function isStaleMarketSlugResponse(payload: {
+  market_scan?: MarketScan | null;
+} | null | undefined) {
+  const scan = payload?.market_scan;
+  const reason = String(scan?.reason || "").toLowerCase();
+  return (
+    scan?.available === false &&
+    (reason.includes("market_slug not found") ||
+      reason.includes("specified market_slug not found") ||
+      reason.includes("slug not found"))
+  );
+}
+
 function isClient() {
   return typeof window !== "undefined";
 }
@@ -338,15 +351,31 @@ export const dashboardClient = {
         return existing;
       }
     }
-    const request = fetchJson<{
+    type MarketScanPayload = {
       fetched_at?: string | null;
       market_scan?: MarketScan | null;
       selected_date?: string | null;
-    }>(`/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`).finally(
-      () => {
-        pendingCityMarketScanRequests.delete(requestKey);
-      },
-    );
+    };
+    const request = (async () => {
+      const payload = await fetchJson<MarketScanPayload>(
+        `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
+      );
+      if (!force && options?.marketSlug && isStaleMarketSlugResponse(payload)) {
+        const fallbackParams = new URLSearchParams({
+          force_refresh: "false",
+          _ts: String(Date.now()),
+        });
+        if (options?.lite) {
+          fallbackParams.set("lite", "true");
+        }
+        return fetchJson<MarketScanPayload>(
+          `/api/city/${normalizeCityName(cityName)}/market-scan?${fallbackParams.toString()}`,
+        );
+      }
+      return payload;
+    })().finally(() => {
+      pendingCityMarketScanRequests.delete(requestKey);
+    });
     if (!force) {
       pendingCityMarketScanRequests.set(requestKey, request);
     }

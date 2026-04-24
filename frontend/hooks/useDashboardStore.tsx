@@ -626,7 +626,8 @@ export function DashboardStoreProvider({
         lite: options?.lite === true,
         marketSlug: options?.marketSlug || null,
         targetDate:
-          options?.targetDate || cached?.local_date || selectedForecastDate || null,
+          options?.targetDate ||
+          (options?.marketSlug ? cached?.local_date || selectedForecastDate || null : null),
       });
       if (!payload.market_scan) return null;
       setCityDetailsByName((current) => {

@@ -220,10 +220,12 @@ export const OpportunityTable = React.memo(function OpportunityTable({
   const { locale } = useI18n();
   const isEn = locale === "en-US";
   const hasRows = rows.length > 0;
+  const scanInProgress =
+    loading || status === "partial" || status === "scanning";
 
   if (!hasRows) {
     const title =
-      loading
+      scanInProgress
         ? isEn
           ? "Scanning markets"
           : "正在扫描市场"
@@ -235,7 +237,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
             ? "No tradable market right now"
             : "当前暂无可交易市场";
     const copy =
-      loading
+      scanInProgress
         ? isEn
           ? "Waiting for the latest market snapshot. Existing data will stay on screen when available."
           : "正在等待最新市场快照；如果有旧数据，会继续保留在页面上。"

@@ -470,6 +470,18 @@ function buildFallbackAnswer(
   };
 }
 
+function shouldUseRuleAnswer(
+  question: string,
+  context: ReturnType<typeof sanitizeContext>,
+) {
+  if (detectUnsupported(question)) return true;
+  if (findMentionedCity(question, context)) return true;
+  if (isForecastQuestion(question)) return true;
+  return /当前|市场|机会|值得|参与|买|卖|yes|no|edge|排序|风险|概率|probability|emos|deb|价格|盘口|高风险|低风险|model|forecast|temperature|rank|buy|sell/i.test(
+    question,
+  );
+}
+
 async function generateWithGroq(params: {
   question: string;
   locale: string;
@@ -636,7 +648,8 @@ export async function POST(request: NextRequest) {
     model: "rule-fallback",
   };
 
-  if (!fallback.refused) {
+  const useRuleAnswer = shouldUseRuleAnswer(question, context);
+  if (!fallback.refused && !useRuleAnswer) {
     try {
       const generated = await generateWithGroq({
         question,

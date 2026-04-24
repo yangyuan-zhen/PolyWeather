@@ -6,6 +6,14 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
+function parseBackendError(raw: string) {
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return raw.slice(0, 800);
+  }
+}
+
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ name: string }> },
@@ -49,7 +57,11 @@ export async function GET(
     if (!res.ok) {
       const raw = await res.text();
       const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
+        {
+          error: "Backend city market scan failed",
+          upstream_status: res.status,
+          detail: parseBackendError(raw),
+        },
         { status: 502 },
       );
       return applyAuthResponseCookies(response, auth.response);
@@ -63,8 +75,11 @@ export async function GET(
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     const response = NextResponse.json(
-      { error: "Failed to fetch city market scan", detail: String(error) },
-      { status: 500 },
+      {
+        error: "Failed to fetch city market scan",
+        detail: String(error),
+      },
+      { status: 502 },
     );
     return response;
   }

@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import hashlib
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -16,9 +17,14 @@ from web.core import CITIES
 
 _SCAN_TERMINAL_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
+_SCAN_TERMINAL_REFRESHING: set[str] = set()
 SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "30")),
+)
+SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
+    8,
+    int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
 )
 
 
@@ -170,6 +176,31 @@ def _set_scan_terminal_failure_state(
         existing["last_error"] = error_message
         existing["last_failed_at"] = datetime.utcnow().isoformat() + "Z"
         _SCAN_TERMINAL_CACHE[cache_key] = existing
+
+
+def _start_scan_terminal_background_refresh(filters: Dict[str, Any]) -> bool:
+    cache_key = _scan_terminal_cache_key(filters)
+    with _SCAN_TERMINAL_CACHE_LOCK:
+        if cache_key in _SCAN_TERMINAL_REFRESHING:
+            return False
+        _SCAN_TERMINAL_REFRESHING.add(cache_key)
+
+    def _runner() -> None:
+        try:
+            _build_scan_terminal_payload_uncached(filters, force_refresh=True)
+        except Exception as exc:  # pragma: no cover - defensive background guard
+            logger.warning("scan terminal background refresh failed: {}", exc)
+        finally:
+            with _SCAN_TERMINAL_CACHE_LOCK:
+                _SCAN_TERMINAL_REFRESHING.discard(cache_key)
+
+    thread = threading.Thread(
+        target=_runner,
+        name="polyweather-scan-terminal-refresh",
+        daemon=True,
+    )
+    thread.start()
+    return True
 
 
 def _build_stale_scan_terminal_payload(
@@ -363,16 +394,11 @@ def _scan_city_terminal_rows(
     }
 
 
-def build_scan_terminal_payload(
-    raw_filters: Optional[Dict[str, Any]] = None,
+def _build_scan_terminal_payload_uncached(
+    filters: Dict[str, Any],
     *,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
-    filters = _normalize_scan_terminal_filters(raw_filters)
-    if not force_refresh:
-        cached = _get_cached_scan_terminal_payload(filters)
-        if cached is not None:
-            return cached
     cached_entry = _get_scan_terminal_cache_entry(filters) or {}
 
     try:
@@ -382,24 +408,51 @@ def build_scan_terminal_payload(
         failed_cities: List[str] = []
         failed_reasons: List[str] = []
 
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_map = {
-                executor.submit(
-                    _scan_city_terminal_rows,
-                    city_name,
-                    filters,
-                    force_refresh=force_refresh,
-                ): city_name
-                for city_name in city_names
-            }
-            for future in as_completed(future_map):
-                city_name = future_map[future]
-                try:
-                    city_results.append(future.result())
-                except Exception as exc:
-                    failed_cities.append(city_name)
-                    failed_reasons.append(str(exc))
-                    logger.warning("scan terminal city failed city={}: {}", city_name, exc)
+        timed_out = False
+        timeout_message: Optional[str] = None
+        executor = ThreadPoolExecutor(max_workers=max_workers)
+        future_map = {
+            executor.submit(
+                _scan_city_terminal_rows,
+                city_name,
+                filters,
+                force_refresh=force_refresh,
+            ): city_name
+            for city_name in city_names
+        }
+        try:
+            try:
+                completed = as_completed(
+                    future_map,
+                    timeout=float(SCAN_TERMINAL_BUILD_TIMEOUT_SEC),
+                )
+                for future in completed:
+                    city_name = future_map[future]
+                    try:
+                        city_results.append(future.result())
+                    except Exception as exc:
+                        failed_cities.append(city_name)
+                        failed_reasons.append(str(exc))
+                        logger.warning("scan terminal city failed city={}: {}", city_name, exc)
+            except FutureTimeoutError:
+                timed_out = True
+                timeout_message = (
+                    f"scan terminal build timed out after "
+                    f"{SCAN_TERMINAL_BUILD_TIMEOUT_SEC}s"
+                )
+                failed_reasons.append(timeout_message)
+                for future, city_name in future_map.items():
+                    if not future.done():
+                        future.cancel()
+                        failed_cities.append(city_name)
+                logger.warning(
+                    "{}; completed={}/{}",
+                    timeout_message,
+                    len(city_results),
+                    len(city_names),
+                )
+        finally:
+            executor.shutdown(wait=False)
 
         if city_names and len(failed_cities) >= len(city_names):
             error_message = failed_reasons[0] if failed_reasons else "all city market scans failed"
@@ -480,6 +533,9 @@ def build_scan_terminal_payload(
             "tradable_market_count": len(unique_market_volume),
             "total_volume": sum(unique_market_volume.values()),
             "resolved_market_type": "maxtemp",
+            "total_city_count": len(city_names),
+            "scanned_city_count": len(city_results),
+            "failed_city_count": len(failed_cities),
         }
         payload = {
             "generated_at": datetime.utcnow().isoformat() + "Z",
@@ -487,9 +543,9 @@ def build_scan_terminal_payload(
             "summary": summary,
             "top_signal": top_signal,
             "rows": ranked_rows,
-            "status": "ready",
+            "status": "partial" if timed_out else "ready",
             "stale": False,
-            "stale_reason": None,
+            "stale_reason": timeout_message,
             "last_success_at": None,
             "last_failed_at": None,
         }
@@ -520,3 +576,32 @@ def build_scan_terminal_payload(
             error_message=error_message,
             failed_at=failed_at,
         )
+
+
+def build_scan_terminal_payload(
+    raw_filters: Optional[Dict[str, Any]] = None,
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    filters = _normalize_scan_terminal_filters(raw_filters)
+    if not force_refresh:
+        cached = _get_cached_scan_terminal_payload(filters)
+        if cached is not None:
+            return cached
+
+        cached_entry = _get_scan_terminal_cache_entry(filters) or {}
+        success_payload = cached_entry.get("success_payload")
+        if isinstance(success_payload, dict) and success_payload:
+            started = _start_scan_terminal_background_refresh(filters)
+            return _build_stale_scan_terminal_payload(
+                filters=filters,
+                success_payload=success_payload,
+                error_message=(
+                    "正在后台刷新市场扫描快照"
+                    if started
+                    else "市场扫描快照正在刷新中"
+                ),
+                failed_at=cached_entry.get("last_failed_at"),
+            )
+
+    return _build_scan_terminal_payload_uncached(filters, force_refresh=force_refresh)

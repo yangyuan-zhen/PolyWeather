@@ -14,6 +14,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import styles from "./Dashboard.module.css";
@@ -33,7 +34,11 @@ import {
   useDashboardStore,
 } from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
-import { dashboardClient } from "@/lib/dashboard-client";
+import {
+  dashboardClient,
+  type AssistantContextPayload,
+  type AssistantOpportunityContext,
+} from "@/lib/dashboard-client";
 import type {
   DistributionPreviewPoint,
   MarketScan,
@@ -64,6 +69,11 @@ const DEFAULT_FILTERS: FilterState = {
 
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
+type AssistantMessage = {
+  id: string;
+  role: "assistant" | "user";
+  content: string;
+};
 
 function formatPercent(value?: number | null, signed = false) {
   if (value == null || Number.isNaN(Number(value))) return "--";
@@ -272,6 +282,165 @@ function buildComparisonBuckets(
       highlighted: true,
     },
   ];
+}
+
+function hashClientText(value: string) {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return Math.abs(hash).toString(16).padStart(8, "0").slice(0, 8);
+}
+
+function normalizeAssistantProbability(value?: number | null) {
+  if (!Number.isFinite(Number(value))) return null;
+  const numeric = Number(value);
+  return Math.abs(numeric) <= 1 ? numeric : numeric / 100;
+}
+
+function getAssistantSidePrice(row: ScanOpportunityRow, side: "yes" | "no") {
+  if (side === "yes") {
+    return row.yes_ask ?? (String(row.side || "").toLowerCase() === "yes" ? row.ask : null);
+  }
+  return row.no_ask ?? (String(row.side || "").toLowerCase() === "no" ? row.ask : null);
+}
+
+function buildAssistantOpportunity(
+  row: ScanOpportunityRow,
+  locale: string,
+): AssistantOpportunityContext {
+  const tempSymbol = row.temp_symbol || "°C";
+  const marketLabel =
+    normalizeTemperatureLabel(row.target_label, tempSymbol) ||
+    row.market_question ||
+    row.target_label ||
+    null;
+  const bestSide = String(row.side || "").toUpperCase();
+
+  return {
+    city_name: row.city,
+    city_display_name: getLocalizedCityName(
+      row.city,
+      row.city_display_name || row.display_name || row.city,
+      locale,
+    ),
+    airport: getLocalizedAirportName(row.city, row.airport || "", locale),
+    risk_level: row.risk_level || "low",
+    tradable:
+      row.tradable === true &&
+      row.closed !== true &&
+      row.active !== false &&
+      row.accepting_orders !== false,
+    local_time: row.local_time || null,
+    current_temperature: Number.isFinite(Number(row.current_temp))
+      ? Number(row.current_temp)
+      : null,
+    deb_prediction: Number.isFinite(Number(row.deb_prediction))
+      ? Number(row.deb_prediction)
+      : null,
+    temp_symbol: tempSymbol,
+    today_high: Number.isFinite(Number(row.current_max_so_far))
+      ? Number(row.current_max_so_far)
+      : Number.isFinite(Number(row.deb_prediction))
+        ? Number(row.deb_prediction)
+        : null,
+    market_question: row.market_question || null,
+    market_label: marketLabel,
+    selected_date: row.selected_date || row.local_date || null,
+    best_side: bestSide === "YES" || bestSide === "NO" ? bestSide : null,
+    yes_price: getAssistantSidePrice(row, "yes"),
+    no_price: getAssistantSidePrice(row, "no"),
+    edge_percent: Number.isFinite(Number(row.edge_percent))
+      ? Number(row.edge_percent)
+      : null,
+    market_probability: normalizeAssistantProbability(
+      row.market_event_probability ?? row.market_probability,
+    ),
+    model_probability: normalizeAssistantProbability(
+      row.model_event_probability ?? row.model_probability,
+    ),
+    status: row.closed ? "closed" : row.tradable ? "tradable" : "watch",
+  };
+}
+
+function buildAssistantContext(params: {
+  terminalData: ScanTerminalResponse | null;
+  rows: ScanOpportunityRow[];
+  selectedRow: ScanOpportunityRow | null;
+  locale: string;
+  totalCities: number;
+}): AssistantContextPayload {
+  const opportunities = params.rows
+    .slice(0, 52)
+    .map((row) => buildAssistantOpportunity(row, params.locale));
+  const selectedCity = params.selectedRow
+    ? buildAssistantOpportunity(params.selectedRow, params.locale)
+    : opportunities[0] || null;
+  const source = JSON.stringify({
+    generated_at: params.terminalData?.generated_at || "",
+    rows: params.rows.slice(0, 20).map((row) => [
+      row.id,
+      row.city,
+      row.market_slug,
+      row.side,
+      row.edge_percent,
+      row.yes_ask,
+      row.no_ask,
+    ]),
+  });
+
+  return {
+    snapshot_id:
+      params.terminalData?.snapshot_id ||
+      `home-${hashClientText(source)}`,
+    locale: params.locale,
+    generated_at: params.terminalData?.generated_at || new Date().toISOString(),
+    totals: {
+      cities: params.totalCities || params.rows.length,
+      tradable_markets:
+        params.terminalData?.summary?.tradable_market_count ??
+        opportunities.filter((item) => item.tradable).length,
+      high_risk: params.rows.filter((row) => row.risk_level === "high").length,
+      medium_risk: params.rows.filter((row) => row.risk_level === "medium").length,
+      low_risk: params.rows.filter((row) => row.risk_level === "low").length,
+    },
+    selected_city: selectedCity,
+    opportunities,
+    glossary:
+      params.locale === "en-US"
+        ? [
+            {
+              term: "edge",
+              meaning:
+                "Edge is model probability minus market-implied probability. Positive edge means the model is more favorable than the market price.",
+            },
+            {
+              term: "EMOS",
+              meaning:
+                "EMOS is the calibrated probability distribution for max-temperature buckets.",
+            },
+            {
+              term: "DEB",
+              meaning:
+                "DEB is PolyWeather's forecast anchor for the 24-hour maximum temperature.",
+            },
+          ]
+        : [
+            {
+              term: "edge",
+              meaning:
+                "edge 是模型概率减去市场隐含概率。正 edge 表示模型判断比市场价格更有利。",
+            },
+            {
+              term: "EMOS",
+              meaning: "EMOS 是最高温分桶的校准概率分布。",
+            },
+            {
+              term: "DEB",
+              meaning: "DEB 是 PolyWeather 对 24 小时最高温的预测锚点。",
+            },
+          ],
+  };
 }
 
 function DetailPanel({
@@ -646,6 +815,364 @@ function OverviewMapView({ locale }: { locale: string }) {
   );
 }
 
+function AssistantWidget({
+  terminalData,
+  rows,
+  selectedRow,
+  locale,
+  totalCities,
+}: {
+  terminalData: ScanTerminalResponse | null;
+  rows: ScanOpportunityRow[];
+  selectedRow: ScanOpportunityRow | null;
+  locale: string;
+  totalCities: number;
+}) {
+  const isEn = locale === "en-US";
+  const [open, setOpen] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<AssistantMessage[]>(() => [
+    {
+      id: "initial",
+      role: "assistant",
+      content: isEn
+        ? "Ask about current opportunities, edge ranking, one city, or the forecast high. I only use the current scan data."
+        : "可以问当前机会、edge 排序、某个城市是否值得参与，或今天预测最高温。我只使用当前扫描数据。",
+    },
+  ]);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
+  const [dragging, setDragging] = useState(false);
+
+  const context = useMemo(
+    () =>
+      buildAssistantContext({
+        terminalData,
+        rows,
+        selectedRow,
+        locale,
+        totalCities,
+      }),
+    [locale, rows, selectedRow, terminalData, totalCities],
+  );
+
+  useEffect(() => {
+    setMessages((current) =>
+      current[0]?.id === "initial"
+        ? [
+            {
+              id: "initial",
+              role: "assistant",
+              content: isEn
+                ? "Ask about current opportunities, edge ranking, one city, or the forecast high. I only use the current scan data."
+                : "可以问当前机会、edge 排序、某个城市是否值得参与，或今天预测最高温。我只使用当前扫描数据。",
+            },
+            ...current.slice(1),
+          ]
+        : current,
+    );
+  }, [isEn]);
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("polyweather_ai_position_v1");
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored) as { x?: number; y?: number };
+        if (Number.isFinite(parsed.x) && Number.isFinite(parsed.y)) {
+          setPosition({
+            x: Math.min(Math.max(Number(parsed.x), 12), window.innerWidth - 72),
+            y: Math.min(Math.max(Number(parsed.y), 76), window.innerHeight - 72),
+          });
+          return;
+        }
+      } catch {
+        // Ignore invalid localStorage state.
+      }
+    }
+    setPosition({
+      x: Math.max(16, window.innerWidth - 88),
+      y: Math.max(88, window.innerHeight - 96),
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!position) return;
+    window.localStorage.setItem(
+      "polyweather_ai_position_v1",
+      JSON.stringify(position),
+    );
+  }, [position]);
+
+  const clampPosition = useCallback((nextX: number, nextY: number, isPanel: boolean) => {
+    const width = isPanel ? Math.min(380, window.innerWidth - 32) : 56;
+    const height = isPanel ? Math.min(520, window.innerHeight - 96) : 56;
+    return {
+      x: Math.min(Math.max(nextX, 12), Math.max(12, window.innerWidth - width - 12)),
+      y: Math.min(Math.max(nextY, 76), Math.max(76, window.innerHeight - height - 12)),
+    };
+  }, []);
+
+  const startDrag = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      if (!position) return;
+      dragStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: position.x,
+        originY: position.y,
+        moved: false,
+      };
+      setDragging(true);
+      event.currentTarget.setPointerCapture?.(event.pointerId);
+    },
+    [position],
+  );
+
+  const updateDrag = useCallback(
+    (event: React.PointerEvent<HTMLElement>) => {
+      const dragState = dragStateRef.current;
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      const deltaX = event.clientX - dragState.startX;
+      const deltaY = event.clientY - dragState.startY;
+      if (Math.abs(deltaX) + Math.abs(deltaY) > 4) {
+        dragState.moved = true;
+      }
+      setPosition(
+        clampPosition(dragState.originX + deltaX, dragState.originY + deltaY, open),
+      );
+    },
+    [clampPosition, open],
+  );
+
+  const endDrag = useCallback((event: React.PointerEvent<HTMLElement>) => {
+    const dragState = dragStateRef.current;
+    if (dragState?.pointerId === event.pointerId) {
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+      setDragging(false);
+      if (dragState.moved) {
+        suppressClickRef.current = true;
+        window.setTimeout(() => {
+          suppressClickRef.current = false;
+        }, 160);
+      }
+      window.setTimeout(() => {
+        dragStateRef.current = null;
+      }, 0);
+    }
+  }, []);
+
+  const starterQuestions = useMemo(() => {
+    const cityName =
+      context.selected_city?.city_display_name ||
+      (isEn ? "the focus city" : "当前焦点城市");
+    return isEn
+      ? [
+          "Which market is worth buying now?",
+          "Rank opportunities by edge",
+          `What is today's forecast high for ${cityName}?`,
+        ]
+      : [
+          "当前有哪些值得参与的市场？",
+          "按 edge 排序",
+          `${cityName} 今天预测最高温是多少？`,
+        ];
+  }, [context.selected_city?.city_display_name, isEn]);
+
+  const submitQuestion = useCallback(
+    async (rawQuestion?: string) => {
+      const nextQuestion = String(rawQuestion ?? question).trim();
+      if (!nextQuestion || submitting) return;
+      const userMessage: AssistantMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: nextQuestion,
+      };
+      setMessages((current) => [...current, userMessage]);
+      setQuestion("");
+      setError(null);
+      setSubmitting(true);
+      try {
+        const response = await dashboardClient.askAssistant({
+          question: nextQuestion,
+          locale,
+          snapshotId: context.snapshot_id,
+          context,
+        });
+        setMessages((current) => [
+          ...current,
+          {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: response.answer,
+          },
+        ]);
+      } catch (submitError) {
+        const message = String(submitError);
+        const paywall =
+          message.includes("402") || message.includes("assistant_requires_pro");
+        setError(
+          paywall
+            ? isEn
+              ? "PolyWeather AI assistant is a Pro feature."
+              : "AI 对话助手属于 Pro 功能，请先开通后使用。"
+            : isEn
+              ? "Assistant request failed. Try again after the market scan refreshes."
+              : "AI 请求失败。请等市场扫描刷新后再试。",
+        );
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [context, isEn, locale, question, submitting],
+  );
+
+  const handleLauncherClick = useCallback(() => {
+    if (suppressClickRef.current || dragStateRef.current?.moved) return;
+    setOpen(true);
+    setPosition((current) => {
+      const next = current || {
+        x: window.innerWidth - 420,
+        y: window.innerHeight - 520,
+      };
+      return clampPosition(next.x, next.y, true);
+    });
+  }, [clampPosition]);
+
+  if (!position) return null;
+
+  return (
+    <div
+      className={clsx("home-ai-assistant", !open && "collapsed", dragging && "dragging")}
+      style={{
+        left: position.x,
+        top: position.y,
+        right: "auto",
+        bottom: "auto",
+        width: open ? "min(380px, calc(100vw - 32px))" : 56,
+      }}
+      onPointerMove={updateDrag}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+    >
+      {!open ? (
+        <button
+          type="button"
+          className="home-ai-launcher"
+          aria-label={isEn ? "Open AI assistant" : "打开 AI 对话助手"}
+          title={isEn ? "Open AI assistant" : "打开 AI 对话助手"}
+          onPointerDown={startDrag}
+          onClick={handleLauncherClick}
+        >
+          <img src="/favicon-32x32.png" alt="" className="home-ai-launcher-icon" />
+        </button>
+      ) : (
+        <section className="home-ai-panel" aria-label={isEn ? "AI assistant" : "AI 对话助手"}>
+          <div className="home-ai-header">
+            <div>
+              <strong>{isEn ? "AI Assistant" : "AI 对话助手"}</strong>
+              <span>
+                {isEn ? "Current market snapshot only" : "仅基于当前市场快照"}
+              </span>
+            </div>
+            <div className="home-ai-header-actions">
+              <button
+                type="button"
+                className="home-ai-drag-handle"
+                aria-label={isEn ? "Move assistant" : "移动助手"}
+                title={isEn ? "Move assistant" : "移动助手"}
+                onPointerDown={startDrag}
+              >
+                ⋮⋮
+              </button>
+              <button
+                type="button"
+                className="home-ai-close"
+                aria-label={isEn ? "Collapse assistant" : "收起助手"}
+                onClick={() => setOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div className="home-ai-disclaimer">
+            {isEn
+              ? "Uses only scan data already provided by PolyWeather; no invented prices, probabilities, or cities."
+              : "只使用 PolyWeather 当前扫描数据，不编造价格、概率或城市。"}
+          </div>
+
+          <div className="home-ai-messages" aria-live="polite">
+            {messages.map((message) => (
+              <div key={message.id} className={clsx("home-ai-message", message.role)}>
+                <p>{message.content}</p>
+              </div>
+            ))}
+            {submitting ? (
+              <div className="home-ai-message assistant loading">
+                <p>{isEn ? "Reading the current scan..." : "正在读取当前扫描数据..."}</p>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="home-ai-starters">
+            {starterQuestions.map((starter) => (
+              <button
+                key={starter}
+                type="button"
+                className="home-ai-starter"
+                onClick={() => void submitQuestion(starter)}
+              >
+                {starter}
+              </button>
+            ))}
+          </div>
+
+          <div className="home-ai-composer">
+            <textarea
+              className="home-ai-input"
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              placeholder={
+                isEn
+                  ? "Ask about current opportunities, one city, or edge..."
+                  : "询问当前机会、某个城市、edge 排序..."
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+                  event.preventDefault();
+                  void submitQuestion();
+                }
+              }}
+            />
+            <div className="home-ai-composer-actions">
+              <span className="home-ai-error">{error}</span>
+              <button
+                type="button"
+                className="home-ai-send"
+                disabled={!question.trim() || submitting}
+                onClick={() => void submitQuestion()}
+              >
+                {isEn ? "Send" : "发送"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}
+
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -973,6 +1500,13 @@ function ScanTerminalScreen() {
           row={activeDetailRow}
           marketScan={selectedDetail}
           loading={detailLoadingId === activeDetailRow?.id}
+        />
+        <AssistantWidget
+          terminalData={terminalData}
+          rows={timeSortedRows}
+          selectedRow={activeDetailRow}
+          locale={locale}
+          totalCities={store.cities.length}
         />
       </div>
     </div>
