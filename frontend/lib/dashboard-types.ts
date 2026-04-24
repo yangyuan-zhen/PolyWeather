@@ -455,6 +455,43 @@ export interface ScanOpportunityRow {
   temp_symbol?: string | null;
   current_temp?: number | null;
   current_max_so_far?: number | null;
+  metar_context?: {
+    source?: string | null;
+    station?: string | null;
+    station_label?: string | null;
+    obs_count?: number | null;
+    last_time?: string | null;
+    last_temp?: number | null;
+    max_temp?: number | null;
+    max_time?: string | null;
+    trend_delta?: number | null;
+    stale_for_today?: boolean;
+    available_for_today?: boolean;
+    last_observation_time?: string | null;
+    airport_current_temp?: number | null;
+    airport_max_so_far?: number | null;
+    airport_obs_time?: string | null;
+    airport_report_time?: string | null;
+    airport_raw_metar?: string | null;
+    airport_wx_desc?: string | null;
+    airport_cloud_desc?: string | null;
+    airport_visibility_mi?: number | null;
+    airport_wind_speed_kt?: number | null;
+    airport_wind_dir?: number | null;
+    airport_humidity?: number | null;
+    today_obs?: Array<{ time?: string; temp?: number | null }>;
+    recent_obs?: Array<{ time?: string; temp?: number | null }>;
+    settlement_today_obs?: Array<{ time?: string; temp?: number | null }>;
+  } | null;
+  metar_recent_obs?: Array<{ time?: string; temp?: number | null }>;
+  metar_today_obs?: Array<{ time?: string; temp?: number | null }>;
+  settlement_today_obs?: Array<{ time?: string; temp?: number | null }>;
+  metar_status?: {
+    available_for_today?: boolean;
+    stale_for_today?: boolean;
+    last_observation_time?: string | null;
+    last_temp?: number | null;
+  } | null;
   deb_prediction?: number | null;
   airport?: string | null;
   risk_level?: RiskLevel | null;
@@ -559,8 +596,25 @@ export interface ScanOpportunityRow {
   ai_city_thesis_en?: string | null;
   ai_city_confidence?: string | null;
   ai_city_model_cluster_note?: string | null;
+  ai_predicted_max?: number | null;
+  ai_predicted_low?: number | null;
+  ai_predicted_high?: number | null;
+  ai_forecast_unit?: string | null;
+  ai_forecast_confidence?: string | null;
+  ai_peak_window_zh?: string | null;
+  ai_peak_window_en?: string | null;
+  ai_airport_metar_read_zh?: string | null;
+  ai_airport_metar_read_en?: string | null;
+  ai_forecast_reason_zh?: string | null;
+  ai_forecast_reason_en?: string | null;
+  ai_forecast_match?: "core" | "edge" | "outside" | "watch" | string | null;
+  ai_forecast_match_reason_zh?: string | null;
+  ai_forecast_match_reason_en?: string | null;
   ai_watchlist_reason_zh?: string | null;
   ai_watchlist_reason_en?: string | null;
+  v4_metar_decision?: "approve" | "veto" | "downgrade" | "watchlist" | string | null;
+  v4_metar_reason_zh?: string | null;
+  v4_metar_reason_en?: string | null;
 }
 
 export interface PrimarySignal extends ScanOpportunityRow {}

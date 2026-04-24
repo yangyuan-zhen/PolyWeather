@@ -19,6 +19,10 @@ import {
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
 import {
+  getLocalDevProAccessState,
+  isBrowserLocalFullAccess,
+} from "@/lib/local-dev-access";
+import {
   CityDetail,
   CityListItem,
   CitySummary,
@@ -94,6 +98,9 @@ function getInitialHistoryState(): HistoryState {
 }
 
 function getInitialProAccessState(): ProAccessState {
+  if (isBrowserLocalFullAccess()) {
+    return getLocalDevProAccessState();
+  }
   return {
     loading: true,
     authenticated: false,
@@ -705,6 +712,10 @@ export function DashboardStoreProvider({
   };
 
   const refreshProAccess = async () => {
+    if (isBrowserLocalFullAccess()) {
+      setProAccess(getLocalDevProAccessState());
+      return;
+    }
     setProAccess((current) => ({
       ...current,
       loading: true,
@@ -870,10 +881,14 @@ export function DashboardStoreProvider({
   ]);
 
   const selectCity = async (cityName: string) => {
+    const wasSelectedCity = selectedCityRef.current === cityName;
+    const cached = cityDetailsByName[cityName];
     selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(true);
-    setSelectedForecastDate(null);
+    setSelectedForecastDate(
+      cached?.local_date || (wasSelectedCity ? selectedForecastDate : null),
+    );
     setFutureModalDate(null);
     setForecastModalMode(null);
 
@@ -898,9 +913,10 @@ export function DashboardStoreProvider({
       return;
     }
 
-    const needsDetailRefresh = true;
-    setLoadingState((current) => ({ ...current, cityDetail: true }));
-    const detailPromise = ensureCityDetail(cityName, needsDetailRefresh, "panel");
+    if (!cached) {
+      setLoadingState((current) => ({ ...current, cityDetail: true }));
+    }
+    const detailPromise = ensureCityDetail(cityName, false, "panel");
     void Promise.allSettled([summaryPromise, detailPromise])
       .then(([, detail]) => {
         if (selectedCityRef.current !== cityName) return;
@@ -910,7 +926,9 @@ export function DashboardStoreProvider({
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
+        if (!cached) {
+          setLoadingState((current) => ({ ...current, cityDetail: false }));
+        }
       });
   };
 

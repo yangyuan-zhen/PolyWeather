@@ -3,10 +3,25 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  getLocalDevAuthPayload,
+  isLocalFullAccessHost,
+} from "@/lib/local-dev-access";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
 export async function GET(req: NextRequest) {
+  const requestHost =
+    req.headers.get("x-forwarded-host") || req.headers.get("host") || req.nextUrl.host;
+  if (
+    isLocalFullAccessHost(requestHost) ||
+    isLocalFullAccessHost(req.nextUrl.hostname)
+  ) {
+    return NextResponse.json(getLocalDevAuthPayload(), {
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   if (!API_BASE) {
     return NextResponse.json(
       { error: "POLYWEATHER_API_BASE_URL is not configured" },

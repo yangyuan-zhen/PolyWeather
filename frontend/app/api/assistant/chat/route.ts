@@ -4,6 +4,7 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import { isLocalFullAccessHost } from "@/lib/local-dev-access";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -565,6 +566,16 @@ async function generateWithGroq(params: {
 
 async function ensureAssistantAccess(request: NextRequest) {
   const auth = await buildBackendRequestHeaders(request);
+  const requestHost =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  if (
+    isLocalFullAccessHost(requestHost) ||
+    isLocalFullAccessHost(request.nextUrl.hostname)
+  ) {
+    return { allowed: true, auth };
+  }
   if (process.env.POLYWEATHER_AI_ALLOW_FREE === "true") {
     return { allowed: true, auth };
   }

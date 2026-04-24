@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import threading
 import time
 import hashlib
@@ -44,7 +45,7 @@ SCAN_AI_TIMEOUT_SEC = max(
 )
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
-    int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "600")),
+    int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "120")),
 )
 SCAN_AI_MAX_ROWS = max(
     1,
@@ -52,7 +53,7 @@ SCAN_AI_MAX_ROWS = max(
 )
 SCAN_AI_MAX_TOKENS = max(
     600,
-    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "1600")),
+    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "3200")),
 )
 
 
@@ -321,6 +322,7 @@ def _extract_ai_json_object(raw_text: str) -> Dict[str, Any]:
 def _scan_ai_cache_key(snapshot_id: str, filters: Dict[str, Any]) -> str:
     raw = json.dumps(
         {
+            "schema_version": "city_forecast_v1",
             "snapshot_id": snapshot_id,
             "filters": _normalize_scan_terminal_filters(filters),
             "model": SCAN_AI_MODEL,
@@ -366,21 +368,20 @@ def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
         "target_value": row.get("target_value"),
         "target_threshold": row.get("target_threshold"),
         "target_unit": row.get("target_unit"),
-        "model_probability": row.get("model_probability"),
         "market_probability": row.get("market_probability"),
-        "model_event_probability": row.get("model_event_probability"),
         "market_event_probability": row.get("market_event_probability"),
         "yes_ask": row.get("yes_ask"),
         "no_ask": row.get("no_ask"),
         "ask": row.get("ask"),
         "spread": row.get("spread"),
         "quote_age_ms": row.get("quote_age_ms"),
-        "edge_percent": row.get("edge_percent"),
-        "kelly_fraction": row.get("kelly_fraction"),
-        "quarter_kelly": row.get("quarter_kelly"),
-        "final_score": row.get("final_score"),
         "cluster_role": row.get("cluster_role"),
         "model_cluster_sources": _compact_ai_model_sources(row),
+        "metar_context": row.get("metar_context") or {},
+        "window_phase": row.get("window_phase"),
+        "peak_window_label": row.get("peak_window_label"),
+        "minutes_until_peak_start": row.get("minutes_until_peak_start"),
+        "minutes_until_peak_end": row.get("minutes_until_peak_end"),
         "trend_alignment": row.get("trend_alignment"),
         "tradable": row.get("tradable"),
         "accepting_orders": row.get("accepting_orders"),
@@ -424,15 +425,246 @@ def _compact_ai_model_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
     return sources[:12]
 
 
+def _observation_sort_key(point: Dict[str, Any]) -> tuple[int, str]:
+    raw_time = str(point.get("time") or "").strip()
+    try:
+        parsed = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        return parsed.hour * 60 + parsed.minute, raw_time
+    except Exception:
+        pass
+    match = re.search(r"(\d{1,2}):(\d{2})", raw_time)
+    if match:
+        hour = max(0, min(23, int(match.group(1))))
+        minute = max(0, min(59, int(match.group(2))))
+        return hour * 60 + minute, raw_time
+    return 9999, raw_time
+
+
+def _compact_observation_points(raw_points: Any, limit: int = 24) -> List[Dict[str, Any]]:
+    if not isinstance(raw_points, list):
+        return []
+    points: List[Dict[str, Any]] = []
+    for item in raw_points:
+        if isinstance(item, dict):
+            temp = _safe_float(item.get("temp"))
+            time_value = str(item.get("time") or item.get("obs_time") or item.get("time_label") or "").strip()
+        elif isinstance(item, (list, tuple)) and len(item) >= 2:
+            time_value = str(item[0] or "").strip()
+            temp = _safe_float(item[1])
+        else:
+            continue
+        if temp is None or not time_value:
+            continue
+        points.append({"time": time_value, "temp": temp})
+    sorted_points = sorted(points, key=_observation_sort_key)
+    return sorted_points[-max(1, int(limit)) :]
+
+
+def _build_metar_decision_context(data: Dict[str, Any]) -> Dict[str, Any]:
+    today_obs = _compact_observation_points(data.get("metar_today_obs"), 36)
+    recent_obs = _compact_observation_points(data.get("metar_recent_obs"), 12)
+    settlement_obs = _compact_observation_points(data.get("settlement_today_obs"), 36)
+    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
+    metar_status = data.get("metar_status") if isinstance(data.get("metar_status"), dict) else {}
+
+    source_obs = today_obs or recent_obs or settlement_obs
+    trend_source = recent_obs or source_obs[-4:]
+    last_point = source_obs[-1] if source_obs else {}
+    first_trend = trend_source[0] if trend_source else {}
+    last_trend = trend_source[-1] if trend_source else {}
+    max_point = None
+    for point in source_obs:
+        if max_point is None or float(point["temp"]) >= float(max_point["temp"]):
+            max_point = point
+
+    last_temp = _safe_float(last_point.get("temp"))
+    first_temp = _safe_float(first_trend.get("temp"))
+    trend_last_temp = _safe_float(last_trend.get("temp"))
+    trend_delta = (
+        trend_last_temp - first_temp
+        if trend_last_temp is not None and first_temp is not None and len(trend_source) >= 2
+        else None
+    )
+    station = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    return {
+        "source": "METAR",
+        "station": station.get("icao") or airport_current.get("station_code"),
+        "station_label": station.get("airport") or airport_current.get("station_label"),
+        "today_obs": today_obs[-12:],
+        "recent_obs": recent_obs[-8:],
+        "settlement_today_obs": settlement_obs[-12:],
+        "obs_count": len(source_obs),
+        "last_time": last_point.get("time"),
+        "last_temp": last_temp,
+        "max_temp": _safe_float((max_point or {}).get("temp")),
+        "max_time": (max_point or {}).get("time"),
+        "trend_delta": trend_delta,
+        "stale_for_today": bool(metar_status.get("stale_for_today")),
+        "available_for_today": bool(metar_status.get("available_for_today")),
+        "last_observation_time": metar_status.get("last_observation_time"),
+        "airport_current_temp": _safe_float(airport_current.get("temp")),
+        "airport_max_so_far": _safe_float(airport_current.get("max_so_far")),
+        "airport_obs_time": airport_current.get("obs_time"),
+        "airport_report_time": airport_current.get("report_time"),
+        "airport_raw_metar": airport_current.get("raw_metar"),
+        "airport_wx_desc": airport_current.get("wx_desc"),
+        "airport_cloud_desc": airport_current.get("cloud_desc"),
+        "airport_visibility_mi": _safe_float(airport_current.get("visibility_mi")),
+        "airport_wind_speed_kt": _safe_float(airport_current.get("wind_speed_kt")),
+        "airport_wind_dir": _safe_float(airport_current.get("wind_dir")),
+        "airport_humidity": _safe_float(airport_current.get("humidity")),
+    }
+
+
+def _target_range_from_row(row: Dict[str, Any]) -> tuple[Optional[float], Optional[float]]:
+    lower = _safe_float(row.get("target_lower"))
+    upper = _safe_float(row.get("target_upper"))
+    if lower is not None or upper is not None:
+        return lower, upper
+    threshold = _safe_float(row.get("target_threshold"))
+    target_value = _safe_float(row.get("target_value"))
+    raw_label = str(row.get("target_label") or row.get("action") or "")
+    numbers = [float(match.group(0)) for match in re.finditer(r"-?\d+(?:\.\d+)?", raw_label)]
+    if len(numbers) >= 2:
+        return min(numbers[0], numbers[1]), max(numbers[0], numbers[1])
+    value = threshold if threshold is not None else target_value if target_value is not None else (numbers[0] if numbers else None)
+    if value is None:
+        return None, None
+    if re.search(r"(\+|above|higher|or\s+higher|>=|≥|以上)", raw_label, re.I):
+        return value, None
+    if re.search(r"(below|or\s+below|<=|≤|以下)", raw_label, re.I):
+        return None, value
+    return value, value
+
+
+def _metar_gate_for_row(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    context = row.get("metar_context") if isinstance(row.get("metar_context"), dict) else {}
+    side = str(row.get("side") or "").strip().lower()
+    if side not in {"yes", "no"}:
+        return None
+    obs_count = _safe_int(context.get("obs_count"), 0)
+    if obs_count <= 0 or context.get("stale_for_today"):
+        return {
+            "decision": "downgrade",
+            "reason_zh": "V4 未拿到同日 METAR 实测，不能只凭 edge/Kelly 给出交易。",
+            "reason_en": "V4 has no same-day METAR observations, so edge/Kelly alone cannot drive a trade.",
+        }
+
+    lower, upper = _target_range_from_row(row)
+    max_temp = _safe_float(context.get("max_temp"))
+    last_temp = _safe_float(context.get("last_temp"))
+    trend_delta = _safe_float(context.get("trend_delta"))
+    if max_temp is None or (lower is None and upper is None):
+        return None
+
+    unit = str(row.get("target_unit") or row.get("temp_symbol") or "")
+    epsilon = 0.7 if "F" in unit.upper() else 0.4
+    phase = str(row.get("window_phase") or "").lower()
+    remaining = _safe_float(row.get("remaining_window_minutes"))
+    minutes_until_peak_start = _safe_float(row.get("minutes_until_peak_start"))
+    is_late = phase in {"active_peak", "post_peak"} or (remaining is not None and remaining <= 180)
+    is_before_peak = phase in {"early_today", "setup_today", "tomorrow", "week_ahead"} or (
+        minutes_until_peak_start is not None and minutes_until_peak_start > 0
+    )
+    is_falling = trend_delta is not None and trend_delta <= -epsilon
+    is_not_rising = trend_delta is not None and trend_delta <= epsilon
+
+    above_upper = upper is not None and max_temp > upper + epsilon
+    below_lower = lower is not None and max_temp < lower - epsilon
+    inside_bucket = (
+        (lower is None or max_temp >= lower - epsilon)
+        and (upper is None or max_temp <= upper + epsilon)
+    )
+
+    if side == "no":
+        if above_upper:
+            return {
+                "decision": "approve",
+                "reason_zh": "METAR 实测最高已越过目标桶上沿，V4 确认 BUY NO 有实测支撑。",
+                "reason_en": "METAR max has already moved above the bucket, so V4 confirms BUY NO has observation support.",
+            }
+        if below_lower and (is_late or is_falling or is_not_rising):
+            if is_before_peak and not is_late:
+                return {
+                    "decision": "watchlist",
+                    "reason_zh": "峰值窗口尚未到来，METAR 暂未触达不能直接确认 BUY NO，V4 先列观察。",
+                    "reason_en": "The peak window has not arrived, so a still-low METAR path cannot confirm BUY NO yet; V4 keeps it on watch.",
+                }
+            return {
+                "decision": "approve",
+                "reason_zh": "METAR 最高仍低于目标桶且近期走势不强，V4 确认 BUY NO 优先。",
+                "reason_en": "METAR max remains below the bucket and recent observations are not strengthening, so V4 favors BUY NO.",
+            }
+        if inside_bucket and is_late and is_not_rising:
+            return {
+                "decision": "downgrade",
+                "reason_zh": "METAR 最高仍贴近目标桶，V4 不允许只因 edge 高就直接交易 NO。",
+                "reason_en": "METAR max is still close to the target bucket, so V4 will not trade NO on edge alone.",
+            }
+    else:
+        if above_upper:
+            return {
+                "decision": "veto",
+                "reason_zh": "METAR 实测最高已越过目标桶上沿，V4 排除该 BUY YES。",
+                "reason_en": "METAR max has already exceeded the bucket, so V4 vetoes this BUY YES.",
+            }
+        if below_lower and (is_late or is_falling or is_not_rising):
+            if is_before_peak and not is_late:
+                return {
+                    "decision": "watchlist",
+                    "reason_zh": "峰值窗口尚未到来，METAR 未触达目标桶只能说明仍需等待峰值验证，V4 暂列观察。",
+                    "reason_en": "The peak window has not arrived, so METAR not reaching the bucket only means the setup still needs peak-window confirmation; V4 keeps it on watch.",
+                }
+            return {
+                "decision": "downgrade",
+                "reason_zh": "METAR 最高仍未触达目标桶且走势不强，V4 将 BUY YES 降级观察。",
+                "reason_en": "METAR max has not reached the bucket and recent observations are weak, so V4 downgrades BUY YES.",
+            }
+        if inside_bucket:
+            return {
+                "decision": "approve",
+                "reason_zh": "METAR 实测最高已落入目标桶，V4 认为 BUY YES 有实测依据，但仍需防止继续升穿上沿。",
+                "reason_en": "METAR max is inside the target bucket, so V4 sees observation support for BUY YES while monitoring an overshoot.",
+            }
+    if last_temp is not None and trend_delta is not None:
+        direction = "走弱" if trend_delta < -epsilon else "走强" if trend_delta > epsilon else "横盘"
+        return {
+            "decision": "watchlist",
+            "reason_zh": f"METAR 最新 {last_temp:.1f}，近期{direction}，V4 暂不把该合约升级为最终交易。",
+            "reason_en": f"Latest METAR is {last_temp:.1f} with a recent {'downtrend' if trend_delta < -epsilon else 'uptrend' if trend_delta > epsilon else 'flat trend'}, so V4 keeps this as watchlist.",
+        }
+    return None
+
+
+def _apply_metar_gate_to_row(row: Dict[str, Any]) -> None:
+    gate = _metar_gate_for_row(row)
+    if not gate:
+        return
+    decision = str(gate.get("decision") or "").lower()
+    row["v4_metar_decision"] = decision
+    row["v4_metar_reason_zh"] = gate.get("reason_zh")
+    row["v4_metar_reason_en"] = gate.get("reason_en")
+
+    current_decision = str(row.get("ai_decision") or "").lower()
+    hard_decisions = {"veto", "downgrade"}
+    if decision == "veto":
+        row["ai_decision"] = "veto"
+        row.pop("ai_rank", None)
+    elif decision == "downgrade" and current_decision != "veto":
+        row["ai_decision"] = "downgrade"
+        row.pop("ai_rank", None)
+    elif decision == "approve" and current_decision not in hard_decisions:
+        row["ai_decision"] = "approve"
+    elif decision == "watchlist" and current_decision not in {"approve", "veto", "downgrade"}:
+        row["ai_decision"] = "watchlist"
+
+    if decision in {"approve", "veto", "downgrade"}:
+        row["ai_reason_zh"] = gate.get("reason_zh") or row.get("ai_reason_zh")
+        row["ai_reason_en"] = gate.get("reason_en") or row.get("ai_reason_en")
+
+
 def _compact_ai_city_group(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     first = rows[0]
-    distribution = _compact_ai_distribution(first)
-    peak = next((item for item in distribution if item.get("highlighted")), None)
-    if not peak and distribution:
-        peak = max(
-            distribution,
-            key=lambda item: _safe_float(item.get("model_probability")) or -1.0,
-        )
     return {
         "city": first.get("city"),
         "city_display_name": first.get("city_display_name") or first.get("display_name") or first.get("city"),
@@ -444,12 +676,10 @@ def _compact_ai_city_group(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "deb_prediction": first.get("deb_prediction"),
         "window_phase": first.get("window_phase"),
         "remaining_window_minutes": first.get("remaining_window_minutes"),
-        "emos_distribution": distribution,
-        "emos_peak": {
-            "label": (peak or {}).get("label"),
-            "value": (peak or {}).get("value"),
-            "probability": (peak or {}).get("model_probability"),
-        },
+        "peak_window_label": first.get("peak_window_label"),
+        "minutes_until_peak_start": first.get("minutes_until_peak_start"),
+        "minutes_until_peak_end": first.get("minutes_until_peak_end"),
+        "metar_context": first.get("metar_context") or {},
         "model_cluster": {
             "core_low": first.get("cluster_core_low"),
             "core_high": first.get("cluster_core_high"),
@@ -480,7 +710,7 @@ def _build_scan_ai_prompt(payload: Dict[str, Any]) -> Dict[str, Any]:
     cities = [_compact_ai_city_group(rows) for rows in grouped.values() if rows]
     sent_contracts = sum(len(city.get("contracts") or []) for city in cities)
     return {
-        "schema_version": "city_group_v2",
+        "schema_version": "city_forecast_v1",
         "snapshot_id": payload.get("snapshot_id"),
         "generated_at": payload.get("generated_at"),
         "summary": payload.get("summary") or {},
@@ -501,28 +731,33 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
 
     system_prompt = (
-        "你是 PolyWeather 的付费 V4-Flash 市场扫描员。你只能基于用户提供的 JSON 快照做判断，"
-        "不得编造城市、价格、概率、盘口或天气数据。输入已经按城市分组，每城包含 EMOS 分布、"
-        "DEB、模型集群、当前实测和候选合约。你的任务不是复述 edge，而是形成 city thesis，"
-        "再决定哪些合约值得推荐、哪些必须排除、哪些只降级观察。"
-        "重点规则：最高温市场一天只会落入一个桶；如果 DEB/模型集群/EMOS 主峰集中在更高温区，"
-        "低温 YES 即使有表面 edge 也通常应 veto，优先考虑相邻尾部 NO；若价格过期、盘口太宽或窗口不支持，也要降级。"
-        "任何基于 edge 或 Kelly/仓位的推荐，都必须先参考该城市全部 model_cluster.sources、DEB 和 EMOS 分布；"
-        "不得只凭单一 EMOS 概率、单一模型或表面 edge 推荐。"
-        "只能引用输入中的 row id。必须输出 JSON object。"
+        "你是 PolyWeather 的付费 V4-Flash 城市最高温预测员。你只能基于用户提供的 JSON 快照做判断，"
+        "不得编造城市、价格、概率、盘口或天气数据。输入已经按城市分组，每城包含 DEB、"
+        "多个天气模型预测值 model_cluster.sources、METAR 实测序列、机场原始报文和候选合约。"
+        "你的首要任务不是分析套利，也不是推荐 BUY YES/NO，而是预测该城市今日最终最高温是多少。"
+        "必须输出城市级最高温点估计、置信区间、置信度、峰值窗口状态、机场报文解读和一句预测理由。"
+        "V4 禁止使用 EMOS、EMOS peak、EMOS probability、edge 或 Kelly 作为交易依据；"
+        "最高温预测必须直接参考该城市全部 model_cluster.sources、DEB、峰值窗口和 METAR/机场报文。"
+        "如果天气模型之间分歧大，必须放宽置信区间并降低 confidence；如果 METAR 与模型路径冲突，必须解释修正方向。"
+        "必须先判断 peak_window_label、minutes_until_peak_start/end 和 window_phase：峰值窗口尚未到来时，"
+        "不能因为 METAR 暂未触达目标温度就下最终结论，只能说明仍需峰值窗口验证；"
+        "必须检查 metar_context 的 today_obs/recent_obs、max_temp、last_temp、trend_delta、"
+        "airport_raw_metar、airport_wx_desc、airport_cloud_desc、airport_wind_* 和 stale 状态；"
+        "合约只作为下游映射：可以为每个候选 row_id 给出 forecast_match（core/edge/outside/watch）和一句原因，"
+        "但不要输出交易建议，不要使用套利、仓位、edge 或 Kelly 语言。必须输出 JSON object。"
     )
     model_snapshot = dict(ai_input)
     model_snapshot.pop("_polyweather_input_meta", None)
     user_payload = {
         "task": (
-            "Analyze each city first, then contract decisions. Return strict JSON only with: "
-            "summary_zh, summary_en, city_theses, recommendations, vetoed, downgraded, watchlist. "
-            "city_theses items need city, thesis_zh, thesis_en, model_cluster_note, confidence, "
-            "recommended_row_ids, vetoed_row_ids. recommendations items need row_id, rank, decision, "
-            "confidence, reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id, "
-            "reason_zh/reason_en. watchlist items are optional and need row_id plus reason. "
-            "If a recommendation cites edge or Kelly, the reason must mention the full model cluster consensus or divergence. "
-            "Keep every thesis and reason concise: one sentence only, no markdown, no repeated data tables."
+            "Return strict JSON only with: summary_zh, summary_en, city_forecasts, contract_notes. "
+            "city_forecasts items require city, predicted_max, range_low, range_high, unit, confidence, "
+            "peak_window_zh, peak_window_en, metar_read_zh, metar_read_en, reasoning_zh, reasoning_en, model_cluster_note. "
+            "contract_notes items are optional and require row_id, forecast_match, reason_zh, reason_en; "
+            "forecast_match must be one of core, edge, outside, watch. "
+            "Focus on final max temperature prediction; do not output recommendations/vetoed/downgraded unless needed for backward compatibility. "
+            "Do not mention EMOS, edge, Kelly, arbitrage, position size, or trading recommendation. "
+            "Keep every city forecast concise: one sentence for METAR read and one sentence for reasoning."
         ),
         "snapshot": model_snapshot,
     }
@@ -598,6 +833,43 @@ def _normalize_ai_city_theses(raw_items: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _normalize_ai_city_forecasts(ai_raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_items = (
+        ai_raw.get("city_forecasts")
+        or ai_raw.get("city_predictions")
+        or ai_raw.get("city_max_forecasts")
+        or ai_raw.get("city_theses")
+    )
+    if not isinstance(raw_items, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        city = str(item.get("city") or item.get("city_name") or "").strip()
+        if not city:
+            continue
+        predicted = (
+            item.get("predicted_max")
+            if item.get("predicted_max") is not None
+            else item.get("max_temp")
+            if item.get("max_temp") is not None
+            else item.get("prediction")
+        )
+        out.append(
+            {
+                **item,
+                "city": city,
+                "predicted_max": predicted,
+                "range_low": item.get("range_low") if item.get("range_low") is not None else item.get("low"),
+                "range_high": item.get("range_high") if item.get("range_high") is not None else item.get("high"),
+                "reasoning_zh": item.get("reasoning_zh") or item.get("thesis_zh") or item.get("summary_zh"),
+                "reasoning_en": item.get("reasoning_en") or item.get("thesis_en") or item.get("summary_en"),
+            }
+        )
+    return out
+
+
 def _merge_scan_ai_result(
     payload: Dict[str, Any],
     ai_raw: Dict[str, Any],
@@ -613,6 +885,8 @@ def _merge_scan_ai_result(
     downgraded = _normalize_ai_items(ai_raw.get("downgraded"))
     watchlist = _normalize_ai_items(ai_raw.get("watchlist"))
     city_theses = _normalize_ai_city_theses(ai_raw.get("city_theses"))
+    city_forecasts = _normalize_ai_city_forecasts(ai_raw)
+    contract_notes = _normalize_ai_items(ai_raw.get("contract_notes"))
 
     veto_ids = {str(item.get("row_id")) for item in vetoed}
     downgrade_ids = {str(item.get("row_id")) for item in downgraded}
@@ -624,17 +898,45 @@ def _merge_scan_ai_result(
         key = _normalize_ai_city_key(item.get("city"))
         if key:
             thesis_by_city[key] = item
+    forecast_by_city: Dict[str, Dict[str, Any]] = {}
+    for item in city_forecasts:
+        key = _normalize_ai_city_key(item.get("city"))
+        if key:
+            forecast_by_city[key] = item
 
     for row in rows:
-        thesis = thesis_by_city.get(_normalize_ai_city_key(row.get("city"))) or thesis_by_city.get(
-            _normalize_ai_city_key(row.get("city_display_name"))
-        )
-        if not thesis:
+        city_key = _normalize_ai_city_key(row.get("city"))
+        display_key = _normalize_ai_city_key(row.get("city_display_name"))
+        thesis = thesis_by_city.get(city_key) or thesis_by_city.get(display_key)
+        forecast = forecast_by_city.get(city_key) or forecast_by_city.get(display_key)
+        if thesis:
+            row["ai_city_thesis_zh"] = thesis.get("thesis_zh") or thesis.get("summary_zh")
+            row["ai_city_thesis_en"] = thesis.get("thesis_en") or thesis.get("summary_en")
+            row["ai_city_confidence"] = thesis.get("confidence")
+            row["ai_city_model_cluster_note"] = thesis.get("model_cluster_note")
+        if forecast:
+            row["ai_predicted_max"] = _safe_float(forecast.get("predicted_max"))
+            row["ai_predicted_low"] = _safe_float(forecast.get("range_low"))
+            row["ai_predicted_high"] = _safe_float(forecast.get("range_high"))
+            row["ai_forecast_unit"] = forecast.get("unit") or row.get("temp_symbol")
+            row["ai_forecast_confidence"] = forecast.get("confidence")
+            row["ai_peak_window_zh"] = forecast.get("peak_window_zh")
+            row["ai_peak_window_en"] = forecast.get("peak_window_en")
+            row["ai_airport_metar_read_zh"] = forecast.get("metar_read_zh")
+            row["ai_airport_metar_read_en"] = forecast.get("metar_read_en")
+            row["ai_forecast_reason_zh"] = forecast.get("reasoning_zh")
+            row["ai_forecast_reason_en"] = forecast.get("reasoning_en")
+            row["ai_city_model_cluster_note"] = forecast.get("model_cluster_note") or row.get("ai_city_model_cluster_note")
+            row["ai_city_thesis_zh"] = row.get("ai_city_thesis_zh") or forecast.get("reasoning_zh")
+            row["ai_city_thesis_en"] = row.get("ai_city_thesis_en") or forecast.get("reasoning_en")
+
+    for item in contract_notes:
+        row = by_id.get(str(item.get("row_id")))
+        if not row:
             continue
-        row["ai_city_thesis_zh"] = thesis.get("thesis_zh") or thesis.get("summary_zh")
-        row["ai_city_thesis_en"] = thesis.get("thesis_en") or thesis.get("summary_en")
-        row["ai_city_confidence"] = thesis.get("confidence")
-        row["ai_city_model_cluster_note"] = thesis.get("model_cluster_note")
+        row["ai_forecast_match"] = item.get("forecast_match") or item.get("match")
+        row["ai_forecast_match_reason_zh"] = item.get("reason_zh") or item.get("reason")
+        row["ai_forecast_match_reason_en"] = item.get("reason_en")
 
     for item in vetoed:
         row = by_id.get(str(item.get("row_id")))
@@ -677,6 +979,7 @@ def _merge_scan_ai_result(
             row["ai_decision"] = row.get("ai_decision") or "neutral"
         if row_id in watchlist_ids and row.get("ai_decision") == "neutral":
             row["ai_decision"] = "watchlist"
+        _apply_metar_gate_to_row(row)
 
     def _ai_sort_key(row: Dict[str, Any]) -> tuple:
         decision = str(row.get("ai_decision") or "").lower()
@@ -721,6 +1024,8 @@ def _merge_scan_ai_result(
         "base_url": SCAN_AI_BASE_URL,
         "summary_zh": ai_raw.get("summary_zh"),
         "summary_en": ai_raw.get("summary_en"),
+        "city_forecasts": city_forecasts,
+        "contract_notes": contract_notes,
         "city_theses": city_theses,
         "watchlist": watchlist,
         "recommended_count": sum(1 for row in rows if row.get("ai_rank") is not None),
@@ -834,6 +1139,7 @@ def _build_terminal_row(
     city_meta = CITIES.get(city) or {}
     tz_offset = _safe_int(city_meta.get("tz"), 0)
     market_region = _market_region_from_tz_offset(tz_offset)
+    metar_context = _build_metar_decision_context(data)
 
     return {
         **row,
@@ -850,6 +1156,16 @@ def _build_terminal_row(
         "temp_symbol": data.get("temp_symbol"),
         "current_temp": current.get("temp"),
         "current_max_so_far": current.get("max_so_far"),
+        "metar_context": metar_context,
+        "metar_today_obs": metar_context.get("today_obs") or [],
+        "metar_recent_obs": metar_context.get("recent_obs") or [],
+        "settlement_today_obs": metar_context.get("settlement_today_obs") or [],
+        "metar_status": {
+            "available_for_today": metar_context.get("available_for_today"),
+            "stale_for_today": metar_context.get("stale_for_today"),
+            "last_observation_time": metar_context.get("last_observation_time"),
+            "last_temp": metar_context.get("last_temp"),
+        },
         "deb_prediction": ((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None)
         or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None),
         "display_name": display_name,

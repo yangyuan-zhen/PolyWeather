@@ -3,6 +3,7 @@ import {
   createSupabaseMiddlewareClient,
   hasSupabaseServerEnv,
 } from "@/lib/supabase/server";
+import { isLocalFullAccessHost } from "@/lib/local-dev-access";
 
 const SESSION_COOKIE = "polyweather_entitlement";
 
@@ -179,6 +180,16 @@ async function handleSupabaseOptionalSession(request: NextRequest) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   if (isStaticAsset(pathname)) {
+    return NextResponse.next();
+  }
+  const requestHost =
+    request.headers.get("x-forwarded-host") ||
+    request.headers.get("host") ||
+    request.nextUrl.host;
+  if (
+    isLocalFullAccessHost(requestHost) ||
+    isLocalFullAccessHost(request.nextUrl.hostname)
+  ) {
     return NextResponse.next();
   }
 

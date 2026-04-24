@@ -831,6 +831,7 @@ export function ProbabilityDistribution({
 }) {
   const { locale, t } = useI18n();
   const view = getProbabilityView(detail, targetDate);
+  const modelView = getModelView(detail, targetDate);
   const marketYesPrice = getMarketYesPrice(marketScan);
   const marketYesText = toPercent(marketYesPrice);
   const isToday = !targetDate || targetDate === detail.local_date;
@@ -1216,34 +1217,26 @@ export function ProbabilityDistribution({
           <div className="prob-price-card">
             <div className="prob-price-head">
               <span>
-                {locale === "en-US" ? "Probability x Price" : "概率 x 价格联动"}
+                {locale === "en-US" ? "Win-rate reference" : "胜率参考"}
               </span>
               <strong>
                 {!marketScan
                   ? locale === "en-US"
-                    ? "Waiting for market layer"
-                    : "等待市场层"
+                    ? "Waiting for market context"
+                    : "等待市场参照"
                   : !marketScan.available
                     ? locale === "en-US"
                       ? "No matched active market"
                       : "未匹配到活跃盘口"
-                    : linkedMarketBucket
-                      ? locale === "en-US"
-                        ? `${actionText}: ${linkedContractLabel || "contract bucket"}`
-                        : `${actionText}：${linkedContractLabel || "合约桶"}`
-                      : preferredPriceView?.edge != null
-                        ? locale === "en-US"
-                          ? `${actionText} · edge ${formatSignedPercent(preferredPriceView.edge)}`
-                          : `${actionText} · 优势 ${formatSignedPercent(preferredPriceView.edge)}`
-                        : locale === "en-US"
-                          ? "Waiting for executable quote"
-                          : "等待可执行报价"}
+                    : locale === "en-US"
+                      ? `${linkedContractLabel || topProbabilityLabel || "Temperature bucket"} · model ${linkedMarketProbabilityText || topProbabilityText || "--"}`
+                      : `${linkedContractLabel || topProbabilityLabel || "温度桶"} · 模型 ${linkedMarketProbabilityText || topProbabilityText || "--"}`}
               </strong>
             </div>
             <div className="prob-price-grid">
               <div>
                 <span>
-                  {locale === "en-US" ? "Contract bucket" : "合约桶口径"}
+                  {locale === "en-US" ? "Bucket" : "温度桶"}
                 </span>
                 <strong>
                   {linkedContractLabel || topProbabilityLabel || "--"}
@@ -1253,33 +1246,29 @@ export function ProbabilityDistribution({
                 </em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "Candidate" : "可关注"}</span>
-                <strong>{actionText}</strong>
-                <em>{actionNote}</em>
+                <span>{locale === "en-US" ? "DEB" : "DEB"}</span>
+                <strong>
+                  {modelView.deb != null && Number.isFinite(Number(modelView.deb))
+                    ? `${Number(modelView.deb).toFixed(1)}${detail.temp_symbol}`
+                    : "--"}
+                </strong>
+                <em>{locale === "en-US" ? "final fused forecast" : "最终融合预测"}</em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "YES price" : "YES 价格"}</span>
-                <strong>{toPriceCents(yesDisplayPrice) || "--"}</strong>
-                <em>
-                  {locale === "en-US"
-                    ? `edge ${formatSignedPercent(yesDisplayEdge)}`
-                    : `优势 ${formatSignedPercent(yesDisplayEdge)}`}
-                </em>
+                <span>{locale === "en-US" ? "Model support" : "模型支持"}</span>
+                <strong>{modelVoteHint || "--"}</strong>
+                <em>{locale === "en-US" ? "raw model agreement" : "原始模型一致性"}</em>
               </div>
               <div>
-                <span>{locale === "en-US" ? "NO price" : "NO 价格"}</span>
-                <strong>{toPriceCents(noDisplayPrice) || "--"}</strong>
-                <em>
-                  {locale === "en-US"
-                    ? `edge ${formatSignedPercent(noDisplayEdge)}`
-                    : `优势 ${formatSignedPercent(noDisplayEdge)}`}
-                </em>
+                <span>{locale === "en-US" ? "Market role" : "盘口角色"}</span>
+                <strong>{locale === "en-US" ? "Reference only" : "仅作参考"}</strong>
+                <em>{quoteSourceLabel}</em>
               </div>
             </div>
             <p>
               {locale === "en-US"
-                ? `Read-only comparison between model probability and executable ask; it does not place orders. Source: ${quoteSourceLabel}${lockAvailable ? ` · lock ${formatSignedPercent(lockEdge)}` : ""}.`
-                : `只比较模型概率与可执行买价；系统不会下单。来源：${quoteSourceLabel}${lockAvailable ? ` · 锁价 ${formatSignedPercent(lockEdge)}` : ""}。`}
+                ? "This card follows the same rule as the opportunity list: DEB first, model agreement second, METAR conflict check before settlement."
+                : "该卡片与机会列表口径一致：先看 DEB，再看模型支持，最后检查 METAR 是否冲突。"}
             </p>
           </div>
         )}

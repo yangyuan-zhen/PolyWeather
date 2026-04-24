@@ -701,7 +701,7 @@ function ScanTerminalScreen() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ContentView>("list");
+  const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [aiLogs, setAiLogs] = useState<ScanAiLogEntry[]>([]);
@@ -1000,7 +1000,7 @@ function ScanTerminalScreen() {
       .slice(0, 12);
 
     cities.forEach((cityName) => {
-      void store.ensureCityDetail(cityName, true, "market").catch(() => {});
+      void store.ensureCityDetail(cityName, false, "market").catch(() => {});
     });
   }, [
     isPro,
@@ -1086,12 +1086,26 @@ function ScanTerminalScreen() {
     setMapSelectedCityName(cityName);
     const matchedRow = findRowForCity(timeSortedRows, cityName);
     setSelectedRowId(matchedRow?.id || null);
-    void store.selectCity(cityName);
-  }, [store, timeSortedRows]);
+  }, [timeSortedRows]);
 
   const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
+    const cityName = row.city || row.city_display_name || row.display_name || "";
+    if (!cityName) return;
     setSelectedRowId(row.id);
-    void store.selectCity(row.city);
+    const selectedCityKey = normalizeCityKey(store.selectedCity);
+    const rowCityKey = normalizeCityKey(cityName);
+    const hasCachedDetail =
+      Boolean(store.cityDetailsByName[cityName]) ||
+      Object.values(store.cityDetailsByName).some((detail) =>
+        rowMatchesCity(row, detail?.name || detail?.display_name || ""),
+      );
+    if (store.isPanelOpen && selectedCityKey === rowCityKey) {
+      if (!hasCachedDetail) {
+        void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
+      }
+      return;
+    }
+    void store.selectCity(cityName);
   }, [store]);
 
   const openScanPaywall = useCallback(() => {
