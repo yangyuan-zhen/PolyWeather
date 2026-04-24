@@ -305,10 +305,22 @@ export const OpportunityTable = React.memo(function OpportunityTable({
             <div className="scan-opportunity-group-head">
               <div className="scan-opportunity-city">
                 <strong>{group.cityName}</strong>
-                <span>
-                  DEB {group.debLabel} · EMOS peak {group.peakLabel}
-                  {group.peakProbability != null ? ` · ${formatPercent(group.peakProbability)}` : ""}
-                </span>
+                <div className="scan-opportunity-models">
+                  <span>
+                    <em>DEB</em>
+                    <b>{group.debLabel}</b>
+                  </span>
+                  <span>
+                    <em>EMOS peak</em>
+                    <b>{group.peakLabel}</b>
+                  </span>
+                  {group.peakProbability != null ? (
+                    <span>
+                      <em>{isEn ? "Peak prob" : "峰值概率"}</em>
+                      <b>{formatPercent(group.peakProbability)}</b>
+                    </span>
+                  ) : null}
+                </div>
               </div>
               <div className="scan-opportunity-phase">
                 <span>{group.localTime || "--"}</span>
@@ -339,19 +351,28 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                     className={`scan-opportunity-item ${selected ? "selected" : ""}`}
                     onClick={() => onSelectRow?.(row)}
                   >
-                    <span className="scan-opportunity-branch">
-                      {rowIndex === group.rows.length - 1 ? "└" : "├"}
+                    <span className="scan-opportunity-branch" aria-hidden="true">
+                      <i />
                     </span>
-                    <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
-                      {formatAction(row, locale, tempSymbol)}
-                    </strong>
-                    <span>EMOS {formatPercent(modelProbability)}</span>
-                    <span>
-                      {priceLabel} {formatQuoteCents(row.ask)}
+                    <span className="scan-opportunity-trade">
+                      <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
+                        {formatAction(row, locale, tempSymbol)}
+                      </strong>
                     </span>
-                    <em className={edgePositive ? "positive" : "negative"}>
-                      edge {formatPercent(row.edge_percent, true)}
-                    </em>
+                    <span className="scan-opportunity-stat">
+                      <small>EMOS</small>
+                      <b>{formatPercent(modelProbability)}</b>
+                    </span>
+                    <span className="scan-opportunity-stat">
+                      <small>{priceLabel}</small>
+                      <b>{formatQuoteCents(row.ask)}</b>
+                    </span>
+                    <span className="scan-opportunity-stat edge">
+                      <small>edge</small>
+                      <b className={edgePositive ? "positive" : "negative"}>
+                        {formatPercent(row.edge_percent, true)}
+                      </b>
+                    </span>
                   </button>
                 );
               })}

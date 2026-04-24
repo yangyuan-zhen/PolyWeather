@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   RefreshCw,
   Moon,
+  Search,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -19,10 +20,6 @@ import {
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
-import {
-  FilterState,
-  ScanFilterPanel,
-} from "@/components/dashboard/ScanFilterPanel";
 import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
@@ -37,6 +34,7 @@ import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import { dashboardClient } from "@/lib/dashboard-client";
 import type {
   ScanOpportunityRow,
+  ScanTerminalFilters,
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
@@ -55,6 +53,8 @@ const DEFAULT_FILTERS: FilterState = {
 };
 
 const SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
+
+interface FilterState extends ScanTerminalFilters {}
 
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
@@ -249,7 +249,6 @@ function ScanTerminalScreen() {
   const accountHref = store.proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const [draftFilters, setDraftFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -491,16 +490,6 @@ function ScanTerminalScreen() {
   return (
     <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
-        <ScanFilterPanel
-          value={draftFilters}
-          onChange={setDraftFilters}
-          onScan={(filters) => {
-            setDraftFilters(filters);
-            void fetchTerminal(filters, true);
-          }}
-          isScanning={loading}
-        />
-
         <main className="scan-data-grid">
           <div className="scan-topbar">
             <div className="scan-topbar-title">
@@ -533,6 +522,21 @@ function ScanTerminalScreen() {
               <span className="scan-topbar-time">
                 {userLocalTime}
               </span>
+              <button
+                type="button"
+                className="scan-primary-button"
+                onClick={() => void fetchTerminal(activeFilters, true)}
+                disabled={loading}
+              >
+                <Search size={14} />
+                {loading
+                  ? isEn
+                    ? "Scanning..."
+                    : "扫描中..."
+                  : isEn
+                    ? "Start Scan"
+                    : "开始扫描"}
+              </button>
               <button
                 type="button"
                 className="scan-theme-button"

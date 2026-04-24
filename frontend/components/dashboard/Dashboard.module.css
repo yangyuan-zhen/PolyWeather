@@ -8998,7 +8998,7 @@
 
 .root :global(.scan-terminal) {
   display: grid;
-  grid-template-columns: 248px minmax(0, 1fr) 324px;
+  grid-template-columns: minmax(0, 1fr) 324px;
   gap: 14px;
   width: 100%;
   min-height: 100vh;
@@ -9302,6 +9302,8 @@
 .root :global(.scan-topbar-actions) {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 12px;
   color: #b4c8e2;
   font-size: 14px;
@@ -9362,6 +9364,31 @@
   gap: 8px;
   padding: 11px 14px;
   font-weight: 700;
+}
+
+.root :global(.scan-primary-button) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 11px 16px;
+  border: 1px solid rgba(23, 217, 139, 0.38);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #1ddb8d, #0eb96d);
+  color: #031411;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(14, 185, 109, 0.18);
+  cursor: pointer;
+}
+
+.root :global(.scan-primary-button:hover:not(:disabled)) {
+  filter: brightness(1.06);
+}
+
+.root :global(.scan-primary-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .root :global(.scan-cta-ghost) {
@@ -9618,7 +9645,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
-  padding: 16px 18px;
+  padding: 16px 18px 14px;
   border-bottom: 1px solid rgba(90, 123, 166, 0.1);
   background: rgba(13, 28, 48, 0.62);
 }
@@ -9636,13 +9663,41 @@
   font-weight: 900;
 }
 
-.root :global(.scan-opportunity-city span) {
-  overflow: hidden;
+.root :global(.scan-opportunity-models) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.scan-opportunity-models span) {
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid rgba(122, 154, 196, 0.14);
+  border-radius: 8px;
+  background: rgba(4, 12, 22, 0.28);
   color: #9fb4cf;
-  font-size: 14px;
-  font-weight: 700;
-  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
   white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-models em) {
+  color: #6f88aa;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.root :global(.scan-opportunity-models b) {
+  overflow: hidden;
+  color: #dceaff;
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
 }
 
 .root :global(.scan-opportunity-phase) {
@@ -9665,42 +9720,74 @@
 }
 
 .root :global(.scan-opportunity-items) {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px 12px;
 }
 
 .root :global(.scan-opportunity-item) {
   display: grid;
-  grid-template-columns: 24px minmax(190px, 1.1fr) minmax(92px, 0.45fr) minmax(92px, 0.45fr) minmax(90px, 0.38fr);
-  gap: 12px;
+  grid-template-columns: 18px minmax(190px, 1fr) minmax(96px, 0.42fr) minmax(88px, 0.36fr) minmax(98px, 0.38fr);
+  gap: 14px;
   align-items: center;
   width: 100%;
-  min-height: 48px;
-  padding: 10px 18px;
-  border: 0;
-  border-bottom: 1px solid rgba(90, 123, 166, 0.08);
-  background: transparent;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: 1px solid rgba(90, 123, 166, 0.1);
+  border-radius: 12px;
+  background: rgba(5, 14, 25, 0.42);
   color: #b8c9e1;
   text-align: left;
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
 }
 
 .root :global(.scan-opportunity-item:last-child) {
-  border-bottom: 0;
+  border-bottom: 1px solid rgba(90, 123, 166, 0.1);
 }
 
 .root :global(.scan-opportunity-item:hover) {
-  background: rgba(30, 70, 110, 0.18);
+  background: rgba(22, 48, 78, 0.5);
+  border-color: rgba(109, 145, 190, 0.2);
 }
 
 .root :global(.scan-opportunity-item.selected) {
-  background: rgba(10, 74, 65, 0.38);
-  box-shadow: inset 3px 0 0 rgba(23, 217, 139, 0.78);
+  background: linear-gradient(180deg, rgba(6, 50, 47, 0.72), rgba(7, 35, 39, 0.72));
+  border-color: rgba(23, 217, 139, 0.42);
+  box-shadow: inset 3px 0 0 rgba(23, 217, 139, 0.82);
 }
 
 .root :global(.scan-opportunity-branch) {
-  color: rgba(159, 180, 207, 0.72);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 16px;
+  position: relative;
+  align-self: stretch;
+  width: 18px;
+}
+
+.root :global(.scan-opportunity-branch::before) {
+  position: absolute;
+  top: -18px;
+  bottom: 50%;
+  left: 8px;
+  width: 1px;
+  background: rgba(122, 154, 196, 0.28);
+  content: "";
+}
+
+.root :global(.scan-opportunity-branch i) {
+  position: absolute;
+  top: 50%;
+  left: 8px;
+  width: 10px;
+  height: 1px;
+  background: rgba(122, 154, 196, 0.32);
+}
+
+.root :global(.scan-opportunity-trade) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
 }
 
 .root :global(.scan-opportunity-action) {
@@ -9719,27 +9806,47 @@
   color: #ff7474;
 }
 
-.root :global(.scan-opportunity-item span:not(.scan-opportunity-branch)) {
+.root :global(.scan-opportunity-stat) {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  justify-items: start;
+  color: #d0ddf0;
+}
+
+.root :global(.scan-opportunity-stat small) {
   overflow: hidden;
+  max-width: 100%;
+  color: #718bac;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-stat b) {
+  overflow: hidden;
+  max-width: 100%;
+  color: #dceaff;
   font-size: 14px;
-  font-weight: 700;
+  font-weight: 900;
+  line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.root :global(.scan-opportunity-item em) {
+.root :global(.scan-opportunity-stat.edge) {
   justify-self: end;
-  font-size: 15px;
-  font-style: normal;
-  font-weight: 900;
-  white-space: nowrap;
+  justify-items: end;
 }
 
-.root :global(.scan-opportunity-item em.positive) {
+.root :global(.scan-opportunity-stat b.positive) {
   color: #1de28f;
 }
 
-.root :global(.scan-opportunity-item em.negative) {
+.root :global(.scan-opportunity-stat b.negative) {
   color: #ff6868;
 }
 
@@ -10588,7 +10695,6 @@
 .root :global(.scan-terminal.light .scan-hero p),
 .root :global(.scan-terminal.light .scan-topbar-title span),
 .root :global(.scan-terminal.light .scan-city-sub),
-.root :global(.scan-terminal.light .scan-opportunity-city span),
 .root :global(.scan-terminal.light .scan-opportunity-phase),
 .root :global(.scan-terminal.light .scan-opportunity-phase em),
 .root :global(.scan-terminal.light .panel-overline),
@@ -10608,6 +10714,8 @@
 
 .root :global(.scan-terminal.light .scan-list-tabs button),
 .root :global(.scan-terminal.light .scan-mode-tab-sub),
+.root :global(.scan-terminal.light .scan-opportunity-models em),
+.root :global(.scan-terminal.light .scan-opportunity-stat small),
 .root :global(.scan-terminal.light .panel-meta-chip),
 .root :global(.scan-terminal.light .panel-weather-chip),
 .root :global(.scan-terminal.light .scan-distribution-card),
@@ -10692,8 +10800,10 @@
 }
 
 .root :global(.scan-terminal.light .scan-opportunity-item) {
+  background: rgba(255, 255, 255, 0.62);
   color: #405977;
   border-bottom-color: rgba(35, 72, 118, 0.08);
+  border-color: rgba(35, 72, 118, 0.1);
 }
 
 .root :global(.scan-terminal.light .scan-opportunity-item:hover) {
@@ -10701,7 +10811,23 @@
 }
 
 .root :global(.scan-terminal.light .scan-opportunity-item.selected) {
-  background: rgba(222, 250, 238, 0.82);
+  background: linear-gradient(180deg, rgba(222, 250, 238, 0.9), rgba(241, 250, 247, 0.96));
+  border-color: rgba(10, 160, 100, 0.34);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-models span) {
+  border-color: rgba(35, 72, 118, 0.1);
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-models b),
+.root :global(.scan-terminal.light .scan-opportunity-stat b) {
+  color: #14253a;
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-branch::before),
+.root :global(.scan-terminal.light .scan-opportunity-branch i) {
+  background: rgba(56, 86, 126, 0.24);
 }
 
 .root :global(.scan-terminal.light .panel-header),
@@ -10731,6 +10857,12 @@
   color: #1f3654;
 }
 
+.root :global(.scan-terminal.light .scan-primary-button) {
+  color: #032019;
+  border-color: rgba(10, 160, 100, 0.34);
+  background: linear-gradient(180deg, #25d990, #10b870);
+}
+
 .root :global(.scan-terminal.light .scan-cta-ghost),
 .root :global(.scan-terminal.light .scan-detail-analysis-button) {
   border-color: rgba(7, 160, 100, 0.24);
@@ -10756,7 +10888,7 @@
 
 @media (max-width: 1480px) {
   .root :global(.scan-terminal) {
-    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
@@ -10813,8 +10945,9 @@
     display: none;
   }
 
-  .root :global(.scan-opportunity-item em) {
+  .root :global(.scan-opportunity-stat.edge) {
     justify-self: start;
+    justify-items: start;
   }
 
   .root :global(.scan-trade-cards) {
@@ -10845,7 +10978,7 @@
     padding: 12px;
   }
 
-  .root :global(.scan-opportunity-city span) {
+  .root :global(.scan-opportunity-models span) {
     white-space: normal;
   }
 }
