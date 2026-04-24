@@ -24,6 +24,14 @@ function formatPercent(value?: number | null, signed = false) {
   return `${signed && numeric >= 0 ? "+" : ""}${numeric.toFixed(1)}%`;
 }
 
+function formatSignedTemperatureDelta(value?: number | null, tempSymbol?: string | null) {
+  if (value == null || Number.isNaN(Number(value))) return "--";
+  const numeric = Number(value);
+  if (Math.abs(numeric) < 0.05) return "0";
+  const absValue = formatTemperatureValue(Math.abs(numeric), tempSymbol);
+  return `${numeric > 0 ? "+" : "-"}${absValue}`;
+}
+
 function formatWindowMinutes(value: number | null | undefined, locale: string) {
   if (value == null || !Number.isFinite(Number(value))) return "--";
   const minutes = Math.max(0, Math.round(Number(value)));
@@ -144,40 +152,58 @@ function ProbabilityPreview({
     });
   }
 
-  const modelLabel = "EMOS";
-  const marketLabel = locale === "en-US" ? "Market" : "市场";
+  const peak =
+    preview.reduce<DistributionPreviewPoint | null>((best, item) => {
+      const probability = Number(item.model_probability ?? -1);
+      const bestProbability = Number(best?.model_probability ?? -1);
+      return probability > bestProbability ? item : best;
+    }, null) || preview.find((item) => item.highlighted) || preview[0];
+  const peakValue = peak?.value ?? row.peak_value ?? null;
+  const peakLabel =
+    peakValue != null
+      ? formatTemperatureValue(Number(peakValue), tempSymbol)
+      : normalizeTemperatureLabel(peak?.label, tempSymbol) || "--";
+  const peakProbability =
+    peak?.model_probability != null
+      ? Number(peak.model_probability) * 100
+      : row.peak_probability != null
+        ? Number(row.peak_probability) * 100
+        : null;
+  const debLabel =
+    row.deb_prediction != null
+      ? formatTemperatureValue(Number(row.deb_prediction), tempSymbol)
+      : "--";
+  const delta =
+    peakValue != null && row.deb_prediction != null
+      ? Number(peakValue) - Number(row.deb_prediction)
+      : null;
+  const targetLabel =
+    normalizeTemperatureLabel(row.target_label, tempSymbol) ||
+    (row.target_value != null ? formatTemperatureValue(Number(row.target_value), tempSymbol) : "--");
+  const targetProbability =
+    row.model_event_probability != null ? Number(row.model_event_probability) * 100 : null;
 
   return (
     <div className="scan-distribution-preview">
-      {preview.slice(0, 6).map((item) => {
-        const modelPercent =
-          item.model_probability != null ? item.model_probability * 100 : null;
-        const marketPercent =
-          item.market_probability != null ? item.market_probability * 100 : null;
-        const modelWidth = Math.max(3, Math.min(100, Number(modelPercent || 0)));
-        const marketWidth = Math.max(3, Math.min(100, Number(marketPercent || 0)));
-
-        return (
-          <div
-            key={`${item.label}-${item.value ?? ""}`}
-            className={`scan-distribution-card ${item.highlighted ? "featured" : ""}`}
-          >
-            <strong>
-              {normalizeTemperatureLabel(item.label, tempSymbol) || item.label || "--"}
-            </strong>
-            <span className="scan-distribution-line model">
-              <b>{modelLabel}</b>
-              <i style={{ width: `${modelWidth}%` }} />
-              <em>{formatPercent(modelPercent)}</em>
-            </span>
-            <span className="scan-distribution-line market">
-              <b>{marketLabel}</b>
-              <i style={{ width: `${marketWidth}%` }} />
-              <em>{formatPercent(marketPercent)}</em>
-            </span>
-          </div>
-        );
-      })}
+      <div className="scan-model-compare">
+        <div className="scan-model-primary">
+          <span>{locale === "en-US" ? "EMOS peak" : "EMOS峰值"}</span>
+          <strong>{peakLabel}</strong>
+          <em>{formatPercent(peakProbability)}</em>
+        </div>
+        <div className="scan-model-rows">
+          <span>
+            <b>DEB</b>
+            <strong>{debLabel}</strong>
+            <em>{delta == null ? "--" : formatSignedTemperatureDelta(delta, tempSymbol)}</em>
+          </span>
+          <span>
+            <b>{locale === "en-US" ? "Target" : "目标"}</b>
+            <strong>{targetLabel}</strong>
+            <em>EMOS {formatPercent(targetProbability)}</em>
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -249,7 +275,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
       <div className="scan-table-header">
         <span>{isEn ? "City / Market" : "城市 / 市场"}</span>
         <span>{isEn ? "Local Time / Phase" : "当前时间 / 阶段"}</span>
-        <span>{isEn ? "EMOS / Market" : "EMOS / 市场"}</span>
+        <span>{isEn ? "EMOS / DEB" : "EMOS / DEB"}</span>
         <span>{isEn ? "Quote / Model" : "买价 / 模型"}</span>
         <span>{isEn ? "Edge" : "边际优势"}</span>
       </div>

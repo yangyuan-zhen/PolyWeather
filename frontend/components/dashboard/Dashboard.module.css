@@ -9572,7 +9572,7 @@
 
 .root :global(.scan-table-header) {
   display: grid;
-  grid-template-columns: minmax(210px, 1.1fr) minmax(132px, 0.72fr) minmax(220px, 1.12fr) minmax(150px, 0.82fr) 96px;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(128px, 0.68fr) minmax(230px, 1.08fr) minmax(150px, 0.78fr) 92px;
   gap: 10px;
   align-items: center;
   padding: 14px 18px;
@@ -9786,7 +9786,7 @@
 
 .root :global(.scan-table-row) {
   display: grid;
-  grid-template-columns: minmax(210px, 1.1fr) minmax(132px, 0.72fr) minmax(220px, 1.12fr) minmax(150px, 0.82fr) 96px;
+  grid-template-columns: minmax(220px, 1.1fr) minmax(128px, 0.68fr) minmax(230px, 1.08fr) minmax(150px, 0.78fr) 92px;
   gap: 10px;
   align-items: center;
   min-height: 132px;
@@ -9892,76 +9892,76 @@
 }
 
 .root :global(.scan-distribution-preview) {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 6px;
+  display: block;
   min-width: 0;
 }
 
-.root :global(.scan-distribution-card) {
+.root :global(.scan-model-compare) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  padding: 8px 6px;
-  border-radius: 10px;
-  border: 1px solid rgba(87, 119, 166, 0.1);
-  background: rgba(15, 28, 46, 0.72);
-  color: #b4c7df;
-  font-size: 10px;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(86, 120, 168, 0.16);
+  border-radius: 12px;
+  background: rgba(13, 27, 45, 0.7);
 }
 
-.root :global(.scan-distribution-card strong) {
-  display: block;
-  margin-bottom: 1px;
-  color: #fff;
-  font-size: 13px;
-  line-height: 1.1;
-  text-align: center;
-  overflow-wrap: anywhere;
-}
-
-.root :global(.scan-distribution-card.featured strong) {
-  color: #22eb98;
-}
-
-.root :global(.scan-distribution-line) {
+.root :global(.scan-model-primary) {
   display: grid;
-  grid-template-columns: 12px minmax(22px, 1fr) auto;
-  gap: 4px;
-  align-items: center;
-  min-width: 0;
-  color: rgba(180, 199, 223, 0.9);
+  grid-template-columns: minmax(76px, 1fr) auto auto;
+  gap: 8px;
+  align-items: baseline;
 }
 
-.root :global(.scan-distribution-line b) {
-  color: rgba(148, 163, 184, 0.78);
-  font-size: 9px;
+.root :global(.scan-model-primary span),
+.root :global(.scan-model-rows b) {
+  color: rgba(146, 168, 197, 0.92);
+  font-size: 11px;
   font-weight: 800;
 }
 
-.root :global(.scan-distribution-line i) {
-  display: block;
-  max-width: 100%;
-  height: 4px;
-  border-radius: 999px;
-}
-
-.root :global(.scan-distribution-line.model i) {
-  background: linear-gradient(90deg, #17d98b, #20e3d2);
-}
-
-.root :global(.scan-distribution-line.market i) {
-  background: linear-gradient(90deg, #3f8cff, #57a8ff);
-}
-
-.root :global(.scan-distribution-line em) {
-  overflow: hidden;
-  color: rgba(226, 237, 252, 0.92);
-  font-size: 10px;
-  font-style: normal;
-  font-weight: 760;
+.root :global(.scan-model-primary strong) {
+  color: #22eb98;
+  font-size: 18px;
+  font-weight: 900;
   line-height: 1;
+}
+
+.root :global(.scan-model-primary em) {
+  color: #d7e7fb;
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.root :global(.scan-model-rows) {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.root :global(.scan-model-rows span) {
+  display: grid;
+  grid-template-columns: 42px minmax(54px, auto) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.root :global(.scan-model-rows strong) {
+  color: #eef7ff;
+  font-size: 13px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.root :global(.scan-model-rows em) {
+  overflow: hidden;
+  color: #9fb4cf;
+  font-size: 12px;
+  font-style: normal;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
