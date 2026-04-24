@@ -13,6 +13,10 @@ data/models/
 logs/
 artifacts/probability_calibration/auto_retrain_report.json
 artifacts/probability_calibration/candidates/
+artifacts/probability_calibration/default.backup-*.json
+artifacts/probability_calibration/default.local-backup-*.json
+artifacts/local_runtime/probability_calibration/auto_retrain_report.json
+artifacts/local_runtime/probability_calibration/candidates/
 
 # Python
 __pycache__/
@@ -45,4 +49,3 @@ frontend/*.tsbuildinfo
 # Browser extension build artifacts
 /extension.zip
 /extension-*.zip
-
