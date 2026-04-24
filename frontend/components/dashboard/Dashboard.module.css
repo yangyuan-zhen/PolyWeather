@@ -10399,6 +10399,192 @@
     radial-gradient(circle at 0 0, rgba(34, 211, 238, 0.12), transparent 34%);
 }
 
+.root :global(.scan-ai-analysis-view) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-height: 520px;
+}
+
+.root :global(.scan-ai-analysis-view.empty) {
+  min-height: 620px;
+}
+
+.root :global(.scan-ai-summary-card) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(8, 32, 52, 0.94), rgba(8, 21, 38, 0.94)),
+    radial-gradient(circle at 0 0, rgba(45, 212, 191, 0.15), transparent 32%);
+}
+
+.root :global(.scan-ai-summary-card strong) {
+  color: #ecf8ff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-summary-card p) {
+  margin: 6px 0 0;
+  color: #a6bbd7;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.root :global(.scan-ai-inline-button) {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 1px solid rgba(45, 212, 191, 0.3);
+  border-radius: 12px;
+  color: #d9fff6;
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.36), rgba(8, 47, 73, 0.4));
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.root :global(.scan-ai-inline-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.root :global(.scan-ai-log-panel.in-tab) {
+  margin: 0;
+}
+
+.root :global(.scan-ai-city-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.root :global(.scan-ai-city-card) {
+  border: 1px solid rgba(68, 100, 150, 0.2);
+  border-radius: 18px;
+  overflow: hidden;
+  background: rgba(10, 24, 42, 0.82);
+}
+
+.root :global(.scan-ai-city-head) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 18px;
+  background: rgba(15, 34, 57, 0.9);
+}
+
+.root :global(.scan-ai-city-head strong) {
+  color: #f2f8ff;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-city-head p) {
+  margin: 6px 0 0;
+  color: #9fb4d2;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.root :global(.scan-ai-city-head span) {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #68f3c8;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-cluster-note) {
+  margin: 0 18px 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 12px;
+  color: #b7cbe6;
+  background: rgba(6, 18, 32, 0.5);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.root :global(.scan-ai-contracts) {
+  display: flex;
+  flex-direction: column;
+  padding: 0 12px 12px;
+}
+
+.root :global(.scan-ai-contract) {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 12px;
+  border-top: 1px solid rgba(68, 100, 150, 0.16);
+}
+
+.root :global(.scan-ai-contract b) {
+  display: block;
+  color: #edf7ff;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-contract small) {
+  display: block;
+  margin-top: 3px;
+  color: #8fa8c7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.root :global(.scan-ai-contract > span) {
+  justify-self: end;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #a8bedc;
+  background: rgba(68, 100, 150, 0.16);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-contract.approve > span) {
+  color: #23f0a8;
+  background: rgba(16, 185, 129, 0.14);
+}
+
+.root :global(.scan-ai-contract.veto > span) {
+  color: #ff8a8a;
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.root :global(.scan-ai-contract.downgrade > span),
+.root :global(.scan-ai-contract.watchlist > span) {
+  color: #ffd166;
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.root :global(.scan-ai-contract p) {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #9fb4d2;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .root :global(.scan-ai-log-head) {
   display: flex;
   align-items: center;
@@ -11142,6 +11328,45 @@
 
 .root :global(.scan-terminal.light .scan-ai-log-item.error) {
   border-color: rgba(220, 38, 38, 0.28);
+}
+
+.root :global(.scan-terminal.light .scan-ai-summary-card),
+.root :global(.scan-terminal.light .scan-ai-city-card) {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+.root :global(.scan-terminal.light .scan-ai-summary-card strong),
+.root :global(.scan-terminal.light .scan-ai-city-head strong),
+.root :global(.scan-terminal.light .scan-ai-contract b) {
+  color: #0f172a;
+}
+
+.root :global(.scan-terminal.light .scan-ai-summary-card p),
+.root :global(.scan-terminal.light .scan-ai-city-head p),
+.root :global(.scan-terminal.light .scan-ai-contract p),
+.root :global(.scan-terminal.light .scan-ai-contract small) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-head) {
+  background: #f8fafc;
+}
+
+.root :global(.scan-terminal.light .scan-ai-cluster-note) {
+  color: #334155;
+  background: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.26);
+}
+
+.root :global(.scan-terminal.light .scan-ai-contract) {
+  border-top-color: rgba(148, 163, 184, 0.2);
+}
+
+.root :global(.scan-terminal.light .scan-ai-inline-button) {
+  color: #064e3b;
+  background: #d1fae5;
+  border-color: rgba(16, 185, 129, 0.28);
 }
 
 .root :global(.scan-terminal.light .scan-cta-ghost),

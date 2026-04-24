@@ -156,6 +156,16 @@ function getAiMeta(row: ScanOpportunityRow, locale: string) {
         null,
     };
   }
+  if (decision === "watchlist") {
+    return {
+      label: locale === "en-US" ? "AI watch" : "AI 观察",
+      tone: "downgrade",
+      reason:
+        locale === "en-US"
+          ? row.ai_watchlist_reason_en || row.ai_watchlist_reason_zh
+          : row.ai_watchlist_reason_zh || row.ai_watchlist_reason_en,
+    };
+  }
   return null;
 }
 

@@ -3359,5 +3359,6 @@ class PolymarketReadOnlyLayer:
             "window_phase": window_meta.get("phase"),
             "window_score": window_meta.get("score"),
             "distribution_preview": distribution_preview[:6],
+            "distribution_full": distribution_preview,
             "resolved_market_type": "maxtemp",
         }

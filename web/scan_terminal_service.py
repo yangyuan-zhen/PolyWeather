@@ -335,11 +335,6 @@ def _set_cached_scan_ai_result(snapshot_id: str, filters: Dict[str, Any], result
 def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "id": row.get("id"),
-        "city": row.get("city_display_name") or row.get("display_name") or row.get("city"),
-        "local_time": row.get("local_time"),
-        "current_temp": row.get("current_temp"),
-        "current_max_so_far": row.get("current_max_so_far"),
-        "deb_prediction": row.get("deb_prediction"),
         "action": row.get("action"),
         "side": row.get("side"),
         "target_label": row.get("target_label"),
@@ -357,35 +352,118 @@ def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
         "quote_age_ms": row.get("quote_age_ms"),
         "edge_percent": row.get("edge_percent"),
         "final_score": row.get("final_score"),
-        "window_phase": row.get("window_phase"),
-        "remaining_window_minutes": row.get("remaining_window_minutes"),
-        "distribution_preview": (row.get("distribution_preview") or [])[:6],
-        "peak_value": row.get("peak_value"),
-        "peak_probability": row.get("peak_probability"),
         "cluster_role": row.get("cluster_role"),
-        "cluster_core_low": row.get("cluster_core_low"),
-        "cluster_core_high": row.get("cluster_core_high"),
-        "cluster_median": row.get("cluster_median"),
-        "cluster_deb_reference": row.get("cluster_deb_reference"),
-        "cluster_model_count": row.get("cluster_model_count"),
         "trend_alignment": row.get("trend_alignment"),
         "tradable": row.get("tradable"),
         "accepting_orders": row.get("accepting_orders"),
     }
 
 
+def _normalize_ai_city_key(value: Any) -> str:
+    return str(value or "").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
+
+
+def _compact_ai_distribution(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_items = row.get("distribution_full") or row.get("distribution_preview") or []
+    if not isinstance(raw_items, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        out.append(
+            {
+                "label": item.get("label"),
+                "value": item.get("value"),
+                "unit": item.get("unit") or row.get("target_unit") or row.get("temp_symbol"),
+                "model_probability": item.get("model_probability"),
+                "market_probability": item.get("market_probability"),
+                "highlighted": item.get("highlighted"),
+            }
+        )
+    return out
+
+
+def _compact_ai_model_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
+    raw_sources = row.get("model_cluster_sources")
+    if not isinstance(raw_sources, dict):
+        return []
+    sources: List[Dict[str, Any]] = []
+    for name, value in raw_sources.items():
+        if _safe_float(value) is None:
+            continue
+        sources.append({"model": str(name), "value": value})
+    return sources[:12]
+
+
+def _compact_ai_city_group(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    first = rows[0]
+    distribution = _compact_ai_distribution(first)
+    peak = next((item for item in distribution if item.get("highlighted")), None)
+    if not peak and distribution:
+        peak = max(
+            distribution,
+            key=lambda item: _safe_float(item.get("model_probability")) or -1.0,
+        )
+    return {
+        "city": first.get("city"),
+        "city_display_name": first.get("city_display_name") or first.get("display_name") or first.get("city"),
+        "selected_date": first.get("selected_date") or first.get("local_date"),
+        "local_time": first.get("local_time"),
+        "temp_symbol": first.get("temp_symbol") or first.get("target_unit"),
+        "current_temp": first.get("current_temp"),
+        "current_max_so_far": first.get("current_max_so_far"),
+        "deb_prediction": first.get("deb_prediction"),
+        "window_phase": first.get("window_phase"),
+        "remaining_window_minutes": first.get("remaining_window_minutes"),
+        "emos_distribution": distribution,
+        "emos_peak": {
+            "label": (peak or {}).get("label"),
+            "value": (peak or {}).get("value"),
+            "probability": (peak or {}).get("model_probability"),
+        },
+        "model_cluster": {
+            "core_low": first.get("cluster_core_low"),
+            "core_high": first.get("cluster_core_high"),
+            "median": first.get("cluster_median"),
+            "deb_reference": first.get("cluster_deb_reference"),
+            "model_count": first.get("cluster_model_count"),
+            "sources": _compact_ai_model_sources(first),
+        },
+        "contracts": [_compact_ai_candidate(row) for row in rows],
+    }
+
+
 def _build_scan_ai_prompt(payload: Dict[str, Any]) -> Dict[str, Any]:
-    rows = [
-        _compact_ai_candidate(row)
+    raw_rows = [
+        row
         for row in (payload.get("rows") or [])[:SCAN_AI_MAX_ROWS]
         if isinstance(row, dict) and row.get("id")
     ]
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for row in raw_rows:
+        key = "|".join(
+            [
+                _normalize_ai_city_key(row.get("city") or row.get("city_display_name")),
+                str(row.get("selected_date") or row.get("local_date") or ""),
+            ]
+        )
+        grouped.setdefault(key, []).append(row)
+    cities = [_compact_ai_city_group(rows) for rows in grouped.values() if rows]
+    sent_contracts = sum(len(city.get("contracts") or []) for city in cities)
     return {
+        "schema_version": "city_group_v2",
         "snapshot_id": payload.get("snapshot_id"),
         "generated_at": payload.get("generated_at"),
         "summary": payload.get("summary") or {},
         "filters": payload.get("filters") or {},
-        "candidates": rows,
+        "city_count": len(cities),
+        "candidate_row_count": len(raw_rows),
+        "cities": cities,
+        "_polyweather_input_meta": {
+            "sent_cities": len(cities),
+            "sent_contracts": sent_contracts,
+        },
     }
 
 
@@ -395,19 +473,26 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
 
     system_prompt = (
-        "你是 PolyWeather 的付费市场扫描员。你只能基于用户提供的 JSON 快照做判断，"
-        "不得编造城市、价格、概率、盘口或天气数据。你的任务是从候选 rows 中选择真正值得看的机会，"
-        "尤其要检查 DEB、EMOS 分布、模型集群、当前实测、峰值窗口和盘口价格是否一致。"
-        "若模型集群不支持某个 YES，不要机械推荐 YES；可以 veto 或改为偏向 NO 候选。"
-        "只能引用输入中的 row id。必须输出 JSON object，字段为 recommendations、vetoed、downgraded、summary_zh、summary_en。"
+        "你是 PolyWeather 的付费 V4-Flash 市场扫描员。你只能基于用户提供的 JSON 快照做判断，"
+        "不得编造城市、价格、概率、盘口或天气数据。输入已经按城市分组，每城包含 EMOS 分布、"
+        "DEB、模型集群、当前实测和候选合约。你的任务不是复述 edge，而是形成 city thesis，"
+        "再决定哪些合约值得推荐、哪些必须排除、哪些只降级观察。"
+        "重点规则：最高温市场一天只会落入一个桶；如果 DEB/模型集群/EMOS 主峰集中在更高温区，"
+        "低温 YES 即使有表面 edge 也通常应 veto，优先考虑相邻尾部 NO；若价格过期、盘口太宽或窗口不支持，也要降级。"
+        "只能引用输入中的 row id。必须输出 JSON object。"
     )
+    model_snapshot = dict(ai_input)
+    model_snapshot.pop("_polyweather_input_meta", None)
     user_payload = {
         "task": (
-            "Review these existing PolyWeather market candidates. "
-            "Return strict JSON only. recommendations items need row_id, rank, decision, confidence, "
-            "reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id and reason."
+            "Analyze each city first, then contract decisions. Return strict JSON only with: "
+            "summary_zh, summary_en, city_theses, recommendations, vetoed, downgraded, watchlist. "
+            "city_theses items need city, thesis_zh, thesis_en, model_cluster_note, confidence, "
+            "recommended_row_ids, vetoed_row_ids. recommendations items need row_id, rank, decision, "
+            "confidence, reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id, "
+            "reason_zh/reason_en. watchlist items are optional and need row_id plus reason."
         ),
-        "snapshot": ai_input,
+        "snapshot": model_snapshot,
     }
     with httpx.Client(timeout=float(SCAN_AI_TIMEOUT_SEC)) as client:
         response = client.post(
@@ -460,6 +545,20 @@ def _normalize_ai_items(raw_items: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def _normalize_ai_city_theses(raw_items: Any) -> List[Dict[str, Any]]:
+    if not isinstance(raw_items, list):
+        return []
+    out: List[Dict[str, Any]] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        city = str(item.get("city") or item.get("city_name") or "").strip()
+        if not city:
+            continue
+        out.append({**item, "city": city})
+    return out
+
+
 def _merge_scan_ai_result(
     payload: Dict[str, Any],
     ai_raw: Dict[str, Any],
@@ -473,10 +572,30 @@ def _merge_scan_ai_result(
     recommendations = _normalize_ai_items(ai_raw.get("recommendations"))
     vetoed = _normalize_ai_items(ai_raw.get("vetoed"))
     downgraded = _normalize_ai_items(ai_raw.get("downgraded"))
+    watchlist = _normalize_ai_items(ai_raw.get("watchlist"))
+    city_theses = _normalize_ai_city_theses(ai_raw.get("city_theses"))
 
     veto_ids = {str(item.get("row_id")) for item in vetoed}
     downgrade_ids = {str(item.get("row_id")) for item in downgraded}
     recommended_ids: set[str] = set()
+    watchlist_ids = {str(item.get("row_id")) for item in watchlist}
+
+    thesis_by_city: Dict[str, Dict[str, Any]] = {}
+    for item in city_theses:
+        key = _normalize_ai_city_key(item.get("city"))
+        if key:
+            thesis_by_city[key] = item
+
+    for row in rows:
+        thesis = thesis_by_city.get(_normalize_ai_city_key(row.get("city"))) or thesis_by_city.get(
+            _normalize_ai_city_key(row.get("city_display_name"))
+        )
+        if not thesis:
+            continue
+        row["ai_city_thesis_zh"] = thesis.get("thesis_zh") or thesis.get("summary_zh")
+        row["ai_city_thesis_en"] = thesis.get("thesis_en") or thesis.get("summary_en")
+        row["ai_city_confidence"] = thesis.get("confidence")
+        row["ai_city_model_cluster_note"] = thesis.get("model_cluster_note")
 
     for item in vetoed:
         row = by_id.get(str(item.get("row_id")))
@@ -492,6 +611,12 @@ def _merge_scan_ai_result(
         row["ai_decision"] = "downgrade"
         row["ai_reason_zh"] = item.get("reason_zh") or item.get("reason")
         row["ai_reason_en"] = item.get("reason_en")
+    for item in watchlist:
+        row = by_id.get(str(item.get("row_id")))
+        if not row:
+            continue
+        row["ai_watchlist_reason_zh"] = item.get("reason_zh") or item.get("reason")
+        row["ai_watchlist_reason_en"] = item.get("reason_en")
     for fallback_rank, item in enumerate(recommendations, start=1):
         row_id = str(item.get("row_id"))
         row = by_id.get(row_id)
@@ -511,6 +636,8 @@ def _merge_scan_ai_result(
         row_id = str(row.get("id"))
         if row_id not in recommended_ids and row_id not in veto_ids and row_id not in downgrade_ids:
             row["ai_decision"] = row.get("ai_decision") or "neutral"
+        if row_id in watchlist_ids and row.get("ai_decision") == "neutral":
+            row["ai_decision"] = "watchlist"
 
     def _ai_sort_key(row: Dict[str, Any]) -> tuple:
         decision = str(row.get("ai_decision") or "").lower()
@@ -534,6 +661,9 @@ def _merge_scan_ai_result(
         (row for row in rows if str(row.get("ai_decision") or "").lower() != "veto"),
         rows[0] if rows else None,
     )
+    input_meta = ai_raw.get("_polyweather_input_meta")
+    sent_cities = input_meta.get("sent_cities") if isinstance(input_meta, dict) else None
+    sent_contracts = input_meta.get("sent_contracts") if isinstance(input_meta, dict) else None
     ai_scan = {
         "status": "ready",
         "stage": "completed",
@@ -542,7 +672,9 @@ def _merge_scan_ai_result(
         "generated_at": datetime.utcnow().isoformat() + "Z",
         "snapshot_id": payload.get("snapshot_id"),
         "input_rows": input_rows if input_rows is not None else len(payload.get("rows") or []),
-        "sent_rows": min(len(payload.get("rows") or []), SCAN_AI_MAX_ROWS),
+        "sent_rows": sent_contracts if sent_contracts is not None else min(len(payload.get("rows") or []), SCAN_AI_MAX_ROWS),
+        "sent_cities": sent_cities,
+        "sent_contracts": sent_contracts,
         "duration_ms": duration_ms,
         "timeout_sec": SCAN_AI_TIMEOUT_SEC,
         "cache_ttl_sec": SCAN_AI_CACHE_TTL_SEC,
@@ -550,9 +682,12 @@ def _merge_scan_ai_result(
         "base_url": SCAN_AI_BASE_URL,
         "summary_zh": ai_raw.get("summary_zh"),
         "summary_en": ai_raw.get("summary_en"),
+        "city_theses": city_theses,
+        "watchlist": watchlist,
         "recommended_count": sum(1 for row in rows if row.get("ai_rank") is not None),
         "vetoed_count": sum(1 for row in rows if row.get("ai_decision") == "veto"),
         "downgraded_count": sum(1 for row in rows if row.get("ai_decision") == "downgrade"),
+        "watchlist_count": sum(1 for row in rows if row.get("ai_decision") == "watchlist"),
     }
     meta = ai_raw.get("_polyweather_meta")
     if isinstance(meta, dict):
@@ -676,6 +811,8 @@ def _build_terminal_row(
         "risk_level": ((data.get("risk") or {}).get("level") if isinstance(data.get("risk"), dict) else None),
         "distribution_bias": scan.get("distribution_bias"),
         "distribution_preview": scan.get("distribution_preview") or row.get("distribution_preview") or [],
+        "distribution_full": scan.get("distribution_full") or scan.get("distribution_preview") or row.get("distribution_preview") or [],
+        "model_cluster_sources": daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else data.get("multi_model"),
         "window_phase": row.get("window_phase") or scan.get("window_phase"),
         "window_score": row.get("window_score") if row.get("window_score") is not None else scan.get("window_score"),
         "signal_status": scan.get("signal_status"),
@@ -1015,15 +1152,19 @@ def build_scan_terminal_ai_payload(
 
     try:
         ai_input = _build_scan_ai_prompt(payload)
-        sent_rows = len(ai_input.get("candidates") or [])
+        input_meta = ai_input.get("_polyweather_input_meta") if isinstance(ai_input, dict) else {}
+        sent_rows = int((input_meta or {}).get("sent_contracts") or 0)
+        sent_cities = int((input_meta or {}).get("sent_cities") or 0)
         logger.info(
-            "scan terminal AI review start snapshot={} rows={} sent_rows={} model={}",
+            "scan terminal AI review start snapshot={} rows={} sent_cities={} sent_contracts={} model={}",
             current_snapshot_id,
             len(payload.get("rows") or []),
+            sent_cities,
             sent_rows,
             SCAN_AI_MODEL,
         )
         ai_raw = _call_deepseek_scan_ai(ai_input)
+        ai_raw["_polyweather_input_meta"] = input_meta
         _set_cached_scan_ai_result(current_snapshot_id, filters, ai_raw)
         duration_ms = int((time.time() - ai_started_at) * 1000)
         logger.info(

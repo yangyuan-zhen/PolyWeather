@@ -58,7 +58,7 @@ const SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 interface FilterState extends ScanTerminalFilters {}
 
-type ContentView = "list" | "map" | "calendar";
+type ContentView = "list" | "map" | "ai" | "calendar";
 type ThemeMode = "dark" | "light";
 type ScanAiLogTone = "info" | "success" | "warning" | "error";
 
@@ -164,6 +164,209 @@ function findRowForCity(rows: ScanOpportunityRow[], cityName?: string | null) {
   const normalized = normalizeCityKey(cityName);
   if (!normalized) return null;
   return rows.find((row) => rowMatchesCity(row, cityName || "")) || null;
+}
+
+function getRowAiReason(row: ScanOpportunityRow, locale: string) {
+  const isEn = locale === "en-US";
+  return (
+    (isEn ? row.ai_reason_en || row.ai_reason_zh : row.ai_reason_zh || row.ai_reason_en) ||
+    row.ai_model_cluster_note ||
+    (isEn
+      ? row.ai_watchlist_reason_en || row.ai_watchlist_reason_zh
+      : row.ai_watchlist_reason_zh || row.ai_watchlist_reason_en) ||
+    null
+  );
+}
+
+function getAiDecisionLabel(row: ScanOpportunityRow, locale: string) {
+  const decision = String(row.ai_decision || "neutral").toLowerCase();
+  if (decision === "veto") return locale === "en-US" ? "Excluded" : "排除";
+  if (decision === "downgrade") return locale === "en-US" ? "Downgraded" : "降级";
+  if (decision === "watchlist") return locale === "en-US" ? "Watch" : "观察";
+  if (row.ai_rank != null || decision === "approve") {
+    return locale === "en-US" ? `Pick ${row.ai_rank || ""}`.trim() : `推荐 ${row.ai_rank || ""}`.trim();
+  }
+  return locale === "en-US" ? "Unreviewed" : "未复核";
+}
+
+function ScanAiAnalysisView({
+  response,
+  rows,
+  logs,
+  loading,
+  error,
+  locale,
+  onRunAi,
+}: {
+  response: ScanTerminalResponse | null;
+  rows: ScanOpportunityRow[];
+  logs: ScanAiLogEntry[];
+  loading: boolean;
+  error?: string | null;
+  locale: string;
+  onRunAi: () => void;
+}) {
+  const isEn = locale === "en-US";
+  const aiScan = response?.ai_scan || null;
+  const theses = aiScan?.city_theses || [];
+  const thesisByCity = useMemo(
+    () => new Map(theses.map((item) => [normalizeCityKey(item.city), item])),
+    [theses],
+  );
+  const groups = useMemo(() => {
+    const map = new Map<string, ScanOpportunityRow[]>();
+    rows.forEach((row) => {
+      const key = normalizeCityKey(row.city || row.city_display_name || row.display_name);
+      if (!key) return;
+      const current = map.get(key) || [];
+      current.push(row);
+      map.set(key, current);
+    });
+    return Array.from(map.entries()).map(([key, items]) => ({
+      key,
+      rows: items,
+      city:
+        items[0]?.city_display_name ||
+        items[0]?.display_name ||
+        items[0]?.city ||
+        key,
+      thesis: thesisByCity.get(key),
+    }));
+  }, [rows, thesisByCity]);
+
+  if (!rows.length) {
+    return (
+      <div className="scan-ai-analysis-view empty">
+        <div className="scan-empty-state">
+          <div className="scan-empty-title">
+            {isEn ? "Run a rule scan first" : "先完成规则扫描"}
+          </div>
+          <div className="scan-empty-copy">
+            {isEn
+              ? "V4 needs the current city candidates before it can analyze them."
+              : "V4 需要先拿到当前城市候选，才能做城市级研判。"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scan-ai-analysis-view">
+      <section className="scan-ai-summary-card">
+        <div>
+          <strong>{isEn ? "V4 city analysis" : "V4 城市级分析"}</strong>
+          <p>
+            {aiScan?.status === "ready"
+              ? (isEn ? aiScan.summary_en || aiScan.summary_zh : aiScan.summary_zh || aiScan.summary_en) ||
+                (isEn ? "V4 has reviewed the grouped city snapshot." : "V4 已复核城市分组快照。")
+              : error ||
+                aiScan?.reason ||
+                (isEn
+                  ? "Click AI Deep Scan after a rule scan to generate city theses and contract decisions."
+                  : "规则扫描后点击 AI 深度扫描，生成每城 thesis 和合约推荐/排除理由。")}
+          </p>
+        </div>
+        <button
+          type="button"
+          className="scan-ai-inline-button"
+          onClick={onRunAi}
+          disabled={loading || !rows.length}
+        >
+          <Sparkles size={14} className={loading ? "spin" : undefined} />
+          {loading
+            ? isEn
+              ? "Analyzing..."
+              : "分析中..."
+            : isEn
+              ? "Run V4"
+              : "运行 V4"}
+        </button>
+      </section>
+
+      <section className="scan-ai-log-panel in-tab">
+        <div className="scan-ai-log-head">
+          <strong>{isEn ? "Run log" : "运行日志"}</strong>
+          <span>
+            {aiScan?.status === "ready"
+              ? isEn
+                ? `${aiScan.sent_cities ?? "--"} cities · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} contracts`
+                : `${aiScan.sent_cities ?? "--"} 城 · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} 合约`
+              : isEn
+                ? "No V4 result yet"
+                : "暂无 V4 结果"}
+          </span>
+        </div>
+        <div className="scan-ai-log-list">
+          {logs.length ? (
+            logs.map((entry) => (
+              <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
+                <span className="scan-ai-log-time">{entry.time}</span>
+                <div>
+                  <b>{entry.title}</b>
+                  {entry.detail ? <small>{entry.detail}</small> : null}
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="scan-ai-log-empty">
+              {isEn ? "No request has been sent." : "还没有发起请求。"}
+            </div>
+          )}
+        </div>
+      </section>
+
+      <div className="scan-ai-city-list">
+        {groups.map((group) => {
+          const cityThesis =
+            (isEn
+              ? group.thesis?.thesis_en || group.thesis?.summary_en || group.rows[0]?.ai_city_thesis_en
+              : group.thesis?.thesis_zh || group.thesis?.summary_zh || group.rows[0]?.ai_city_thesis_zh) ||
+            (isEn ? "Waiting for V4 city thesis." : "等待 V4 城市研判。");
+          const clusterNote =
+            group.thesis?.model_cluster_note || group.rows[0]?.ai_city_model_cluster_note || null;
+          return (
+            <section key={group.key} className="scan-ai-city-card">
+              <div className="scan-ai-city-head">
+                <div>
+                  <strong>{group.city}</strong>
+                  <p>{cityThesis}</p>
+                </div>
+                {group.thesis?.confidence || group.rows[0]?.ai_city_confidence ? (
+                  <span>{group.thesis?.confidence || group.rows[0]?.ai_city_confidence}</span>
+                ) : null}
+              </div>
+              {clusterNote ? (
+                <div className="scan-ai-cluster-note">{clusterNote}</div>
+              ) : null}
+              <div className="scan-ai-contracts">
+                {group.rows.map((row) => {
+                  const decision = String(row.ai_decision || "neutral").toLowerCase();
+                  const reason = getRowAiReason(row, locale);
+                  const tempSymbol = row.temp_symbol || row.target_unit || "°C";
+                  return (
+                    <div key={row.id} className={`scan-ai-contract ${decision}`}>
+                      <div>
+                        <b>{row.action || row.target_label || row.market_question || row.id}</b>
+                        <small>
+                          {row.deb_prediction != null
+                            ? `DEB ${formatTemperatureValue(row.deb_prediction, tempSymbol)} · `
+                            : ""}
+                          {row.edge_percent != null ? `edge ${Number(row.edge_percent).toFixed(1)}%` : "--"}
+                        </small>
+                      </div>
+                      <span>{getAiDecisionLabel(row, locale)}</span>
+                      {reason ? <p>{reason}</p> : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 function CalendarView({
@@ -441,19 +644,20 @@ function ScanTerminalScreen() {
         tone: "info",
         title: isEn ? "V4 review queued" : "V4 复核已排队",
         detail: isEn
-          ? `snapshot ${snapshotId || "--"} · ${rowCount} rule candidates`
-          : `快照 ${snapshotId || "--"} · 规则候选 ${rowCount} 条`,
+          ? `snapshot ${snapshotId || "--"} · ${rowCount} rule candidates grouped by city`
+          : `快照 ${snapshotId || "--"} · ${rowCount} 条候选将按城市分组`,
       },
       {
         id: `send-${Date.now() + 1}`,
         time: formatLogTime(),
         tone: "info",
-        title: isEn ? "Sending compact candidate set" : "正在发送精简候选集",
+        title: isEn ? "Sending city-level context" : "正在发送城市级上下文",
         detail: isEn
-          ? "VPS will call DeepSeek; Vercel only proxies the request."
-          : "由 VPS 调用 DeepSeek，Vercel 只做短代理。",
+          ? "Each city includes EMOS distribution, model cluster and contracts."
+          : "每城包含 EMOS 分布、模型集群和候选合约。",
       },
     ]);
+    setActiveView("ai");
     setAiLoading(true);
     setAiError(null);
     try {
@@ -493,8 +697,8 @@ function ScanTerminalScreen() {
           detail:
             review?.status === "ready"
               ? isEn
-                ? `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · sent ${review.sent_rows ?? "--"} rows · ${review.recommended_count ?? 0} picks / ${review.vetoed_count ?? 0} veto`
-                : `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · 发送 ${review.sent_rows ?? "--"} 条 · 推荐 ${review.recommended_count ?? 0} / 排除 ${review.vetoed_count ?? 0}`
+                ? `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · ${review.sent_cities ?? "--"} cities / ${review.sent_contracts ?? review.sent_rows ?? "--"} contracts · ${review.recommended_count ?? 0} picks / ${review.vetoed_count ?? 0} veto`
+                : `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · ${review.sent_cities ?? "--"} 城 / ${review.sent_contracts ?? review.sent_rows ?? "--"} 合约 · 推荐 ${review.recommended_count ?? 0} / 排除 ${review.vetoed_count ?? 0}`
               : review?.reason || (isEn ? "No AI result returned." : "没有返回 AI 结果。"),
         },
         ...(review?.usage
@@ -608,7 +812,8 @@ function ScanTerminalScreen() {
     setMapSelectedCityName(cityName);
     const matchedRow = findRowForCity(timeSortedRows, cityName);
     setSelectedRowId(matchedRow?.id || null);
-  }, [timeSortedRows]);
+    void store.selectCity(cityName);
+  }, [store, timeSortedRows]);
 
   const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
     setSelectedRowId(row.id);
@@ -655,6 +860,19 @@ function ScanTerminalScreen() {
           locale={locale}
           selectedRowId={selectedRowId}
           onSelectRow={handleSelectRow}
+        />
+      );
+    }
+    if (resolvedView === "ai") {
+      return (
+        <ScanAiAnalysisView
+          response={terminalData}
+          rows={timeSortedRows}
+          logs={aiLogs}
+          loading={aiLoading}
+          error={aiError}
+          locale={locale}
+          onRunAi={() => void runAiReview()}
         />
       );
     }
@@ -839,6 +1057,20 @@ function ScanTerminalScreen() {
                 </button>
                 <button
                   type="button"
+                  className={resolvedView === "ai" ? "active" : ""}
+                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
+                  onClick={() => {
+                    if (!isPro) {
+                      openScanPaywall();
+                      return;
+                    }
+                    setActiveView("ai");
+                  }}
+                >
+                  {isEn ? "V4 Analysis" : "V4 分析"}
+                </button>
+                <button
+                  type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
                   title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
@@ -870,43 +1102,6 @@ function ScanTerminalScreen() {
                 ) : null}
               </div>
             </div>
-            {isPro ? (
-              <div className="scan-ai-log-panel">
-                <div className="scan-ai-log-head">
-                  <strong>{isEn ? "V4 run log" : "V4 运行日志"}</strong>
-                  <span>
-                    {aiLoading
-                      ? isEn
-                        ? "Waiting for DeepSeek response"
-                        : "正在等待 DeepSeek 返回"
-                      : aiScan?.status
-                        ? `${aiScan.model || "V4"} · ${aiScan.status}`
-                        : isEn
-                          ? "No V4 request yet"
-                          : "还没有发起 V4 请求"}
-                  </span>
-                </div>
-                <div className="scan-ai-log-list">
-                  {aiLogs.length ? (
-                    aiLogs.map((entry) => (
-                      <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
-                        <span className="scan-ai-log-time">{entry.time}</span>
-                        <div>
-                          <b>{entry.title}</b>
-                          {entry.detail ? <small>{entry.detail}</small> : null}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="scan-ai-log-empty">
-                      {isEn
-                        ? "After a rule scan, click AI Deep Scan to see request and result logs here."
-                        : "规则扫描完成后点击 AI 深度扫描，这里会显示请求和返回日志。"}
-                    </div>
-                  )}
-                </div>
-              </div>
-            ) : null}
 
             {scanStatus === "failed" && !terminalData ? (
               <div className="scan-empty-state">

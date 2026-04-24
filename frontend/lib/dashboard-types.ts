@@ -401,6 +401,7 @@ export interface MarketScan {
   websocket?: Record<string, unknown>;
   distribution_bias?: DistributionBias | null;
   distribution_preview?: DistributionPreviewPoint[] | null;
+  distribution_full?: DistributionPreviewPoint[] | null;
   window_phase?: string | null;
   window_score?: number | null;
   primary_signal?: PrimarySignal | null;
@@ -513,6 +514,7 @@ export interface ScanOpportunityRow {
   cluster_model_count?: number | null;
   cluster_deb_reference?: number | null;
   cluster_median?: number | null;
+  model_cluster_sources?: Record<string, number | null> | null;
   window_phase?: string | null;
   window_score?: number | null;
   remaining_window_minutes?: number | null;
@@ -541,9 +543,34 @@ export interface ScanOpportunityRow {
   ai_reason_zh?: string | null;
   ai_reason_en?: string | null;
   ai_model_cluster_note?: string | null;
+  ai_city_thesis_zh?: string | null;
+  ai_city_thesis_en?: string | null;
+  ai_city_confidence?: string | null;
+  ai_city_model_cluster_note?: string | null;
+  ai_watchlist_reason_zh?: string | null;
+  ai_watchlist_reason_en?: string | null;
 }
 
 export interface PrimarySignal extends ScanOpportunityRow {}
+
+export interface ScanAiCityThesis {
+  city: string;
+  thesis_zh?: string | null;
+  thesis_en?: string | null;
+  summary_zh?: string | null;
+  summary_en?: string | null;
+  model_cluster_note?: string | null;
+  confidence?: string | null;
+  recommended_row_ids?: string[] | null;
+  vetoed_row_ids?: string[] | null;
+}
+
+export interface ScanAiWatchlistItem {
+  row_id: string;
+  reason?: string | null;
+  reason_zh?: string | null;
+  reason_en?: string | null;
+}
 
 export interface ScanAiReview {
   status?: "ready" | "disabled" | "missing_key" | "failed" | "no_rows" | "no_snapshot" | "snapshot_mismatch" | string;
@@ -554,6 +581,8 @@ export interface ScanAiReview {
   snapshot_id?: string | null;
   input_rows?: number | null;
   sent_rows?: number | null;
+  sent_cities?: number | null;
+  sent_contracts?: number | null;
   duration_ms?: number | null;
   timeout_sec?: number | null;
   cache_ttl_sec?: number | null;
@@ -570,9 +599,12 @@ export interface ScanAiReview {
   reason?: string | null;
   summary_zh?: string | null;
   summary_en?: string | null;
+  city_theses?: ScanAiCityThesis[] | null;
+  watchlist?: ScanAiWatchlistItem[] | null;
   recommended_count?: number | null;
   vetoed_count?: number | null;
   downgraded_count?: number | null;
+  watchlist_count?: number | null;
 }
 
 export interface ScanTerminalResponse {
