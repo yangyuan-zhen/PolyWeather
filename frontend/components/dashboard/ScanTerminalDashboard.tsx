@@ -624,6 +624,7 @@ function ScanTerminalScreen() {
 
         <CityDetailPanel variant="rail" />
       </div>
+      <FutureForecastModal />
     </div>
   );
 }
@@ -633,7 +634,6 @@ export function ScanTerminalDashboard() {
     <I18nProvider>
       <DashboardStoreProvider>
         <ScanTerminalScreen />
-        <FutureForecastModal />
       </DashboardStoreProvider>
     </I18nProvider>
   );
