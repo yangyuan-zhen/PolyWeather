@@ -41,6 +41,8 @@ frontend/.next/
 frontend/.vercel/
 frontend/*.tsbuildinfo
 frontend/.codex-next-dev*.log
+frontend/.codex-next-start*.log
+.codex-backend-*.log
 
 .npm-cache/
 .codex-tmp/

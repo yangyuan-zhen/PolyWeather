@@ -59,7 +59,7 @@ const SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
 
 interface FilterState extends ScanTerminalFilters {}
 
-type ContentView = "list" | "map" | "ai" | "calendar";
+type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
 type ScanAiLogTone = "info" | "success" | "warning" | "error";
 
@@ -370,6 +370,64 @@ function ScanAiAnalysisView({
   );
 }
 
+function ScanAiLogPanel({
+  response,
+  logs,
+  locale,
+  loading,
+  error,
+}: {
+  response: ScanTerminalResponse | null;
+  logs: ScanAiLogEntry[];
+  locale: string;
+  loading: boolean;
+  error?: string | null;
+}) {
+  const isEn = locale === "en-US";
+  const aiScan = response?.ai_scan || null;
+  return (
+    <details className="scan-ai-log-panel compact">
+      <summary className="scan-ai-log-summary">
+        <span>{isEn ? "Debug log" : "调试日志"}</span>
+        <strong>
+          {loading
+            ? isEn
+              ? "V4 running"
+              : "V4 运行中"
+            : error
+              ? isEn
+                ? "V4 failed"
+                : "V4 失败"
+              : aiScan?.status === "ready"
+                ? isEn
+                  ? `${aiScan.sent_cities ?? "--"} cities · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} contracts`
+                  : `${aiScan.sent_cities ?? "--"} 城 · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} 合约`
+                : isEn
+                  ? "Collapsed"
+                  : "已折叠"}
+        </strong>
+      </summary>
+      <div className="scan-ai-log-list">
+        {logs.length ? (
+          logs.map((entry) => (
+            <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
+              <span className="scan-ai-log-time">{entry.time}</span>
+              <div>
+                <b>{entry.title}</b>
+                {entry.detail ? <small>{entry.detail}</small> : null}
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="scan-ai-log-empty">
+            {isEn ? "No request has been sent." : "还没有发起请求。"}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function CalendarView({
   rows,
   locale,
@@ -469,7 +527,7 @@ function ScanTerminalScreen() {
   const [aiError, setAiError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ContentView>("map");
+  const [activeView, setActiveView] = useState<ContentView>("list");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [aiLogs, setAiLogs] = useState<ScanAiLogEntry[]>([]);
@@ -659,7 +717,7 @@ function ScanTerminalScreen() {
           : "每城包含 EMOS 分布、模型集群和候选合约。",
       },
     ]);
-    setActiveView("ai");
+    setActiveView("list");
     setAiLoading(true);
     setAiError(null);
     try {
@@ -778,10 +836,10 @@ function ScanTerminalScreen() {
   }, [activeFilters, isPro]);
 
   useEffect(() => {
-    if (!isPro && activeView !== "map") {
+    if (!store.proAccess.loading && !isPro && activeView !== "map") {
       setActiveView("map");
     }
-  }, [activeView, isPro]);
+  }, [activeView, isPro, store.proAccess.loading]);
 
   useEffect(() => {
     setUserLocalTime(formatUserLocalTime());
@@ -893,19 +951,6 @@ function ScanTerminalScreen() {
           locale={locale}
           selectedRowId={selectedRowId}
           onSelectRow={handleSelectRow}
-        />
-      );
-    }
-    if (resolvedView === "ai") {
-      return (
-        <ScanAiAnalysisView
-          response={terminalData}
-          rows={timeSortedRows}
-          logs={aiLogs}
-          loading={aiLoading}
-          error={aiError}
-          locale={locale}
-          onRunAi={() => void runAiReview()}
         />
       );
     }
@@ -1090,20 +1135,6 @@ function ScanTerminalScreen() {
                 </button>
                 <button
                   type="button"
-                  className={resolvedView === "ai" ? "active" : ""}
-                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
-                  onClick={() => {
-                    if (!isPro) {
-                      openScanPaywall();
-                      return;
-                    }
-                    setActiveView("ai");
-                  }}
-                >
-                  {isEn ? "V4 Analysis" : "V4 分析"}
-                </button>
-                <button
-                  type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
                   title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
@@ -1144,7 +1175,18 @@ function ScanTerminalScreen() {
                 <div className="scan-empty-copy">{staleReason}</div>
               </div>
             ) : (
-              renderMainView()
+              <>
+                {renderMainView()}
+                {isPro ? (
+                  <ScanAiLogPanel
+                    response={terminalData}
+                    logs={aiLogs}
+                    locale={locale}
+                    loading={aiLoading}
+                    error={aiError}
+                  />
+                ) : null}
+              </>
             )}
           </section>
         </main>

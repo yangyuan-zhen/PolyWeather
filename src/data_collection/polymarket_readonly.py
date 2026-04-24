@@ -3083,6 +3083,7 @@ class PolymarketReadOnlyLayer:
             )
             edge = model_probability - ask
             edge_percent = edge * 100.0
+            kelly_fraction = edge / (1.0 - ask) if 0.0 < ask < 1.0 else None
             liquidity_reference = max(
                 _safe_float(
                     entry.get("yes_book_liquidity") if side == "yes" else entry.get("no_book_liquidity")
@@ -3185,6 +3186,12 @@ class PolymarketReadOnlyLayer:
                 "quote_age_ms": entry.get("quote_age_ms"),
                 "edge": edge,
                 "edge_percent": edge_percent,
+                "kelly_fraction": kelly_fraction,
+                "quarter_kelly": (
+                    max(0.0, kelly_fraction) / 4.0
+                    if kelly_fraction is not None
+                    else None
+                ),
                 "edge_score": edge_score,
                 "bias_score": bias_score,
                 "consensus_score": consensus_score,

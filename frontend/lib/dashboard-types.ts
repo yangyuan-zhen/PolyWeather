@@ -492,11 +492,14 @@ export interface ScanOpportunityRow {
   quote_age_ms?: number | null;
   edge?: number | null;
   edge_percent?: number | null;
+  kelly_fraction?: number | null;
+  quarter_kelly?: number | null;
   edge_score?: number | null;
   bias_score?: number | null;
   consensus_score?: number | null;
   distribution_bias?: DistributionBias | null;
   distribution_preview?: DistributionPreviewPoint[] | null;
+  distribution_full?: DistributionPreviewPoint[] | null;
   distribution_bias_direction?: string | null;
   distribution_bias_score?: number | null;
   distribution_bias_available?: boolean;

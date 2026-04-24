@@ -355,8 +355,11 @@ def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
         "spread": row.get("spread"),
         "quote_age_ms": row.get("quote_age_ms"),
         "edge_percent": row.get("edge_percent"),
+        "kelly_fraction": row.get("kelly_fraction"),
+        "quarter_kelly": row.get("quarter_kelly"),
         "final_score": row.get("final_score"),
         "cluster_role": row.get("cluster_role"),
+        "model_cluster_sources": _compact_ai_model_sources(row),
         "trend_alignment": row.get("trend_alignment"),
         "tradable": row.get("tradable"),
         "accepting_orders": row.get("accepting_orders"),
@@ -483,6 +486,8 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         "再决定哪些合约值得推荐、哪些必须排除、哪些只降级观察。"
         "重点规则：最高温市场一天只会落入一个桶；如果 DEB/模型集群/EMOS 主峰集中在更高温区，"
         "低温 YES 即使有表面 edge 也通常应 veto，优先考虑相邻尾部 NO；若价格过期、盘口太宽或窗口不支持，也要降级。"
+        "任何基于 edge 或 Kelly/仓位的推荐，都必须先参考该城市全部 model_cluster.sources、DEB 和 EMOS 分布；"
+        "不得只凭单一 EMOS 概率、单一模型或表面 edge 推荐。"
         "只能引用输入中的 row id。必须输出 JSON object。"
     )
     model_snapshot = dict(ai_input)
@@ -495,6 +500,7 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
             "recommended_row_ids, vetoed_row_ids. recommendations items need row_id, rank, decision, "
             "confidence, reason_zh, reason_en, model_cluster_note. vetoed/downgraded items need row_id, "
             "reason_zh/reason_en. watchlist items are optional and need row_id plus reason. "
+            "If a recommendation cites edge or Kelly, the reason must mention the full model cluster consensus or divergence. "
             "Keep every thesis and reason concise: one sentence only, no markdown, no repeated data tables."
         ),
         "snapshot": model_snapshot,

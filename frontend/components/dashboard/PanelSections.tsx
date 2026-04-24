@@ -1195,17 +1195,6 @@ export function ProbabilityDistribution({
               const probability = Math.round(
                 Number(row.probability || 0) * 100,
               );
-              const rowMarketBucket = row.marketBucket;
-              const rowMarketPrice =
-                rowMarketBucket?.yes_buy ??
-                rowMarketBucket?.market_price ??
-                null;
-              const yesPriceText = toPriceCents(rowMarketPrice);
-              const marketTagFinal = rowMarketBucket
-                ? locale === "en-US"
-                  ? `YES ask: ${yesPriceText || "--"}`
-                  : `YES 买价: ${yesPriceText || "--"}`
-                : null;
 
               return (
                 <div key={`${row.key || index}`} className="prob-row">
@@ -1218,16 +1207,6 @@ export function ProbabilityDistribution({
                       {probability}%
                     </div>
                   </div>
-                  {marketTagFinal && (
-                    <div
-                      className={clsx(
-                        "prob-market-inline",
-                        rowMarketBucket ? "yes" : "no",
-                      )}
-                    >
-                      {marketTagFinal}
-                    </div>
-                  )}
                 </div>
               );
             })

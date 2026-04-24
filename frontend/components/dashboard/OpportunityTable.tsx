@@ -1,5 +1,6 @@
 "use client";
 
+import { BarChart3, ChevronDown, ChevronUp } from "lucide-react";
 import React from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type {
@@ -128,6 +129,243 @@ function formatQuoteCents(value?: number | null) {
       ? cents.toFixed(1)
       : Math.round(cents).toFixed(0);
   return `${text.replace(/\.0$/, "")}¢`;
+}
+
+function formatTradeSide(row: ScanOpportunityRow, locale: string) {
+  const side = String(row.side || "").toLowerCase();
+  if (side === "yes") return "BUY YES";
+  if (side === "no") return "BUY NO";
+  if (row.action) {
+    return String(row.action)
+      .replace(String(row.target_label || ""), "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .toUpperCase();
+  }
+  return locale === "en-US" ? "WATCH" : "观察";
+}
+
+function formatThreshold(row: ScanOpportunityRow, tempSymbol?: string | null) {
+  const targetLabel = normalizeTemperatureLabel(row.target_label, tempSymbol);
+  if (targetLabel) return targetLabel;
+  if (row.target_lower != null && row.target_upper != null) {
+    return `${formatTemperatureValue(Number(row.target_lower), tempSymbol)} ~ ${formatTemperatureValue(Number(row.target_upper), tempSymbol)}`;
+  }
+  if (row.target_threshold != null) {
+    return formatTemperatureValue(Number(row.target_threshold), tempSymbol);
+  }
+  if (row.target_value != null) {
+    return formatTemperatureValue(Number(row.target_value), tempSymbol);
+  }
+  return "--";
+}
+
+function getOpportunityStrength(edgePercent?: number | null, locale = "zh-CN") {
+  const edge = Number(edgePercent);
+  const normalized = Number.isFinite(edge) ? edge : 0;
+  if (normalized >= 20) {
+    return {
+      label: locale === "en-US" ? "Strong" : "强机会",
+      tone: "strong",
+    };
+  }
+  if (normalized >= 10) {
+    return {
+      label: locale === "en-US" ? "Medium" : "中机会",
+      tone: "medium",
+    };
+  }
+  return {
+    label: locale === "en-US" ? "Watch" : "观察",
+    tone: "watch",
+  };
+}
+
+function getLocalizedRowText(
+  row: ScanOpportunityRow,
+  locale: string,
+  zh?: string | null,
+  en?: string | null,
+) {
+  return locale === "en-US" ? en || zh || null : zh || en || null;
+}
+
+function formatModelSources(row: ScanOpportunityRow, tempSymbol?: string | null) {
+  const sources = row.model_cluster_sources || {};
+  return Object.entries(sources)
+    .filter(([, value]) => value != null && Number.isFinite(Number(value)))
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([name, value]) => ({
+      name,
+      value: formatTemperatureValue(Number(value), tempSymbol, { digits: 1 }),
+    }));
+}
+
+function getModelSourceSummary(
+  row: ScanOpportunityRow,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const sources = formatModelSources(row, tempSymbol);
+  if (!sources.length) {
+    return locale === "en-US"
+      ? "model cluster pending"
+      : "模型集群暂未回传";
+  }
+  const shown = sources.map((item) => `${item.name} ${item.value}`).join(" / ");
+  return locale === "en-US"
+    ? `all models: ${shown}`
+    : `全部模型：${shown}`;
+}
+
+function getShortAiConclusion(
+  row: ScanOpportunityRow,
+  locale: string,
+  edgePercent?: number | null,
+  strengthLabel?: string,
+) {
+  const directReason =
+    getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en) ||
+    getLocalizedRowText(
+      row,
+      locale,
+      row.ai_watchlist_reason_zh,
+      row.ai_watchlist_reason_en,
+    );
+  if (directReason) return directReason;
+  const cityThesis = getLocalizedRowText(
+    row,
+    locale,
+    row.ai_city_thesis_zh,
+    row.ai_city_thesis_en,
+  );
+  if (cityThesis) return cityThesis;
+
+  const edgeText = formatPercent(edgePercent, true);
+  const modelBasis = getModelSourceSummary(row, locale, row.target_unit || row.temp_symbol);
+  if (locale === "en-US") {
+    return `${strengthLabel || "Watch"} setup: edge ${edgeText}; V4 should validate against ${modelBasis}.`;
+  }
+  return `${strengthLabel || "观察"}：edge ${edgeText}，V4 需结合${modelBasis}确认。`;
+}
+
+function getRiskHints(
+  row: ScanOpportunityRow,
+  locale: string,
+  modelProbability?: number | null,
+) {
+  const hints: string[] = [];
+  const spread = Number(row.spread);
+  if (Number.isFinite(spread) && spread > 0.03) {
+    hints.push(
+      locale === "en-US"
+        ? `Wide spread ${formatQuoteCents(spread)} may distort executable edge.`
+        : `盘口价差 ${formatQuoteCents(spread)} 偏宽，可能扭曲可执行 edge。`,
+    );
+  }
+  const quoteAgeSeconds =
+    row.quote_age_ms != null && Number.isFinite(Number(row.quote_age_ms))
+      ? Math.round(Number(row.quote_age_ms) / 1000)
+      : null;
+  if (quoteAgeSeconds != null && quoteAgeSeconds > 60) {
+    hints.push(
+      locale === "en-US"
+        ? `Quote age ${quoteAgeSeconds}s; refresh before acting.`
+        : `报价已 ${quoteAgeSeconds}s，执行前需要刷新。`,
+    );
+  }
+  if (row.trend_alignment === false) {
+    hints.push(
+      locale === "en-US"
+        ? "Intraday trend does not fully support this direction."
+        : "日内趋势未完全支持该方向。",
+    );
+  }
+  if (row.cluster_adjusted) {
+    hints.push(
+      locale === "en-US"
+        ? "Tail bucket was cluster-adjusted; raw edge may be overstated."
+        : "尾部桶已做模型集群折扣，原始 edge 可能偏乐观。",
+    );
+  }
+  if (modelProbability != null && modelProbability < 10) {
+    hints.push(
+      locale === "en-US"
+        ? "Low model probability makes the setup sensitive to calibration error."
+        : "模型概率偏低，校准误差会显著影响判断。",
+    );
+  }
+  if (!hints.length) {
+    hints.push(
+      locale === "en-US"
+        ? "Main residual risk is late observation updates or a shifted peak window."
+        : "主要残余风险是后续实测升温或峰值窗口漂移。",
+    );
+  }
+  return hints;
+}
+
+function getRecommendationReasons(
+  row: ScanOpportunityRow,
+  locale: string,
+  modelProbability?: number | null,
+  edgePercent?: number | null,
+  price?: number | null,
+) {
+  const reasons: string[] = [];
+  const aiReason = getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en);
+  if (aiReason && String(row.ai_decision || "").toLowerCase() === "approve") {
+    reasons.push(aiReason);
+  }
+  reasons.push(
+    locale === "en-US"
+      ? `EMOS probability ${formatPercent(modelProbability)} vs market price ${formatQuoteCents(price)} gives edge ${formatPercent(edgePercent, true)}.`
+      : `EMOS 概率 ${formatPercent(modelProbability)} 对比市场价格 ${formatQuoteCents(price)}，edge ${formatPercent(edgePercent, true)}。`,
+  );
+  if (row.peak_alignment_score != null) {
+    reasons.push(
+      locale === "en-US"
+        ? `Peak alignment score ${Number(row.peak_alignment_score).toFixed(2)} supports checking this bucket.`
+        : `峰值对齐分 ${Number(row.peak_alignment_score).toFixed(2)}，支持把该桶纳入检查。`,
+    );
+  }
+  return reasons.slice(0, 3);
+}
+
+function getExclusionReasons(
+  row: ScanOpportunityRow,
+  locale: string,
+  edgePercent?: number | null,
+) {
+  const decision = String(row.ai_decision || "").toLowerCase();
+  const aiReason =
+    getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en) ||
+    getLocalizedRowText(
+      row,
+      locale,
+      row.ai_watchlist_reason_zh,
+      row.ai_watchlist_reason_en,
+    );
+  if (decision === "veto" || decision === "downgrade" || decision === "watchlist") {
+    return [
+      aiReason ||
+        (locale === "en-US"
+          ? "V4 did not classify this row as a primary recommendation."
+          : "V4 未把该合约列为主推荐。"),
+    ];
+  }
+  if (edgePercent != null && Number(edgePercent) < 10) {
+    return [
+      locale === "en-US"
+        ? "Edge is below the medium-opportunity threshold."
+        : "edge 低于中机会阈值。",
+    ];
+  }
+  return [
+    locale === "en-US"
+      ? "No hard veto in the current V4/rule snapshot."
+      : "当前 V4/规则快照没有硬性排除项。",
+  ];
 }
 
 function getAiMeta(row: ScanOpportunityRow, locale: string) {
@@ -463,6 +701,21 @@ export const OpportunityTable = React.memo(function OpportunityTable({
     () => buildOpportunityGroups(rows, locale, cityDetailsByName),
     [rows, locale, cityDetailsByName],
   );
+  const [expandedRowIds, setExpandedRowIds] = React.useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const toggleExpandedRow = React.useCallback((rowId: string) => {
+    setExpandedRowIds((current) => {
+      const next = new Set(current);
+      if (next.has(rowId)) {
+        next.delete(rowId);
+      } else {
+        next.add(rowId);
+      }
+      return next;
+    });
+  }, []);
 
   if (!hasRows) {
     const title =
@@ -525,6 +778,14 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                 <strong>{group.cityName}</strong>
                 <div className="scan-opportunity-models">
                   <span>
+                    <em>{isEn ? "Local time" : "当前时间"}</em>
+                    <b>{group.localTime || "--"}</b>
+                  </span>
+                  <span>
+                    <em>{isEn ? "Settlement left" : "剩余结算时间"}</em>
+                    <b>{formatWindowMinutes(group.remainingMinutes, locale)}</b>
+                  </span>
+                  <span>
                     <em>DEB</em>
                     <b>{group.debLabel}</b>
                   </span>
@@ -541,16 +802,14 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                 </div>
               </div>
               <div className="scan-opportunity-phase">
-                <span>{group.localTime || "--"}</span>
                 <b className={`scan-phase-badge ${group.phaseMeta.tone}`}>
                   {group.phaseMeta.label}
                 </b>
-                <em>{formatWindowMinutes(group.remainingMinutes, locale)}</em>
               </div>
             </button>
 
             <div className="scan-opportunity-items">
-              {group.rows.map((row, rowIndex) => {
+              {group.rows.map((row) => {
                 const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
                 const side = String(row.side || "").toLowerCase();
                 const detail = getDetailForRow(row, cityDetailsByName);
@@ -577,22 +836,56 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                   modelProbability != null && row.ask != null
                     ? modelProbability - Number(row.ask) * 100
                     : row.edge_percent;
-                const modelLabel = "EMOS";
-                const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
+                const modelLabel = isEn ? "EMOS prob" : "EMOS 概率";
+                const priceLabel = isEn ? "Market price" : "市场价格";
                 const edgePositive = Number(edgePercent || 0) >= 0;
                 const aiMeta = getAiMeta(row, locale);
+                const strength = getOpportunityStrength(edgePercent, locale);
+                const expanded = expandedRowIds.has(row.id);
+                const shortConclusion = getShortAiConclusion(
+                  row,
+                  locale,
+                  edgePercent,
+                  strength.label,
+                );
+                const recommendationReasons = getRecommendationReasons(
+                  row,
+                  locale,
+                  modelProbability,
+                  edgePercent,
+                  row.ask,
+                );
+                const exclusionReasons = getExclusionReasons(row, locale, edgePercent);
+                const riskHints = getRiskHints(row, locale, modelProbability);
+                const thesis =
+                  getLocalizedRowText(
+                    row,
+                    locale,
+                    row.ai_city_thesis_zh,
+                    row.ai_city_thesis_en,
+                  ) ||
+                  getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en) ||
+                  (isEn
+                    ? `${group.cityName} thesis: validate this ${formatTradeSide(row, locale)} against the full model cluster before sizing.`
+                    : `${group.cityName} thesis：该 ${formatTradeSide(row, locale)} 需要先结合全部模型集群确认，再考虑仓位。`);
+                const modelSources = formatModelSources(row, tempSymbol);
                 return (
                   <div
                     key={row.id}
-                    className={`scan-opportunity-item ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
+                    className={`scan-opportunity-item ${selectedRowId === row.id ? "selected" : ""} ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
+                    onClick={() => onSelectRow?.(row)}
                   >
                     <span className="scan-opportunity-branch" aria-hidden="true">
                       <i />
                     </span>
                     <span className="scan-opportunity-trade">
                       <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
-                        {formatAction(row, locale, tempSymbol)}
+                        {formatTradeSide(row, locale)}
                       </strong>
+                    </span>
+                    <span className="scan-opportunity-stat threshold">
+                      <small>{isEn ? "Threshold" : "阈值"}</small>
+                      <b>{formatThreshold(row, tempSymbol)}</b>
                     </span>
                     <span className="scan-opportunity-stat">
                       <small>{modelLabel}</small>
@@ -608,11 +901,103 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                         {formatPercent(edgePercent, true)}
                       </b>
                     </span>
-                    {aiMeta ? (
-                      <span className={`scan-opportunity-ai ${aiMeta.tone}`}>
-                        <b>{aiMeta.label}</b>
-                        {aiMeta.reason ? <small>{aiMeta.reason}</small> : null}
-                      </span>
+                    <span className={`scan-opportunity-strength ${strength.tone}`}>
+                      {strength.label}
+                    </span>
+                    <button
+                      type="button"
+                      className="scan-opportunity-expand"
+                      aria-expanded={expanded}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        toggleExpandedRow(row.id);
+                        onSelectRow?.(row);
+                      }}
+                    >
+                      <BarChart3 size={14} />
+                      {expanded
+                        ? isEn
+                          ? "Hide analysis"
+                          : "收起分析"
+                        : isEn
+                          ? "Full analysis"
+                          : "查看完整分析"}
+                      {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                    <span className={`scan-opportunity-ai ${aiMeta?.tone || "neutral"}`}>
+                      <b>{isEn ? "AI take" : "AI 结论"}</b>
+                      <small>{shortConclusion}</small>
+                    </span>
+                    {expanded ? (
+                      <div className="scan-v4-analysis">
+                        <section>
+                          <strong>thesis</strong>
+                          <p>{thesis}</p>
+                        </section>
+                        <section>
+                          <strong>{isEn ? "Recommendation reasons" : "推荐理由"}</strong>
+                          <ul>
+                            {recommendationReasons.map((reason) => (
+                              <li key={reason}>{reason}</li>
+                            ))}
+                          </ul>
+                        </section>
+                        <section>
+                          <strong>{isEn ? "Exclusion reasons" : "排除理由"}</strong>
+                          <ul>
+                            {exclusionReasons.map((reason) => (
+                              <li key={reason}>{reason}</li>
+                            ))}
+                          </ul>
+                        </section>
+                        <section>
+                          <strong>{isEn ? "Risk notes" : "风险提示"}</strong>
+                          <ul>
+                            {riskHints.map((reason) => (
+                              <li key={reason}>{reason}</li>
+                            ))}
+                          </ul>
+                        </section>
+                        <section className="scan-v4-evidence">
+                          <strong>{isEn ? "Data basis" : "数据依据"}</strong>
+                          <div>
+                            <span>DEB {group.debLabel}</span>
+                            <span>EMOS peak {group.peakLabel}</span>
+                            <span>
+                              {isEn ? "Peak prob" : "峰值概率"}{" "}
+                              {formatPercent(group.peakProbability)}
+                            </span>
+                            <span>
+                              {isEn ? "Ask" : "买价"} {formatQuoteCents(row.ask)}
+                            </span>
+                            <span>edge {formatPercent(edgePercent, true)}</span>
+                            {row.kelly_fraction != null ? (
+                              <span>
+                                Kelly {formatPercent(Number(row.kelly_fraction) * 100)}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="scan-v4-model-sources">
+                            {modelSources.length ? (
+                              modelSources.map((source) => (
+                                <span key={source.name}>
+                                  <em>{source.name}</em>
+                                  <b>{source.value}</b>
+                                </span>
+                              ))
+                            ) : (
+                              <span>
+                                <em>{isEn ? "Models" : "模型"}</em>
+                                <b>
+                                  {isEn
+                                    ? "waiting for cluster"
+                                    : "等待模型集群"}
+                                </b>
+                              </span>
+                            )}
+                          </div>
+                        </section>
+                      </div>
                     ) : null}
                   </div>
                 );

@@ -9781,7 +9781,10 @@
 
 .root :global(.scan-opportunity-item) {
   display: grid;
-  grid-template-columns: 16px minmax(180px, 1fr) max-content max-content max-content;
+  grid-template-columns:
+    16px minmax(96px, 0.7fr) minmax(82px, 0.45fr)
+    minmax(114px, 0.52fr) minmax(96px, 0.46fr)
+    minmax(92px, 0.42fr) max-content max-content;
   gap: 10px;
   align-items: center;
   width: 100%;
@@ -9792,7 +9795,7 @@
   background: rgba(4, 12, 22, 0.48);
   color: #b8c9e1;
   text-align: left;
-  cursor: default;
+  cursor: pointer;
   transition:
     background 0.18s ease,
     border-color 0.18s ease,
@@ -9916,6 +9919,10 @@
   justify-content: flex-end;
 }
 
+.root :global(.scan-opportunity-stat.threshold) {
+  min-width: 82px;
+}
+
 .root :global(.scan-opportunity-stat b.positive) {
   color: #1de28f;
 }
@@ -9959,6 +9966,160 @@
 
 .root :global(.scan-opportunity-ai.veto b) {
   color: #ff8585;
+}
+
+.root :global(.scan-opportunity-ai.neutral b) {
+  color: #9fc5ff;
+}
+
+.root :global(.scan-opportunity-strength) {
+  display: inline-flex;
+  justify-self: end;
+  align-items: center;
+  justify-content: center;
+  min-width: 66px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(90, 123, 166, 0.16);
+  background: rgba(13, 28, 48, 0.6);
+  color: #91a7c4;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-strength.strong) {
+  color: #ff8585;
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(248, 113, 113, 0.1);
+}
+
+.root :global(.scan-opportunity-strength.medium) {
+  color: #ffd166;
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.root :global(.scan-opportunity-strength.watch) {
+  color: #7aa8ff;
+  border-color: rgba(96, 165, 250, 0.28);
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.root :global(.scan-opportunity-expand) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid rgba(65, 118, 216, 0.34);
+  border-radius: 9px;
+  background: rgba(10, 30, 58, 0.8);
+  color: #7fb4ff;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.root :global(.scan-opportunity-expand:hover) {
+  border-color: rgba(96, 165, 250, 0.5);
+  background: rgba(20, 47, 86, 0.86);
+}
+
+.root :global(.scan-opportunity-expand:focus-visible) {
+  outline: 2px solid rgba(34, 211, 238, 0.72);
+  outline-offset: 2px;
+}
+
+.root :global(.scan-v4-analysis) {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(69, 116, 178, 0.18);
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(9, 23, 38, 0.9), rgba(6, 16, 28, 0.92)),
+    radial-gradient(circle at 0 0, rgba(34, 211, 238, 0.1), transparent 30%);
+}
+
+.root :global(.scan-v4-analysis section) {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  border-radius: 10px;
+  background: rgba(6, 16, 28, 0.52);
+}
+
+.root :global(.scan-v4-analysis section:first-child),
+.root :global(.scan-v4-analysis .scan-v4-evidence) {
+  grid-column: 1 / -1;
+}
+
+.root :global(.scan-v4-analysis strong) {
+  display: block;
+  color: #72f3d1;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.root :global(.scan-v4-analysis p) {
+  margin: 7px 0 0;
+  color: #c2d2e7;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.root :global(.scan-v4-analysis ul) {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding-left: 17px;
+  color: #aabdd6;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.root :global(.scan-v4-evidence > div) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.root :global(.scan-v4-evidence > div > span),
+.root :global(.scan-v4-model-sources span) {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  min-height: 28px;
+  padding: 5px 8px;
+  border: 1px solid rgba(122, 154, 196, 0.14);
+  border-radius: 8px;
+  background: rgba(13, 28, 48, 0.58);
+  color: #d4e4f8;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-v4-model-sources em) {
+  color: #839abd;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.root :global(.scan-v4-model-sources b) {
+  color: #eef7ff;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .root :global(.scan-table-body::-webkit-scrollbar),
@@ -10397,6 +10558,48 @@
   background:
     linear-gradient(180deg, rgba(9, 23, 38, 0.92), rgba(7, 17, 30, 0.92)),
     radial-gradient(circle at 0 0, rgba(34, 211, 238, 0.12), transparent 34%);
+}
+
+.root :global(.scan-ai-log-panel.compact) {
+  flex: 0 0 auto;
+  display: block;
+  margin-top: 10px;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 14px;
+  background: rgba(7, 17, 30, 0.72);
+}
+
+.root :global(.scan-ai-log-panel.compact .scan-ai-log-summary) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+  color: #9fb4cf;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  list-style: none;
+}
+
+.root :global(.scan-ai-log-panel.compact .scan-ai-log-summary::-webkit-details-marker) {
+  display: none;
+}
+
+.root :global(.scan-ai-log-panel.compact .scan-ai-log-summary span) {
+  color: #c7d8ef;
+}
+
+.root :global(.scan-ai-log-panel.compact .scan-ai-log-summary strong) {
+  color: #7fb4ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-log-panel.compact[open] .scan-ai-log-list) {
+  padding: 0 12px 12px;
 }
 
 .root :global(.scan-ai-analysis-view) {
@@ -11289,9 +11492,58 @@
   color: #647a98;
 }
 
+.root :global(.scan-terminal.light .scan-opportunity-strength) {
+  border-color: rgba(35, 72, 118, 0.12);
+  background: rgba(248, 252, 255, 0.78);
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-expand) {
+  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.18);
+  background: rgba(239, 246, 255, 0.84);
+}
+
+.root :global(.scan-terminal.light .scan-v4-analysis),
+.root :global(.scan-terminal.light .scan-v4-analysis section),
+.root :global(.scan-terminal.light .scan-v4-evidence > div > span),
+.root :global(.scan-terminal.light .scan-v4-model-sources span) {
+  border-color: rgba(35, 72, 118, 0.12);
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.root :global(.scan-terminal.light .scan-v4-analysis strong) {
+  color: #057a6b;
+}
+
+.root :global(.scan-terminal.light .scan-v4-analysis p),
+.root :global(.scan-terminal.light .scan-v4-analysis ul),
+.root :global(.scan-terminal.light .scan-v4-evidence > div > span) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-v4-model-sources em) {
+  color: #64748b;
+}
+
+.root :global(.scan-terminal.light .scan-v4-model-sources b) {
+  color: #0f172a;
+}
+
 .root :global(.scan-terminal.light .scan-ai-log-panel) {
   border-color: rgba(35, 72, 118, 0.12);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(246, 250, 255, 0.9));
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-panel.compact) {
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-panel.compact .scan-ai-log-summary span) {
+  color: #334155;
+}
+
+.root :global(.scan-terminal.light .scan-ai-log-panel.compact .scan-ai-log-summary strong) {
+  color: #2563eb;
 }
 
 .root :global(.scan-terminal.light .scan-ai-log-head strong),
@@ -11458,6 +11710,15 @@
   .root :global(.scan-opportunity-stat.edge) {
     justify-self: start;
     justify-items: start;
+  }
+
+  .root :global(.scan-opportunity-ai),
+  .root :global(.scan-v4-analysis) {
+    grid-column: 1 / -1;
+  }
+
+  .root :global(.scan-v4-analysis) {
+    grid-template-columns: 1fr;
   }
 
   .root :global(.scan-trade-cards) {
