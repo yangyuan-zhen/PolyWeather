@@ -123,9 +123,6 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
       <div className="detail-mini-chart">
         <canvas ref={canvasRef} />
       </div>
-      <div className="detail-mini-meta">
-        {chartData?.legendText || t("detail.chartLegendEmpty")}
-      </div>
     </div>
   );
 }

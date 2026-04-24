@@ -3108,12 +3108,13 @@
 }
 
 .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
-  position: relative;
-  inset: auto;
+  position: sticky;
+  top: 16px;
   width: auto;
   min-width: 0;
-  height: auto;
-  min-height: calc(100vh - 32px);
+  height: calc(100vh - 32px);
+  min-height: 0;
+  max-height: calc(100vh - 32px);
   z-index: auto;
   transform: none;
   transition: none;
@@ -3123,7 +3124,8 @@
   background: linear-gradient(180deg, rgba(15, 28, 47, 0.94), rgba(9, 18, 32, 0.94));
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
-  align-self: stretch;
+  align-self: start;
+  overflow: hidden;
 }
 
 .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail.visible) {
@@ -10999,7 +11001,11 @@
   }
 
   .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
+    position: relative;
+    top: auto;
     grid-column: 1 / -1;
+    height: auto;
+    max-height: none;
     min-height: auto;
   }
 
