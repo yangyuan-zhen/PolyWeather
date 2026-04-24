@@ -2880,6 +2880,8 @@ def _build_city_market_scan_payload(
         if isinstance(p, dict)
     ]
     current = data.get("current") or {}
+    selected_deb = selected_daily.get("deb") if isinstance(selected_daily.get("deb"), dict) else {}
+    current_deb = data.get("deb") if isinstance(data.get("deb"), dict) else {}
     scan_context = {
         "local_date": data.get("local_date"),
         "local_time": data.get("local_time"),
@@ -2888,6 +2890,8 @@ def _build_city_market_scan_payload(
         "current_temp": current.get("temp"),
         "trend": data.get("trend") or {},
         "network_lead_signal": data.get("network_lead_signal") or {},
+        "models": model_map,
+        "deb_prediction": selected_deb.get("prediction") or current_deb.get("prediction"),
     }
     market_scan = _market_layer.build_market_scan(
         city=data.get("name"),

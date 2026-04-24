@@ -342,6 +342,11 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                     : row.model_event_probability != null
                       ? row.model_event_probability * 100
                       : null;
+                const modelLabel = row.cluster_adjusted
+                  ? isEn
+                    ? "Model"
+                    : "模型"
+                  : "EMOS";
                 const priceLabel = side === "no" ? "NO" : isEn ? "Market" : "市场";
                 const edgePositive = Number(row.edge_percent || 0) >= 0;
                 return (
@@ -360,7 +365,7 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                       </strong>
                     </span>
                     <span className="scan-opportunity-stat">
-                      <small>EMOS</small>
+                      <small>{modelLabel}</small>
                       <b>{formatPercent(modelProbability)}</b>
                     </span>
                     <span className="scan-opportunity-stat">

@@ -470,6 +470,7 @@ export interface ScanOpportunityRow {
   model_probability?: number | null;
   market_probability?: number | null;
   model_event_probability?: number | null;
+  raw_model_event_probability?: number | null;
   market_event_probability?: number | null;
   gap?: number | null;
   signed_gap?: number | null;
@@ -492,6 +493,7 @@ export interface ScanOpportunityRow {
   edge_percent?: number | null;
   edge_score?: number | null;
   bias_score?: number | null;
+  consensus_score?: number | null;
   distribution_bias?: DistributionBias | null;
   distribution_preview?: DistributionPreviewPoint[] | null;
   distribution_bias_direction?: string | null;
@@ -502,6 +504,15 @@ export interface ScanOpportunityRow {
   peak_distance?: number | null;
   peak_alignment_score?: number | null;
   is_peak_candidate?: boolean;
+  is_directional_candidate?: boolean;
+  cluster_adjusted?: boolean;
+  cluster_role?: string | null;
+  cluster_center?: number | null;
+  cluster_core_low?: number | null;
+  cluster_core_high?: number | null;
+  cluster_model_count?: number | null;
+  cluster_deb_reference?: number | null;
+  cluster_median?: number | null;
   window_phase?: string | null;
   window_score?: number | null;
   remaining_window_minutes?: number | null;

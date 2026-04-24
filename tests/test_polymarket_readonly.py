@@ -738,6 +738,113 @@ def test_distribution_scan_tradable_prefers_peak_bucket_and_adjacent_only():
     assert all((row.get("peak_distance") or 0) <= 1 for row in scan["rows"])
 
 
+def test_distribution_scan_uses_model_cluster_to_prefer_tail_no_over_yes():
+    layer = PolymarketReadOnlyLayer()
+    markets = [
+        {
+            "id": "m-21",
+            "slug": "highest-temperature-in-paris-on-april-24-2026-21c",
+            "question": "Will the highest temperature in Paris be 21C on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 6000,
+            "volumeNum": 5000,
+            "_model_prob": 0.205,
+        },
+        {
+            "id": "m-22",
+            "slug": "highest-temperature-in-paris-on-april-24-2026-22c",
+            "question": "Will the highest temperature in Paris be 22C on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 6000,
+            "volumeNum": 5000,
+            "_model_prob": 0.34,
+        },
+        {
+            "id": "m-24",
+            "slug": "highest-temperature-in-paris-on-april-24-2026-24c",
+            "question": "Will the highest temperature in Paris be 24C on April 24?",
+            "active": True,
+            "closed": False,
+            "acceptingOrders": True,
+            "enableOrderBook": True,
+            "liquidityNum": 6000,
+            "volumeNum": 5000,
+            "_model_prob": 0.06,
+        },
+    ]
+    token_map = {
+        "m-21": {"yes": "yes-21", "no": "no-21"},
+        "m-22": {"yes": "yes-22", "no": "no-22"},
+        "m-24": {"yes": "yes-24", "no": "no-24"},
+    }
+    quote_map = {
+        "yes-21": {"buy": 0.16, "sell": 0.14, "midpoint": 0.15, "spread": 0.02, "book_liquidity": 6000},
+        "no-21": {"buy": 0.85, "sell": 0.83, "midpoint": 0.84, "spread": 0.02, "book_liquidity": 6000},
+        "yes-22": {"buy": 0.34, "sell": 0.32, "midpoint": 0.33, "spread": 0.02, "book_liquidity": 6000},
+        "no-22": {"buy": 0.67, "sell": 0.65, "midpoint": 0.66, "spread": 0.02, "book_liquidity": 6000},
+        "yes-24": {"buy": 0.06, "sell": 0.05, "midpoint": 0.055, "spread": 0.01, "book_liquidity": 6000},
+        "no-24": {"buy": 0.948, "sell": 0.93, "midpoint": 0.94, "spread": 0.018, "book_liquidity": 6000},
+    }
+
+    layer._collect_related_temperature_markets = lambda **_kwargs: markets
+    layer._aggregate_distribution_probability_for_market = (
+        lambda market, **_kwargs: market.get("_model_prob")
+    )
+    layer._extract_market_tokens = lambda market: [
+        {"outcome": "Yes", "token_id": token_map[market["id"]]["yes"]},
+        {"outcome": "No", "token_id": token_map[market["id"]]["no"]},
+    ]
+    layer._batch_get_token_market_data = (
+        lambda token_ids, include_books=False: {
+            token_id: dict(quote_map[token_id])
+            for token_id in token_ids
+            if token_id in quote_map
+        }
+    )
+
+    scan = layer._build_distribution_scan_pack(
+        city_key="paris",
+        target_date="2026-04-24",
+        primary_market=markets[1],
+        probability_distribution=[],
+        temp_symbol="°C",
+        scan_context={
+            "local_date": "2026-04-24",
+            "local_time": "08:54",
+            "peak": {"first_h": 14, "last_h": 16},
+            "current_max_so_far": 20.0,
+            "current_temp": 20.0,
+            "trend": {"recent": []},
+            "network_lead_signal": {},
+            "deb_prediction": 22.0,
+            "models": {
+                "Open-Meteo": 22.4,
+                "ICON": 22.4,
+                "GEM": 22.2,
+                "GDPS": 22.2,
+                "ECMWF": 21.2,
+                "JMA": 20.9,
+                "GFS": 20.6,
+                "AIFS": 22.9,
+            },
+        },
+        scan_filters={"limit": 10, "scan_mode": "tradable", "min_edge_pct": 2},
+    )
+
+    recommendations = {(row["target_value"], row["side"]) for row in scan["rows"]}
+    assert (21.0, "no") in recommendations
+    assert (24.0, "no") in recommendations
+    assert (21.0, "yes") not in recommendations
+    assert all(row.get("is_directional_candidate") for row in scan["rows"])
+    assert all(row.get("cluster_adjusted") for row in scan["rows"])
+
+
 def test_batch_token_market_data_falls_back_to_single_fetch_when_batch_fails():
     layer = PolymarketReadOnlyLayer()
     layer._clob_post = lambda *_args, **_kwargs: None

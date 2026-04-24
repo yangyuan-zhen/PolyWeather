@@ -2896,10 +2896,91 @@ class PolymarketReadOnlyLayer:
                 ),
             )
 
+        raw_model_values: List[float] = []
+        scan_models = (scan_context or {}).get("models")
+        if isinstance(scan_models, dict):
+            for raw_value in scan_models.values():
+                value = _safe_float(raw_value)
+                if value is not None:
+                    raw_model_values.append(value)
+        raw_deb_prediction = _safe_float((scan_context or {}).get("deb_prediction"))
+
         current_reference_raw = _safe_float(
             (scan_context or {}).get("current_max_so_far")
             or (scan_context or {}).get("current_temp")
         )
+
+        def _median(values: List[float]) -> Optional[float]:
+            if not values:
+                return None
+            sorted_values = sorted(values)
+            middle = len(sorted_values) // 2
+            if len(sorted_values) % 2:
+                return sorted_values[middle]
+            return (sorted_values[middle - 1] + sorted_values[middle]) / 2.0
+
+        def _build_cluster_meta(market_unit: str) -> Dict[str, Any]:
+            converted_values = [
+                self._convert_temp_to_market_unit(
+                    value,
+                    source_symbol=temp_symbol,
+                    market_unit=market_unit,
+                )
+                for value in raw_model_values
+            ]
+            model_values = [value for value in converted_values if value is not None]
+            deb_reference = self._convert_temp_to_market_unit(
+                raw_deb_prediction,
+                source_symbol=temp_symbol,
+                market_unit=market_unit,
+            )
+            median_value = _median(model_values)
+            if deb_reference is not None and median_value is not None:
+                center = (deb_reference + median_value) / 2.0
+            elif deb_reference is not None:
+                center = deb_reference
+            elif median_value is not None:
+                center = median_value
+            elif peak_value is not None:
+                center = peak_value
+            else:
+                center = None
+
+            unit_step = 1.8 if str(market_unit or "").upper() == "F" else 1.0
+            return {
+                "available": center is not None and bool(model_values),
+                "center": center,
+                "core_low": center - 0.75 * unit_step if center is not None else None,
+                "core_high": center + 1.25 * unit_step if center is not None else None,
+                "low_tail": center - 0.75 * unit_step if center is not None else None,
+                "high_tail": center + 1.75 * unit_step if center is not None else None,
+                "model_count": len(model_values),
+                "deb_reference": deb_reference,
+                "median": median_value,
+            }
+
+        def _cluster_role_for_target(
+            *,
+            target_value: Optional[float],
+            cluster_meta: Dict[str, Any],
+        ) -> str:
+            if not cluster_meta.get("available") or target_value is None:
+                return "unknown"
+            low_tail = _safe_float(cluster_meta.get("low_tail"))
+            high_tail = _safe_float(cluster_meta.get("high_tail"))
+            core_low = _safe_float(cluster_meta.get("core_low"))
+            core_high = _safe_float(cluster_meta.get("core_high"))
+            if low_tail is not None and target_value <= low_tail:
+                return "low_tail"
+            if high_tail is not None and target_value >= high_tail:
+                return "high_tail"
+            if (
+                core_low is not None
+                and core_high is not None
+                and core_low < target_value <= core_high
+            ):
+                return "core"
+            return "shoulder"
 
         def _row_from_entry(
             entry: Dict[str, Any],
@@ -2907,12 +2988,32 @@ class PolymarketReadOnlyLayer:
             *,
             entry_index: int,
         ) -> Optional[Dict[str, Any]]:
-            model_event_probability = _clamp_probability(_safe_float(entry.get("model_event_probability")))
+            raw_model_event_probability = _clamp_probability(_safe_float(entry.get("model_event_probability")))
+            model_event_probability = raw_model_event_probability
             market_event_probability = _clamp_probability(_safe_float(entry.get("market_event_probability")))
             ask = _clamp_probability(_safe_float(entry.get("yes_ask") if side == "yes" else entry.get("no_ask")))
             bid = _clamp_probability(_safe_float(entry.get("yes_bid") if side == "yes" else entry.get("no_bid")))
             if model_event_probability is None or ask is None:
                 return None
+
+            market = entry["market"]
+            target_threshold = _safe_float(entry.get("target_threshold"))
+            bucket_range = entry.get("bucket_range")
+            market_unit = bucket_range[2] if bucket_range else ("F" if self._is_fahrenheit_symbol(temp_symbol) else "C")
+            cluster_meta = _build_cluster_meta(market_unit)
+            cluster_target = _safe_float(entry.get("bucket_temp")) or target_threshold
+            cluster_role = _cluster_role_for_target(
+                target_value=cluster_target,
+                cluster_meta=cluster_meta,
+            )
+            cluster_adjusted = False
+            if (
+                raw_model_event_probability is not None
+                and str(entry.get("market_direction") or "exact") in {"exact", "range"}
+                and cluster_role in {"low_tail", "high_tail"}
+            ):
+                model_event_probability = _clamp_probability(raw_model_event_probability * 0.45)
+                cluster_adjusted = True
 
             model_probability = (
                 model_event_probability
@@ -2927,10 +3028,6 @@ class PolymarketReadOnlyLayer:
             if model_probability is None:
                 return None
 
-            market = entry["market"]
-            target_threshold = _safe_float(entry.get("target_threshold"))
-            bucket_range = entry.get("bucket_range")
-            market_unit = bucket_range[2] if bucket_range else ("F" if self._is_fahrenheit_symbol(temp_symbol) else "C")
             current_reference = self._convert_temp_to_market_unit(
                 current_reference_raw,
                 source_symbol=temp_symbol,
@@ -2947,6 +3044,23 @@ class PolymarketReadOnlyLayer:
             if entry_order is not None and peak_entry_order is not None:
                 peak_distance = abs(entry_order - peak_entry_order)
                 is_peak_candidate = peak_distance <= 1
+            market_structure = str(entry.get("market_direction") or "exact")
+            is_consensus_tail_no = (
+                side == "no"
+                and market_structure in {"exact", "range"}
+                and cluster_role in {"low_tail", "high_tail"}
+            )
+            is_consensus_core_yes = (
+                side == "yes"
+                and market_structure in {"exact", "range"}
+                and cluster_role in {"core", "shoulder", "unknown"}
+                and (is_peak_candidate or cluster_role == "core")
+            )
+            is_directional_candidate = (
+                is_consensus_tail_no
+                or is_consensus_core_yes
+                or (market_structure not in {"exact", "range"} and is_peak_candidate)
+            )
             peak_alignment_score = 0.0
             if peak_distance is None:
                 peak_alignment_score = 0.35
@@ -2999,13 +3113,15 @@ class PolymarketReadOnlyLayer:
                 min(((spread or 0.0) - 0.01) / 0.02, 1.0),
             ) * 15.0
             edge_score = max(0.0, min(edge_percent / 12.0, 1.0))
+            consensus_score = 1.0 if is_directional_candidate else 0.0
             final_score = 100.0 * (
-                0.35 * edge_score
+                0.32 * edge_score
                 + 0.25 * bias_score
                 + 0.20 * float(window_meta.get("score") or 0.0)
                 + 0.10 * liquidity_score
                 + 0.10 * price_usefulness_score
                 + 0.08 * peak_alignment_score
+                + 0.12 * consensus_score
             ) - spread_penalty
             market_slug = str(market.get("slug") or "").strip()
             target_label = str(entry.get("target_label") or "").strip()
@@ -3032,6 +3148,7 @@ class PolymarketReadOnlyLayer:
                 "model_probability": model_probability,
                 "market_probability": market_probability,
                 "model_event_probability": model_event_probability,
+                "raw_model_event_probability": raw_model_event_probability,
                 "market_event_probability": market_event_probability,
                 "gap": (
                     model_event_probability - market_event_probability
@@ -3070,6 +3187,7 @@ class PolymarketReadOnlyLayer:
                 "edge_percent": edge_percent,
                 "edge_score": edge_score,
                 "bias_score": bias_score,
+                "consensus_score": consensus_score,
                 "window_phase": window_meta.get("phase"),
                 "window_score": window_meta.get("score"),
                 "remaining_window_minutes": window_meta.get("remaining_minutes"),
@@ -3086,6 +3204,15 @@ class PolymarketReadOnlyLayer:
                 "peak_distance": peak_distance,
                 "peak_alignment_score": peak_alignment_score,
                 "is_peak_candidate": is_peak_candidate,
+                "is_directional_candidate": is_directional_candidate,
+                "cluster_adjusted": cluster_adjusted,
+                "cluster_role": cluster_role,
+                "cluster_center": cluster_meta.get("center"),
+                "cluster_core_low": cluster_meta.get("core_low"),
+                "cluster_core_high": cluster_meta.get("core_high"),
+                "cluster_model_count": cluster_meta.get("model_count"),
+                "cluster_deb_reference": cluster_meta.get("deb_reference"),
+                "cluster_median": cluster_meta.get("median"),
                 "current_reference": current_reference,
                 "gap_to_target": gap_to_target,
                 "touch_distance": abs(gap_to_target) if gap_to_target is not None else None,
@@ -3191,7 +3318,7 @@ class PolymarketReadOnlyLayer:
             if scan_mode == "tradable":
                 return (
                     float(row.get("window_score") or 0.0) >= 0.65
-                    and bool(row.get("is_peak_candidate"))
+                    and bool(row.get("is_directional_candidate"))
                 )
             if scan_mode == "early":
                 return str(row.get("window_phase") or "") in {"tomorrow", "week_ahead", "early_today"}
@@ -3213,6 +3340,7 @@ class PolymarketReadOnlyLayer:
         ]
         filtered_rows.sort(
             key=lambda row: (
+                1.0 if bool(row.get("is_directional_candidate")) else 0.0,
                 1.0 if bool(row.get("is_peak_candidate")) else 0.0,
                 float(row.get("final_score") or 0.0),
                 float(row.get("edge_percent") or 0.0),
