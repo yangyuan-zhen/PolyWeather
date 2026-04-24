@@ -254,7 +254,7 @@ function ScanTerminalScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ContentView>("list");
+  const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [userLocalTime, setUserLocalTime] = useState("--");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
@@ -573,21 +573,21 @@ function ScanTerminalScreen() {
               <div className="scan-list-tabs">
                 <button
                   type="button"
-                  className={resolvedView === "list" ? "active" : ""}
-                  onClick={() => {
-                    setActiveView("list");
-                  }}
-                >
-                  {isEn ? "Opportunity List" : "机会列表"}
-                </button>
-                <button
-                  type="button"
                   className={resolvedView === "map" ? "active" : ""}
                   onClick={() => {
                     setActiveView("map");
                   }}
                 >
                   {isEn ? "Distribution View" : "分布视图"}
+                </button>
+                <button
+                  type="button"
+                  className={resolvedView === "list" ? "active" : ""}
+                  onClick={() => {
+                    setActiveView("list");
+                  }}
+                >
+                  {isEn ? "Opportunity List" : "机会列表"}
                 </button>
                 <button
                   type="button"
