@@ -91,22 +91,155 @@ type AiCityForecastState = {
   status: "idle" | "loading" | "ready" | "failed";
   payload?: AiCityForecastPayload | null;
   error?: string | null;
+  streamText?: string | null;
+  streamRaw?: string | null;
 };
 
-let aiCityFetchQueue: Promise<unknown> = Promise.resolve();
+const AI_CITY_MAX_CONCURRENT = 2;
+let aiCityActiveCount = 0;
+const aiCityPendingQueue: Array<() => void> = [];
+
+function createAiCityAbortError() {
+  return new DOMException("The AI city request was aborted.", "AbortError");
+}
+
+function drainAiCityFetchQueue() {
+  while (aiCityActiveCount < AI_CITY_MAX_CONCURRENT && aiCityPendingQueue.length) {
+    const next = aiCityPendingQueue.shift();
+    next?.();
+  }
+}
 
 function enqueueAiCityFetch<T>(
   task: () => Promise<T>,
   signal: AbortSignal,
+  callbacks?: {
+    onQueued?: () => void;
+    onStart?: () => void;
+  },
 ): Promise<T> {
-  const run = aiCityFetchQueue.then(async () => {
-    if (signal.aborted) {
-      throw new DOMException("The AI city request was aborted.", "AbortError");
+  return new Promise<T>((resolve, reject) => {
+    let started = false;
+    let queuedStart: (() => void) | null = null;
+
+    const cleanup = () => {
+      signal.removeEventListener("abort", handleAbort);
+    };
+    const removeQueuedStart = () => {
+      if (!queuedStart) return;
+      const index = aiCityPendingQueue.indexOf(queuedStart);
+      if (index >= 0) {
+        aiCityPendingQueue.splice(index, 1);
+      }
+      queuedStart = null;
+    };
+    const finishActive = () => {
+      aiCityActiveCount = Math.max(0, aiCityActiveCount - 1);
+      cleanup();
+      drainAiCityFetchQueue();
+    };
+    const handleAbort = () => {
+      if (started) return;
+      removeQueuedStart();
+      cleanup();
+      reject(createAiCityAbortError());
+      drainAiCityFetchQueue();
+    };
+    const start = () => {
+      queuedStart = null;
+      if (signal.aborted) {
+        cleanup();
+        reject(createAiCityAbortError());
+        drainAiCityFetchQueue();
+        return;
+      }
+      started = true;
+      aiCityActiveCount += 1;
+      callbacks?.onStart?.();
+      task()
+        .then(resolve, reject)
+        .finally(finishActive);
+    };
+
+    signal.addEventListener("abort", handleAbort, { once: true });
+    queuedStart = start;
+    if (aiCityActiveCount < AI_CITY_MAX_CONCURRENT) {
+      start();
+    } else {
+      callbacks?.onQueued?.();
+      aiCityPendingQueue.push(start);
     }
-    return task();
   });
-  aiCityFetchQueue = run.catch(() => undefined);
-  return run;
+}
+
+function parseSseBlock(block: string): { event: string; data: unknown } | null {
+  const lines = block.split(/\r?\n/);
+  let event = "message";
+  const dataLines: string[] = [];
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      event = line.slice("event:".length).trim() || "message";
+    } else if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trimStart());
+    }
+  }
+  if (!dataLines.length) return null;
+  const raw = dataLines.join("\n");
+  try {
+    return { event, data: JSON.parse(raw) };
+  } catch {
+    return { event, data: raw };
+  }
+}
+
+function decodeJsonStringFragment(fragment: string) {
+  const safe = fragment.replace(/\\$/g, "");
+  try {
+    return JSON.parse(`"${safe.replace(/"/g, '\\"')}"`) as string;
+  } catch {
+    return safe
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, "\n")
+      .replace(/\\r/g, "\r")
+      .replace(/\\t/g, "\t")
+      .replace(/\\\\/g, "\\");
+  }
+}
+
+function extractStreamingJsonField(raw: string, field: string) {
+  const keyIndex = raw.indexOf(`"${field}"`);
+  if (keyIndex < 0) return "";
+  const colonIndex = raw.indexOf(":", keyIndex);
+  if (colonIndex < 0) return "";
+  const quoteIndex = raw.indexOf('"', colonIndex + 1);
+  if (quoteIndex < 0) return "";
+  let end = raw.length;
+  let escaped = false;
+  for (let i = quoteIndex + 1; i < raw.length; i += 1) {
+    const char = raw[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (char === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (char === '"') {
+      end = i;
+      break;
+    }
+  }
+  return decodeJsonStringFragment(raw.slice(quoteIndex + 1, end)).trim();
+}
+
+function extractStreamingAirportRead(raw: string, locale: string) {
+  const primaryField = locale === "en-US" ? "metar_read_en" : "metar_read_zh";
+  const fallbackField = locale === "en-US" ? "metar_read_zh" : "metar_read_en";
+  return (
+    extractStreamingJsonField(raw, primaryField) ||
+    extractStreamingJsonField(raw, fallbackField)
+  );
 }
 
 function formatShortDate(value?: string | null, locale = "zh-CN") {
@@ -684,13 +817,13 @@ function AiPinnedCityCard({
     if (!aiForecastKey) return;
     let cancelled = false;
     const controller = new AbortController();
-    setAiForecast({ status: "loading" });
+    setAiForecast({ status: "loading", streamText: null, streamRaw: "" });
     enqueueAiCityFetch(
       () =>
-        fetch("/api/scan/terminal/ai-city", {
+        fetch("/api/scan/terminal/ai-city/stream", {
           method: "POST",
           headers: {
-            Accept: "application/json",
+            Accept: "text/event-stream",
             "Content-Type": "application/json",
           },
           cache: "no-store",
@@ -698,18 +831,18 @@ function AiPinnedCityCard({
           body: JSON.stringify({
             city: detailCityName,
             force_refresh: aiRefreshToken > 0,
-            locale: "zh-CN",
+            locale,
           }),
         }).then(async (response) => {
           if (!response.ok) {
-            let detail = "";
+            let detailMessage = "";
             try {
               const errorPayload = await response.json();
               const message = String(errorPayload?.error || "").trim();
               const rawDetail = String(errorPayload?.detail || "").trim();
               const elapsed = Number(errorPayload?.elapsed_ms);
               const timeout = Number(errorPayload?.timeout_ms);
-              detail = [
+              detailMessage = [
                 message,
                 rawDetail,
                 Number.isFinite(elapsed) && Number.isFinite(timeout)
@@ -719,13 +852,108 @@ function AiPinnedCityCard({
                 .filter(Boolean)
                 .join(" · ");
             } catch {
-              detail = "";
+              detailMessage = "";
             }
-            throw new Error(detail ? `HTTP ${response.status} · ${detail}` : `HTTP ${response.status}`);
+            throw new Error(detailMessage ? `HTTP ${response.status} · ${detailMessage}` : `HTTP ${response.status}`);
           }
-          return response.json() as Promise<AiCityForecastPayload>;
+          const contentType = response.headers.get("content-type") || "";
+          if (!response.body || !contentType.includes("text/event-stream")) {
+            return response.json() as Promise<AiCityForecastPayload>;
+          }
+
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          let rawStream = "";
+          let finalPayload: AiCityForecastPayload | null = null;
+          const handleBlock = (block: string) => {
+            const message = parseSseBlock(block);
+            if (!message || !message.data || typeof message.data !== "object") {
+              return;
+            }
+            const data = message.data as Record<string, unknown>;
+            if (message.event === "progress") {
+              const progressText =
+                String(locale === "en-US" ? data.message_en || "" : data.message_zh || "").trim() ||
+                String(data.message || "").trim();
+              if (progressText && !cancelled) {
+                setAiForecast((current) =>
+                  current.status === "loading"
+                    ? { ...current, streamText: current.streamText || progressText }
+                    : current,
+                );
+              }
+            } else if (message.event === "delta") {
+              const content = String(data.content || "");
+              if (!content) return;
+              rawStream += content;
+              const airportRead = extractStreamingAirportRead(rawStream, locale);
+              if (!cancelled) {
+                setAiForecast((current) =>
+                  current.status === "loading"
+                    ? {
+                        ...current,
+                        streamRaw: rawStream,
+                        streamText: airportRead || current.streamText || null,
+                      }
+                    : current,
+                );
+              }
+            } else if (message.event === "final") {
+              finalPayload = data as AiCityForecastPayload;
+            }
+          };
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split(/\n\n|\r\n\r\n/);
+            buffer = blocks.pop() || "";
+            for (const block of blocks) {
+              handleBlock(block);
+            }
+          }
+          buffer += decoder.decode();
+          if (buffer.trim()) {
+            handleBlock(buffer);
+          }
+          if (!finalPayload) {
+            throw new Error("AI stream ended before final payload");
+          }
+          return finalPayload;
         }),
       controller.signal,
+      {
+        onQueued: () => {
+          if (cancelled) return;
+          setAiForecast((current) =>
+            current.status === "loading"
+              ? {
+                  ...current,
+                  streamText: isEn
+                    ? "Waiting for the AI airport read queue..."
+                    : "正在等待 AI 机场报文解读队列...",
+                }
+              : current,
+          );
+        },
+        onStart: () => {
+          if (cancelled) return;
+          setAiForecast((current) =>
+            current.status === "loading"
+              ? {
+                  ...current,
+                  streamText: current.streamRaw
+                    ? current.streamText
+                    : isEn
+                      ? "Connecting to DeepSeek V4-Pro for airport bulletin streaming..."
+                      : "正在连接 DeepSeek V4-Pro，准备流式解读机场报文...",
+                }
+              : current,
+          );
+        },
+      },
     )
       .then((payload) => {
         if (!cancelled) {
@@ -742,7 +970,7 @@ function AiPinnedCityCard({
       cancelled = true;
       controller.abort();
     };
-  }, [aiForecastKey, aiRefreshToken, detailCityName]);
+  }, [aiForecastKey, aiRefreshToken, detailCityName, locale]);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
   const localizedFinalJudgment =
@@ -911,11 +1139,21 @@ function AiPinnedCityCard({
                 {isEn ? "AI airport weather read" : "AI 机场报文解读"}
               </div>
               {aiForecast.status === "loading" ? (
-                <p>
-                  {isEn
-                    ? "Deepseek V4 pro is reading the latest airport bulletin..."
-                    : "Deepseek V4 pro 正在解读最新机场报文..."}
-                </p>
+                <>
+                  <p className={aiForecast.streamText ? "scan-ai-weather-summary" : undefined}>
+                    {aiForecast.streamText ||
+                      (isEn
+                        ? "Deepseek V4 pro is reading the latest airport bulletin..."
+                        : "Deepseek V4 pro 正在解读最新机场报文...")}
+                  </p>
+                  {aiForecast.streamText ? (
+                    <p className="scan-ai-city-muted">
+                      {isEn
+                        ? "Streaming airport read; final forecast is still being completed..."
+                        : "机场报文解读正在流式输出，最终预报结论仍在补全..."}
+                    </p>
+                  ) : null}
+                </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>
                   <p className="scan-ai-weather-summary">

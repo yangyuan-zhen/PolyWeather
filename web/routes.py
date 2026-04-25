@@ -7,7 +7,7 @@ from typing import Optional
 
 from fastapi.concurrency import run_in_threadpool
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from loguru import logger
 
 from src.analysis.deb_algorithm import load_history
@@ -36,6 +36,7 @@ from web.scan_terminal_service import (
     build_scan_city_ai_forecast_payload,
     build_scan_terminal_ai_payload,
     build_scan_terminal_payload,
+    stream_scan_city_ai_forecast_payload,
 )
 from web.core import (
     AnalyticsEventRequest,
@@ -1775,5 +1776,38 @@ async def scan_terminal_ai_city(request: Request):
         city,
         force_refresh=force_refresh,
         locale=locale,
+    )
+
+
+@router.post("/api/scan/terminal/ai-city/stream")
+async def scan_terminal_ai_city_stream(request: Request):
+    _assert_entitlement(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    city = str(body.get("city") or "").strip()
+    if not city:
+        raise HTTPException(status_code=400, detail="city is required")
+    force_refresh = str(body.get("force_refresh") or "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    locale = str(body.get("locale") or "zh-CN").strip()
+    return StreamingResponse(
+        stream_scan_city_ai_forecast_payload(
+            city,
+            force_refresh=force_refresh,
+            locale=locale,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
     )
 
