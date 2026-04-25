@@ -7,7 +7,7 @@ import {
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_AI_PROXY_TIMEOUT_MS = Math.max(
   35_000,
-  Number(process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS || "45000") || 45_000,
+  Number(process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS || "55000") || 55_000,
 );
 
 export const dynamic = "force-dynamic";

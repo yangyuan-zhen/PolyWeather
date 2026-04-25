@@ -45,6 +45,10 @@ SCAN_AI_TIMEOUT_SEC = max(
     30,
     int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "40")),
 )
+SCAN_CITY_AI_TIMEOUT_SEC = max(
+    20,
+    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "32")),
+)
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
     int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "120")),
@@ -915,9 +919,9 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         "city_snapshot": ai_input,
     }
     timeout = httpx.Timeout(
-        timeout=float(SCAN_AI_TIMEOUT_SEC),
-        connect=min(8.0, float(SCAN_AI_TIMEOUT_SEC)),
-        read=float(SCAN_AI_TIMEOUT_SEC),
+        timeout=float(SCAN_CITY_AI_TIMEOUT_SEC),
+        connect=min(8.0, float(SCAN_CITY_AI_TIMEOUT_SEC)),
+        read=float(SCAN_CITY_AI_TIMEOUT_SEC),
         write=10.0,
         pool=5.0,
     )
@@ -988,7 +992,7 @@ def build_scan_city_ai_forecast_payload(
     )
     data = _analyze(
         city_name,
-        force_refresh=force_refresh,
+        force_refresh=False,
         include_llm_commentary=False,
         detail_mode="full",
     )
@@ -1073,7 +1077,7 @@ def build_scan_city_ai_forecast_payload(
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "duration_ms": duration_ms,
-            "reason": f"V4 provider timed out after {SCAN_AI_TIMEOUT_SEC}s",
+            "reason": f"V4 provider timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s",
         }
     except Exception as exc:
         duration_ms = int((time.time() - started_at) * 1000)

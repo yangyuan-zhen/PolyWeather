@@ -730,7 +730,11 @@ function AiPinnedCityCard({
             <button
               type="button"
               className="scan-ai-city-icon-button"
-              onClick={() => setAiRefreshToken((current) => current + 1)}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setAiRefreshToken((current) => current + 1);
+              }}
               aria-label={isEn ? `Refresh ${displayName} analysis` : `刷新 ${displayName} 深度分析`}
               title={isEn ? "Refresh analysis" : "刷新深度分析"}
               disabled={aiForecast.status === "loading"}
@@ -740,7 +744,11 @@ function AiPinnedCityCard({
             <button
               type="button"
               className="scan-ai-city-icon-button danger"
-              onClick={onRemove}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onRemove();
+              }}
               aria-label={isEn ? `Remove ${displayName}` : `移除 ${displayName}`}
               title={isEn ? "Remove city" : "移除城市"}
               disabled={removing}
@@ -832,10 +840,14 @@ function AiPinnedCityCard({
                 </>
               ) : aiForecast.status === "ready" ? (
                 <p>
-                  {aiForecast.payload?.reason ||
-                    (isEn
-                      ? "AI read is unavailable for this city right now."
-                      : "该城市暂时没有可用的 AI 解读。")}
+                  {aiForecast.payload?.status === "timeout"
+                    ? isEn
+                      ? "Deepseek V4-Pro timed out. You can retry; city data and the right briefing were not refreshed."
+                      : "Deepseek V4-Pro 本次解读超时，可稍后重试；城市数据和右侧简报不会被刷新。"
+                    : aiForecast.payload?.reason ||
+                      (isEn
+                        ? "AI read is unavailable for this city right now."
+                        : "该城市暂时没有可用的 AI 解读。")}
                 </p>
               ) : aiForecast.status === "failed" ? (
                 <p>
@@ -1417,10 +1429,21 @@ function ScanTerminalScreen() {
       <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
         <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
           <main className="scan-data-grid">
-            <div className="scan-empty-state">
-              <div className="scan-empty-title">{isEn ? "Checking access" : "正在检查权限"}</div>
-              <div className="scan-empty-copy">
-                {isEn ? "Preparing your deep analysis workspace." : "正在准备深度分析台。"}
+            <div className="scan-loading-state" role="status" aria-live="polite">
+              <div className="scan-loading-orb" aria-hidden="true">
+                <span />
+                <i />
+              </div>
+              <div className="scan-loading-title">
+                {isEn ? "Preparing deep analysis" : "正在准备深度分析"}
+              </div>
+              <div className="scan-loading-copy">
+                {isEn ? "Checking access and loading city context." : "正在检查权限并载入城市上下文。"}
+              </div>
+              <div className="scan-loading-steps" aria-hidden="true">
+                <span />
+                <span />
+                <span />
               </div>
             </div>
           </main>
