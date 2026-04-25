@@ -47,8 +47,8 @@ SCAN_AI_TIMEOUT_SEC = max(
     int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "40")),
 )
 SCAN_CITY_AI_TIMEOUT_SEC = max(
-    20,
-    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "45")),
+    75,
+    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "75")),
 )
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
@@ -63,8 +63,8 @@ SCAN_AI_MAX_TOKENS = max(
     int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "3200")),
 )
 SCAN_CITY_AI_MAX_TOKENS = max(
-    500,
-    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "1200")),
+    8192,
+    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "8192")),
 )
 
 
@@ -447,10 +447,14 @@ def _build_city_ai_fallback(
     model_note_zh = _city_ai_model_cluster_note(ai_input, locale="zh-CN")
     model_note_en = _city_ai_model_cluster_note(ai_input, locale="en-US")
     content_preview = _truncate_ai_text(raw_content, 1000)
+    looks_like_truncated_json = bool(content_preview.startswith("{") and not content_preview.rstrip().endswith("}"))
     reason_preview = _truncate_ai_text(reason, 260)
-    if content_preview:
+    if content_preview and not looks_like_truncated_json:
         metar_zh = f"DeepSeek V4-Pro 返回了非结构化解读，系统已保留摘要：{content_preview}"
         metar_en = f"DeepSeek V4-Pro returned non-JSON analysis; preserved summary: {content_preview}"
+    elif content_preview:
+        metar_zh = "DeepSeek V4-Pro 本次输出在 JSON 中途被截断，系统已改用 DEB、多模型与原始 METAR 兜底。"
+        metar_en = "DeepSeek V4-Pro output was truncated mid-JSON, so DEB, model cluster and raw METAR are used as fallback."
     elif raw_metar:
         metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；需结合后续报文确认温度路径。"
         metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; later reports are needed to confirm the path."
@@ -481,6 +485,7 @@ def _build_city_ai_fallback(
         "_polyweather_meta": {
             **_provider_response_meta(provider_data),
             "fallback": True,
+            "looks_like_truncated_json": looks_like_truncated_json,
             "fallback_reason": reason_preview,
             "raw_content_preview": content_preview,
             "raw_metar": _truncate_ai_text(raw_metar, 1000),
@@ -1074,8 +1079,8 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         "但必须使用“可能”“倾向”“需要确认”等非绝对表达。"
         "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
         f"当前用户界面语言是 {normalized_locale}，所有面向用户的主要自然语言字段必须使用 {primary_language}。"
-        f"重点填写 {primary_suffix} 字段；{secondary_suffix} 字段可以给极短镜像翻译，但不能影响响应速度。"
-        "risks 最多 2 条，reasoning、metar_read、model_cluster_note 各 1 句。"
+        f"重点填写 {primary_suffix} 字段；{secondary_suffix} 字段只填空字符串，前端不读取它。"
+        "risks 最多 2 条，每条不超过 18 个汉字或 12 个英文词；reasoning、metar_read、model_cluster_note 各 1 句。"
         "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
@@ -1086,6 +1091,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             f"Primary output language is {primary_language}; the UI will read fields ending with {primary_suffix}. "
+            f"Fields ending with {secondary_suffix} must be empty strings or empty arrays to avoid truncation. "
             "Keep final_judgment one short decision sentence. metar_read should explain the latest airport bulletin "
             "and how wind/cloud/visibility/dewpoint may affect the temperature path. model_cluster_note must state "
             "how many model sources are available, whether they support DEB, and whether the sample is too sparse. "
@@ -1103,7 +1109,9 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     request_json = {
         "model": SCAN_AI_MODEL,
         "temperature": 0.2,
-        "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 700), 1400),
+        "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 8192), 64000),
+        "thinking": {"type": "enabled"},
+        "reasoning_effort": "high",
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -1190,7 +1198,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             repair_payload = {
                 "model": SCAN_AI_MODEL,
                 "temperature": 0.0,
-                "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 700), 1200),
+                "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 4096), 64000),
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
