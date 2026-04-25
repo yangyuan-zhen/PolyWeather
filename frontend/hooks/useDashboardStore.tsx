@@ -116,7 +116,6 @@ function getInitialProAccessState(): ProAccessState {
 }
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
-const BACKGROUND_SUMMARY_REFRESH_MS = 30_000;
 const CITY_LOAD_RETRY_DELAYS_MS = [700, 1600];
 type CityDetailDepth = "panel" | "market" | "nearby" | "full";
 
@@ -226,10 +225,6 @@ function detailSatisfiesDepth(
     return normalized === "nearby" || normalized === "full";
   }
   return normalizeDetailDepth(detail) === "full";
-}
-
-function shouldCheckSparseCoverageForDepth(depth: CityDetailDepth) {
-  return depth === "panel" || depth === "market" || depth === "full";
 }
 
 function hasMeaningfulModelMap(
@@ -399,7 +394,6 @@ export function DashboardStoreProvider({
   const modalOpenSeqRef = useRef(0);
   const hydratedSelectionRef = useRef(false);
   const hydratedProCacheRef = useRef(false);
-  const backgroundSummaryCheckAtRef = useRef<Record<string, number>>({});
   const summaryInflightByCityRef = useRef<Record<string, Promise<CitySummary>>>(
     {},
   );
@@ -474,32 +468,36 @@ export function DashboardStoreProvider({
     dashboardClient.clearCityDetailCache();
   }, [proAccess]);
 
-  const scheduleBackgroundDetailRefresh = (
+  const ensureCityDetail = async (
     cityName: string,
-    cached: CityDetail,
-    cachedMeta?: { cachedAt: number; revision: string },
+    force = false,
+    depth: CityDetailDepth = "panel",
   ) => {
-    const nowTs = Date.now();
-    const lastTs = backgroundSummaryCheckAtRef.current[cityName] || 0;
-    if (nowTs - lastTs < BACKGROUND_SUMMARY_REFRESH_MS) {
-      return;
+    const cached = cityDetailsByName[cityName];
+    const cachedMeta = cityDetailMetaByName[cityName];
+    const marketTargetDate =
+      depth === "market" ? selectedForecastDate || cached?.local_date : null;
+    const hasRequestedDepth = detailSatisfiesDepth(
+      cached,
+      depth,
+      marketTargetDate,
+    );
+    if (
+      !force &&
+      cached &&
+      hasRequestedDepth &&
+      dashboardClient.isCityDetailFresh(cachedMeta)
+    ) {
+      return cached;
     }
-    backgroundSummaryCheckAtRef.current[cityName] = nowTs;
 
-    void dashboardClient
-      .getCitySummary(cityName)
-      .then(async (summary) => {
-        const revision = getCityRevision(summary);
-        if (!revision || revision === cachedMeta?.revision) {
-          return;
-        }
-
+    if (!force && cached && hasRequestedDepth) {
+      try {
         const latestDetail = await dashboardClient.getCityDetail(cityName, {
-          force: false,
-          depth: normalizeDetailDepth(cached),
+          force: true,
+          depth,
         });
         const detail = latestDetail;
-
         setCityDetailsByName((current) => ({
           ...current,
           [cityName]: mergeCityDetail(current[cityName], detail),
@@ -515,77 +513,7 @@ export function DashboardStoreProvider({
             revision: getCityRevision(detail),
           },
         }));
-      })
-      .catch(() => {});
-  };
-
-  const ensureCityDetail = async (
-    cityName: string,
-    force = false,
-    depth: CityDetailDepth = "panel",
-  ) => {
-    const cached = cityDetailsByName[cityName];
-    const cachedMeta = cityDetailMetaByName[cityName];
-    const marketTargetDate =
-      depth === "market" ? selectedForecastDate || cached?.local_date : null;
-    const hasRequestedDepth = detailSatisfiesDepth(
-      cached,
-      depth,
-      marketTargetDate,
-    );
-    const cachedIsSparse =
-      shouldCheckSparseCoverageForDepth(depth) &&
-      (depth === "market"
-        ? hasSparseModelCoverage(cached, marketTargetDate)
-        : hasSparseDetailCoverage(cached, cached?.local_date));
-    if (
-      !force &&
-      cached &&
-      hasRequestedDepth &&
-      !cachedIsSparse &&
-      dashboardClient.isCityDetailFresh(cachedMeta)
-    ) {
-      scheduleBackgroundDetailRefresh(cityName, cached, cachedMeta);
-      return cached;
-    }
-
-    if (!force && cached && hasRequestedDepth) {
-      try {
-        const summary = await dashboardClient.getCitySummary(cityName);
-        const revision = getCityRevision(summary);
-        if (revision && revision === cachedMeta?.revision) {
-          if (cachedIsSparse) {
-            const latestDetail = await dashboardClient.getCityDetail(cityName, {
-              force: true,
-              depth,
-            });
-            const detail = latestDetail;
-            setCityDetailsByName((current) => ({
-              ...current,
-              [cityName]: mergeCityDetail(current[cityName], detail),
-            }));
-            setCitySummariesByName((current) => ({
-              ...current,
-              [cityName]: toCitySummary(detail),
-            }));
-            setCityDetailMetaByName((current) => ({
-              ...current,
-              [cityName]: {
-                cachedAt: Date.now(),
-                revision: getCityRevision(detail),
-              },
-            }));
-            return detail;
-          }
-          setCityDetailMetaByName((current) => ({
-            ...current,
-            [cityName]: {
-              cachedAt: Date.now(),
-              revision,
-            },
-          }));
-          return cached;
-        }
+        return detail;
       } catch {
         return cached;
       }

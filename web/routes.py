@@ -147,10 +147,10 @@ US_CORE_CITIES = [
     "atlanta",
     "seattle",
 ]
-CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", "180")))
-CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "300")))
-CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "480")))
-CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "900")))
+CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CACHE_TTL_SEC", "1800")))
+CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "1800")))
+CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "1800")))
+CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "1800")))
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
@@ -969,7 +969,7 @@ async def city_detail(
         cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "panel", city)
         if cached_entry:
             if not _city_cache_is_fresh(cached_entry, CITY_PANEL_CACHE_TTL_SEC):
-                _schedule_cache_refresh(background_tasks, kind="panel", city=city)
+                return await run_in_threadpool(_refresh_city_panel_cache, city, False)
             return cached_entry.get("payload") or {}
         return await run_in_threadpool(_refresh_city_panel_cache, city, False)
     if detail_mode == "nearby":
@@ -978,7 +978,7 @@ async def city_detail(
         cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "nearby", city)
         if cached_entry:
             if not _city_cache_is_fresh(cached_entry, CITY_NEARBY_CACHE_TTL_SEC):
-                _schedule_cache_refresh(background_tasks, kind="nearby", city=city)
+                return await run_in_threadpool(_refresh_city_nearby_cache, city, False)
             return cached_entry.get("payload") or {}
         return await run_in_threadpool(_refresh_city_nearby_cache, city, False)
     if detail_mode == "market":
@@ -987,7 +987,7 @@ async def city_detail(
         cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "market", city)
         if cached_entry:
             if not _market_analysis_cache_is_fresh(cached_entry):
-                _schedule_cache_refresh(background_tasks, kind="market", city=city)
+                return await run_in_threadpool(_refresh_city_market_cache, city, False)
             return cached_entry.get("payload") or {}
         return await run_in_threadpool(_refresh_city_market_cache, city, False)
     return await run_in_threadpool(_analyze, city, force_refresh, False, detail_mode)
@@ -1007,7 +1007,7 @@ async def city_history(
     cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "history_preview", city)
     if cached_entry:
         if not _city_cache_is_fresh(cached_entry, CITY_HISTORY_PREVIEW_CACHE_TTL_SEC):
-            _schedule_cache_refresh(background_tasks, kind="history_preview", city=city)
+            return await run_in_threadpool(_refresh_city_history_preview_cache, city)
         return cached_entry.get("payload") or {}
     return await run_in_threadpool(_refresh_city_history_preview_cache, city)
 
@@ -1610,7 +1610,7 @@ async def city_summary(
     cached_entry = await run_in_threadpool(_CACHE_DB.get_city_cache, "summary", city)
     if cached_entry:
         if not _city_cache_is_fresh(cached_entry, CITY_SUMMARY_CACHE_TTL_SEC):
-            _schedule_cache_refresh(background_tasks, kind="summary", city=city)
+            return await run_in_threadpool(_refresh_city_summary_cache, city, False)
         return cached_entry.get("payload") or {}
     return await run_in_threadpool(_refresh_city_summary_cache, city, False)
 
@@ -1769,9 +1769,11 @@ async def scan_terminal_ai_city(request: Request):
         "yes",
         "on",
     }
+    locale = str(body.get("locale") or "zh-CN").strip()
     return await run_in_threadpool(
         build_scan_city_ai_forecast_payload,
         city,
         force_refresh=force_refresh,
+        locale=locale,
     )
 

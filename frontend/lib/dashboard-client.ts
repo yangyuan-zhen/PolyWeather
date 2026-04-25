@@ -62,7 +62,7 @@ export type AssistantChatResponse = {
 };
 
 const CACHE_KEY = "polyWeather_v1";
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 30 * 60 * 1000;
 const SCAN_TERMINAL_CLIENT_TIMEOUT_MS = 35_000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
@@ -244,16 +244,18 @@ function readLegacyCache(raw: string): CityCacheBundle {
   };
   const details = parsed.data || {};
   const cachedAt = parsed.timestamp || 0;
-  const meta = Object.fromEntries(
-    Object.entries(details).map(([cityName, detail]) => [
-      cityName,
-      {
-        cachedAt,
-        revision: getCityRevision(detail),
-      },
-    ]),
-  );
-  return { details, meta };
+  const freshDetails: Record<string, CityDetail> = {};
+  const meta: Record<string, CityCacheMeta> = {};
+  Object.entries(details).forEach(([cityName, detail]) => {
+    const nextMeta = {
+      cachedAt,
+      revision: getCityRevision(detail),
+    };
+    if (!isFresh(nextMeta)) return;
+    freshDetails[cityName] = detail;
+    meta[cityName] = nextMeta;
+  });
+  return { details: freshDetails, meta };
 }
 
 export const dashboardClient = {
@@ -606,11 +608,13 @@ export const dashboardClient = {
         const meta: Record<string, CityCacheMeta> = {};
         Object.entries(parsed.entries).forEach(([cityName, entry]) => {
           if (!entry?.detail) return;
-          details[cityName] = entry.detail;
-          meta[cityName] = {
+          const nextMeta = {
             cachedAt: entry.cachedAt || 0,
             revision: entry.revision || getCityRevision(entry.detail),
           };
+          if (!isFresh(nextMeta)) return;
+          details[cityName] = entry.detail;
+          meta[cityName] = nextMeta;
         });
         return { details, meta };
       }

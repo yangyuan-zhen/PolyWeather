@@ -41,6 +41,7 @@ export async function POST(req: NextRequest) {
     console.info("[scan-ai-city] proxy request", {
       city: requestBody.city,
       force_refresh: requestBody.force_refresh === true,
+      locale: requestBody.locale,
     });
     const res = await fetch(`${API_BASE}/api/scan/terminal/ai-city`, {
       method: "POST",

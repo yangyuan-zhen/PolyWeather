@@ -47,11 +47,11 @@ SCAN_AI_TIMEOUT_SEC = max(
 )
 SCAN_CITY_AI_TIMEOUT_SEC = max(
     20,
-    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "32")),
+    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "45")),
 )
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
-    int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "120")),
+    int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "1800")),
 )
 SCAN_AI_MAX_ROWS = max(
     1,
@@ -60,6 +60,10 @@ SCAN_AI_MAX_ROWS = max(
 SCAN_AI_MAX_TOKENS = max(
     600,
     int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "3200")),
+)
+SCAN_CITY_AI_MAX_TOKENS = max(
+    500,
+    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "1200")),
 )
 
 
@@ -77,6 +81,11 @@ def _safe_int(value: Any, default: int) -> int:
         return int(value)
     except Exception:
         return int(default)
+
+
+def _normalize_locale(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return "en-US" if text.startswith("en") else "zh-CN"
 
 
 def _normalize_scan_terminal_filters(
@@ -892,10 +901,14 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
+def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -> Dict[str, Any]:
     api_key = str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip()
     if not api_key:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
+    normalized_locale = _normalize_locale(locale)
+    primary_language = "English" if normalized_locale == "en-US" else "Simplified Chinese"
+    primary_suffix = "_en" if normalized_locale == "en-US" else "_zh"
+    secondary_suffix = "_zh" if normalized_locale == "en-US" else "_en"
 
     system_prompt = (
         "你是 PolyWeather 的 Deepseek V4-Pro 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
@@ -906,15 +919,21 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         "你可以基于城市、时间、季节、机场位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
         "但必须使用“可能”“倾向”“需要确认”等非绝对表达。"
         "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
+        f"当前用户界面语言是 {normalized_locale}，所有面向用户的主要自然语言字段必须使用 {primary_language}。"
+        f"重点填写 {primary_suffix} 字段；{secondary_suffix} 字段可以给极短镜像翻译，但不能影响响应速度。"
+        "risks 最多 2 条，reasoning、metar_read、model_cluster_note 各 1 句。"
         "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
+        "locale": normalized_locale,
+        "primary_language": primary_language,
         "task": (
             "Return strict JSON with: predicted_max, range_low, range_high, unit, confidence, "
             "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
+            f"Primary output language is {primary_language}; the UI will read fields ending with {primary_suffix}. "
             "Keep final_judgment one short decision sentence. metar_read should explain the latest airport bulletin "
-            "and how wind/cloud/visibility/dewpoint may affect the temperature path."
+            "and how wind/cloud/visibility/dewpoint may affect the temperature path. Keep the whole JSON compact."
         ),
         "city_snapshot": ai_input,
     }
@@ -925,6 +944,27 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         write=10.0,
         pool=5.0,
     )
+    request_json = {
+        "model": SCAN_AI_MODEL,
+        "temperature": 0.2,
+        "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 700), 1400),
+        "response_format": {"type": "json_object"},
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {
+                "role": "user",
+                "content": json.dumps(user_payload, ensure_ascii=False),
+            },
+        ],
+    }
+    logger.info(
+        "scan city AI provider request city={} locale={} input_bytes={} max_tokens={} timeout_sec={}",
+        ai_input.get("city"),
+        normalized_locale,
+        len(json.dumps(request_json, ensure_ascii=False, default=str).encode("utf-8")),
+        request_json.get("max_tokens"),
+        SCAN_CITY_AI_TIMEOUT_SEC,
+    )
     with httpx.Client(timeout=timeout) as client:
         response = client.post(
             f"{SCAN_AI_BASE_URL}/chat/completions",
@@ -932,19 +972,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": SCAN_AI_MODEL,
-                "temperature": 0.2,
-                "max_tokens": min(max(SCAN_AI_MAX_TOKENS, 1200), 2400),
-                "response_format": {"type": "json_object"},
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {
-                        "role": "user",
-                        "content": json.dumps(user_payload, ensure_ascii=False),
-                    },
-                ],
-            },
+            json=request_json,
         )
         response.raise_for_status()
         data = response.json()
@@ -979,32 +1007,28 @@ def build_scan_city_ai_forecast_payload(
     city: str,
     *,
     force_refresh: bool = False,
+    locale: str = "zh-CN",
 ) -> Dict[str, Any]:
     started_at = time.time()
     city_name = str(city or "").strip()
+    normalized_locale = _normalize_locale(locale)
     if not city_name:
         return {"status": "failed", "reason": "city is required"}
     logger.info(
-        "scan city AI forecast requested city={} force_refresh={} model={}",
+        "scan city AI forecast requested city={} force_refresh={} locale={} model={}",
         city_name,
         force_refresh,
+        normalized_locale,
         SCAN_AI_MODEL,
     )
-    data = _analyze(
-        city_name,
-        force_refresh=False,
-        include_llm_commentary=False,
-        detail_mode="full",
-    )
-    ai_input = _build_city_ai_prompt(data)
-    cache_key = _scan_city_ai_cache_key(ai_input)
+    cache_key = f"city_forecast:{city_name.lower()}:{normalized_locale}"
     if not force_refresh:
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)
             if cached and cached.get("expires_at", 0) >= time.time():
                 logger.info(
                     "scan city AI forecast cache hit city={} model={}",
-                    data.get("name") or city_name,
+                    cached.get("city") or city_name,
                     SCAN_AI_MODEL,
                 )
                 return {
@@ -1012,12 +1036,19 @@ def build_scan_city_ai_forecast_payload(
                     "cached": True,
                     "model": SCAN_AI_MODEL,
                     "provider": "deepseek",
-                    "city": data.get("name") or city_name,
-                    "city_display_name": data.get("display_name") or city_name,
+                    "city": cached.get("city") or city_name,
+                    "city_display_name": cached.get("city_display_name") or city_name,
                     "generated_at": cached.get("generated_at"),
                     "duration_ms": 0,
                     "city_forecast": cached.get("payload"),
                 }
+    data = _analyze(
+        city_name,
+        force_refresh=False,
+        include_llm_commentary=False,
+        detail_mode="full",
+    )
+    ai_input = _build_city_ai_prompt(data)
 
     if not SCAN_AI_ENABLED:
         logger.warning(
@@ -1060,7 +1091,7 @@ def build_scan_city_ai_forecast_payload(
                 else False
             ),
         )
-        ai_raw = _call_deepseek_city_ai(ai_input)
+        ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
         logger.warning(
@@ -1077,7 +1108,13 @@ def build_scan_city_ai_forecast_payload(
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "duration_ms": duration_ms,
-            "reason": f"V4 provider timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s",
+            "reason": (
+                f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+                if normalized_locale == "en-US"
+                else f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+            ),
+            "reason_en": f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s",
+            "reason_zh": f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回",
         }
     except Exception as exc:
         duration_ms = int((time.time() - started_at) * 1000)
@@ -1102,6 +1139,8 @@ def build_scan_city_ai_forecast_payload(
         _SCAN_CITY_AI_CACHE[cache_key] = {
             "expires_at": time.time() + SCAN_AI_CACHE_TTL_SEC,
             "generated_at": generated_at,
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
             "payload": ai_raw,
         }
     logger.info(

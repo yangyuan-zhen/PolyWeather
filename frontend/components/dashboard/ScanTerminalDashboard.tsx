@@ -643,6 +643,7 @@ function AiPinnedCityCard({
       body: JSON.stringify({
         city: detailCityName,
         force_refresh: aiRefreshToken > 0,
+        locale,
       }),
     })
       .then(async (response) => {
@@ -664,7 +665,7 @@ function AiPinnedCityCard({
     return () => {
       cancelled = true;
     };
-  }, [aiForecastKey, aiRefreshToken, detailCityName]);
+  }, [aiForecastKey, aiRefreshToken, detailCityName, locale]);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
   const localizedFinalJudgment =
