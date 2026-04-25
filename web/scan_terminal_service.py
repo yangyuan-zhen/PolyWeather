@@ -933,7 +933,9 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             f"Primary output language is {primary_language}; the UI will read fields ending with {primary_suffix}. "
             "Keep final_judgment one short decision sentence. metar_read should explain the latest airport bulletin "
-            "and how wind/cloud/visibility/dewpoint may affect the temperature path. Keep the whole JSON compact."
+            "and how wind/cloud/visibility/dewpoint may affect the temperature path. model_cluster_note must state "
+            "how many model sources are available, whether they support DEB, and whether the sample is too sparse. "
+            "Keep the whole JSON compact."
         ),
         "city_snapshot": ai_input,
     }
@@ -965,22 +967,69 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         request_json.get("max_tokens"),
         SCAN_CITY_AI_TIMEOUT_SEC,
     )
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
     with httpx.Client(timeout=timeout) as client:
         response = client.post(
             f"{SCAN_AI_BASE_URL}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json=request_json,
         )
         response.raise_for_status()
         data = response.json()
-    content = (
-        ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-        if isinstance(data, dict)
-        else None
-    )
+        content = (
+            ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+            if isinstance(data, dict)
+            else None
+        )
+        if not str(content or "").strip():
+            logger.warning(
+                "scan city AI provider returned empty content city={} locale={} finish_reason={} retrying_without_json_mode=true",
+                ai_input.get("city"),
+                normalized_locale,
+                ((data.get("choices") or [{}])[0] or {}).get("finish_reason") if isinstance(data, dict) else None,
+            )
+            retry_payload = dict(request_json)
+            retry_payload.pop("response_format", None)
+            retry_payload["temperature"] = 0.1
+            retry_payload["messages"] = [
+                {
+                    "role": "system",
+                    "content": (
+                        system_prompt
+                        + " 这次重试必须返回一个紧凑 JSON object，不要解释，不要空回复。"
+                        + " If you cannot infer a field, still return the field with a cautious sentence."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            **user_payload,
+                            "retry_reason": "previous provider response had empty message.content",
+                            "task": (
+                                user_payload["task"]
+                                + " The previous response had empty content. Return only one compact JSON object now."
+                            ),
+                        },
+                        ensure_ascii=False,
+                    ),
+                },
+            ]
+            response = client.post(
+                f"{SCAN_AI_BASE_URL}/chat/completions",
+                headers=headers,
+                json=retry_payload,
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = (
+                ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+                if isinstance(data, dict)
+                else None
+            )
     parsed = _extract_ai_json_object(str(content or ""))
     if isinstance(data, dict):
         parsed["_polyweather_meta"] = {
@@ -1118,12 +1167,24 @@ def build_scan_city_ai_forecast_payload(
         }
     except Exception as exc:
         duration_ms = int((time.time() - started_at) * 1000)
+        raw_reason = str(exc)
+        empty_ai_content = raw_reason.strip().lower() == "empty ai content"
+        reason_en = (
+            "DeepSeek V4-Pro returned no usable text. Retry the city analysis."
+            if empty_ai_content
+            else raw_reason
+        )
+        reason_zh = (
+            "DeepSeek V4-Pro 没有返回有效正文，请刷新重试。"
+            if empty_ai_content
+            else raw_reason
+        )
         logger.warning(
             "scan city AI forecast failed city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
             duration_ms,
             SCAN_AI_MODEL,
-            exc,
+            raw_reason,
         )
         return {
             "status": "failed",
@@ -1132,7 +1193,10 @@ def build_scan_city_ai_forecast_payload(
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "duration_ms": duration_ms,
-            "reason": str(exc),
+            "reason": reason_en if normalized_locale == "en-US" else reason_zh,
+            "reason_en": reason_en,
+            "reason_zh": reason_zh,
+            "raw_reason": raw_reason,
         }
     generated_at = datetime.utcnow().isoformat() + "Z"
     with _SCAN_CITY_AI_CACHE_LOCK:

@@ -64,6 +64,9 @@ type AiPinnedCity = {
 type AiCityForecastPayload = {
   status?: string | null;
   reason?: string | null;
+  reason_zh?: string | null;
+  reason_en?: string | null;
+  raw_reason?: string | null;
   model?: string | null;
   provider?: string | null;
   city_forecast?: {
@@ -584,11 +587,12 @@ function AiPinnedCityCard({
     item.cityName;
   const tempSymbol = detail?.temp_symbol || row?.temp_symbol || "°C";
   const modelView = detail ? getModelView(detail, detail.local_date) : null;
-  const modelValues = modelView
-    ? Object.values(modelView.models || {})
-        .map((value) => Number(value))
-        .filter((value) => Number.isFinite(value))
+  const modelEntries = modelView
+    ? Object.entries(modelView.models || {})
+        .map(([name, value]) => [name, Number(value)] as const)
+        .filter(([, value]) => Number.isFinite(value))
     : [];
+  const modelValues = modelEntries.map(([, value]) => value);
   const modelMin = modelValues.length ? Math.min(...modelValues) : null;
   const modelMax = modelValues.length ? Math.max(...modelValues) : null;
   const paceView = detail ? getTodayPaceView(detail, locale as "zh-CN" | "en-US") : null;
@@ -682,6 +686,21 @@ function AiPinnedCityCard({
     (isEn
       ? aiCityForecast?.model_cluster_note_en
       : aiCityForecast?.model_cluster_note_zh) || "";
+  const modelPreview = modelEntries
+    .slice(0, 4)
+    .map(([name, value]) => `${name} ${formatTemperatureValue(value, tempSymbol, { digits: 1 })}`)
+    .join(isEn ? " / " : " / ");
+  const localModelSupportNote = modelEntries.length
+    ? isEn
+      ? modelEntries.length <= 2
+        ? `Model support is sparse: only ${modelEntries.length} sources are available${modelPreview ? ` (${modelPreview})` : ""}, so the read should lean more on DEB path and METAR.`
+        : `Model support: ${modelEntries.length} sources cluster between ${modelRange}; ${modelPreview}.`
+      : modelEntries.length <= 2
+        ? `多模型支撑偏少：当前只有 ${modelEntries.length} 个模型${modelPreview ? `（${modelPreview}）` : ""}，需要更重视 DEB 路径和 METAR 实测。`
+        : `多模型支撑：${modelEntries.length} 个模型集中在 ${modelRange}，代表模型为 ${modelPreview}。`
+    : isEn
+      ? "Model support is unavailable, so this city must rely on DEB path and METAR observations."
+      : "暂无可用多模型支撑，需要主要参考 DEB 路径和 METAR 实测。";
   const localizedRisksRaw =
     (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
   const localizedRisks = Array.isArray(localizedRisksRaw)
@@ -692,9 +711,13 @@ function AiPinnedCityCard({
   const aiBullets = [
     localizedMetarRead,
     localizedReasoning !== localizedFinalJudgment ? localizedReasoning : "",
-    localizedModelNote,
+    localizedModelNote || localModelSupportNote,
     ...localizedRisks,
   ].filter((line) => String(line || "").trim());
+  const fallbackAiReason =
+    (isEn ? aiForecast.payload?.reason_en : aiForecast.payload?.reason_zh) ||
+    aiForecast.payload?.reason ||
+    "";
 
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
 
@@ -840,23 +863,47 @@ function AiPinnedCityCard({
                   </p>
                 </>
               ) : aiForecast.status === "ready" ? (
-                <p>
-                  {aiForecast.payload?.status === "timeout"
-                    ? isEn
-                      ? "Deepseek V4-Pro timed out. You can retry; city data and the right briefing were not refreshed."
-                      : "Deepseek V4-Pro 本次解读超时，可稍后重试；城市数据和右侧简报不会被刷新。"
-                    : aiForecast.payload?.reason ||
-                      (isEn
-                        ? "AI read is unavailable for this city right now."
-                        : "该城市暂时没有可用的 AI 解读。")}
-                </p>
+                <>
+                  <p>
+                    {aiForecast.payload?.status === "timeout"
+                      ? isEn
+                        ? "Deepseek V4-Pro timed out. You can retry; city data and the right briefing were not refreshed."
+                        : "Deepseek V4-Pro 本次解读超时，可稍后重试；城市数据和右侧简报不会被刷新。"
+                      : fallbackAiReason ||
+                        (isEn
+                          ? "AI read is unavailable for this city right now."
+                          : "该城市暂时没有可用的 AI 解读。")}
+                  </p>
+                  <ul className="scan-ai-weather-bullets">
+                    <li>{localModelSupportNote}</li>
+                    <li>
+                      {report
+                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
+                        : isEn
+                          ? "Raw METAR is unavailable."
+                          : "暂无原始 METAR。"}
+                    </li>
+                  </ul>
+                </>
               ) : aiForecast.status === "failed" ? (
-                <p>
-                  {isEn
-                    ? "AI read failed. The raw METAR remains below as fallback context."
-                    : "AI 解读失败。下方仅保留原始 METAR 作为兜底上下文。"}
-                  {aiForecast.error ? ` ${aiForecast.error}` : ""}
-                </p>
+                <>
+                  <p>
+                    {isEn
+                      ? "AI read failed. Model support and the raw METAR remain as fallback context."
+                      : "AI 解读失败。下方保留多模型支撑和原始 METAR 作为兜底上下文。"}
+                    {aiForecast.error ? ` ${aiForecast.error}` : ""}
+                  </p>
+                  <ul className="scan-ai-weather-bullets">
+                    <li>{localModelSupportNote}</li>
+                    <li>
+                      {report
+                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
+                        : isEn
+                          ? "Raw METAR is unavailable."
+                          : "暂无原始 METAR。"}
+                    </li>
+                  </ul>
+                </>
               ) : (
                 <p>
                   {isEn
