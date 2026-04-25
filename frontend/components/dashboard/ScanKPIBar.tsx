@@ -3,31 +3,17 @@
 import React from "react";
 import { useI18n } from "@/hooks/useI18n";
 import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
-import { getMarketFocus } from "@/lib/scan-market-focus";
 
 function formatTemperature(value?: number | null, unit?: string | null): string {
   if (value == null || Number.isNaN(Number(value))) return "--";
   return `${Number(value).toFixed(1)}${unit || "°C"}`;
 }
 
-function countByRisk(rows: ScanOpportunityRow[]) {
-  return rows.reduce(
-    (acc, row) => {
-      const risk = String(row.risk_level || "").toLowerCase();
-      if (risk.includes("high")) acc.high += 1;
-      else if (risk.includes("medium")) acc.medium += 1;
-      else acc.low += 1;
-      return acc;
-    },
-    { high: 0, medium: 0, low: 0 },
-  );
-}
-
 export function ScanKPIBar({
   response,
   rows,
   totalCities,
-  loading,
+  loading: _loading,
 }: {
   response: ScanTerminalResponse | null;
   rows: ScanOpportunityRow[];
@@ -36,48 +22,21 @@ export function ScanKPIBar({
 }) {
   const { locale } = useI18n();
   const isEn = locale === "en-US";
-  const riskCounts = countByRisk(rows);
-  const tradableRows = rows.filter((row) => row.tradable && !row.closed);
-  const liveRows = rows.filter((row) => row.active || row.accepting_orders);
   const bestRow = rows[0] || null;
-  const marketFocus = getMarketFocus(rows, locale);
-  const statusLabel =
-    loading && !response
-      ? isEn
-        ? "Scanning"
-        : "扫描中"
-      : response?.status === "stale"
-        ? isEn
-          ? "Stale"
-          : "旧数据"
-        : response?.status === "failed"
-          ? isEn
-            ? "Failed"
-            : "失败"
-          : isEn
-            ? "Live"
-            : "最新";
 
   const cards = [
     {
-      label: isEn ? "Scan Status" : "扫描状态",
+      label: isEn ? "AI Workspace" : "AI 工作区",
       value: `${rows.length}/${totalCities || 0}`,
-      note:
-        loading && response
-          ? isEn
-            ? "Refreshing latest snapshot"
-            : "正在刷新最新快照"
-          : response?.status === "stale"
-            ? response.stale_reason || (isEn ? "Using last good snapshot" : "正在使用上次成功快照")
-            : response?.status === "failed"
-              ? response.stale_reason || (isEn ? "No valid snapshot" : "当前没有可用快照")
-              : `${isEn ? "Snapshot" : "快照"} · ${statusLabel}`,
+      note: isEn
+        ? "No automatic scan. Cities are added from map clicks."
+        : "不主动扫描；地图点选后加入城市分析。",
       tone: response?.status === "failed" ? "red" : response?.status === "stale" ? "amber" : "cyan",
     },
     {
-      label: isEn ? "Book Status" : "盘口状态",
-      value: `${liveRows.length}`,
-      note: `${isEn ? "Evaluable" : "可评估"} ${tradableRows.length} · ${isEn ? "Pending" : "待评估"} ${Math.max(0, rows.length - tradableRows.length)}`,
+      label: isEn ? "City Pool" : "城市池",
+      value: `${totalCities || 0}`,
+      note: isEn ? "Available cities for forecast review" : "可点击进入 AI 预测的城市范围",
       tone: "blue",
     },
     {
@@ -86,19 +45,9 @@ export function ScanKPIBar({
       note: bestRow
         ? `${isEn ? "Focus" : "焦点"} ${bestRow.city_display_name || bestRow.display_name || bestRow.city} · DEB / ${isEn ? "models" : "模型"} / METAR`
         : isEn
-          ? "No active market now"
-          : "当前没有活跃市场",
+          ? "Select a city to load DEB and observations"
+          : "选择城市后展示 DEB 与实测路径",
       tone: "green",
-    },
-    {
-      label: isEn ? "Current Region" : "当前主盘",
-      value: marketFocus?.label || "--",
-      note: marketFocus
-        ? isEn
-          ? `${marketFocus.stageLabel} · ${marketFocus.activeCityCount || 1} cities in focus`
-          : `${marketFocus.stageLabel} · ${marketFocus.activeCityCount || 1} 个城市在焦点窗口`
-        : `${isEn ? "Risk" : "风险"} ${riskCounts.high} / ${riskCounts.medium} / ${riskCounts.low}`,
-      tone: "orange",
     },
   ];
 

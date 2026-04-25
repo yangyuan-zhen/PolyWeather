@@ -1269,8 +1269,8 @@ export function ProbabilityDistribution({
             </div>
             <p>
               {locale === "en-US"
-                ? "This card follows the same rule as the opportunity list: DEB first, model agreement second, METAR conflict check before settlement."
-                : "该卡片与机会列表口径一致：先看 DEB，再看模型支持，最后检查 METAR 是否冲突。"}
+                ? "This card follows the same rule as AI forecast: DEB first, model agreement second, METAR conflict check before settlement."
+                : "该卡片与 AI 预测口径一致：先看 DEB，再看模型支持，最后检查 METAR 是否冲突。"}
             </p>
           </div>
         )}

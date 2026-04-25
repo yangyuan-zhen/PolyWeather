@@ -1163,7 +1163,7 @@ function ScanTerminalScreen() {
             <div className="scan-empty-state">
               <div className="scan-empty-title">{isEn ? "Checking access" : "正在检查权限"}</div>
               <div className="scan-empty-copy">
-                {isEn ? "Preparing your market scan terminal." : "正在准备市场扫描台。"}
+                {isEn ? "Preparing your AI forecast workspace." : "正在准备 AI 预测台。"}
               </div>
             </div>
           </main>
@@ -1178,7 +1178,7 @@ function ScanTerminalScreen() {
         <main className="scan-data-grid">
           <div className="scan-topbar">
             <div className="scan-topbar-title">
-              <strong>{isEn ? "Market Scan Terminal" : "市场扫描台"}</strong>
+              <strong>{isEn ? "AI Forecast Terminal" : "AI 预测台"}</strong>
               <span>
                 {isEn
                   ? "Click cities on the map to build an AI forecast workspace"
@@ -1269,7 +1269,7 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "calendar" ? "active" : ""}
-                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
+                  title={!isPro ? (isEn ? "Pro forecast calendar required" : "日历预测需 Pro") : undefined}
                   onClick={() => {
                     if (!isPro) {
                       openScanPaywall();
