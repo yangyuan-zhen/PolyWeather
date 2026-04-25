@@ -652,7 +652,26 @@ function AiPinnedCityCard({
     })
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          let detail = "";
+          try {
+            const errorPayload = await response.json();
+            const message = String(errorPayload?.error || "").trim();
+            const rawDetail = String(errorPayload?.detail || "").trim();
+            const elapsed = Number(errorPayload?.elapsed_ms);
+            const timeout = Number(errorPayload?.timeout_ms);
+            detail = [
+              message,
+              rawDetail,
+              Number.isFinite(elapsed) && Number.isFinite(timeout)
+                ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ");
+          } catch {
+            detail = "";
+          }
+          throw new Error(detail ? `HTTP ${response.status} · ${detail}` : `HTTP ${response.status}`);
         }
         return response.json() as Promise<AiCityForecastPayload>;
       })

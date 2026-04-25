@@ -11149,9 +11149,9 @@
 }
 
 .root :global(.scan-ai-city-body) {
-  padding: 18px;
-  max-height: clamp(420px, 58vh, 760px);
-  overflow-y: auto;
+  padding: 18px 18px 36px;
+  max-height: none;
+  overflow: visible;
   overscroll-behavior: contain;
 }
 
