@@ -66,6 +66,7 @@ SCAN_CITY_AI_MAX_TOKENS = max(
     8192,
     int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "8192")),
 )
+SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v2"
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -996,7 +997,8 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
     risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
 
     return {
-        "schema_version": "single_city_forecast_v1",
+        "schema_version": "single_city_forecast_v2",
+        "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
         "task": "predict_city_daily_high_and_read_metar",
         "city": data.get("name"),
         "city_display_name": data.get("display_name") or data.get("name"),
@@ -1077,10 +1079,15 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         "如果实测温度与 DEB 预测走势出现偏差，要明确说明偏差方向和可能修正。"
         "你可以基于城市、时间、季节、机场位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
         "但必须使用“可能”“倾向”“需要确认”等非绝对表达。"
+        "METAR 解读必须具体：写清楚最新报文时间、温度、风向风速、云量/天气、能见度或露点中与温度路径相关的因素。"
+        "涉及风时必须说明该风向对本城市/机场最高温路径倾向增温、降温还是中性，并给出理由；"
+        "不得只写“风向切换可能冷平流”，必须说明是哪一类风向或哪段风向切换可能带来冷/暖平流。"
+        "涉及 TAF 或云雨扰动时必须给出报文中的有效时间、BECMG/TEMPO/FM 时间窗或说明“未给出明确时间”；"
+        "如果没有 TAF 时间依据，不要笼统写“峰值窗口云雨扰动风险”。"
         "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
         f"当前用户界面语言是 {normalized_locale}，所有面向用户的主要自然语言字段必须使用 {primary_language}。"
         f"重点填写 {primary_suffix} 字段；{secondary_suffix} 字段只填空字符串，前端不读取它。"
-        "risks 最多 2 条，每条不超过 18 个汉字或 12 个英文词；reasoning、metar_read、model_cluster_note 各 1 句。"
+        "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 可用 2-4 句。"
         "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
@@ -1092,8 +1099,12 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             f"Primary output language is {primary_language}; the UI will read fields ending with {primary_suffix}. "
             f"Fields ending with {secondary_suffix} must be empty strings or empty arrays to avoid truncation. "
-            "Keep final_judgment one short decision sentence. metar_read should explain the latest airport bulletin "
-            "and how wind/cloud/visibility/dewpoint may affect the temperature path. model_cluster_note must state "
+            "Keep final_judgment one short decision sentence. metar_read must explain the latest airport bulletin "
+            "with report time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
+            "For wind, explicitly say whether the current wind tends to warm, cool, or be neutral for today's high, "
+            "and why in local city/airport context. If mentioning cold/warm advection, name the wind direction or "
+            "direction shift responsible. If mentioning TAF risk, include the concrete TAF time window or say no "
+            "explicit timing is available. model_cluster_note must state "
             "how many model sources are available, whether they support DEB, and whether the sample is too sparse. "
             "Keep the whole JSON compact."
         ),
@@ -1238,7 +1249,11 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                                 "instruction": (
                                     f"Primary UI language is {primary_language}. "
                                     "Make final_judgment one direct sentence about today's high temperature. "
-                                    "metar_read must interpret the latest airport bulletin and possible temperature-path impact. "
+                                    "metar_read must interpret the latest airport bulletin with report time, temperature, "
+                                    "wind direction/speed, cloud/weather/visibility/dewpoint if available. State whether "
+                                    "the current wind tends to warm, cool, or stay neutral for the temperature path, and why. "
+                                    "If mentioning cold/warm advection or TAF risk, include the responsible wind direction "
+                                    "or the concrete TAF time window; otherwise say timing is not explicit. "
                                     "model_cluster_note must mention available model count/range and whether it supports DEB. "
                                     "Keep the JSON compact."
                                 ),
@@ -1287,6 +1302,8 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
 
 def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
     key_payload = {
+        "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
+        "schema_version": ai_input.get("schema_version"),
         "city": ai_input.get("city"),
         "local_date": ai_input.get("local_date"),
         "local_time": ai_input.get("local_time"),
@@ -1331,7 +1348,7 @@ def build_scan_city_ai_forecast_payload(
         normalized_locale,
         SCAN_AI_MODEL,
     )
-    cache_key = f"city_forecast:{city_name.lower()}:{normalized_locale}"
+    cache_key = f"city_forecast:{SCAN_CITY_AI_PROMPT_VERSION}:{city_name.lower()}:{normalized_locale}"
     if not force_refresh:
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)

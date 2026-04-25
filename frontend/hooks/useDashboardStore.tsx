@@ -841,9 +841,7 @@ export function DashboardStoreProvider({
       return;
     }
 
-    if (!cached) {
-      setLoadingState((current) => ({ ...current, cityDetail: true }));
-    }
+    setLoadingState((current) => ({ ...current, cityDetail: !cached }));
     const detailPromise = ensureCityDetail(cityName, false, "panel");
     void Promise.allSettled([summaryPromise, detailPromise])
       .then(([, detail]) => {
@@ -854,20 +852,19 @@ export function DashboardStoreProvider({
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
-        if (!cached) {
-          setLoadingState((current) => ({ ...current, cityDetail: false }));
-        }
+        setLoadingState((current) => ({ ...current, cityDetail: false }));
       });
   };
 
   const focusCity = async (cityName: string) => {
+    const cached = cityDetailsByName[cityName];
     selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(false);
     setSelectedForecastDate(null);
     setFutureModalDate(null);
     setForecastModalMode(null);
-    setLoadingState((current) => ({ ...current, cityDetail: true }));
+    setLoadingState((current) => ({ ...current, cityDetail: !cached }));
     void Promise.allSettled([
       ensureCitySummary(cityName),
       ensureCityDetail(cityName, false, "panel"),
