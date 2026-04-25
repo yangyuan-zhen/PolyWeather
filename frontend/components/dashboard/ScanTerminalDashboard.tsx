@@ -623,10 +623,11 @@ function AiPinnedCityCard({
           <div className="scan-ai-city-actions">
             <button
               type="button"
-              className="scan-ai-city-pin"
+              className="scan-ai-city-pin pinned"
               onClick={onRemove}
+              aria-pressed="true"
               aria-label={isEn ? `Unpin ${displayName}` : `取消固定 ${displayName}`}
-              title={isEn ? "Unpin city" : "取消固定"}
+              title={isEn ? "Pinned. Click to unpin." : "已钉选，点击取消固定"}
             >
               <Pin size={15} fill="currentColor" />
             </button>

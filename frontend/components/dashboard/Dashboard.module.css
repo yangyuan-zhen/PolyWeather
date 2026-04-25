@@ -11086,6 +11086,19 @@
   padding: 0;
 }
 
+.root :global(.scan-ai-city-pin.pinned) {
+  border-color: rgba(77, 163, 255, 0.72);
+  background: rgba(77, 163, 255, 0.2);
+  color: #6fb7ff;
+  box-shadow: inset 0 0 0 1px rgba(77, 163, 255, 0.12);
+}
+
+.root :global(.scan-ai-city-pin.pinned:hover) {
+  border-color: rgba(239, 68, 68, 0.52);
+  background: rgba(239, 68, 68, 0.14);
+  color: #ff9aa4;
+}
+
 .root :global(.scan-ai-city-collapse) {
   padding: 8px 10px;
 }
@@ -11116,6 +11129,18 @@
 
 .root :global(.scan-ai-city-body) {
   padding: 18px;
+  max-height: clamp(420px, 58vh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.root :global(.scan-ai-city-body::-webkit-scrollbar) {
+  width: 8px;
+}
+
+.root :global(.scan-ai-city-body::-webkit-scrollbar-thumb) {
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.28);
 }
 
 .root :global(.scan-ai-decision-band) {
