@@ -22,6 +22,8 @@ _SCAN_TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
 _SCAN_TERMINAL_REFRESHING: set[str] = set()
 _SCAN_TERMINAL_AI_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_AI_CACHE: Dict[str, Dict[str, Any]] = {}
+_SCAN_CITY_AI_CACHE_LOCK = threading.Lock()
+_SCAN_CITY_AI_CACHE: Dict[str, Dict[str, Any]] = {}
 SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "30")),
@@ -31,7 +33,7 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
 )
 SCAN_AI_MODEL = str(
-    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-flash"
+    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-pro"
 ).strip()
 SCAN_AI_BASE_URL = str(
     os.getenv("POLYWEATHER_DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
@@ -731,7 +733,7 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
 
     system_prompt = (
-        "你是 PolyWeather 的付费 V4-Flash 城市最高温预测员。你只能基于用户提供的 JSON 快照做判断，"
+        "你是 PolyWeather 的付费 V4-Pro 城市最高温预测员。你只能基于用户提供的 JSON 快照做判断，"
         "不得编造城市、价格、概率、盘口或天气数据。输入已经按城市分组，每城包含 DEB、"
         "多个天气模型预测值 model_cluster.sources、METAR 实测序列、机场原始报文和候选合约。"
         "你的首要任务不是分析套利，也不是推荐 BUY YES/NO，而是预测该城市今日最终最高温是多少。"
@@ -803,6 +805,243 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
             "finish_reason": ((data.get("choices") or [{}])[0] or {}).get("finish_reason"),
         }
     return parsed
+
+
+def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
+    local_date = str(data.get("local_date") or "").strip()
+    multi_model_daily = data.get("multi_model_daily") if isinstance(data.get("multi_model_daily"), dict) else {}
+    daily_entry = multi_model_daily.get(local_date) if isinstance(multi_model_daily, dict) else {}
+    if not isinstance(daily_entry, dict):
+        daily_entry = {}
+    daily_models = daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else None
+    models = daily_models or (data.get("multi_model") if isinstance(data.get("multi_model"), dict) else {})
+    model_values = [_safe_float(value) for value in (models or {}).values()]
+    model_values = [value for value in model_values if value is not None]
+    metar_context = _build_metar_decision_context(data)
+    current = data.get("current") if isinstance(data.get("current"), dict) else {}
+    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
+    airport_primary = data.get("airport_primary") if isinstance(data.get("airport_primary"), dict) else {}
+    risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+
+    return {
+        "schema_version": "single_city_forecast_v1",
+        "task": "predict_city_daily_high_and_read_metar",
+        "city": data.get("name"),
+        "city_display_name": data.get("display_name") or data.get("name"),
+        "local_date": local_date,
+        "local_time": data.get("local_time"),
+        "temp_symbol": data.get("temp_symbol"),
+        "timezone_offset_seconds": data.get("utc_offset_seconds"),
+        "current": {
+            "temp": current.get("temp"),
+            "max_so_far": current.get("max_so_far"),
+            "max_temp_time": current.get("max_temp_time"),
+            "obs_time": current.get("obs_time"),
+            "station_code": current.get("station_code"),
+            "station_name": current.get("station_name"),
+        },
+        "airport": {
+            "name": risk.get("airport") or airport_current.get("station_label") or airport_primary.get("station_label"),
+            "icao": risk.get("icao") or airport_current.get("station_code") or airport_primary.get("station_code"),
+            "distance_km": risk.get("distance_km"),
+        },
+        "deb": {
+            "prediction": ((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None)
+            or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None),
+            "weights_info": ((data.get("deb") or {}).get("weights_info") if isinstance(data.get("deb"), dict) else None),
+        },
+        "model_cluster": {
+            "sources": [
+                {"model": str(name), "value": value}
+                for name, value in (models or {}).items()
+                if _safe_float(value) is not None
+            ],
+            "model_count": len(model_values),
+            "min": min(model_values) if model_values else None,
+            "max": max(model_values) if model_values else None,
+            "spread": (max(model_values) - min(model_values)) if len(model_values) >= 2 else None,
+        },
+        "peak": data.get("peak") or {},
+        "metar_context": metar_context,
+        "airport_current": {
+            "temp": airport_current.get("temp"),
+            "obs_time": airport_current.get("obs_time"),
+            "report_time": airport_current.get("report_time"),
+            "receipt_time": airport_current.get("receipt_time"),
+            "wind_speed_kt": airport_current.get("wind_speed_kt"),
+            "wind_dir": airport_current.get("wind_dir"),
+            "humidity": airport_current.get("humidity"),
+            "cloud_desc": airport_current.get("cloud_desc"),
+            "visibility_mi": airport_current.get("visibility_mi"),
+            "wx_desc": airport_current.get("wx_desc"),
+            "raw_metar": airport_current.get("raw_metar"),
+            "station_code": airport_current.get("station_code"),
+            "station_label": airport_current.get("station_label"),
+        },
+        "taf": data.get("taf") or {},
+        "vertical_profile_signal": data.get("vertical_profile_signal") or {},
+        "intraday_meteorology": data.get("intraday_meteorology") or {},
+        "hourly": data.get("hourly") or {},
+        "metar_today_obs": _compact_observation_points(data.get("metar_today_obs"), 36),
+        "metar_recent_obs": _compact_observation_points(data.get("metar_recent_obs"), 12),
+        "settlement_today_obs": _compact_observation_points(data.get("settlement_today_obs"), 36),
+    }
+
+
+def _call_deepseek_city_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
+    api_key = str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip()
+    if not api_key:
+        raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
+
+    system_prompt = (
+        "你是 PolyWeather 的 Deepseek V4-Pro 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
+        "判断该城市今日最高温路径。不要写套利、交易、BUY YES/NO、价格、edge 或 Kelly。"
+        "你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、机场报文/METAR 解读、判断依据和风险。"
+        "必须综合 DEB 最终融合值、全部天气模型预测、METAR 实测序列、最新机场报文、峰值窗口、当地时间、季节背景。"
+        "如果实测温度与 DEB 预测走势出现偏差，要明确说明偏差方向和可能修正。"
+        "你可以基于城市、时间、季节、机场位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
+        "但必须使用“可能”“倾向”“需要确认”等非绝对表达。"
+        "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
+        "只返回 JSON object，不要 Markdown。"
+    )
+    user_payload = {
+        "task": (
+            "Return strict JSON with: predicted_max, range_low, range_high, unit, confidence, "
+            "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
+            "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
+            "Keep final_judgment one short decision sentence. metar_read should explain the latest airport bulletin "
+            "and how wind/cloud/visibility/dewpoint may affect the temperature path."
+        ),
+        "city_snapshot": ai_input,
+    }
+    timeout = httpx.Timeout(
+        timeout=float(SCAN_AI_TIMEOUT_SEC),
+        connect=min(8.0, float(SCAN_AI_TIMEOUT_SEC)),
+        read=float(SCAN_AI_TIMEOUT_SEC),
+        write=10.0,
+        pool=5.0,
+    )
+    with httpx.Client(timeout=timeout) as client:
+        response = client.post(
+            f"{SCAN_AI_BASE_URL}/chat/completions",
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": SCAN_AI_MODEL,
+                "temperature": 0.2,
+                "max_tokens": min(max(SCAN_AI_MAX_TOKENS, 1200), 2400),
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {
+                        "role": "user",
+                        "content": json.dumps(user_payload, ensure_ascii=False),
+                    },
+                ],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+    content = (
+        ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
+        if isinstance(data, dict)
+        else None
+    )
+    parsed = _extract_ai_json_object(str(content or ""))
+    if isinstance(data, dict):
+        parsed["_polyweather_meta"] = {
+            "usage": data.get("usage"),
+            "finish_reason": ((data.get("choices") or [{}])[0] or {}).get("finish_reason"),
+        }
+    return parsed
+
+
+def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
+    key_payload = {
+        "city": ai_input.get("city"),
+        "local_date": ai_input.get("local_date"),
+        "local_time": ai_input.get("local_time"),
+        "deb": (ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None,
+        "metar": (ai_input.get("airport_current") or {}).get("raw_metar") if isinstance(ai_input.get("airport_current"), dict) else None,
+        "obs": ai_input.get("metar_today_obs") or ai_input.get("metar_recent_obs") or [],
+    }
+    raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False, default=str)
+    return "city-ai:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def build_scan_city_ai_forecast_payload(
+    city: str,
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    started_at = time.time()
+    city_name = str(city or "").strip()
+    if not city_name:
+        return {"status": "failed", "reason": "city is required"}
+    data = _analyze(
+        city_name,
+        force_refresh=force_refresh,
+        include_llm_commentary=False,
+        detail_mode="full",
+    )
+    ai_input = _build_city_ai_prompt(data)
+    cache_key = _scan_city_ai_cache_key(ai_input)
+    if not force_refresh:
+        with _SCAN_CITY_AI_CACHE_LOCK:
+            cached = _SCAN_CITY_AI_CACHE.get(cache_key)
+            if cached and cached.get("expires_at", 0) >= time.time():
+                return {
+                    "status": "ready",
+                    "cached": True,
+                    "model": SCAN_AI_MODEL,
+                    "provider": "deepseek",
+                    "city": data.get("name") or city_name,
+                    "city_display_name": data.get("display_name") or city_name,
+                    "generated_at": cached.get("generated_at"),
+                    "duration_ms": 0,
+                    "city_forecast": cached.get("payload"),
+                }
+
+    if not SCAN_AI_ENABLED:
+        return {
+            "status": "disabled",
+            "model": SCAN_AI_MODEL,
+            "provider": "deepseek",
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
+            "reason": "POLYWEATHER_SCAN_AI_ENABLED is not enabled",
+        }
+    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+        return {
+            "status": "missing_key",
+            "model": SCAN_AI_MODEL,
+            "provider": "deepseek",
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
+            "reason": "POLYWEATHER_DEEPSEEK_API_KEY is not configured",
+        }
+
+    ai_raw = _call_deepseek_city_ai(ai_input)
+    generated_at = datetime.utcnow().isoformat() + "Z"
+    with _SCAN_CITY_AI_CACHE_LOCK:
+        _SCAN_CITY_AI_CACHE[cache_key] = {
+            "expires_at": time.time() + SCAN_AI_CACHE_TTL_SEC,
+            "generated_at": generated_at,
+            "payload": ai_raw,
+        }
+    return {
+        "status": "ready",
+        "cached": False,
+        "model": SCAN_AI_MODEL,
+        "provider": "deepseek",
+        "city": data.get("name") or city_name,
+        "city_display_name": data.get("display_name") or city_name,
+        "generated_at": generated_at,
+        "duration_ms": int((time.time() - started_at) * 1000),
+        "city_forecast": ai_raw,
+    }
 
 
 def _normalize_ai_items(raw_items: Any) -> List[Dict[str, Any]]:

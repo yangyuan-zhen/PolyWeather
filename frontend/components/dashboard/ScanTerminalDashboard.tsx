@@ -60,6 +60,34 @@ type AiPinnedCity = {
   displayName?: string | null;
   addedAt: number;
 };
+type AiCityForecastPayload = {
+  status?: string | null;
+  reason?: string | null;
+  model?: string | null;
+  provider?: string | null;
+  city_forecast?: {
+    predicted_max?: number | string | null;
+    range_low?: number | string | null;
+    range_high?: number | string | null;
+    unit?: string | null;
+    confidence?: string | null;
+    final_judgment_zh?: string | null;
+    final_judgment_en?: string | null;
+    metar_read_zh?: string | null;
+    metar_read_en?: string | null;
+    reasoning_zh?: string | null;
+    reasoning_en?: string | null;
+    risks_zh?: string[] | null;
+    risks_en?: string[] | null;
+    model_cluster_note_zh?: string | null;
+    model_cluster_note_en?: string | null;
+  } | null;
+};
+type AiCityForecastState = {
+  status: "idle" | "loading" | "ready" | "failed";
+  payload?: AiCityForecastPayload | null;
+  error?: string | null;
+};
 
 function formatShortDate(value?: string | null, locale = "zh-CN") {
   const text = String(value || "").trim();
@@ -583,11 +611,85 @@ function AiPinnedCityCard({
       ? "Waiting for intraday observations to compare against the DEB path."
       : "等待更多日内实测，用来对照 DEB 预测路径。");
   const report = detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
-  const weatherLine =
-    detail?.current?.wx_desc ||
-    detail?.airport_current?.wx_desc ||
-    detail?.airport_primary?.wx_desc ||
+  const airportStation =
+    detail?.risk?.icao ||
+    detail?.current?.station_code ||
+    detail?.airport_current?.station_code ||
+    detail?.airport_primary?.station_code ||
     "";
+  const [aiForecast, setAiForecast] = useState<AiCityForecastState>({
+    status: "idle",
+  });
+  const detailCityName = detail?.name || item.cityName;
+  const aiForecastKey = detail
+    ? `${normalizeCityKey(detailCityName)}:${detail.local_date || ""}:${report || ""}`
+    : "";
+
+  useEffect(() => {
+    if (!aiForecastKey || collapsed) return;
+    let cancelled = false;
+    setAiForecast({ status: "loading" });
+    fetch("/api/scan/terminal/ai-city", {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        city: detailCityName,
+        force_refresh: false,
+      }),
+    })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json() as Promise<AiCityForecastPayload>;
+      })
+      .then((payload) => {
+        if (!cancelled) {
+          setAiForecast({ payload, status: "ready" });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setAiForecast({ error: String(error), status: "failed" });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [aiForecastKey, collapsed, detailCityName]);
+
+  const aiCityForecast = aiForecast.payload?.city_forecast || null;
+  const localizedFinalJudgment =
+    (isEn ? aiCityForecast?.final_judgment_en : aiCityForecast?.final_judgment_zh) ||
+    (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
+    "";
+  const localizedMetarRead =
+    (isEn ? aiCityForecast?.metar_read_en : aiCityForecast?.metar_read_zh) ||
+    "";
+  const localizedReasoning =
+    (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
+    "";
+  const localizedModelNote =
+    (isEn
+      ? aiCityForecast?.model_cluster_note_en
+      : aiCityForecast?.model_cluster_note_zh) || "";
+  const localizedRisksRaw =
+    (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
+  const localizedRisks = Array.isArray(localizedRisksRaw)
+    ? localizedRisksRaw
+    : localizedRisksRaw
+      ? [String(localizedRisksRaw)]
+      : [];
+  const aiBullets = [
+    localizedMetarRead,
+    localizedReasoning !== localizedFinalJudgment ? localizedReasoning : "",
+    localizedModelNote,
+    ...localizedRisks,
+  ].filter((line) => String(line || "").trim());
 
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
 
@@ -687,17 +789,54 @@ function AiPinnedCityCard({
             <AiCityTemperatureChart detail={detail} />
             <section className="scan-ai-city-section">
               <div className="scan-ai-city-section-title">
-                {isEn ? "Airport / climate read" : "机场报文与天气解读"}
+                {isEn ? "AI airport weather read" : "AI 机场报文解读"}
               </div>
-              <p>{weatherLine || (isEn ? "No weather text decoded yet." : "暂无天气文本解读。")}</p>
-              <p>
-                {report
-                  ? `${detail.risk?.icao || detail.current?.station_code || ""} ${report}`.trim()
-                  : isEn
-                    ? "No raw METAR available."
-                    : "暂无原始 METAR 报文。"}
-              </p>
-              <p>{paceView?.kicker || ""}</p>
+              {aiForecast.status === "loading" ? (
+                <p>
+                  {isEn
+                    ? "Deepseek V4 flash is reading the latest airport bulletin..."
+                    : "Deepseek V4 flash 正在解读最新机场报文..."}
+                </p>
+              ) : aiForecast.status === "ready" && aiCityForecast ? (
+                <>
+                  <p className="scan-ai-weather-summary">
+                    {localizedFinalJudgment ||
+                      (isEn ? "AI read returned without a final sentence." : "AI 已返回，但缺少最终判断。")}
+                  </p>
+                  <ul className="scan-ai-weather-bullets">
+                    {aiBullets.map((line, index) => (
+                      <li key={`${line}-${index}`}>{line}</li>
+                    ))}
+                  </ul>
+                  <p className="scan-ai-raw-metar">
+                    {report
+                      ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
+                      : isEn
+                        ? "Raw METAR: unavailable."
+                        : "原始 METAR：暂无。"}
+                  </p>
+                </>
+              ) : aiForecast.status === "ready" ? (
+                <p>
+                  {aiForecast.payload?.reason ||
+                    (isEn
+                      ? "AI read is unavailable for this city right now."
+                      : "该城市暂时没有可用的 AI 解读。")}
+                </p>
+              ) : aiForecast.status === "failed" ? (
+                <p>
+                  {isEn
+                    ? "AI read failed. The raw METAR remains below as fallback context."
+                    : "AI 解读失败。下方仅保留原始 METAR 作为兜底上下文。"}
+                  {aiForecast.error ? ` ${aiForecast.error}` : ""}
+                </p>
+              ) : (
+                <p>
+                  {isEn
+                    ? "Waiting for AI to read the latest airport bulletin."
+                    : "等待 AI 解读最新机场报文。"}
+                </p>
+              )}
             </section>
           </div>
 

@@ -33,6 +33,7 @@ from web.analysis_service import (
     _build_city_summary_payload,
 )
 from web.scan_terminal_service import (
+    build_scan_city_ai_forecast_payload,
     build_scan_terminal_ai_payload,
     build_scan_terminal_payload,
 )
@@ -1747,5 +1748,30 @@ async def scan_terminal_ai(request: Request):
         build_scan_terminal_ai_payload,
         filters,
         snapshot_id=snapshot_id,
+    )
+
+
+@router.post("/api/scan/terminal/ai-city")
+async def scan_terminal_ai_city(request: Request):
+    _assert_entitlement(request)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    city = str(body.get("city") or "").strip()
+    if not city:
+        raise HTTPException(status_code=400, detail="city is required")
+    force_refresh = str(body.get("force_refresh") or "false").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+    return await run_in_threadpool(
+        build_scan_city_ai_forecast_payload,
+        city,
+        force_refresh=force_refresh,
     )
 

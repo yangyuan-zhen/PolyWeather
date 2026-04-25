@@ -11235,6 +11235,42 @@
   line-height: 1.6;
 }
 
+.root :global(.scan-ai-weather-summary) {
+  color: #e6edf3;
+  font-weight: 850;
+}
+
+.root :global(.scan-ai-weather-bullets) {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: #9fb2c7;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.root :global(.scan-ai-weather-bullets li::marker) {
+  color: #4da3ff;
+}
+
+.root :global(.scan-ai-raw-metar) {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(77, 163, 255, 0.12);
+  color: #6b7a90;
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Monaco,
+    Consolas,
+    "Liberation Mono",
+    monospace;
+  font-size: 12px;
+}
+
 .root :global(.scan-ai-city-chart) {
   height: 260px;
 }
@@ -12948,7 +12984,8 @@
 .root :global(.scan-terminal.light .scan-ai-city-hero-side > strong),
 .root :global(.scan-terminal.light .scan-ai-decision-band strong),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
-.root :global(.scan-terminal.light .scan-ai-market-bucket strong) {
+.root :global(.scan-terminal.light .scan-ai-market-bucket strong),
+.root :global(.scan-terminal.light .scan-ai-weather-summary) {
   color: #0f172a;
 }
 
@@ -12960,8 +12997,14 @@
 .root :global(.scan-terminal.light .scan-ai-market-bucket span),
 .root :global(.scan-terminal.light .scan-ai-city-muted),
 .root :global(.scan-terminal.light .scan-ai-city-loading),
-.root :global(.scan-terminal.light .scan-ai-city-chart-legend) {
+.root :global(.scan-terminal.light .scan-ai-city-chart-legend),
+.root :global(.scan-terminal.light .scan-ai-weather-bullets) {
   color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-ai-raw-metar) {
+  border-top-color: #e2e8f0;
+  color: #64748b;
 }
 
 .root :global(.scan-terminal.light .scan-ai-log-panel) {
