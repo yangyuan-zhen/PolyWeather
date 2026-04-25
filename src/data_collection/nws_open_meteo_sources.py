@@ -139,6 +139,66 @@ def _parse_open_meteo_multi_model_daily(
     return [str(d) for d in dates], daily_forecasts, model_metadata, model_keys
 
 
+def _count_models(values: Any) -> int:
+    if not isinstance(values, dict):
+        return 0
+    count = 0
+    for value in values.values():
+        try:
+            float(value)
+            count += 1
+        except (TypeError, ValueError):
+            continue
+    return count
+
+
+def _merge_multi_model_result_with_cache(
+    cached: Dict[str, Any],
+    fresh: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Avoid downgrading a rich multi-model cache when Open-Meteo returns a sparse subset."""
+    if not isinstance(cached, dict):
+        return fresh
+    cached_forecasts = cached.get("forecasts") if isinstance(cached.get("forecasts"), dict) else {}
+    fresh_forecasts = fresh.get("forecasts") if isinstance(fresh.get("forecasts"), dict) else {}
+    if _count_models(fresh_forecasts) >= _count_models(cached_forecasts):
+        return fresh
+
+    merged_daily: Dict[str, Dict[str, float]] = {}
+    cached_daily = cached.get("daily_forecasts") if isinstance(cached.get("daily_forecasts"), dict) else {}
+    fresh_daily = fresh.get("daily_forecasts") if isinstance(fresh.get("daily_forecasts"), dict) else {}
+    for date in sorted({*cached_daily.keys(), *fresh_daily.keys()}):
+        cached_day = cached_daily.get(date) if isinstance(cached_daily.get(date), dict) else {}
+        fresh_day = fresh_daily.get(date) if isinstance(fresh_daily.get(date), dict) else {}
+        merged_daily[str(date)] = (
+            dict(fresh_day)
+            if _count_models(fresh_day) >= _count_models(cached_day)
+            else {**dict(fresh_day), **dict(cached_day)}
+        )
+
+    merged = {
+        **cached,
+        **fresh,
+        "forecasts": {**dict(fresh_forecasts), **dict(cached_forecasts)},
+        "daily_forecasts": merged_daily or cached_daily or fresh_daily,
+        "model_metadata": {
+            **(fresh.get("model_metadata") if isinstance(fresh.get("model_metadata"), dict) else {}),
+            **(cached.get("model_metadata") if isinstance(cached.get("model_metadata"), dict) else {}),
+        },
+        "model_keys": {
+            **(fresh.get("model_keys") if isinstance(fresh.get("model_keys"), dict) else {}),
+            **(cached.get("model_keys") if isinstance(cached.get("model_keys"), dict) else {}),
+        },
+        "partial_refresh": True,
+        "partial_refresh_model_count": _count_models(fresh_forecasts),
+        "preserved_cached_model_count": _count_models(cached_forecasts),
+    }
+    merged_dates = list(dict.fromkeys([*(fresh.get("dates") or []), *(cached.get("dates") or [])]))
+    if merged_dates:
+        merged["dates"] = merged_dates
+    return merged
+
+
 class NwsOpenMeteoSourceMixin:
     def fetch_nws(self, lat: float, lon: float) -> Optional[Dict]:
         """
@@ -693,6 +753,17 @@ class NwsOpenMeteoSourceMixin:
                 "unit": "fahrenheit" if use_fahrenheit else "celsius",
                 "attribution": "Open-Meteo forecast model API; underlying models from ECMWF, DWD, ECCC, NOAA and JMA.",
             }
+            with self._multi_model_cache_lock:
+                previous = self._multi_model_cache.get(cache_key)
+                previous_data = previous.get("data") if isinstance(previous, dict) else None
+            if isinstance(previous_data, dict):
+                result = _merge_multi_model_result_with_cache(previous_data, result)
+                if result.get("partial_refresh"):
+                    logger.info(
+                        "🔬 Multi-model sparse refresh preserved cache: fresh={} cached={}",
+                        result.get("partial_refresh_model_count"),
+                        result.get("preserved_cached_model_count"),
+                    )
             with self._multi_model_cache_lock:
                 self._multi_model_cache[cache_key] = {
                     "t": time.time(),

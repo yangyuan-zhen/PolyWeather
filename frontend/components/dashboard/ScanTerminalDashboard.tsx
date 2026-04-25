@@ -466,6 +466,10 @@ function isFullEnoughForDeepAnalysis(detail?: CityDetail | null) {
   );
 }
 
+function waitForDeepAnalysisQueue(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
 function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale } = useI18n();
   const chartData = useMemo(
@@ -674,7 +678,7 @@ function AiPinnedCityCard({
       body: JSON.stringify({
         city: detailCityName,
         force_refresh: aiRefreshToken > 0,
-        locale,
+        locale: "zh-CN",
       }),
     })
       .then(async (response) => {
@@ -715,7 +719,7 @@ function AiPinnedCityCard({
     return () => {
       cancelled = true;
     };
-  }, [aiForecastKey, aiRefreshToken, detailCityName, locale]);
+  }, [aiForecastKey, aiRefreshToken, detailCityName]);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
   const localizedFinalJudgment =
@@ -1215,6 +1219,8 @@ function ScanTerminalScreen() {
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
   const lastMapSelectedCityRef = useRef<string>("");
   const aiFullHydrationRef = useRef<Set<string>>(new Set());
+  const aiHydrationQueueRef = useRef<string[]>([]);
+  const aiHydrationRunningRef = useRef(false);
 
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(terminalData?.rows || []),
@@ -1373,6 +1379,48 @@ function ScanTerminalScreen() {
     }
   }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
 
+  const runAiHydrationQueue = useCallback(async () => {
+    if (aiHydrationRunningRef.current) return;
+    aiHydrationRunningRef.current = true;
+    try {
+      while (aiHydrationQueueRef.current.length > 0) {
+        const nextCity = aiHydrationQueueRef.current.shift();
+        const key = normalizeCityKey(nextCity || "");
+        if (!nextCity || !key) continue;
+        const existingDetail = findDetailForCity(store.cityDetailsByName, nextCity);
+        try {
+          const detail = await store.ensureCityDetail(
+            nextCity,
+            Boolean(existingDetail) && !isFullEnoughForDeepAnalysis(existingDetail),
+            "full",
+          );
+          if (!isFullEnoughForDeepAnalysis(detail)) {
+            aiFullHydrationRef.current.delete(key);
+          }
+        } catch {
+          aiFullHydrationRef.current.delete(key);
+        }
+        await waitForDeepAnalysisQueue(1200);
+      }
+    } finally {
+      aiHydrationRunningRef.current = false;
+      if (aiHydrationQueueRef.current.length > 0) {
+        void runAiHydrationQueue();
+      }
+    }
+  }, [store.cityDetailsByName, store.ensureCityDetail]);
+
+  const queueAiFullHydration = useCallback(
+    (cityName: string) => {
+      const key = normalizeCityKey(cityName);
+      if (!key || aiFullHydrationRef.current.has(key)) return;
+      aiFullHydrationRef.current.add(key);
+      aiHydrationQueueRef.current.push(cityName);
+      void runAiHydrationQueue();
+    },
+    [runAiHydrationQueue],
+  );
+
   const addAiPinnedCity = useCallback((cityName: string) => {
     const cleanName = String(cityName || "").trim();
     const key = normalizeCityKey(cleanName);
@@ -1404,22 +1452,15 @@ function ScanTerminalScreen() {
       }
       return [nextItem, ...current].slice(0, 8);
     });
-    aiFullHydrationRef.current.delete(key);
-    aiFullHydrationRef.current.add(key);
-    void store
-      .ensureCityDetail(cleanName, true, "full")
-      .then((detail) => {
-        if (!isFullEnoughForDeepAnalysis(detail)) {
-          aiFullHydrationRef.current.delete(key);
-        }
-      })
-      .catch(() => {
-        aiFullHydrationRef.current.delete(key);
-      });
-  }, [locale, store.ensureCityDetail, timeSortedRows]);
+    queueAiFullHydration(matchedRow?.city || cleanName);
+  }, [locale, queueAiFullHydration, timeSortedRows]);
 
   const removeAiPinnedCity = useCallback((cityName: string) => {
     const key = normalizeCityKey(cityName);
+    aiFullHydrationRef.current.delete(key);
+    aiHydrationQueueRef.current = aiHydrationQueueRef.current.filter(
+      (queuedCity) => normalizeCityKey(queuedCity) !== key,
+    );
     setAiPinnedCities((current) =>
       current.filter((item) => normalizeCityKey(item.cityName) !== key),
     );
@@ -1432,14 +1473,9 @@ function ScanTerminalScreen() {
       const detail = findDetailForCity(store.cityDetailsByName, item.cityName);
       const needsFullHydration = !isFullEnoughForDeepAnalysis(detail);
       if (!needsFullHydration) return;
-      aiFullHydrationRef.current.add(key);
-      void store
-        .ensureCityDetail(item.cityName, Boolean(detail), "full")
-        .catch(() => {
-          aiFullHydrationRef.current.delete(key);
-        });
+      queueAiFullHydration(item.cityName);
     });
-  }, [aiPinnedCities, store.cityDetailsByName, store.ensureCityDetail]);
+  }, [aiPinnedCities, queueAiFullHydration, store.cityDetailsByName]);
 
   const handleMapCitySelect = useCallback((cityName: string) => {
     setMapSelectedCityName(cityName);

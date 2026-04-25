@@ -66,7 +66,7 @@ SCAN_CITY_AI_MAX_TOKENS = max(
     8192,
     int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "8192")),
 )
-SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v2"
+SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v3"
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -1067,9 +1067,6 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     if not api_key:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
     normalized_locale = _normalize_locale(locale)
-    primary_language = "English" if normalized_locale == "en-US" else "Simplified Chinese"
-    primary_suffix = "_en" if normalized_locale == "en-US" else "_zh"
-    secondary_suffix = "_zh" if normalized_locale == "en-US" else "_en"
 
     system_prompt = (
         "你是 PolyWeather 的 Deepseek V4-Pro 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
@@ -1085,20 +1082,18 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         "涉及 TAF 或云雨扰动时必须给出报文中的有效时间、BECMG/TEMPO/FM 时间窗或说明“未给出明确时间”；"
         "如果没有 TAF 时间依据，不要笼统写“峰值窗口云雨扰动风险”。"
         "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
-        f"当前用户界面语言是 {normalized_locale}，所有面向用户的主要自然语言字段必须使用 {primary_language}。"
-        f"重点填写 {primary_suffix} 字段；{secondary_suffix} 字段只填空字符串，前端不读取它。"
+        "所有面向用户的自然语言字段必须同时填写简体中文和英文两套内容："
+        "_zh 字段写简体中文，_en 字段写英文。前端会按用户界面语言直接切换字段，不能留空。"
         "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 可用 2-4 句。"
         "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
         "locale": normalized_locale,
-        "primary_language": primary_language,
         "task": (
             "Return strict JSON with: predicted_max, range_low, range_high, unit, confidence, "
             "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
-            f"Primary output language is {primary_language}; the UI will read fields ending with {primary_suffix}. "
-            f"Fields ending with {secondary_suffix} must be empty strings or empty arrays to avoid truncation. "
+            "Fill every *_zh field in Simplified Chinese and every *_en field in English in the same response. "
             "Keep final_judgment one short decision sentence. metar_read must explain the latest airport bulletin "
             "with report time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
             "For wind, explicitly say whether the current wind tends to warm, cool, or be neutral for today's high, "
@@ -1225,7 +1220,6 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                         "content": json.dumps(
                             {
                                 "locale": normalized_locale,
-                                "primary_language": primary_language,
                                 "required_schema": [
                                     "predicted_max",
                                     "range_low",
@@ -1247,7 +1241,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                                 "previous_assistant_content": _truncate_ai_text(content, 5000),
                                 "city_snapshot": ai_input,
                                 "instruction": (
-                                    f"Primary UI language is {primary_language}. "
+                                    "Fill *_zh fields in Simplified Chinese and *_en fields in English; do not leave either language empty. "
                                     "Make final_judgment one direct sentence about today's high temperature. "
                                     "metar_read must interpret the latest airport bulletin with report time, temperature, "
                                     "wind direction/speed, cloud/weather/visibility/dewpoint if available. State whether "
@@ -1348,7 +1342,7 @@ def build_scan_city_ai_forecast_payload(
         normalized_locale,
         SCAN_AI_MODEL,
     )
-    cache_key = f"city_forecast:{SCAN_CITY_AI_PROMPT_VERSION}:{city_name.lower()}:{normalized_locale}"
+    cache_key = f"city_forecast:{SCAN_CITY_AI_PROMPT_VERSION}:{city_name.lower()}"
     if not force_refresh:
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)

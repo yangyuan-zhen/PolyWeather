@@ -101,6 +101,10 @@ function getInitialProAccessState(): ProAccessState {
   if (isBrowserLocalFullAccess()) {
     return getLocalDevProAccessState();
   }
+  const cached = readStoredProAccess();
+  if (cached) {
+    return cached;
+  }
   return {
     loading: true,
     authenticated: false,
@@ -116,11 +120,122 @@ function getInitialProAccessState(): ProAccessState {
 }
 
 const SELECTED_CITY_STORAGE_KEY = "polyWeather_selected_city_v1";
+const PRO_ACCESS_STORAGE_KEY = "polyWeather_pro_access_v1";
 const CITY_LOAD_RETRY_DELAYS_MS = [700, 1600];
+const PRO_ACCESS_FALLBACK_TTL_MS = 24 * 60 * 60 * 1000;
 type CityDetailDepth = "panel" | "market" | "nearby" | "full";
+
+type StoredProAccessState = ProAccessState & {
+  cachedAt: number;
+  expiresAtMs: number;
+  version: 1;
+};
 
 function wait(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getSubscriptionExpiryMs(access: Pick<
+  ProAccessState,
+  "subscriptionExpiresAt" | "subscriptionTotalExpiresAt"
+>) {
+  const raw =
+    access.subscriptionTotalExpiresAt || access.subscriptionExpiresAt || "";
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function clearStoredProAccess() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(PRO_ACCESS_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures; backend auth remains the source of truth.
+  }
+}
+
+function readStoredProAccess(): ProAccessState | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PRO_ACCESS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredProAccessState>;
+    if (parsed.version !== 1) {
+      clearStoredProAccess();
+      return null;
+    }
+    if (!parsed.authenticated || !parsed.subscriptionActive || !parsed.userId) {
+      clearStoredProAccess();
+      return null;
+    }
+    const expiresAtMs = Number(parsed.expiresAtMs || 0);
+    if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+      clearStoredProAccess();
+      return null;
+    }
+    return {
+      loading: false,
+      authenticated: true,
+      userId: String(parsed.userId),
+      subscriptionActive: true,
+      subscriptionPlanCode: parsed.subscriptionPlanCode ?? null,
+      subscriptionExpiresAt: parsed.subscriptionExpiresAt ?? null,
+      subscriptionTotalExpiresAt: parsed.subscriptionTotalExpiresAt ?? null,
+      subscriptionQueuedDays: Math.max(
+        0,
+        Number(parsed.subscriptionQueuedDays ?? 0),
+      ),
+      points: Number(parsed.points ?? 0),
+      error: null,
+    };
+  } catch {
+    clearStoredProAccess();
+    return null;
+  }
+}
+
+function writeStoredProAccess(access: ProAccessState) {
+  if (typeof window === "undefined") return;
+  if (!access.authenticated || !access.subscriptionActive || !access.userId) {
+    clearStoredProAccess();
+    return;
+  }
+  const explicitExpiryMs = getSubscriptionExpiryMs(access);
+  const expiresAtMs =
+    explicitExpiryMs > Date.now()
+      ? explicitExpiryMs
+      : Date.now() + PRO_ACCESS_FALLBACK_TTL_MS;
+  const payload: StoredProAccessState = {
+    ...access,
+    loading: false,
+    error: null,
+    cachedAt: Date.now(),
+    expiresAtMs,
+    version: 1,
+  };
+  try {
+    window.localStorage.setItem(PRO_ACCESS_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Storage can be unavailable in private mode; keep the in-memory state.
+  }
+}
+
+function mergeWithStoredProAccess(
+  next: ProAccessState,
+  reason: string,
+): ProAccessState {
+  if (next.subscriptionActive || !next.authenticated) return next;
+  const cached = readStoredProAccess();
+  if (!cached) return next;
+  if (next.userId && cached.userId !== next.userId) return next;
+  const payloadExpiryMs = getSubscriptionExpiryMs(next);
+  if (payloadExpiryMs > 0 && payloadExpiryMs <= Date.now()) return next;
+  return {
+    ...cached,
+    loading: false,
+    points: Math.max(cached.points, next.points),
+    error: reason,
+  };
 }
 
 async function buildAuthMeHeaders(): Promise<HeadersInit> {
@@ -247,6 +362,52 @@ function hasMeaningfulDailyModelMap(
   );
 }
 
+function countModelMapEntries(value: Record<string, number | null> | undefined) {
+  if (!value || typeof value !== "object") return 0;
+  return Object.values(value).filter((entry) => Number.isFinite(Number(entry))).length;
+}
+
+function pickRicherModelMap(
+  currentValue: CityDetail["multi_model"] | undefined,
+  incomingValue: CityDetail["multi_model"] | undefined,
+) {
+  return countModelMapEntries(incomingValue) >= countModelMapEntries(currentValue)
+    ? incomingValue || currentValue
+    : currentValue;
+}
+
+function mergeDailyModelMap(
+  currentValue: CityDetail["multi_model_daily"] | undefined,
+  incomingValue: CityDetail["multi_model_daily"] | undefined,
+) {
+  if (!hasMeaningfulDailyModelMap(incomingValue)) return currentValue;
+  if (!hasMeaningfulDailyModelMap(currentValue)) return incomingValue;
+  const merged = { ...(currentValue || {}) };
+  Object.entries(incomingValue || {}).forEach(([date, incomingDay]) => {
+    const currentDay = merged[date];
+    const incomingCount = countModelMapEntries(incomingDay?.models || undefined);
+    const currentCount = countModelMapEntries(currentDay?.models || undefined);
+    if (incomingCount >= currentCount) {
+      merged[date] = {
+        ...(currentDay || {}),
+        ...(incomingDay || {}),
+        models: incomingDay?.models || currentDay?.models,
+      };
+    }
+  });
+  return merged;
+}
+
+function pickRicherForecast(
+  currentValue: CityDetail["forecast"] | undefined,
+  incomingValue: CityDetail["forecast"] | undefined,
+) {
+  return countForecastDays({ forecast: incomingValue } as CityDetail) >=
+    countForecastDays({ forecast: currentValue } as CityDetail)
+    ? incomingValue || currentValue
+    : currentValue;
+}
+
 function pickPreferredNearbyStations(
   currentValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
   incomingValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
@@ -264,12 +425,17 @@ function mergeCityDetail(
   incoming: CityDetail,
 ): CityDetail {
   if (!current) return incoming;
-  if (incoming.detail_depth !== "market") return incoming;
 
+  const currentDepth = normalizeDetailDepth(current);
+  const incomingDepth = normalizeDetailDepth(incoming);
   const mergedDepth =
-    current.detail_depth === "full" || current.detail_depth === "nearby"
-      ? current.detail_depth
-      : incoming.detail_depth;
+    currentDepth === "full" || incomingDepth === "full"
+      ? "full"
+      : currentDepth === "nearby" || incomingDepth === "nearby"
+        ? "nearby"
+        : currentDepth === "market" || incomingDepth === "market"
+          ? "market"
+          : "panel";
 
   return {
     ...current,
@@ -280,16 +446,12 @@ function mergeCityDetail(
     deb: incoming.deb || current.deb,
     probabilities: incoming.probabilities || current.probabilities,
     trend: incoming.trend || current.trend,
-    multi_model: hasMeaningfulModelMap(incoming.multi_model)
-      ? incoming.multi_model
-      : current.multi_model,
-    multi_model_daily: hasMeaningfulDailyModelMap(incoming.multi_model_daily)
-      ? {
-          ...(current.multi_model_daily || {}),
-          ...(incoming.multi_model_daily || {}),
-        }
-      : current.multi_model_daily,
-    forecast: current.forecast || incoming.forecast,
+    multi_model: pickRicherModelMap(current.multi_model, incoming.multi_model),
+    multi_model_daily: mergeDailyModelMap(
+      current.multi_model_daily,
+      incoming.multi_model_daily,
+    ),
+    forecast: pickRicherForecast(current.forecast, incoming.forecast),
     official_nearby: pickPreferredNearbyStations(
       current.official_nearby,
       incoming.official_nearby,
@@ -641,12 +803,14 @@ export function DashboardStoreProvider({
 
   const refreshProAccess = async () => {
     if (isBrowserLocalFullAccess()) {
-      setProAccess(getLocalDevProAccessState());
+      const localAccess = getLocalDevProAccessState();
+      writeStoredProAccess(localAccess);
+      setProAccess(localAccess);
       return;
     }
     setProAccess((current) => ({
       ...current,
-      loading: true,
+      loading: current.subscriptionActive ? false : true,
       error: null,
     }));
     try {
@@ -667,8 +831,10 @@ export function DashboardStoreProvider({
         subscription_total_expires_at?: string | null;
         subscription_queued_days?: number | null;
         points?: number;
+        degraded_auth_profile?: boolean | null;
+        degraded_reason?: string | null;
       };
-      setProAccess({
+      const nextAccess: ProAccessState = {
         loading: false,
         authenticated: Boolean(payload.authenticated),
         userId: payload.user_id ?? null,
@@ -683,8 +849,30 @@ export function DashboardStoreProvider({
         ),
         points: payload.points ?? 0,
         error: null,
-      });
+      };
+      const mergedAccess = mergeWithStoredProAccess(
+        nextAccess,
+        payload.degraded_auth_profile
+          ? String(payload.degraded_reason || "degraded_auth_profile")
+          : "using_cached_pro_access",
+      );
+      if (mergedAccess.subscriptionActive) {
+        writeStoredProAccess(mergedAccess);
+      } else if (!mergedAccess.authenticated || payload.subscription_active === false) {
+        clearStoredProAccess();
+      }
+      setProAccess(mergedAccess);
     } catch (error) {
+      const cachedAccess = readStoredProAccess();
+      if (cachedAccess) {
+        setProAccess({
+          ...cachedAccess,
+          loading: false,
+          error: String(error),
+        });
+        return;
+      }
+      clearStoredProAccess();
       setProAccess({
         loading: false,
         authenticated: false,
@@ -725,6 +913,34 @@ export function DashboardStoreProvider({
 
   useEffect(() => {
     void refreshProAccess();
+  }, []);
+
+  useEffect(() => {
+    if (!hasSupabasePublicEnv()) return;
+    const {
+      data: { subscription },
+    } = getSupabaseBrowserClient().auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        clearStoredProAccess();
+        setProAccess({
+          loading: false,
+          authenticated: false,
+          userId: null,
+          subscriptionActive: false,
+          subscriptionPlanCode: null,
+          subscriptionExpiresAt: null,
+          subscriptionTotalExpiresAt: null,
+          subscriptionQueuedDays: 0,
+          points: 0,
+          error: null,
+        });
+        return;
+      }
+      if (event === "SIGNED_IN" || event === "TOKEN_REFRESHED") {
+        void refreshProAccess();
+      }
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
   const ensureCitySummary = async (cityName: string, force = false) => {
