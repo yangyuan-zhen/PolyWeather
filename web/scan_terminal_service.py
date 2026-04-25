@@ -16,6 +16,7 @@ from loguru import logger
 
 from web.analysis_service import _analyze, _build_city_market_scan_payload
 from web.core import CITIES
+from src.data_collection.city_registry import ALIASES
 
 _SCAN_TERMINAL_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_CACHE: Dict[str, Dict[str, Any]] = {}
@@ -86,6 +87,12 @@ def _safe_int(value: Any, default: int) -> int:
 def _normalize_locale(value: Any) -> str:
     text = str(value or "").strip().lower()
     return "en-US" if text.startswith("en") else "zh-CN"
+
+
+def _normalize_city_key(value: Any) -> str:
+    text = str(value or "").strip().lower().replace("-", " ")
+    text = re.sub(r"\s+", " ", text)
+    return ALIASES.get(text, text)
 
 
 def _normalize_scan_terminal_filters(
@@ -332,6 +339,153 @@ def _extract_ai_json_object(raw_text: str) -> Dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     raise ValueError("AI content is not a JSON object")
+
+
+def _truncate_ai_text(value: Any, limit: int = 800) -> str:
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "…"
+
+
+def _extract_provider_content(data: Any) -> str:
+    if not isinstance(data, dict):
+        return ""
+    choices = data.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return ""
+    message = choices[0].get("message") or {}
+    if not isinstance(message, dict):
+        return ""
+    return str(message.get("content") or "")
+
+
+def _provider_response_meta(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    choices = data.get("choices") or []
+    first = choices[0] if choices and isinstance(choices[0], dict) else {}
+    return {
+        "usage": data.get("usage"),
+        "finish_reason": first.get("finish_reason"),
+    }
+
+
+def _format_ai_temperature(value: Any, unit: str) -> Optional[str]:
+    numeric = _safe_float(value)
+    if numeric is None:
+        return None
+    return f"{numeric:.1f}{unit or ''}"
+
+
+def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str:
+    cluster = ai_input.get("model_cluster") if isinstance(ai_input.get("model_cluster"), dict) else {}
+    sources = cluster.get("sources") if isinstance(cluster.get("sources"), list) else []
+    unit = str(ai_input.get("temp_symbol") or "")
+    values = [
+        _safe_float(item.get("value"))
+        for item in sources
+        if isinstance(item, dict) and _safe_float(item.get("value")) is not None
+    ]
+    count = len(values)
+    deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
+    if locale == "en-US":
+        if count <= 0:
+            return "No usable model cluster was returned; rely on DEB and METAR only."
+        if count <= 2:
+            return f"Only {count} model source(s) are available, so model support is thin and should be treated as context."
+        range_text = f"{min(values):.1f}{unit} to {max(values):.1f}{unit}"
+        if deb_value is None:
+            return f"{count} model sources cluster between {range_text}; DEB support cannot be cross-checked."
+        supporting = sum(1 for value in values if abs(value - deb_value) <= 2.0)
+        return f"{supporting}/{count} model sources sit within 2{unit} of DEB; model range is {range_text}."
+    if count <= 0:
+        return "没有可用的多模型集合，只能把 DEB 与 METAR 作为主要依据。"
+    if count <= 2:
+        return f"当前只有 {count} 个模型来源，模型支撑偏薄，只能作为辅助上下文。"
+    range_text = f"{min(values):.1f}{unit} ~ {max(values):.1f}{unit}"
+    if deb_value is None:
+        return f"{count} 个模型集中在 {range_text}，但无法与 DEB 做一致性校验。"
+    supporting = sum(1 for value in values if abs(value - deb_value) <= 2.0)
+    return f"{supporting}/{count} 个模型落在 DEB ±2{unit} 内；模型区间为 {range_text}。"
+
+
+def _build_city_ai_fallback(
+    ai_input: Dict[str, Any],
+    *,
+    locale: str,
+    reason: str,
+    raw_content: str = "",
+    provider_data: Any = None,
+) -> Dict[str, Any]:
+    unit = str(ai_input.get("temp_symbol") or "")
+    cluster = ai_input.get("model_cluster") if isinstance(ai_input.get("model_cluster"), dict) else {}
+    values = [
+        _safe_float(item.get("value"))
+        for item in (cluster.get("sources") if isinstance(cluster.get("sources"), list) else [])
+        if isinstance(item, dict) and _safe_float(item.get("value")) is not None
+    ]
+    deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
+    current_temp = _safe_float(
+        (ai_input.get("airport_current") or {}).get("temp")
+        if isinstance(ai_input.get("airport_current"), dict)
+        else None
+    )
+    predicted = deb_value
+    if predicted is None and values:
+        predicted = sum(values) / len(values)
+    if predicted is None:
+        predicted = current_temp
+    range_low = min(values) if values else predicted
+    range_high = max(values) if values else predicted
+    city = str(ai_input.get("city_display_name") or ai_input.get("city") or "this city")
+    airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
+    station = str(airport_current.get("station_code") or "")
+    raw_metar = str(airport_current.get("raw_metar") or "").strip()
+    metar_temp = _format_ai_temperature(airport_current.get("temp"), unit)
+    obs_time = str(airport_current.get("report_time") or airport_current.get("obs_time") or "").strip()
+    model_note_zh = _city_ai_model_cluster_note(ai_input, locale="zh-CN")
+    model_note_en = _city_ai_model_cluster_note(ai_input, locale="en-US")
+    content_preview = _truncate_ai_text(raw_content, 1000)
+    reason_preview = _truncate_ai_text(reason, 260)
+    if content_preview:
+        metar_zh = f"DeepSeek V4-Pro 返回了非结构化解读，系统已保留摘要：{content_preview}"
+        metar_en = f"DeepSeek V4-Pro returned non-JSON analysis; preserved summary: {content_preview}"
+    elif raw_metar:
+        metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；需结合后续报文确认温度路径。"
+        metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; later reports are needed to confirm the path."
+    else:
+        metar_zh = "当前没有可用的原始 METAR 正文，暂以 DEB 与多模型路径为主。"
+        metar_en = "No raw METAR text is available, so DEB and the model cluster carry the read."
+    predicted_text = _format_ai_temperature(predicted, unit) or "--"
+    final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 输出格式异常，已降级为模型/METAR 兜底判断。"
+    final_en = f"{city} daily high is centered near {predicted_text}; AI output was not strict JSON, so this is a model/METAR fallback."
+    reasoning_zh = f"DEB、多模型集合和最新 METAR 仍可用于判断方向；原始失败原因：{reason_preview or 'AI 输出不是 JSON object'}。"
+    reasoning_en = f"DEB, the model cluster and latest METAR still support a directional read; raw failure: {reason_preview or 'AI output was not a JSON object'}."
+    return {
+        "predicted_max": predicted,
+        "range_low": range_low,
+        "range_high": range_high,
+        "unit": unit,
+        "confidence": "low",
+        "final_judgment_zh": final_zh,
+        "final_judgment_en": final_en,
+        "metar_read_zh": metar_zh,
+        "metar_read_en": metar_en,
+        "reasoning_zh": reasoning_zh,
+        "reasoning_en": reasoning_en,
+        "risks_zh": ["DeepSeek V4-Pro 本次没有返回严格 JSON，需刷新重试确认。"],
+        "risks_en": ["DeepSeek V4-Pro did not return strict JSON; refresh to confirm."],
+        "model_cluster_note_zh": model_note_zh,
+        "model_cluster_note_en": model_note_en,
+        "_polyweather_meta": {
+            **_provider_response_meta(provider_data),
+            "fallback": True,
+            "fallback_reason": reason_preview,
+            "raw_content_preview": content_preview,
+            "raw_metar": _truncate_ai_text(raw_metar, 1000),
+        },
+    }
 
 
 def _scan_ai_cache_key(snapshot_id: str, filters: Dict[str, Any]) -> str:
@@ -979,17 +1133,13 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         )
         response.raise_for_status()
         data = response.json()
-        content = (
-            ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-            if isinstance(data, dict)
-            else None
-        )
+        content = _extract_provider_content(data)
         if not str(content or "").strip():
             logger.warning(
                 "scan city AI provider returned empty content city={} locale={} finish_reason={} retrying_without_json_mode=true",
                 ai_input.get("city"),
                 normalized_locale,
-                ((data.get("choices") or [{}])[0] or {}).get("finish_reason") if isinstance(data, dict) else None,
+                _provider_response_meta(data).get("finish_reason"),
             )
             retry_payload = dict(request_json)
             retry_payload.pop("response_format", None)
@@ -1025,17 +1175,105 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             )
             response.raise_for_status()
             data = response.json()
-            content = (
-                ((data.get("choices") or [{}])[0].get("message") or {}).get("content")
-                if isinstance(data, dict)
-                else None
+            content = _extract_provider_content(data)
+        try:
+            parsed = _extract_ai_json_object(str(content or ""))
+        except ValueError as exc:
+            preview = _truncate_ai_text(content, 700)
+            logger.warning(
+                "scan city AI provider returned non-json city={} locale={} finish_reason={} content_preview={}",
+                ai_input.get("city"),
+                normalized_locale,
+                _provider_response_meta(data).get("finish_reason"),
+                preview,
             )
-    parsed = _extract_ai_json_object(str(content or ""))
+            repair_payload = {
+                "model": SCAN_AI_MODEL,
+                "temperature": 0.0,
+                "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 700), 1200),
+                "response_format": {"type": "json_object"},
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You repair PolyWeather AI output into one strict JSON object. "
+                            "Do not add facts that are not present in the original city snapshot or previous assistant content. "
+                            "Return only JSON, no markdown."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": json.dumps(
+                            {
+                                "locale": normalized_locale,
+                                "primary_language": primary_language,
+                                "required_schema": [
+                                    "predicted_max",
+                                    "range_low",
+                                    "range_high",
+                                    "unit",
+                                    "confidence",
+                                    "final_judgment_zh",
+                                    "final_judgment_en",
+                                    "metar_read_zh",
+                                    "metar_read_en",
+                                    "reasoning_zh",
+                                    "reasoning_en",
+                                    "risks_zh",
+                                    "risks_en",
+                                    "model_cluster_note_zh",
+                                    "model_cluster_note_en",
+                                ],
+                                "previous_error": str(exc),
+                                "previous_assistant_content": _truncate_ai_text(content, 5000),
+                                "city_snapshot": ai_input,
+                                "instruction": (
+                                    f"Primary UI language is {primary_language}. "
+                                    "Make final_judgment one direct sentence about today's high temperature. "
+                                    "metar_read must interpret the latest airport bulletin and possible temperature-path impact. "
+                                    "model_cluster_note must mention available model count/range and whether it supports DEB. "
+                                    "Keep the JSON compact."
+                                ),
+                            },
+                            ensure_ascii=False,
+                        ),
+                    },
+                ],
+            }
+            try:
+                repair_response = client.post(
+                    f"{SCAN_AI_BASE_URL}/chat/completions",
+                    headers=headers,
+                    json=repair_payload,
+                )
+                repair_response.raise_for_status()
+                repair_data = repair_response.json()
+                repair_content = _extract_provider_content(repair_data)
+                parsed = _extract_ai_json_object(str(repair_content or ""))
+                if isinstance(parsed, dict):
+                    parsed["_polyweather_meta"] = {
+                        **_provider_response_meta(repair_data),
+                        "repaired_from_non_json": True,
+                        "original_finish_reason": _provider_response_meta(data).get("finish_reason"),
+                        "original_content_preview": preview,
+                    }
+                    return parsed
+            except Exception as repair_exc:
+                logger.warning(
+                    "scan city AI provider json repair failed city={} locale={} error={}",
+                    ai_input.get("city"),
+                    normalized_locale,
+                    repair_exc,
+                )
+            return _build_city_ai_fallback(
+                ai_input,
+                locale=normalized_locale,
+                reason=str(exc),
+                raw_content=str(content or ""),
+                provider_data=data,
+            )
     if isinstance(data, dict):
-        parsed["_polyweather_meta"] = {
-            "usage": data.get("usage"),
-            "finish_reason": ((data.get("choices") or [{}])[0] or {}).get("finish_reason"),
-        }
+        parsed["_polyweather_meta"] = _provider_response_meta(data)
     return parsed
 
 
@@ -1059,10 +1297,25 @@ def build_scan_city_ai_forecast_payload(
     locale: str = "zh-CN",
 ) -> Dict[str, Any]:
     started_at = time.time()
-    city_name = str(city or "").strip()
+    city_name = _normalize_city_key(city)
     normalized_locale = _normalize_locale(locale)
     if not city_name:
         return {"status": "failed", "reason": "city is required"}
+    if city_name not in CITIES:
+        return {
+            "status": "failed",
+            "model": SCAN_AI_MODEL,
+            "provider": "deepseek",
+            "city": city_name,
+            "city_display_name": str(city or "").strip() or city_name,
+            "reason": (
+                f"Unknown city: {city_name}"
+                if normalized_locale == "en-US"
+                else f"未知城市：{city_name}"
+            ),
+            "reason_en": f"Unknown city: {city_name}",
+            "reason_zh": f"未知城市：{city_name}",
+        }
     logger.info(
         "scan city AI forecast requested city={} force_refresh={} locale={} model={}",
         city_name,
