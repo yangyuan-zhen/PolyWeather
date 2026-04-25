@@ -9565,6 +9565,7 @@
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
 
 .root :global(.scan-list-header) {
@@ -10922,11 +10923,24 @@
 }
 
 .root :global(.scan-ai-workspace) {
-  min-height: 720px;
+  flex: 1;
+  min-height: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid rgba(77, 163, 255, 0.16);
   border-radius: 18px;
   background: #0b1220;
   padding: 18px;
+}
+
+.root :global(.scan-ai-workspace::-webkit-scrollbar) {
+  width: 8px;
+}
+
+.root :global(.scan-ai-workspace::-webkit-scrollbar-thumb) {
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.28);
 }
 
 .root :global(.scan-ai-workspace.empty) {
