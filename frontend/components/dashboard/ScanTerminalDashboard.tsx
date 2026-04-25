@@ -8,9 +8,10 @@ import {
   ChevronDown,
   LogIn,
   Moon,
-  Pin,
+  RefreshCw,
   Sun,
   UserRound,
+  X,
 } from "lucide-react";
 import {
   useCallback,
@@ -561,6 +562,7 @@ function AiPinnedCityCard({
   row,
   locale,
   collapsed,
+  removing,
   onRemove,
   onToggleCollapsed,
 }: {
@@ -569,6 +571,7 @@ function AiPinnedCityCard({
   row: ScanOpportunityRow | null;
   locale: string;
   collapsed: boolean;
+  removing?: boolean;
   onRemove: () => void;
   onToggleCollapsed: () => void;
 }) {
@@ -620,13 +623,14 @@ function AiPinnedCityCard({
   const [aiForecast, setAiForecast] = useState<AiCityForecastState>({
     status: "idle",
   });
+  const [aiRefreshToken, setAiRefreshToken] = useState(0);
   const detailCityName = detail?.name || item.cityName;
   const aiForecastKey = detail
     ? `${normalizeCityKey(detailCityName)}:${detail.local_date || ""}:${report || ""}`
     : "";
 
   useEffect(() => {
-    if (!aiForecastKey || collapsed) return;
+    if (!aiForecastKey) return;
     let cancelled = false;
     setAiForecast({ status: "loading" });
     fetch("/api/scan/terminal/ai-city", {
@@ -638,7 +642,7 @@ function AiPinnedCityCard({
       cache: "no-store",
       body: JSON.stringify({
         city: detailCityName,
-        force_refresh: false,
+        force_refresh: aiRefreshToken > 0,
       }),
     })
       .then(async (response) => {
@@ -660,7 +664,7 @@ function AiPinnedCityCard({
     return () => {
       cancelled = true;
     };
-  }, [aiForecastKey, collapsed, detailCityName]);
+  }, [aiForecastKey, aiRefreshToken, detailCityName]);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
   const localizedFinalJudgment =
@@ -694,11 +698,11 @@ function AiPinnedCityCard({
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
 
   return (
-    <article className={clsx("scan-ai-city-card", collapsed && "collapsed")}>
+    <article className={clsx("scan-ai-city-card", collapsed && "collapsed", removing && "removing")}>
       <header className="scan-ai-city-hero">
         <div>
           <span className="scan-ai-city-kicker">
-            {isEn ? "AI city forecast" : "AI 城市预测"}
+            {isEn ? "Deep analysis" : "城市深度分析"}
           </span>
           <h3>{displayName}</h3>
           <div className="scan-ai-city-pills">
@@ -725,13 +729,23 @@ function AiPinnedCityCard({
           <div className="scan-ai-city-actions">
             <button
               type="button"
-              className="scan-ai-city-pin pinned"
-              onClick={onRemove}
-              aria-pressed="true"
-              aria-label={isEn ? `Unpin ${displayName}` : `取消固定 ${displayName}`}
-              title={isEn ? "Pinned. Click to unpin." : "已钉选，点击取消固定"}
+              className="scan-ai-city-icon-button"
+              onClick={() => setAiRefreshToken((current) => current + 1)}
+              aria-label={isEn ? `Refresh ${displayName} analysis` : `刷新 ${displayName} 深度分析`}
+              title={isEn ? "Refresh analysis" : "刷新深度分析"}
+              disabled={aiForecast.status === "loading"}
             >
-              <Pin size={15} fill="currentColor" />
+              <RefreshCw size={15} className={aiForecast.status === "loading" ? "spin" : undefined} />
+            </button>
+            <button
+              type="button"
+              className="scan-ai-city-icon-button danger"
+              onClick={onRemove}
+              aria-label={isEn ? `Remove ${displayName}` : `移除 ${displayName}`}
+              title={isEn ? "Remove city" : "移除城市"}
+              disabled={removing}
+            >
+              <X size={15} />
             </button>
             <button
               type="button"
@@ -794,8 +808,8 @@ function AiPinnedCityCard({
               {aiForecast.status === "loading" ? (
                 <p>
                   {isEn
-                    ? "Deepseek V4 flash is reading the latest airport bulletin..."
-                    : "Deepseek V4 flash 正在解读最新机场报文..."}
+                    ? "Deepseek V4 pro is reading the latest airport bulletin..."
+                    : "Deepseek V4 pro 正在解读最新机场报文..."}
                 </p>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>
@@ -874,6 +888,67 @@ function AiPinnedForecastView({
   const [collapsedCities, setCollapsedCities] = useState<Set<string>>(
     () => new Set(),
   );
+  const [removingCities, setRemovingCities] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const knownCityKeysRef = useRef<Set<string>>(new Set());
+  const removeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  useEffect(() => {
+    const activeKeys = new Set(
+      items.map((item) => normalizeCityKey(item.cityName) || item.cityName),
+    );
+    setCollapsedCities((current) => {
+      const next = new Set<string>();
+      let changed = false;
+      current.forEach((key) => {
+        if (activeKeys.has(key)) {
+          next.add(key);
+        } else {
+          changed = true;
+        }
+      });
+      items.forEach((item) => {
+        const stableKey = normalizeCityKey(item.cityName) || item.cityName;
+        if (!knownCityKeysRef.current.has(stableKey)) {
+          next.add(stableKey);
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+    knownCityKeysRef.current = activeKeys;
+  }, [items]);
+
+  useEffect(() => {
+    return () => {
+      removeTimersRef.current.forEach((timer) => clearTimeout(timer));
+      removeTimersRef.current.clear();
+    };
+  }, []);
+
+  const removeCityWithMotion = useCallback(
+    (item: AiPinnedCity, stableKey: string) => {
+      if (removeTimersRef.current.has(stableKey)) return;
+      setRemovingCities((current) => {
+        const next = new Set(current);
+        next.add(stableKey);
+        return next;
+      });
+      const timer = setTimeout(() => {
+        onRemoveCity(item.cityName);
+        setRemovingCities((current) => {
+          const next = new Set(current);
+          next.delete(stableKey);
+          return next;
+        });
+        removeTimersRef.current.delete(stableKey);
+      }, 260);
+      removeTimersRef.current.set(stableKey, timer);
+    },
+    [onRemoveCity],
+  );
+
   if (!items.length) {
     return (
       <div className="scan-ai-workspace empty">
@@ -883,8 +958,8 @@ function AiPinnedForecastView({
           </div>
           <div className="scan-empty-copy">
             {isEn
-              ? "Selected cities will appear here as pinned AI forecast blocks."
-              : "被点击的城市会加入 AI 预测页，并保留为可固定的城市分析区块。"}
+              ? "Selected cities will appear here as deep analysis blocks."
+              : "被点击的城市会加入深度分析页，并保留为城市分析区块。"}
           </div>
         </div>
       </div>
@@ -895,17 +970,17 @@ function AiPinnedForecastView({
     <div className="scan-ai-workspace">
       <div className="scan-ai-workspace-head">
         <div>
-          <span>{isEn ? "Pinned city workspace" : "固定城市工作区"}</span>
+          <span>{isEn ? "Selected city workspace" : "城市分析工作区"}</span>
           <strong>
             {isEn
-              ? `${items.length} cities under AI forecast`
-              : `${items.length} 个城市正在 AI 预测`}
+              ? `${items.length} cities under deep analysis`
+              : `${items.length} 个城市正在深度分析`}
           </strong>
         </div>
         <p>
           {isEn
-            ? "Map clicks add cities here. Pinned city analysis stays here until you remove it."
-            : "地图点击会把城市加入这里；已固定的城市分析会保留，直到你手动移除。"}
+            ? "Map clicks add cities here. City analysis stays here until you remove it."
+            : "地图点击会把城市加入这里；城市分析会保留，直到你手动移除。"}
         </p>
       </div>
       <div className="scan-ai-city-stack">
@@ -914,6 +989,7 @@ function AiPinnedForecastView({
           const row = findRowForCity(rows, item.cityName);
           const key = normalizeCityKey(item.cityName);
           const stableKey = key || item.cityName;
+          const isKnownCity = knownCityKeysRef.current.has(stableKey);
           return (
             <AiPinnedCityCard
               key={stableKey}
@@ -921,8 +997,9 @@ function AiPinnedForecastView({
               detail={detail}
               row={row}
               locale={locale}
-              collapsed={collapsedCities.has(stableKey)}
-              onRemove={() => onRemoveCity(item.cityName)}
+              collapsed={!isKnownCity || collapsedCities.has(stableKey)}
+              removing={removingCities.has(stableKey)}
+              onRemove={() => removeCityWithMotion(item, stableKey)}
               onToggleCollapsed={() => {
                 setCollapsedCities((current) => {
                   const next = new Set(current);
@@ -973,9 +1050,9 @@ function AiForecastKPIBar({
     "--";
   const cards = [
     {
-      label: isEn ? "AI Workspace" : "AI 工作区",
+      label: isEn ? "Deep Analysis" : "深度分析",
       value: String(pinnedCount),
-      note: isEn ? "Pinned cities from map clicks" : "地图点选后固定到 AI 预测",
+      note: isEn ? "Cities selected from map clicks" : "地图点选后进入深度分析",
       tone: "green",
     },
     {
@@ -1343,7 +1420,7 @@ function ScanTerminalScreen() {
             <div className="scan-empty-state">
               <div className="scan-empty-title">{isEn ? "Checking access" : "正在检查权限"}</div>
               <div className="scan-empty-copy">
-                {isEn ? "Preparing your AI forecast workspace." : "正在准备 AI 预测台。"}
+                {isEn ? "Preparing your deep analysis workspace." : "正在准备深度分析台。"}
               </div>
             </div>
           </main>
@@ -1358,11 +1435,11 @@ function ScanTerminalScreen() {
         <main className="scan-data-grid">
           <div className="scan-topbar">
             <div className="scan-topbar-title">
-              <strong>{isEn ? "AI Forecast Terminal" : "AI 预测台"}</strong>
+              <strong>{isEn ? "Deep Analysis Terminal" : "深度分析台"}</strong>
               <span>
                 {isEn
-                  ? "Click cities on the map to build an AI forecast workspace"
-                  : "点击地图城市加入 AI 预测工作区，按城市查看 DEB / 模型 / METAR"}
+                  ? "Click cities on the map to build a deep analysis workspace"
+                  : "点击地图城市加入深度分析工作区，按城市查看 DEB / 模型 / METAR"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -1444,7 +1521,7 @@ function ScanTerminalScreen() {
                     setActiveView("list");
                   }}
                 >
-                  {isEn ? "AI Forecast" : "AI 预测"}
+                  {isEn ? "Deep Analysis" : "深度分析"}
                 </button>
                 <button
                   type="button"

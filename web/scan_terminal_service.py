@@ -980,6 +980,12 @@ def build_scan_city_ai_forecast_payload(
     city_name = str(city or "").strip()
     if not city_name:
         return {"status": "failed", "reason": "city is required"}
+    logger.info(
+        "scan city AI forecast requested city={} force_refresh={} model={}",
+        city_name,
+        force_refresh,
+        SCAN_AI_MODEL,
+    )
     data = _analyze(
         city_name,
         force_refresh=force_refresh,
@@ -992,6 +998,11 @@ def build_scan_city_ai_forecast_payload(
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)
             if cached and cached.get("expires_at", 0) >= time.time():
+                logger.info(
+                    "scan city AI forecast cache hit city={} model={}",
+                    data.get("name") or city_name,
+                    SCAN_AI_MODEL,
+                )
                 return {
                     "status": "ready",
                     "cached": True,
@@ -1005,6 +1016,11 @@ def build_scan_city_ai_forecast_payload(
                 }
 
     if not SCAN_AI_ENABLED:
+        logger.warning(
+            "scan city AI forecast disabled city={} model={}",
+            data.get("name") or city_name,
+            SCAN_AI_MODEL,
+        )
         return {
             "status": "disabled",
             "model": SCAN_AI_MODEL,
@@ -1014,6 +1030,11 @@ def build_scan_city_ai_forecast_payload(
             "reason": "POLYWEATHER_SCAN_AI_ENABLED is not enabled",
         }
     if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+        logger.warning(
+            "scan city AI forecast missing DeepSeek key city={} model={}",
+            data.get("name") or city_name,
+            SCAN_AI_MODEL,
+        )
         return {
             "status": "missing_key",
             "model": SCAN_AI_MODEL,
@@ -1023,7 +1044,55 @@ def build_scan_city_ai_forecast_payload(
             "reason": "POLYWEATHER_DEEPSEEK_API_KEY is not configured",
         }
 
-    ai_raw = _call_deepseek_city_ai(ai_input)
+    try:
+        logger.info(
+            "scan city AI forecast calling provider city={} station={} model={} raw_metar_present={}",
+            data.get("name") or city_name,
+            ((ai_input.get("airport") or {}).get("icao") if isinstance(ai_input.get("airport"), dict) else None),
+            SCAN_AI_MODEL,
+            bool(
+                (ai_input.get("airport_current") or {}).get("raw_metar")
+                if isinstance(ai_input.get("airport_current"), dict)
+                else False
+            ),
+        )
+        ai_raw = _call_deepseek_city_ai(ai_input)
+    except httpx.TimeoutException as exc:
+        duration_ms = int((time.time() - started_at) * 1000)
+        logger.warning(
+            "scan city AI forecast timeout city={} duration_ms={} model={} error={}",
+            data.get("name") or city_name,
+            duration_ms,
+            SCAN_AI_MODEL,
+            exc,
+        )
+        return {
+            "status": "timeout",
+            "model": SCAN_AI_MODEL,
+            "provider": "deepseek",
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
+            "duration_ms": duration_ms,
+            "reason": f"V4 provider timed out after {SCAN_AI_TIMEOUT_SEC}s",
+        }
+    except Exception as exc:
+        duration_ms = int((time.time() - started_at) * 1000)
+        logger.warning(
+            "scan city AI forecast failed city={} duration_ms={} model={} error={}",
+            data.get("name") or city_name,
+            duration_ms,
+            SCAN_AI_MODEL,
+            exc,
+        )
+        return {
+            "status": "failed",
+            "model": SCAN_AI_MODEL,
+            "provider": "deepseek",
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
+            "duration_ms": duration_ms,
+            "reason": str(exc),
+        }
     generated_at = datetime.utcnow().isoformat() + "Z"
     with _SCAN_CITY_AI_CACHE_LOCK:
         _SCAN_CITY_AI_CACHE[cache_key] = {
@@ -1031,6 +1100,13 @@ def build_scan_city_ai_forecast_payload(
             "generated_at": generated_at,
             "payload": ai_raw,
         }
+    logger.info(
+        "scan city AI forecast complete city={} duration_ms={} model={} confidence={}",
+        data.get("name") or city_name,
+        int((time.time() - started_at) * 1000),
+        SCAN_AI_MODEL,
+        ai_raw.get("confidence") if isinstance(ai_raw, dict) else None,
+    )
     return {
         "status": "ready",
         "cached": False,

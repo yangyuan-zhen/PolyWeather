@@ -37,6 +37,11 @@ export async function POST(req: NextRequest) {
     const headers = new Headers(auth.headers);
     headers.set("Content-Type", "application/json");
     headers.set("Accept", "application/json");
+    const requestBody = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    console.info("[scan-ai-city] proxy request", {
+      city: requestBody.city,
+      force_refresh: requestBody.force_refresh === true,
+    });
     const res = await fetch(`${API_BASE}/api/scan/terminal/ai-city`, {
       method: "POST",
       headers,
@@ -46,6 +51,10 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) {
       const raw = await res.text();
+      console.warn("[scan-ai-city] backend returned non-ok", {
+        status: res.status,
+        detail: raw.slice(0, 180),
+      });
       const response = NextResponse.json(
         { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
         { status: res.status === 402 || res.status === 403 ? res.status : 502 },
@@ -53,6 +62,12 @@ export async function POST(req: NextRequest) {
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
+    console.info("[scan-ai-city] proxy complete", {
+      status: data?.status,
+      city: data?.city,
+      model: data?.model,
+      cached: data?.cached === true,
+    });
     const response = NextResponse.json(data, {
       headers: {
         "Cache-Control": "no-store",
