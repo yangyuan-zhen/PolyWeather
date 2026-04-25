@@ -93,6 +93,22 @@ type AiCityForecastState = {
   error?: string | null;
 };
 
+let aiCityFetchQueue: Promise<unknown> = Promise.resolve();
+
+function enqueueAiCityFetch<T>(
+  task: () => Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
+  const run = aiCityFetchQueue.then(async () => {
+    if (signal.aborted) {
+      throw new DOMException("The AI city request was aborted.", "AbortError");
+    }
+    return task();
+  });
+  aiCityFetchQueue = run.catch(() => undefined);
+  return run;
+}
+
 function formatShortDate(value?: string | null, locale = "zh-CN") {
   const text = String(value || "").trim();
   if (!text) return "--";
@@ -667,57 +683,64 @@ function AiPinnedCityCard({
   useEffect(() => {
     if (!aiForecastKey) return;
     let cancelled = false;
+    const controller = new AbortController();
     setAiForecast({ status: "loading" });
-    fetch("/api/scan/terminal/ai-city", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        city: detailCityName,
-        force_refresh: aiRefreshToken > 0,
-        locale: "zh-CN",
-      }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          let detail = "";
-          try {
-            const errorPayload = await response.json();
-            const message = String(errorPayload?.error || "").trim();
-            const rawDetail = String(errorPayload?.detail || "").trim();
-            const elapsed = Number(errorPayload?.elapsed_ms);
-            const timeout = Number(errorPayload?.timeout_ms);
-            detail = [
-              message,
-              rawDetail,
-              Number.isFinite(elapsed) && Number.isFinite(timeout)
-                ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ");
-          } catch {
-            detail = "";
+    enqueueAiCityFetch(
+      () =>
+        fetch("/api/scan/terminal/ai-city", {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          cache: "no-store",
+          signal: controller.signal,
+          body: JSON.stringify({
+            city: detailCityName,
+            force_refresh: aiRefreshToken > 0,
+            locale: "zh-CN",
+          }),
+        }).then(async (response) => {
+          if (!response.ok) {
+            let detail = "";
+            try {
+              const errorPayload = await response.json();
+              const message = String(errorPayload?.error || "").trim();
+              const rawDetail = String(errorPayload?.detail || "").trim();
+              const elapsed = Number(errorPayload?.elapsed_ms);
+              const timeout = Number(errorPayload?.timeout_ms);
+              detail = [
+                message,
+                rawDetail,
+                Number.isFinite(elapsed) && Number.isFinite(timeout)
+                  ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
+                  : "",
+              ]
+                .filter(Boolean)
+                .join(" · ");
+            } catch {
+              detail = "";
+            }
+            throw new Error(detail ? `HTTP ${response.status} · ${detail}` : `HTTP ${response.status}`);
           }
-          throw new Error(detail ? `HTTP ${response.status} · ${detail}` : `HTTP ${response.status}`);
-        }
-        return response.json() as Promise<AiCityForecastPayload>;
-      })
+          return response.json() as Promise<AiCityForecastPayload>;
+        }),
+      controller.signal,
+    )
       .then((payload) => {
         if (!cancelled) {
           setAiForecast({ payload, status: "ready" });
         }
       })
       .catch((error) => {
+        if (controller.signal.aborted) return;
         if (!cancelled) {
           setAiForecast({ error: String(error), status: "failed" });
         }
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [aiForecastKey, aiRefreshToken, detailCityName]);
 

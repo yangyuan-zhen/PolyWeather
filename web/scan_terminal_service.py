@@ -25,6 +25,25 @@ _SCAN_TERMINAL_AI_CACHE_LOCK = threading.Lock()
 _SCAN_TERMINAL_AI_CACHE: Dict[str, Dict[str, Any]] = {}
 _SCAN_CITY_AI_CACHE_LOCK = threading.Lock()
 _SCAN_CITY_AI_CACHE: Dict[str, Dict[str, Any]] = {}
+
+
+def _env_int(
+    name: str,
+    default: int,
+    *,
+    min_value: int,
+    max_value: Optional[int] = None,
+) -> int:
+    try:
+        value = int(os.getenv(name, str(default)))
+    except Exception:
+        value = int(default)
+    value = max(int(min_value), value)
+    if max_value is not None:
+        value = min(int(max_value), value)
+    return value
+
+
 SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "30")),
@@ -42,29 +61,34 @@ SCAN_AI_BASE_URL = str(
 SCAN_AI_ENABLED = str(
     os.getenv("POLYWEATHER_SCAN_AI_ENABLED") or "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
-SCAN_AI_TIMEOUT_SEC = max(
-    30,
-    int(os.getenv("POLYWEATHER_SCAN_AI_TIMEOUT_SEC", "40")),
+SCAN_AI_TIMEOUT_SEC = _env_int(
+    "POLYWEATHER_SCAN_AI_TIMEOUT_SEC",
+    40,
+    min_value=10,
+    max_value=120,
 )
-SCAN_CITY_AI_TIMEOUT_SEC = max(
-    75,
-    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC", "75")),
+SCAN_CITY_AI_TIMEOUT_SEC = _env_int(
+    "POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC",
+    45,
+    min_value=10,
+    max_value=120,
 )
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
     int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "1800")),
 )
-SCAN_AI_MAX_ROWS = max(
-    1,
-    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_ROWS", "40")),
+SCAN_AI_MAX_ROWS = _env_int("POLYWEATHER_SCAN_AI_MAX_ROWS", 40, min_value=1)
+SCAN_AI_MAX_TOKENS = _env_int(
+    "POLYWEATHER_SCAN_AI_MAX_TOKENS",
+    3200,
+    min_value=600,
+    max_value=64000,
 )
-SCAN_AI_MAX_TOKENS = max(
-    600,
-    int(os.getenv("POLYWEATHER_SCAN_AI_MAX_TOKENS", "3200")),
-)
-SCAN_CITY_AI_MAX_TOKENS = max(
-    8192,
-    int(os.getenv("POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS", "8192")),
+SCAN_CITY_AI_MAX_TOKENS = _env_int(
+    "POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS",
+    1200,
+    min_value=800,
+    max_value=64000,
 )
 SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v3"
 
@@ -450,6 +474,8 @@ def _build_city_ai_fallback(
     content_preview = _truncate_ai_text(raw_content, 1000)
     looks_like_truncated_json = bool(content_preview.startswith("{") and not content_preview.rstrip().endswith("}"))
     reason_preview = _truncate_ai_text(reason, 260)
+    reason_lower = str(reason or "").lower()
+    timed_out = "timeout" in reason_lower or "timed out" in reason_lower or "超时" in str(reason or "")
     if content_preview and not looks_like_truncated_json:
         metar_zh = f"DeepSeek V4-Pro 返回了非结构化解读，系统已保留摘要：{content_preview}"
         metar_en = f"DeepSeek V4-Pro returned non-JSON analysis; preserved summary: {content_preview}"
@@ -463,10 +489,24 @@ def _build_city_ai_fallback(
         metar_zh = "当前没有可用的原始 METAR 正文，暂以 DEB 与多模型路径为主。"
         metar_en = "No raw METAR text is available, so DEB and the model cluster carry the read."
     predicted_text = _format_ai_temperature(predicted, unit) or "--"
-    final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 输出格式异常，已降级为模型/METAR 兜底判断。"
-    final_en = f"{city} daily high is centered near {predicted_text}; AI output was not strict JSON, so this is a model/METAR fallback."
+    if timed_out:
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；DeepSeek V4-Pro 超时，已降级为模型/METAR 兜底判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; DeepSeek V4-Pro timed out, so this is a model/METAR fallback."
+    else:
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 输出格式异常，已降级为模型/METAR 兜底判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; AI output was not strict JSON, so this is a model/METAR fallback."
     reasoning_zh = f"DEB、多模型集合和最新 METAR 仍可用于判断方向；原始失败原因：{reason_preview or 'AI 输出不是 JSON object'}。"
     reasoning_en = f"DEB, the model cluster and latest METAR still support a directional read; raw failure: {reason_preview or 'AI output was not a JSON object'}."
+    risks_zh = (
+        ["DeepSeek V4-Pro 本次超时，需刷新重试确认 AI 细节。"]
+        if timed_out
+        else ["DeepSeek V4-Pro 本次没有返回严格 JSON，需刷新重试确认。"]
+    )
+    risks_en = (
+        ["DeepSeek V4-Pro timed out; refresh to confirm the AI details."]
+        if timed_out
+        else ["DeepSeek V4-Pro did not return strict JSON; refresh to confirm."]
+    )
     return {
         "predicted_max": predicted,
         "range_low": range_low,
@@ -479,13 +519,14 @@ def _build_city_ai_fallback(
         "metar_read_en": metar_en,
         "reasoning_zh": reasoning_zh,
         "reasoning_en": reasoning_en,
-        "risks_zh": ["DeepSeek V4-Pro 本次没有返回严格 JSON，需刷新重试确认。"],
-        "risks_en": ["DeepSeek V4-Pro did not return strict JSON; refresh to confirm."],
+        "risks_zh": risks_zh,
+        "risks_en": risks_en,
         "model_cluster_note_zh": model_note_zh,
         "model_cluster_note_en": model_note_en,
         "_polyweather_meta": {
             **_provider_response_meta(provider_data),
             "fallback": True,
+            "fallback_kind": "timeout" if timed_out else "non_json",
             "looks_like_truncated_json": looks_like_truncated_json,
             "fallback_reason": reason_preview,
             "raw_content_preview": content_preview,
@@ -633,6 +674,143 @@ def _compact_observation_points(raw_points: Any, limit: int = 24) -> List[Dict[s
         points.append({"time": time_value, "temp": temp})
     sorted_points = sorted(points, key=_observation_sort_key)
     return sorted_points[-max(1, int(limit)) :]
+
+
+def _compact_ai_text(value: Any, limit: int = 700) -> Optional[str]:
+    text = _truncate_ai_text(value, limit).strip()
+    return text or None
+
+
+def _compact_hourly_context(raw_hourly: Any) -> Dict[str, Any]:
+    if not isinstance(raw_hourly, dict):
+        return {}
+    times = raw_hourly.get("times") or raw_hourly.get("time") or []
+    temps = raw_hourly.get("temps") or raw_hourly.get("temperature_2m") or []
+    radiation = raw_hourly.get("radiation") or raw_hourly.get("shortwave_radiation") or []
+    if not isinstance(times, list) or not isinstance(temps, list):
+        return {}
+
+    points: List[Dict[str, Any]] = []
+    for idx, raw_time in enumerate(times):
+        temp = _safe_float(temps[idx] if idx < len(temps) else None)
+        if temp is None:
+            continue
+        time_text = str(raw_time or "").strip()
+        if "T" in time_text:
+            time_text = time_text.split("T", 1)[1][:5]
+        elif len(time_text) > 5:
+            time_text = time_text[:5]
+        point: Dict[str, Any] = {"time": time_text, "temp": temp}
+        rad = _safe_float(radiation[idx] if isinstance(radiation, list) and idx < len(radiation) else None)
+        if rad is not None:
+            point["radiation"] = rad
+        points.append(point)
+
+    if not points:
+        return {}
+    max_point = max(points, key=lambda item: _safe_float(item.get("temp")) or -999.0)
+    sample_indexes = {
+        idx
+        for idx in range(len(points))
+        if idx % 2 == 0 or idx >= len(points) - 4 or points[idx] is max_point
+    }
+    samples = [points[idx] for idx in sorted(sample_indexes)][-14:]
+    return {
+        "sample_count": len(points),
+        "forecast_hourly_max": max_point,
+        "samples": samples,
+    }
+
+
+def _compact_taf_context(raw_taf_data: Any) -> Dict[str, Any]:
+    if not isinstance(raw_taf_data, dict):
+        return {}
+    signal = raw_taf_data.get("signal") if isinstance(raw_taf_data.get("signal"), dict) else {}
+    source = signal or raw_taf_data
+    raw_taf = raw_taf_data.get("raw_taf") or source.get("raw_taf")
+    compact: Dict[str, Any] = {
+        "available": bool(source.get("available") or raw_taf),
+        "raw_taf": _compact_ai_text(raw_taf, 900),
+        "issue_time": raw_taf_data.get("issue_time") or source.get("issue_time"),
+        "valid_time_from": raw_taf_data.get("valid_time_from") or source.get("valid_time_from"),
+        "valid_time_to": raw_taf_data.get("valid_time_to") or source.get("valid_time_to"),
+        "peak_window": source.get("peak_window"),
+        "suppression_level": source.get("suppression_level"),
+        "disruption_level": source.get("disruption_level"),
+        "wind_shift": source.get("wind_shift"),
+        "wind_regimes": source.get("wind_regimes"),
+        "summary_zh": _compact_ai_text(source.get("summary_zh"), 260),
+        "summary_en": _compact_ai_text(source.get("summary_en"), 260),
+    }
+    segments = source.get("segments") if isinstance(source.get("segments"), list) else []
+    markers = source.get("markers") if isinstance(source.get("markers"), list) else []
+    if segments:
+        compact["segments"] = segments[:3]
+    if markers:
+        compact["markers"] = markers[:4]
+    return {key: value for key, value in compact.items() if value not in (None, "", [])}
+
+
+def _compact_vertical_context(raw_vertical: Any) -> Dict[str, Any]:
+    if not isinstance(raw_vertical, dict):
+        return {}
+    keys = [
+        "source",
+        "window_start",
+        "window_end",
+        "suppression_risk",
+        "trigger_risk",
+        "mixing_strength",
+        "shear_risk",
+        "heating_setup",
+        "heating_score",
+        "summary_zh",
+        "summary_en",
+    ]
+    compact: Dict[str, Any] = {}
+    for key in keys:
+        value = raw_vertical.get(key)
+        if isinstance(value, str):
+            value = _compact_ai_text(value, 280)
+        if value not in (None, "", []):
+            compact[key] = value
+    return compact
+
+
+def _compact_intraday_context(raw_intraday: Any) -> Dict[str, Any]:
+    if not isinstance(raw_intraday, dict):
+        return {}
+    compact: Dict[str, Any] = {}
+    for key in [
+        "headline",
+        "headline_en",
+        "confidence",
+        "base_case_bucket",
+        "upside_bucket",
+        "downside_bucket",
+        "next_observation_time",
+        "peak_window",
+    ]:
+        value = raw_intraday.get(key)
+        if isinstance(value, str):
+            value = _compact_ai_text(value, 220)
+        if value not in (None, "", []):
+            compact[key] = value
+    signals = raw_intraday.get("signal_contributions")
+    if isinstance(signals, list):
+        compact["signal_contributions"] = [
+            {
+                "label": item.get("label"),
+                "label_en": item.get("label_en"),
+                "direction": item.get("direction"),
+                "strength": item.get("strength"),
+                "summary": _compact_ai_text(item.get("summary"), 180),
+                "summary_en": _compact_ai_text(item.get("summary_en"), 180),
+            }
+            for item in signals[:4]
+            if isinstance(item, dict)
+        ]
+    return compact
 
 
 def _build_metar_decision_context(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -1052,13 +1230,20 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
             "station_code": airport_current.get("station_code"),
             "station_label": airport_current.get("station_label"),
         },
-        "taf": data.get("taf") or {},
-        "vertical_profile_signal": data.get("vertical_profile_signal") or {},
-        "intraday_meteorology": data.get("intraday_meteorology") or {},
-        "hourly": data.get("hourly") or {},
-        "metar_today_obs": _compact_observation_points(data.get("metar_today_obs"), 36),
-        "metar_recent_obs": _compact_observation_points(data.get("metar_recent_obs"), 12),
-        "settlement_today_obs": _compact_observation_points(data.get("settlement_today_obs"), 36),
+        "taf": _compact_taf_context(data.get("taf")),
+        "vertical_profile_signal": _compact_vertical_context(
+            data.get("vertical_profile_signal")
+        ),
+        "intraday_meteorology": _compact_intraday_context(
+            data.get("intraday_meteorology")
+        ),
+        "hourly": _compact_hourly_context(data.get("hourly")),
+        "metar_today_obs": _compact_observation_points(data.get("metar_today_obs"), 18),
+        "metar_recent_obs": _compact_observation_points(data.get("metar_recent_obs"), 8),
+        "settlement_today_obs": _compact_observation_points(
+            data.get("settlement_today_obs"),
+            18,
+        ),
     }
 
 
@@ -1115,9 +1300,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     request_json = {
         "model": SCAN_AI_MODEL,
         "temperature": 0.2,
-        "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 8192), 64000),
-        "thinking": {"type": "enabled"},
-        "reasoning_effort": "high",
+        "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
         "response_format": {"type": "json_object"},
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -1204,7 +1387,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             repair_payload = {
                 "model": SCAN_AI_MODEL,
                 "temperature": 0.0,
-                "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 4096), 64000),
+                "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 1200), 64000),
                 "response_format": {"type": "json_object"},
                 "messages": [
                     {
@@ -1415,27 +1598,35 @@ def build_scan_city_ai_forecast_payload(
         ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
+        reason_en = f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+        reason_zh = f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        ai_raw = _build_city_ai_fallback(
+            ai_input,
+            locale=normalized_locale,
+            reason=reason_en if normalized_locale == "en-US" else reason_zh,
+        )
+        generated_at = datetime.utcnow().isoformat() + "Z"
         logger.warning(
-            "scan city AI forecast timeout city={} duration_ms={} model={} error={}",
+            "scan city AI forecast timeout fallback city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
             duration_ms,
             SCAN_AI_MODEL,
             exc,
         )
         return {
-            "status": "timeout",
+            "status": "ready",
+            "degraded": True,
+            "cached": False,
             "model": SCAN_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
+            "generated_at": generated_at,
             "duration_ms": duration_ms,
-            "reason": (
-                f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-                if normalized_locale == "en-US"
-                else f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
-            ),
-            "reason_en": f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s",
-            "reason_zh": f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回",
+            "reason": reason_en if normalized_locale == "en-US" else reason_zh,
+            "reason_en": reason_en,
+            "reason_zh": reason_zh,
+            "city_forecast": ai_raw,
         }
     except Exception as exc:
         duration_ms = int((time.time() - started_at) * 1000)
