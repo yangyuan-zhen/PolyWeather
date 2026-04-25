@@ -411,25 +411,6 @@ export function DetailPanel({
               type="button"
               className={clsx(
                 "panel-action-button",
-                "panel-action-button-primary",
-                !isPro && "pro-locked",
-              )}
-              title={
-                isPro
-                  ? t("detail.todayAnalysis")
-                  : `${t("detail.todayAnalysis")} (Pro)`
-              }
-              onClick={() => handleFeatureAccess("today")}
-              disabled={!store.selectedCity}
-            >
-              {isPro
-                ? t("detail.todayAnalysis")
-                : `${t("detail.todayAnalysis")} · Pro`}
-            </button>
-            <button
-              type="button"
-              className={clsx(
-                "panel-action-button",
                 "panel-action-button-secondary",
                 !isPro && "pro-locked",
               )}
