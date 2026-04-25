@@ -5,9 +5,10 @@ import clsx from "clsx";
 import Link from "next/link";
 import {
   BarChart3,
+  ChevronDown,
   LogIn,
-  X,
   Moon,
+  Pin,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -531,13 +532,17 @@ function AiPinnedCityCard({
   detail,
   row,
   locale,
+  collapsed,
   onRemove,
+  onToggleCollapsed,
 }: {
   item: AiPinnedCity;
   detail: CityDetail | null;
   row: ScanOpportunityRow | null;
   locale: string;
+  collapsed: boolean;
   onRemove: () => void;
+  onToggleCollapsed: () => void;
 }) {
   const isEn = locale === "en-US";
   const displayName =
@@ -584,8 +589,10 @@ function AiPinnedCityCard({
     detail?.airport_primary?.wx_desc ||
     "";
 
+  const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
+
   return (
-    <article className="scan-ai-city-card">
+    <article className={clsx("scan-ai-city-card", collapsed && "collapsed")}>
       <header className="scan-ai-city-hero">
         <div>
           <span className="scan-ai-city-kicker">
@@ -613,15 +620,32 @@ function AiPinnedCityCard({
                 ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
                 : "--"}
           </strong>
-          <button type="button" className="scan-ai-city-remove" onClick={onRemove}>
-            <X size={14} />
-            {isEn ? "Unpin" : "取消固定"}
-          </button>
+          <div className="scan-ai-city-actions">
+            <button
+              type="button"
+              className="scan-ai-city-pin"
+              onClick={onRemove}
+              aria-label={isEn ? `Unpin ${displayName}` : `取消固定 ${displayName}`}
+              title={isEn ? "Unpin city" : "取消固定"}
+            >
+              <Pin size={15} fill="currentColor" />
+            </button>
+            <button
+              type="button"
+              className="scan-ai-city-collapse"
+              onClick={onToggleCollapsed}
+              aria-expanded={!collapsed}
+              aria-controls={collapseId}
+            >
+              <ChevronDown size={15} />
+              {collapsed ? (isEn ? "Expand" : "展开") : (isEn ? "Collapse" : "收起")}
+            </button>
+          </div>
         </div>
       </header>
 
-      {detail ? (
-        <div className="scan-ai-city-body">
+      {detail && !collapsed ? (
+        <div className="scan-ai-city-body" id={collapseId}>
           <section className={clsx("scan-ai-decision-band", paceTone)}>
             <div>
               <span>{isEn ? "Final read" : "最终判断"}</span>
@@ -684,11 +708,11 @@ function AiPinnedCityCard({
           </section>
 
         </div>
-      ) : (
+      ) : !detail ? (
         <div className="scan-ai-city-loading">
           {isEn ? "Loading today analysis for this city..." : "正在加载该城市的今日日内分析..."}
         </div>
-      )}
+      ) : null}
     </article>
   );
 }
@@ -707,6 +731,9 @@ function AiPinnedForecastView({
   onRemoveCity: (cityName: string) => void;
 }) {
   const isEn = locale === "en-US";
+  const [collapsedCities, setCollapsedCities] = useState<Set<string>>(
+    () => new Set(),
+  );
   if (!items.length) {
     return (
       <div className="scan-ai-workspace empty">
@@ -746,14 +773,27 @@ function AiPinnedForecastView({
           const detail = findDetailForCity(detailsByName, item.cityName);
           const row = findRowForCity(rows, item.cityName);
           const key = normalizeCityKey(item.cityName);
+          const stableKey = key || item.cityName;
           return (
             <AiPinnedCityCard
-              key={key || item.cityName}
+              key={stableKey}
               item={item}
               detail={detail}
               row={row}
               locale={locale}
+              collapsed={collapsedCities.has(stableKey)}
               onRemove={() => onRemoveCity(item.cityName)}
+              onToggleCollapsed={() => {
+                setCollapsedCities((current) => {
+                  const next = new Set(current);
+                  if (next.has(stableKey)) {
+                    next.delete(stableKey);
+                  } else {
+                    next.add(stableKey);
+                  }
+                  return next;
+                });
+              }}
             />
           );
         })}
