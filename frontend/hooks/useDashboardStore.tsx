@@ -939,24 +939,15 @@ export function DashboardStoreProvider({
     setSelectedForecastDate(null);
     setFutureModalDate(null);
     setForecastModalMode(null);
-    const depth: CityDetailDepth = proAccessRef.current.subscriptionActive
-      ? "market"
-      : "panel";
     setLoadingState((current) => ({ ...current, cityDetail: true }));
     void Promise.allSettled([
       ensureCitySummary(cityName),
-      ensureCityDetail(cityName, false, depth),
+      ensureCityDetail(cityName, false, "panel"),
     ])
       .then(([, detail]) => {
         if (selectedCityRef.current !== cityName) return;
         if (detail.status === "fulfilled") {
           setSelectedForecastDate(detail.value.local_date);
-          if (
-            proAccessRef.current.subscriptionActive &&
-            !detail.value.market_scan
-          ) {
-            void ensureCityMarketScan(cityName, false);
-          }
         }
       })
       .finally(() => {
@@ -964,15 +955,6 @@ export function DashboardStoreProvider({
         setLoadingState((current) => ({ ...current, cityDetail: false }));
       });
   };
-
-  useEffect(() => {
-    if (!selectedCity) return;
-    if (!proAccess.subscriptionActive) return;
-    const detail = cityDetailsByName[selectedCity];
-    if (!detail) return;
-    if (detail.market_scan) return;
-    void ensureCityMarketScan(selectedCity, false);
-  }, [cityDetailsByName, proAccess.subscriptionActive, selectedCity]);
 
   const clearCityFocus = () => {
     selectedCityRef.current = null;
@@ -1220,11 +1202,6 @@ export function DashboardStoreProvider({
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, dateStr);
-        const hasMarketCachedDetail = detailSatisfiesDepth(
-          cachedDetail,
-          "market",
-          dateStr,
-        );
         const todayDate =
           cachedDetail?.local_date ||
           cachedDetail?.forecast?.daily?.[0]?.date ||
@@ -1235,9 +1212,6 @@ export function DashboardStoreProvider({
         setSelectedForecastDate(dateStr);
         setFutureModalDate(dateStr);
         setForecastModalMode(modalMode);
-        if (!hasMarketCachedDetail || forceRefresh) {
-          void ensureCityDetail(cityName, forceRefresh, "market").catch(() => {});
-        }
         if (!hasFullCachedDetail || forceRefresh) {
           setLoadingState((current) => ({
             ...current,
@@ -1282,11 +1256,6 @@ export function DashboardStoreProvider({
         const hasFullCachedDetail =
           detailSatisfiesDepth(cachedDetail, "full") &&
           !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
-        const hasMarketCachedDetail = detailSatisfiesDepth(
-          cachedDetail,
-          "market",
-          cachedDetail?.local_date,
-        );
         const targetDate =
           cachedDetail?.local_date ||
           cachedDetail?.forecast?.daily?.[0]?.date ||
@@ -1306,13 +1275,6 @@ export function DashboardStoreProvider({
           ...current,
           futureDeep: needsDetailRefresh,
         }));
-        if (!hasMarketCachedDetail || forceRefresh) {
-          void ensureCityDetail(
-            cityName,
-            Boolean(forceRefresh),
-            "market",
-          ).catch(() => {});
-        }
         void ensureCityDetail(
           cityName,
           needsDetailRefresh,

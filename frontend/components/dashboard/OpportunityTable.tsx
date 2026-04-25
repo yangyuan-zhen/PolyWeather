@@ -12,6 +12,7 @@ import {
   formatTemperatureValue,
   getModelView,
   getProbabilityView,
+  getTodayPaceView,
   normalizeTemperatureLabel,
   normalizeTemperatureSymbol,
 } from "@/lib/dashboard-utils";
@@ -595,6 +596,11 @@ type V4CityForecast = {
   confidence?: string | null;
   peakWindow?: string | null;
   airportRead?: string | null;
+  weatherRead?: string | null;
+  paceRead?: string | null;
+  paceTone?: "warm" | "cold" | "neutral" | string | null;
+  paceDelta?: number | null;
+  paceAdjustedHigh?: number | null;
   reason?: string | null;
   modelNote?: string | null;
   source: "ai" | "fallback";
@@ -736,6 +742,171 @@ function decodeRawMetarVisibility(rawMetar?: string | null) {
   return "";
 }
 
+function decodeMetarWeatherToken(token?: string | null, locale = "zh-CN") {
+  const raw = String(token || "").trim().toUpperCase();
+  if (!raw) return "";
+  const isEn = locale === "en-US";
+  const intensity = raw.startsWith("-")
+    ? isEn
+      ? "light "
+      : "轻"
+    : raw.startsWith("+")
+      ? isEn
+        ? "heavy "
+        : "强"
+      : "";
+  const cleaned = raw.replace(/^[+-]/, "");
+  const descriptors: Record<string, { zh: string; en: string }> = {
+    VC: { zh: "附近", en: "nearby " },
+    SH: { zh: "阵性", en: "showery " },
+    TS: { zh: "雷暴性", en: "thunderstorm " },
+    FZ: { zh: "冻", en: "freezing " },
+    BL: { zh: "吹扬", en: "blowing " },
+    DR: { zh: "低吹", en: "drifting " },
+    MI: { zh: "浅层", en: "shallow " },
+    BC: { zh: "碎片状", en: "patches of " },
+    PR: { zh: "部分", en: "partial " },
+  };
+  const phenomena: Record<string, { zh: string; en: string }> = {
+    DZ: { zh: "毛毛雨", en: "drizzle" },
+    RA: { zh: "雨", en: "rain" },
+    SN: { zh: "雪", en: "snow" },
+    SG: { zh: "米雪", en: "snow grains" },
+    IC: { zh: "冰晶", en: "ice crystals" },
+    PL: { zh: "冰粒", en: "ice pellets" },
+    GR: { zh: "冰雹", en: "hail" },
+    GS: { zh: "小冰雹", en: "small hail" },
+    UP: { zh: "未知降水", en: "unknown precipitation" },
+    BR: { zh: "薄雾", en: "mist" },
+    FG: { zh: "雾", en: "fog" },
+    FU: { zh: "烟", en: "smoke" },
+    VA: { zh: "火山灰", en: "volcanic ash" },
+    DU: { zh: "浮尘", en: "dust" },
+    SA: { zh: "沙", en: "sand" },
+    HZ: { zh: "霾", en: "haze" },
+    PY: { zh: "喷雾", en: "spray" },
+    PO: { zh: "尘卷风", en: "dust whirls" },
+    SQ: { zh: "飑", en: "squall" },
+    FC: { zh: "漏斗云", en: "funnel cloud" },
+    SS: { zh: "沙暴", en: "sandstorm" },
+    DS: { zh: "尘暴", en: "duststorm" },
+  };
+  const descriptorText = Object.entries(descriptors)
+    .filter(([code]) => cleaned.includes(code))
+    .map(([, text]) => (isEn ? text.en : text.zh))
+    .join("");
+  const phenomenonText = Object.entries(phenomena)
+    .filter(([code]) => cleaned.includes(code))
+    .map(([, text]) => (isEn ? text.en : text.zh))
+    .join(isEn ? " / " : "、");
+  if (!phenomenonText) return "";
+  return `${intensity}${descriptorText}${phenomenonText}`;
+}
+
+function decodeRawMetarWeather(rawMetar?: string | null, locale = "zh-CN") {
+  const raw = String(rawMetar || "").toUpperCase();
+  const matches = Array.from(
+    raw.matchAll(/\b([+-]?(?:VC)?(?:MI|PR|BC|DR|BL|SH|TS|FZ)?(?:DZ|RA|SN|SG|IC|PL|GR|GS|UP|BR|FG|FU|VA|DU|SA|HZ|PY|PO|SQ|FC|SS|DS))\b/g),
+  );
+  return Array.from(
+    new Set(
+      matches
+        .map((match) => decodeMetarWeatherToken(match[1], locale))
+        .filter(Boolean),
+    ),
+  ).join(locale === "en-US" ? ", " : "、");
+}
+
+function getAirportWeatherInputs(row: ScanOpportunityRow, detail: CityDetail | null) {
+  const context = row.metar_context || {};
+  const airport: Partial<NonNullable<CityDetail["airport_current"]>> =
+    detail?.airport_current || {};
+  const rawMetar = String(context.airport_raw_metar || airport.raw_metar || "").trim();
+  return {
+    cloud: String(context.airport_cloud_desc || airport.cloud_desc || "").trim(),
+    rawMetar,
+    visibility:
+      context.airport_visibility_mi != null && Number.isFinite(Number(context.airport_visibility_mi))
+        ? Number(context.airport_visibility_mi)
+        : airport.visibility_mi != null && Number.isFinite(Number(airport.visibility_mi))
+          ? Number(airport.visibility_mi)
+          : null,
+    weather: String(context.airport_wx_desc || airport.wx_desc || "").trim(),
+    windSpeed:
+      context.airport_wind_speed_kt != null && Number.isFinite(Number(context.airport_wind_speed_kt))
+        ? Number(context.airport_wind_speed_kt)
+        : airport.wind_speed_kt != null && Number.isFinite(Number(airport.wind_speed_kt))
+          ? Number(airport.wind_speed_kt)
+          : null,
+  };
+}
+
+function formatAirportWeatherRead(
+  row: ScanOpportunityRow,
+  detail: CityDetail | null,
+  locale: string,
+) {
+  const isEn = locale === "en-US";
+  const inputs = getAirportWeatherInputs(row, detail);
+  const decodedCloud = inputs.cloud || decodeRawMetarCloud(inputs.rawMetar, locale);
+  const decodedWeather =
+    decodeMetarWeatherToken(inputs.weather, locale) ||
+    inputs.weather ||
+    decodeRawMetarWeather(inputs.rawMetar, locale);
+  const visibilityText =
+    inputs.visibility != null ? `${inputs.visibility.toFixed(1)}mi` : decodeRawMetarVisibility(inputs.rawMetar);
+  const cloudRaw = `${inputs.cloud} ${inputs.rawMetar}`.toUpperCase();
+  const weatherRaw = `${inputs.weather} ${inputs.rawMetar}`.toUpperCase();
+  const suppressors: string[] = [];
+  const supporters: string[] = [];
+
+  if (/(RA|DZ|SN|TS|SH|FG|BR|HZ|OVC|BKN)/.test(weatherRaw) || /(OVC|BKN)/.test(cloudRaw)) {
+    suppressors.push(
+      isEn
+        ? "cloud, precipitation or restricted visibility can suppress solar heating"
+        : "云雨、薄雾或低能见度会压制太阳辐射升温",
+    );
+  }
+  if (inputs.visibility != null && inputs.visibility < 6) {
+    suppressors.push(
+      isEn
+        ? `visibility is only ${visibilityText}, so the airport path may warm more slowly`
+        : `能见度仅 ${visibilityText}，机场路径可能升温偏慢`,
+    );
+  }
+  if (/(FEW|SCT)/.test(cloudRaw) && !/(RA|DZ|SN|TS|FG|BR|HZ|OVC|BKN)/.test(weatherRaw)) {
+    supporters.push(
+      isEn
+        ? "few or scattered clouds do not block the heating path materially"
+        : "少云或散云对日间升温压制不明显",
+    );
+  }
+  if (inputs.windSpeed != null && inputs.windSpeed >= 15) {
+    suppressors.push(
+      isEn
+        ? "stronger wind mixing can change the airport temperature path"
+        : "风速偏大，边界层混合可能改写机场温度路径",
+    );
+  } else if (inputs.windSpeed != null && inputs.windSpeed <= 5 && !suppressors.length) {
+    supporters.push(
+      isEn
+        ? "light wind leaves the temperature path mainly driven by local sunshine"
+        : "风速较弱，温度路径更取决于本地日照",
+    );
+  }
+
+  const descriptors = [
+    decodedWeather ? (isEn ? `weather ${decodedWeather}` : `天气 ${decodedWeather}`) : null,
+    decodedCloud ? (isEn ? `cloud ${decodedCloud}` : `云况 ${decodedCloud}`) : null,
+    visibilityText ? (isEn ? `visibility ${visibilityText}` : `能见度 ${visibilityText}`) : null,
+  ].filter(Boolean);
+  const read = suppressors[0] || supporters[0];
+  if (!descriptors.length && !read) return null;
+  const prefix = isEn ? "Airport weather read" : "机场气象解读";
+  const evidence = descriptors.length ? `${descriptors.join(isEn ? ", " : "，")}；` : "";
+  return `${prefix}：${evidence}${read || (isEn ? "no clear weather suppression signal yet" : "暂未看到明确天气压温信号")}。`;
+}
+
 function formatAirportReportRead(
   row: ScanOpportunityRow,
   detail: CityDetail | null,
@@ -779,6 +950,10 @@ function formatAirportReportRead(
   const weather = String(context.airport_wx_desc || airport.wx_desc || "").trim();
   const rawMetar = String(context.airport_raw_metar || airport.raw_metar || "").trim();
   const decodedCloud = cloud || decodeRawMetarCloud(rawMetar, locale);
+  const decodedWeather =
+    decodeMetarWeatherToken(weather, locale) ||
+    weather ||
+    decodeRawMetarWeather(rawMetar, locale);
   const visibility =
     context.airport_visibility_mi != null && Number.isFinite(Number(context.airport_visibility_mi))
       ? Number(context.airport_visibility_mi)
@@ -801,12 +976,80 @@ function formatAirportReportRead(
     );
   }
   if (decodedCloud) parts.push(isEn ? `cloud ${decodedCloud}` : `云况 ${decodedCloud}`);
-  if (weather) parts.push(isEn ? `weather ${weather}` : `天气 ${weather}`);
+  if (decodedWeather) parts.push(isEn ? `weather ${decodedWeather}` : `天气 ${decodedWeather}`);
   if (decodedVisibility) parts.push(isEn ? `visibility ${decodedVisibility}` : `能见度 ${decodedVisibility}`);
   if (!parts.length) return null;
   const prefix = isEn ? "Latest airport METAR read" : "最新机场报文解读";
   const head = [station, obsTime].filter(Boolean).join(" ");
   return `${prefix}${head ? ` ${head}` : ""}：${parts.join("，")}。`;
+}
+
+function getPaceDeviationRead(
+  detail: CityDetail | null,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  if (!detail) return null;
+  const paceView = getTodayPaceView(detail, locale === "en-US" ? "en-US" : "zh-CN");
+  if (!paceView) return null;
+  const unit = normalizeTemperatureSymbol(tempSymbol || detail.temp_symbol);
+  const observed = formatTemperatureValue(paceView.observedNow, unit, { digits: 1 });
+  const expected = formatTemperatureValue(paceView.expectedNow, unit, { digits: 1 });
+  const delta = `${paceView.delta > 0 ? "+" : ""}${paceView.delta.toFixed(1)}${unit}`;
+  const isEn = locale === "en-US";
+  const toneText =
+    paceView.biasTone === "warm"
+      ? isEn
+        ? "running hotter"
+        : "偏热"
+      : paceView.biasTone === "cold"
+        ? isEn
+          ? "running cooler"
+          : "偏冷"
+        : isEn
+          ? "tracking"
+          : "基本跟踪";
+  return {
+    adjustedHigh: paceView.paceAdjustedHigh,
+    delta: paceView.delta,
+    label: paceView.badge,
+    read: isEn
+      ? `Observed path vs DEB curve: ${observed} now vs ${expected} expected, ${delta} (${toneText}).`
+      : `实测路径对比 DEB 曲线：当前 ${observed}，同刻预期 ${expected}，偏差 ${delta}（${toneText}）。`,
+    tone: paceView.biasTone,
+  };
+}
+
+function getPaceSignalLabel(forecast: V4CityForecast, locale: string, tempSymbol?: string | null) {
+  const isEn = locale === "en-US";
+  if (forecast.paceDelta == null || !Number.isFinite(Number(forecast.paceDelta))) {
+    return isEn ? "Path pending" : "路径待确认";
+  }
+  const unit = normalizeTemperatureSymbol(tempSymbol);
+  const delta = `${forecast.paceDelta > 0 ? "+" : ""}${Number(forecast.paceDelta).toFixed(1)}${unit}`;
+  if (forecast.paceTone === "warm") return isEn ? `Hot path ${delta}` : `实测偏热 ${delta}`;
+  if (forecast.paceTone === "cold") return isEn ? `Cool path ${delta}` : `实测偏冷 ${delta}`;
+  return isEn ? `On path ${delta}` : `路径跟踪 ${delta}`;
+}
+
+function getPaceDecisionTail(forecast: V4CityForecast, locale: string, tempSymbol?: string | null) {
+  if (forecast.paceDelta == null || !Number.isFinite(Number(forecast.paceDelta))) return "";
+  const isEn = locale === "en-US";
+  const unit = normalizeTemperatureSymbol(tempSymbol);
+  const delta = `${forecast.paceDelta > 0 ? "+" : ""}${Number(forecast.paceDelta).toFixed(1)}${unit}`;
+  if (forecast.paceTone === "warm") {
+    return isEn
+      ? ` Observations are running ${delta} above the DEB path, so upside boundaries need extra caution.`
+      : ` 实测比 DEB 路径偏高 ${delta}，上方阈值要额外谨慎。`;
+  }
+  if (forecast.paceTone === "cold") {
+    return isEn
+      ? ` Observations are running ${delta} below the DEB path, which weakens upside breakout odds.`
+      : ` 实测比 DEB 路径偏低 ${delta}，上破概率需要下修。`;
+  }
+  return isEn
+    ? " Observations are still tracking the DEB path."
+    : " 实测仍基本跟踪 DEB 路径。";
 }
 
 function median(values: number[]) {
@@ -856,6 +1099,8 @@ function getV4CityForecast(
       row.ai_airport_metar_read_zh,
       row.ai_airport_metar_read_en,
     ) || formatAirportReportRead(row, detail, locale, tempSymbol);
+  const weatherRead = formatAirportWeatherRead(row, detail, locale);
+  const paceRead = getPaceDeviationRead(detail, locale, tempSymbol);
   const modelNote =
     row.ai_city_model_cluster_note ||
     row.ai_model_cluster_note ||
@@ -865,8 +1110,8 @@ function getV4CityForecast(
     getLocalizedRowText(row, locale, row.ai_city_thesis_zh, row.ai_city_thesis_en) ||
     (fallbackPredicted != null
       ? isEn
-        ? `${group.cityName} final high is centered near ${formatTemperatureValue(fallbackPredicted, tempSymbol, { digits: 1 })}; use the contract rows only as bucket mapping.`
-        : `${group.cityName} 最终最高温先以 ${formatTemperatureValue(fallbackPredicted, tempSymbol, { digits: 1 })} 附近为中枢，下面合约只作为温度桶映射。`
+        ? `${group.cityName} final high is centered near ${formatTemperatureValue(fallbackPredicted, tempSymbol, { digits: 1 })}; market temperature buckets are only mapped against that forecast range.`
+        : `${group.cityName} 最终最高温先以 ${formatTemperatureValue(fallbackPredicted, tempSymbol, { digits: 1 })} 附近为中枢，市场温度桶只用于对照 AI 预测区间。`
       : null);
   return {
     predicted: fallbackPredicted,
@@ -875,6 +1120,11 @@ function getV4CityForecast(
     confidence: row.ai_forecast_confidence || row.ai_city_confidence,
     peakWindow,
     airportRead,
+    weatherRead,
+    paceRead: paceRead?.read || null,
+    paceTone: paceRead?.tone || null,
+    paceDelta: paceRead?.delta ?? null,
+    paceAdjustedHigh: paceRead?.adjustedHigh ?? null,
     reason,
     modelNote,
     source: aiPredicted != null ? "ai" : "fallback",
@@ -1101,8 +1351,10 @@ function getMetarGate(
   const unit = normalizeTemperatureSymbol(tempSymbol);
   const peakTiming = formatPeakWindowTiming(row, locale);
   const airportReport = formatAirportReportRead(row, detail, locale, unit);
+  const airportWeatherRead = formatAirportWeatherRead(row, detail, locale);
   if (peakTiming) evidence.push(peakTiming);
   if (airportReport) evidence.push(airportReport);
+  if (airportWeatherRead) evidence.push(airportWeatherRead);
   if (obs.lastTemp != null) {
     evidence.push(
       `${isEn ? "METAR latest" : "METAR 最新"} ${formatTemperatureValue(obs.lastTemp, unit, { digits: 1 })}${obs.lastTime ? ` @ ${obs.lastTime}` : ""}`,
@@ -1487,6 +1739,312 @@ function buildOpportunityGroups(
   }));
 }
 
+function getBucketDisplayLabel(
+  row: ScanOpportunityRow,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const isEn = locale === "en-US";
+  const { lower, upper } = getTargetRange(row);
+  if (lower != null && upper == null) {
+    const value = formatTemperatureValue(lower, tempSymbol);
+    return isEn ? `${value} or higher` : `${value} 以上`;
+  }
+  if (upper != null && lower == null) {
+    const value = formatTemperatureValue(upper, tempSymbol);
+    return isEn ? `${value} or lower` : `${value} 以下`;
+  }
+  if (lower != null && upper != null && Math.abs(lower - upper) > 0.01) {
+    return `${formatTemperatureValue(lower, tempSymbol)} ~ ${formatTemperatureValue(upper, tempSymbol)}`;
+  }
+  return formatThreshold(row, tempSymbol);
+}
+
+function getForecastFitMeta(
+  fit: ReturnType<typeof getForecastContractFit>,
+  locale: string,
+) {
+  const isEn = locale === "en-US";
+  const tone = String(fit.tone || "watchlist");
+  if (tone === "approve" || tone === "core") {
+    return {
+      label: isEn ? "Clear signal" : "方向明确",
+      tone: "approve",
+    };
+  }
+  if (tone === "veto" || tone === "outside") {
+    return {
+      label: isEn ? "Outside AI range" : "偏离 AI 区间",
+      tone: "veto",
+    };
+  }
+  if (tone === "downgrade") {
+    return {
+      label: isEn ? "Downgraded" : "降级观察",
+      tone: "downgrade",
+    };
+  }
+  return {
+    label: isEn ? "Need peak confirmation" : "等待峰值确认",
+    tone: "watchlist",
+  };
+}
+
+function getThresholdDecision(
+  row: ScanOpportunityRow,
+  forecast: V4CityForecast,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const isEn = locale === "en-US";
+  const unit = normalizeTemperatureSymbol(tempSymbol);
+  const { lower, upper } = getTargetRange(row);
+  const predicted = forecast.predicted;
+  const low = forecast.low;
+  const high = forecast.high;
+  const tolerance = unit === "°F" ? 1 : 0.5;
+  const cautionBand = unit === "°F" ? 2 : 1;
+  const format = (value: number) => formatTemperatureValue(value, unit, { digits: 0 });
+  const paceTolerance = unit === "°F" ? 1 : 0.6;
+  const paceTail = getPaceDecisionTail(forecast, locale, unit);
+  const paceAdjustedHigh =
+    forecast.paceAdjustedHigh != null && Number.isFinite(Number(forecast.paceAdjustedHigh))
+      ? Number(forecast.paceAdjustedHigh)
+      : null;
+  const runningHot =
+    forecast.paceDelta != null && Number(forecast.paceDelta) >= paceTolerance;
+  const runningCold =
+    forecast.paceDelta != null && Number(forecast.paceDelta) <= -paceTolerance;
+  const confidence = (() => {
+    const values = Object.values(row.model_cluster_sources || {})
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value));
+    if (!values.length || predicted == null) return isEn ? "Medium" : "中";
+    const near = values.filter((value) => Math.abs(value - predicted) <= cautionBand).length;
+    const ratio = near / values.length;
+    if (ratio >= 0.75) return isEn ? "High" : "高";
+    if (ratio >= 0.45) return isEn ? "Medium" : "中";
+    return isEn ? "Low" : "低";
+  })();
+
+  if (predicted == null || (lower == null && upper == null)) {
+    return {
+      confidence,
+      headline: isEn ? "Conclusion pending" : "结论待确认",
+      relation: isEn ? "Await stable forecast" : "等待稳定预测",
+      summary: isEn
+        ? "AI does not have a stable high-temperature center yet."
+        : "AI 还没有稳定的最高温中枢，先不输出边界结论。",
+      tone: "watchlist" as const,
+    };
+  }
+
+  if (lower != null && upper == null) {
+    const threshold = format(lower);
+    if (
+      predicted < lower - cautionBand &&
+      (high == null || high < lower + tolerance) &&
+      (paceAdjustedHigh == null || paceAdjustedHigh < lower - tolerance)
+    ) {
+      return {
+        confidence,
+        headline: isEn ? `Unlikely to reach ${threshold}` : `不太可能达到 ${threshold}`,
+        relation: isEn ? "Clearly below threshold" : "明显低于阈值",
+        summary: isEn
+          ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}, below the ${threshold} boundary with no clear breakout signal.${paceTail}`
+          : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，低于 ${threshold} 阈值，暂时缺乏明显突破信号。${paceTail}`,
+        tone: "veto" as const,
+      };
+    }
+    if (
+      predicted >= lower + tolerance &&
+      (low == null || low >= lower - tolerance) &&
+      !runningCold &&
+      (paceAdjustedHigh == null || paceAdjustedHigh >= lower - tolerance)
+    ) {
+      return {
+        confidence,
+        headline: isEn ? `Likely to reach ${threshold}` : `大概率达到 ${threshold}`,
+        relation: isEn ? "Above threshold" : "高于阈值",
+        summary: isEn
+          ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}, already above the ${threshold} boundary.${paceTail}`
+          : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，已经高于 ${threshold} 阈值。${paceTail}`,
+        tone: "approve" as const,
+      };
+    }
+    return {
+      confidence,
+      headline: isEn ? `${threshold} boundary is risky` : `${threshold} 边界偏危险`,
+      relation: isEn ? "Near threshold" : "接近阈值（存在突破风险）",
+      summary: isEn
+        ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}; the ${threshold} boundary still needs peak-window confirmation.${paceTail}`
+        : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，接近 ${threshold} 阈值，仍要等峰值窗口确认。${paceTail}`,
+      tone: "watchlist" as const,
+    };
+  }
+
+  if (upper != null && lower == null) {
+    const threshold = format(upper);
+    if (
+      predicted <= upper - tolerance &&
+      (high == null || high <= upper + tolerance) &&
+      !runningHot &&
+      (paceAdjustedHigh == null || paceAdjustedHigh <= upper + tolerance)
+    ) {
+      return {
+        confidence,
+        headline: isEn ? `Likely to stay below ${threshold}` : `大概率不超过 ${threshold}`,
+        relation: isEn ? "Clearly below threshold" : "明显低于阈值",
+        summary: isEn
+          ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}, below the ${threshold} boundary.${paceTail}`
+          : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，低于 ${threshold} 阈值。${paceTail}`,
+        tone: "approve" as const,
+      };
+    }
+    if (
+      predicted > upper + cautionBand &&
+      (low == null || low > upper - tolerance) &&
+      (paceAdjustedHigh == null || paceAdjustedHigh > upper + tolerance)
+    ) {
+      return {
+        confidence,
+        headline: isEn ? `Likely above ${threshold}` : `大概率超过 ${threshold}`,
+        relation: isEn ? "Above threshold" : "高于阈值",
+        summary: isEn
+          ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}, above the ${threshold} boundary.${paceTail}`
+          : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，高于 ${threshold} 阈值。${paceTail}`,
+        tone: "veto" as const,
+      };
+    }
+    return {
+      confidence,
+      headline: isEn ? `${threshold} boundary is risky` : `${threshold} 边界偏危险`,
+      relation: isEn ? "Near threshold" : "接近阈值（存在突破风险）",
+      summary: isEn
+        ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}; the boundary still needs peak-window confirmation.${paceTail}`
+        : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，仍需等待峰值窗口确认边界。${paceTail}`,
+      tone: "watchlist" as const,
+    };
+  }
+
+  const bucket = getBucketDisplayLabel(row, locale, unit);
+  const bucketReference = paceAdjustedHigh ?? predicted;
+  const inside =
+    (lower == null || bucketReference >= lower - tolerance) &&
+    (upper == null || bucketReference <= upper + tolerance);
+  return {
+    confidence,
+    headline: inside
+      ? isEn
+        ? `Likely inside ${bucket}`
+        : `大概率落在 ${bucket}`
+      : isEn
+        ? `Unlikely inside ${bucket}`
+        : `不太可能落在 ${bucket}`,
+    relation: inside ? (isEn ? "Inside target bucket" : "处于目标桶") : (isEn ? "Outside target bucket" : "偏离目标桶"),
+    summary: isEn
+      ? `Forecast center is ${formatTemperatureValue(predicted, unit, { digits: 1 })}; use this bucket only as the market mapping of the city high.${paceTail}`
+      : `温度中枢约 ${formatTemperatureValue(predicted, unit, { digits: 1 })}，该温度桶只用于映射城市最高温判断。${paceTail}`,
+    tone: inside ? ("approve" as const) : ("veto" as const),
+  };
+}
+
+function getForecastRiskItems(
+  row: ScanOpportunityRow,
+  detail: CityDetail | null,
+  forecast: V4CityForecast,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const isEn = locale === "en-US";
+  const obs = getMetarObservationContext(row, detail);
+  const risks: string[] = [];
+  const phase = String(row.window_phase || "").toLowerCase();
+  if (
+    phase === "early_today" ||
+    phase === "setup_today" ||
+    (row.minutes_until_peak_start != null && Number(row.minutes_until_peak_start) > 0)
+  ) {
+    risks.push(
+      isEn
+        ? "Peak window has not arrived; current METAR is only path evidence."
+        : "峰值窗口尚未到达，当前 METAR 只能作为路径证据。",
+    );
+  }
+  if (row.trend_alignment === false) {
+    risks.push(
+      isEn
+        ? "Intraday observation path does not fully support the forecast center."
+        : "日内实况路径还没有完全支持预测中枢。",
+    );
+  }
+  if (forecast.paceRead && forecast.paceTone !== "neutral") {
+    risks.push(
+      isEn
+        ? `Observed pace is deviating from the DEB curve: ${forecast.paceRead}`
+        : `实测节奏正在偏离 DEB 曲线：${forecast.paceRead}`,
+    );
+  }
+  if (obs.stale || obs.lastTemp == null) {
+    risks.push(
+      isEn
+        ? "Same-day METAR confirmation is still weak."
+        : "同日 METAR 确认仍然偏弱。",
+    );
+  }
+  if (forecast.low != null && forecast.high != null) {
+    const spread = Math.abs(forecast.high - forecast.low);
+    const wide = String(normalizeTemperatureSymbol(tempSymbol)).toUpperCase().includes("F")
+      ? spread > 2
+      : spread > 1;
+    if (wide) {
+      risks.push(
+        isEn
+          ? "Model range is wide; treat boundary buckets conservatively."
+          : "模型区间偏宽，边界温度桶需要保守处理。",
+      );
+    }
+  }
+  if (!risks.length) {
+    risks.push(
+      isEn
+        ? "Residual risk is late METAR revision or a shifted afternoon peak."
+        : "残余风险主要是后续 METAR 修订或峰值窗口漂移。",
+    );
+  }
+  return Array.from(new Set(risks)).slice(0, 3);
+}
+
+function getDecisionReasonItems(
+  row: ScanOpportunityRow,
+  forecast: V4CityForecast,
+  modelSupportText: string,
+  locale: string,
+  tempSymbol?: string | null,
+) {
+  const isEn = locale === "en-US";
+  const modelRange = formatModelClusterRange(row.model_cluster_sources, tempSymbol);
+  const reasons: string[] = [];
+  if (modelRange !== "--") {
+    reasons.push(
+      isEn
+        ? `Model cluster sits around ${modelRange}; ${modelSupportText}.`
+        : `模型区间集中在 ${modelRange}，${modelSupportText}。`,
+    );
+  }
+  if (forecast.predicted != null) {
+    reasons.push(
+      isEn
+        ? `AI high-temperature center is ${formatTemperatureValue(forecast.predicted, tempSymbol, { digits: 1 })}.`
+        : `AI 最高温中枢约 ${formatTemperatureValue(forecast.predicted, tempSymbol, { digits: 1 })}。`,
+    );
+  }
+  if (forecast.paceRead) reasons.push(forecast.paceRead);
+  if (forecast.peakWindow) reasons.push(forecast.peakWindow);
+  if (forecast.weatherRead) reasons.push(forecast.weatherRead);
+  return Array.from(new Set(reasons)).slice(0, 3);
+}
+
 export const OpportunityTable = React.memo(function OpportunityTable({
   rows,
   status,
@@ -1597,44 +2155,55 @@ export const OpportunityTable = React.memo(function OpportunityTable({
           <span>{staleReason || (isEn ? "Latest refresh failed, fallback to the last successful scan." : "最新刷新失败，已回退到上次成功扫描结果。")}</span>
         </div>
       ) : null}
-      <div className="scan-table-body scan-opportunity-groups">
+      <div className="scan-table-body scan-opportunity-groups scan-forecast-desk">
         {groups.map((group) => {
           const groupSelected = group.rows.some((row) => row.id === selectedRowId);
+          const firstRow = group.rows[0];
+          const firstTempSymbol = normalizeTemperatureSymbol(
+            firstRow?.target_unit || firstRow?.temp_symbol || group.tempSymbol,
+          );
+          const firstDetail = firstRow
+            ? getDetailForRow(firstRow, cityDetailsByName)
+            : null;
+          const groupForecast = firstRow
+            ? getV4CityForecast(firstRow, group, firstDetail, locale, firstTempSymbol)
+            : null;
+          const groupForecastLabel =
+            groupForecast?.predicted != null
+              ? formatTemperatureValue(groupForecast.predicted, firstTempSymbol, { digits: 1 })
+              : "--";
+          const groupRangeLabel = groupForecast
+            ? getForecastRangeLabel(groupForecast, firstTempSymbol)
+            : group.peakLabel;
           return (
           <section
             key={group.key}
-            className={`scan-opportunity-group ${groupSelected ? "selected" : ""}`}
+            className={`scan-opportunity-group scan-forecast-city-card ${groupSelected ? "selected" : ""}`}
           >
             <button
               type="button"
-              className="scan-opportunity-group-head"
+              className="scan-opportunity-group-head scan-forecast-city-head"
               onClick={() => {
                 const firstRow = group.rows[0];
                 if (firstRow) selectAndOpenRow(firstRow);
               }}
             >
-              <div className="scan-opportunity-city">
+              <div className="scan-forecast-city-title">
+                <span className="scan-forecast-kicker">
+                  {isEn ? "City max-temp read" : "城市最高温判断"}
+                </span>
                 <strong>{group.cityName}</strong>
-                <div className="scan-opportunity-models">
-                  <span>
-                    <em>{isEn ? "Local time" : "当前时间"}</em>
-                    <b>{group.localTime || "--"}</b>
-                  </span>
-                  <span>
-                    <em>{isEn ? "Settlement left" : "剩余结算时间"}</em>
-                    <b>{formatWindowMinutes(group.remainingMinutes, locale)}</b>
-                  </span>
-                  <span>
-                    <em>DEB</em>
-                    <b>{group.debLabel}</b>
-                  </span>
-                  <span>
-                    <em>{isEn ? "Model range" : "模型区间"}</em>
-                    <b>{group.peakLabel}</b>
-                  </span>
+                <div className="scan-forecast-city-chips">
+                  <span>{group.localTime || "--"}</span>
+                  <span>{formatWindowMinutes(group.remainingMinutes, locale)}</span>
+                  <span>DEB {group.debLabel}</span>
+                  <span>{isEn ? "Models" : "模型"} {group.peakLabel}</span>
                 </div>
               </div>
-              <div className="scan-opportunity-phase">
+              <div className="scan-forecast-city-read">
+                <small>{isEn ? "AI expected high" : "AI 预计最高温"}</small>
+                <b>{groupForecastLabel}</b>
+                <span>{isEn ? "Range" : "区间"} {groupRangeLabel}</span>
                 <b className={`scan-phase-badge ${group.phaseMeta.tone}`}>
                   {group.phaseMeta.label}
                 </b>
@@ -1644,34 +2213,11 @@ export const OpportunityTable = React.memo(function OpportunityTable({
             <div className="scan-opportunity-items">
               {group.rows.map((row) => {
                 const tempSymbol = normalizeTemperatureSymbol(row.target_unit || row.temp_symbol);
-                const side = String(row.side || "").toLowerCase();
                 const detail = getDetailForRow(row, cityDetailsByName);
-                const detailEventProbability = getDetailBucketEventProbability(
-                  detail,
-                  row,
-                  tempSymbol,
-                );
-                const modelProbability =
-                  detailEventProbability != null
-                    ? (side === "no" ? 1 - detailEventProbability : detailEventProbability) * 100
-                    : row.model_probability != null
-                      ? Number(row.model_probability) * 100
-                    : row.raw_model_event_probability != null
-                      ? (side === "no"
-                          ? 1 - Number(row.raw_model_event_probability)
-                          : Number(row.raw_model_event_probability)) * 100
-                    : row.model_event_probability != null
-                      ? (side === "no"
-                          ? 1 - Number(row.model_event_probability)
-                          : Number(row.model_event_probability)) * 100
-                      : null;
-                const edgePercent =
-                  modelProbability != null && row.ask != null
-                    ? modelProbability - Number(row.ask) * 100
-                    : row.edge_percent;
                 const debDistanceLabel = isEn ? "DEB distance" : "DEB 距离";
                 const modelSupportLabel = isEn ? "Model support" : "模型支持";
                 const metarLabel = "METAR";
+                const paceLabel = isEn ? "Path vs DEB" : "路径偏差";
                 const debDistanceText = getDebDistanceSummary(row, locale, tempSymbol);
                 const modelSupportText = getModelSupportSummary(row, locale);
                 const metarConflictText = getMetarConflictSummary(row, detail, locale);
@@ -1682,102 +2228,65 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                   locale,
                   tempSymbol,
                 );
-                const forecastFit = getForecastContractFit(
+                const paceSignalText = getPaceSignalLabel(cityForecast, locale, tempSymbol);
+                const aiMeta = getAiMeta(row, locale);
+                const thresholdDecision = getThresholdDecision(
                   row,
                   cityForecast,
                   locale,
                   tempSymbol,
                 );
-                const v4Decision = getV4TradeDecision(
-                  row,
-                  detail,
-                  locale,
-                  edgePercent,
-                  tempSymbol,
-                );
-                const aiMeta = getAiMeta(row, locale);
-                const fallbackStrength = getOpportunityStrength(edgePercent, locale);
-                const strength = {
-                  label: forecastFit.label || fallbackStrength.label,
-                  tone: forecastFit.tone || fallbackStrength.tone,
-                };
                 const expanded = expandedRowIds.has(row.id);
                 const shortConclusion =
-                  forecastFit.reason ||
-                  cityForecast.reason ||
-                  getShortAiConclusion(
-                    row,
-                    locale,
-                    edgePercent,
-                    fallbackStrength.label,
-                  );
-                const riskHints = getRiskHints(row, locale, modelProbability);
-                if (
-                  v4Decision.decision === "watchlist" &&
-                  !riskHints.includes(v4Decision.reason)
-                ) {
-                  riskHints.unshift(v4Decision.reason);
-                }
-                const cityAnalysis =
-                  getLocalizedRowText(
-                    row,
-                    locale,
-                    row.ai_city_thesis_zh,
-                    row.ai_city_thesis_en,
-                  ) ||
-                  cityForecast.reason ||
-                  getLocalizedRowText(row, locale, row.ai_reason_zh, row.ai_reason_en) ||
-                  (isEn
-                    ? `${group.cityName} is judged first as a max-temperature forecast; contract rows are only bucket mappings.`
-                    : `${group.cityName} 当前先判断最终最高温，下面合约只作为温度桶映射。`);
-                const cityModelNote =
-                  cityForecast.modelNote ||
-                  row.ai_city_model_cluster_note ||
-                  row.ai_model_cluster_note ||
-                  getModelSourceSummary(row, locale, tempSymbol);
-                const keyReasons = Array.from(
-                  new Set(
-                    [
-                      forecastFit.reason,
-                      cityForecast.reason,
-                      cityForecast.peakWindow,
-                      cityForecast.airportRead,
-                      cityModelNote,
-                    ].filter(Boolean),
-                  ),
-                ).slice(0, 4);
-                const riskItems = Array.from(new Set(riskHints.filter(Boolean))).slice(0, 3);
+                  `${thresholdDecision.headline}。${thresholdDecision.summary}`;
+                const keyReasons = getDecisionReasonItems(
+                  row,
+                  cityForecast,
+                  modelSupportText,
+                  locale,
+                  tempSymbol,
+                );
+                const riskItems = getForecastRiskItems(
+                  row,
+                  detail,
+                  cityForecast,
+                  locale,
+                  tempSymbol,
+                );
+                const bucketLabel = getBucketDisplayLabel(row, locale, tempSymbol);
+                const forecastRangeLabel = getForecastRangeLabel(cityForecast, tempSymbol);
                 return (
                   <div
                     key={row.id}
-                    className={`scan-opportunity-item ${selectedRowId === row.id ? "selected" : ""} ${expanded ? "expanded" : ""} v4-${strength.tone} ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
+                    className={`scan-opportunity-item scan-forecast-row ${selectedRowId === row.id ? "selected" : ""} ${expanded ? "expanded" : ""} ai-fit-${thresholdDecision.tone} ${aiMeta ? `ai-${aiMeta.tone}` : ""}`}
                     onClick={() => selectAndOpenRow(row)}
                   >
-                    <div className="scan-opportunity-summary-row">
-                      <span className="scan-opportunity-branch" aria-hidden="true">
-                        <i />
-                      </span>
-                      <span className="scan-opportunity-trade">
-                        <strong className={`scan-opportunity-action ${side === "no" ? "sell" : "buy"}`}>
-                          {formatTradeSide(row, locale, tempSymbol)}
-                        </strong>
-                      </span>
-                      <div className="scan-opportunity-metrics">
-                        <span className="scan-opportunity-stat threshold">
+                    <div className="scan-forecast-row-main">
+                      <div className="scan-forecast-bucket">
+                        <span>{isEn ? "Conclusion" : "最终判断"}</span>
+                        <strong>{thresholdDecision.headline}</strong>
+                        <small>{thresholdDecision.summary}</small>
+                      </div>
+                      <div className="scan-forecast-signals">
+                        <span>
                           <small>{debDistanceLabel}</small>
                           <b>{debDistanceText}</b>
                         </span>
-                        <span className="scan-opportunity-stat">
+                        <span>
                           <small>{modelSupportLabel}</small>
                           <b>{modelSupportText}</b>
                         </span>
-                        <span className="scan-opportunity-stat">
+                        <span>
                           <small>{metarLabel}</small>
                           <b>{metarConflictText}</b>
                         </span>
+                        <span>
+                          <small>{paceLabel}</small>
+                          <b>{paceSignalText}</b>
+                        </span>
                       </div>
-                      <span className={`scan-opportunity-strength ${strength.tone}`}>
-                        {strength.label}
+                      <span className={`scan-forecast-fit ${thresholdDecision.tone}`}>
+                        {thresholdDecision.relation}
                       </span>
                       <button
                         type="button"
@@ -1794,52 +2303,70 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                             ? "Hide analysis"
                             : "收起分析"
                           : isEn
-                            ? "Full analysis"
-                            : "查看完整分析"}
+                            ? "AI analysis"
+                            : "AI 分析"}
                         {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </div>
-                    <div className={`scan-opportunity-ai ${aiMeta?.tone || "neutral"}`}>
-                      <b>{isEn ? "AI forecast mapping" : "AI 预测映射"}</b>
+                    <div className={`scan-forecast-ai-line ${aiMeta?.tone || "neutral"}`}>
+                      <b>{isEn ? "Current read" : "当前判断"}</b>
                       <small>{shortConclusion}</small>
                     </div>
                     {expanded ? (
-                      <div className="scan-v4-analysis">
-                        <div className="scan-v4-heading">
+                      <div className="scan-ai-analysis">
+                        <div className="scan-ai-analysis-head">
                           <div>
-                            <strong>{isEn ? "AI max-temperature forecast" : "AI 最高温预测"}</strong>
-                            <p>{cityAnalysis}</p>
+                            <strong>{isEn ? "Conclusion" : "结论"}</strong>
+                            <p>{thresholdDecision.headline}</p>
+                            <small>{thresholdDecision.summary}</small>
                           </div>
-                          <span className={`scan-v4-decision-pill ${strength.tone}`}>
-                            {strength.label}
+                          <span className={`scan-ai-forecast-pill ${thresholdDecision.tone}`}>
+                            {thresholdDecision.relation}
                           </span>
                         </div>
-                        <div className="scan-v4-current">
-                          <b>{isEn ? "Forecast" : "预测"}</b>
+                        <div className="scan-ai-temperature-line">
                           <span>
-                            {isEn ? "Expected high" : "预计最高温"}{" "}
-                            <strong>
+                            <small>{isEn ? "Bucket" : "判断对象"}</small>
+                            <b>{bucketLabel}</b>
+                          </span>
+                          <span>
+                            <small>{isEn ? "AI forecast" : "AI 预测"}</small>
+                            <b>
                               {cityForecast.predicted != null
                                 ? formatTemperatureValue(cityForecast.predicted, tempSymbol, { digits: 1 })
                                 : "--"}
-                            </strong>
-                            {" · "}
-                            {isEn ? "interval" : "区间"} {getForecastRangeLabel(cityForecast, tempSymbol)}
-                            {cityForecast.confidence ? ` · ${isEn ? "confidence" : "信心"} ${cityForecast.confidence}` : ""}
+                            </b>
                           </span>
-                          {cityForecast.reason ? (
-                            <small>{cityForecast.reason}</small>
-                          ) : null}
-                          {cityForecast.airportRead ? (
-                            <small>{cityForecast.airportRead}</small>
-                          ) : null}
-                          {cityForecast.peakWindow ? (
-                            <small>{cityForecast.peakWindow}</small>
-                          ) : null}
+                          <span>
+                            <small>{isEn ? "Forecast range" : "预测区间"}</small>
+                            <b>{forecastRangeLabel}</b>
+                          </span>
+                          <span>
+                            <small>{isEn ? "Confidence" : "信心"}</small>
+                            <b>{cityForecast.confidence || thresholdDecision.confidence}</b>
+                          </span>
                         </div>
-                        <div className="scan-v4-brief-grid">
+                        <div className="scan-ai-evidence-line">
+                          <span>
+                            <small>DEB</small>
+                            <b>{group.debLabel}</b>
+                          </span>
+                          <span>
+                            <small>{modelSupportLabel}</small>
+                            <b>{modelSupportText}</b>
+                          </span>
+                          <span>
+                            <small>METAR</small>
+                            <b>{metarConflictText}</b>
+                          </span>
+                          <span>
+                            <small>{paceLabel}</small>
+                            <b>{paceSignalText}</b>
+                          </span>
+                        </div>
+                        <div className="scan-ai-brief-grid">
                           <section>
-                            <strong>{isEn ? "Key basis" : "关键依据"}</strong>
+                            <strong>{isEn ? "Why" : "为什么"}</strong>
                             <ul>
                               {keyReasons.map((reason) => (
                                 <li key={reason}>{reason}</li>
@@ -1847,13 +2374,27 @@ export const OpportunityTable = React.memo(function OpportunityTable({
                             </ul>
                           </section>
                           <section>
-                            <strong>{isEn ? "Risk" : "风险"}</strong>
+                            <strong>{isEn ? "What can change it" : "可能改变判断的因素"}</strong>
                             <ul>
                               {riskItems.map((reason) => (
                                 <li key={reason}>{reason}</li>
                               ))}
                             </ul>
                           </section>
+                        </div>
+                        <div className="scan-ai-airport-read">
+                          {cityForecast.airportRead ? (
+                            <p>{cityForecast.airportRead}</p>
+                          ) : null}
+                          {cityForecast.weatherRead ? (
+                            <p>{cityForecast.weatherRead}</p>
+                          ) : null}
+                          {cityForecast.paceRead ? (
+                            <p>{cityForecast.paceRead}</p>
+                          ) : null}
+                          {cityForecast.peakWindow ? (
+                            <p>{cityForecast.peakWindow}</p>
+                          ) : null}
                         </div>
                       </div>
                     ) : null}

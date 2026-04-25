@@ -475,7 +475,7 @@ export function WeatherAuraLayer() {
       `radial-gradient(circle at 78% 20%, ${hexToRgba(aura.secondary, 0.14 * aura.intensity)}, transparent 34%)`,
       `radial-gradient(circle at 52% 78%, ${hexToRgba(aura.tertiary, 0.12 * aura.intensity)}, transparent 38%)`,
       aura.effect === "rain" || aura.effect === "storm"
-        ? `linear-gradient(180deg, ${hexToRgba("#67e8f9", 0.06 * aura.effectIntensity)}, transparent 45%)`
+        ? `linear-gradient(180deg, ${hexToRgba("#6FB7FF", 0.06 * aura.effectIntensity)}, transparent 45%)`
         : aura.effect === "snow"
           ? `linear-gradient(180deg, ${hexToRgba("#e2e8f0", 0.06 * aura.effectIntensity)}, transparent 45%)`
           : aura.effect === "fog"

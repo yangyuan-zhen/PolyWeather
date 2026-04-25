@@ -694,8 +694,8 @@ export function TemperatureChart() {
       });
     } else {
       datasets.push({
-        backgroundColor: "rgba(52, 211, 153, 0.05)",
-        borderColor: "rgba(52, 211, 153, 0.6)",
+        backgroundColor: "rgba(77, 163, 255, 0.06)",
+        borderColor: "rgba(77, 163, 255, 0.66)",
         borderWidth: 1.5,
         data: chartData.datasets.debPast,
         fill: true,
@@ -705,7 +705,7 @@ export function TemperatureChart() {
         tension: 0.3,
       });
       datasets.push({
-        borderColor: "rgba(52, 211, 153, 0.35)",
+        borderColor: "rgba(77, 163, 255, 0.36)",
         borderDash: [5, 3],
         borderWidth: 1.5,
         data: chartData.datasets.debFuture,
@@ -717,8 +717,8 @@ export function TemperatureChart() {
     }
 
     datasets.push({
-      backgroundColor: "#00E0A4",
-      borderColor: "#00E0A4",
+      backgroundColor: "#4DA3FF",
+      borderColor: "#4DA3FF",
       borderWidth: 0,
       data: chartData.datasets.metarPoints,
       fill: false,
@@ -750,7 +750,7 @@ export function TemperatureChart() {
       Math.abs(chartData.datasets.offset) > 0.3
     ) {
       datasets.push({
-        borderColor: "rgba(123, 97, 255, 0.2)",
+        borderColor: "rgba(77, 163, 255, 0.22)",
         borderDash: [2, 4],
         borderWidth: 1,
         data: chartData.datasets.temps,
@@ -773,7 +773,7 @@ export function TemperatureChart() {
           legend: { display: false },
           tooltip: {
             backgroundColor: "rgba(15, 23, 42, 0.9)",
-            borderColor: "rgba(52, 211, 153, 0.3)",
+            borderColor: "rgba(77, 163, 255, 0.28)",
             borderWidth: 1,
           },
         },
@@ -786,7 +786,7 @@ export function TemperatureChart() {
                 typeof index === "number" && index % 3 === 0
                   ? chartData.times[index]
                   : "",
-              color: "#64748b",
+              color: "#6B7A90",
               maxRotation: 0,
             },
           },
@@ -795,8 +795,10 @@ export function TemperatureChart() {
             max: chartData.max,
             min: chartData.min,
             ticks: {
-              callback: (value) => `${value}${data.temp_symbol || "°C"}`,
-              color: "#64748b",
+              callback: (value) =>
+                `${Number(value).toFixed(chartData.yTickStep < 1 ? 1 : 0)}${data.temp_symbol || "°C"}`,
+              color: "#6B7A90",
+              stepSize: chartData.yTickStep,
             },
           },
         },

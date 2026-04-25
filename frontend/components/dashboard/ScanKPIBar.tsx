@@ -81,7 +81,7 @@ export function ScanKPIBar({
       tone: "blue",
     },
     {
-      label: isEn ? "Win-rate Basis" : "胜率依据",
+      label: isEn ? "Forecast Center" : "预测中枢",
       value: bestRow ? formatTemperature(bestRow.deb_prediction, bestRow.temp_symbol || bestRow.target_unit) : "--",
       note: bestRow
         ? `${isEn ? "Focus" : "焦点"} ${bestRow.city_display_name || bestRow.display_name || bestRow.city} · DEB / ${isEn ? "models" : "模型"} / METAR`

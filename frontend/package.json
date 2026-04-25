@@ -3,8 +3,8 @@
   "version": "1.5.4",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "node scripts/sync-next-server-chunks.mjs --clean-root && next dev",
+    "build": "next build && node scripts/sync-next-server-chunks.mjs",
     "start": "next start",
     "lint": "next lint"
   },

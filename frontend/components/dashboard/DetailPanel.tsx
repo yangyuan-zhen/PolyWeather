@@ -25,6 +25,16 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
     () => getTemperatureChartData(detail, locale),
     [detail, locale],
   );
+  const forecastLabel = chartData?.datasets.hasMgmHourly
+    ? locale === "en-US"
+      ? "MGM Forecast"
+      : "MGM 预测"
+    : locale === "en-US"
+      ? "DEB Forecast"
+      : "DEB 预测";
+  const observationLabel =
+    chartData?.observationLabel ||
+    (locale === "en-US" ? "METAR Observation" : "METAR 实况");
 
   const canvasRef = useChart(() => {
     if (!chartData) {
@@ -50,28 +60,20 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
             borderWidth: 1.8,
             data: forecastPoints,
             fill: false,
-            label: chartData.datasets.hasMgmHourly
-              ? locale === "en-US"
-                ? "MGM Forecast"
-                : "MGM 预测"
-              : locale === "en-US"
-                ? "DEB Forecast"
-                : "DEB 预测",
+            label: forecastLabel,
             pointRadius: 0,
             spanGaps: true,
             tension: 0.28,
           },
           {
-            backgroundColor: "#00E0A4",
-            borderColor: "#00E0A4",
+            backgroundColor: "#4DA3FF",
+            borderColor: "#4DA3FF",
             borderWidth: 0,
             data: chartData.datasets.metarPoints,
             fill: false,
-            label:
-              chartData.observationLabel ||
-              (locale === "en-US" ? "METAR Observation" : "METAR 实况"),
-            pointHoverRadius: 6,
-            pointRadius: 3.8,
+            label: observationLabel,
+            pointHoverRadius: 5,
+            pointRadius: 3.2,
             showLine: false,
           },
         ],
@@ -79,12 +81,13 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
       },
       options: {
         interaction: { intersect: false, mode: "index" },
+        layout: { padding: { bottom: 0, left: 0, right: 6, top: 4 } },
         maintainAspectRatio: false,
         plugins: {
           legend: { display: false },
           tooltip: {
             backgroundColor: "rgba(15, 23, 42, 0.95)",
-            borderColor: "rgba(0, 224, 164, 0.25)",
+            borderColor: "rgba(77, 163, 255, 0.28)",
             borderWidth: 1,
           },
         },
@@ -97,8 +100,9 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
                 typeof index === "number" && index % 4 === 0
                   ? chartData.times[index]
                   : "",
-              color: "#64748b",
+              color: "#6B7A90",
               font: { size: 10 },
+              maxTicksLimit: 6,
               maxRotation: 0,
             },
           },
@@ -107,22 +111,37 @@ function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
             max: chartData.max,
             min: chartData.min,
             ticks: {
-              callback: (value) => `${value}${detail.temp_symbol || "°C"}`,
-              color: "#64748b",
+              callback: (value) =>
+                `${Number(value).toFixed(chartData.yTickStep < 1 ? 1 : 0)}${detail.temp_symbol || "°C"}`,
+              color: "#6B7A90",
               font: { size: 10 },
+              maxTicksLimit: 5,
+              stepSize: chartData.yTickStep,
             },
           },
         },
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [chartData, detail.temp_symbol, locale]);
+  }, [chartData, detail.temp_symbol, forecastLabel, observationLabel]);
 
   return (
     <div className="detail-mini-chart-wrap">
       <div className="detail-mini-chart">
         <canvas ref={canvasRef} />
       </div>
+      {chartData ? (
+        <div className="detail-mini-chart-legend">
+          <span>
+            <i className="forecast" />
+            {forecastLabel}
+          </span>
+          <span>
+            <i className="observation" />
+            {observationLabel}
+          </span>
+        </div>
+      ) : null}
     </div>
   );
 }

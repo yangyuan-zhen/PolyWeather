@@ -90,9 +90,9 @@
 }
 
 .root :global(.panel-action-button-primary) {
-  color: #05111f;
-  background: linear-gradient(135deg, #67e8f9, #38bdf8);
-  border-color: rgba(103, 232, 249, 0.3);
+  color: #FFFFFF;
+  background: linear-gradient(135deg, #4DA3FF, #3B82F6);
+  border-color: rgba(77, 163, 255, 0.34);
 }
 
 .root :global(.panel-action-button-secondary) {

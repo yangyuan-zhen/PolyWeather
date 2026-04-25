@@ -1,18 +1,18 @@
 "use client";
 
+import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
 import Link from "next/link";
 import {
+  BarChart3,
   LogIn,
-  RefreshCw,
+  X,
   Moon,
   Sun,
   UserRound,
 } from "lucide-react";
 import {
-  startTransition,
   useCallback,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
@@ -24,24 +24,26 @@ import modalChromeStyles from "./ModalChrome.module.css";
 import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
+import { ModelForecast } from "@/components/dashboard/PanelSections";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
-import { ScanKPIBar } from "@/components/dashboard/ScanKPIBar";
-import { OpportunityTable } from "@/components/dashboard/OpportunityTable";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
   useDashboardStore,
 } from "@/hooks/useDashboardStore";
+import { useChart } from "@/hooks/useChart";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
-import { dashboardClient } from "@/lib/dashboard-client";
 import type {
+  CityDetail,
   ScanOpportunityRow,
-  ScanTerminalFilters,
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import {
   formatTemperatureValue,
+  getModelView,
+  getTemperatureChartData,
+  getTodayPaceView,
   normalizeTemperatureLabel,
 } from "@/lib/dashboard-utils";
 import {
@@ -50,46 +52,13 @@ import {
   getRowPeakSortValue,
 } from "@/lib/scan-market-focus";
 
-const DEFAULT_FILTERS: FilterState = {
-  scan_mode: "tradable",
-  min_price: 0.05,
-  max_price: 0.95,
-  min_edge_pct: 2,
-  min_liquidity: 1000,
-  high_liquidity_only: false,
-  market_type: "maxtemp",
-  time_range: "today",
-  limit: 28,
-};
-
-const SCAN_AUTO_REFRESH_MS = 5 * 60 * 1000;
-
-interface FilterState extends ScanTerminalFilters {}
-
 type ContentView = "list" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
-type ScanAiLogTone = "info" | "success" | "warning" | "error";
-
-type ScanAiLogEntry = {
-  id: string;
-  time: string;
-  tone: ScanAiLogTone;
-  title: string;
-  detail?: string | null;
+type AiPinnedCity = {
+  cityName: string;
+  displayName?: string | null;
+  addedAt: number;
 };
-
-function formatLogTime() {
-  const now = new Date();
-  return `${String(now.getHours()).padStart(2, "0")}:${String(
-    now.getMinutes(),
-  ).padStart(2, "0")}:${String(now.getSeconds()).padStart(2, "0")}`;
-}
-
-function formatDuration(ms?: number | null) {
-  if (ms == null || !Number.isFinite(Number(ms))) return "--";
-  if (Number(ms) < 1000) return `${Math.round(Number(ms))}ms`;
-  return `${(Number(ms) / 1000).toFixed(1)}s`;
-}
 
 function formatShortDate(value?: string | null, locale = "zh-CN") {
   const text = String(value || "").trim();
@@ -274,36 +243,18 @@ function sortRowsByUserTime(rows: ScanOpportunityRow[]) {
   });
 }
 
-function mergeRefreshingScanSnapshot(
-  previous: ScanTerminalResponse | null,
-  next: ScanTerminalResponse,
-  locale = "zh-CN",
-): ScanTerminalResponse {
-  if (next.rows.length || !previous?.rows.length) return next;
-  const nextStatus = String(next.status || "").toLowerCase();
-  if (!["partial", "stale", "scanning", "loading", "failed"].includes(nextStatus)) {
-    return next;
-  }
-  return {
-    ...previous,
-    generated_at: previous.generated_at || next.generated_at,
-    status: nextStatus === "failed" ? "stale" : next.status || "stale",
-    stale: true,
-    stale_reason:
-      next.stale_reason ||
-      (locale === "en-US"
-        ? "Refreshing a new scan; showing the previous snapshot until it is ready."
-        : "新扫描仍在刷新中，当前继续展示上一轮快照。"),
-    last_failed_at: next.last_failed_at || previous.last_failed_at,
-    filters: next.filters || previous.filters,
-  };
-}
-
 function normalizeCityKey(value?: string | null) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/[\s_-]+/g, "");
+}
+
+function prettifyCityName(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .replace(/[-_]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 function rowMatchesCity(row: ScanOpportunityRow, cityName: string) {
@@ -318,256 +269,6 @@ function findRowForCity(rows: ScanOpportunityRow[], cityName?: string | null) {
   const normalized = normalizeCityKey(cityName);
   if (!normalized) return null;
   return rows.find((row) => rowMatchesCity(row, cityName || "")) || null;
-}
-
-function getRowAiReason(row: ScanOpportunityRow, locale: string) {
-  const isEn = locale === "en-US";
-  return (
-    (isEn ? row.ai_reason_en || row.ai_reason_zh : row.ai_reason_zh || row.ai_reason_en) ||
-    row.ai_model_cluster_note ||
-    (isEn
-      ? row.ai_watchlist_reason_en || row.ai_watchlist_reason_zh
-      : row.ai_watchlist_reason_zh || row.ai_watchlist_reason_en) ||
-    null
-  );
-}
-
-function getAiDecisionLabel(row: ScanOpportunityRow, locale: string) {
-  const decision = String(row.ai_decision || "neutral").toLowerCase();
-  if (decision === "veto") return locale === "en-US" ? "Excluded" : "排除";
-  if (decision === "downgrade") return locale === "en-US" ? "Downgraded" : "降级";
-  if (decision === "watchlist") return locale === "en-US" ? "Watch" : "观察";
-  if (row.ai_rank != null || decision === "approve") {
-    return locale === "en-US" ? `Pick ${row.ai_rank || ""}`.trim() : `推荐 ${row.ai_rank || ""}`.trim();
-  }
-  return locale === "en-US" ? "Unreviewed" : "未复核";
-}
-
-function ScanAiAnalysisView({
-  response,
-  rows,
-  logs,
-  error,
-  locale,
-}: {
-  response: ScanTerminalResponse | null;
-  rows: ScanOpportunityRow[];
-  logs: ScanAiLogEntry[];
-  error?: string | null;
-  locale: string;
-}) {
-  const isEn = locale === "en-US";
-  const aiScan = response?.ai_scan || null;
-  const theses = aiScan?.city_theses || [];
-  const thesisByCity = useMemo(
-    () => new Map(theses.map((item) => [normalizeCityKey(item.city), item])),
-    [theses],
-  );
-  const groups = useMemo(() => {
-    const map = new Map<string, ScanOpportunityRow[]>();
-    rows.forEach((row) => {
-      const key = normalizeCityKey(row.city || row.city_display_name || row.display_name);
-      if (!key) return;
-      const current = map.get(key) || [];
-      current.push(row);
-      map.set(key, current);
-    });
-    return Array.from(map.entries()).map(([key, items]) => ({
-      key,
-      rows: items,
-      city:
-        items[0]?.city_display_name ||
-        items[0]?.display_name ||
-        items[0]?.city ||
-        key,
-      thesis: thesisByCity.get(key),
-    }));
-  }, [rows, thesisByCity]);
-
-  if (!rows.length) {
-    return (
-      <div className="scan-ai-analysis-view empty">
-        <div className="scan-empty-state">
-          <div className="scan-empty-title">
-            {isEn ? "Run a rule scan first" : "先完成规则扫描"}
-          </div>
-          <div className="scan-empty-copy">
-            {isEn
-              ? "V4 needs the current city candidates before it can analyze them."
-              : "V4 需要先拿到当前城市候选，才能做城市级研判。"}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="scan-ai-analysis-view">
-      <section className="scan-ai-summary-card">
-        <div>
-          <strong>{isEn ? "AI city forecast" : "AI 城市级预测"}</strong>
-          <p>
-            {aiScan?.status === "ready"
-              ? (isEn ? aiScan.summary_en || aiScan.summary_zh : aiScan.summary_zh || aiScan.summary_en) ||
-                (isEn ? "V4 has reviewed the grouped city snapshot." : "V4 已复核城市分组快照。")
-              : error ||
-                aiScan?.reason ||
-                (isEn
-                  ? "V4 analysis appears inside each opportunity row when AI review data is available."
-                  : "当 AI 复核数据可用时，V4 分析会展示在每条机会的展开层中。")}
-          </p>
-        </div>
-      </section>
-
-      <section className="scan-ai-log-panel in-tab">
-        <div className="scan-ai-log-head">
-          <strong>{isEn ? "Run log" : "运行日志"}</strong>
-          <span>
-            {aiScan?.status === "ready"
-              ? isEn
-                ? `${aiScan.sent_cities ?? "--"} cities · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} contracts`
-                : `${aiScan.sent_cities ?? "--"} 城 · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} 合约`
-              : isEn
-                ? "No V4 result yet"
-                : "暂无 V4 结果"}
-          </span>
-        </div>
-        <div className="scan-ai-log-list">
-          {logs.length ? (
-            logs.map((entry) => (
-              <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
-                <span className="scan-ai-log-time">{entry.time}</span>
-                <div>
-                  <b>{entry.title}</b>
-                  {entry.detail ? <small>{entry.detail}</small> : null}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="scan-ai-log-empty">
-              {isEn ? "No request has been sent." : "还没有发起请求。"}
-            </div>
-          )}
-        </div>
-      </section>
-
-      <div className="scan-ai-city-list">
-        {groups.map((group) => {
-          const cityThesis =
-            (isEn
-              ? group.thesis?.thesis_en || group.thesis?.summary_en || group.rows[0]?.ai_city_thesis_en
-              : group.thesis?.thesis_zh || group.thesis?.summary_zh || group.rows[0]?.ai_city_thesis_zh) ||
-            (isEn ? "Waiting for AI city forecast." : "等待 AI 城市预测。");
-          const clusterNote =
-            group.thesis?.model_cluster_note || group.rows[0]?.ai_city_model_cluster_note || null;
-          return (
-            <section key={group.key} className="scan-ai-city-card">
-              <div className="scan-ai-city-head">
-                <div>
-                  <strong>{group.city}</strong>
-                  <p>{cityThesis}</p>
-                </div>
-                {group.thesis?.confidence || group.rows[0]?.ai_city_confidence ? (
-                  <span>{group.thesis?.confidence || group.rows[0]?.ai_city_confidence}</span>
-                ) : null}
-              </div>
-              {clusterNote ? (
-                <div className="scan-ai-cluster-note">{clusterNote}</div>
-              ) : null}
-              <div className="scan-ai-contracts">
-                {group.rows.map((row) => {
-                  const decision = String(row.ai_decision || "neutral").toLowerCase();
-                  const reason = getRowAiReason(row, locale);
-                  const tempSymbol = row.temp_symbol || row.target_unit || "°C";
-                  return (
-                    <div key={row.id} className={`scan-ai-contract ${decision}`}>
-                      <div>
-                        <b>
-                          {normalizeTemperatureLabel(row.target_label, tempSymbol) ||
-                            row.market_question ||
-                            row.id}
-                        </b>
-                        <small>
-                          {row.deb_prediction != null
-                            ? `DEB ${formatTemperatureValue(row.deb_prediction, tempSymbol)} · `
-                            : ""}
-                          {row.ai_forecast_confidence
-                            ? `${isEn ? "confidence" : "信心"} ${row.ai_forecast_confidence}`
-                            : isEn
-                              ? "forecast mapping"
-                              : "预测映射"}
-                        </small>
-                      </div>
-                      <span>{getAiDecisionLabel(row, locale)}</span>
-                      {reason ? <p>{reason}</p> : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ScanAiLogPanel({
-  response,
-  logs,
-  locale,
-  loading,
-  error,
-}: {
-  response: ScanTerminalResponse | null;
-  logs: ScanAiLogEntry[];
-  locale: string;
-  loading: boolean;
-  error?: string | null;
-}) {
-  const isEn = locale === "en-US";
-  const aiScan = response?.ai_scan || null;
-  return (
-    <details className="scan-ai-log-panel compact">
-      <summary className="scan-ai-log-summary">
-        <span>{isEn ? "Debug log" : "调试日志"}</span>
-        <strong>
-          {loading
-            ? isEn
-              ? "V4 running"
-              : "V4 运行中"
-            : error
-              ? isEn
-                ? "V4 failed"
-                : "V4 失败"
-              : aiScan?.status === "ready"
-                ? isEn
-                  ? `${aiScan.sent_cities ?? "--"} cities · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} contracts`
-                  : `${aiScan.sent_cities ?? "--"} 城 · ${aiScan.sent_contracts ?? aiScan.sent_rows ?? "--"} 合约`
-                : isEn
-                  ? "Collapsed"
-                  : "已折叠"}
-        </strong>
-      </summary>
-      <div className="scan-ai-log-list">
-        {logs.length ? (
-          logs.map((entry) => (
-            <div key={entry.id} className={`scan-ai-log-item ${entry.tone}`}>
-              <span className="scan-ai-log-time">{entry.time}</span>
-              <div>
-                <b>{entry.title}</b>
-                {entry.detail ? <small>{entry.detail}</small> : null}
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="scan-ai-log-empty">
-            {isEn ? "No request has been sent." : "还没有发起请求。"}
-          </div>
-        )}
-      </div>
-    </details>
-  );
 }
 
 function CalendarView({
@@ -690,6 +391,449 @@ function CalendarView({
   );
 }
 
+function findDetailForCity(
+  detailsByName: Record<string, CityDetail>,
+  cityName?: string | null,
+) {
+  const target = normalizeCityKey(cityName);
+  if (!target) return null;
+  return (
+    Object.values(detailsByName).find((detail) =>
+      [detail?.name, detail?.display_name].some(
+        (value) => normalizeCityKey(value) === target,
+      ),
+    ) || null
+  );
+}
+
+function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
+  const { locale } = useI18n();
+  const chartData = useMemo(
+    () => getTemperatureChartData(detail, locale),
+    [detail, locale],
+  );
+  const forecastLabel = chartData?.datasets.hasMgmHourly
+    ? locale === "en-US"
+      ? "MGM forecast"
+      : "MGM 预测"
+    : locale === "en-US"
+      ? "DEB forecast"
+      : "DEB 预测";
+  const observationLabel =
+    chartData?.observationLabel ||
+    (locale === "en-US" ? "METAR obs" : "METAR 实况");
+  const canvasRef = useChart(() => {
+    if (!chartData) {
+      return {
+        data: { datasets: [], labels: [] },
+        type: "line",
+      } satisfies ChartConfiguration<"line">;
+    }
+    const forecastPoints = chartData.datasets.hasMgmHourly
+      ? chartData.datasets.mgmHourlyPoints
+      : chartData.datasets.debPast.map(
+          (value, index) => value ?? chartData.datasets.debFuture[index],
+        );
+    return {
+      data: {
+        datasets: [
+          {
+            borderColor: "#4DA3FF",
+            borderWidth: 2,
+            data: forecastPoints,
+            fill: false,
+            label: forecastLabel,
+            pointRadius: 0,
+            spanGaps: true,
+            tension: 0.32,
+          },
+          {
+            backgroundColor: "#22C55E",
+            borderColor: "#22C55E",
+            borderWidth: 0,
+            data: chartData.datasets.metarPoints,
+            fill: false,
+            label: observationLabel,
+            pointHoverRadius: 5,
+            pointRadius: 3.5,
+            showLine: false,
+          },
+        ],
+        labels: chartData.times,
+      },
+      options: {
+        interaction: { intersect: false, mode: "index" },
+        layout: { padding: { bottom: 2, left: 0, right: 8, top: 8 } },
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: "rgba(11, 18, 32, 0.96)",
+            borderColor: "rgba(77, 163, 255, 0.38)",
+            borderWidth: 1,
+          },
+        },
+        responsive: true,
+        scales: {
+          x: {
+            grid: { color: "rgba(159, 178, 199, 0.08)" },
+            ticks: {
+              callback: (_value, index) =>
+                typeof index === "number" && index % 4 === 0
+                  ? chartData.times[index]
+                  : "",
+              color: "#6B7A90",
+              font: { size: 10 },
+              maxTicksLimit: 6,
+              maxRotation: 0,
+            },
+          },
+          y: {
+            grid: { color: "rgba(159, 178, 199, 0.08)" },
+            max: chartData.max,
+            min: chartData.min,
+            ticks: {
+              callback: (value) =>
+                `${Number(value).toFixed(chartData.yTickStep < 1 ? 1 : 0)}${detail.temp_symbol || "°C"}`,
+              color: "#6B7A90",
+              font: { size: 10 },
+              maxTicksLimit: 5,
+              stepSize: chartData.yTickStep,
+            },
+          },
+        },
+      },
+      type: "line",
+    } satisfies ChartConfiguration<"line">;
+  }, [chartData, detail.temp_symbol, forecastLabel, observationLabel]);
+
+  return (
+    <section className="scan-ai-city-section chart">
+      <div className="scan-ai-city-section-title">
+        <BarChart3 size={15} />
+        <span>{locale === "en-US" ? "Intraday path" : "今日日内分析"}</span>
+      </div>
+      <div className="scan-ai-city-chart">
+        <canvas ref={canvasRef} />
+      </div>
+      {chartData ? (
+        <div className="scan-ai-city-chart-legend">
+          <span><i className="forecast" />{forecastLabel}</span>
+          <span><i className="observation" />{observationLabel}</span>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function AiPinnedCityCard({
+  item,
+  detail,
+  row,
+  locale,
+  onRemove,
+}: {
+  item: AiPinnedCity;
+  detail: CityDetail | null;
+  row: ScanOpportunityRow | null;
+  locale: string;
+  onRemove: () => void;
+}) {
+  const isEn = locale === "en-US";
+  const displayName =
+    detail?.display_name ||
+    row?.city_display_name ||
+    row?.display_name ||
+    item.displayName ||
+    item.cityName;
+  const tempSymbol = detail?.temp_symbol || row?.temp_symbol || "°C";
+  const modelView = detail ? getModelView(detail, detail.local_date) : null;
+  const modelValues = modelView
+    ? Object.values(modelView.models || {})
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value))
+    : [];
+  const modelMin = modelValues.length ? Math.min(...modelValues) : null;
+  const modelMax = modelValues.length ? Math.max(...modelValues) : null;
+  const paceView = detail ? getTodayPaceView(detail, locale as "zh-CN" | "en-US") : null;
+  const peakWindow =
+    paceView?.peakWindowText ||
+    (row ? getPeakWindowLabel(row) : null) ||
+    "--";
+  const deb = detail?.deb?.prediction ?? row?.deb_prediction ?? null;
+  const currentTemp =
+    detail?.airport_primary?.temp ??
+    detail?.airport_current?.temp ??
+    detail?.current?.temp ??
+    row?.current_temp ??
+    null;
+  const modelRange =
+    modelMin != null && modelMax != null
+      ? `${formatTemperatureValue(modelMin, tempSymbol, { digits: 1 })} ~ ${formatTemperatureValue(modelMax, tempSymbol, { digits: 1 })}`
+      : "--";
+  const paceTone = paceView?.biasTone || "neutral";
+  const paceText =
+    paceView?.summary ||
+    (isEn
+      ? "Waiting for intraday observations to compare against the DEB path."
+      : "等待更多日内实测，用来对照 DEB 预测路径。");
+  const report = detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
+  const weatherLine =
+    detail?.current?.wx_desc ||
+    detail?.airport_current?.wx_desc ||
+    detail?.airport_primary?.wx_desc ||
+    "";
+
+  return (
+    <article className="scan-ai-city-card">
+      <header className="scan-ai-city-hero">
+        <div>
+          <span className="scan-ai-city-kicker">
+            {isEn ? "AI city forecast" : "AI 城市预测"}
+          </span>
+          <h3>{displayName}</h3>
+          <div className="scan-ai-city-pills">
+            <span>{detail?.local_time || row?.local_time || "--"}</span>
+            <span>
+              DEB{" "}
+              {deb != null
+                ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
+                : "--"}
+            </span>
+            <span>{isEn ? "Model" : "模型"} {modelRange}</span>
+            <span>{isEn ? "Peak" : "峰值"} {peakWindow}</span>
+          </div>
+        </div>
+        <div className="scan-ai-city-hero-side">
+          <span>{isEn ? "Expected high" : "预计最高温"}</span>
+          <strong>
+            {paceView?.paceAdjustedHigh != null
+              ? formatTemperatureValue(paceView.paceAdjustedHigh, tempSymbol, { digits: 1 })
+              : deb != null
+                ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
+                : "--"}
+          </strong>
+          <button type="button" className="scan-ai-city-remove" onClick={onRemove}>
+            <X size={14} />
+            {isEn ? "Unpin" : "取消固定"}
+          </button>
+        </div>
+      </header>
+
+      {detail ? (
+        <div className="scan-ai-city-body">
+          <section className={clsx("scan-ai-decision-band", paceTone)}>
+            <div>
+              <span>{isEn ? "Final read" : "最终判断"}</span>
+              <strong>
+                {paceTone === "warm"
+                  ? isEn
+                    ? "Running above DEB path"
+                    : "实测高于 DEB 路径"
+                  : paceTone === "cold"
+                    ? isEn
+                      ? "Running below DEB path"
+                      : "实测低于 DEB 路径"
+                    : isEn
+                      ? "Tracking DEB path"
+                      : "基本贴合 DEB 路径"}
+              </strong>
+              <p>{paceText}</p>
+            </div>
+            <div className="scan-ai-decision-metrics">
+              <span>
+                {isEn ? "Observed" : "实测"}{" "}
+                <b>
+                  {currentTemp != null
+                    ? formatTemperatureValue(currentTemp, tempSymbol, { digits: 1 })
+                    : "--"}
+                </b>
+              </span>
+              <span>
+                {isEn ? "Path delta" : "路径偏差"} <b>{paceView?.deltaText || "--"}</b>
+              </span>
+              <span>
+                {isEn ? "Model support" : "模型支持"} <b>{modelValues.length}</b>
+              </span>
+            </div>
+          </section>
+
+          <div className="scan-ai-city-analysis-grid">
+            <AiCityTemperatureChart detail={detail} />
+            <section className="scan-ai-city-section">
+              <div className="scan-ai-city-section-title">
+                {isEn ? "Airport / climate read" : "机场报文与天气解读"}
+              </div>
+              <p>{weatherLine || (isEn ? "No weather text decoded yet." : "暂无天气文本解读。")}</p>
+              <p>
+                {report
+                  ? `${detail.risk?.icao || detail.current?.station_code || ""} ${report}`.trim()
+                  : isEn
+                    ? "No raw METAR available."
+                    : "暂无原始 METAR 报文。"}
+              </p>
+              <p>{paceView?.kicker || ""}</p>
+            </section>
+          </div>
+
+          <section className="scan-ai-city-section models">
+            <div className="scan-ai-city-section-title">
+              {isEn ? "Multi-model support" : "多模型支撑"}
+            </div>
+            <ModelForecast detail={detail} targetDate={detail.local_date} hideTitle />
+          </section>
+
+        </div>
+      ) : (
+        <div className="scan-ai-city-loading">
+          {isEn ? "Loading today analysis for this city..." : "正在加载该城市的今日日内分析..."}
+        </div>
+      )}
+    </article>
+  );
+}
+
+function AiPinnedForecastView({
+  items,
+  rows,
+  detailsByName,
+  locale,
+  onRemoveCity,
+}: {
+  items: AiPinnedCity[];
+  rows: ScanOpportunityRow[];
+  detailsByName: Record<string, CityDetail>;
+  locale: string;
+  onRemoveCity: (cityName: string) => void;
+}) {
+  const isEn = locale === "en-US";
+  if (!items.length) {
+    return (
+      <div className="scan-ai-workspace empty">
+        <div className="scan-empty-state">
+          <div className="scan-empty-title">
+            {isEn ? "Click a city on the map" : "从分布视图点击城市"}
+          </div>
+          <div className="scan-empty-copy">
+            {isEn
+              ? "Selected cities will appear here as pinned AI forecast blocks."
+              : "被点击的城市会加入 AI 预测页，并保留为可固定的城市分析区块。"}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="scan-ai-workspace">
+      <div className="scan-ai-workspace-head">
+        <div>
+          <span>{isEn ? "Pinned city workspace" : "固定城市工作区"}</span>
+          <strong>
+            {isEn
+              ? `${items.length} cities under AI forecast`
+              : `${items.length} 个城市正在 AI 预测`}
+          </strong>
+        </div>
+        <p>
+          {isEn
+            ? "Map clicks add cities here. Pinned city analysis stays here until you remove it."
+            : "地图点击会把城市加入这里；已固定的城市分析会保留，直到你手动移除。"}
+        </p>
+      </div>
+      <div className="scan-ai-city-stack">
+        {items.map((item) => {
+          const detail = findDetailForCity(detailsByName, item.cityName);
+          const row = findRowForCity(rows, item.cityName);
+          const key = normalizeCityKey(item.cityName);
+          return (
+            <AiPinnedCityCard
+              key={key || item.cityName}
+              item={item}
+              detail={detail}
+              row={row}
+              locale={locale}
+              onRemove={() => onRemoveCity(item.cityName)}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function AiForecastKPIBar({
+  pinnedCount,
+  activeCityName,
+  activeDetail,
+  activeRow,
+  locale,
+}: {
+  pinnedCount: number;
+  activeCityName?: string | null;
+  activeDetail?: CityDetail | null;
+  activeRow?: ScanOpportunityRow | null;
+  locale: string;
+}) {
+  const isEn = locale === "en-US";
+  const tempSymbol = activeDetail?.temp_symbol || activeRow?.temp_symbol || "°C";
+  const displayName =
+    activeDetail?.display_name ||
+    activeRow?.city_display_name ||
+    activeRow?.display_name ||
+    activeCityName ||
+    "--";
+  const deb = activeDetail?.deb?.prediction ?? activeRow?.deb_prediction ?? null;
+  const paceView = activeDetail
+    ? getTodayPaceView(activeDetail, locale as "zh-CN" | "en-US")
+    : null;
+  const peakWindow =
+    paceView?.peakWindowText ||
+    (activeRow ? getPeakWindowLabel(activeRow) : null) ||
+    "--";
+  const cards = [
+    {
+      label: isEn ? "AI Workspace" : "AI 工作区",
+      value: String(pinnedCount),
+      note: isEn ? "Pinned cities from map clicks" : "地图点选后固定到 AI 预测",
+      tone: "green",
+    },
+    {
+      label: isEn ? "Current City" : "当前城市",
+      value: displayName,
+      note: isEn ? "City briefing stays in the right rail" : "右侧城市简报同步显示，不自动切页",
+      tone: "blue",
+    },
+    {
+      label: isEn ? "Forecast Center" : "预测中枢",
+      value:
+        deb != null
+          ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
+          : "--",
+      note: isEn ? "DEB final blended forecast" : "DEB 最终融合预测，不含市场价格",
+      tone: "cyan",
+    },
+    {
+      label: isEn ? "Peak Window" : "峰值窗口",
+      value: peakWindow,
+      note: isEn ? "Key window for daily high judgment" : "用于判断是否接近今日最高温",
+      tone: "amber",
+    },
+  ];
+
+  return (
+    <section className="scan-kpi-bar">
+      {cards.map((card) => (
+        <article key={card.label} className={`scan-kpi-card ${card.tone}`}>
+          <div className="scan-kpi-label">{card.label}</div>
+          <div className="scan-kpi-value">{card.value}</div>
+          <div className="scan-kpi-note">{card.note}</div>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -698,34 +842,20 @@ function ScanTerminalScreen() {
   const accountHref = store.proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const [activeFilters, setActiveFilters] = useState<FilterState>(DEFAULT_FILTERS);
-  const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [terminalData] = useState<ScanTerminalResponse | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
+  const [aiPinnedCities, setAiPinnedCities] = useState<AiPinnedCity[]>([]);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
-  const [aiLogs, setAiLogs] = useState<ScanAiLogEntry[]>([]);
   const [userLocalTime, setUserLocalTime] = useState("--");
   const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
-  const deferredRows = useDeferredValue(terminalData?.rows || []);
-  const preloadedSnapshotRef = useRef<string | null>(null);
+  const lastMapSelectedCityRef = useRef<string>("");
 
-  const prependAiLogs = (entries: ScanAiLogEntry[]) => {
-    setAiLogs((current) => [...entries, ...current].slice(0, 8));
-  };
   const timeSortedRows = useMemo(
-    () => sortRowsByUserTime(deferredRows),
-    [deferredRows],
+    () => sortRowsByUserTime(terminalData?.rows || []),
+    [terminalData?.rows],
   );
-  const marketFocus = useMemo(
-    () => getMarketFocus(timeSortedRows, locale),
-    [locale, timeSortedRows],
-  );
-
   const selectedRow = useMemo(() => {
     if (!timeSortedRows.length) return null;
     return timeSortedRows.find((row) => row.id === selectedRowId) || timeSortedRows[0] || null;
@@ -737,6 +867,18 @@ function ScanTerminalScreen() {
       mapSelectedCityName || store.selectedCity,
     );
   }, [mapSelectedCityName, store.selectedCity, timeSortedRows]);
+  const kpiCityName =
+    mapSelectedCityName ||
+    store.selectedCity ||
+    aiPinnedCities[0]?.cityName ||
+    null;
+  const kpiDetail =
+    findDetailForCity(store.cityDetailsByName, kpiCityName) ||
+    (store.selectedDetail &&
+    normalizeCityKey(store.selectedDetail.name) === normalizeCityKey(kpiCityName)
+      ? store.selectedDetail
+      : null);
+  const kpiRow = findRowForCity(timeSortedRows, kpiCityName);
 
   const mapFallbackRow = useMemo(() => {
     const rawCityName = mapSelectedCityName || store.selectedCity;
@@ -826,204 +968,8 @@ function ScanTerminalScreen() {
     store.selectedDetail,
   ]);
 
-  const fetchTerminal = async (filters: FilterState, force = false) => {
-    if (!isPro) return;
-    setLoading(true);
-    setAiError(null);
-    try {
-      const response = await dashboardClient.getScanTerminal(filters, { force });
-      const displayRows = response.rows.length
-        ? response.rows
-        : terminalData?.rows || [];
-      startTransition(() => {
-        setTerminalData((current) =>
-          mergeRefreshingScanSnapshot(current, response, locale),
-        );
-        setActiveFilters(filters);
-        setError(response.status === "failed" ? response.stale_reason || null : null);
-        setSelectedRowId((current) => {
-          if (current && displayRows.some((row) => row.id === current)) {
-            return current;
-          }
-          return sortRowsByUserTime(displayRows)[0]?.id || response.top_signal?.id || null;
-        });
-      });
-      prependAiLogs([
-        {
-          id: `rule-${Date.now()}`,
-          time: formatLogTime(),
-          tone: displayRows.length ? "success" : "warning",
-          title: isEn ? "Rule scan snapshot ready" : "规则扫描快照已就绪",
-          detail: isEn
-            ? `snapshot ${response.snapshot_id || "--"} · ${displayRows.length} visible rows`
-            : `快照 ${response.snapshot_id || "--"} · 可见候选 ${displayRows.length} 条`,
-        },
-      ]);
-    } catch (fetchError) {
-      setError(String(fetchError));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const runAiReview = async () => {
-    if (aiLoading) return;
-    if (!terminalData?.rows.length) {
-      prependAiLogs([
-        {
-          id: `no-rows-${Date.now()}`,
-          time: formatLogTime(),
-          tone: "warning",
-          title: isEn ? "V4 not started" : "V4 未启动",
-          detail: isEn
-            ? "Run the rule scan first. V4 only reviews existing candidate rows."
-            : "需要先完成规则扫描。V4 只复核已有候选，不会凭空抓市场。",
-        },
-      ]);
-      return;
-    }
-    const snapshotId = terminalData.snapshot_id || null;
-    const rowCount = terminalData.rows.length;
-    prependAiLogs([
-      {
-        id: `queued-${Date.now()}`,
-        time: formatLogTime(),
-        tone: "info",
-        title: isEn ? "V4 review queued" : "V4 复核已排队",
-        detail: isEn
-          ? `snapshot ${snapshotId || "--"} · ${rowCount} rule candidates grouped by city`
-          : `快照 ${snapshotId || "--"} · ${rowCount} 条候选将按城市分组`,
-      },
-      {
-        id: `send-${Date.now() + 1}`,
-        time: formatLogTime(),
-        tone: "info",
-        title: isEn ? "Sending city-level context" : "正在发送城市级上下文",
-        detail: isEn
-          ? "Each city includes EMOS distribution, model cluster and contracts."
-          : "每城包含 EMOS 分布、模型集群和候选合约。",
-      },
-    ]);
-    setActiveView("list");
-    setAiLoading(true);
-    setAiError(null);
-    try {
-      const response = await dashboardClient.reviewScanTerminalWithAi({
-        filters: terminalData.filters || activeFilters,
-        snapshotId,
-      });
-      const review = response.ai_scan;
-      startTransition(() => {
-        setTerminalData(response);
-        setActiveFilters(response.filters || activeFilters);
-        setError(response.status === "failed" ? response.stale_reason || null : null);
-        setSelectedRowId((current) => {
-          if (current && response.rows.some((row) => row.id === current)) {
-            return current;
-          }
-          return sortRowsByUserTime(response.rows)[0]?.id || response.top_signal?.id || null;
-        });
-      });
-      prependAiLogs([
-        {
-          id: `done-${Date.now()}`,
-          time: formatLogTime(),
-          tone: review?.status === "ready" ? "success" : "warning",
-          title:
-            review?.status === "ready"
-              ? review.cached
-                ? isEn
-                  ? "V4 cache hit"
-                  : "V4 命中缓存"
-                : isEn
-                  ? "V4 review completed"
-                  : "V4 复核完成"
-              : isEn
-                ? "V4 fell back to rule scan"
-                : "V4 已回退规则扫描",
-          detail:
-            review?.status === "ready"
-              ? isEn
-                ? `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · ${review.sent_cities ?? "--"} cities / ${review.sent_contracts ?? review.sent_rows ?? "--"} contracts · ${review.recommended_count ?? 0} picks / ${review.vetoed_count ?? 0} veto`
-                : `${review.model || "V4"} · ${formatDuration(review.duration_ms)} · ${review.sent_cities ?? "--"} 城 / ${review.sent_contracts ?? review.sent_rows ?? "--"} 合约 · 推荐 ${review.recommended_count ?? 0} / 排除 ${review.vetoed_count ?? 0}`
-              : review?.reason || (isEn ? "No AI result returned." : "没有返回 AI 结果。"),
-        },
-        ...(review?.usage
-          ? [
-              {
-                id: `usage-${Date.now() + 1}`,
-                time: formatLogTime(),
-                tone: "info" as const,
-                title: isEn ? "Token usage" : "Token 用量",
-                detail: isEn
-                  ? `input ${review.usage.prompt_tokens ?? "--"} · output ${review.usage.completion_tokens ?? "--"} · total ${review.usage.total_tokens ?? "--"}`
-                  : `输入 ${review.usage.prompt_tokens ?? "--"} · 输出 ${review.usage.completion_tokens ?? "--"} · 总计 ${review.usage.total_tokens ?? "--"}`,
-              },
-            ]
-          : []),
-      ]);
-    } catch (reviewError) {
-      setAiError(String(reviewError));
-      prependAiLogs([
-        {
-          id: `error-${Date.now()}`,
-          time: formatLogTime(),
-          tone: "error",
-          title: isEn ? "V4 request failed" : "V4 请求失败",
-          detail: String(reviewError),
-        },
-      ]);
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
   useEffect(() => {
-    if (!isPro) return;
-    void fetchTerminal(DEFAULT_FILTERS, false);
-  }, [isPro]);
-
-  useEffect(() => {
-    if (!isPro || !terminalData?.rows.length) return;
-    const snapshotKey =
-      terminalData.snapshot_id ||
-      terminalData.generated_at ||
-      terminalData.rows.map((row) => row.id).join("|");
-    if (!snapshotKey || preloadedSnapshotRef.current === snapshotKey) return;
-    preloadedSnapshotRef.current = snapshotKey;
-
-    const seen = new Set<string>();
-    const cities = sortRowsByUserTime(terminalData.rows)
-      .map((row) => String(row.city || row.city_display_name || row.display_name || "").trim())
-      .filter((city) => {
-        const key = normalizeCityKey(city);
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      })
-      .slice(0, 12);
-
-    cities.forEach((cityName) => {
-      void store.ensureCityDetail(cityName, false, "market").catch(() => {});
-    });
-  }, [
-    isPro,
-    store.ensureCityDetail,
-    terminalData?.rows,
-    terminalData?.generated_at,
-    terminalData?.snapshot_id,
-  ]);
-
-  useEffect(() => {
-    if (!isPro) return;
-    const intervalId = window.setInterval(() => {
-      void fetchTerminal(activeFilters, false);
-    }, SCAN_AUTO_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
-  }, [activeFilters, isPro]);
-
-  useEffect(() => {
-    if (!store.proAccess.loading && !isPro && activeView !== "map") {
+    if (!store.proAccess.loading && !isPro && activeView === "calendar") {
       setActiveView("map");
     }
   }, [activeView, isPro, store.proAccess.loading]);
@@ -1053,31 +999,8 @@ function ScanTerminalScreen() {
     resolvedView === "map" && mapFocusedCity
       ? mapFocusedRow || mapFallbackRow
       : selectedRow;
-  const scanStatus = terminalData?.status || (loading ? "loading" : error ? "failed" : "ready");
-  const staleReason =
-    terminalData?.stale_reason || error || null;
-  const aiScan = terminalData?.ai_scan || null;
-  const aiStatusText = aiLoading
-    ? isEn
-      ? "V4 reviewing"
-      : "V4 复核中"
-    : aiError
-      ? isEn
-        ? "V4 failed"
-        : "V4 失败"
-      : aiScan?.status === "ready"
-        ? isEn
-          ? aiScan.cached
-            ? "V4 cached"
-            : "V4 reviewed"
-          : aiScan.cached
-            ? "V4 缓存"
-            : "V4 已复核"
-        : aiScan?.status
-          ? isEn
-            ? "Rule scan"
-            : "使用规则扫描"
-          : null;
+  const scanStatus = terminalData?.status || "ready";
+  const staleReason = terminalData?.stale_reason || null;
 
   useEffect(() => {
     if (!activeDetailRow) return;
@@ -1086,11 +1009,74 @@ function ScanTerminalScreen() {
     }
   }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
 
+  const addAiPinnedCity = useCallback((cityName: string) => {
+    const cleanName = String(cityName || "").trim();
+    const key = normalizeCityKey(cleanName);
+    if (!key) return;
+    const matchedRow = findRowForCity(timeSortedRows, cleanName);
+    const prettyName = prettifyCityName(cleanName);
+    const displayName =
+      matchedRow?.city_display_name ||
+      matchedRow?.display_name ||
+      getLocalizedCityName(cleanName, prettyName || cleanName, locale) ||
+      prettyName ||
+      cleanName;
+    setAiPinnedCities((current) => {
+      const existing = current.findIndex(
+        (item) => normalizeCityKey(item.cityName) === key,
+      );
+      const nextItem = {
+        cityName: matchedRow?.city || cleanName,
+        displayName,
+        addedAt: Date.now(),
+      };
+      if (existing >= 0) {
+        const next = [...current];
+        next[existing] = { ...next[existing], ...nextItem };
+        return [
+          next[existing],
+          ...next.filter((_, index) => index !== existing),
+        ];
+      }
+      return [nextItem, ...current].slice(0, 8);
+    });
+    void store.ensureCityDetail(cleanName, false, "full").catch(() => {});
+  }, [locale, store.ensureCityDetail, timeSortedRows]);
+
+  const removeAiPinnedCity = useCallback((cityName: string) => {
+    const key = normalizeCityKey(cityName);
+    setAiPinnedCities((current) =>
+      current.filter((item) => normalizeCityKey(item.cityName) !== key),
+    );
+  }, []);
+
+  useEffect(() => {
+    aiPinnedCities.forEach((item) => {
+      if (!findDetailForCity(store.cityDetailsByName, item.cityName)) {
+        void store.ensureCityDetail(item.cityName, false, "full").catch(() => {});
+      }
+    });
+  }, [aiPinnedCities, store.cityDetailsByName, store.ensureCityDetail]);
+
   const handleMapCitySelect = useCallback((cityName: string) => {
     setMapSelectedCityName(cityName);
+    lastMapSelectedCityRef.current = normalizeCityKey(cityName);
     const matchedRow = findRowForCity(timeSortedRows, cityName);
     setSelectedRowId(matchedRow?.id || null);
-  }, [timeSortedRows]);
+    addAiPinnedCity(cityName);
+  }, [addAiPinnedCity, timeSortedRows]);
+
+  useEffect(() => {
+    if (activeView !== "map") return;
+    const selectedCity = String(store.selectedCity || "").trim();
+    const selectedKey = normalizeCityKey(selectedCity);
+    if (!selectedKey || selectedKey === lastMapSelectedCityRef.current) return;
+    lastMapSelectedCityRef.current = selectedKey;
+    setMapSelectedCityName(selectedCity);
+    const matchedRow = findRowForCity(timeSortedRows, selectedCity);
+    setSelectedRowId(matchedRow?.id || null);
+    addAiPinnedCity(selectedCity);
+  }, [activeView, addAiPinnedCity, store.selectedCity, timeSortedRows]);
 
   const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
     const cityName = row.city || row.city_display_name || row.display_name || "";
@@ -1129,6 +1115,17 @@ function ScanTerminalScreen() {
         </div>
       );
     }
+    if (resolvedView === "list") {
+      return (
+        <AiPinnedForecastView
+          items={aiPinnedCities}
+          rows={timeSortedRows}
+          detailsByName={store.cityDetailsByName}
+          locale={locale}
+          onRemoveCity={removeAiPinnedCity}
+        />
+      );
+    }
     if (!isPro) {
       return (
         <div className="scan-table-shell empty">
@@ -1155,20 +1152,7 @@ function ScanTerminalScreen() {
         />
       );
     }
-    return (
-      <>
-        <OpportunityTable
-          rows={timeSortedRows}
-          status={scanStatus}
-          stale={Boolean(terminalData?.stale)}
-          staleReason={staleReason}
-          loading={loading}
-          selectedRowId={selectedRowId}
-          onSelectRow={handleSelectRow}
-          cityDetailsByName={store.cityDetailsByName}
-        />
-      </>
-    );
+    return null;
   };
 
   if (store.proAccess.loading) {
@@ -1196,21 +1180,9 @@ function ScanTerminalScreen() {
             <div className="scan-topbar-title">
               <strong>{isEn ? "Market Scan Terminal" : "市场扫描台"}</strong>
               <span>
-                {loading
-                  ? isEn
-                    ? "Refreshing current market snapshot"
-                    : "正在刷新当前市场快照"
-                  : terminalData?.stale
-                    ? isEn
-                      ? "Showing the last successful snapshot"
-                      : "当前显示上次成功快照"
-                    : isEn
-                      ? isPro
-                        ? "Read-only market scan with DEB-first win-rate signal"
-                        : "Free preview: distribution view and city briefing"
-                      : isPro
-                        ? "只读市场扫描，主信号按 DEB 最终融合预测优先"
-                        : "免费预览：分布视图和城市简报可查看"}
+                {isEn
+                  ? "Click cities on the map to build an AI forecast workspace"
+                  : "点击地图城市加入 AI 预测工作区，按城市查看 DEB / 模型 / METAR"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -1251,12 +1223,6 @@ function ScanTerminalScreen() {
               >
                 {themeMode === "light" ? <Moon size={15} /> : <Sun size={15} />}
               </button>
-              {isPro ? (
-                <button type="button" className="scan-ghost-button" onClick={() => void fetchTerminal(activeFilters, true)}>
-                  <RefreshCw size={14} className={loading ? "spin" : undefined} />
-                  {isEn ? "Refresh" : "刷新"}
-                </button>
-              ) : null}
               {store.proAccess.authenticated ? (
                 <Link
                   href={accountHref}
@@ -1270,14 +1236,13 @@ function ScanTerminalScreen() {
             </div>
           </div>
 
-          {isPro ? (
-            <ScanKPIBar
-              response={terminalData}
-              rows={timeSortedRows}
-              totalCities={store.cities.length}
-              loading={loading}
-            />
-          ) : null}
+          <AiForecastKPIBar
+            pinnedCount={aiPinnedCities.length}
+            activeCityName={kpiCityName}
+            activeDetail={kpiDetail}
+            activeRow={kpiRow}
+            locale={locale}
+          />
 
           <section className="scan-list-section">
             <div className="scan-list-header">
@@ -1286,6 +1251,7 @@ function ScanTerminalScreen() {
                   type="button"
                   className={resolvedView === "map" ? "active" : ""}
                   onClick={() => {
+                    lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
                     setActiveView("map");
                   }}
                 >
@@ -1294,16 +1260,11 @@ function ScanTerminalScreen() {
                 <button
                   type="button"
                   className={resolvedView === "list" ? "active" : ""}
-                  title={!isPro ? (isEn ? "Pro scan required" : "扫描需 Pro") : undefined}
                   onClick={() => {
-                    if (!isPro) {
-                      openScanPaywall();
-                      return;
-                    }
                     setActiveView("list");
                   }}
                 >
-                  {isEn ? "Opportunity List" : "机会列表"}
+                  {isEn ? "AI Forecast" : "AI 预测"}
                 </button>
                 <button
                   type="button"
@@ -1321,26 +1282,9 @@ function ScanTerminalScreen() {
                 </button>
               </div>
               <div className="scan-list-status">
-                {marketFocus ? (
-                  <span className="scan-status-chip focus">
-                    {isEn
-                      ? `Focus: ${marketFocus.label}`
-                      : `当前主盘：${marketFocus.label}`}
-                  </span>
-                ) : null}
                 {terminalData?.stale ? (
                   <span className="scan-status-chip stale">
                     {isEn ? "Delayed snapshot" : "延迟快照"}
-                  </span>
-                ) : null}
-                {loading ? (
-                  <span className="scan-status-chip live">
-                    {isEn ? "Refreshing" : "刷新中"}
-                  </span>
-                ) : null}
-                {aiStatusText ? (
-                  <span className={`scan-status-chip ${aiScan?.status === "ready" ? "ai" : "stale"}`}>
-                    {aiStatusText}
                   </span>
                 ) : null}
               </div>
@@ -1354,18 +1298,7 @@ function ScanTerminalScreen() {
                 <div className="scan-empty-copy">{staleReason}</div>
               </div>
             ) : (
-              <>
-                {renderMainView()}
-                {isPro ? (
-                  <ScanAiLogPanel
-                    response={terminalData}
-                    logs={aiLogs}
-                    locale={locale}
-                    loading={aiLoading}
-                    error={aiError}
-                  />
-                ) : null}
-              </>
+              renderMainView()
             )}
           </section>
         </main>

@@ -326,6 +326,42 @@ function buildTemperatureTickLabels(times: string[]) {
   });
 }
 
+function getNiceTemperatureScale(values: number[], tempSymbol?: string | null) {
+  const numericValues = values.filter((value) => Number.isFinite(Number(value)));
+  if (!numericValues.length) {
+    return { max: 1, min: 0, step: 1 };
+  }
+
+  const rawMin = Math.min(...numericValues);
+  const rawMax = Math.max(...numericValues);
+  const spread = Math.max(0.1, rawMax - rawMin);
+  const isFahrenheit = normalizeTemperatureSymbol(tempSymbol) === "°F";
+  const padding = Math.max(isFahrenheit ? 1.5 : 0.8, spread * 0.12);
+  const paddedMin = rawMin - padding;
+  const paddedMax = rawMax + padding;
+  const paddedSpread = Math.max(0.1, paddedMax - paddedMin);
+  const candidates = isFahrenheit ? [1, 2, 5, 10, 20] : [0.5, 1, 2, 5, 10];
+  let step =
+    candidates.find((candidate) => candidate >= paddedSpread / 4) ||
+    candidates[candidates.length - 1];
+  let min = Math.floor(paddedMin / step) * step;
+  let max = Math.ceil(paddedMax / step) * step;
+
+  if (min < 0 && rawMin >= 0 && rawMin <= step * 1.25) min = 0;
+  if (max <= min) max = min + step * 4;
+
+  while ((max - min) / step + 1 > 6) {
+    const nextStep = candidates.find((candidate) => candidate > step);
+    if (!nextStep) break;
+    step = nextStep;
+    min = Math.floor(paddedMin / step) * step;
+    max = Math.ceil(paddedMax / step) * step;
+    if (min < 0 && rawMin >= 0 && rawMin <= step * 1.25) min = 0;
+  }
+
+  return { max, min, step };
+}
+
 function buildSeriesPoints(
   times: string[],
   values: Array<number | null | undefined>,
@@ -905,8 +941,10 @@ export function getTemperatureChartData(
 
   if (!allValues.length) return null;
 
-  const min = Math.floor(Math.min(...allValues)) - 1;
-  const max = Math.ceil(Math.max(...allValues)) + 1;
+  const yScale = getNiceTemperatureScale(allValues, detail.temp_symbol);
+  const min = yScale.min;
+  const max = yScale.max;
+  const yTickStep = yScale.step;
   const tafMarkersRaw = Array.isArray(detail.taf?.signal?.markers)
     ? detail.taf?.signal?.markers || []
     : [];
@@ -1240,6 +1278,7 @@ export function getTemperatureChartData(
     times,
     xMax,
     xMin,
+    yTickStep,
   };
 }
 

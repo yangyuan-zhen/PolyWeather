@@ -62,8 +62,8 @@ function formatMinuteAxisLabel(value: number) {
 function WeatherIcon({ emoji, size = 32 }: { emoji: string; size?: number }) {
   if (emoji === "☀️") return <Sun size={size} color="#facc15" />;
   if (emoji === "⛅" || emoji === "🌤️")
-    return <CloudSun size={size} color="#38bdf8" />;
-  if (emoji === "☁️") return <Cloud size={size} color="#94a3b8" />;
+    return <CloudSun size={size} color="#4DA3FF" />;
+  if (emoji === "☁️") return <Cloud size={size} color="#9FB2C7" />;
   if (emoji === "🌧️" || emoji === "🌦️")
     return <CloudRain size={size} color="#60a5fa" />;
   if (emoji === "⛈️") return <CloudLightning size={size} color="#c084fc" />;
@@ -71,7 +71,7 @@ function WeatherIcon({ emoji, size = 32 }: { emoji: string; size?: number }) {
     return <CloudSnow size={size} color="#7dd3fc" />;
   if (emoji === "🌫️") return <CloudFog size={size} color="#a1a1aa" />;
   if (emoji === "💨") return <Wind size={size} color="#cbd5e1" />;
-  return <Search size={size} color="#64748b" />;
+  return <Search size={size} color="#6B7A90" />;
 }
 
 function formatMarketPercent(value?: number | null) {
@@ -354,8 +354,8 @@ function DailyTemperatureChart({
         });
       } else {
         datasets.push({
-          backgroundColor: "rgba(52, 211, 153, 0.05)",
-          borderColor: "rgba(52, 211, 153, 0.6)",
+          backgroundColor: "rgba(77, 163, 255, 0.06)",
+          borderColor: "rgba(77, 163, 255, 0.66)",
           borderWidth: 1.5,
           data: todayChartData.datasets.debPastSeries,
           fill: true,
@@ -366,7 +366,7 @@ function DailyTemperatureChart({
           tension: 0.3,
         });
         datasets.push({
-          borderColor: "rgba(52, 211, 153, 0.35)",
+          borderColor: "rgba(77, 163, 255, 0.36)",
           borderDash: [5, 3],
           borderWidth: 1.5,
           data: todayChartData.datasets.debFutureSeries,
@@ -379,8 +379,8 @@ function DailyTemperatureChart({
       }
 
       datasets.push({
-        backgroundColor: "#00E0A4",
-        borderColor: "#00E0A4",
+        backgroundColor: "#4DA3FF",
+        borderColor: "#4DA3FF",
         borderWidth: 0,
         data: todayChartData.datasets.metarSeries,
         fill: false,
@@ -431,7 +431,7 @@ function DailyTemperatureChart({
         Math.abs(todayChartData.datasets.offset) > 0.3
       ) {
         datasets.push({
-          borderColor: "rgba(123, 97, 255, 0.2)",
+          borderColor: "rgba(77, 163, 255, 0.22)",
           borderDash: [2, 4],
           borderWidth: 1,
           data: todayChartData.datasets.tempsSeries,
@@ -495,7 +495,7 @@ function DailyTemperatureChart({
           plugins: {
             legend: {
               labels: {
-                color: "#94a3b8",
+                color: "#9FB2C7",
                 filter: (legendItem, chartData) => {
                   const text = String(legendItem.text || "");
                   if (!text) return false;
@@ -513,7 +513,7 @@ function DailyTemperatureChart({
             },
             tooltip: {
               backgroundColor: "rgba(15, 23, 42, 0.96)",
-              borderColor: "rgba(0, 224, 164, 0.2)",
+              borderColor: "rgba(77, 163, 255, 0.24)",
               borderWidth: 1,
               callbacks: {
                 title: (items) => {
@@ -598,7 +598,7 @@ function DailyTemperatureChart({
                   }
                   return formatMinuteAxisLabel(minutes);
                 },
-                color: "#64748b",
+                color: "#6B7A90",
                 font: { family: "Inter", size: 10 },
                 maxRotation: 0,
               },
@@ -608,9 +608,11 @@ function DailyTemperatureChart({
               max: todayChartData.max,
               min: todayChartData.min,
               ticks: {
-                callback: (value) => `${value}${detail.temp_symbol || "°C"}`,
-                color: "#64748b",
+                callback: (value) =>
+                  `${Number(value).toFixed(todayChartData.yTickStep < 1 ? 1 : 0)}${detail.temp_symbol || "°C"}`,
+                color: "#6B7A90",
                 font: { family: "Inter", size: 10 },
+                stepSize: todayChartData.yTickStep,
               },
             },
           },
@@ -626,8 +628,8 @@ function DailyTemperatureChart({
       data: {
         datasets: [
           {
-            backgroundColor: "rgba(0, 224, 164, 0.08)",
-            borderColor: "#00E0A4",
+            backgroundColor: "rgba(77, 163, 255, 0.08)",
+            borderColor: "#4DA3FF",
             data: view.slice.map((point) => point.temp),
             fill: false,
             label:
@@ -637,7 +639,7 @@ function DailyTemperatureChart({
           },
           {
             backgroundColor: "transparent",
-            borderColor: "#a78bfa",
+            borderColor: "#93C5FD",
             borderDash: [5, 4],
             data: view.slice.map((point) => point.dewPoint),
             fill: false,
@@ -654,13 +656,13 @@ function DailyTemperatureChart({
         plugins: {
           legend: {
             labels: {
-              color: "#94a3b8",
+              color: "#9FB2C7",
               font: { family: "Inter", size: 11 },
             },
           },
           tooltip: {
             backgroundColor: "rgba(15, 23, 42, 0.96)",
-            borderColor: "rgba(0, 224, 164, 0.2)",
+            borderColor: "rgba(77, 163, 255, 0.24)",
             borderWidth: 1,
             callbacks: {
               label: (ctx) =>
@@ -673,7 +675,7 @@ function DailyTemperatureChart({
           x: {
             grid: { color: "rgba(255,255,255,0.04)" },
             ticks: {
-              color: "#64748b",
+              color: "#6B7A90",
               font: { family: "Inter", size: 10 },
               maxRotation: 0,
             },
@@ -682,7 +684,7 @@ function DailyTemperatureChart({
             grid: { color: "rgba(255,255,255,0.04)" },
             ticks: {
               callback: (value) => `${value}${unit}`,
-              color: "#64748b",
+              color: "#6B7A90",
               font: { family: "Inter", size: 10 },
             },
           },

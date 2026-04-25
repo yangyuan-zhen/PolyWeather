@@ -9,28 +9,28 @@
 @layer base {
   :root {
     /* ── Background Scale ── */
-    --color-bg-base: #080c14;
-    --color-bg-raised: #0d1321;
-    --color-bg-overlay: #111827;
-    --color-bg-card: rgba(15, 23, 42, 0.72);
-    --color-bg-input: rgba(255, 255, 255, 0.04);
+    --color-bg-base: #0B1220;
+    --color-bg-raised: #111A2E;
+    --color-bg-overlay: #16213A;
+    --color-bg-card: rgba(17, 26, 46, 0.88);
+    --color-bg-input: rgba(22, 33, 58, 0.72);
 
     /* ── Text Scale ── */
-    --color-text-primary: #f1f5f9;
-    --color-text-secondary: #94a3b8;
-    --color-text-muted: #64748b;
-    --color-text-disabled: #475569;
+    --color-text-primary: #E6EDF3;
+    --color-text-secondary: #9FB2C7;
+    --color-text-muted: #6B7A90;
+    --color-text-disabled: #6B7A90;
 
     /* ── Accent Colors (Fintech 3-Color) ── */
-    --color-accent-primary: #00e0a4;
-    --color-accent-secondary: #7b61ff;
-    --color-accent-tertiary: #a78bfa;
+    --color-accent-primary: #4DA3FF;
+    --color-accent-secondary: #4DA3FF;
+    --color-accent-tertiary: #93C5FD;
 
     /* ── Signal / Semantic Colors ── */
-    --color-signal-success: #00e0a4;
-    --color-signal-warning: #ffb020;
-    --color-signal-danger: #ff4d6a;
-    --color-signal-info: #7b61ff;
+    --color-signal-success: #22C55E;
+    --color-signal-warning: #F59E0B;
+    --color-signal-danger: #EF4444;
+    --color-signal-info: #4DA3FF;
 
     /* ── Risk Colors (aliased from signal) ── */
     --color-risk-high: var(--color-signal-danger);
@@ -38,16 +38,16 @@
     --color-risk-low: var(--color-signal-success);
 
     /* ── Border ── */
-    --color-border-default: rgba(123, 97, 255, 0.12);
-    --color-border-hover: rgba(123, 97, 255, 0.28);
-    --color-border-subtle: rgba(255, 255, 255, 0.06);
+    --color-border-default: rgba(159, 178, 199, 0.16);
+    --color-border-hover: rgba(77, 163, 255, 0.38);
+    --color-border-subtle: rgba(159, 178, 199, 0.08);
 
     /* ── Shadow / Elevation ── */
     --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-elevation-2: 0 8px 24px rgba(0, 0, 0, 0.45);
     --shadow-elevation-3: 0 20px 60px rgba(0, 0, 0, 0.6);
-    --shadow-glow-accent: 0 0 20px rgba(0, 224, 164, 0.25);
-    --shadow-glow-secondary: 0 0 20px rgba(123, 97, 255, 0.25);
+    --shadow-glow-accent: 0 0 20px rgba(77, 163, 255, 0.24);
+    --shadow-glow-secondary: 0 0 20px rgba(111, 183, 255, 0.22);
 
     /* ── Typography ── */
     --font-data:
@@ -182,7 +182,7 @@
   }
 
   .map-pill.low {
-    background: linear-gradient(135deg, #10b981, #047857);
+    background: linear-gradient(135deg, #22C55E, #047857);
   }
 
   .map-pill.active {
@@ -329,12 +329,12 @@
   }
 
   .marker-bubble.risk-low {
-    background: linear-gradient(135deg, #059669, #10b981);
+    background: linear-gradient(135deg, #059669, #22C55E);
     border-color: rgba(16, 185, 129, 0.5);
   }
 
   .marker-bubble.risk-low::after {
-    border-top-color: #10b981;
+    border-top-color: #22C55E;
   }
 
   .marker-name {

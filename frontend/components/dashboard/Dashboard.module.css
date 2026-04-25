@@ -4,12 +4,12 @@
 
 .root {
   /* ── Palette (bridged from globals.css unified tokens) ── */
-  --bg-primary: #030711;
-  --bg-secondary: #09111d;
-  --bg-card: #0b1422;
-  --bg-glass: rgba(8, 15, 27, 0.78);
-  --border-glass: rgba(120, 146, 176, 0.18);
-  --border-subtle: rgba(120, 146, 176, 0.1);
+  --bg-primary: #0B1220;
+  --bg-secondary: #16213A;
+  --bg-card: #111A2E;
+  --bg-glass: rgba(17, 26, 46, 0.82);
+  --border-glass: rgba(159, 178, 199, 0.16);
+  --border-subtle: rgba(159, 178, 199, 0.08);
 
   /* Text */
   --text-primary: var(--color-text-primary);
@@ -17,13 +17,13 @@
   --text-muted: var(--color-text-muted);
 
   /* Accents — Fintech 3-Color Model */
-  --accent-cyan: #00e0a4;
-  --accent-blue: #7b61ff;
-  --accent-green: #00e0a4;
-  --accent-orange: #ffb020;
-  --accent-red: #ff4d6a;
-  --accent-yellow: #ffb020;
-  --accent-purple: #7b61ff;
+  --accent-cyan: #4DA3FF;
+  --accent-blue: #4DA3FF;
+  --accent-green: #22C55E;
+  --accent-orange: #F59E0B;
+  --accent-red: #EF4444;
+  --accent-yellow: #F59E0B;
+  --accent-purple: #4DA3FF;
 
   /* Risk colors */
   --risk-high: var(--color-risk-high);
@@ -66,41 +66,41 @@
   background-image:
     radial-gradient(
       circle at 18% 18%,
-      rgba(0, 224, 164, 0.08),
+      rgba(77, 163, 255, 0.09),
       transparent 24%
     ),
     radial-gradient(
       circle at 82% 12%,
-      rgba(123, 97, 255, 0.06),
+      rgba(111, 183, 255, 0.05),
       transparent 20%
     ),
-    linear-gradient(180deg, #040914 0%, #02050d 100%);
+    linear-gradient(180deg, #0B1220 0%, #07101D 100%);
 }
 
 :global(html.light) .root {
-  --bg-primary: #edf5ff;
-  --bg-secondary: #f7fbff;
+  --bg-primary: #F7F9FC;
+  --bg-secondary: #EEF2F7;
   --bg-card: #ffffff;
-  --bg-glass: rgba(248, 252, 255, 0.84);
-  --border-glass: rgba(48, 77, 112, 0.18);
-  --border-subtle: rgba(48, 77, 112, 0.1);
-  --text-primary: #0b1726;
-  --text-secondary: #42546c;
-  --text-muted: #6b7b91;
-  background: #edf5ff;
-  color: #0b1726;
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --border-glass: #E2E8F0;
+  --border-subtle: rgba(226, 232, 240, 0.74);
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #94A3B8;
+  background: #F7F9FC;
+  color: #0F172A;
   background-image:
     radial-gradient(
       circle at 18% 18%,
-      rgba(0, 224, 164, 0.12),
+      rgba(59, 130, 246, 0.1),
       transparent 25%
     ),
     radial-gradient(
       circle at 82% 12%,
-      rgba(123, 97, 255, 0.1),
+      rgba(22, 163, 74, 0.07),
       transparent 22%
     ),
-    linear-gradient(180deg, #f8fbff 0%, #e9f3ff 100%);
+    linear-gradient(180deg, #F7F9FC 0%, #EEF2F7 100%);
 }
 
 :global(html.light) .root :global(.header),
@@ -774,7 +774,7 @@
 }
 
 .root :global(.city-item .city-deviation-cold) {
-  color: #38bdf8;
+  color: #4DA3FF;
 }
 
 .root :global(.city-item .city-deviation-hot) {
@@ -1217,7 +1217,7 @@
   border: 1px solid rgba(34, 211, 238, 0.18);
   border-radius: 999px;
   background: rgba(8, 145, 178, 0.1);
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -1310,7 +1310,7 @@
 
 .root :global(.home-weather-label) {
   margin-bottom: 8px;
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.14em;
@@ -1377,7 +1377,7 @@
 .root :global(.home-weather-icon .cloud) {
   position: absolute;
   border-radius: 999px;
-  background: linear-gradient(180deg, #b8c4d2, #64748b);
+  background: linear-gradient(180deg, #b8c4d2, #6B7A90);
   filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.28));
 }
 
@@ -1401,7 +1401,7 @@
   width: 4px;
   height: 13px;
   border-radius: 999px;
-  background: #38bdf8;
+  background: #4DA3FF;
   transform: rotate(18deg);
 }
 
@@ -1594,7 +1594,7 @@
 
 .root :global(.home-deb-card span),
 .root :global(.home-card-section h3) {
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 12px;
   font-weight: 850;
 }
@@ -1716,7 +1716,7 @@
 }
 
 .root :global(.home-intraday-chart circle) {
-  fill: #38bdf8;
+  fill: #4DA3FF;
   stroke: rgba(15, 23, 42, 0.92);
   stroke-width: 1.6;
   filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.28));
@@ -1943,7 +1943,7 @@
 }
 
 .root :global(.home-market-prices .yes) {
-  color: #67e8f9;
+  color: #6FB7FF;
   background: rgba(8, 145, 178, 0.2);
 }
 
@@ -2126,7 +2126,7 @@
 }
 
 .root :global(.opportunity-tape-pill.accent-cyan strong) {
-  color: #67e8f9;
+  color: #6FB7FF;
 }
 
 .root :global(.opportunity-tape-pill.accent-green strong) {
@@ -2217,7 +2217,7 @@
 }
 
 .root :global(.opportunity-hero-kicker) {
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -2279,7 +2279,7 @@
 
 .root :global(.opportunity-hero-tag.engine) {
   border-color: rgba(34, 211, 238, 0.24);
-  color: #67e8f9;
+  color: #6FB7FF;
 }
 
 .root :global(.opportunity-hero-tag.signal-yes) {
@@ -3111,7 +3111,7 @@
   position: sticky;
   top: 16px;
   width: auto;
-  min-width: 0;
+  min-width: 380px;
   height: calc(100vh - 32px);
   min-height: 0;
   max-height: calc(100vh - 32px);
@@ -3512,7 +3512,7 @@
   padding: 3px 8px;
   border: 1px solid rgba(34, 211, 238, 0.28);
   border-radius: 8px;
-  color: #67e8f9;
+  color: #6FB7FF;
   background: rgba(34, 211, 238, 0.08);
   font-size: 11px;
   font-weight: 900;
@@ -4216,7 +4216,7 @@
     0 0 22px rgba(74, 222, 128, 0.14);
 }
 .root :global(.marker-bubble.risk-low::after) {
-  border-top-color: #10b981;
+  border-top-color: #22C55E;
 }
 
 .root :global(.marker-name) {
@@ -4417,7 +4417,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: radial-gradient(circle, #67e8f9 0%, #0891b2 100%);
+  background: radial-gradient(circle, #6FB7FF 0%, #0891b2 100%);
   transform: translate(-50%, -50%);
   box-shadow:
     0 0 12px rgba(34, 211, 238, 0.65),
@@ -5122,7 +5122,7 @@
 .root :global(.scan-select) {
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #00e0a4, #00b383);
+  background: linear-gradient(135deg, #4DA3FF, #00b383);
   color: #000;
   font-weight: 700;
   cursor: pointer;
@@ -5165,7 +5165,7 @@
 }
 
 .root :global(.modal-content) {
-  background: #111827;
+  background: #16213A;
   border: 1px solid var(--border-subtle);
   border-radius: 16px;
   width: 100%;
@@ -6053,7 +6053,7 @@
   border: 1px solid rgba(34, 211, 238, 0.28);
   border-radius: 8px;
   background: rgba(8, 47, 73, 0.36);
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 11px;
   font-weight: 800;
   line-height: 1.25;
@@ -6132,7 +6132,7 @@
 .root :global(.future-v2-decision-anchor small) {
   display: block;
   margin-top: 6px;
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 11px;
   font-weight: 700;
   line-height: 1.3;
@@ -6156,7 +6156,7 @@
 .root :global(.future-v2-decision-grid strong) {
   display: block;
   margin-top: 7px;
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 18px;
   font-weight: 800;
   line-height: 1;
@@ -6187,7 +6187,7 @@
 .root :global(.future-v2-meteorology-paths strong) {
   display: block;
   margin-top: 8px;
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 22px;
   font-weight: 800;
   line-height: 1;
@@ -6213,7 +6213,7 @@
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: #34d399;
+  background: #22C55E;
   margin-top: 5px;
   flex: 0 0 auto;
   box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.12);
@@ -6508,7 +6508,7 @@
 }
 
 .root :global(.future-v2-signal-tag.cyan) {
-  color: #67e8f9;
+  color: #6FB7FF;
   border-color: rgba(34, 211, 238, 0.22);
   background: rgba(34, 211, 238, 0.08);
 }
@@ -6597,7 +6597,7 @@
 }
 
 .root :global(.future-v2-pace-delta.cold) {
-  color: #67e8f9;
+  color: #6FB7FF;
 }
 
 .root :global(.future-v2-pace-delta.neutral) {
@@ -6672,11 +6672,11 @@
 }
 
 .root :global(.future-v2-pace-meter-fill.cold) {
-  background: linear-gradient(90deg, #0f766e 0%, #67e8f9 100%);
+  background: linear-gradient(90deg, #0f766e 0%, #6FB7FF 100%);
 }
 
 .root :global(.future-v2-pace-meter-fill.neutral) {
-  background: linear-gradient(90deg, #475569 0%, #cbd5e1 100%);
+  background: linear-gradient(90deg, #6B7A90 0%, #cbd5e1 100%);
 }
 
 .root :global(.intraday-scene-shell) {
@@ -7189,7 +7189,7 @@
   left: 0;
   bottom: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #334155 0%, #94a3b8 100%);
+  background: linear-gradient(90deg, #334155 0%, #9FB2C7 100%);
 }
 
 .root :global(.future-trend-meter-fill.warm) {
@@ -7229,7 +7229,7 @@
 }
 
 .root :global(.future-trend-value.warm) {
-  color: #34d399;
+  color: #22C55E;
 }
 
 .root :global(.future-trend-value.cold) {
@@ -7608,21 +7608,58 @@
 
 .root :global(.detail-mini-chart-wrap) {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .root :global(.detail-mini-chart) {
   position: relative;
-  height: 190px;
+  height: 210px;
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.02);
   padding: 10px;
 }
 
+.root :global(.scan-city-detail-rail .detail-mini-chart) {
+  height: 230px;
+}
+
 .root :global(.detail-mini-chart canvas) {
   width: 100% !important;
   height: 100% !important;
+}
+
+.root :global(.detail-mini-chart-legend) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.root :global(.detail-mini-chart-legend span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.root :global(.detail-mini-chart-legend i) {
+  width: 16px;
+  height: 3px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.root :global(.detail-mini-chart-legend i.forecast) {
+  background: rgba(52, 211, 153, 0.86);
+}
+
+.root :global(.detail-mini-chart-legend i.observation) {
+  width: 7px;
+  height: 7px;
+  background: #4DA3FF;
 }
 
 .root :global(.detail-mini-meta) {
@@ -7966,7 +8003,7 @@
 .root :global(.home-ai-message small) {
   display: inline-block;
   margin-top: 6px;
-  color: #67e8f9;
+  color: #6FB7FF;
   font-size: 10px;
   font-weight: 800;
 }
@@ -8180,7 +8217,7 @@
 
 .root :global(.scan-mode-tab.active) {
   background: rgba(0, 224, 164, 0.08);
-  color: #00e0a4;
+  color: #4DA3FF;
   font-weight: 600;
 }
 
@@ -8191,7 +8228,7 @@
   top: 25%;
   height: 50%;
   width: 3px;
-  background: #00e0a4;
+  background: #4DA3FF;
   border-radius: 0 2px 2px 0;
 }
 
@@ -8232,7 +8269,7 @@
   appearance: none;
   width: 14px;
   height: 14px;
-  background: #00e0a4;
+  background: #4DA3FF;
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid var(--bg-secondary);
@@ -8253,7 +8290,7 @@
 
 .root :global(.scan-toggle.active) {
   background: rgba(0, 224, 164, 0.3);
-  border-color: #00e0a4;
+  border-color: #4DA3FF;
 }
 
 .root :global(.scan-toggle-knob) {
@@ -8269,7 +8306,7 @@
 
 .root :global(.scan-toggle.active .scan-toggle-knob) {
   left: 18px;
-  background: #00e0a4;
+  background: #4DA3FF;
 }
 
 /* Select */
@@ -8286,7 +8323,7 @@
 }
 
 .root :global(.scan-select:focus) {
-  border-color: #00e0a4;
+  border-color: #4DA3FF;
 }
 
 /* Scan CTA */
@@ -8299,7 +8336,7 @@
   padding: 12px 16px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #00e0a4, #00c48f);
+  background: linear-gradient(135deg, #4DA3FF, #00c48f);
   color: #030711;
   font-size: 14px;
   font-weight: 700;
@@ -8437,7 +8474,7 @@
 }
 
 .root :global(.scan-kpi-green .scan-kpi-value) {
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-kpi-delta) {
@@ -8469,7 +8506,7 @@
 }
 
 .root :global(.scan-view-tab.active) {
-  color: #00e0a4;
+  color: #4DA3FF;
   font-weight: 600;
 }
 
@@ -8480,7 +8517,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: #00e0a4;
+  background: #4DA3FF;
   border-radius: 4px;
   opacity: 0.8;
   transition: all 0.3s ease;
@@ -8557,17 +8594,17 @@
   font-size: 12px;
   font-weight: 700;
   background: rgba(0, 224, 164, 0.12);
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.rank-amber .scan-rank-circle) {
   background: rgba(255, 176, 32, 0.12);
-  color: #ffb020;
+  color: #F59E0B;
 }
 
 .root :global(.rank-purple .scan-rank-circle) {
   background: rgba(123, 97, 255, 0.12);
-  color: #7b61ff;
+  color: #4DA3FF;
 }
 
 .root :global(.rank-neutral .scan-rank-circle) {
@@ -8654,17 +8691,17 @@
 
 .root :global(.scan-status-badge.tone-green) {
   background: rgba(0, 224, 164, 0.12);
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-status-badge.tone-amber) {
   background: rgba(255, 176, 32, 0.12);
-  color: #ffb020;
+  color: #F59E0B;
 }
 
 .root :global(.scan-status-badge.tone-purple) {
   background: rgba(123, 97, 255, 0.12);
-  color: #7b61ff;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-status-badge.tone-neutral) {
@@ -8719,7 +8756,7 @@
 .root :global(.scan-action-text) {
   font-size: 12px;
   font-weight: 600;
-  color: #00e0a4;
+  color: #4DA3FF;
   white-space: nowrap;
 }
 
@@ -8731,7 +8768,7 @@
 }
 
 .root :global(.scan-edge-value.positive) {
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-edge-value.neutral) {
@@ -8762,7 +8799,7 @@
 }
 
 .root :global(.scan-fav-icon:hover) {
-  color: #ffb020;
+  color: #F59E0B;
 }
 
 /* ── Right: Scan Detail Panel ── */
@@ -8869,11 +8906,11 @@
 }
 
 .root :global(.scan-condition-value.accent-green) {
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-condition-value.accent-red) {
-  color: #ff4d6a;
+  color: #EF4444;
 }
 
 /* Trade Cards */
@@ -8894,11 +8931,11 @@
 }
 
 .root :global(.scan-trade-card.yes) {
-  border-top: 2px solid #00e0a4;
+  border-top: 2px solid #4DA3FF;
 }
 
 .root :global(.scan-trade-card.no) {
-  border-top: 2px solid #ff4d6a;
+  border-top: 2px solid #EF4444;
 }
 
 .root :global(.scan-trade-card-title) {
@@ -8918,11 +8955,11 @@
 }
 
 .root :global(.scan-trade-card-edge.positive) {
-  color: #00e0a4;
+  color: #4DA3FF;
 }
 
 .root :global(.scan-trade-card-edge.negative) {
-  color: #ff4d6a;
+  color: #EF4444;
 }
 
 .root :global(.scan-trade-card-note) {
@@ -8971,15 +9008,15 @@
 }
 
 .root :global(.scan-confidence-dot.filled) {
-  background: #00e0a4;
+  background: #4DA3FF;
 }
 
 .root :global(.scan-confidence-dot.filled.amber) {
-  background: #ffb020;
+  background: #F59E0B;
 }
 
 .root :global(.scan-confidence-dot.filled.red) {
-  background: #ff4d6a;
+  background: #EF4444;
 }
 
 /* Empty state */
@@ -9000,7 +9037,7 @@
 
 .root :global(.scan-terminal) {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 324px;
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 420px);
   gap: 14px;
   width: 100%;
   min-height: 100vh;
@@ -9008,8 +9045,8 @@
   margin-top: 0;
   padding: 16px;
   background:
-    radial-gradient(circle at top, rgba(17, 44, 78, 0.46), transparent 36%),
-    linear-gradient(180deg, #07111f 0%, #050c16 100%);
+    radial-gradient(circle at top, rgba(77, 163, 255, 0.12), transparent 36%),
+    linear-gradient(180deg, #0B1220 0%, #07101D 100%);
   overflow: auto;
 }
 
@@ -9017,9 +9054,9 @@
 .root :global(.scan-data-grid),
 .root :global(.scan-detail-panel) {
   min-height: calc(100vh - 32px);
-  border: 1px solid rgba(82, 114, 161, 0.18);
+  border: 1px solid rgba(159, 178, 199, 0.14);
   border-radius: 22px;
-  background: linear-gradient(180deg, rgba(15, 28, 47, 0.94), rgba(9, 18, 32, 0.94));
+  background: linear-gradient(180deg, rgba(17, 26, 46, 0.96), rgba(11, 18, 32, 0.96));
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(14px);
 }
@@ -9027,7 +9064,7 @@
 .root :global(.scan-filter-panel) {
   width: auto;
   min-width: 0;
-  border-right: 1px solid rgba(82, 114, 161, 0.18);
+  border-right: 1px solid rgba(159, 178, 199, 0.14);
   padding: 18px 14px;
   gap: 18px;
   overflow: hidden auto;
@@ -9374,14 +9411,14 @@
   gap: 8px;
   min-height: 42px;
   padding: 11px 16px;
-  border: 1px solid rgba(23, 217, 139, 0.38);
+  border: 1px solid rgba(77, 163, 255, 0.42);
   border-radius: 12px;
-  background: linear-gradient(180deg, #1ddb8d, #0eb96d);
-  color: #031411;
+  background: linear-gradient(180deg, #4DA3FF, #3B82F6);
+  color: #FFFFFF;
   font-size: 14px;
   font-weight: 900;
   text-decoration: none;
-  box-shadow: 0 10px 24px rgba(14, 185, 109, 0.18);
+  box-shadow: 0 10px 24px rgba(59, 130, 246, 0.22);
   cursor: pointer;
 }
 
@@ -9400,18 +9437,18 @@
   gap: 8px;
   min-height: 42px;
   padding: 11px 14px;
-  border: 1px solid rgba(94, 234, 212, 0.3);
+  border: 1px solid rgba(77, 163, 255, 0.3);
   border-radius: 12px;
-  background: linear-gradient(180deg, rgba(20, 184, 166, 0.22), rgba(14, 116, 144, 0.18));
-  color: #a7fff2;
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.18), rgba(59, 130, 246, 0.12));
+  color: #CFE6FF;
   font-size: 13px;
   font-weight: 900;
   cursor: pointer;
 }
 
 .root :global(.scan-ai-button:hover:not(:disabled)) {
-  border-color: rgba(94, 234, 212, 0.5);
-  background: linear-gradient(180deg, rgba(20, 184, 166, 0.32), rgba(14, 116, 144, 0.24));
+  border-color: rgba(111, 183, 255, 0.5);
+  background: linear-gradient(180deg, rgba(77, 163, 255, 0.26), rgba(59, 130, 246, 0.18));
 }
 
 .root :global(.scan-ai-button:disabled) {
@@ -9420,7 +9457,7 @@
 }
 
 .root :global(.scan-cta-ghost) {
-  color: #27ea98;
+  color: #6FB7FF;
   border-color: rgba(23, 217, 139, 0.3);
   background: rgba(23, 217, 139, 0.12);
 }
@@ -9503,7 +9540,7 @@
 }
 
 .root :global(.scan-kpi-card.orange .scan-kpi-label) {
-  color: #ffb020;
+  color: #F59E0B;
 }
 
 .root :global(.scan-kpi-label) {
@@ -9833,7 +9870,7 @@
 }
 
 .root :global(.scan-opportunity-item.ai-veto .scan-opportunity-action) {
-  color: #94a3b8;
+  color: #9FB2C7;
 }
 
 .root :global(.scan-opportunity-branch) {
@@ -10088,7 +10125,7 @@
 
 .root :global(.scan-v4-analysis strong) {
   display: block;
-  color: #72f3d1;
+  color: #6FB7FF;
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.02em;
@@ -10362,7 +10399,7 @@
 .root :global(.scan-v4-heading strong),
 .root :global(.scan-v4-current b),
 .root :global(.scan-v4-brief-grid strong) {
-  color: #72f3d1;
+  color: #6FB7FF;
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.02em;
@@ -10461,7 +10498,7 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: #2dd4bf;
+  background: #4DA3FF;
   box-shadow: 0 0 10px rgba(45, 212, 191, 0.45);
 }
 
@@ -10507,6 +10544,774 @@
 
 .root :global(details.scan-v4-evidence > div) {
   margin-top: 10px;
+}
+
+.root :global(.scan-forecast-desk) {
+  gap: 16px;
+  padding: 16px 18px 20px;
+}
+
+.root :global(.scan-forecast-city-card) {
+  overflow: visible;
+  border-color: rgba(159, 178, 199, 0.14);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(17, 26, 46, 0.96), rgba(11, 18, 32, 0.98)),
+    radial-gradient(circle at 0 0, rgba(77, 163, 255, 0.08), transparent 26%);
+}
+
+.root :global(.scan-forecast-city-card.selected),
+.root :global(.scan-forecast-city-card:has(.scan-forecast-row.selected)) {
+  border-color: rgba(77, 163, 255, 0.42);
+  box-shadow:
+    inset 0 0 0 1px rgba(77, 163, 255, 0.14),
+    0 20px 54px rgba(0, 0, 0, 0.2);
+}
+
+.root :global(.scan-forecast-city-head) {
+  grid-template-columns: minmax(0, 1fr) minmax(250px, 340px);
+  padding: 18px 20px;
+  border-bottom-color: rgba(159, 178, 199, 0.1);
+  background: rgba(22, 33, 58, 0.56);
+}
+
+.root :global(.scan-forecast-city-title) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.scan-forecast-kicker) {
+  color: #4DA3FF;
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.root :global(.scan-forecast-city-title strong) {
+  color: #E6EDF3;
+  font-size: 24px;
+  font-weight: 950;
+  letter-spacing: 0;
+}
+
+.root :global(.scan-forecast-city-chips) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.scan-forecast-city-chips span) {
+  min-height: 28px;
+  padding: 6px 9px;
+  border: 1px solid rgba(159, 178, 199, 0.14);
+  border-radius: 9px;
+  background: rgba(22, 33, 58, 0.56);
+  color: #9FB2C7;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.root :global(.scan-forecast-city-read) {
+  display: grid;
+  justify-items: end;
+  gap: 5px;
+  min-width: 0;
+  color: #9FB2C7;
+  text-align: right;
+}
+
+.root :global(.scan-forecast-city-read small) {
+  color: #6B7A90;
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.root :global(.scan-forecast-city-read > b:not(.scan-phase-badge)) {
+  color: #E6EDF3;
+  font-size: 30px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.root :global(.scan-forecast-city-read span) {
+  color: #9FB2C7;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.root :global(.scan-forecast-row) {
+  gap: 0;
+  overflow: hidden;
+  border-color: rgba(159, 178, 199, 0.12);
+  border-radius: 16px;
+  background: rgba(17, 26, 46, 0.76);
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.root :global(.scan-forecast-row:hover) {
+  border-color: rgba(77, 163, 255, 0.28);
+  background: rgba(22, 33, 58, 0.88);
+}
+
+.root :global(.scan-forecast-row.selected),
+.root :global(.scan-forecast-row.expanded) {
+  border-color: rgba(77, 163, 255, 0.42);
+  background:
+    linear-gradient(180deg, rgba(13, 37, 66, 0.76), rgba(11, 18, 32, 0.9)),
+    radial-gradient(circle at 0 0, rgba(77, 163, 255, 0.12), transparent 32%);
+  box-shadow: inset 4px 0 0 rgba(77, 163, 255, 0.78);
+}
+
+.root :global(.scan-forecast-row-main) {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.05fr) minmax(360px, 1fr) max-content max-content;
+  gap: 12px;
+  align-items: stretch;
+  padding: 14px 16px;
+}
+
+.root :global(.scan-forecast-bucket) {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.root :global(.scan-forecast-bucket span),
+.root :global(.scan-forecast-bucket small),
+.root :global(.scan-forecast-signals small),
+.root :global(.scan-ai-temperature-line small) {
+  color: #6B7A90;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+}
+
+.root :global(.scan-forecast-bucket strong) {
+  color: #E6EDF3;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.22;
+}
+
+.root :global(.scan-forecast-bucket small) {
+  color: #9FB2C7;
+  line-height: 1.45;
+}
+
+.root :global(.scan-forecast-signals) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.scan-forecast-signals span) {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid rgba(159, 178, 199, 0.12);
+  border-radius: 11px;
+  background: rgba(22, 33, 58, 0.68);
+}
+
+.root :global(.scan-forecast-signals b) {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #E6EDF3;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.root :global(.scan-forecast-fit) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 110px;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #6FB7FF;
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.root :global(.scan-forecast-fit.approve),
+.root :global(.scan-ai-forecast-pill.approve) {
+  border-color: rgba(34, 197, 94, 0.34);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86EFAC;
+}
+
+.root :global(.scan-forecast-fit.downgrade),
+.root :global(.scan-forecast-fit.watchlist),
+.root :global(.scan-ai-forecast-pill.downgrade),
+.root :global(.scan-ai-forecast-pill.watchlist) {
+  border-color: rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.12);
+  color: #F59E0B;
+}
+
+.root :global(.scan-forecast-fit.veto),
+.root :global(.scan-ai-forecast-pill.veto) {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(248, 113, 113, 0.12);
+  color: #EF4444;
+}
+
+.root :global(.scan-forecast-ai-line) {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  padding: 0 16px 14px;
+  color: #9FB2C7;
+}
+
+.root :global(.scan-forecast-ai-line b) {
+  color: #6FB7FF;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.root :global(.scan-forecast-ai-line small) {
+  min-width: 0;
+  color: #9FB2C7;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.5;
+}
+
+.root :global(.scan-ai-analysis) {
+  display: grid;
+  gap: 14px;
+  margin: 0 16px 16px;
+  padding: 16px;
+  border-top: 1px solid rgba(159, 178, 199, 0.12);
+  background: rgba(11, 18, 32, 0.38);
+}
+
+.root :global(.scan-ai-analysis-head) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.root :global(.scan-ai-analysis-head > div) {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.root :global(.scan-ai-analysis-head strong),
+.root :global(.scan-ai-brief-grid strong) {
+  color: #6FB7FF;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.root :global(.scan-ai-analysis-head p) {
+  margin: 0;
+  color: #E6EDF3;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.3;
+}
+
+.root :global(.scan-ai-analysis-head small) {
+  max-width: 880px;
+  color: #9FB2C7;
+  font-size: 14px;
+  font-weight: 760;
+  line-height: 1.55;
+}
+
+.root :global(.scan-ai-forecast-pill) {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 0 13px;
+  border: 1px solid rgba(96, 165, 250, 0.28);
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.1);
+  color: #6FB7FF;
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.root :global(.scan-ai-temperature-line) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 13px 0;
+  border-top: 1px solid rgba(159, 178, 199, 0.1);
+  border-bottom: 1px solid rgba(159, 178, 199, 0.1);
+}
+
+.root :global(.scan-ai-temperature-line span) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.root :global(.scan-ai-temperature-line b) {
+  overflow: hidden;
+  color: #E6EDF3;
+  font-size: 17px;
+  font-weight: 950;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-ai-evidence-line) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.root :global(.scan-ai-evidence-line span) {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(159, 178, 199, 0.1);
+  border-radius: 10px;
+  background: rgba(22, 33, 58, 0.54);
+}
+
+.root :global(.scan-ai-evidence-line small) {
+  color: #6B7A90;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-evidence-line b) {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #E6EDF3;
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.root :global(.scan-ai-workspace) {
+  min-height: 720px;
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  border-radius: 18px;
+  background: #0b1220;
+  padding: 18px;
+}
+
+.root :global(.scan-ai-workspace.empty) {
+  display: grid;
+  place-items: center;
+}
+
+.root :global(.scan-ai-workspace-head) {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-end;
+  margin-bottom: 18px;
+  padding: 0 2px;
+}
+
+.root :global(.scan-ai-workspace-head span) {
+  display: block;
+  color: #4da3ff;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.root :global(.scan-ai-workspace-head strong) {
+  display: block;
+  color: #e6edf3;
+  font-size: 22px;
+  line-height: 1.2;
+  margin-top: 4px;
+}
+
+.root :global(.scan-ai-workspace-head p) {
+  max-width: 560px;
+  margin: 0;
+  color: #9fb2c7;
+  font-size: 13px;
+  line-height: 1.55;
+  text-align: right;
+}
+
+.root :global(.scan-ai-city-stack) {
+  display: grid;
+  gap: 18px;
+}
+
+.root :global(.scan-ai-city-card) {
+  overflow: hidden;
+  border: 1px solid rgba(77, 163, 255, 0.35);
+  border-radius: 18px;
+  background: #111a2e;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
+}
+
+.root :global(.scan-ai-city-hero) {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 22px;
+  background:
+    linear-gradient(135deg, rgba(77, 163, 255, 0.11), rgba(34, 197, 94, 0.03)),
+    #111a2e;
+  border-bottom: 1px solid rgba(159, 178, 199, 0.12);
+}
+
+.root :global(.scan-ai-city-kicker) {
+  color: #4da3ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-ai-city-hero h3) {
+  margin: 8px 0 12px;
+  color: #e6edf3;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.root :global(.scan-ai-city-pills) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.scan-ai-city-pills span) {
+  border: 1px solid rgba(159, 178, 199, 0.14);
+  border-radius: 10px;
+  background: rgba(11, 18, 32, 0.58);
+  color: #c9d7e8;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 10px;
+}
+
+.root :global(.scan-ai-city-hero-side) {
+  min-width: 180px;
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 6px;
+  text-align: right;
+}
+
+.root :global(.scan-ai-city-hero-side > span) {
+  color: #9fb2c7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-ai-city-hero-side > strong) {
+  color: #e6edf3;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.root :global(.scan-ai-city-remove),
+.root :global(.scan-ai-city-price-button) {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid rgba(77, 163, 255, 0.32);
+  border-radius: 10px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #9ecbff;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.root :global(.scan-ai-city-remove) {
+  padding: 8px 10px;
+}
+
+.root :global(.scan-ai-city-price-button) {
+  padding: 9px 12px;
+}
+
+.root :global(.scan-ai-city-remove:hover),
+.root :global(.scan-ai-city-price-button:hover) {
+  background: rgba(77, 163, 255, 0.18);
+  border-color: rgba(111, 183, 255, 0.58);
+}
+
+.root :global(.scan-ai-city-price-button:disabled) {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.root :global(.scan-ai-city-body) {
+  padding: 18px;
+}
+
+.root :global(.scan-ai-decision-band) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 16px;
+  background: #16213a;
+  padding: 18px;
+}
+
+.root :global(.scan-ai-decision-band.warm) {
+  border-color: rgba(239, 68, 68, 0.34);
+}
+
+.root :global(.scan-ai-decision-band.cold) {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.root :global(.scan-ai-decision-band span) {
+  color: #4da3ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-decision-band strong) {
+  display: block;
+  margin-top: 5px;
+  color: #e6edf3;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.root :global(.scan-ai-decision-band p) {
+  margin: 8px 0 0;
+  color: #9fb2c7;
+  line-height: 1.55;
+}
+
+.root :global(.scan-ai-decision-metrics) {
+  min-width: 360px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.root :global(.scan-ai-decision-metrics span) {
+  border: 1px solid rgba(159, 178, 199, 0.14);
+  border-radius: 12px;
+  background: rgba(11, 18, 32, 0.5);
+  color: #9fb2c7;
+  padding: 12px;
+}
+
+.root :global(.scan-ai-decision-metrics b) {
+  display: block;
+  margin-top: 4px;
+  color: #e6edf3;
+  font-size: 15px;
+}
+
+.root :global(.scan-ai-city-analysis-grid) {
+  display: grid;
+  grid-template-columns: minmax(420px, 1.4fr) minmax(280px, 0.8fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.root :global(.scan-ai-city-section) {
+  border: 1px solid rgba(159, 178, 199, 0.12);
+  border-radius: 16px;
+  background: rgba(11, 18, 32, 0.38);
+  padding: 16px;
+}
+
+.root :global(.scan-ai-city-section-title) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #4da3ff;
+  font-size: 13px;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+
+.root :global(.scan-ai-city-section p) {
+  margin: 0 0 10px;
+  color: #9fb2c7;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.root :global(.scan-ai-city-chart) {
+  height: 260px;
+}
+
+.root :global(.scan-ai-city-chart-legend) {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  color: #9fb2c7;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-ai-city-chart-legend span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.root :global(.scan-ai-city-chart-legend i) {
+  width: 18px;
+  height: 3px;
+  border-radius: 999px;
+  background: #4da3ff;
+}
+
+.root :global(.scan-ai-city-chart-legend i.observation) {
+  width: 8px;
+  height: 8px;
+  background: #22c55e;
+}
+
+.root :global(.scan-ai-city-section.models) {
+  margin-top: 14px;
+}
+
+.root :global(.scan-ai-city-section.models .models-section) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.root :global(.scan-ai-city-section-head) {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.root :global(.scan-ai-city-section.market) {
+  margin-top: 14px;
+}
+
+.root :global(.scan-ai-market-buckets) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+  gap: 10px;
+}
+
+.root :global(.scan-ai-market-bucket) {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(159, 178, 199, 0.12);
+  border-radius: 12px;
+  background: rgba(17, 26, 46, 0.9);
+  padding: 12px;
+}
+
+.root :global(.scan-ai-market-bucket strong) {
+  color: #e6edf3;
+  font-size: 15px;
+}
+
+.root :global(.scan-ai-market-bucket span),
+.root :global(.scan-ai-city-muted),
+.root :global(.scan-ai-city-loading) {
+  color: #9fb2c7;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.root :global(.scan-ai-city-loading) {
+  padding: 28px;
+}
+
+.root :global(.scan-ai-brief-grid) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(260px, 0.75fr);
+  gap: 28px;
+}
+
+.root :global(.scan-ai-brief-grid ul) {
+  display: grid;
+  gap: 8px;
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.root :global(.scan-ai-brief-grid li) {
+  position: relative;
+  padding-left: 16px;
+  color: #9FB2C7;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.48;
+}
+
+.root :global(.scan-ai-brief-grid li::before) {
+  position: absolute;
+  top: 0.65em;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: #4DA3FF;
+  box-shadow: 0 0 10px rgba(77, 163, 255, 0.34);
+  content: "";
+}
+
+.root :global(.scan-ai-brief-grid section:nth-child(2) li::before) {
+  background: #F59E0B;
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.35);
+}
+
+.root :global(.scan-ai-airport-read) {
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(159, 178, 199, 0.1);
+}
+
+.root :global(.scan-ai-airport-read p) {
+  margin: 0;
+  color: #9FB2C7;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .root :global(.scan-table-body::-webkit-scrollbar),
@@ -11702,17 +12507,17 @@
 
 .root :global(.scan-terminal.light) {
   background:
-    radial-gradient(circle at top, rgba(65, 120, 190, 0.14), transparent 34%),
-    linear-gradient(180deg, #f4f8fd 0%, #e9f0f8 100%);
-  color: #102033;
+    radial-gradient(circle at top, rgba(59, 130, 246, 0.1), transparent 34%),
+    linear-gradient(180deg, #F7F9FC 0%, #EEF2F7 100%);
+  color: #0F172A;
 }
 
 .root :global(.scan-terminal.light .scan-filter-panel),
 .root :global(.scan-terminal.light .scan-data-grid),
 .root :global(.scan-terminal.light .scan-detail-panel),
 .root :global(.scan-terminal.light > .detail-panel.scan-city-detail-rail) {
-  border-color: rgba(35, 72, 118, 0.14);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 247, 253, 0.94));
+  border-color: #E2E8F0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.96));
   box-shadow: 0 16px 34px rgba(40, 70, 110, 0.12);
 }
 
@@ -11735,7 +12540,7 @@
 .root :global(.scan-terminal.light .scan-distribution-card strong),
 .root :global(.scan-terminal.light .scan-table-header),
 .root :global(.scan-terminal.light .scan-list-tabs button.active) {
-  color: #122033;
+  color: #0F172A;
 }
 
 .root :global(.scan-terminal.light .scan-filter-heading),
@@ -11758,7 +12563,7 @@
 .root :global(.scan-terminal.light .scan-chart-label),
 .root :global(.scan-terminal.light .scan-trade-sub),
 .root :global(.scan-terminal.light .scan-trade-note) {
-  color: #58708f;
+  color: #475569;
 }
 
 .root :global(.scan-terminal.light .scan-list-tabs button),
@@ -11770,7 +12575,7 @@
 .root :global(.scan-terminal.light .scan-distribution-card),
 .root :global(.scan-terminal.light .scan-chart-legend),
 .root :global(.scan-terminal.light .scan-kpi-note) {
-  color: #647a98;
+  color: #94A3B8;
 }
 
 .root :global(.scan-terminal.light .scan-distribution-line em) {
@@ -11795,23 +12600,23 @@
 .root :global(.scan-terminal.light .detail-structured-section),
 .root :global(.scan-terminal.light .detail-card),
 .root :global(.scan-terminal.light .scan-trade-card) {
-  border-color: rgba(35, 72, 118, 0.12);
-  background: rgba(255, 255, 255, 0.72);
+  border-color: #E2E8F0;
+  background: #FFFFFF;
 }
 
 .root :global(.scan-terminal.light .scan-mode-tab.active) {
-  color: #096846;
-  background: linear-gradient(180deg, rgba(222, 250, 238, 0.94), rgba(237, 252, 246, 0.96));
-  border-color: rgba(10, 160, 100, 0.34);
-  box-shadow: inset 0 0 0 1px rgba(10, 160, 100, 0.18);
+  color: #1D4ED8;
+  background: #DBEAFE;
+  border-color: rgba(59, 130, 246, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.16);
 }
 
 .root :global(.scan-terminal.light .scan-mode-tab.active .scan-mode-tab-label) {
-  color: #075f43;
+  color: #1D4ED8;
 }
 
 .root :global(.scan-terminal.light .scan-mode-tab.active .scan-mode-tab-sub) {
-  color: #426b5f;
+  color: #475569;
 }
 
 .root :global(.scan-terminal.light .scan-calendar-subtitle),
@@ -11938,15 +12743,15 @@
 }
 
 .root :global(.scan-terminal.light .scan-primary-button) {
-  color: #032019;
-  border-color: rgba(10, 160, 100, 0.34);
-  background: linear-gradient(180deg, #25d990, #10b870);
+  color: #FFFFFF;
+  border-color: rgba(59, 130, 246, 0.34);
+  background: linear-gradient(180deg, #3B82F6, #2563EB);
 }
 
 .root :global(.scan-terminal.light .scan-ai-button) {
-  color: #075f5a;
-  border-color: rgba(10, 160, 150, 0.28);
-  background: linear-gradient(180deg, rgba(214, 250, 246, 0.94), rgba(231, 247, 252, 0.96));
+  color: #1D4ED8;
+  border-color: rgba(59, 130, 246, 0.28);
+  background: #DBEAFE;
 }
 
 .root :global(.scan-terminal.light .scan-opportunity-ai) {
@@ -11984,15 +12789,117 @@
 .root :global(.scan-terminal.light .scan-v4-analysis p),
 .root :global(.scan-terminal.light .scan-v4-analysis ul),
 .root :global(.scan-terminal.light .scan-v4-evidence > div > span) {
-  color: #475569;
+  color: #6B7A90;
 }
 
 .root :global(.scan-terminal.light .scan-v4-model-sources em) {
-  color: #64748b;
+  color: #6B7A90;
 }
 
 .root :global(.scan-terminal.light .scan-v4-model-sources b) {
   color: #0f172a;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-card),
+.root :global(.scan-terminal.light .scan-forecast-row),
+.root :global(.scan-terminal.light .scan-ai-analysis) {
+  border-color: #E2E8F0;
+  background: #FFFFFF;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-head) {
+  background: #EEF2F7;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-card.selected),
+.root :global(.scan-terminal.light .scan-forecast-city-card:has(.scan-forecast-row.selected)) {
+  border-color: rgba(59, 130, 246, 0.38);
+  box-shadow:
+    inset 0 0 0 1px rgba(59, 130, 246, 0.12),
+    0 16px 34px rgba(40, 70, 110, 0.12);
+}
+
+.root :global(.scan-terminal.light .scan-forecast-row.selected),
+.root :global(.scan-terminal.light .scan-forecast-row.expanded) {
+  border-color: rgba(59, 130, 246, 0.38);
+  background:
+    linear-gradient(180deg, rgba(219, 234, 254, 0.62), rgba(255, 255, 255, 0.98)),
+    #FFFFFF;
+  box-shadow: inset 4px 0 0 #3B82F6;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-title strong),
+.root :global(.scan-terminal.light .scan-forecast-city-read > b:not(.scan-phase-badge)),
+.root :global(.scan-terminal.light .scan-forecast-bucket strong),
+.root :global(.scan-terminal.light .scan-forecast-signals b),
+.root :global(.scan-terminal.light .scan-ai-temperature-line b) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-chips span),
+.root :global(.scan-terminal.light .scan-forecast-signals span),
+.root :global(.scan-terminal.light .scan-ai-evidence-line span) {
+  border-color: #E2E8F0;
+  background: #EEF2F7;
+}
+
+.root :global(.scan-terminal.light .scan-forecast-city-chips span),
+.root :global(.scan-terminal.light .scan-forecast-city-read span),
+.root :global(.scan-terminal.light .scan-forecast-bucket small),
+.root :global(.scan-terminal.light .scan-forecast-ai-line small),
+.root :global(.scan-terminal.light .scan-ai-brief-grid li),
+.root :global(.scan-terminal.light .scan-ai-airport-read p) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-ai-analysis-head p) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .scan-ai-analysis-head small),
+.root :global(.scan-terminal.light .scan-ai-evidence-line b) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-ai-workspace) {
+  background: #f7f9fc;
+  border-color: #e2e8f0;
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-card),
+.root :global(.scan-terminal.light .scan-ai-city-hero) {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-section),
+.root :global(.scan-terminal.light .scan-ai-decision-band),
+.root :global(.scan-terminal.light .scan-ai-decision-metrics span),
+.root :global(.scan-terminal.light .scan-ai-market-bucket),
+.root :global(.scan-terminal.light .scan-ai-city-pills span) {
+  background: #eef2f7;
+  border-color: #e2e8f0;
+}
+
+.root :global(.scan-terminal.light .scan-ai-workspace-head strong),
+.root :global(.scan-terminal.light .scan-ai-city-hero h3),
+.root :global(.scan-terminal.light .scan-ai-city-hero-side > strong),
+.root :global(.scan-terminal.light .scan-ai-decision-band strong),
+.root :global(.scan-terminal.light .scan-ai-decision-metrics b),
+.root :global(.scan-terminal.light .scan-ai-market-bucket strong) {
+  color: #0f172a;
+}
+
+.root :global(.scan-terminal.light .scan-ai-workspace-head p),
+.root :global(.scan-terminal.light .scan-ai-city-section p),
+.root :global(.scan-terminal.light .scan-ai-decision-band p),
+.root :global(.scan-terminal.light .scan-ai-city-pills span),
+.root :global(.scan-terminal.light .scan-ai-decision-metrics span),
+.root :global(.scan-terminal.light .scan-ai-market-bucket span),
+.root :global(.scan-terminal.light .scan-ai-city-muted),
+.root :global(.scan-terminal.light .scan-ai-city-loading),
+.root :global(.scan-terminal.light .scan-ai-city-chart-legend) {
+  color: #475569;
 }
 
 .root :global(.scan-terminal.light .scan-ai-log-panel) {
@@ -12064,7 +12971,7 @@
 .root :global(.scan-terminal.light .scan-ai-city-head p),
 .root :global(.scan-terminal.light .scan-ai-contract p),
 .root :global(.scan-terminal.light .scan-ai-contract small) {
-  color: #475569;
+  color: #6B7A90;
 }
 
 .root :global(.scan-terminal.light .scan-ai-city-head) {
@@ -12165,6 +13072,43 @@
     grid-template-columns: 1fr;
   }
 
+  .root :global(.scan-forecast-city-head),
+  .root :global(.scan-forecast-row-main),
+  .root :global(.scan-ai-brief-grid),
+  .root :global(.scan-ai-city-analysis-grid),
+  .root :global(.scan-ai-decision-band),
+  .root :global(.scan-ai-evidence-line) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-workspace-head),
+  .root :global(.scan-ai-city-hero),
+  .root :global(.scan-ai-city-section-head) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .root :global(.scan-ai-workspace-head p),
+  .root :global(.scan-ai-city-hero-side) {
+    text-align: left;
+    justify-items: start;
+  }
+
+  .root :global(.scan-ai-decision-metrics) {
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-forecast-city-read) {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .root :global(.scan-forecast-signals),
+  .root :global(.scan-ai-temperature-line) {
+    grid-template-columns: 1fr;
+  }
+
   .root :global(.scan-opportunity-phase) {
     flex-wrap: wrap;
   }
@@ -12217,5 +13161,19 @@
 
   .root :global(.scan-opportunity-models span) {
     white-space: normal;
+  }
+
+  .root :global(.scan-forecast-city-title strong) {
+    font-size: 21px;
+  }
+
+  .root :global(.scan-forecast-row-main),
+  .root :global(.scan-ai-analysis) {
+    padding: 13px;
+  }
+
+  .root :global(.scan-forecast-ai-line) {
+    grid-template-columns: 1fr;
+    padding: 0 13px 13px;
   }
 }

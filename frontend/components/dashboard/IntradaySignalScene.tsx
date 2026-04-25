@@ -18,10 +18,10 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function getToneColor(tone: string) {
-  if (tone === "cyan") return "#00E0A4";
+  if (tone === "cyan") return "#4DA3FF";
   if (tone === "blue") return "#60a5fa";
   if (tone === "amber") return "#f59e0b";
-  return "#94a3b8";
+  return "#9FB2C7";
 }
 
 export function IntradaySignalScene({
@@ -77,7 +77,7 @@ export function IntradaySignalScene({
     const ring = new THREE.Mesh(
       new THREE.TorusGeometry(2.8, 0.03, 18, 100),
       new THREE.MeshBasicMaterial({
-        color: new THREE.Color(score >= 0 ? "#00E0A4" : "#FFB020"),
+        color: new THREE.Color(score >= 0 ? "#4DA3FF" : "#F59E0B"),
         transparent: true,
         opacity: 0.5,
       }),
