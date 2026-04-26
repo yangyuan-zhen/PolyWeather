@@ -392,6 +392,90 @@ def _extract_ai_json_object(raw_text: str) -> Dict[str, Any]:
     raise ValueError("AI content is not a JSON object")
 
 
+def _decode_json_string_fragment(fragment: str) -> str:
+    safe = str(fragment or "")
+    while safe.endswith("\\"):
+        safe = safe[:-1]
+    try:
+        return str(json.loads(f'"{safe}"'))
+    except Exception:
+        return (
+            safe.replace('\\"', '"')
+            .replace("\\n", "\n")
+            .replace("\\r", "\r")
+            .replace("\\t", "\t")
+            .replace("\\\\", "\\")
+        )
+
+
+def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
+    """Best-effort extraction from a streamed/incomplete JSON object.
+
+    DeepSeek may stream useful fields first but still end with truncated JSON.
+    In that case the UI should keep the AI text already received instead of
+    replacing it with the deterministic DEB/METAR fallback.
+    """
+
+    text = str(raw_text or "")
+    match = re.search(rf'"{re.escape(field)}"\s*:\s*"', text)
+    if not match:
+        return ""
+    idx = match.end()
+    chars: List[str] = []
+    escaped = False
+    while idx < len(text):
+        char = text[idx]
+        idx += 1
+        if escaped:
+            chars.append("\\" + char)
+            escaped = False
+            continue
+        if char == "\\":
+            escaped = True
+            continue
+        if char == '"':
+            break
+        chars.append(char)
+    if escaped:
+        chars.append("\\")
+    return _decode_json_string_fragment("".join(chars)).strip()
+
+
+def _extract_json_number_field_from_fragment(raw_text: str, field: str) -> Optional[float]:
+    text = str(raw_text or "")
+    match = re.search(rf'"{re.escape(field)}"\s*:\s*(-?\d+(?:\.\d+)?)', text)
+    if not match:
+        return None
+    return _safe_float(match.group(1))
+
+
+def _extract_city_ai_partial_fields(raw_text: str) -> Dict[str, Any]:
+    text = str(raw_text or "")
+    if not text.strip():
+        return {}
+    out: Dict[str, Any] = {}
+    for field in (
+        "metar_read_zh",
+        "metar_read_en",
+        "final_judgment_zh",
+        "final_judgment_en",
+        "reasoning_zh",
+        "reasoning_en",
+        "model_cluster_note_zh",
+        "model_cluster_note_en",
+        "confidence",
+        "unit",
+    ):
+        value = _extract_json_string_field_from_fragment(text, field)
+        if value:
+            out[field] = value
+    for field in ("predicted_max", "range_low", "range_high"):
+        value = _extract_json_number_field_from_fragment(text, field)
+        if value is not None:
+            out[field] = value
+    return out
+
+
 def _truncate_ai_text(value: Any, limit: int = 800) -> str:
     text = re.sub(r"\s+", " ", str(value or "")).strip()
     if len(text) <= limit:
@@ -519,11 +603,15 @@ def _build_city_ai_fallback(
     model_note_zh = _city_ai_model_cluster_note(ai_input, locale="zh-CN")
     model_note_en = _city_ai_model_cluster_note(ai_input, locale="en-US")
     content_preview = _truncate_ai_text(raw_content, 1000)
+    partial_ai = _extract_city_ai_partial_fields(raw_content)
     looks_like_truncated_json = bool(content_preview.startswith("{") and not content_preview.rstrip().endswith("}"))
     reason_preview = _truncate_ai_text(reason, 260)
     reason_lower = str(reason or "").lower()
     timed_out = "timeout" in reason_lower or "timed out" in reason_lower or "超时" in str(reason or "")
-    if content_preview and not looks_like_truncated_json:
+    if partial_ai.get("metar_read_zh") or partial_ai.get("metar_read_en"):
+        metar_zh = str(partial_ai.get("metar_read_zh") or partial_ai.get("metar_read_en") or "").strip()
+        metar_en = str(partial_ai.get("metar_read_en") or partial_ai.get("metar_read_zh") or "").strip()
+    elif content_preview and not looks_like_truncated_json:
         metar_zh = f"机场报文快速解读已先完成；AI 补充摘要：{content_preview}"
         metar_en = f"The fast airport-bulletin read is available; AI supplemental summary: {content_preview}"
     elif content_preview:
@@ -536,22 +624,25 @@ def _build_city_ai_fallback(
         metar_zh = "当前没有可用的原始 METAR 正文，暂以 DEB 与多模型路径为主。"
         metar_en = "No raw METAR text is available, so DEB and the model cluster carry the read."
     predicted_text = _format_ai_temperature(predicted, unit) or "--"
-    if timed_out:
+    if partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en"):
+        final_zh = str(partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en") or "").strip()
+        final_en = str(partial_ai.get("final_judgment_en") or partial_ai.get("final_judgment_zh") or "").strip()
+    elif timed_out:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
     else:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
-    reasoning_zh = "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；AI 增强可作为后续补充，不阻塞本轮读数。"
-    reasoning_en = "DEB, the model cluster and latest METAR are enough for the current directional read; AI enhancement can be added later without blocking this card."
+    reasoning_zh = str(partial_ai.get("reasoning_zh") or "").strip() or "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；AI 增强可作为后续补充，不阻塞本轮读数。"
+    reasoning_en = str(partial_ai.get("reasoning_en") or "").strip() or "DEB, the model cluster and latest METAR are enough for the current directional read; AI enhancement can be added later without blocking this card."
     risks_zh = ["后续 METAR 若明显偏离模型路径，需及时修正最高温中枢。"]
     risks_en = ["If later METAR reports diverge from the model path, revise the daily-high center promptly."]
     return {
-        "predicted_max": predicted,
-        "range_low": range_low,
-        "range_high": range_high,
-        "unit": unit,
-        "confidence": "low",
+        "predicted_max": partial_ai.get("predicted_max", predicted),
+        "range_low": partial_ai.get("range_low", range_low),
+        "range_high": partial_ai.get("range_high", range_high),
+        "unit": partial_ai.get("unit") or unit,
+        "confidence": partial_ai.get("confidence") or ("medium" if partial_ai else "low"),
         "final_judgment_zh": final_zh,
         "final_judgment_en": final_en,
         "metar_read_zh": metar_zh,
@@ -560,15 +651,16 @@ def _build_city_ai_fallback(
         "reasoning_en": reasoning_en,
         "risks_zh": risks_zh,
         "risks_en": risks_en,
-        "model_cluster_note_zh": model_note_zh,
-        "model_cluster_note_en": model_note_en,
+        "model_cluster_note_zh": partial_ai.get("model_cluster_note_zh") or model_note_zh,
+        "model_cluster_note_en": partial_ai.get("model_cluster_note_en") or model_note_en,
         "_polyweather_meta": {
             **_provider_response_meta(provider_data),
             "fallback": True,
-            "fallback_kind": "timeout" if timed_out else "non_json",
+            "fallback_kind": "partial_ai_json" if partial_ai else "timeout" if timed_out else "non_json",
             "looks_like_truncated_json": looks_like_truncated_json,
             "fallback_reason": reason_preview,
             "raw_content_preview": content_preview,
+            "partial_ai_fields": sorted(partial_ai.keys()),
             "raw_metar": _truncate_ai_text(raw_metar, 1000),
         },
     }

@@ -155,7 +155,7 @@ function AiPinnedCityCard({
   const { aiForecast, refreshAiForecast } = useAiCityForecast({
     detail,
     detailCityName,
-    enabled: Boolean(detail && !collapsed),
+    enabled: Boolean(detail),
     isEn,
     locale,
     report,
@@ -163,7 +163,7 @@ function AiPinnedCityCard({
   const { marketScan, marketStatus } = useCityMarketScan({
     detail,
     detailCityName,
-    enabled: Boolean(detail && !collapsed),
+    enabled: Boolean(detail),
   });
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
@@ -572,7 +572,6 @@ export function AiPinnedForecastView({
       items.forEach((item) => {
         const stableKey = normalizeCityKey(item.cityName) || item.cityName;
         if (!knownCityKeysRef.current.has(stableKey)) {
-          next.add(stableKey);
           changed = true;
         }
       });

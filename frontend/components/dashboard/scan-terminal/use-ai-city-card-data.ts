@@ -82,6 +82,16 @@ function writeCachedPayload<T>(key: string, payload: T) {
   }
 }
 
+function removeCachedPayload(key: string) {
+  const storage = getStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(key);
+  } catch {
+    // Ignore privacy-mode failures; the next network request can still proceed.
+  }
+}
+
 function parseAiCityStreamBlock(block: string): AiCityStreamEvent | null {
   const eventLines = block
     .split(/\r?\n/)
@@ -369,10 +379,17 @@ export function useAiCityForecast({
           )
         : null;
     if (cachedPayload) {
-      setAiForecast({ payload: cachedPayload, status: "ready" });
-      return () => {
-        cancelled = true;
-      };
+      if (
+        cachedPayload.status === "ready" &&
+        !cachedPayload.degraded &&
+        cachedPayload.city_forecast
+      ) {
+        setAiForecast({ payload: cachedPayload, status: "ready" });
+        return () => {
+          cancelled = true;
+        };
+      }
+      removeCachedPayload(cacheKey);
     }
     const initialFallback = buildAiCityFallbackPayload({ detail, isEn, report });
     setAiForecast({
