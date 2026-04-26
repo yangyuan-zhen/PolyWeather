@@ -29,19 +29,25 @@ export function useChart<TType extends ChartType>(
       if (disposed) return;
 
       const config = createConfig();
-      if (chartRef.current) {
-        chartRef.current.destroy();
-        chartRef.current = null;
+      const nextType = (config as { type?: ChartType }).type;
+      const currentType = chartRef.current
+        ? (chartRef.current.config as { type?: ChartType }).type
+        : null;
+      if (chartRef.current && currentType === nextType) {
+        chartRef.current.data = config.data as ChartInstance<TType>["data"];
+        chartRef.current.options =
+          (config.options || {}) as ChartInstance<TType>["options"];
+        chartRef.current.update("none");
+        return;
       }
 
+      chartRef.current?.destroy();
       chartRef.current = new Chart(canvas, config);
     };
 
     void setupChart();
     return () => {
       disposed = true;
-      chartRef.current?.destroy();
-      chartRef.current = null;
     };
   }, dependencies);
 

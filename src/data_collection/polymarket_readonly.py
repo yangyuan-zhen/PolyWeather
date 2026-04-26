@@ -901,7 +901,11 @@ class PolymarketReadOnlyLayer:
             if reference_price is not None:
                 reference_price = max(0.0, min(1.0, float(reference_price)))
                 bucket["market_price"] = reference_price
-                bucket["probability"] = reference_price
+                # Keep model probability separate from market-implied price.
+                # Older code overwrote ``probability`` with the quote, which made
+                # downstream UI compare a market price against itself or display
+                # stale bucket probabilities as weather probabilities.
+                bucket.setdefault("model_probability", bucket.get("probability"))
             if yes_prices.get("quote_source"):
                 bucket["quote_source"] = yes_prices.get("quote_source")
             if yes_prices.get("quote_age_ms") is not None:

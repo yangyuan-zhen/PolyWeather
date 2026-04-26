@@ -35,6 +35,12 @@ export function normalizeMarketProbability(value: unknown) {
   return numeric;
 }
 
+function normalizeQuotePrice(value: unknown) {
+  const normalized = normalizeMarketProbability(value);
+  if (normalized == null || normalized <= 0) return null;
+  return normalized;
+}
+
 export function formatMarketPercent(value: number | null, digits = 1) {
   if (value == null || !Number.isFinite(value)) return "--";
   return `${(value * 100).toFixed(digits)}%`;
@@ -42,6 +48,7 @@ export function formatMarketPercent(value: number | null, digits = 1) {
 
 export function formatMarketCents(value: number | null) {
   if (value == null || !Number.isFinite(value)) return "--";
+  if (value > 0 && value < 0.01) return "<1¢";
   return `${Math.round(value * 100)}¢`;
 }
 
@@ -66,7 +73,9 @@ export function normalizeMarketComparableTemp(
 
 export function getMarketBucketLabel(bucket?: MarketTopBucket | null, tempSymbol = "°C") {
   const direct = String(bucket?.label || "").trim();
-  if (direct) return direct;
+  if (direct && /[°]?[CF]\b|\d+\s*[+-]?$/i.test(direct) && !/[�｡紊]/.test(direct)) {
+    return direct.replace(/\bC\b/g, "°C").replace(/\bF\b/g, "°F");
+  }
   const value = bucket?.temp ?? bucket?.value ?? bucket?.lower ?? null;
   const numeric = Number(value);
   if (Number.isFinite(numeric)) {
@@ -76,6 +85,53 @@ export function getMarketBucketLabel(bucket?: MarketTopBucket | null, tempSymbol
     return `${numeric.toFixed(0)}${unit}`;
   }
   return "--";
+}
+
+function getBucketAnchor(bucket: MarketTopBucket) {
+  const anchor = Number(bucket.temp ?? bucket.value ?? bucket.lower);
+  return Number.isFinite(anchor) ? anchor : null;
+}
+
+function getBucketModelProbability(bucket?: MarketTopBucket | null) {
+  const model = normalizeMarketProbability(bucket?.model_probability);
+  const probability = normalizeMarketProbability(bucket?.probability);
+  const market = normalizeMarketProbability(bucket?.market_price);
+  // Some persisted market_scan payloads from older builds overwrote bucket
+  // probability with the market price. Treat an exact price clone as missing
+  // model probability so the caller can fall back to scan.model_probability.
+  if (
+    model != null &&
+    market != null &&
+    Math.abs(model - market) <= 0.000_001
+  ) {
+    return null;
+  }
+  if (
+    probability != null &&
+    market != null &&
+    Math.abs(probability - market) <= 0.000_001
+  ) {
+    return null;
+  }
+  return model ?? probability;
+}
+
+function getMarketSelectedBucket(scan: MarketScan | null | undefined): MarketTopBucket | null {
+  const selected = scan?.temperature_bucket;
+  if (!selected) return null;
+  const value = Number(selected.value);
+  return {
+    label: selected.label || selected.bucket || selected.range || null,
+    value: Number.isFinite(value) ? value : null,
+    temp: Number.isFinite(value) ? value : null,
+    unit: selected.unit || null,
+    probability: selected.probability ?? scan?.model_probability ?? null,
+    model_probability: selected.probability ?? scan?.model_probability ?? null,
+    market_price: scan?.market_price ?? null,
+    yes_buy: scan?.yes_buy ?? null,
+    yes_sell: scan?.yes_sell ?? null,
+    slug: scan?.selected_slug ?? scan?.primary_market?.slug ?? null,
+  };
 }
 
 export function pickMarketBucketForWeatherCenter(
@@ -90,8 +146,18 @@ export function pickMarketBucketForWeatherCenter(
         ? scan?.top_buckets
         : []
   ) as MarketTopBucket[];
+  const selectedBucket = getMarketSelectedBucket(scan);
+  const isReasonableFallback = (bucket: MarketTopBucket | null) => {
+    if (!bucket) return false;
+    const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, bucket);
+    const anchor = getBucketAnchor(bucket);
+    if (comparable == null || anchor == null) return false;
+    const unit = String(bucket.unit || "").toUpperCase();
+    const maxReasonableDelta = unit === "F" ? 16 : 8;
+    return Math.abs(anchor - comparable) <= maxReasonableDelta;
+  };
   if (!buckets.length || expectedHigh == null || !Number.isFinite(expectedHigh)) {
-    return null;
+    return selectedBucket;
   }
 
   let nearest: MarketTopBucket | null = null;
@@ -111,15 +177,26 @@ export function pickMarketBucketForWeatherCenter(
     ) {
       return bucket;
     }
-    const anchor = Number(bucket.temp ?? bucket.value ?? bucket.lower);
-    if (!Number.isFinite(anchor)) continue;
+    const anchor = getBucketAnchor(bucket);
+    if (anchor == null) continue;
     const delta = Math.abs(anchor - comparable);
     if (delta < nearestDelta) {
       nearest = bucket;
       nearestDelta = delta;
     }
   }
-  return nearest;
+  if (!nearest) return isReasonableFallback(selectedBucket) ? selectedBucket : null;
+  const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, nearest);
+  const unit = String(nearest.unit || "").toUpperCase();
+  const maxReasonableDelta = unit === "F" ? 16 : 8;
+  if (
+    comparable != null &&
+    Number.isFinite(nearestDelta) &&
+    nearestDelta <= maxReasonableDelta
+  ) {
+    return nearest;
+  }
+  return isReasonableFallback(selectedBucket) ? selectedBucket : null;
 }
 
 export function buildMarketDecisionView({
@@ -171,18 +248,42 @@ export function buildMarketDecisionView({
   }
 
   const bucket = pickMarketBucketForWeatherCenter(marketScan, expectedHigh, tempSymbol);
-  const bucketProbability = normalizeMarketProbability(bucket?.probability);
+  if (!bucket) {
+    return {
+      bucketLabel: "--",
+      confidence: marketScan.confidence || "--",
+      edgeText: "--",
+      impliedText: formatMarketPercent(
+        normalizeMarketProbability(marketScan.market_price) ??
+          normalizeMarketProbability(marketScan.midpoint) ??
+          normalizeMarketProbability(marketScan.yes_midpoint),
+      ),
+      marketUrl: marketScan.market_url || marketScan.primary_market_url || null,
+      modelText: formatMarketPercent(normalizeMarketProbability(marketScan.model_probability)),
+      priceText: formatMarketCents(normalizeQuotePrice(marketScan.yes_buy)),
+      reason: isEn
+        ? "A market was found, but its temperature bucket does not match today’s expected high closely enough, so edge is withheld."
+        : "已找到市场，但温度桶与今日预计高点不够匹配，暂不计算概率差。",
+      status: "ready",
+      title: isEn ? "Market bucket needs rematch" : "市场温度桶需重新匹配",
+      tone: "watch",
+    };
+  }
+  const bucketProbability = getBucketModelProbability(bucket);
   const scanProbability = normalizeMarketProbability(marketScan.model_probability);
   const modelProbability = bucketProbability ?? scanProbability;
   const yesBuy =
-    normalizeMarketProbability(bucket?.yes_buy) ??
-    normalizeMarketProbability(bucket?.market_price) ??
-    normalizeMarketProbability(marketScan.yes_buy) ??
-    normalizeMarketProbability(marketScan.market_price);
+    normalizeQuotePrice(bucket?.yes_buy) ??
+    normalizeQuotePrice(marketScan.yes_buy);
   const yesSell =
-    normalizeMarketProbability(bucket?.yes_sell) ??
-    normalizeMarketProbability(marketScan.yes_sell);
-  const implied = yesBuy ?? yesSell ?? null;
+    normalizeQuotePrice(bucket?.yes_sell) ??
+    normalizeQuotePrice(marketScan.yes_sell);
+  const marketMid =
+    normalizeMarketProbability(bucket?.market_price) ??
+    normalizeMarketProbability(marketScan.market_price) ??
+    normalizeMarketProbability(marketScan.midpoint) ??
+    normalizeMarketProbability(marketScan.yes_midpoint);
+  const implied = marketMid ?? yesBuy ?? yesSell ?? null;
   const edge =
     modelProbability != null && implied != null ? modelProbability - implied : null;
   const tone =
@@ -216,9 +317,10 @@ export function buildMarketDecisionView({
     edgeText: formatSignedMarketPercent(edge),
     impliedText: formatMarketPercent(implied),
     marketUrl:
-      bucket?.slug
+      bucket?.market_url ||
+      (bucket?.slug
         ? `https://polymarket.com/market/${bucket.slug}`
-        : marketScan.market_url || marketScan.primary_market_url || null,
+        : marketScan.market_url || marketScan.primary_market_url || null),
     modelText: formatMarketPercent(modelProbability),
     priceText: formatMarketCents(yesBuy),
     reason:

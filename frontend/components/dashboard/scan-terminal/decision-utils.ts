@@ -195,6 +195,50 @@ export function normalizeCityKey(value?: string | null) {
     .replace(/[\s_-]+/g, "");
 }
 
+function getOpportunityCardKey(row: ScanOpportunityRow) {
+  const city =
+    normalizeCityKey(row.city) ||
+    normalizeCityKey(row.city_display_name) ||
+    normalizeCityKey(row.display_name);
+  const date = String(row.selected_date || row.local_date || "").trim();
+  if (city || date) {
+    return `${city || row.id}:${date || "date-unknown"}`;
+  }
+  return row.id;
+}
+
+function getOpportunitySortScore(row: ScanOpportunityRow) {
+  return Number(row.final_score || 0) * 1000 + Number(row.edge_percent || 0);
+}
+
+function dedupeOpportunityCards(rows: ScanOpportunityRow[]) {
+  const bestByCard = new Map<string, ScanOpportunityRow>();
+  for (const row of rows) {
+    const key = getOpportunityCardKey(row);
+    const current = bestByCard.get(key);
+    if (!current || getOpportunitySortScore(row) > getOpportunitySortScore(current)) {
+      bestByCard.set(key, row);
+    }
+  }
+  return [...bestByCard.values()];
+}
+
+function takeUniqueOpportunityRows(
+  candidates: ScanOpportunityRow[],
+  usedCardKeys: Set<string>,
+  limit: number,
+) {
+  const picked: ScanOpportunityRow[] = [];
+  for (const row of candidates) {
+    const key = getOpportunityCardKey(row);
+    if (usedCardKeys.has(key)) continue;
+    usedCardKeys.add(key);
+    picked.push(row);
+    if (picked.length >= limit) break;
+  }
+  return picked;
+}
+
 export function prettifyCityName(value?: string | null) {
   return String(value || "")
     .trim()
@@ -323,25 +367,32 @@ export function getRowDecisionMeta(row: ScanOpportunityRow, locale = "zh-CN") {
 
 export function pickOpportunitySections(rows: ScanOpportunityRow[], locale = "zh-CN") {
   const isEn = locale === "en-US";
-  const top = [...rows]
+  const usedCardKeys = new Set<string>();
+  const uniqueRows = dedupeOpportunityCards(rows);
+  const top = takeUniqueOpportunityRows([...uniqueRows]
     .sort((left, right) => {
       const scoreDelta = Number(right.final_score || 0) - Number(left.final_score || 0);
       if (scoreDelta !== 0) return scoreDelta;
       return Number(right.edge_percent || 0) - Number(left.edge_percent || 0);
-    })
-    .slice(0, 4);
-  const peak = rows
-    .filter((row) => {
+    }), usedCardKeys, 4);
+  const peak = takeUniqueOpportunityRows(
+    uniqueRows.filter((row) => {
       const meta = getPeakCountdownMeta(row, locale);
       return meta.key === "active" || meta.key === "next";
-    })
-    .slice(0, 4);
-  const model = rows
-    .filter((row) => Number(row.cluster_model_count || 0) >= 4 || Number(row.consensus_score || 0) >= 0.65)
-    .slice(0, 4);
-  const risk = rows
-    .filter((row) => row.risk_level === "high" || ["veto", "downgrade"].includes(String(row.v4_metar_decision || row.ai_decision || "").toLowerCase()))
-    .slice(0, 4);
+    }),
+    usedCardKeys,
+    4,
+  );
+  const model = takeUniqueOpportunityRows(
+    uniqueRows.filter((row) => Number(row.cluster_model_count || 0) >= 4 || Number(row.consensus_score || 0) >= 0.65),
+    usedCardKeys,
+    4,
+  );
+  const risk = takeUniqueOpportunityRows(
+    uniqueRows.filter((row) => row.risk_level === "high" || ["veto", "downgrade"].includes(String(row.v4_metar_decision || row.ai_decision || "").toLowerCase())),
+    usedCardKeys,
+    4,
+  );
   return [
     {
       key: "top",

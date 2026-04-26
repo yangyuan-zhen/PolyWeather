@@ -315,7 +315,9 @@ export interface MarketTopBucket {
   upper?: number | null;
   unit?: string | null;
   probability?: number | null;
+  model_probability?: number | null;
   market_price?: number | null;
+  edge_percent?: number | null;
   yes_buy?: number | null;
   yes_sell?: number | null;
   no_buy?: number | null;
@@ -325,6 +327,7 @@ export interface MarketTopBucket {
   quote_source?: string | null;
   quote_age_ms?: number | null;
   slug?: string | null;
+  market_url?: string | null;
   question?: string | null;
   is_primary?: boolean;
 }

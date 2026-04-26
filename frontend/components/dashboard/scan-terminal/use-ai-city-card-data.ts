@@ -99,6 +99,13 @@ export function useAiCityForecast({
           let buffer = "";
           let rawStream = "";
           let finalPayload: AiCityForecastPayload | null = null;
+          let latestReadableText = "";
+          const rememberReadableText = (value?: string | null) => {
+            const text = String(value || "").trim();
+            if (text) {
+              latestReadableText = text;
+            }
+          };
           const handleBlock = (block: string) => {
             const message = parseSseBlock(block);
             if (!message || !message.data || typeof message.data !== "object") {
@@ -111,6 +118,7 @@ export function useAiCityForecast({
                   locale === "en-US" ? data.message_en || "" : data.message_zh || "",
                 ).trim() || String(data.message || "").trim();
               if (progressText && !cancelled) {
+                rememberReadableText(progressText);
                 setAiForecast((current) =>
                   current.status === "loading"
                     ? { ...current, streamText: current.streamText || progressText }
@@ -132,6 +140,7 @@ export function useAiCityForecast({
                 ).trim() ||
                 String(data.final_judgment_zh || data.final_judgment_en || "").trim();
               if (previewText && !cancelled) {
+                rememberReadableText(previewText);
                 setAiForecast((current) =>
                   current.status === "loading"
                     ? {
@@ -153,6 +162,7 @@ export function useAiCityForecast({
                     ? "AI has started streaming; parsing the METAR read field…"
                     : "AI 已开始流式输出，正在解析机场报文字段…"
                   : "");
+              rememberReadableText(airportRead || streamingText);
               if (!cancelled) {
                 setAiForecast((current) =>
                   current.status === "loading"
@@ -184,7 +194,45 @@ export function useAiCityForecast({
             handleBlock(buffer);
           }
           if (!finalPayload) {
-            throw new Error("AI stream ended before final payload");
+            const fallbackText =
+              extractStreamingAirportRead(rawStream, locale) ||
+              latestReadableText ||
+              (isEn
+                ? "The AI airport read stream was interrupted after partial output."
+                : "AI 机场报文解读已输出部分内容，但最终载荷未返回。");
+            const retryHint = isEn
+              ? "The streaming connection ended before the final structured payload. The partial airport read above is preserved; refresh once if you need the full JSON-backed conclusion."
+              : "流式连接在最终结构化载荷返回前结束。上方已保留已输出的机场报文解读；如需完整 JSON 结论可刷新一次。";
+            return {
+              city_forecast: {
+                confidence: "low",
+                final_judgment_en: isEn
+                  ? fallbackText
+                  : "Partial AI airport read was preserved after the stream ended early.",
+                final_judgment_zh: isEn
+                  ? "AI 机场报文解读已保留部分输出，但流式连接提前结束。"
+                  : fallbackText,
+                metar_read_en: isEn ? fallbackText : "",
+                metar_read_zh: isEn ? "" : fallbackText,
+                model_cluster_note_en: "",
+                model_cluster_note_zh: "",
+                predicted_max: null,
+                range_high: null,
+                range_low: null,
+                reasoning_en: retryHint,
+                reasoning_zh: retryHint,
+                risks_en: isEn ? [retryHint] : [],
+                risks_zh: isEn ? [] : [retryHint],
+                unit: detail?.temp_symbol || "°C",
+              },
+              raw_reason: "AI stream ended before final payload",
+              reason: retryHint,
+              reason_en: isEn
+                ? retryHint
+                : "AI stream ended before the final payload; partial text was preserved.",
+              reason_zh: isEn ? "AI 流在最终载荷前结束；已保留部分文本。" : retryHint,
+              status: "partial_stream",
+            };
           }
           return finalPayload;
         }),
