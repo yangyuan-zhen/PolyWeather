@@ -55,6 +55,11 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
 SCAN_AI_MODEL = str(
     os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-pro"
 ).strip()
+SCAN_CITY_AI_MODEL = str(
+    os.getenv("POLYWEATHER_SCAN_CITY_AI_MODEL")
+    or os.getenv("POLYWEATHER_SCAN_AI_MODEL")
+    or "deepseek-v4-flash"
+).strip()
 SCAN_AI_BASE_URL = str(
     os.getenv("POLYWEATHER_DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
 ).strip().rstrip("/")
@@ -1217,7 +1222,7 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
                 "Content-Type": "application/json",
             },
             json={
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "temperature": 0.1,
                 "max_tokens": SCAN_AI_MAX_TOKENS,
                 "response_format": {"type": "json_object"},
@@ -1342,7 +1347,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     normalized_locale = _normalize_locale(locale)
 
     system_prompt = (
-        "你是 PolyWeather 的 Deepseek V4-Pro 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
+        "你是 PolyWeather 的 DeepSeek 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
         "判断该城市今日最高温路径。不要写套利、交易、BUY YES/NO、价格、edge 或 Kelly。"
         "你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、机场报文/METAR 解读、判断依据和风险。"
         "必须综合 DEB 最终融合值、全部天气模型预测、METAR 实测序列、最新机场报文、峰值窗口、当地时间、季节背景。"
@@ -1389,7 +1394,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         pool=5.0,
     )
     request_json = {
-        "model": SCAN_AI_MODEL,
+        "model": SCAN_CITY_AI_MODEL,
         "temperature": 0.2,
         "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
         "response_format": {"type": "json_object"},
@@ -1476,7 +1481,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                 preview,
             )
             repair_payload = {
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "temperature": 0.0,
                 "max_tokens": min(max(SCAN_CITY_AI_MAX_TOKENS, 1200), 64000),
                 "response_format": {"type": "json_object"},
@@ -1580,6 +1585,7 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
     key_payload = {
         "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
         "schema_version": ai_input.get("schema_version"),
+        "model": SCAN_CITY_AI_MODEL,
         "city": ai_input.get("city"),
         "local_date": ai_input.get("local_date"),
         "local_time": ai_input.get("local_time"),
@@ -1620,7 +1626,7 @@ def _build_city_ai_stream_request(
         "不要写交易建议、BUY/SELL、Kelly 或套利。"
     )
     return {
-        "model": SCAN_AI_MODEL,
+        "model": SCAN_CITY_AI_MODEL,
         "temperature": 0.2,
         "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
         "response_format": {"type": "json_object"},
@@ -1691,7 +1697,7 @@ def _build_city_ai_result_payload(
     payload: Dict[str, Any] = {
         "status": "ready",
         "cached": cached,
-        "model": SCAN_AI_MODEL,
+        "model": SCAN_CITY_AI_MODEL,
         "provider": "deepseek",
         "city": data.get("name"),
         "city_display_name": data.get("display_name"),
@@ -1729,7 +1735,7 @@ def stream_scan_city_ai_forecast_payload(
             "final",
             {
                 "status": "failed",
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "provider": "deepseek",
                 "city": city_name,
                 "city_display_name": str(city or "").strip() or city_name,
@@ -1765,7 +1771,7 @@ def stream_scan_city_ai_forecast_payload(
                     {
                         "status": "ready",
                         "cached": True,
-                        "model": SCAN_AI_MODEL,
+                        "model": SCAN_CITY_AI_MODEL,
                         "provider": "deepseek",
                         "city": cached.get("city") or city_name,
                         "city_display_name": cached.get("city_display_name") or city_name,
@@ -1799,8 +1805,8 @@ def stream_scan_city_ai_forecast_payload(
             "stage": "calling_ai",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
-            "message_zh": "DeepSeek V4-Pro 开始流式解读机场报文…",
-            "message_en": "DeepSeek V4-Pro is streaming the airport bulletin read…",
+            "message_zh": "DeepSeek 正在快速增强机场报文解读…",
+            "message_en": "DeepSeek is adding a fast airport-bulletin enhancement…",
         },
     )
 
@@ -1809,7 +1815,7 @@ def stream_scan_city_ai_forecast_payload(
             "final",
             {
                 "status": "disabled",
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "provider": "deepseek",
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
@@ -1822,7 +1828,7 @@ def stream_scan_city_ai_forecast_payload(
             "final",
             {
                 "status": "missing_key",
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "provider": "deepseek",
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
@@ -1967,13 +1973,13 @@ def stream_scan_city_ai_forecast_payload(
         )
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
-        reason_en = f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_en = f"DeepSeek city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+        reason_zh = f"DeepSeek 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
         logger.warning(
             "scan city AI stream timeout fallback city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
             duration_ms,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
             exc,
         )
         ai_raw = _build_city_ai_fallback(
@@ -2001,14 +2007,14 @@ def stream_scan_city_ai_forecast_payload(
         logger.warning(
             "scan city AI stream failed city={} model={} error={}",
             data.get("name") or city_name,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
             reason,
         )
         yield _sse_event(
             "final",
             {
                 "status": "failed",
-                "model": SCAN_AI_MODEL,
+                "model": SCAN_CITY_AI_MODEL,
                 "provider": "deepseek",
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
@@ -2035,7 +2041,7 @@ def build_scan_city_ai_forecast_payload(
     if city_name not in CITIES:
         return {
             "status": "failed",
-            "model": SCAN_AI_MODEL,
+            "model": SCAN_CITY_AI_MODEL,
             "provider": "deepseek",
             "city": city_name,
             "city_display_name": str(city or "").strip() or city_name,
@@ -2052,7 +2058,7 @@ def build_scan_city_ai_forecast_payload(
         city_name,
         force_refresh,
         normalized_locale,
-        SCAN_AI_MODEL,
+        SCAN_CITY_AI_MODEL,
     )
     data = _analyze(
         city_name,
@@ -2069,12 +2075,12 @@ def build_scan_city_ai_forecast_payload(
                 logger.info(
                     "scan city AI forecast cache hit city={} model={}",
                     cached.get("city") or city_name,
-                    SCAN_AI_MODEL,
+                    SCAN_CITY_AI_MODEL,
                 )
                 return {
                     "status": "ready",
                     "cached": True,
-                    "model": SCAN_AI_MODEL,
+                    "model": SCAN_CITY_AI_MODEL,
                     "provider": "deepseek",
                     "city": cached.get("city") or city_name,
                     "city_display_name": cached.get("city_display_name") or city_name,
@@ -2087,11 +2093,11 @@ def build_scan_city_ai_forecast_payload(
         logger.warning(
             "scan city AI forecast disabled city={} model={}",
             data.get("name") or city_name,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
         )
         return {
             "status": "disabled",
-            "model": SCAN_AI_MODEL,
+            "model": SCAN_CITY_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
@@ -2101,11 +2107,11 @@ def build_scan_city_ai_forecast_payload(
         logger.warning(
             "scan city AI forecast missing DeepSeek key city={} model={}",
             data.get("name") or city_name,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
         )
         return {
             "status": "missing_key",
-            "model": SCAN_AI_MODEL,
+            "model": SCAN_CITY_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
@@ -2117,7 +2123,7 @@ def build_scan_city_ai_forecast_payload(
             "scan city AI forecast calling provider city={} station={} model={} raw_metar_present={}",
             data.get("name") or city_name,
             ((ai_input.get("airport") or {}).get("icao") if isinstance(ai_input.get("airport"), dict) else None),
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
             bool(
                 (ai_input.get("airport_current") or {}).get("raw_metar")
                 if isinstance(ai_input.get("airport_current"), dict)
@@ -2127,8 +2133,8 @@ def build_scan_city_ai_forecast_payload(
         ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
-        reason_en = f"DeepSeek V4-Pro timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"DeepSeek V4-Pro 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_en = f"DeepSeek city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+        reason_zh = f"DeepSeek 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
         ai_raw = _build_city_ai_fallback(
             ai_input,
             locale=normalized_locale,
@@ -2139,14 +2145,14 @@ def build_scan_city_ai_forecast_payload(
             "scan city AI forecast timeout fallback city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
             duration_ms,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
             exc,
         )
         return {
             "status": "ready",
             "degraded": True,
             "cached": False,
-            "model": SCAN_AI_MODEL,
+            "model": SCAN_CITY_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
@@ -2162,12 +2168,12 @@ def build_scan_city_ai_forecast_payload(
         raw_reason = str(exc)
         empty_ai_content = raw_reason.strip().lower() == "empty ai content"
         reason_en = (
-            "DeepSeek V4-Pro returned no usable text. Retry the city analysis."
+            "DeepSeek city AI returned no usable text. Retry the city analysis."
             if empty_ai_content
             else raw_reason
         )
         reason_zh = (
-            "DeepSeek V4-Pro 没有返回有效正文，请刷新重试。"
+            "DeepSeek 城市 AI 没有返回有效正文，请刷新重试。"
             if empty_ai_content
             else raw_reason
         )
@@ -2175,7 +2181,7 @@ def build_scan_city_ai_forecast_payload(
             "scan city AI forecast failed city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
             duration_ms,
-            SCAN_AI_MODEL,
+            SCAN_CITY_AI_MODEL,
             raw_reason,
         )
         ai_raw = _build_city_ai_fallback(
@@ -2188,7 +2194,7 @@ def build_scan_city_ai_forecast_payload(
             "status": "ready",
             "degraded": True,
             "cached": False,
-            "model": SCAN_AI_MODEL,
+            "model": SCAN_CITY_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
@@ -2211,13 +2217,13 @@ def build_scan_city_ai_forecast_payload(
         "scan city AI forecast complete city={} duration_ms={} model={} confidence={}",
         data.get("name") or city_name,
         int((time.time() - started_at) * 1000),
-        SCAN_AI_MODEL,
+        SCAN_CITY_AI_MODEL,
         ai_raw.get("confidence") if isinstance(ai_raw, dict) else None,
     )
     return {
         "status": "ready",
         "cached": False,
-        "model": SCAN_AI_MODEL,
+        "model": SCAN_CITY_AI_MODEL,
         "provider": "deepseek",
         "city": data.get("name") or city_name,
         "city_display_name": data.get("display_name") or city_name,

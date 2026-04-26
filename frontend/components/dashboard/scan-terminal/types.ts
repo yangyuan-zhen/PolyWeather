@@ -9,6 +9,8 @@ export type AiCityForecastPayload = {
   reason_zh?: string | null;
   reason_en?: string | null;
   raw_reason?: string | null;
+  degraded?: boolean | null;
+  cached?: boolean | null;
   model?: string | null;
   provider?: string | null;
   city_forecast?: {

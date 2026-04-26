@@ -11,6 +11,7 @@ import {
   fetchBackendApi,
 } from "@/lib/backend-api";
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
+import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
 const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v2";
@@ -106,6 +107,7 @@ function parseAiCityStreamBlock(block: string): AiCityStreamEvent | null {
 
 async function readAiCityForecastStream(
   response: Response,
+  locale: string,
   onProgress?: (progress: AiCityStreamProgress) => void,
 ) {
   if (!response.body) {
@@ -115,6 +117,7 @@ async function readAiCityForecastStream(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
+  let accumulatedRaw = "";
   let finalPayload: AiCityForecastPayload | null = null;
 
   const consumeBlock = (block: string) => {
@@ -130,10 +133,26 @@ async function readAiCityForecastStream(
       return;
     }
     if (event === "delta") {
+      const content = String(data.content || "");
       const rawLength = Number(data.raw_length);
-      onProgress?.({
+      if (content) {
+        accumulatedRaw += content;
+      }
+      const streamingAirportRead = extractStreamingAirportRead(
+        accumulatedRaw,
+        locale,
+      );
+      const progress: AiCityStreamProgress = {
         raw_length: Number.isFinite(rawLength) ? rawLength : null,
-      });
+      };
+      if (streamingAirportRead) {
+        if (locale === "en-US") {
+          progress.metar_read_en = streamingAirportRead;
+        } else {
+          progress.metar_read_zh = streamingAirportRead;
+        }
+      }
+      onProgress?.(progress);
     }
   };
 
@@ -214,7 +233,7 @@ function requestAiCityForecast({
           : `HTTP ${response.status}`,
         );
       }
-      return readAiCityForecastStream(response, onProgress);
+      return readAiCityForecastStream(response, locale, onProgress);
     })
     .finally(() => {
       pendingAiCityForecastRequests.delete(requestKey);
@@ -235,8 +254,8 @@ function getAiCityStreamProgressText(progress: AiCityStreamProgress, isEn: boole
   const rawLength = Number(progress.raw_length);
   if (Number.isFinite(rawLength) && rawLength > 0) {
     return isEn
-      ? `DeepSeek V4-Pro is streaming the airport bulletin read... ${Math.round(rawLength)} chars received.`
-      : `DeepSeek V4-Pro 正在流式解读机场报文... 已收到 ${Math.round(rawLength)} 字符。`;
+      ? `DeepSeek is streaming the airport-bulletin enhancement... ${Math.round(rawLength)} chars received.`
+      : `DeepSeek 正在流式增强机场报文解读... 已收到 ${Math.round(rawLength)} 字符。`;
   }
   return "";
 }
@@ -364,7 +383,7 @@ export function useAiCityForecast({
           : initialFallback.city_forecast?.metar_read_zh) ||
         (isEn
           ? "Reading the latest airport bulletin with model/METAR fallback ready..."
-          : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek V4-Pro 补充…"),
+          : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek 补充…"),
     });
     void requestAiCityForecast({
         city: detailCityName,
@@ -397,7 +416,9 @@ export function useAiCityForecast({
                   isEn,
                   report,
                 });
-          writeCachedPayload(cacheKey, usablePayload);
+          if (usablePayload.status === "ready" && !usablePayload.degraded) {
+            writeCachedPayload(cacheKey, usablePayload);
+          }
           setAiForecast({ payload: usablePayload, status: "ready" });
         }
       })
@@ -409,7 +430,6 @@ export function useAiCityForecast({
             isEn,
             report,
           });
-          writeCachedPayload(cacheKey, fallbackPayload);
           setAiForecast({ payload: fallbackPayload, status: "ready" });
         }
       });

@@ -425,8 +425,8 @@ function AiPinnedCityCard({
                   <p className={aiForecast.streamText ? "scan-ai-weather-summary" : undefined}>
                     {aiForecast.streamText ||
                       (isEn
-                        ? "Deepseek V4 pro is reading the latest airport bulletin..."
-                        : "Deepseek V4 pro 正在解读最新机场报文...")}
+                        ? "DeepSeek is reading the latest airport bulletin..."
+                        : "DeepSeek 正在解读最新机场报文...")}
                   </p>
                   {!aiForecast.streamText ? (
                     <p className="scan-ai-city-muted">
@@ -460,8 +460,8 @@ function AiPinnedCityCard({
                   <p>
                     {aiForecast.payload?.status === "timeout"
                       ? isEn
-                        ? "Deepseek V4-Pro timed out. You can retry; city data and the right briefing were not refreshed."
-                        : "Deepseek V4-Pro 本次解读超时，可稍后重试；城市数据和右侧简报不会被刷新。"
+                        ? "DeepSeek enhancement timed out. You can retry; city data and the right briefing were not refreshed."
+                        : "DeepSeek 增强本次超时，可稍后重试；城市数据和右侧简报不会被刷新。"
                       : fallbackAiReason ||
                         (isEn
                           ? "AI read is unavailable for this city right now."
