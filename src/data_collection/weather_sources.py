@@ -767,6 +767,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
 
     def _supports_aviationweather(self, city_lower: str) -> bool:
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
+        settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
+        # HKO-settled Hong Kong cities (Hong Kong, Lau Fau Shan, future HKO stations)
+        # are official observatory stations, not airport/METAR contracts. Do not fetch
+        # AviationWeather for their city cards; Shenzhen remains ZGSZ/Bao'an METAR-backed.
+        if settlement_source == "hko":
+            return False
         return not bool(city_meta.get("disable_aviationweather"))
 
     def _log_temperature_unit(self, city: str, use_fahrenheit: bool) -> None:

@@ -14,7 +14,7 @@ import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
-const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v3";
+const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v4";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
 const AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS = 2;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
@@ -59,6 +59,17 @@ function buildStorageKey(prefix: string, parts: Array<string | null | undefined>
   return `${prefix}:${parts
     .map((part) => encodeURIComponent(String(part || "").trim()))
     .join(":")}`;
+}
+
+function isHkoObservationCity(detail?: CityDetail | null) {
+  const source = String(
+    detail?.current?.settlement_source ||
+      detail?.settlement_station?.settlement_source ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return source === "hko";
 }
 
 function readCachedPayload<T>(key: string, ttlMs: number): T | null {
@@ -298,8 +309,8 @@ function requestAiCityForecast({
     onProgress?.({
       stage: "queued",
       message_en:
-        "AI airport-bulletin read is queued behind the cities already streaming...",
-      message_zh: "AI 机场报文解读已排队，正在等待前面的城市完成流式生成…",
+        "AI observation read is queued behind the cities already streaming...",
+      message_zh: "AI 观测解读已排队，正在等待前面的城市完成流式生成…",
     });
   })
     .finally(() => {
@@ -321,8 +332,8 @@ function getAiCityStreamProgressText(progress: AiCityStreamProgress, isEn: boole
   const rawLength = Number(progress.raw_length);
   if (Number.isFinite(rawLength) && rawLength > 0) {
     return isEn
-      ? `DeepSeek is streaming the airport-bulletin enhancement... ${Math.round(rawLength)} chars received.`
-      : `DeepSeek 正在流式增强机场报文解读... 已收到 ${Math.round(rawLength)} 字符。`;
+      ? `DeepSeek is streaming the observation enhancement... ${Math.round(rawLength)} chars received.`
+      : `DeepSeek 正在流式增强观测解读... 已收到 ${Math.round(rawLength)} 字符。`;
   }
   return "";
 }
@@ -339,11 +350,13 @@ function buildAiCityFallbackPayload({
   report: string;
 }): AiCityForecastPayload {
   const tempSymbol = detail?.temp_symbol || "°C";
+  const isHkoObservation = isHkoObservationCity(detail);
   const currentTemp =
-    detail?.airport_current?.temp ??
-    detail?.airport_primary?.temp ??
-    detail?.current?.temp ??
-    null;
+    (isHkoObservation
+      ? detail?.current?.temp
+      : detail?.airport_current?.temp ??
+        detail?.airport_primary?.temp ??
+        detail?.current?.temp) ?? null;
   const currentText =
     currentTemp != null && Number.isFinite(Number(currentTemp))
       ? `${Number(currentTemp).toFixed(1)}${tempSymbol}`
@@ -351,22 +364,28 @@ function buildAiCityFallbackPayload({
         ? "the latest observed temperature"
         : "最新实测温度";
   const timeoutLike = /timeout|timed out|504|aborted|超时/i.test(String(error || ""));
-  const rawMetar = String(report || detail?.airport_current?.raw_metar || detail?.current?.raw_metar || "").trim();
+  const rawMetar = isHkoObservation
+    ? ""
+    : String(report || detail?.airport_current?.raw_metar || detail?.current?.raw_metar || "").trim();
+  const sourceZh = isHkoObservation ? "香港天文台观测" : "METAR";
+  const sourceEn = isHkoObservation ? "Hong Kong Observatory observation" : "METAR";
+  const bulletinZh = isHkoObservation ? "官方观测" : "机场报文";
+  const bulletinEn = isHkoObservation ? "official observation" : "airport bulletin";
 
   const finalZh = timeoutLike
-    ? "DeepSeek 增强暂未返回；当前先以多模型集中度和最新 METAR 实况快速判断。"
-    : "当前先以多模型集中度和最新 METAR 实况快速判断。";
+    ? `DeepSeek 增强暂未返回；当前先以多模型集中度和最新${sourceZh}快速判断。`
+    : `当前先以多模型集中度和最新${sourceZh}快速判断。`;
   const finalEn = timeoutLike
-    ? "DeepSeek enhancement is not back yet; use the model cluster and latest METAR as the fast working read."
-    : "Use the model cluster and latest METAR as the fast working read.";
+    ? `DeepSeek enhancement is not back yet; use the model cluster and latest ${sourceEn} as the fast working read.`
+    : `Use the model cluster and latest ${sourceEn} as the fast working read.`;
   const metarZh = rawMetar
     ? `最新 METAR 显示 ${currentText}；当前先作为实况锚点，并结合后续报文确认温度路径。`
-    : `当前可先参考 ${currentText} 与多模型路径，等待下一次机场报文更新。`;
+    : `当前可先参考 ${currentText} 与多模型路径，等待下一次${bulletinZh}更新。`;
   const metarEn = rawMetar
     ? `Latest METAR shows ${currentText}; use it as the live anchor while later reports confirm the path.`
-    : `Use ${currentText} and the model path for now while waiting for the next airport bulletin.`;
-  const reasonZh = "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；DeepSeek 增强可作为后续补充。";
-  const reasonEn = "DEB, the model cluster and latest METAR are enough for the current directional read; DeepSeek enhancement can be added later.";
+    : `Use ${currentText} and the model path for now while waiting for the next ${bulletinEn}.`;
+  const reasonZh = `DEB、多模型集合和最新${sourceZh}已足够给出当前方向判断；DeepSeek 增强可作为后续补充。`;
+  const reasonEn = `DEB, the model cluster and latest ${sourceEn} are enough for the current directional read; DeepSeek enhancement can be added later.`;
 
   return {
     city_forecast: {
@@ -416,14 +435,20 @@ export function useAiCityForecast({
   const aiForecastKey = useMemo(
     () => {
       if (!detail) return "";
-      const airportCurrent = detail.airport_current || detail.current || {};
-      const metarSignature =
-        String(report || "").trim() ||
+      const isHkoObservation = isHkoObservationCity(detail);
+      const observationSource = isHkoObservation ? "hko" : "metar";
+      const observationCurrent = isHkoObservation
+        ? detail.current || {}
+        : detail.airport_current || detail.current || {};
+      const observationSignature =
+        (!isHkoObservation ? String(report || "").trim() : "") ||
         [
-          airportCurrent.report_time,
-          airportCurrent.obs_time_epoch,
-          airportCurrent.obs_time,
-          airportCurrent.temp,
+          observationSource,
+          observationCurrent.report_time,
+          observationCurrent.obs_time_epoch,
+          observationCurrent.obs_time,
+          observationCurrent.temp,
+          observationCurrent.station_code,
         ]
           .filter((part) => part != null && part !== "")
           .join("|");
@@ -431,7 +456,7 @@ export function useAiCityForecast({
         normalizeCityKey(detailCityName),
         detail.local_date || "",
         locale,
-        metarSignature,
+        observationSignature,
       ].join(":");
     },
     [detail, detailCityName, locale, report],
@@ -490,8 +515,8 @@ export function useAiCityForecast({
                 ? initialFallback.city_forecast?.metar_read_en
                 : initialFallback.city_forecast?.metar_read_zh) ||
               (isEn
-                ? "Reading the latest airport bulletin with model/METAR fallback ready..."
-                : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek 补充…"),
+                ? "Reading the latest observation with model fallback ready..."
+                : "已先用最新观测给出兜底解读，正在等待 DeepSeek 补充…"),
           };
     writeCachedAiForecastState(cacheKey, loadingState);
     setAiForecast(loadingState);

@@ -203,6 +203,42 @@ function getBucketModelProbability(bucket?: MarketTopBucket | null) {
   return model ?? probability;
 }
 
+function getBucketDisplayUnit(bucket: MarketTopBucket, tempSymbol: string) {
+  return bucket.unit
+    ? `°${String(bucket.unit).replace(/^°/, "").toUpperCase()}`
+    : tempSymbol;
+}
+
+function buildBucketMappingExplanation({
+  bucket,
+  expectedHigh,
+  isEn,
+  tempSymbol,
+}: {
+  bucket: MarketTopBucket;
+  expectedHigh: number | null;
+  isEn: boolean;
+  tempSymbol: string;
+}) {
+  const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, bucket);
+  const rounded = getRoundedWeatherBucketValue(expectedHigh, tempSymbol, bucket);
+  if (comparable == null || rounded == null) return "";
+  const unit = getBucketDisplayUnit(bucket, tempSymbol);
+  const bucketLabel = getMarketBucketLabel(bucket, tempSymbol);
+  const expectedText = formatTemperatureValue(comparable, unit, { digits: 1 });
+  const hasRounding = Math.abs(comparable - rounded) >= 0.05;
+  if (isEn) {
+    const mapping = hasRounding
+      ? `Expected high ${expectedText} maps to the ${bucketLabel} settlement bucket after rounding.`
+      : `Expected high ${expectedText} maps to the ${bucketLabel} bucket.`;
+    return `${mapping} Model probability is still the bucket-distribution probability, not 100% just because the center maps there.`;
+  }
+  const mapping = hasRounding
+    ? `预计高点 ${expectedText} 按结算四舍五入映射到 ${bucketLabel} 桶。`
+    : `预计高点 ${expectedText} 对应 ${bucketLabel} 桶。`;
+  return `${mapping} 模型概率仍按温度分布计算，不等于把该桶视为 100%。`;
+}
+
 function getMarketSelectedBucket(scan: MarketScan | null | undefined): MarketTopBucket | null {
   const selected = scan?.temperature_bucket;
   if (!selected) return null;
@@ -366,6 +402,13 @@ export function buildMarketDecisionView({
       tone: "watch",
     };
   }
+  const bucketLabel = getMarketBucketLabel(bucket, tempSymbol);
+  const bucketMappingExplanation = buildBucketMappingExplanation({
+    bucket,
+    expectedHigh,
+    isEn,
+    tempSymbol,
+  });
   const bucketProbability = getBucketModelProbability(bucket);
   const scanProbability = normalizeMarketProbability(marketScan.model_probability);
   const modelProbability = bucketProbability ?? scanProbability;
@@ -409,7 +452,7 @@ export function buildMarketDecisionView({
             : "价格接近天气概率";
 
   return {
-    bucketLabel: getMarketBucketLabel(bucket, tempSymbol),
+    bucketLabel,
     confidence: marketScan.confidence || "--",
     edgeText: formatSignedMarketPercent(edge),
     impliedText: formatMarketPercent(implied),
@@ -426,8 +469,8 @@ export function buildMarketDecisionView({
           ? "Quote is available, but model probability or YES price is incomplete."
           : "已获取报价，但模型概率或 YES 价格不完整。"
         : isEn
-          ? `Model probability is ${formatMarketPercent(modelProbability)} versus market-implied ${formatMarketPercent(implied)}.`
-          : `模型概率 ${formatMarketPercent(modelProbability)}，市场隐含约 ${formatMarketPercent(implied)}。`,
+          ? `Model probability is ${formatMarketPercent(modelProbability)} versus market-implied ${formatMarketPercent(implied)}.${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`
+          : `模型概率 ${formatMarketPercent(modelProbability)}，市场隐含约 ${formatMarketPercent(implied)}。${bucketMappingExplanation ? ` ${bucketMappingExplanation}` : ""}`,
     status: "ready",
     title,
     tone,

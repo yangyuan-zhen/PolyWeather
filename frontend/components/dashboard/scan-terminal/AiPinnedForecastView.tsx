@@ -83,6 +83,17 @@ function normalizeMetarReadTime(text: string, displayTime: string, isEn: boolean
     .replace(/\bat\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gi, `at ${displayTime}`);
 }
 
+function isHkoObservationCity(detail?: CityDetail | null) {
+  const source = String(
+    detail?.current?.settlement_source ||
+      detail?.settlement_station?.settlement_source ||
+      "",
+  )
+    .trim()
+    .toLowerCase();
+  return source === "hko";
+}
+
 function AiPinnedCityCard({
   item,
   detail,
@@ -127,12 +138,14 @@ function AiPinnedCityCard({
     (row ? getPeakWindowLabel(row) : null) ||
     "--";
   const deb = detail?.deb?.prediction ?? row?.deb_prediction ?? null;
+  const isHkoObservation = isHkoObservationCity(detail);
   const currentTemp =
-    detail?.airport_primary?.temp ??
-    detail?.airport_current?.temp ??
-    detail?.current?.temp ??
-    row?.current_temp ??
-    null;
+    (isHkoObservation
+      ? detail?.current?.temp ?? row?.current_temp
+      : detail?.airport_primary?.temp ??
+        detail?.airport_current?.temp ??
+        detail?.current?.temp ??
+        row?.current_temp) ?? null;
   const debNumber = toFiniteDecisionNumber(deb);
   const currentTempNumber = toFiniteDecisionNumber(currentTemp);
   const modelRange =
@@ -145,14 +158,30 @@ function AiPinnedCityCard({
     (isEn
       ? "Waiting for intraday observations to compare against the DEB path."
       : "等待更多日内实测，用来对照 DEB 预测路径。");
-  const report = detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
+  const report = isHkoObservation
+    ? ""
+    : detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
   const metarReportTimeDisplay = formatMetarReportTime(detail, report, isEn);
-  const airportStation =
-    detail?.risk?.icao ||
-    detail?.current?.station_code ||
-    detail?.airport_current?.station_code ||
-    detail?.airport_primary?.station_code ||
-    "";
+  const observationStation = isHkoObservation
+    ? detail?.current?.station_name ||
+      detail?.current?.station_code ||
+      detail?.settlement_station?.settlement_station_label ||
+      detail?.settlement_station?.settlement_station_code ||
+      "香港天文台"
+    : detail?.risk?.icao ||
+      detail?.current?.station_code ||
+      detail?.airport_current?.station_code ||
+      detail?.airport_primary?.station_code ||
+      "";
+  const observationSourceZh = isHkoObservation ? "香港天文台观测" : "METAR 实测";
+  const observationSourceEn = isHkoObservation ? "HKO observations" : "METAR observations";
+  const rawObservationText = isHkoObservation
+    ? `${isEn ? "Observation source" : "观测来源"}：${observationStation || (isEn ? "Hong Kong Observatory" : "香港天文台")}${metarReportTimeDisplay ? `，${metarReportTimeDisplay}` : ""}`
+    : report
+      ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${observationStation} ${report}`.trim()}`
+      : isEn
+        ? "Raw METAR: unavailable."
+        : "原始 METAR：暂无。";
   const detailCityName = detail?.name || item.cityName;
   const [refreshingDetail, setRefreshingDetail] = useState(false);
   const { aiForecast, refreshAiForecast } = useAiCityForecast({
@@ -207,14 +236,14 @@ function AiPinnedCityCard({
   const localModelSupportNote = modelEntries.length
     ? isEn
       ? modelEntries.length <= 2
-        ? `Model support is sparse: only ${modelEntries.length} sources are available${modelPreview ? ` (${modelPreview})` : ""}, so the read should lean more on DEB path and METAR.`
+        ? `Model support is sparse: only ${modelEntries.length} sources are available${modelPreview ? ` (${modelPreview})` : ""}, so the read should lean more on DEB path and ${observationSourceEn}.`
         : `Model support: ${modelEntries.length} sources cluster between ${modelRange}; ${modelPreview}.`
       : modelEntries.length <= 2
-        ? `多模型支撑偏少：当前只有 ${modelEntries.length} 个模型${modelPreview ? `（${modelPreview}）` : ""}，需要更重视 DEB 路径和 METAR 实测。`
+        ? `多模型支撑偏少：当前只有 ${modelEntries.length} 个模型${modelPreview ? `（${modelPreview}）` : ""}，需要更重视 DEB 路径和${observationSourceZh}。`
         : `多模型支撑：${modelEntries.length} 个模型集中在 ${modelRange}，代表模型为 ${modelPreview}。`
     : isEn
-      ? "Model support is unavailable, so this city must rely on DEB path and METAR observations."
-      : "暂无可用多模型支撑，需要主要参考 DEB 路径和 METAR 实测。";
+      ? `Model support is unavailable, so this city must rely on DEB path and ${observationSourceEn}.`
+      : `暂无可用多模型支撑，需要主要参考 DEB 路径和${observationSourceZh}。`;
   const aiPredictedMax = toFiniteDecisionNumber(aiCityForecast?.predicted_max);
   const decisionExpectedHighNumber = resolveExpectedHighCandidate({
     aiPredictedMax,
@@ -372,7 +401,7 @@ function AiPinnedCityCard({
                     {isEn ? "Bucket" : "温度桶"} <b>{marketDecisionView.bucketLabel}</b>
                   </small>
                   <small>
-                    {isEn ? "YES" : "YES 买入"} <b>{marketDecisionView.priceText}</b>
+                    {isEn ? "YES buy" : "YES 买价"} <b>{marketDecisionView.priceText}</b>
                   </small>
                   <small>
                     {isEn ? "Model-market" : "模型-市场差"} <b>{marketDecisionView.edgeText}</b>
@@ -433,7 +462,13 @@ function AiPinnedCityCard({
             <AiCityTemperatureChart detail={detail} />
             <section className="scan-ai-city-section">
               <div className="scan-ai-city-section-title">
-                {isEn ? "Evidence · AI airport read" : "证据 · AI 机场报文解读"}
+                {isHkoObservation
+                  ? isEn
+                    ? "Evidence · AI HKO observation read"
+                    : "证据 · AI 香港天文台观测解读"
+                  : isEn
+                    ? "Evidence · AI airport read"
+                    : "证据 · AI 机场报文解读"}
               </div>
               {aiForecast.status === "loading" ? (
                 <>
@@ -441,13 +476,21 @@ function AiPinnedCityCard({
                     {localizedFinalJudgment ||
                       aiForecast.streamText ||
                       (isEn
-                        ? "DeepSeek is reading the airport bulletin and city context..."
-                        : "DeepSeek 正在统一解读机场报文和城市上下文…")}
+                        ? isHkoObservation
+                          ? "DeepSeek is reading the HKO observation and city context..."
+                          : "DeepSeek is reading the airport bulletin and city context..."
+                        : isHkoObservation
+                          ? "DeepSeek 正在统一解读香港天文台观测和城市上下文…"
+                          : "DeepSeek 正在统一解读机场报文和城市上下文…")}
                   </p>
                   <p className="scan-ai-city-muted">
                     {isEn
-                      ? "One v4-flash stream now drives both the airport read and city judgment."
-                      : "现在由 v4-flash 一条流同时生成机场报文解读和城市判断。"}
+                      ? isHkoObservation
+                        ? "One v4-flash stream now drives both the HKO observation read and city judgment."
+                        : "One v4-flash stream now drives both the airport read and city judgment."
+                      : isHkoObservation
+                        ? "现在由 v4-flash 一条流同时生成香港天文台观测解读和城市判断。"
+                        : "现在由 v4-flash 一条流同时生成机场报文解读和城市判断。"}
                   </p>
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
@@ -462,11 +505,7 @@ function AiPinnedCityCard({
                     ))}
                   </ul>
                   <p className="scan-ai-raw-metar">
-                    {report
-                      ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                      : isEn
-                        ? "Raw METAR: unavailable."
-                        : "原始 METAR：暂无。"}
+                    {rawObservationText}
                   </p>
                 </>
               ) : aiForecast.status === "ready" ? (
@@ -483,39 +522,35 @@ function AiPinnedCityCard({
                   </p>
                   <ul className="scan-ai-weather-bullets">
                     <li>{localModelSupportNote}</li>
-                    <li>
-                      {report
-                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                        : isEn
-                          ? "Raw METAR is unavailable."
-                          : "暂无原始 METAR。"}
-                    </li>
+                    <li>{rawObservationText}</li>
                   </ul>
                 </>
               ) : aiForecast.status === "failed" ? (
                 <>
                   <p>
                     {isEn
-                      ? "AI read failed. Model support and the raw METAR remain as fallback context."
-                      : "AI 解读失败。下方保留多模型支撑和原始 METAR 作为兜底上下文。"}
+                      ? isHkoObservation
+                        ? "AI read failed. Model support and the HKO observation remain as fallback context."
+                        : "AI read failed. Model support and the raw METAR remain as fallback context."
+                      : isHkoObservation
+                        ? "AI 解读失败。下方保留多模型支撑和香港天文台观测作为兜底上下文。"
+                        : "AI 解读失败。下方保留多模型支撑和原始 METAR 作为兜底上下文。"}
                     {aiForecast.error ? ` ${aiForecast.error}` : ""}
                   </p>
                   <ul className="scan-ai-weather-bullets">
                     <li>{localModelSupportNote}</li>
-                    <li>
-                      {report
-                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                        : isEn
-                          ? "Raw METAR is unavailable."
-                          : "暂无原始 METAR。"}
-                    </li>
+                    <li>{rawObservationText}</li>
                   </ul>
                 </>
               ) : (
                 <p>
                   {isEn
-                    ? "Waiting for AI to read the latest airport bulletin."
-                    : "等待 AI 解读最新机场报文。"}
+                    ? isHkoObservation
+                      ? "Waiting for AI to read the latest HKO observation."
+                      : "Waiting for AI to read the latest airport bulletin."
+                    : isHkoObservation
+                      ? "等待 AI 解读最新香港天文台观测。"
+                      : "等待 AI 解读最新机场报文。"}
                 </p>
               )}
             </section>
@@ -535,8 +570,12 @@ function AiPinnedCityCard({
             title={isEn ? "Loading city decision data" : "正在加载城市决策数据"}
             description={
               isEn
-                ? "Hydrating today’s model stack, METAR context and market layer."
-                : "正在补全今日模型、机场报文和市场价格层。"
+                ? isHkoObservation
+                  ? "Hydrating today’s model stack, HKO observation context and market layer."
+                  : "Hydrating today’s model stack, METAR context and market layer."
+                : isHkoObservation
+                  ? "正在补全今日模型、香港天文台观测和市场价格层。"
+                  : "正在补全今日模型、机场报文和市场价格层。"
             }
             compact
           />

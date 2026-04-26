@@ -98,7 +98,7 @@ SCAN_CITY_AI_MAX_TOKENS = _env_int(
     min_value=800,
     max_value=64000,
 )
-SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v3"
+SCAN_CITY_AI_PROMPT_VERSION = "city-observation-read-v4"
 
 CITY_AI_REQUIRED_FIELDS = [
     "metar_read_zh",
@@ -535,6 +535,15 @@ def _format_ai_temperature(value: Any, unit: str) -> Optional[str]:
 
 
 def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str:
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_hko_observation = observation_anchor.get("is_airport_metar") is False
+    observation_label = (
+        "HKO observations"
+        if locale == "en-US" and is_hko_observation
+        else "香港天文台观测"
+        if is_hko_observation
+        else "METAR"
+    )
     cluster = ai_input.get("model_cluster") if isinstance(ai_input.get("model_cluster"), dict) else {}
     sources = cluster.get("sources") if isinstance(cluster.get("sources"), list) else []
     unit = str(ai_input.get("temp_symbol") or "")
@@ -547,7 +556,7 @@ def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str
     deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
     if locale == "en-US":
         if count <= 0:
-            return "No usable model cluster was returned; rely on DEB and METAR only."
+            return f"No usable model cluster was returned; rely on DEB and {observation_label} only."
         if count <= 2:
             return f"Only {count} model source(s) are available, so model support is thin and should be treated as context."
         range_text = f"{min(values):.1f}{unit} to {max(values):.1f}{unit}"
@@ -556,7 +565,7 @@ def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str
         supporting = sum(1 for value in values if abs(value - deb_value) <= 2.0)
         return f"{supporting}/{count} model sources sit within 2{unit} of DEB; model range is {range_text}."
     if count <= 0:
-        return "没有可用的多模型集合，只能把 DEB 与 METAR 作为主要依据。"
+        return f"没有可用的多模型集合，只能把 DEB 与{observation_label}作为主要依据。"
     if count <= 2:
         return f"当前只有 {count} 个模型来源，模型支撑偏薄，只能作为辅助上下文。"
     range_text = f"{min(values):.1f}{unit} ~ {max(values):.1f}{unit}"
@@ -582,10 +591,12 @@ def _build_city_ai_fallback(
         if isinstance(item, dict) and _safe_float(item.get("value")) is not None
     ]
     deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_airport_metar = observation_anchor.get("is_airport_metar") is not False
+    airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
+    current_obs = ai_input.get("current") if isinstance(ai_input.get("current"), dict) else {}
     current_temp = _safe_float(
-        (ai_input.get("airport_current") or {}).get("temp")
-        if isinstance(ai_input.get("airport_current"), dict)
-        else None
+        airport_current.get("temp") if is_airport_metar else current_obs.get("temp")
     )
     predicted = deb_value
     if predicted is None and values:
@@ -595,11 +606,14 @@ def _build_city_ai_fallback(
     range_low = min(values) if values else predicted
     range_high = max(values) if values else predicted
     city = str(ai_input.get("city_display_name") or ai_input.get("city") or "this city")
-    airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
-    station = str(airport_current.get("station_code") or "")
-    raw_metar = str(airport_current.get("raw_metar") or "").strip()
-    metar_temp = _format_ai_temperature(airport_current.get("temp"), unit)
-    obs_time = str(airport_current.get("report_time") or airport_current.get("obs_time") or "").strip()
+    station = str((airport_current.get("station_code") if is_airport_metar else None) or observation_anchor.get("station_code") or current_obs.get("station_code") or "")
+    raw_metar = str(airport_current.get("raw_metar") or "").strip() if is_airport_metar else ""
+    metar_temp = _format_ai_temperature((airport_current.get("temp") if is_airport_metar else current_obs.get("temp")), unit)
+    obs_time = str((airport_current.get("report_time") or airport_current.get("obs_time")) if is_airport_metar else (current_obs.get("obs_time") or current_obs.get("report_time") or "")).strip()
+    source_name_zh = "METAR" if is_airport_metar else "香港天文台观测"
+    source_name_en = "METAR" if is_airport_metar else "Hong Kong Observatory observation"
+    bulletin_zh = "机场报文" if is_airport_metar else "官方观测"
+    bulletin_en = "airport-bulletin" if is_airport_metar else "official-station observation"
     model_note_zh = _city_ai_model_cluster_note(ai_input, locale="zh-CN")
     model_note_en = _city_ai_model_cluster_note(ai_input, locale="en-US")
     content_preview = _truncate_ai_text(raw_content, 1000)
@@ -612,42 +626,42 @@ def _build_city_ai_fallback(
         metar_zh = str(partial_ai.get("metar_read_zh") or partial_ai.get("metar_read_en") or "").strip()
         metar_en = str(partial_ai.get("metar_read_en") or partial_ai.get("metar_read_zh") or "").strip()
     elif content_preview and not looks_like_truncated_json:
-        metar_zh = f"机场报文快速解读已先完成；AI 补充摘要：{content_preview}"
-        metar_en = f"The fast airport-bulletin read is available; AI supplemental summary: {content_preview}"
+        metar_zh = f"{bulletin_zh}快速解读已先完成；AI 补充摘要：{content_preview}"
+        metar_en = f"The fast {bulletin_en} read is available; AI supplemental summary: {content_preview}"
     elif content_preview:
-        metar_zh = "机场报文快速解读已先完成；本轮 AI 增强未完整返回，当前以 DEB、多模型与原始 METAR 为准。"
-        metar_en = "The fast airport-bulletin read is available; this AI enhancement was incomplete, so DEB, model cluster and raw METAR carry the read."
+        metar_zh = f"{bulletin_zh}快速解读已先完成；本轮 AI 增强未完整返回，当前以 DEB、多模型与{source_name_zh}为准。"
+        metar_en = f"The fast {bulletin_en} read is available; this AI enhancement was incomplete, so DEB, model cluster and {source_name_en} carry the read."
     elif raw_metar:
         metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；当前先把它作为实况锚点，并结合后续报文确认温度路径。"
         metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; use it as the live anchor while later reports confirm the path."
     else:
-        metar_zh = "当前没有可用的原始 METAR 正文，暂以 DEB 与多模型路径为主。"
-        metar_en = "No raw METAR text is available, so DEB and the model cluster carry the read."
+        metar_zh = f"当前没有可用的{source_name_zh}正文，暂以 DEB、多模型路径与最新实测为主。"
+        metar_en = f"No raw {source_name_en} text is available, so DEB, latest observations and the model cluster carry the read."
     predicted_text = _format_ai_temperature(predicted, unit) or "--"
     if partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en"):
         final_zh = str(partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en") or "").strip()
         final_en = str(partial_ai.get("final_judgment_en") or partial_ai.get("final_judgment_zh") or "").strip()
     elif partial_ai:
-        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 已先完成机场报文解读，最高温结论结合 DEB、多模型与最新 METAR 校准。"
-        final_en = f"{city} daily high is centered near {predicted_text}; AI has already read the airport bulletin, with the high calibrated against DEB, the model cluster and latest METAR."
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 已先完成{bulletin_zh}解读，最高温结论结合 DEB、多模型与最新实测校准。"
+        final_en = f"{city} daily high is centered near {predicted_text}; AI has already read the {bulletin_en}, with the high calibrated against DEB, the model cluster and latest observations."
     elif timed_out:
-        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
-        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和{source_name_zh}快速证据模式判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/{source_name_en} evidence mode."
     else:
-        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
-        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和{source_name_zh}快速证据模式判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/{source_name_en} evidence mode."
     reasoning_zh = str(partial_ai.get("reasoning_zh") or "").strip() or (
-        "AI 机场报文解读已用于校准日内节奏；DEB 与多模型集合继续约束最高温中枢，后续 METAR 用于确认是否需要上调或下修。"
+        f"AI {bulletin_zh}解读已用于校准日内节奏；DEB 与多模型集合继续约束最高温中枢，后续{source_name_zh}用于确认是否需要上调或下修。"
         if partial_ai
-        else "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；AI 增强可作为后续补充，不阻塞本轮读数。"
+        else f"DEB、多模型集合和最新{source_name_zh}已足够给出当前方向判断；AI 增强可作为后续补充，不阻塞本轮读数。"
     )
     reasoning_en = str(partial_ai.get("reasoning_en") or "").strip() or (
-        "The AI airport-bulletin read is already used to calibrate the intraday pace; DEB and the model cluster still constrain the high-temperature center, while later METAR reports confirm whether to revise it."
+        f"The AI {bulletin_en} read is already used to calibrate the intraday pace; DEB and the model cluster still constrain the high-temperature center, while later {source_name_en} updates confirm whether to revise it."
         if partial_ai
-        else "DEB, the model cluster and latest METAR are enough for the current directional read; AI enhancement can be added later without blocking this card."
+        else f"DEB, the model cluster and latest {source_name_en} are enough for the current directional read; AI enhancement can be added later without blocking this card."
     )
-    risks_zh = ["后续 METAR 若明显偏离模型路径，需及时修正最高温中枢。"]
-    risks_en = ["If later METAR reports diverge from the model path, revise the daily-high center promptly."]
+    risks_zh = [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
+    risks_en = [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]
     return {
         "predicted_max": partial_ai.get("predicted_max", predicted),
         "range_low": partial_ai.get("range_low", range_low),
@@ -679,8 +693,8 @@ def _build_city_ai_fallback(
 
 def _city_ai_response_example(unit: str) -> Dict[str, Any]:
     return {
-        "metar_read_zh": f"最新 METAR 显示 37.0{unit or '°C'}，报文时间 04:30Z；风和云量暂未显示强降温信号，后续报文用于确认升温路径。",
-        "metar_read_en": f"The latest METAR shows 37.0{unit or '°C'} at 04:30Z; wind and cloud signals do not yet show a strong cooling break, so later reports should confirm the warming path.",
+        "metar_read_zh": f"最新观测显示 37.0{unit or '°C'}，观测时间 04:30Z；风和云量暂未显示强降温信号，后续观测用于确认升温路径。",
+        "metar_read_en": f"The latest observation shows 37.0{unit or '°C'} at 04:30Z; wind and cloud signals do not yet show a strong cooling break, so later observations should confirm the warming path.",
         "final_judgment_zh": f"预计最高温暂以 43.0{unit or '°C'} 附近为中枢。",
         "final_judgment_en": f"The expected daily high is centered near 43.0{unit or '°C'}.",
         "predicted_max": 43.0,
@@ -688,10 +702,10 @@ def _city_ai_response_example(unit: str) -> Dict[str, Any]:
         "range_high": 44.0,
         "unit": unit or "°C",
         "confidence": "medium",
-        "reasoning_zh": "DEB 与多数模型集中在同一温区，METAR 仍处于上午升温路径。",
-        "reasoning_en": "DEB and most models cluster in the same temperature band, while METAR remains on a morning warming path.",
-        "risks_zh": ["若后续 METAR 升温放缓或云雨增强，需要下调中枢。"],
-        "risks_en": ["If later METAR warming slows or cloud/rain strengthens, revise the center lower."],
+        "reasoning_zh": "DEB 与多数模型集中在同一温区，最新观测仍处于上午升温路径。",
+        "reasoning_en": "DEB and most models cluster in the same temperature band, while the latest observation remains on a morning warming path.",
+        "risks_zh": ["若后续观测升温放缓或云雨增强，需要下调中枢。"],
+        "risks_en": ["If later observations show slower warming or stronger cloud/rain, revise the center lower."],
         "model_cluster_note_zh": "7/8 个模型落在 DEB ±2°C 内，模型支撑较集中。",
         "model_cluster_note_en": "7/8 models are within DEB ±2°C, so model support is clustered.",
     }
@@ -1035,10 +1049,30 @@ def _build_metar_decision_context(data: Dict[str, Any]) -> Dict[str, Any]:
         else None
     )
     station = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    current = data.get("current") if isinstance(data.get("current"), dict) else {}
+    settlement_station = data.get("settlement_station") if isinstance(data.get("settlement_station"), dict) else {}
+    settlement_source = str(
+        current.get("settlement_source")
+        or settlement_station.get("settlement_source")
+        or "metar"
+    ).strip().lower()
+    is_hko = settlement_source == "hko"
+    source_label = "HKO" if is_hko else "METAR"
     return {
-        "source": "METAR",
-        "station": station.get("icao") or airport_current.get("station_code"),
-        "station_label": station.get("airport") or airport_current.get("station_label"),
+        "source": source_label,
+        "is_airport_metar": not is_hko,
+        "station": (
+            current.get("station_code")
+            or settlement_station.get("settlement_station_code")
+            or station.get("icao")
+            or airport_current.get("station_code")
+        ),
+        "station_label": (
+            current.get("station_name")
+            or settlement_station.get("settlement_station_label")
+            or station.get("airport")
+            or airport_current.get("station_label")
+        ),
         "today_obs": today_obs[-12:],
         "recent_obs": recent_obs[-8:],
         "settlement_today_obs": settlement_obs[-12:],
@@ -1062,6 +1096,52 @@ def _build_metar_decision_context(data: Dict[str, Any]) -> Dict[str, Any]:
         "airport_wind_speed_kt": _safe_float(airport_current.get("wind_speed_kt")),
         "airport_wind_dir": _safe_float(airport_current.get("wind_dir")),
         "airport_humidity": _safe_float(airport_current.get("humidity")),
+    }
+
+
+def _city_observation_anchor(data: Dict[str, Any]) -> Dict[str, Any]:
+    current = data.get("current") if isinstance(data.get("current"), dict) else {}
+    settlement_station = data.get("settlement_station") if isinstance(data.get("settlement_station"), dict) else {}
+    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
+    risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
+    source = str(
+        current.get("settlement_source")
+        or settlement_station.get("settlement_source")
+        or "metar"
+    ).strip().lower()
+    is_hko = source == "hko"
+    if is_hko:
+        station_code = (
+            current.get("station_code")
+            or settlement_station.get("settlement_station_code")
+            or "HKO"
+        )
+        station_label = (
+            current.get("station_name")
+            or settlement_station.get("settlement_station_label")
+            or "Hong Kong Observatory"
+        )
+        return {
+            "source": "hko",
+            "source_label": "Hong Kong Observatory",
+            "is_airport_metar": False,
+            "station_code": station_code,
+            "station_label": station_label,
+            "read_label_zh": "香港天文台观测解读",
+            "read_label_en": "Hong Kong Observatory observation read",
+            "instruction_zh": "该城市使用香港天文台/HKO 官方站点观测，不是机场 METAR；不得称为机场报文或 METAR。",
+            "instruction_en": "This city uses Hong Kong Observatory/HKO station observations, not an airport METAR; do not call it an airport bulletin or METAR.",
+        }
+    return {
+        "source": "metar",
+        "source_label": "METAR",
+        "is_airport_metar": True,
+        "station_code": risk.get("icao") or airport_current.get("station_code"),
+        "station_label": risk.get("airport") or airport_current.get("station_label"),
+        "read_label_zh": "机场报文解读",
+        "read_label_en": "airport-bulletin read",
+        "instruction_zh": "该城市使用机场 METAR/TAF 作为日内实况证据。",
+        "instruction_en": "This city uses airport METAR/TAF as intraday observation evidence.",
     }
 
 
@@ -1365,6 +1445,7 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
     model_values = [_safe_float(value) for value in (models or {}).values()]
     model_values = [value for value in model_values if value is not None]
     metar_context = _build_metar_decision_context(data)
+    observation_anchor = _city_observation_anchor(data)
     current = data.get("current") if isinstance(data.get("current"), dict) else {}
     airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
     airport_primary = data.get("airport_primary") if isinstance(data.get("airport_primary"), dict) else {}
@@ -1373,13 +1454,15 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "schema_version": "single_city_forecast_v2",
         "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
-        "task": "predict_city_daily_high_and_read_metar",
+        "task": "predict_city_daily_high_and_read_observation",
         "city": data.get("name"),
         "city_display_name": data.get("display_name") or data.get("name"),
         "local_date": local_date,
         "local_time": data.get("local_time"),
         "temp_symbol": data.get("temp_symbol"),
         "timezone_offset_seconds": data.get("utc_offset_seconds"),
+        "observation_anchor": observation_anchor,
+        "settlement_station": data.get("settlement_station") or {},
         "current": {
             "temp": current.get("temp"),
             "max_so_far": current.get("max_so_far"),
@@ -1448,21 +1531,26 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     if not api_key:
         raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
     normalized_locale = _normalize_locale(locale)
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_airport_metar = observation_anchor.get("is_airport_metar") is not False
+    observation_label_zh = str(observation_anchor.get("read_label_zh") or ("机场报文解读" if is_airport_metar else "官方观测解读"))
+    observation_instruction = str(observation_anchor.get("instruction_zh") or "")
 
     system_prompt = (
         "你是 PolyWeather 的 DeepSeek 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
         "判断该城市今日最高温路径。不要写套利、交易、BUY YES/NO、价格、edge 或 Kelly。"
-        "你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、机场报文/METAR 解读、判断依据和风险。"
-        "必须综合 DEB 最终融合值、全部天气模型预测、METAR 实测序列、最新机场报文、峰值窗口、当地时间、季节背景。"
+        f"你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、{observation_label_zh}、判断依据和风险。"
+        "必须综合 DEB 最终融合值、全部天气模型预测、实测序列、最新观测、峰值窗口、当地时间、季节背景。"
+        f"{observation_instruction}"
         "如果实测温度与 DEB 预测走势出现偏差，要明确说明偏差方向和可能修正。"
-        "你可以基于城市、时间、季节、机场位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
+        "你可以基于城市、时间、季节、站点位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
         "但必须使用“可能”“倾向”“需要确认”等非绝对表达。"
-        "METAR 解读必须具体：写清楚最新报文时间、温度、风向风速、云量/天气、能见度或露点中与温度路径相关的因素。"
+        "观测解读必须具体：写清楚最新观测/报文时间、温度、风向风速、云量/天气、能见度或露点中与温度路径相关的因素。"
         "涉及风时必须说明该风向对本城市/机场最高温路径倾向增温、降温还是中性，并给出理由；"
         "不得只写“风向切换可能冷平流”，必须说明是哪一类风向或哪段风向切换可能带来冷/暖平流。"
         "涉及 TAF 或云雨扰动时必须给出报文中的有效时间、BECMG/TEMPO/FM 时间窗或说明“未给出明确时间”；"
         "如果没有 TAF 时间依据，不要笼统写“峰值窗口云雨扰动风险”。"
-        "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
+        "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视最新实测。"
         "所有面向用户的自然语言字段必须同时填写简体中文和英文两套内容："
         "_zh 字段写简体中文，_en 字段写英文。前端会按用户界面语言直接切换字段，不能留空。"
         "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 用 1-2 句。"
@@ -1476,10 +1564,10 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             "Fill every *_zh field in Simplified Chinese and every *_en field in English in the same response. "
             "Use this exact JSON object shape; do not return an array, markdown, or prose outside JSON. "
-            "Keep final_judgment one short decision sentence. metar_read must explain the latest airport bulletin "
-            "with report time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
+            "Keep final_judgment one short decision sentence. metar_read must explain the latest observation source "
+            "with report/observation time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
             "For wind, explicitly say whether the current wind tends to warm, cool, or be neutral for today's high, "
-            "and why in local city/airport context. If mentioning cold/warm advection, name the wind direction or "
+            "and why in local city/station context. If mentioning cold/warm advection, name the wind direction or "
             "direction shift responsible. If mentioning TAF risk, include the concrete TAF time window or say no "
             "explicit timing is available. model_cluster_note must state "
             "how many model sources are available, whether they support DEB, and whether the sample is too sparse. "
@@ -1625,7 +1713,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                                 "instruction": (
                                     "Fill *_zh fields in Simplified Chinese and *_en fields in English; do not leave either language empty. "
                                     "Make final_judgment one direct sentence about today's high temperature. "
-                                    "metar_read must interpret the latest airport bulletin with report time, temperature, "
+                                    "metar_read must interpret the latest observation source with report/observation time, temperature, "
                                     "wind direction/speed, cloud/weather/visibility/dewpoint if available. State whether "
                                     "the current wind tends to warm, cool, or stay neutral for the temperature path, and why. "
                                     "If mentioning cold/warm advection or TAF risk, include the responsible wind direction "
@@ -1685,6 +1773,14 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
 
 
 def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_airport_metar = observation_anchor.get("is_airport_metar") is not False
+    airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
+    observation_obs = (
+        ai_input.get("metar_today_obs") or ai_input.get("metar_recent_obs") or []
+        if is_airport_metar
+        else ai_input.get("settlement_today_obs") or ai_input.get("settlement_recent_obs") or []
+    )
     key_payload = {
         "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
         "schema_version": ai_input.get("schema_version"),
@@ -1692,8 +1788,10 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
         "city": ai_input.get("city"),
         "local_date": ai_input.get("local_date"),
         "deb": (ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None,
-        "metar": (ai_input.get("airport_current") or {}).get("raw_metar") if isinstance(ai_input.get("airport_current"), dict) else None,
-        "obs": ai_input.get("metar_today_obs") or ai_input.get("metar_recent_obs") or [],
+        "observation_source": observation_anchor.get("source") or ("metar" if is_airport_metar else "official"),
+        "station": observation_anchor.get("station_code"),
+        "metar": airport_current.get("raw_metar") if is_airport_metar else None,
+        "obs": observation_obs,
     }
     raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False, default=str)
     return "city-ai:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -1716,14 +1814,21 @@ def _build_city_ai_stream_request(
     locale: str,
 ) -> Dict[str, Any]:
     normalized_locale = _normalize_locale(locale)
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_airport_metar = observation_anchor.get("is_airport_metar") is not False
+    role_label = "机场 METAR 解读员" if is_airport_metar else "官方观测站解读员"
+    read_label = str(observation_anchor.get("read_label_zh") or ("机场报文解读" if is_airport_metar else "官方观测解读"))
+    source_instruction = str(observation_anchor.get("instruction_zh") or "")
     system_prompt = (
-        "你是 PolyWeather 的城市最高温与机场 METAR 解读员。"
+        f"你是 PolyWeather 的城市最高温与{role_label}。"
         "只返回一个紧凑 JSON object，不要 Markdown。"
-        "必须先写 metar_read_zh 和 metar_read_en 字段，便于前端流式显示机场报文解读；"
+        f"必须先写 metar_read_zh 和 metar_read_en 字段，便于前端流式显示{read_label}；"
         "然后写 final_judgment_zh/final_judgment_en、predicted_max、range_low、range_high、unit、confidence、"
         "reasoning_zh/reasoning_en、risks_zh/risks_en、model_cluster_note_zh/model_cluster_note_en。"
-        "METAR 解读必须具体说明报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；"
-        "涉及风时要说明当前风向对机场最高温路径倾向增温、降温还是中性，并给出理由。"
+        f"{source_instruction}"
+        "观测解读必须具体说明观测/报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；"
+        "涉及风时要说明当前风向对站点最高温路径倾向增温、降温还是中性，并给出理由。"
+        "如果 observation_anchor.is_airport_metar 为 false，不得使用 METAR、TAF、机场报文等称谓。"
         "所有 *_zh 字段写简体中文，所有 *_en 字段写英文，不得留空。"
         "不要写交易建议、BUY/SELL、Kelly 或套利。"
     )
@@ -1852,8 +1957,8 @@ def stream_scan_city_ai_forecast_payload(
         "progress",
         {
             "stage": "loading_city",
-            "message_zh": "正在读取城市实况、模型和最新机场报文…",
-            "message_en": "Loading city observations, model cluster and latest airport bulletin…",
+            "message_zh": "正在读取城市实况、模型和最新观测…",
+            "message_en": "Loading city observations, model cluster and latest observation…",
         },
     )
     data = _analyze(
@@ -1888,6 +1993,18 @@ def stream_scan_city_ai_forecast_payload(
         locale=normalized_locale,
         reason="stream preview",
     )
+    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    is_airport_metar = observation_anchor.get("is_airport_metar") is not False
+    calling_message_zh = (
+        "DeepSeek 正在快速增强机场报文解读…"
+        if is_airport_metar
+        else "DeepSeek 正在快速增强香港天文台观测解读…"
+    )
+    calling_message_en = (
+        "DeepSeek is adding a fast airport-bulletin enhancement…"
+        if is_airport_metar
+        else "DeepSeek is adding a fast HKO observation enhancement…"
+    )
     yield _sse_event(
         "preview",
         {
@@ -1907,8 +2024,8 @@ def stream_scan_city_ai_forecast_payload(
             "stage": "calling_ai",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
-            "message_zh": "DeepSeek 正在快速增强机场报文解读…",
-            "message_en": "DeepSeek is adding a fast airport-bulletin enhancement…",
+            "message_zh": calling_message_zh,
+            "message_en": calling_message_en,
         },
     )
 
