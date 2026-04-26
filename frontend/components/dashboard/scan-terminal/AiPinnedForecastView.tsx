@@ -428,11 +428,13 @@ function AiPinnedCityCard({
                         ? "Deepseek V4 pro is reading the latest airport bulletin..."
                         : "Deepseek V4 pro 正在解读最新机场报文...")}
                   </p>
-                  <p className="scan-ai-city-muted">
-                    {isEn
-                      ? "The final airport read will appear here shortly."
-                      : "机场报文解读稍后将在这里显示。"}
-                  </p>
+                  {!aiForecast.streamText ? (
+                    <p className="scan-ai-city-muted">
+                      {isEn
+                        ? "The final airport read will appear here shortly."
+                        : "机场报文解读稍后将在这里显示。"}
+                    </p>
+                  ) : null}
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>

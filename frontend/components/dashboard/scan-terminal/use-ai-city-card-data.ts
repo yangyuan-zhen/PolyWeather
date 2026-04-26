@@ -23,6 +23,7 @@ const pendingAiCityForecastRequests = new Map<
 >();
 
 type AiCityStreamProgress = {
+  stage?: string | null;
   message_en?: string | null;
   message_zh?: string | null;
   final_judgment_en?: string | null;
@@ -358,11 +359,16 @@ export function useAiCityForecast({
         cancelled = true;
       };
     }
+    const initialFallback = buildAiCityFallbackPayload({ detail, isEn, report });
     setAiForecast({
       status: "loading",
-      streamText: isEn
-        ? "DeepSeek V4-Pro is reading the latest airport bulletin..."
-        : "DeepSeek V4-Pro 正在解读最新机场报文...",
+      streamText:
+        (isEn
+          ? initialFallback.city_forecast?.metar_read_en
+          : initialFallback.city_forecast?.metar_read_zh) ||
+        (isEn
+          ? "Reading the latest airport bulletin with model/METAR fallback ready..."
+          : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek V4-Pro 补充…"),
     });
     void requestAiCityForecast({
         city: detailCityName,
@@ -375,7 +381,10 @@ export function useAiCityForecast({
           setAiForecast((current) => ({
             ...current,
             status: "loading",
-            streamText: progressText,
+            streamText:
+              progress.stage === "calling_ai" && current.streamText
+                ? current.streamText
+                : progressText,
           }));
         },
         requestKey,

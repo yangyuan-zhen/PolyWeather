@@ -69,10 +69,13 @@ SCAN_AI_TIMEOUT_SEC = _env_int(
 )
 SCAN_CITY_AI_TIMEOUT_SEC = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC",
-    45,
+    18,
     min_value=10,
     max_value=120,
 )
+SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR = str(
+    os.getenv("POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR") or "false"
+).strip().lower() in {"1", "true", "yes", "on"}
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
     int(os.getenv("POLYWEATHER_SCAN_AI_CACHE_TTL_SEC", "1800")),
@@ -86,7 +89,7 @@ SCAN_AI_MAX_TOKENS = _env_int(
 )
 SCAN_CITY_AI_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS",
-    1200,
+    900,
     min_value=800,
     max_value=64000,
 )
@@ -1296,7 +1299,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
         "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视 METAR 实测。"
         "所有面向用户的自然语言字段必须同时填写简体中文和英文两套内容："
         "_zh 字段写简体中文，_en 字段写英文。前端会按用户界面语言直接切换字段，不能留空。"
-        "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 可用 2-4 句。"
+        "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 用 1-2 句。"
         "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
@@ -1817,39 +1820,49 @@ def stream_scan_city_ai_forecast_payload(
                 }
         except Exception as exc:
             retry_reason = str(exc)
-            yield _sse_event(
-                "progress",
-                {
-                    "stage": "retry_non_stream",
-                    "message_zh": "流式内容为空或 JSON 不完整，正在改用非流式严格 JSON 重试…",
-                    "message_en": "Stream content was empty or incomplete JSON; retrying with a strict non-stream request…",
-                    "raw_length": len(accumulated),
-                    "reason": retry_reason,
-                },
-            )
-            try:
-                ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
-                if isinstance(ai_raw, dict):
-                    meta = ai_raw.get("_polyweather_meta")
-                    if not isinstance(meta, dict):
-                        meta = {}
-                    ai_raw["_polyweather_meta"] = {
-                        **meta,
-                        "streamed": False,
-                        "stream_retry_non_stream": True,
-                        "stream_retry_reason": retry_reason,
-                        "stream_raw_length": len(accumulated),
-                    }
-                if _is_city_ai_fallback(ai_raw):
+            if SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR:
+                yield _sse_event(
+                    "progress",
+                    {
+                        "stage": "retry_non_stream",
+                        "message_zh": "流式内容为空或 JSON 不完整，正在改用非流式严格 JSON 重试…",
+                        "message_en": "Stream content was empty or incomplete JSON; retrying with a strict non-stream request…",
+                        "raw_length": len(accumulated),
+                        "reason": retry_reason,
+                    },
+                )
+                try:
+                    ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
+                    if isinstance(ai_raw, dict):
+                        meta = ai_raw.get("_polyweather_meta")
+                        if not isinstance(meta, dict):
+                            meta = {}
+                        ai_raw["_polyweather_meta"] = {
+                            **meta,
+                            "streamed": False,
+                            "stream_retry_non_stream": True,
+                            "stream_retry_reason": retry_reason,
+                            "stream_raw_length": len(accumulated),
+                        }
+                    if _is_city_ai_fallback(ai_raw):
+                        degraded = True
+                        degraded_reason = retry_reason
+                except Exception as retry_exc:
                     degraded = True
-                    degraded_reason = retry_reason
-            except Exception as retry_exc:
+                    degraded_reason = str(retry_exc)
+                    ai_raw = _build_city_ai_fallback(
+                        ai_input,
+                        locale=normalized_locale,
+                        reason=degraded_reason or retry_reason,
+                        raw_content=accumulated,
+                    )
+            else:
                 degraded = True
-                degraded_reason = str(retry_exc)
+                degraded_reason = retry_reason
                 ai_raw = _build_city_ai_fallback(
                     ai_input,
                     locale=normalized_locale,
-                    reason=degraded_reason or retry_reason,
+                    reason=retry_reason,
                     raw_content=accumulated,
                 )
         generated_at = datetime.utcnow().isoformat() + "Z"
