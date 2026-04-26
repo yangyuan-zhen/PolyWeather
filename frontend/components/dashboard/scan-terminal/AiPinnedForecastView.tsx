@@ -16,6 +16,7 @@ import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSigna
 import type { AiPinnedCity } from "@/components/dashboard/scan-terminal/types";
 import {
   useAiCityForecast,
+  useAiMetarSummary,
   useCityMarketScan,
 } from "@/components/dashboard/scan-terminal/use-ai-city-card-data";
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
@@ -152,6 +153,20 @@ function AiPinnedCityCard({
     detail?.airport_primary?.station_code ||
     "";
   const detailCityName = detail?.name || item.cityName;
+  const debText =
+    debNumber != null
+      ? formatTemperatureValue(debNumber, tempSymbol, { digits: 1 })
+      : "";
+  const { metarSummary } = useAiMetarSummary({
+    airport: airportStation,
+    city: displayName,
+    deb: debText,
+    enabled: Boolean(detail && report),
+    isEn,
+    locale,
+    metar: report,
+    modelRange,
+  });
   const { aiForecast, refreshAiForecast } = useAiCityForecast({
     detail,
     detailCityName,
@@ -249,7 +264,6 @@ function AiPinnedCityCard({
       ? [String(localizedRisksRaw)]
       : [];
   const aiBullets = [
-    localizedMetarRead,
     localizedReasoning !== localizedFinalJudgment ? localizedReasoning : "",
     localizedModelNote || localModelSupportNote,
     ...localizedRisks,
@@ -420,21 +434,66 @@ function AiPinnedCityCard({
               <div className="scan-ai-city-section-title">
                 {isEn ? "Evidence · AI airport read" : "证据 · AI 机场报文解读"}
               </div>
+              {metarSummary.status === "loading" ? (
+                <>
+                  <p className="scan-ai-weather-summary">
+                    {metarSummary.streamText ||
+                      (isEn
+                        ? "Streaming the lightweight METAR read..."
+                        : "轻量 METAR 解读正在流式输出…")}
+                  </p>
+                  <p className="scan-ai-city-muted">
+                    {isEn
+                      ? "This read is independent from the full city review below."
+                      : "这一步已和下方完整城市分析解耦，不等待完整 JSON。"}
+                  </p>
+                </>
+              ) : metarSummary.status === "ready" && metarSummary.streamText ? (
+                <p className="scan-ai-weather-summary">{metarSummary.streamText}</p>
+              ) : metarSummary.status === "failed" ? (
+                <p>
+                  {localizedMetarRead ||
+                    (isEn
+                      ? "Lightweight AI METAR read is unavailable; raw METAR remains below."
+                      : "轻量 AI METAR 解读暂不可用；下方保留原始 METAR。")}
+                </p>
+              ) : (
+                <p>
+                  {report
+                    ? isEn
+                      ? "Waiting for lightweight AI to read the latest METAR."
+                      : "等待轻量 AI 解读最新 METAR。"
+                    : isEn
+                      ? "Raw METAR is unavailable."
+                      : "暂无原始 METAR。"}
+                </p>
+              )}
+              <p className="scan-ai-raw-metar">
+                {report
+                  ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
+                  : isEn
+                    ? "Raw METAR: unavailable."
+                    : "原始 METAR：暂无。"}
+              </p>
+            </section>
+            <section className="scan-ai-city-section">
+              <div className="scan-ai-city-section-title">
+                {isEn ? "Complete city AI review" : "完整城市 AI 判断"}
+              </div>
               {aiForecast.status === "loading" ? (
                 <>
                   <p className={aiForecast.streamText ? "scan-ai-weather-summary" : undefined}>
-                    {aiForecast.streamText ||
+                    {localizedFinalJudgment ||
+                      aiForecast.streamText ||
                       (isEn
-                        ? "DeepSeek is reading the latest airport bulletin..."
-                        : "DeepSeek 正在解读最新机场报文...")}
+                        ? "Generating the full city review in the background..."
+                        : "后台正在生成完整城市分析…")}
                   </p>
-                  {!aiForecast.streamText ? (
-                    <p className="scan-ai-city-muted">
-                      {isEn
-                        ? "The final airport read will appear here shortly."
-                        : "机场报文解读稍后将在这里显示。"}
-                    </p>
-                  ) : null}
+                  <p className="scan-ai-city-muted">
+                    {isEn
+                      ? "This heavier JSON review can finish after the airport read."
+                      : "这部分是较重的 JSON 分析，可以晚于机场报文解读完成。"}
+                  </p>
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>
@@ -447,13 +506,6 @@ function AiPinnedCityCard({
                       <li key={`${line}-${index}`}>{line}</li>
                     ))}
                   </ul>
-                  <p className="scan-ai-raw-metar">
-                    {report
-                      ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                      : isEn
-                        ? "Raw METAR: unavailable."
-                        : "原始 METAR：暂无。"}
-                  </p>
                 </>
               ) : aiForecast.status === "ready" ? (
                 <>
@@ -469,13 +521,6 @@ function AiPinnedCityCard({
                   </p>
                   <ul className="scan-ai-weather-bullets">
                     <li>{localModelSupportNote}</li>
-                    <li>
-                      {report
-                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                        : isEn
-                          ? "Raw METAR is unavailable."
-                          : "暂无原始 METAR。"}
-                    </li>
                   </ul>
                 </>
               ) : aiForecast.status === "failed" ? (
@@ -488,20 +533,13 @@ function AiPinnedCityCard({
                   </p>
                   <ul className="scan-ai-weather-bullets">
                     <li>{localModelSupportNote}</li>
-                    <li>
-                      {report
-                        ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${airportStation} ${report}`.trim()}`
-                        : isEn
-                          ? "Raw METAR is unavailable."
-                          : "暂无原始 METAR。"}
-                    </li>
                   </ul>
                 </>
               ) : (
                 <p>
                   {isEn
-                    ? "Waiting for AI to read the latest airport bulletin."
-                    : "等待 AI 解读最新机场报文。"}
+                    ? "The complete city review is queued in the background."
+                    : "完整城市分析正在后台排队。"}
                 </p>
               )}
             </section>

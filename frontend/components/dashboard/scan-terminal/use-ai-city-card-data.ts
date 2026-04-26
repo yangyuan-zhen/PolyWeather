@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AiCityForecastPayload,
   AiCityForecastState,
+  AiMetarSummaryPayload,
+  AiMetarSummaryState,
 } from "@/components/dashboard/scan-terminal/types";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import {
@@ -22,6 +24,10 @@ const pendingAiCityForecastRequests = new Map<
   string,
   Promise<AiCityForecastPayload>
 >();
+const pendingMetarSummaryRequests = new Map<
+  string,
+  Promise<AiMetarSummaryPayload>
+>();
 
 type AiCityStreamProgress = {
   stage?: string | null;
@@ -37,6 +43,13 @@ type AiCityStreamProgress = {
 type AiCityStreamEvent = {
   data: Record<string, unknown>;
   event: string;
+};
+
+type AiMetarSummaryProgress = {
+  message_en?: string | null;
+  message_zh?: string | null;
+  content?: string | null;
+  raw_length?: number | null;
 };
 
 function getStorage() {
@@ -270,6 +283,118 @@ function getAiCityStreamProgressText(progress: AiCityStreamProgress, isEn: boole
   return "";
 }
 
+async function readMetarSummaryStream(
+  response: Response,
+  onProgress?: (progress: AiMetarSummaryProgress) => void,
+) {
+  if (!response.body) {
+    return response.json() as Promise<AiMetarSummaryPayload>;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let accumulated = "";
+  let finalPayload: AiMetarSummaryPayload | null = null;
+
+  const consumeBlock = (block: string) => {
+    const parsed = parseAiCityStreamBlock(block);
+    if (!parsed) return;
+    const { data, event } = parsed;
+    if (event === "final") {
+      finalPayload = data as AiMetarSummaryPayload;
+      return;
+    }
+    if (event === "progress") {
+      onProgress?.(data as AiMetarSummaryProgress);
+      return;
+    }
+    if (event === "delta") {
+      const content = String(data.content || "");
+      if (content) {
+        accumulated += content;
+      }
+      onProgress?.({
+        content: accumulated,
+        raw_length: Number(data.raw_length),
+      });
+    }
+  };
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+    blocks.forEach(consumeBlock);
+    if (done) break;
+  }
+  if (buffer.trim()) {
+    consumeBlock(buffer);
+  }
+  return (
+    finalPayload || {
+      status: accumulated ? "ready" : "failed",
+      summary: accumulated,
+    }
+  );
+}
+
+function requestMetarSummary({
+  airport,
+  city,
+  deb,
+  locale,
+  metar,
+  modelRange,
+  onProgress,
+  requestKey,
+}: {
+  airport: string;
+  city: string;
+  deb: string;
+  locale: string;
+  metar: string;
+  modelRange: string;
+  onProgress?: (progress: AiMetarSummaryProgress) => void;
+  requestKey: string;
+}) {
+  const pending = pendingMetarSummaryRequests.get(requestKey);
+  if (pending) return pending;
+
+  const request = buildBrowserBackendHeaders({
+    Accept: "text/event-stream",
+    "Content-Type": "application/json",
+  })
+    .then((headers) =>
+      fetchBackendApi("/api/ai/metar-summary", {
+        method: "POST",
+        headers,
+        cache: "no-store",
+        body: JSON.stringify({
+          airport,
+          city,
+          deb,
+          locale,
+          metar,
+          model_range: modelRange,
+        }),
+      }),
+    )
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return readMetarSummaryStream(response, onProgress);
+    })
+    .finally(() => {
+      pendingMetarSummaryRequests.delete(requestKey);
+    });
+
+  pendingMetarSummaryRequests.set(requestKey, request);
+  return request;
+}
+
 function buildAiCityFallbackPayload({
   detail,
   error,
@@ -335,6 +460,113 @@ function buildAiCityFallbackPayload({
     reason_zh: reasonZh,
     status: timeoutLike ? "timeout_fallback" : "fallback",
   };
+}
+
+export function useAiMetarSummary({
+  airport,
+  city,
+  deb,
+  enabled = true,
+  isEn,
+  locale,
+  metar,
+  modelRange,
+}: {
+  airport: string;
+  city: string;
+  deb: string;
+  enabled?: boolean;
+  isEn: boolean;
+  locale: string;
+  metar: string;
+  modelRange: string;
+}) {
+  const [metarSummary, setMetarSummary] = useState<AiMetarSummaryState>({
+    status: "idle",
+  });
+
+  const requestKey = useMemo(
+    () =>
+      metar
+        ? [
+            "metar-summary",
+            normalizeCityKey(city) || city,
+            airport,
+            locale,
+            deb,
+            modelRange,
+            metar,
+          ].join(":")
+        : "",
+    [airport, city, deb, locale, metar, modelRange],
+  );
+
+  useEffect(() => {
+    if (!enabled || !requestKey || !metar) {
+      setMetarSummary({ status: "idle" });
+      return;
+    }
+    let cancelled = false;
+    setMetarSummary({
+      status: "loading",
+      streamText: isEn
+        ? "Reading current METAR with a lightweight AI pass..."
+        : "正在用轻量 AI 快速解读当前 METAR…",
+    });
+    void requestMetarSummary({
+      airport,
+      city,
+      deb,
+      locale,
+      metar,
+      modelRange,
+      onProgress: (progress) => {
+        if (cancelled) return;
+        const text = String(
+          progress.content ||
+            (isEn ? progress.message_en : progress.message_zh) ||
+            "",
+        ).trim();
+        if (!text) return;
+        setMetarSummary((current) => ({
+          ...current,
+          status: "loading",
+          streamText: text,
+        }));
+      },
+      requestKey,
+    })
+      .then((payload) => {
+        if (cancelled) return;
+        const summary = String(payload?.summary || "").trim();
+        if (summary) {
+          setMetarSummary({
+            payload,
+            status: "ready",
+            streamText: summary,
+          });
+        } else {
+          setMetarSummary({
+            payload,
+            status: "failed",
+            error: String(payload?.reason || payload?.status || "empty response"),
+          });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          setMetarSummary({
+            status: "failed",
+            error: String(error),
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [airport, city, deb, enabled, isEn, locale, metar, modelRange, requestKey]);
+
+  return { metarSummary };
 }
 
 export function useAiCityForecast({

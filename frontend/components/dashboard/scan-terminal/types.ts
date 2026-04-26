@@ -39,3 +39,20 @@ export type AiCityForecastState = {
   streamRaw?: string | null;
 };
 
+export type AiMetarSummaryPayload = {
+  status?: string | null;
+  summary?: string | null;
+  reason?: string | null;
+  degraded?: boolean | null;
+  duration_ms?: number | null;
+  model?: string | null;
+  provider?: string | null;
+};
+
+export type AiMetarSummaryState = {
+  status: "idle" | "loading" | "ready" | "failed";
+  payload?: AiMetarSummaryPayload | null;
+  error?: string | null;
+  streamText?: string | null;
+};
+
