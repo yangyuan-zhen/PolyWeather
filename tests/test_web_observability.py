@@ -100,6 +100,39 @@ def test_metrics_endpoint_returns_prometheus_payload():
     assert 'polyweather_http_requests_total' in response.text
 
 
+def test_city_ai_fallback_reasoning_says_ai_read_is_normal():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "Tokyo",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 17.8},
+            "model_cluster": {
+                "sources": [
+                    {"value": 17.0},
+                    {"value": 17.8},
+                    {"value": 20.6},
+                ]
+            },
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "RJTT",
+            },
+            "airport_current": {
+                "station_code": "RJTT",
+                "temp": 16.0,
+                "report_time": "21:30Z",
+                "raw_metar": "RJTT 262130Z AUTO 00000KT 9999 FEW030 16/10 Q1015",
+            },
+        },
+        locale="zh-CN",
+        reason="preview",
+    )
+
+    assert "AI 机场报文解读正常" in payload["reasoning_zh"]
+    assert "后补" not in payload["reasoning_zh"]
+    assert "AI 增强可作为后续补充" not in payload["reasoning_zh"]
+
+
 def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200
