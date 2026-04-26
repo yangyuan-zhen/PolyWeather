@@ -36,7 +36,6 @@ from web.scan_terminal_service import (
     build_scan_city_ai_forecast_payload,
     build_scan_terminal_ai_payload,
     build_scan_terminal_payload,
-    stream_metar_summary_payload,
     stream_scan_city_ai_forecast_payload,
 )
 from web.core import (
@@ -1805,25 +1804,6 @@ async def scan_terminal_ai_city_stream(request: Request):
             force_refresh=force_refresh,
             locale=locale,
         ),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-store",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@router.post("/api/ai/metar-summary")
-async def ai_metar_summary_stream(request: Request):
-    _assert_entitlement(request)
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
-    if not isinstance(body, dict):
-        raise HTTPException(status_code=400, detail="Invalid JSON body")
-    return StreamingResponse(
-        stream_metar_summary_payload(body),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-store",

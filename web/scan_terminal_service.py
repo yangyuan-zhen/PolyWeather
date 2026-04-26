@@ -53,7 +53,7 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
 )
 SCAN_AI_MODEL = str(
-    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-pro"
+    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-flash"
 ).strip()
 SCAN_CITY_AI_MODEL = str(
     os.getenv("POLYWEATHER_SCAN_CITY_AI_MODEL")
@@ -97,24 +97,6 @@ SCAN_CITY_AI_MAX_TOKENS = _env_int(
     900,
     min_value=800,
     max_value=64000,
-)
-METAR_SUMMARY_AI_MODEL = str(
-    os.getenv("POLYWEATHER_METAR_SUMMARY_AI_MODEL")
-    or os.getenv("POLYWEATHER_SCAN_CITY_AI_MODEL")
-    or os.getenv("POLYWEATHER_SCAN_AI_MODEL")
-    or "deepseek-v4-flash"
-).strip()
-METAR_SUMMARY_AI_TIMEOUT_SEC = _env_int(
-    "POLYWEATHER_METAR_SUMMARY_AI_TIMEOUT_SEC",
-    8,
-    min_value=3,
-    max_value=30,
-)
-METAR_SUMMARY_AI_MAX_TOKENS = _env_int(
-    "POLYWEATHER_METAR_SUMMARY_AI_MAX_TOKENS",
-    160,
-    min_value=80,
-    max_value=1000,
 )
 SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v3"
 
@@ -1777,177 +1759,6 @@ def _build_city_ai_stream_request(
             },
         ],
     }
-
-
-def stream_metar_summary_payload(body: Dict[str, Any]) -> Iterator[str]:
-    """Stream a tiny METAR-only AI read.
-
-    This intentionally does not share the full city-review prompt. The goal is
-    first-token speed for the "AI airport read" section, while the heavier city
-    JSON review continues separately.
-    """
-
-    started_at = time.time()
-    normalized_locale = _normalize_locale(str(body.get("locale") or "zh-CN"))
-    city = str(body.get("city") or "").strip()
-    airport = str(body.get("airport") or body.get("station") or "").strip()
-    metar = str(body.get("metar") or "").strip()
-    model_range = str(body.get("model_range") or "").strip()
-    deb = str(body.get("deb") or "").strip()
-
-    if not metar:
-        yield _sse_event(
-            "final",
-            {
-                "status": "failed",
-                "model": METAR_SUMMARY_AI_MODEL,
-                "provider": "deepseek",
-                "summary": "",
-                "reason": "metar is required",
-                "duration_ms": int((time.time() - started_at) * 1000),
-            },
-        )
-        return
-
-    yield _sse_event(
-        "progress",
-        {
-            "stage": "calling_ai",
-            "message_zh": "DeepSeek 正在快速解读当前 METAR…",
-            "message_en": "DeepSeek is quickly reading the current METAR…",
-        },
-    )
-
-    if not SCAN_AI_ENABLED:
-        yield _sse_event(
-            "final",
-            {
-                "status": "disabled",
-                "model": METAR_SUMMARY_AI_MODEL,
-                "provider": "deepseek",
-                "summary": "",
-                "reason": "POLYWEATHER_SCAN_AI_ENABLED is not enabled",
-                "duration_ms": int((time.time() - started_at) * 1000),
-            },
-        )
-        return
-    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
-        yield _sse_event(
-            "final",
-            {
-                "status": "missing_key",
-                "model": METAR_SUMMARY_AI_MODEL,
-                "provider": "deepseek",
-                "summary": "",
-                "reason": "POLYWEATHER_DEEPSEEK_API_KEY is not configured",
-                "duration_ms": int((time.time() - started_at) * 1000),
-            },
-        )
-        return
-
-    is_en = normalized_locale == "en-US"
-    system_prompt = (
-        "You are PolyWeather's fast airport-bulletin module. "
-        "Use only the current METAR, DEB and model range. "
-        "Do not output JSON. Do not repeat the full METAR. Do not predict market prices. "
-        "Keep the answer within 80 Chinese characters or 45 English words."
-        if is_en
-        else "你是 PolyWeather 的机场报文快速解读模块。"
-        "请用中文用1到2句话解读当前 METAR 对今日最高温判断的影响。"
-        "要求：只基于当前 METAR、DEB 和模型区间；不输出 JSON；不要复述完整报文；"
-        "不要预测市场价格；不超过80个中文字。"
-    )
-    user_prompt = (
-        f"City: {city or 'unknown'}\n"
-        f"Airport: {airport or 'unknown'}\n"
-        f"METAR: {metar}\n"
-        f"DEB: {deb or 'unknown'}\n"
-        f"Model range: {model_range or 'unknown'}"
-    )
-    request_json = {
-        "model": METAR_SUMMARY_AI_MODEL,
-        "temperature": 0.15,
-        "max_tokens": METAR_SUMMARY_AI_MAX_TOKENS,
-        "stream": True,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-    }
-    timeout = httpx.Timeout(
-        timeout=float(METAR_SUMMARY_AI_TIMEOUT_SEC),
-        connect=min(5.0, float(METAR_SUMMARY_AI_TIMEOUT_SEC)),
-        read=float(METAR_SUMMARY_AI_TIMEOUT_SEC),
-        write=5.0,
-        pool=3.0,
-    )
-    headers = {
-        "Authorization": f"Bearer {os.getenv('POLYWEATHER_DEEPSEEK_API_KEY')}",
-        "Content-Type": "application/json",
-    }
-    accumulated = ""
-    try:
-        logger.info(
-            "metar summary stream request city={} airport={} model={} timeout_sec={}",
-            city,
-            airport,
-            METAR_SUMMARY_AI_MODEL,
-            METAR_SUMMARY_AI_TIMEOUT_SEC,
-        )
-        with httpx.Client(timeout=timeout) as client:
-            with client.stream(
-                "POST",
-                f"{SCAN_AI_BASE_URL}/chat/completions",
-                headers=headers,
-                json=request_json,
-            ) as response:
-                response.raise_for_status()
-                for line in response.iter_lines():
-                    text = str(line or "").strip()
-                    if not text or not text.startswith("data:"):
-                        continue
-                    payload_text = text[5:].strip()
-                    if payload_text == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(payload_text)
-                    except Exception:
-                        continue
-                    delta = _extract_provider_stream_delta(chunk)
-                    if delta:
-                        accumulated += delta
-                        yield _sse_event(
-                            "delta",
-                            {
-                                "content": delta,
-                                "raw_length": len(accumulated),
-                            },
-                        )
-        summary = _truncate_ai_text(accumulated, 260)
-        yield _sse_event(
-            "final",
-            {
-                "status": "ready" if summary else "empty",
-                "model": METAR_SUMMARY_AI_MODEL,
-                "provider": "deepseek",
-                "summary": summary,
-                "duration_ms": int((time.time() - started_at) * 1000),
-            },
-        )
-    except Exception as exc:
-        summary = _truncate_ai_text(accumulated, 260)
-        yield _sse_event(
-            "final",
-            {
-                "status": "ready" if summary else "failed",
-                "degraded": bool(summary),
-                "model": METAR_SUMMARY_AI_MODEL,
-                "provider": "deepseek",
-                "summary": summary,
-                "reason": str(exc),
-                "duration_ms": int((time.time() - started_at) * 1000),
-            },
-        )
 
 
 def _cache_city_ai_payload(

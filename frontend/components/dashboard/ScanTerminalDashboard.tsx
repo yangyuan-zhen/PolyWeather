@@ -412,6 +412,17 @@ function ScanTerminalScreen() {
     );
   }, []);
 
+  const refreshAiPinnedCityDetail = useCallback(
+    async (cityName: string) => {
+      const key = normalizeCityKey(cityName);
+      if (key) {
+        aiFullHydrationRef.current.delete(key);
+      }
+      await store.ensureCityDetail(cityName, true, "full");
+    },
+    [store.ensureCityDetail],
+  );
+
   useEffect(() => {
     aiPinnedCities.forEach((item) => {
       const key = normalizeCityKey(item.cityName);
@@ -527,6 +538,7 @@ function ScanTerminalScreen() {
           rows={timeSortedRows}
           detailsByName={store.cityDetailsByName}
           locale={locale}
+          onRefreshCityDetail={refreshAiPinnedCityDetail}
           onRemoveCity={removeAiPinnedCity}
         />
       );
