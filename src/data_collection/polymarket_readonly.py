@@ -901,6 +901,8 @@ class PolymarketReadOnlyLayer:
             if reference_price is not None:
                 reference_price = max(0.0, min(1.0, float(reference_price)))
                 bucket["market_price"] = reference_price
+                if bucket.get("probability") is None:
+                    bucket["probability"] = reference_price
                 # Keep model probability separate from market-implied price.
                 # Older code overwrote ``probability`` with the quote, which made
                 # downstream UI compare a market price against itself or display
@@ -1822,6 +1824,17 @@ class PolymarketReadOnlyLayer:
         best_ask = _extract_price(payload.get("best_ask"))
         resolved_buy = best_ask if best_ask is not None else buy
         resolved_sell = best_bid if best_bid is not None else sell
+        if (
+            best_ask is None
+            and best_bid is None
+            and buy is not None
+            and sell is not None
+            and buy < sell
+        ):
+            # When no order book is available, normalize raw CLOB /price
+            # snapshots into executable semantics used by the rest of this
+            # module: buy = ask-to-buy, sell = bid-to-sell.
+            resolved_buy, resolved_sell = sell, buy
         return resolved_buy, resolved_sell
 
     def _normalize_orderbook(self, orderbook_raw: Any) -> Tuple[Optional[Dict[str, Any]], Optional[float]]:
@@ -2169,7 +2182,7 @@ class PolymarketReadOnlyLayer:
         direction = self._extract_market_bucket_direction(market)
         bucket_range = self._extract_market_bucket_range(market)
         raw_unit = bucket_range[2] if bucket_range else "C"
-        unit = "°F" if str(raw_unit).upper().endswith("F") else "°C"
+        unit = "F" if str(raw_unit).upper().endswith("F") else "°C"
         if bucket_range and bucket_range[1] is not None:
             return f"{bucket_range[0]:g}-{bucket_range[1]:g}{unit}"
         if bucket_temp is not None:
@@ -3369,6 +3382,7 @@ class PolymarketReadOnlyLayer:
                 and market_direction in {"exact", "range"}
                 and ask >= 0.80
                 and edge_percent < 10.0
+                and not (row.get("cluster_adjusted") and row.get("is_directional_candidate"))
             ):
                 return False
             if spread is None or spread > filters["max_spread"]:
