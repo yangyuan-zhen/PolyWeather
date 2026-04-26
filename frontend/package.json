@@ -1,6 +1,6 @@
 {
   "name": "polyweather-frontend",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "private": true,
   "scripts": {
     "dev": "node scripts/sync-next-server-chunks.mjs --clean-root && next dev",

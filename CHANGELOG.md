@@ -1,6 +1,6 @@
 # Changelog
 
-## snapshot-2026-04-27-calendar-local-time - 2026-04-27
+## 1.5.5 - 2026-04-27
 
 - 城市决策卡新增 AI 机场报文解读缓存说明：页面内存缓存保留 loading / 流式片段 / 最终结果，`localStorage` 保存最终成功 payload，后端 AI 缓存不再因 `local_time` 变化失效
 - 城市决策卡兜底文案明确为“AI 机场报文解读正常”，不再使用“AI 增强可后补 / 不阻塞”这类容易被误解为 AI 未解读的表述
