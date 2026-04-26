@@ -54,6 +54,22 @@ _GROQ_COMMENTARY_CACHE_TTL_SEC = int(
 )
 
 
+def _dedupe_forecast_daily(rows: Any) -> list[Dict[str, Any]]:
+    if not isinstance(rows, list):
+        return []
+    seen = set()
+    out = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        date = str(row.get("date") or "").strip()
+        if not date or date in seen:
+            continue
+        seen.add(date)
+        out.append(row)
+    return out
+
+
 def _format_observation_time_local(value: Any, utc_offset: int) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -1810,7 +1826,9 @@ def _analyze(
     sunshine = daily.get("sunshine_duration", [])
     om_today = _sf(maxtemps[0]) if maxtemps else None
 
-    forecast_daily = [{"date": d, "max_temp": t} for d, t in zip(dates, maxtemps)]
+    forecast_daily = _dedupe_forecast_daily(
+        [{"date": d, "max_temp": t} for d, t in zip(dates, maxtemps)]
+    )
     if om_today is None:
         nws_high = _sf(raw.get("nws", {}).get("today_high"))
         mgm_high = _sf(mgm.get("today_high")) if mgm else None

@@ -285,7 +285,33 @@ function countAvailableModels(
 
 function countForecastDays(detail?: CityDetail | null): number {
   const daily = detail?.forecast?.daily;
-  return Array.isArray(daily) ? daily.length : 0;
+  if (!Array.isArray(daily)) return 0;
+  return new Set(
+    daily
+      .map((day) => String(day?.date || "").trim())
+      .filter(Boolean),
+  ).size;
+}
+
+function normalizeCityLookupKey(value?: string | null): string {
+  return String(value || "").trim().toLowerCase();
+}
+
+function findCachedCityDetail(
+  detailsByName: Record<string, CityDetail>,
+  cityName?: string | null,
+) {
+  const key = normalizeCityLookupKey(cityName);
+  if (!key) return null;
+  return (
+    detailsByName[cityName || ""] ||
+    Object.entries(detailsByName).find(([storedName, detail]) =>
+      [storedName, detail?.name, detail?.display_name].some(
+        (value) => normalizeCityLookupKey(value) === key,
+      ),
+    )?.[1] ||
+    null
+  );
 }
 
 function hasSparseModelCoverage(
@@ -402,10 +428,21 @@ function pickRicherForecast(
   currentValue: CityDetail["forecast"] | undefined,
   incomingValue: CityDetail["forecast"] | undefined,
 ) {
-  return countForecastDays({ forecast: incomingValue } as CityDetail) >=
+  const picked = countForecastDays({ forecast: incomingValue } as CityDetail) >=
     countForecastDays({ forecast: currentValue } as CityDetail)
     ? incomingValue || currentValue
     : currentValue;
+  if (!picked?.daily || !Array.isArray(picked.daily)) return picked;
+  const seen = new Set<string>();
+  return {
+    ...picked,
+    daily: picked.daily.filter((day) => {
+      const date = String(day?.date || "").trim();
+      if (!date || seen.has(date)) return false;
+      seen.add(date);
+      return true;
+    }),
+  };
 }
 
 function pickPreferredNearbyStations(
@@ -562,7 +599,9 @@ export function DashboardStoreProvider({
   const citiesRef = useRef<CityListItem[]>([]);
   const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedCityRef = useRef<string | null>(null);
-  const selectedDetail = selectedCity ? cityDetailsByName[selectedCity] || null : null;
+  const selectedDetail = selectedCity
+    ? findCachedCityDetail(cityDetailsByName, selectedCity)
+    : null;
   useEffect(() => {
     if (proAccess.loading) return;
     if (!proAccess.authenticated || !proAccess.subscriptionActive) {
@@ -635,7 +674,7 @@ export function DashboardStoreProvider({
     force = false,
     depth: CityDetailDepth = "panel",
   ) => {
-    const cached = cityDetailsByName[cityName];
+    const cached = findCachedCityDetail(cityDetailsByName, cityName);
     const cachedMeta = cityDetailMetaByName[cityName];
     const marketTargetDate =
       depth === "market" ? selectedForecastDate || cached?.local_date : null;
@@ -713,7 +752,7 @@ export function DashboardStoreProvider({
       targetDate?: string | null;
     },
   ) => {
-    let cached = cityDetailsByName[cityName];
+    let cached = findCachedCityDetail(cityDetailsByName, cityName);
     try {
       if (!cached) {
         cached = await ensureCityDetail(cityName, false, "panel");
@@ -748,7 +787,7 @@ export function DashboardStoreProvider({
     if (proAccess.loading) return;
     if (!selectedCity) return;
     if (!isPanelOpen) return;
-    if (cityDetailsByName[selectedCity]) return;
+    if (findCachedCityDetail(cityDetailsByName, selectedCity)) return;
 
     let cancelled = false;
     setLoadingState((current) => ({ ...current, cityDetail: true }));
@@ -1026,7 +1065,7 @@ export function DashboardStoreProvider({
 
   const selectCity = async (cityName: string) => {
     const wasSelectedCity = selectedCityRef.current === cityName;
-    const cached = cityDetailsByName[cityName];
+    const cached = findCachedCityDetail(cityDetailsByName, cityName);
     selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(true);
@@ -1073,7 +1112,7 @@ export function DashboardStoreProvider({
   };
 
   const focusCity = async (cityName: string) => {
-    const cached = cityDetailsByName[cityName];
+    const cached = findCachedCityDetail(cityDetailsByName, cityName);
     selectedCityRef.current = cityName;
     setSelectedCity(cityName);
     setIsPanelOpen(false);
@@ -1328,7 +1367,7 @@ export function DashboardStoreProvider({
         const isLatestModalRequest = () =>
           modalOpenSeqRef.current === modalSeq &&
           selectedCityRef.current === cityName;
-        let cachedDetail = cityDetailsByName[selectedCity];
+        let cachedDetail = findCachedCityDetail(cityDetailsByName, selectedCity);
         if (!cachedDetail) {
           setLoadingState((current) => ({ ...current, cityDetail: true }));
           try {
@@ -1382,7 +1421,7 @@ export function DashboardStoreProvider({
         const isLatestModalRequest = () =>
           modalOpenSeqRef.current === modalSeq &&
           selectedCityRef.current === cityName;
-        let cachedDetail = cityDetailsByName[cityName];
+        let cachedDetail = findCachedCityDetail(cityDetailsByName, cityName);
         if (!cachedDetail) {
           setLoadingState((current) => ({ ...current, cityDetail: true }));
           try {
@@ -1494,7 +1533,7 @@ export function useCityData(name?: string | null) {
   const store = useDashboardStore();
   const key = name || store.selectedCity;
   return {
-    data: key ? store.cityDetailsByName[key] || null : null,
+    data: key ? findCachedCityDetail(store.cityDetailsByName, key) : null,
     isLoading:
       store.loadingState.cityDetail &&
       Boolean(key) &&

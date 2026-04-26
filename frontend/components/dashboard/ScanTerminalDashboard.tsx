@@ -1635,7 +1635,7 @@ function ScanTerminalScreen() {
 
   useEffect(() => {
     if (!activeDetailRow) return;
-    if (!store.cityDetailsByName[activeDetailRow.city]) {
+    if (!findDetailForCity(store.cityDetailsByName, activeDetailRow.city)) {
       void store.ensureCityDetail(activeDetailRow.city, false, "panel").catch(() => {});
     }
   }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
@@ -1765,7 +1765,7 @@ function ScanTerminalScreen() {
     const selectedCityKey = normalizeCityKey(store.selectedCity);
     const rowCityKey = normalizeCityKey(cityName);
     const hasCachedDetail =
-      Boolean(store.cityDetailsByName[cityName]) ||
+      Boolean(findDetailForCity(store.cityDetailsByName, cityName)) ||
       Object.values(store.cityDetailsByName).some((detail) =>
         rowMatchesCity(row, detail?.name || detail?.display_name || ""),
       );

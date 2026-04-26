@@ -765,8 +765,15 @@ export function getTemperatureChartData(
   locale: Locale = "zh-CN",
 ) {
   const hourly = detail.hourly || {};
-  const times = hourly.times || [];
-  const temps = hourly.temps || [];
+  const rawTimes = Array.isArray(hourly.times) ? hourly.times : [];
+  const rawTemps = Array.isArray(hourly.temps) ? hourly.temps : [];
+  const times = rawTimes
+    .map((time) => String(time || "").trim())
+    .filter(Boolean);
+  const temps = times.map((_, index) => {
+    const value = Number(rawTemps[index]);
+    return Number.isFinite(value) ? value : null;
+  });
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (!times.length) return null;
@@ -777,7 +784,9 @@ export function getTemperatureChartData(
   const offset =
     debMax != null && omMax != null ? Number(debMax) - Number(omMax) : 0;
   const debTemps = temps.map((temp) =>
-    temp != null ? Number((temp + offset).toFixed(1)) : null,
+    temp != null && Number.isFinite(temp)
+      ? Number((temp + offset).toFixed(1))
+      : null,
   );
   const debPast = debTemps.map((temp, index) =>
     currentIndex >= 0 && index <= currentIndex ? temp : null,
@@ -889,23 +898,23 @@ export function getTemperatureChartData(
   const metarPoints = new Array(times.length).fill(null);
   observationSource.forEach((item) => {
     const index = findNearestTimeIndex(times, String(item.time || ""));
-    const temp = item.temp ?? null;
-    if (index >= 0 && temp != null) {
+    const temp = Number(item.temp);
+    if (index >= 0 && Number.isFinite(temp)) {
       const existing = metarPoints[index];
       // Multiple reports can land in the same hour bucket. Keep the peak
       // value so an intrahour high is not hidden by a later weaker report.
       metarPoints[index] =
-        existing == null ? temp : Math.max(Number(existing), Number(temp));
+        existing == null ? temp : Math.max(Number(existing), temp);
     }
   });
   const airportMetarPoints = new Array(times.length).fill(null);
   airportMetarSource.forEach((item) => {
     const index = findNearestTimeIndex(times, String(item.time || ""));
-    const temp = item.temp ?? null;
-    if (index >= 0 && temp != null) {
+    const temp = Number(item.temp);
+    if (index >= 0 && Number.isFinite(temp)) {
       const existing = airportMetarPoints[index];
       airportMetarPoints[index] =
-        existing == null ? temp : Math.max(Number(existing), Number(temp));
+        existing == null ? temp : Math.max(Number(existing), temp);
     }
   });
 
@@ -916,17 +925,22 @@ export function getTemperatureChartData(
     detail.mgm?.time
   ) {
     const index = findNearestTimeIndex(times, detail.mgm.time);
-    if (index >= 0) {
-      mgmPoints[index] = detail.mgm.temp;
+    const temp = Number(detail.mgm.temp);
+    if (index >= 0 && Number.isFinite(temp)) {
+      mgmPoints[index] = temp;
     }
   }
 
   const mgmHourlyPoints = new Array(times.length).fill(null);
   let hasMgmHourly = false;
-  detail.mgm?.hourly?.forEach((item) => {
+  const mgmHourlyRows = Array.isArray(detail.mgm?.hourly)
+    ? detail.mgm?.hourly || []
+    : [];
+  mgmHourlyRows.forEach((item) => {
     const index = findNearestTimeIndex(times, String(item.time || ""));
-    if (index >= 0) {
-      mgmHourlyPoints[index] = item.temp ?? null;
+    const temp = Number(item.temp);
+    if (index >= 0 && Number.isFinite(temp)) {
+      mgmHourlyPoints[index] = temp;
       hasMgmHourly = true;
     }
   });

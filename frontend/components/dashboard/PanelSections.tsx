@@ -1491,9 +1491,20 @@ export function ForecastTable() {
   const store = useDashboardStore();
   const { data } = useCityData();
   const { locale, t } = useI18n();
+  const daily = useMemo(() => {
+    if (!data) return [];
+    const rawDaily = Array.isArray(data.forecast?.daily)
+      ? data.forecast?.daily || []
+      : [];
+    const seen = new Set<string>();
+    return rawDaily.filter((day) => {
+      const date = String(day?.date || "").trim();
+      if (!date || seen.has(date)) return false;
+      seen.add(date);
+      return true;
+    });
+  }, [data]);
   if (!data) return null;
-
-  const daily = data.forecast?.daily || [];
   const isSparseDaily = daily.length <= 1;
   const isForecastCompleting =
     store.loadingState.cityDetail &&
@@ -1525,7 +1536,9 @@ export function ForecastTable() {
         ) : (
           daily
             .map((day, index) => {
-              const isToday = day.date === data.local_date || index === 0;
+              const isToday = data.local_date
+                ? day.date === data.local_date
+                : index === 0;
               const isSelected =
                 (isToday &&
                   store.forecastModalMode === "today" &&
