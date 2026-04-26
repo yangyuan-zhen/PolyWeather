@@ -5,7 +5,11 @@ import { ChevronDown, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ModelForecast } from "@/components/dashboard/PanelSections";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
-import { buildMarketDecisionView, buildWeatherDecisionView } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
+import {
+  buildMarketDecisionView,
+  buildWeatherDecisionView,
+  resolveExpectedHighCandidate,
+} from "@/components/dashboard/scan-terminal/city-card-decision-utils";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import { findRowForCity, getPeakWindowLabel, normalizeCityKey } from "@/components/dashboard/scan-terminal/decision-utils";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
@@ -127,6 +131,8 @@ function AiPinnedCityCard({
     detail?.current?.temp ??
     row?.current_temp ??
     null;
+  const debNumber = toFiniteDecisionNumber(deb);
+  const currentTempNumber = toFiniteDecisionNumber(currentTemp);
   const modelRange =
     modelMin != null && modelMax != null
       ? `${formatTemperatureValue(modelMin, tempSymbol, { digits: 1 })} ~ ${formatTemperatureValue(modelMax, tempSymbol, { digits: 1 })}`
@@ -206,15 +212,18 @@ function AiPinnedCityCard({
       ? "Model support is unavailable, so this city must rely on DEB path and METAR observations."
       : "暂无可用多模型支撑，需要主要参考 DEB 路径和 METAR 实测。";
   const aiPredictedMax = toFiniteDecisionNumber(aiCityForecast?.predicted_max);
-  const decisionExpectedHighNumber = aiPredictedMax != null
-    ? aiPredictedMax
-    : paceView?.paceAdjustedHigh != null
-      ? paceView.paceAdjustedHigh
-      : deb;
+  const decisionExpectedHighNumber = resolveExpectedHighCandidate({
+    aiPredictedMax,
+    currentTemp: currentTempNumber,
+    deb: debNumber,
+    modelMax,
+    modelMin,
+    paceAdjustedHigh: paceView?.paceAdjustedHigh ?? null,
+  });
   const decisionView = buildWeatherDecisionView({
     aiCityForecast,
-    currentTemp,
-    deb,
+    currentTemp: currentTempNumber,
+    deb: debNumber,
     isEn,
     localModelSupportNote,
     modelEntries,
@@ -264,8 +273,8 @@ function AiPinnedCityCard({
             <span>{detail?.local_time || row?.local_time || "--"}</span>
             <span>
               DEB{" "}
-              {deb != null
-                ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
+              {debNumber != null
+                ? formatTemperatureValue(debNumber, tempSymbol, { digits: 1 })
                 : "--"}
             </span>
             <span>{isEn ? "Model" : "模型"} {modelRange}</span>
@@ -275,11 +284,9 @@ function AiPinnedCityCard({
         <div className="scan-ai-city-hero-side">
           <span>{isEn ? "Expected high" : "预计最高温"}</span>
           <strong>
-            {paceView?.paceAdjustedHigh != null
-              ? formatTemperatureValue(paceView.paceAdjustedHigh, tempSymbol, { digits: 1 })
-              : deb != null
-                ? formatTemperatureValue(deb, tempSymbol, { digits: 1 })
-                : "--"}
+            {decisionExpectedHighNumber != null
+              ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
+              : "--"}
           </strong>
           <div className="scan-ai-city-actions">
             <button
@@ -384,8 +391,8 @@ function AiPinnedCityCard({
               <span>
                 {isEn ? "Observed" : "实测"}
                 <b>
-                  {currentTemp != null
-                    ? formatTemperatureValue(currentTemp, tempSymbol, { digits: 1 })
+                  {currentTempNumber != null
+                    ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
                     : "--"}
                 </b>
               </span>

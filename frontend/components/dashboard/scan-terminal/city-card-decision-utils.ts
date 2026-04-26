@@ -47,6 +47,52 @@ function toFiniteMarketNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function hasReasonableTemperatureValue(value: number | null): value is number {
+  return value != null && Number.isFinite(value) && value > -130 && value < 150;
+}
+
+function isPlausibleExpectedHigh(
+  value: number | null,
+  references: Array<number | null>,
+) {
+  if (!hasReasonableTemperatureValue(value)) return false;
+  const usableReferences = references.filter(hasReasonableTemperatureValue);
+  if (!usableReferences.length) return true;
+  const referenceMin = Math.min(...usableReferences);
+  const referenceMax = Math.max(...usableReferences);
+  return value >= referenceMin - 6 && value <= referenceMax + 6;
+}
+
+export function resolveExpectedHighCandidate({
+  aiPredictedMax,
+  currentTemp,
+  deb,
+  modelMax,
+  modelMin,
+  paceAdjustedHigh,
+}: {
+  aiPredictedMax?: unknown;
+  currentTemp?: number | null;
+  deb?: number | null;
+  modelMax?: number | null;
+  modelMin?: number | null;
+  paceAdjustedHigh?: number | null;
+}) {
+  const ai = toFiniteMarketNumber(aiPredictedMax);
+  const modelCenter =
+    modelMin != null && modelMax != null
+      ? (modelMin + modelMax) / 2
+      : null;
+  const references = [deb ?? null, modelMin ?? null, modelMax ?? null, currentTemp ?? null];
+  const candidates = [ai, deb ?? null, paceAdjustedHigh ?? null, modelCenter, currentTemp ?? null];
+  for (const candidate of candidates) {
+    if (isPlausibleExpectedHigh(candidate, references)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
 export function formatMarketPercent(value: number | null, digits = 1) {
   if (value == null || !Number.isFinite(value)) return "--";
   return `${(value * 100).toFixed(digits)}%`;
@@ -388,12 +434,14 @@ export function buildWeatherDecisionView({
   peakWindow: string;
   tempSymbol: string;
 }): WeatherDecisionView {
-  const aiPredictedMax = toFiniteMarketNumber(aiCityForecast?.predicted_max);
-  const center = aiPredictedMax != null
-    ? aiPredictedMax
-    : paceView?.paceAdjustedHigh != null
-      ? paceView.paceAdjustedHigh
-      : deb;
+  const center = resolveExpectedHighCandidate({
+    aiPredictedMax: aiCityForecast?.predicted_max,
+    currentTemp,
+    deb,
+    modelMax,
+    modelMin,
+    paceAdjustedHigh: paceView?.paceAdjustedHigh ?? null,
+  });
   const aiLow = toFiniteMarketNumber(aiCityForecast?.range_low);
   const aiHigh = toFiniteMarketNumber(aiCityForecast?.range_high);
   const low = aiLow != null
