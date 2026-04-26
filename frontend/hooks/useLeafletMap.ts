@@ -57,14 +57,16 @@ function getMarkerDisplayOffset(cityName: string) {
   };
 }
 
-function getMapTileUrl() {
+function getMapTileUrl(container?: Element | null) {
   if (typeof document === "undefined") {
     return MAP_TILE_URLS.dark;
   }
 
   const lightMode =
+    Boolean(container?.closest(".light")) ||
     document.documentElement.classList.contains("light") ||
     document.body.classList.contains("light") ||
+    Boolean(document.querySelector(`.${CSS.escape("light")}`)) ||
     Boolean(document.querySelector(".scan-terminal.light"));
   if (lightMode) {
     return MAP_TILE_URLS.light;
@@ -518,7 +520,7 @@ export function useLeafletMap({
     });
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
-    const tileLayer = L.tileLayer(getMapTileUrl(), {
+    const tileLayer = L.tileLayer(getMapTileUrl(container), {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
       maxZoom: 19,
@@ -599,7 +601,7 @@ export function useLeafletMap({
     if (!tileLayer || typeof MutationObserver === "undefined") return;
 
     const syncMapTheme = () => {
-      tileLayer.setUrl(getMapTileUrl());
+      tileLayer.setUrl(getMapTileUrl(containerRef.current));
     };
     syncMapTheme();
 

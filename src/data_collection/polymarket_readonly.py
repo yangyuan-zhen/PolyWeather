@@ -1749,12 +1749,19 @@ class PolymarketReadOnlyLayer:
 
     def _fetch_token_market_data(self, token_id: str) -> Dict[str, Any]:
         # REST-only path: CLOB public endpoints.
-        bid = _extract_price(self._clob_get("/price", {"token_id": token_id, "side": "BUY"}))
-        ask = _extract_price(
+        # Polymarket CLOB semantics:
+        # - side=BUY returns the executable ask, i.e. the price paid to buy.
+        # - side=SELL returns the executable bid, i.e. the price received to sell.
+        buy_price = _extract_price(self._clob_get("/price", {"token_id": token_id, "side": "BUY"}))
+        sell_price = _extract_price(
             self._clob_get("/price", {"token_id": token_id, "side": "SELL"})
         )
         if self.fast_price_only:
-            buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=None)
+            buy, sell = self._resolve_trade_prices(
+                buy=buy_price,
+                sell=sell_price,
+                book=None,
+            )
             midpoint = (buy + sell) / 2.0 if buy is not None and sell is not None else (buy or sell)
             spread = max(0.0, float(buy) - float(sell)) if buy is not None and sell is not None else None
             return {
@@ -1775,7 +1782,11 @@ class PolymarketReadOnlyLayer:
         )
         orderbook_raw = self._clob_get("/book", {"token_id": token_id})
         book, book_liquidity = self._normalize_orderbook(orderbook_raw)
-        buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=book)
+        buy, sell = self._resolve_trade_prices(
+            buy=buy_price,
+            sell=sell_price,
+            book=book,
+        )
         if midpoint is None and buy is not None and sell is not None:
             midpoint = (buy + sell) / 2.0
         spread = max(0.0, float(buy) - float(sell)) if buy is not None and sell is not None else None
@@ -2366,21 +2377,21 @@ class PolymarketReadOnlyLayer:
         if not missing:
             return results
 
-        ask_map: Dict[str, float] = {}
-        bid_map: Dict[str, float] = {}
+        buy_map: Dict[str, float] = {}
+        sell_map: Dict[str, float] = {}
         midpoint_map: Dict[str, float] = {}
         spread_map: Dict[str, float] = {}
         last_trade_map: Dict[str, float] = {}
         book_map: Dict[str, Dict[str, Any]] = {}
 
         for chunk in self._batch_chunks(missing):
-            sell_payload = self._clob_post(
-                "/prices",
-                [{"token_id": token_id, "side": "SELL"} for token_id in chunk],
-            )
             buy_payload = self._clob_post(
                 "/prices",
                 [{"token_id": token_id, "side": "BUY"} for token_id in chunk],
+            )
+            sell_payload = self._clob_post(
+                "/prices",
+                [{"token_id": token_id, "side": "SELL"} for token_id in chunk],
             )
             midpoint_payload = (
                 self._clob_post(
@@ -2414,8 +2425,8 @@ class PolymarketReadOnlyLayer:
                 if include_books and not self.fast_price_only
                 else None
             )
-            ask_map.update(self._extract_batch_price_map(sell_payload, "SELL"))
-            bid_map.update(self._extract_batch_price_map(buy_payload, "BUY"))
+            buy_map.update(self._extract_batch_price_map(buy_payload, "BUY"))
+            sell_map.update(self._extract_batch_price_map(sell_payload, "SELL"))
             midpoint_map.update(self._extract_batch_scalar_map(midpoint_payload))
             spread_map.update(self._extract_batch_scalar_map(spread_payload))
             last_trade_map.update(self._extract_batch_scalar_map(last_trade_payload))
@@ -2427,13 +2438,17 @@ class PolymarketReadOnlyLayer:
         for token_id in missing:
             raw_book = book_map.get(token_id)
             book, book_liquidity = self._normalize_orderbook(raw_book)
-            ask = _extract_price(ask_map.get(token_id))
-            bid = _extract_price(bid_map.get(token_id))
+            buy_price = _extract_price(buy_map.get(token_id))
+            sell_price = _extract_price(sell_map.get(token_id))
             midpoint = _extract_price(midpoint_map.get(token_id))
             spread = _extract_price(spread_map.get(token_id))
             last_trade = _extract_price(last_trade_map.get(token_id))
 
-            buy, sell = self._resolve_trade_prices(buy=ask, sell=bid, book=book)
+            buy, sell = self._resolve_trade_prices(
+                buy=buy_price,
+                sell=sell_price,
+                book=book,
+            )
             if midpoint is None and buy is not None and sell is not None:
                 midpoint = (buy + sell) / 2.0
             if midpoint is None:

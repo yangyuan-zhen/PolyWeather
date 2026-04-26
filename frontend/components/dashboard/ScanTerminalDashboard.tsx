@@ -78,6 +78,18 @@ function ScanTerminalScreen() {
   const aiHydrationQueueRef = useRef<string[]>([]);
   const aiHydrationRunningRef = useRef(false);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    const hadLight = root.classList.contains("light");
+    const hadDark = root.classList.contains("dark");
+    root.classList.toggle("light", themeMode === "light");
+    root.classList.toggle("dark", themeMode === "dark");
+    return () => {
+      root.classList.toggle("light", hadLight);
+      root.classList.toggle("dark", hadDark);
+    };
+  }, [themeMode]);
+
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(terminalData?.rows || []),
     [terminalData?.rows],
@@ -537,7 +549,7 @@ function ScanTerminalScreen() {
 
   if (store.proAccess.loading) {
     return (
-      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
+      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
         <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
           <main className="scan-data-grid">
             <div className="scan-loading-state">
@@ -557,7 +569,7 @@ function ScanTerminalScreen() {
   }
 
   return (
-    <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root)}>
+    <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
         <main className="scan-data-grid">
           <div className="scan-topbar">
