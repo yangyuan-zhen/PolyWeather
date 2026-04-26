@@ -58,10 +58,15 @@ function getMarkerDisplayOffset(cityName: string) {
 }
 
 function getMapTileUrl() {
-  if (
-    typeof document !== "undefined" &&
-    document.documentElement.classList.contains("light")
-  ) {
+  if (typeof document === "undefined") {
+    return MAP_TILE_URLS.dark;
+  }
+
+  const lightMode =
+    document.documentElement.classList.contains("light") ||
+    document.body.classList.contains("light") ||
+    Boolean(document.querySelector(".scan-terminal.light"));
+  if (lightMode) {
     return MAP_TILE_URLS.light;
   }
   return MAP_TILE_URLS.dark;
@@ -603,6 +608,13 @@ export function useLeafletMap({
       attributeFilter: ["class"],
       attributes: true,
     });
+    if (document.body) {
+      observer.observe(document.body, {
+        attributeFilter: ["class"],
+        attributes: true,
+        subtree: true,
+      });
+    }
 
     return () => observer.disconnect();
   }, []);

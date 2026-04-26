@@ -23,6 +23,62 @@ function toFiniteDecisionNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function parseEpochMs(value: unknown) {
+  if (value == null || value === "") return null;
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.getTime();
+}
+
+function formatMetarReportTime(detail: CityDetail | null, report: string, isEn: boolean) {
+  const offsetSeconds = Number(detail?.utc_offset_seconds);
+  const epochMs =
+    parseEpochMs(detail?.airport_current?.report_time) ??
+    parseEpochMs(detail?.airport_current?.obs_time_epoch) ??
+    parseEpochMs(detail?.airport_current?.obs_time) ??
+    parseEpochMs(detail?.current?.report_time) ??
+    parseEpochMs(detail?.current?.obs_time_epoch) ??
+    parseEpochMs(detail?.current?.obs_time);
+  if (epochMs != null) {
+    const utc = new Date(epochMs);
+    const zText = `${String(utc.getUTCHours()).padStart(2, "0")}:${String(
+      utc.getUTCMinutes(),
+    ).padStart(2, "0")}Z`;
+    if (Number.isFinite(offsetSeconds)) {
+      const local = new Date(epochMs + offsetSeconds * 1000);
+      const localText = `${String(local.getUTCHours()).padStart(2, "0")}:${String(
+        local.getUTCMinutes(),
+      ).padStart(2, "0")}`;
+      return isEn ? `${zText} / local ${localText}` : `${zText} / 当地 ${localText}`;
+    }
+    return zText;
+  }
+
+  const rawToken = String(report || "").match(/\b(\d{2})(\d{2})(\d{2})Z\b/i);
+  if (!rawToken) return "";
+  const zText = `${rawToken[2]}:${rawToken[3]}Z`;
+  if (!Number.isFinite(offsetSeconds)) return zText;
+  const utcMinutes = Number(rawToken[2]) * 60 + Number(rawToken[3]);
+  if (!Number.isFinite(utcMinutes)) return zText;
+  const localMinutes = Math.round(
+    ((utcMinutes + offsetSeconds / 60) % 1440 + 1440) % 1440,
+  );
+  const localText = `${String(Math.floor(localMinutes / 60)).padStart(2, "0")}:${String(
+    localMinutes % 60,
+  ).padStart(2, "0")}`;
+  return isEn ? `${zText} / local ${localText}` : `${zText} / 当地 ${localText}`;
+}
+
+function normalizeMetarReadTime(text: string, displayTime: string, isEn: boolean) {
+  if (!text || !displayTime) return text;
+  const timeLabel = isEn ? `report time ${displayTime}` : `报文时间 ${displayTime}`;
+  return text
+    .replace(/报文时间\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gi, timeLabel)
+    .replace(/report time\s*\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gi, timeLabel)
+    .replace(/\bat\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/gi, `at ${displayTime}`);
+}
+
 function AiPinnedCityCard({
   item,
   detail,
@@ -82,6 +138,7 @@ function AiPinnedCityCard({
       ? "Waiting for intraday observations to compare against the DEB path."
       : "等待更多日内实测，用来对照 DEB 预测路径。");
   const report = detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
+  const metarReportTimeDisplay = formatMetarReportTime(detail, report, isEn);
   const airportStation =
     detail?.risk?.icao ||
     detail?.current?.station_code ||
@@ -104,16 +161,31 @@ function AiPinnedCityCard({
   });
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
-  const localizedFinalJudgment =
+  const localizedFinalJudgmentRaw =
     (isEn ? aiCityForecast?.final_judgment_en : aiCityForecast?.final_judgment_zh) ||
     (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
     "";
-  const localizedMetarRead =
+  const localizedMetarReadRaw =
     (isEn ? aiCityForecast?.metar_read_en : aiCityForecast?.metar_read_zh) ||
     "";
-  const localizedReasoning =
+  const localizedReasoningRaw =
     (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
     "";
+  const localizedFinalJudgment = normalizeMetarReadTime(
+    localizedFinalJudgmentRaw,
+    metarReportTimeDisplay,
+    isEn,
+  );
+  const localizedMetarRead = normalizeMetarReadTime(
+    localizedMetarReadRaw,
+    metarReportTimeDisplay,
+    isEn,
+  );
+  const localizedReasoning = normalizeMetarReadTime(
+    localizedReasoningRaw,
+    metarReportTimeDisplay,
+    isEn,
+  );
   const localizedModelNote =
     (isEn
       ? aiCityForecast?.model_cluster_note_en
@@ -349,13 +421,11 @@ function AiPinnedCityCard({
                         ? "Deepseek V4 pro is reading the latest airport bulletin..."
                         : "Deepseek V4 pro 正在解读最新机场报文...")}
                   </p>
-                  {aiForecast.streamText ? (
-                    <p className="scan-ai-city-muted">
-                      {isEn
-                        ? "Streaming airport read; final forecast is still being completed..."
-                        : "机场报文解读正在流式输出，最终预报结论仍在补全..."}
-                    </p>
-                  ) : null}
+                  <p className="scan-ai-city-muted">
+                    {isEn
+                      ? "Non-streaming mode is enabled to avoid truncated airport reads."
+                      : "已停用流式输出，改用非流式 JSON 请求，避免报文解读被截断。"}
+                  </p>
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>

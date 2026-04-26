@@ -96,6 +96,16 @@ function getBucketAnchor(bucket: MarketTopBucket) {
   return toFiniteMarketNumber(bucket.temp ?? bucket.value ?? bucket.lower);
 }
 
+function getRoundedWeatherBucketValue(
+  expectedHigh: number | null,
+  tempSymbol: string,
+  bucket: MarketTopBucket,
+) {
+  const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, bucket);
+  if (comparable == null || !Number.isFinite(comparable)) return null;
+  return Math.round(comparable);
+}
+
 function getBucketModelProbability(bucket?: MarketTopBucket | null) {
   const model = normalizeMarketProbability(bucket?.model_probability);
   const probability = normalizeMarketProbability(bucket?.probability);
@@ -164,24 +174,33 @@ export function pickMarketBucketForWeatherCenter(
     return isReasonableFallback(selectedBucket) ? selectedBucket : null;
   }
 
+  let roundedMatch: MarketTopBucket | null = null;
   let nearest: MarketTopBucket | null = null;
   let nearestDelta = Number.POSITIVE_INFINITY;
   for (const bucket of buckets) {
     const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, bucket);
     if (comparable == null) continue;
+    const roundedTarget = getRoundedWeatherBucketValue(expectedHigh, tempSymbol, bucket);
     const lower = bucket.lower != null ? Number(bucket.lower) : null;
     const upper = bucket.upper != null ? Number(bucket.upper) : null;
+    const anchor = getBucketAnchor(bucket);
+    if (anchor != null && roundedTarget != null && Math.round(anchor) === roundedTarget) {
+      roundedMatch = bucket;
+      break;
+    }
     if (
+      roundedMatch == null &&
       lower != null &&
       upper != null &&
       Number.isFinite(lower) &&
       Number.isFinite(upper) &&
-      comparable >= lower - 0.01 &&
-      comparable <= upper + 0.01
+      roundedTarget != null &&
+      roundedTarget >= lower - 0.01 &&
+      roundedTarget <= upper + 0.01
     ) {
-      return bucket;
+      roundedMatch = bucket;
+      break;
     }
-    const anchor = getBucketAnchor(bucket);
     if (anchor == null) continue;
     const delta = Math.abs(anchor - comparable);
     if (delta < nearestDelta) {
@@ -189,6 +208,7 @@ export function pickMarketBucketForWeatherCenter(
       nearestDelta = delta;
     }
   }
+  if (roundedMatch) return roundedMatch;
   if (!nearest) return isReasonableFallback(selectedBucket) ? selectedBucket : null;
   const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, nearest);
   const unit = String(nearest.unit || "").toUpperCase();
