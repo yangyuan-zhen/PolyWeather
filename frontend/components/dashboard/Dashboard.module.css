@@ -11682,6 +11682,12 @@
   height: 260px;
 }
 
+.root :global(.scan-ai-city-chart canvas) {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 .root :global(.scan-ai-city-chart-legend) {
   display: flex;
   gap: 14px;

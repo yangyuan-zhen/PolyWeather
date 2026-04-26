@@ -1,17 +1,86 @@
 import type { ChartConfiguration } from "chart.js";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { BarChart3 } from "lucide-react";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { useChart } from "@/hooks/useChart";
 import { useI18n } from "@/hooks/useI18n";
 import { getTemperatureChartData } from "@/lib/dashboard-utils";
 
+type TemperatureChartData = NonNullable<ReturnType<typeof getTemperatureChartData>>;
+
+function compactSeries<T extends { time?: string | null; temp?: number | null }>(
+  rows?: T[] | null,
+) {
+  return (Array.isArray(rows) ? rows : [])
+    .map((row) => `${String(row?.time || "").trim()}=${Number(row?.temp)}`)
+    .join("|");
+}
+
+function buildTemperatureChartSignature(detail: CityDetail) {
+  const hourly = detail.hourly || {};
+  const mgmHourly = Array.isArray(detail.mgm?.hourly) ? detail.mgm?.hourly || [] : [];
+  const tafMarkers = Array.isArray(detail.taf?.signal?.markers)
+    ? detail.taf?.signal?.markers || []
+    : [];
+  return [
+    detail.name,
+    detail.local_date,
+    detail.temp_symbol,
+    (hourly.times || []).join("|"),
+    (hourly.temps || []).map((value) => Number(value)).join("|"),
+    detail.forecast?.today_high ?? "",
+    detail.deb?.prediction ?? "",
+    detail.mgm?.temp ?? "",
+    detail.mgm?.time ?? "",
+    mgmHourly
+      .map((row) => `${String(row?.time || "").trim()}=${Number(row?.temp)}`)
+      .join("|"),
+    compactSeries(detail.metar_today_obs),
+    compactSeries(detail.settlement_today_obs),
+    compactSeries(detail.trend?.recent),
+    detail.current?.temp ?? "",
+    detail.current?.obs_time ?? "",
+    detail.airport_current?.temp ?? "",
+    detail.airport_current?.obs_time ?? "",
+    detail.peak?.first_h ?? "",
+    detail.peak?.last_h ?? "",
+    tafMarkers
+      .map((marker) =>
+        [
+          marker?.marker_type,
+          marker?.label_time,
+          marker?.start_local,
+          marker?.end_local,
+          marker?.summary_zh,
+          marker?.summary_en,
+        ]
+          .map((value) => String(value || "").trim())
+          .join("="),
+      )
+      .join("|"),
+  ].join("::");
+}
+
 export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale } = useI18n();
-  const chartData = useMemo(
+  const cityKey = `${detail.name || detail.display_name || ""}:${detail.local_date || ""}`;
+  const chartSignature = useMemo(() => buildTemperatureChartSignature(detail), [detail]);
+  const computedChartData = useMemo(
     () => getTemperatureChartData(detail, locale),
-    [detail, locale],
+    [chartSignature, locale],
   );
+  const lastChartDataRef = useRef<{
+    cityKey: string;
+    data: TemperatureChartData;
+  } | null>(null);
+  if (computedChartData) {
+    lastChartDataRef.current = { cityKey, data: computedChartData };
+  }
+  const chartData =
+    computedChartData ||
+    (lastChartDataRef.current?.cityKey === cityKey
+      ? lastChartDataRef.current.data
+      : null);
   const forecastLabel = chartData?.datasets.hasMgmHourly
     ? locale === "en-US"
       ? "MGM forecast"
@@ -62,6 +131,7 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
         labels: chartData.times,
       },
       options: {
+        animation: false,
         interaction: { intersect: false, mode: "index" },
         layout: { padding: { bottom: 2, left: 0, right: 8, top: 8 } },
         maintainAspectRatio: false,
@@ -101,6 +171,12 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
               stepSize: chartData.yTickStep,
             },
           },
+        },
+        transitions: {
+          active: { animation: { duration: 0 } },
+          hide: { animation: { duration: 0 } },
+          resize: { animation: { duration: 0 } },
+          show: { animation: { duration: 0 } },
         },
       },
       type: "line",

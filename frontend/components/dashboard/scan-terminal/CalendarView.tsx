@@ -5,6 +5,38 @@ import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { formatTemperatureValue } from "@/lib/dashboard-utils";
 import { formatShortDate, getPeakCountdownMeta } from "@/components/dashboard/scan-terminal/decision-utils";
 
+function normalizeCalendarCityKey(value?: string | null) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s_-]+/g, "");
+}
+
+function getCalendarCardKey(row: ScanOpportunityRow) {
+  const city =
+    normalizeCalendarCityKey(row.city) ||
+    normalizeCalendarCityKey(row.city_display_name) ||
+    normalizeCalendarCityKey(row.display_name);
+  const date = String(row.selected_date || row.local_date || "").trim();
+  return `${city || row.id}:${date || "date-unknown"}`;
+}
+
+function getCalendarRowScore(row: ScanOpportunityRow) {
+  return Number(row.final_score || 0) * 1000 + Number(row.edge_percent || 0);
+}
+
+function dedupeCalendarRows(rows: ScanOpportunityRow[]) {
+  const bestByCard = new Map<string, ScanOpportunityRow>();
+  rows.forEach((row) => {
+    const key = getCalendarCardKey(row);
+    const current = bestByCard.get(key);
+    if (!current || getCalendarRowScore(row) > getCalendarRowScore(current)) {
+      bestByCard.set(key, row);
+    }
+  });
+  return [...bestByCard.values()];
+}
+
 export function CalendarView({
   rows,
   locale,
@@ -26,7 +58,7 @@ export function CalendarView({
         items: Array<{ row: ScanOpportunityRow; meta: ReturnType<typeof getPeakCountdownMeta> }>;
       }
     >();
-    rows.forEach((row) => {
+    dedupeCalendarRows(rows).forEach((row) => {
       const meta = getPeakCountdownMeta(row, locale);
       const current = byPhase.get(meta.key) || {
         label: meta.groupLabel,

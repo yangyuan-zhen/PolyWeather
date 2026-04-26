@@ -17,6 +17,12 @@ import {
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { formatTemperatureValue, getModelView, getTodayPaceView } from "@/lib/dashboard-utils";
 
+function toFiniteDecisionNumber(value: unknown) {
+  if (value == null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 function AiPinnedCityCard({
   item,
   detail,
@@ -86,6 +92,7 @@ function AiPinnedCityCard({
   const { aiForecast, refreshAiForecast } = useAiCityForecast({
     detail,
     detailCityName,
+    enabled: Boolean(detail && !collapsed),
     isEn,
     locale,
     report,
@@ -93,6 +100,7 @@ function AiPinnedCityCard({
   const { marketScan, marketStatus } = useCityMarketScan({
     detail,
     detailCityName,
+    enabled: Boolean(detail && !collapsed),
   });
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
@@ -125,8 +133,8 @@ function AiPinnedCityCard({
     : isEn
       ? "Model support is unavailable, so this city must rely on DEB path and METAR observations."
       : "暂无可用多模型支撑，需要主要参考 DEB 路径和 METAR 实测。";
-  const aiPredictedMax = Number(aiCityForecast?.predicted_max);
-  const decisionExpectedHighNumber = Number.isFinite(aiPredictedMax)
+  const aiPredictedMax = toFiniteDecisionNumber(aiCityForecast?.predicted_max);
+  const decisionExpectedHighNumber = aiPredictedMax != null
     ? aiPredictedMax
     : paceView?.paceAdjustedHigh != null
       ? paceView.paceAdjustedHigh

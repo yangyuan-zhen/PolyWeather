@@ -41,6 +41,12 @@ function normalizeQuotePrice(value: unknown) {
   return normalized;
 }
 
+function toFiniteMarketNumber(value: unknown) {
+  if (value == null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export function formatMarketPercent(value: number | null, digits = 1) {
   if (value == null || !Number.isFinite(value)) return "--";
   return `${(value * 100).toFixed(digits)}%`;
@@ -76,9 +82,8 @@ export function getMarketBucketLabel(bucket?: MarketTopBucket | null, tempSymbol
   if (direct && /[°]?[CF]\b|\d+\s*[+-]?$/i.test(direct) && !/[�｡紊]/.test(direct)) {
     return direct.replace(/\bC\b/g, "°C").replace(/\bF\b/g, "°F");
   }
-  const value = bucket?.temp ?? bucket?.value ?? bucket?.lower ?? null;
-  const numeric = Number(value);
-  if (Number.isFinite(numeric)) {
+  const numeric = toFiniteMarketNumber(bucket?.temp ?? bucket?.value ?? bucket?.lower);
+  if (numeric != null) {
     const unit = bucket?.unit
       ? `°${String(bucket.unit).replace(/^°/, "").toUpperCase()}`
       : tempSymbol;
@@ -88,8 +93,7 @@ export function getMarketBucketLabel(bucket?: MarketTopBucket | null, tempSymbol
 }
 
 function getBucketAnchor(bucket: MarketTopBucket) {
-  const anchor = Number(bucket.temp ?? bucket.value ?? bucket.lower);
-  return Number.isFinite(anchor) ? anchor : null;
+  return toFiniteMarketNumber(bucket.temp ?? bucket.value ?? bucket.lower);
 }
 
 function getBucketModelProbability(bucket?: MarketTopBucket | null) {
@@ -157,7 +161,7 @@ export function pickMarketBucketForWeatherCenter(
     return Math.abs(anchor - comparable) <= maxReasonableDelta;
   };
   if (!buckets.length || expectedHigh == null || !Number.isFinite(expectedHigh)) {
-    return selectedBucket;
+    return isReasonableFallback(selectedBucket) ? selectedBucket : null;
   }
 
   let nearest: MarketTopBucket | null = null;
@@ -364,22 +368,22 @@ export function buildWeatherDecisionView({
   peakWindow: string;
   tempSymbol: string;
 }): WeatherDecisionView {
-  const aiPredicted = Number(aiCityForecast?.predicted_max);
-  const center = Number.isFinite(aiPredicted)
-    ? aiPredicted
+  const aiPredictedMax = toFiniteMarketNumber(aiCityForecast?.predicted_max);
+  const center = aiPredictedMax != null
+    ? aiPredictedMax
     : paceView?.paceAdjustedHigh != null
       ? paceView.paceAdjustedHigh
       : deb;
-  const aiLow = Number(aiCityForecast?.range_low);
-  const aiHigh = Number(aiCityForecast?.range_high);
-  const low = Number.isFinite(aiLow)
+  const aiLow = toFiniteMarketNumber(aiCityForecast?.range_low);
+  const aiHigh = toFiniteMarketNumber(aiCityForecast?.range_high);
+  const low = aiLow != null
     ? aiLow
     : modelMin != null
       ? modelMin
       : center != null
         ? center - 1
         : null;
-  const high = Number.isFinite(aiHigh)
+  const high = aiHigh != null
     ? aiHigh
     : modelMax != null
       ? modelMax

@@ -2872,8 +2872,23 @@ def _build_city_market_scan_payload(
     primary_bucket = None
     if isinstance(distribution, list) and distribution:
         ranked_buckets = []
+        temp_symbol_upper = str(temp_symbol or "").upper()
+        max_primary_bucket_delta = 16.0 if "F" in temp_symbol_upper else 8.0
         for idx, row in enumerate(distribution_all):
             if not isinstance(row, dict):
+                continue
+            bucket_value = _sf(
+                row.get("temp")
+                if row.get("temp") is not None
+                else row.get("value")
+                if row.get("value") is not None
+                else row.get("lower")
+            )
+            if (
+                anchor_temp is not None
+                and bucket_value is not None
+                and abs(float(bucket_value) - float(anchor_temp)) > max_primary_bucket_delta
+            ):
                 continue
             bucket_prob = _sf(row.get("probability"))
             prob_rank = bucket_prob if bucket_prob is not None else -1.0
@@ -2881,7 +2896,7 @@ def _build_city_market_scan_payload(
         if ranked_buckets:
             ranked_buckets.sort(key=lambda x: (x[0], x[1]))
             primary_bucket = ranked_buckets[0][2]
-        else:
+        elif anchor_temp is None:
             primary_bucket = distribution[0]
 
     model_probability = None
