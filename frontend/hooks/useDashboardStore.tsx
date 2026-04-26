@@ -599,6 +599,13 @@ export function DashboardStoreProvider({
   const citiesRef = useRef<CityListItem[]>([]);
   const citySummariesRef = useRef<Record<string, CitySummary>>({});
   const selectedCityRef = useRef<string | null>(null);
+  const setCityDetailLoading = (isLoading: boolean) => {
+    setLoadingState((current) =>
+      current.cityDetail === isLoading
+        ? current
+        : { ...current, cityDetail: isLoading },
+    );
+  };
   const selectedDetail = selectedCity
     ? findCachedCityDetail(cityDetailsByName, selectedCity)
     : null;
@@ -790,7 +797,7 @@ export function DashboardStoreProvider({
     if (findCachedCityDetail(cityDetailsByName, selectedCity)) return;
 
     let cancelled = false;
-    setLoadingState((current) => ({ ...current, cityDetail: true }));
+    setCityDetailLoading(true);
     void ensureCityDetail(selectedCity, false, "panel")
       .then((detail) => {
         if (cancelled) return;
@@ -799,7 +806,7 @@ export function DashboardStoreProvider({
       .catch(() => {})
       .finally(() => {
         if (cancelled) return;
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
+        setCityDetailLoading(false);
       });
 
     return () => {
@@ -807,7 +814,6 @@ export function DashboardStoreProvider({
     };
   }, [
     cityDetailsByName,
-    ensureCityDetail,
     isPanelOpen,
     proAccess.authenticated,
     proAccess.loading,
@@ -1080,7 +1086,7 @@ export function DashboardStoreProvider({
       : Promise.resolve(citySummariesRef.current[cityName]);
 
     if (proAccessRef.current.loading) {
-      setLoadingState((current) => ({ ...current, cityDetail: true }));
+      setCityDetailLoading(true);
       const detailPromise = ensureCityDetail(cityName, false, "panel");
       try {
         const [, detail] = await Promise.allSettled([summaryPromise, detailPromise]);
@@ -1091,12 +1097,14 @@ export function DashboardStoreProvider({
         }
       } catch {
       } finally {
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
+        if (selectedCityRef.current === cityName) {
+          setCityDetailLoading(false);
+        }
       }
       return;
     }
 
-    setLoadingState((current) => ({ ...current, cityDetail: !cached }));
+    setCityDetailLoading(!cached);
     const detailPromise = ensureCityDetail(cityName, false, "panel");
     void Promise.allSettled([summaryPromise, detailPromise])
       .then(([, detail]) => {
@@ -1107,7 +1115,7 @@ export function DashboardStoreProvider({
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
+        setCityDetailLoading(false);
       });
   };
 
@@ -1119,7 +1127,7 @@ export function DashboardStoreProvider({
     setSelectedForecastDate(null);
     setFutureModalDate(null);
     setForecastModalMode(null);
-    setLoadingState((current) => ({ ...current, cityDetail: !cached }));
+    setCityDetailLoading(!cached);
     void Promise.allSettled([
       ensureCitySummary(cityName),
       ensureCityDetail(cityName, false, "panel"),
@@ -1132,7 +1140,7 @@ export function DashboardStoreProvider({
       })
       .finally(() => {
         if (selectedCityRef.current !== cityName) return;
-        setLoadingState((current) => ({ ...current, cityDetail: false }));
+        setCityDetailLoading(false);
       });
   };
 
@@ -1369,12 +1377,12 @@ export function DashboardStoreProvider({
           selectedCityRef.current === cityName;
         let cachedDetail = findCachedCityDetail(cityDetailsByName, selectedCity);
         if (!cachedDetail) {
-          setLoadingState((current) => ({ ...current, cityDetail: true }));
+          setCityDetailLoading(true);
           try {
             cachedDetail = await ensureCityDetail(cityName, false, "panel");
           } finally {
             if (isLatestModalRequest()) {
-              setLoadingState((current) => ({ ...current, cityDetail: false }));
+              setCityDetailLoading(false);
             }
           }
         }
@@ -1423,12 +1431,12 @@ export function DashboardStoreProvider({
           selectedCityRef.current === cityName;
         let cachedDetail = findCachedCityDetail(cityDetailsByName, cityName);
         if (!cachedDetail) {
-          setLoadingState((current) => ({ ...current, cityDetail: true }));
+          setCityDetailLoading(true);
           try {
             cachedDetail = await ensureCityDetail(cityName, false, "panel");
           } finally {
             if (isLatestModalRequest()) {
-              setLoadingState((current) => ({ ...current, cityDetail: false }));
+              setCityDetailLoading(false);
             }
           }
         }

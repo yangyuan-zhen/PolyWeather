@@ -64,6 +64,7 @@ export type AssistantChatResponse = {
 const CACHE_KEY = "polyWeather_v1";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const SCAN_TERMINAL_CLIENT_TIMEOUT_MS = 35_000;
+const CITY_DETAIL_CLIENT_TIMEOUT_MS = 35_000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
 const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
@@ -320,6 +321,7 @@ export const dashboardClient = {
 
       const request = fetchJson<CityDetail>(
         `/api/city/${normalizeCityName(cityName)}?force_refresh=false&depth=${depth}`,
+        { timeoutMs: CITY_DETAIL_CLIENT_TIMEOUT_MS },
       ).finally(() => {
         pendingCityDetailRequests.delete(requestKey);
       });
@@ -335,6 +337,7 @@ export const dashboardClient = {
     });
     return fetchJson<CityDetail>(
       `/api/city/${normalizeCityName(cityName)}?${params.toString()}`,
+      { timeoutMs: CITY_DETAIL_CLIENT_TIMEOUT_MS },
     );
   },
 

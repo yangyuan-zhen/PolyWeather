@@ -423,8 +423,8 @@ function AiPinnedCityCard({
                   </p>
                   <p className="scan-ai-city-muted">
                     {isEn
-                      ? "Non-streaming mode is enabled to avoid truncated airport reads."
-                      : "已停用流式输出，改用非流式 JSON 请求，避免报文解读被截断。"}
+                      ? "The final airport read will appear here shortly."
+                      : "机场报文解读稍后将在这里显示。"}
                   </p>
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (

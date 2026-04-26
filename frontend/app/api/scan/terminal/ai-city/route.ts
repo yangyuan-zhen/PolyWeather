@@ -5,13 +5,18 @@ import {
 } from "@/lib/backend-auth";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
-const SCAN_AI_PROXY_TIMEOUT_MS = Math.max(
+const AI_CITY_GATEWAY_TIMEOUT_MS = Math.max(
   10_000,
-  Number(process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS || "55000") || 55_000,
+  Number(
+    process.env.POLYWEATHER_SCAN_AI_GATEWAY_TIMEOUT_MS ||
+      process.env.POLYWEATHER_AI_CITY_GATEWAY_TIMEOUT_MS ||
+      process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS ||
+      "120000",
+  ) || 120_000,
 );
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 130;
 
 export async function POST(req: NextRequest) {
   if (!API_BASE) {
@@ -31,7 +36,7 @@ export async function POST(req: NextRequest) {
   let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
   const controller = new AbortController();
   const startedAt = Date.now();
-  const timeoutId = setTimeout(() => controller.abort(), SCAN_AI_PROXY_TIMEOUT_MS);
+  const timeoutId = setTimeout(() => controller.abort(), AI_CITY_GATEWAY_TIMEOUT_MS);
   const requestBody = body && typeof body === "object" ? body as Record<string, unknown> : {};
 
   try {
@@ -39,11 +44,11 @@ export async function POST(req: NextRequest) {
     const headers = new Headers(auth.headers);
     headers.set("Content-Type", "application/json");
     headers.set("Accept", "application/json");
-    console.info("[scan-ai-city] proxy request", {
+    console.info("[scan-ai-city] gateway request", {
       city: requestBody.city,
       force_refresh: requestBody.force_refresh === true,
       locale: requestBody.locale,
-      timeout_ms: SCAN_AI_PROXY_TIMEOUT_MS,
+      timeout_ms: AI_CITY_GATEWAY_TIMEOUT_MS,
     });
     const res = await fetch(`${API_BASE}/api/scan/terminal/ai-city`, {
       method: "POST",
@@ -65,7 +70,7 @@ export async function POST(req: NextRequest) {
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
-    console.info("[scan-ai-city] proxy complete", {
+    console.info("[scan-ai-city] gateway complete", {
       status: data?.status,
       city: data?.city,
       model: data?.model,
@@ -81,21 +86,21 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     const timedOut = controller.signal.aborted;
     const elapsedMs = Date.now() - startedAt;
-    console.warn("[scan-ai-city] proxy failed", {
+    console.warn("[scan-ai-city] gateway failed", {
       city: requestBody.city,
       timed_out: timedOut,
       elapsed_ms: elapsedMs,
-      timeout_ms: SCAN_AI_PROXY_TIMEOUT_MS,
+      timeout_ms: AI_CITY_GATEWAY_TIMEOUT_MS,
       error: String(error),
     });
     const response = NextResponse.json(
       {
         error: timedOut
-          ? "City AI request timed out"
+          ? "City AI gateway timed out before backend responded"
           : "Failed to fetch city AI data",
         detail: String(error),
         elapsed_ms: elapsedMs,
-        timeout_ms: SCAN_AI_PROXY_TIMEOUT_MS,
+        timeout_ms: AI_CITY_GATEWAY_TIMEOUT_MS,
         city: requestBody.city,
       },
       { status: timedOut ? 504 : 500 },

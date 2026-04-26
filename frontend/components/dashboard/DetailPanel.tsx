@@ -226,7 +226,9 @@ export function DetailPanel({
       (detail.forecast?.daily?.length ?? 0) <= 1),
   );
   const isPanelSyncing = store.loadingState.cityDetail;
-  const isShowingCachedDetailDuringSync = Boolean(detail && isPanelSyncing);
+  const [panelSyncTimedOut, setPanelSyncTimedOut] = useState(false);
+  const showPanelSyncing = isPanelSyncing && !panelSyncTimedOut;
+  const isShowingCachedDetailDuringSync = false;
 
   const blurActiveElement = () => {
     if (typeof document === "undefined") return;
@@ -268,6 +270,22 @@ export function DetailPanel({
     }
     void store.openHistory();
   };
+
+  useEffect(() => {
+    if (!isPanelSyncing || !store.selectedCity) {
+      setPanelSyncTimedOut(false);
+      return;
+    }
+
+    setPanelSyncTimedOut(false);
+    const timeoutId = window.setTimeout(() => {
+      setPanelSyncTimedOut(true);
+    }, 12_000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isPanelSyncing, store.selectedCity]);
 
   useEffect(() => {
     const panel = panelRef.current;
@@ -362,7 +380,7 @@ export function DetailPanel({
             </div>
             <h2>{panelDisplayName}</h2>
           </div>
-          {isPanelSyncing && (
+          {showPanelSyncing && (
             <div
               className="panel-loading-hint"
               role="status"
@@ -462,14 +480,14 @@ export function DetailPanel({
                 </div>
               </div>
               <div style={{ color: "var(--text-muted)", fontSize: "13px" }}>
-                {store.loadingState.cityDetail
+                {showPanelSyncing
                   ? t("detail.loading")
                   : t("detail.emptyHint")}
               </div>
             </section>
           ) : !detail ? (
             <div className="detail-mini-meta" role="status" aria-live="polite">
-              {store.loadingState.cityDetail
+              {showPanelSyncing
                 ? locale === "en-US"
                   ? "Loading city cards..."
                   : "正在加载城市卡片..."
