@@ -16,7 +16,7 @@ import { normalizeCityKey } from "./decision-utils";
 
 const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v3";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
-const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v2";
+const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
 const pendingAiCityForecastRequests = new Map<
   string,
@@ -504,7 +504,7 @@ export function useCityMarketScan({
     const cacheKey = buildStorageKey(CITY_MARKET_SCAN_CACHE_PREFIX, [
       normalizeCityKey(detailCityName),
       detail.local_date || "",
-      "lite",
+      "full",
     ]);
     let cancelled = false;
     if (detail.market_scan) {

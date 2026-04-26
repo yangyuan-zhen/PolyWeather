@@ -281,14 +281,7 @@ export function pickMarketBucketForWeatherCenter(
   }
   if (roundedMatch) return roundedMatch;
   if (!nearest) return isReasonableFallback(selectedBucket) ? selectedBucket : null;
-  const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, nearest);
-  const unit = String(nearest.unit || "").toUpperCase();
-  const maxReasonableDelta = unit === "F" ? 16 : 8;
-  if (
-    comparable != null &&
-    Number.isFinite(nearestDelta) &&
-    nearestDelta <= maxReasonableDelta
-  ) {
+  if (Number.isFinite(nearestDelta) && isReasonableFallback(nearest)) {
     return nearest;
   }
   return isReasonableFallback(selectedBucket) ? selectedBucket : null;
