@@ -268,23 +268,19 @@ function buildAiCityFallbackPayload({
   const rawMetar = String(report || detail?.airport_current?.raw_metar || detail?.current?.raw_metar || "").trim();
 
   const finalZh = timeoutLike
-    ? "AI 解读暂未返回；先以多模型集中度和最新 METAR 实况作为判断依据。"
-    : "AI 解读暂不可用；先以多模型集中度和最新 METAR 实况作为判断依据。";
+    ? "DeepSeek 增强暂未返回；当前先以多模型集中度和最新 METAR 实况快速判断。"
+    : "当前先以多模型集中度和最新 METAR 实况快速判断。";
   const finalEn = timeoutLike
-    ? "The AI read is not back yet; use the model cluster and latest METAR as the working read."
-    : "The AI read is temporarily unavailable; use the model cluster and latest METAR as the working read.";
+    ? "DeepSeek enhancement is not back yet; use the model cluster and latest METAR as the fast working read."
+    : "Use the model cluster and latest METAR as the fast working read.";
   const metarZh = rawMetar
-    ? `最新 METAR 显示 ${currentText}；原始报文已保留，可继续结合后续报文确认温度路径。`
+    ? `最新 METAR 显示 ${currentText}；当前先作为实况锚点，并结合后续报文确认温度路径。`
     : `当前可先参考 ${currentText} 与多模型路径，等待下一次机场报文更新。`;
   const metarEn = rawMetar
-    ? `Latest METAR shows ${currentText}; the raw bulletin is preserved and later reports should confirm the path.`
+    ? `Latest METAR shows ${currentText}; use it as the live anchor while later reports confirm the path.`
     : `Use ${currentText} and the model path for now while waiting for the next airport bulletin.`;
-  const reasonZh = timeoutLike
-    ? "AI 服务响应较慢，本次未在页面等待窗口内完成；页面已自动降级为天气证据模式。"
-    : "AI 服务本次没有返回可用解读；页面已自动降级为天气证据模式。";
-  const reasonEn = timeoutLike
-    ? "The AI service was slow and did not finish within the page wait window; the card fell back to weather evidence mode."
-    : "The AI service did not return a usable read; the card fell back to weather evidence mode.";
+  const reasonZh = "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；DeepSeek 增强可作为后续补充。";
+  const reasonEn = "DEB, the model cluster and latest METAR are enough for the current directional read; DeepSeek enhancement can be added later.";
 
   return {
     city_forecast: {

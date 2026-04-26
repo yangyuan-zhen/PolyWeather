@@ -95,6 +95,24 @@ SCAN_CITY_AI_MAX_TOKENS = _env_int(
 )
 SCAN_CITY_AI_PROMPT_VERSION = "city-airport-read-v3"
 
+CITY_AI_REQUIRED_FIELDS = [
+    "metar_read_zh",
+    "metar_read_en",
+    "final_judgment_zh",
+    "final_judgment_en",
+    "predicted_max",
+    "range_low",
+    "range_high",
+    "unit",
+    "confidence",
+    "reasoning_zh",
+    "reasoning_en",
+    "risks_zh",
+    "risks_en",
+    "model_cluster_note_zh",
+    "model_cluster_note_en",
+]
+
 
 def _safe_float(value: Any) -> Optional[float]:
     try:
@@ -499,44 +517,30 @@ def _build_city_ai_fallback(
     looks_like_truncated_json = bool(content_preview.startswith("{") and not content_preview.rstrip().endswith("}"))
     reason_preview = _truncate_ai_text(reason, 260)
     reason_lower = str(reason or "").lower()
-    if reason_lower.strip() == "empty ai content":
-        reason_preview_zh = "模型没有返回可解析正文"
-        reason_preview_en = "model returned no parseable content"
-    else:
-        reason_preview_zh = reason_preview
-        reason_preview_en = reason_preview
     timed_out = "timeout" in reason_lower or "timed out" in reason_lower or "超时" in str(reason or "")
     if content_preview and not looks_like_truncated_json:
-        metar_zh = f"DeepSeek V4-Pro 返回了非结构化解读，系统已保留摘要：{content_preview}"
-        metar_en = f"DeepSeek V4-Pro returned non-JSON analysis; preserved summary: {content_preview}"
+        metar_zh = f"机场报文快速解读已先完成；AI 补充摘要：{content_preview}"
+        metar_en = f"The fast airport-bulletin read is available; AI supplemental summary: {content_preview}"
     elif content_preview:
-        metar_zh = "DeepSeek V4-Pro 本次输出在 JSON 中途被截断，系统已改用 DEB、多模型与原始 METAR 兜底。"
-        metar_en = "DeepSeek V4-Pro output was truncated mid-JSON, so DEB, model cluster and raw METAR are used as fallback."
+        metar_zh = "机场报文快速解读已先完成；本轮 AI 增强未完整返回，当前以 DEB、多模型与原始 METAR 为准。"
+        metar_en = "The fast airport-bulletin read is available; this AI enhancement was incomplete, so DEB, model cluster and raw METAR carry the read."
     elif raw_metar:
-        metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；需结合后续报文确认温度路径。"
-        metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; later reports are needed to confirm the path."
+        metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；当前先把它作为实况锚点，并结合后续报文确认温度路径。"
+        metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; use it as the live anchor while later reports confirm the path."
     else:
         metar_zh = "当前没有可用的原始 METAR 正文，暂以 DEB 与多模型路径为主。"
         metar_en = "No raw METAR text is available, so DEB and the model cluster carry the read."
     predicted_text = _format_ai_temperature(predicted, unit) or "--"
     if timed_out:
-        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；DeepSeek V4-Pro 超时，已降级为模型/METAR 兜底判断。"
-        final_en = f"{city} daily high is centered near {predicted_text}; DeepSeek V4-Pro timed out, so this is a model/METAR fallback."
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
     else:
-        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 输出格式异常，已降级为模型/METAR 兜底判断。"
-        final_en = f"{city} daily high is centered near {predicted_text}; AI output was not strict JSON, so this is a model/METAR fallback."
-    reasoning_zh = f"DEB、多模型集合和最新 METAR 仍可用于判断方向；原始失败原因：{reason_preview_zh or 'AI 输出不是 JSON object'}。"
-    reasoning_en = f"DEB, the model cluster and latest METAR still support a directional read; raw failure: {reason_preview_en or 'AI output was not a JSON object'}."
-    risks_zh = (
-        ["DeepSeek V4-Pro 本次超时，需刷新重试确认 AI 细节。"]
-        if timed_out
-        else ["DeepSeek V4-Pro 本次没有返回严格 JSON，需刷新重试确认。"]
-    )
-    risks_en = (
-        ["DeepSeek V4-Pro timed out; refresh to confirm the AI details."]
-        if timed_out
-        else ["DeepSeek V4-Pro did not return strict JSON; refresh to confirm."]
-    )
+        final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和 METAR 快速证据模式判断。"
+        final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/METAR evidence mode."
+    reasoning_zh = "DEB、多模型集合和最新 METAR 已足够给出当前方向判断；AI 增强可作为后续补充，不阻塞本轮读数。"
+    reasoning_en = "DEB, the model cluster and latest METAR are enough for the current directional read; AI enhancement can be added later without blocking this card."
+    risks_zh = ["后续 METAR 若明显偏离模型路径，需及时修正最高温中枢。"]
+    risks_en = ["If later METAR reports diverge from the model path, revise the daily-high center promptly."]
     return {
         "predicted_max": predicted,
         "range_low": range_low,
@@ -563,6 +567,60 @@ def _build_city_ai_fallback(
             "raw_metar": _truncate_ai_text(raw_metar, 1000),
         },
     }
+
+
+def _city_ai_response_example(unit: str) -> Dict[str, Any]:
+    return {
+        "metar_read_zh": f"最新 METAR 显示 37.0{unit or '°C'}，报文时间 04:30Z；风和云量暂未显示强降温信号，后续报文用于确认升温路径。",
+        "metar_read_en": f"The latest METAR shows 37.0{unit or '°C'} at 04:30Z; wind and cloud signals do not yet show a strong cooling break, so later reports should confirm the warming path.",
+        "final_judgment_zh": f"预计最高温暂以 43.0{unit or '°C'} 附近为中枢。",
+        "final_judgment_en": f"The expected daily high is centered near 43.0{unit or '°C'}.",
+        "predicted_max": 43.0,
+        "range_low": 42.0,
+        "range_high": 44.0,
+        "unit": unit or "°C",
+        "confidence": "medium",
+        "reasoning_zh": "DEB 与多数模型集中在同一温区，METAR 仍处于上午升温路径。",
+        "reasoning_en": "DEB and most models cluster in the same temperature band, while METAR remains on a morning warming path.",
+        "risks_zh": ["若后续 METAR 升温放缓或云雨增强，需要下调中枢。"],
+        "risks_en": ["If later METAR warming slows or cloud/rain strengthens, revise the center lower."],
+        "model_cluster_note_zh": "7/8 个模型落在 DEB ±2°C 内，模型支撑较集中。",
+        "model_cluster_note_en": "7/8 models are within DEB ±2°C, so model support is clustered.",
+    }
+
+
+def _complete_city_ai_payload(
+    ai_raw: Dict[str, Any],
+    ai_input: Dict[str, Any],
+    *,
+    locale: str,
+) -> Dict[str, Any]:
+    """Fill missing structured fields without marking a provider success as fallback."""
+    if not isinstance(ai_raw, dict):
+        return _build_city_ai_fallback(
+            ai_input,
+            locale=locale,
+            reason="provider output was not a JSON object",
+        )
+    fallback = _build_city_ai_fallback(
+        ai_input,
+        locale=locale,
+        reason="schema completion",
+    )
+    completed: List[str] = []
+    out = dict(ai_raw)
+    for field in CITY_AI_REQUIRED_FIELDS:
+        value = out.get(field)
+        if value is None or value == "" or value == []:
+            out[field] = fallback.get(field)
+            completed.append(field)
+    meta = out.get("_polyweather_meta")
+    if not isinstance(meta, dict):
+        meta = {}
+    if completed:
+        meta["schema_completed_fields"] = completed
+    out["_polyweather_meta"] = meta
+    return out
 
 
 def _scan_ai_cache_key(snapshot_id: str, filters: Dict[str, Any]) -> str:
@@ -1309,6 +1367,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             "Fill every *_zh field in Simplified Chinese and every *_en field in English in the same response. "
+            "Use this exact JSON object shape; do not return an array, markdown, or prose outside JSON. "
             "Keep final_judgment one short decision sentence. metar_read must explain the latest airport bulletin "
             "with report time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
             "For wind, explicitly say whether the current wind tends to warm, cool, or be neutral for today's high, "
@@ -1318,6 +1377,8 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             "how many model sources are available, whether they support DEB, and whether the sample is too sparse. "
             "Keep the whole JSON compact."
         ),
+        "required_json_keys": CITY_AI_REQUIRED_FIELDS,
+        "json_example": _city_ai_response_example(str(ai_input.get("temp_symbol") or "°C")),
         "city_snapshot": ai_input,
     }
     timeout = httpx.Timeout(
@@ -1487,7 +1548,11 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
                         "original_finish_reason": _provider_response_meta(data).get("finish_reason"),
                         "original_content_preview": preview,
                     }
-                    return parsed
+                    return _complete_city_ai_payload(
+                        parsed,
+                        ai_input,
+                        locale=normalized_locale,
+                    )
             except Exception as repair_exc:
                 logger.warning(
                     "scan city AI provider json repair failed city={} locale={} error={}",
@@ -1504,7 +1569,11 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
             )
     if isinstance(data, dict):
         parsed["_polyweather_meta"] = _provider_response_meta(data)
-    return parsed
+    return _complete_city_ai_payload(
+        parsed,
+        ai_input,
+        locale=normalized_locale,
+    )
 
 
 def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
@@ -1554,6 +1623,7 @@ def _build_city_ai_stream_request(
         "model": SCAN_AI_MODEL,
         "temperature": 0.2,
         "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
+        "response_format": {"type": "json_object"},
         "stream": True,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -1566,7 +1636,12 @@ def _build_city_ai_stream_request(
                             "Return JSON keys in this exact order: metar_read_zh, metar_read_en, "
                             "final_judgment_zh, final_judgment_en, predicted_max, range_low, range_high, "
                             "unit, confidence, reasoning_zh, reasoning_en, risks_zh, risks_en, "
-                            "model_cluster_note_zh, model_cluster_note_en. Keep it compact."
+                            "model_cluster_note_zh, model_cluster_note_en. Keep it compact. "
+                            "Return exactly one JSON object and no markdown."
+                        ),
+                        "required_json_keys": CITY_AI_REQUIRED_FIELDS,
+                        "json_example": _city_ai_response_example(
+                            str(ai_input.get("temp_symbol") or "°C")
                         ),
                         "city_snapshot": ai_input,
                     },
@@ -1665,7 +1740,22 @@ def stream_scan_city_ai_forecast_payload(
         )
         return
 
-    cache_key = _city_forecast_cache_key(city_name)
+    yield _sse_event(
+        "progress",
+        {
+            "stage": "loading_city",
+            "message_zh": "正在读取城市实况、模型和最新机场报文…",
+            "message_en": "Loading city observations, model cluster and latest airport bulletin…",
+        },
+    )
+    data = _analyze(
+        city_name,
+        force_refresh=False,
+        include_llm_commentary=False,
+        detail_mode="full",
+    )
+    ai_input = _build_city_ai_prompt(data)
+    cache_key = _scan_city_ai_cache_key(ai_input)
     if not force_refresh:
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)
@@ -1685,22 +1775,6 @@ def stream_scan_city_ai_forecast_payload(
                     },
                 )
                 return
-
-    yield _sse_event(
-        "progress",
-        {
-            "stage": "loading_city",
-            "message_zh": "正在读取城市实况、模型和最新机场报文…",
-            "message_en": "Loading city observations, model cluster and latest airport bulletin…",
-        },
-    )
-    data = _analyze(
-        city_name,
-        force_refresh=False,
-        include_llm_commentary=False,
-        detail_mode="full",
-    )
-    ai_input = _build_city_ai_prompt(data)
     preview_raw = _build_city_ai_fallback(
         ai_input,
         locale=normalized_locale,
@@ -1818,6 +1892,11 @@ def stream_scan_city_ai_forecast_payload(
                     **last_meta,
                     "streamed": True,
                 }
+                ai_raw = _complete_city_ai_payload(
+                    ai_raw,
+                    ai_input,
+                    locale=normalized_locale,
+                )
         except Exception as exc:
             retry_reason = str(exc)
             if SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR:
@@ -1975,7 +2054,14 @@ def build_scan_city_ai_forecast_payload(
         normalized_locale,
         SCAN_AI_MODEL,
     )
-    cache_key = _city_forecast_cache_key(city_name)
+    data = _analyze(
+        city_name,
+        force_refresh=False,
+        include_llm_commentary=False,
+        detail_mode="full",
+    )
+    ai_input = _build_city_ai_prompt(data)
+    cache_key = _scan_city_ai_cache_key(ai_input)
     if not force_refresh:
         with _SCAN_CITY_AI_CACHE_LOCK:
             cached = _SCAN_CITY_AI_CACHE.get(cache_key)
@@ -1996,13 +2082,6 @@ def build_scan_city_ai_forecast_payload(
                     "duration_ms": 0,
                     "city_forecast": cached.get("payload"),
                 }
-    data = _analyze(
-        city_name,
-        force_refresh=False,
-        include_llm_commentary=False,
-        detail_mode="full",
-    )
-    ai_input = _build_city_ai_prompt(data)
 
     if not SCAN_AI_ENABLED:
         logger.warning(
@@ -2099,17 +2178,27 @@ def build_scan_city_ai_forecast_payload(
             SCAN_AI_MODEL,
             raw_reason,
         )
+        ai_raw = _build_city_ai_fallback(
+            ai_input,
+            locale=normalized_locale,
+            reason=reason_en if normalized_locale == "en-US" else reason_zh,
+        )
+        generated_at = datetime.utcnow().isoformat() + "Z"
         return {
-            "status": "failed",
+            "status": "ready",
+            "degraded": True,
+            "cached": False,
             "model": SCAN_AI_MODEL,
             "provider": "deepseek",
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
+            "generated_at": generated_at,
             "duration_ms": duration_ms,
             "reason": reason_en if normalized_locale == "en-US" else reason_zh,
             "reason_en": reason_en,
             "reason_zh": reason_zh,
             "raw_reason": raw_reason,
+            "city_forecast": ai_raw,
         }
     generated_at = datetime.utcnow().isoformat() + "Z"
     _cache_city_ai_payload(
