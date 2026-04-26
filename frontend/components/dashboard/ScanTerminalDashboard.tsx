@@ -32,6 +32,10 @@ import type {
   ScanOpportunityRow,
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
+import {
+  buildBrowserBackendHeaders,
+  resolveBackendApiUrl,
+} from "@/lib/backend-api";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { CalendarView } from "@/components/dashboard/scan-terminal/CalendarView";
@@ -240,11 +244,19 @@ function ScanTerminalScreen() {
       time_range: "today",
       limit: "36",
     });
-    fetch(`/api/scan/terminal?${params.toString()}`, {
-      cache: "no-store",
-      signal: controller.signal,
+    void buildBrowserBackendHeaders({
+      Accept: "application/json",
     })
+      .then((headers) => {
+        if (cancelled) return null;
+        return fetch(resolveBackendApiUrl(`/api/scan/terminal?${params.toString()}`), {
+          cache: "no-store",
+          headers,
+          signal: controller.signal,
+        });
+      })
       .then(async (response) => {
+        if (!response) return null;
         if (!response.ok) {
           let message = `HTTP ${response.status}`;
           try {
@@ -258,6 +270,7 @@ function ScanTerminalScreen() {
         return response.json() as Promise<ScanTerminalResponse>;
       })
       .then((payload) => {
+        if (!payload) return;
         if (cancelled) return;
         setTerminalData(payload);
         setScanError(null);

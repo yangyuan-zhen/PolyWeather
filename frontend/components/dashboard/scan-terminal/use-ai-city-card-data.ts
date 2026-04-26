@@ -6,6 +6,10 @@ import type {
   AiCityForecastState,
 } from "@/components/dashboard/scan-terminal/types";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
+import {
+  buildBrowserBackendHeaders,
+  resolveBackendApiUrl,
+} from "@/lib/backend-api";
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { normalizeCityKey } from "./decision-utils";
 
@@ -182,21 +186,26 @@ export function useAiCityForecast({
         ? "DeepSeek V4-Pro is reading the latest airport bulletin..."
         : "DeepSeek V4-Pro 正在解读最新机场报文...",
     });
-    fetch("/api/scan/terminal/ai-city", {
-      method: "POST",
-      headers: {
+    void buildBrowserBackendHeaders({
         Accept: "application/json",
         "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      signal: controller.signal,
-      body: JSON.stringify({
-        city: detailCityName,
-        force_refresh: aiRefreshToken > 0,
-        locale,
-      }),
-    })
+      })
+      .then((headers) => {
+        if (cancelled) return null;
+        return fetch(resolveBackendApiUrl("/api/scan/terminal/ai-city"), {
+          method: "POST",
+          headers,
+          cache: "no-store",
+          signal: controller.signal,
+          body: JSON.stringify({
+            city: detailCityName,
+            force_refresh: aiRefreshToken > 0,
+            locale,
+          }),
+        });
+      })
       .then(async (response) => {
+        if (!response) return null;
         if (!response.ok) {
           let detailMessage = "";
           try {
@@ -226,6 +235,7 @@ export function useAiCityForecast({
         return response.json() as Promise<AiCityForecastPayload>;
       })
       .then((payload) => {
+        if (!payload) return;
         if (!cancelled) {
           const usablePayload =
             payload?.city_forecast

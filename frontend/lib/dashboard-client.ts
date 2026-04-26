@@ -9,6 +9,10 @@ import {
   ScanTerminalFilters,
   ScanTerminalResponse,
 } from "@/lib/dashboard-types";
+import {
+  buildBrowserBackendHeaders,
+  resolveBackendApiUrl,
+} from "@/lib/backend-api";
 
 export type AssistantOpportunityContext = {
   city_name: string;
@@ -108,11 +112,15 @@ async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Prom
   const timeoutId = controller
     ? window.setTimeout(() => controller.abort(), timeoutMs)
     : null;
+  const requestUrl = resolveBackendApiUrl(url);
+  const headers = await buildBrowserBackendHeaders({
+    Accept: "application/json",
+  });
 
   let response: Response;
   try {
-    response = await fetch(url, {
-      headers: { Accept: "application/json" },
+    response = await fetch(requestUrl, {
+      headers,
       cache: "no-store",
       signal: controller?.signal,
     });
@@ -457,18 +465,18 @@ export const dashboardClient = {
     if (existing) {
       return existing;
     }
-    const request = fetch("/api/scan/terminal/ai", {
+    const request = buildBrowserBackendHeaders({
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    }).then((headers) => fetch(resolveBackendApiUrl("/api/scan/terminal/ai"), {
       method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
+      headers,
       cache: "no-store",
       body: JSON.stringify({
         filters: payload.filters,
         snapshot_id: snapshotId || null,
       }),
-    })
+    }))
       .then(async (response) => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);

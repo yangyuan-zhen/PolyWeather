@@ -11,12 +11,12 @@ const AI_CITY_GATEWAY_TIMEOUT_MS = Math.max(
     process.env.POLYWEATHER_SCAN_AI_GATEWAY_TIMEOUT_MS ||
       process.env.POLYWEATHER_AI_CITY_GATEWAY_TIMEOUT_MS ||
       process.env.POLYWEATHER_SCAN_AI_PROXY_TIMEOUT_MS ||
-      "120000",
-  ) || 120_000,
+      "55000",
+  ) || 55_000,
 );
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 130;
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   if (!API_BASE) {
