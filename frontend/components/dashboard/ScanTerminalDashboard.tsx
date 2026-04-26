@@ -34,7 +34,7 @@ import type {
 } from "@/lib/dashboard-types";
 import {
   buildBrowserBackendHeaders,
-  resolveBackendApiUrl,
+  fetchBackendApi,
 } from "@/lib/backend-api";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
@@ -249,7 +249,7 @@ function ScanTerminalScreen() {
     })
       .then((headers) => {
         if (cancelled) return null;
-        return fetch(resolveBackendApiUrl(`/api/scan/terminal?${params.toString()}`), {
+        return fetchBackendApi(`/api/scan/terminal?${params.toString()}`, {
           cache: "no-store",
           headers,
           signal: controller.signal,

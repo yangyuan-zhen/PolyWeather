@@ -8,7 +8,7 @@ import type {
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import {
   buildBrowserBackendHeaders,
-  resolveBackendApiUrl,
+  fetchBackendApi,
 } from "@/lib/backend-api";
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { normalizeCityKey } from "./decision-utils";
@@ -192,7 +192,7 @@ export function useAiCityForecast({
       })
       .then((headers) => {
         if (cancelled) return null;
-        return fetch(resolveBackendApiUrl("/api/scan/terminal/ai-city"), {
+        return fetchBackendApi("/api/scan/terminal/ai-city", {
           method: "POST",
           headers,
           cache: "no-store",

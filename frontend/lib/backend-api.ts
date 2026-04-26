@@ -21,6 +21,10 @@ export function resolveBackendApiUrl(path: string) {
   return `${base}${suffix}`;
 }
 
+export async function fetchBackendApi(path: string, init?: RequestInit) {
+  return fetch(resolveBackendApiUrl(path), init);
+}
+
 export async function buildBrowserBackendHeaders(init?: HeadersInit) {
   const headers = new Headers(init);
   if (!headers.has("Accept")) {

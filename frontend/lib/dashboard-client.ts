@@ -11,59 +11,8 @@ import {
 } from "@/lib/dashboard-types";
 import {
   buildBrowserBackendHeaders,
-  resolveBackendApiUrl,
+  fetchBackendApi,
 } from "@/lib/backend-api";
-
-export type AssistantOpportunityContext = {
-  city_name: string;
-  city_display_name: string;
-  airport?: string | null;
-  risk_level: string;
-  tradable: boolean;
-  local_time?: string | null;
-  current_temperature?: number | null;
-  deb_prediction?: number | null;
-  temp_symbol?: string | null;
-  today_high?: number | null;
-  market_question?: string | null;
-  market_label?: string | null;
-  selected_date?: string | null;
-  best_side?: string | null;
-  yes_price?: number | null;
-  no_price?: number | null;
-  edge_percent?: number | null;
-  market_probability?: number | null;
-  model_probability?: number | null;
-  status?: string | null;
-};
-
-export type AssistantContextPayload = {
-  snapshot_id: string;
-  locale: string;
-  generated_at: string;
-  totals: {
-    cities: number;
-    tradable_markets: number;
-    high_risk: number;
-    medium_risk: number;
-    low_risk: number;
-  };
-  selected_city?: AssistantOpportunityContext | null;
-  opportunities: AssistantOpportunityContext[];
-  glossary: Array<{
-    term: string;
-    meaning: string;
-  }>;
-};
-
-export type AssistantChatResponse = {
-  answer: string;
-  cached?: boolean;
-  model?: string;
-  refused?: boolean;
-  snapshot_id?: string;
-  suggestions?: string[];
-};
 
 const CACHE_KEY = "polyWeather_v1";
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -80,7 +29,6 @@ const pendingCityMarketScanRequests = new Map<
     selected_date?: string | null;
   }>
 >();
-const pendingAssistantRequests = new Map<string, Promise<AssistantChatResponse>>();
 const pendingScanTerminalRequests = new Map<string, Promise<ScanTerminalResponse>>();
 const pendingScanTerminalAiRequests = new Map<string, Promise<ScanTerminalResponse>>();
 const PRIORITY_WARM_SESSION_KEY = "polyWeather_priority_warm_v1";
@@ -112,14 +60,13 @@ async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Prom
   const timeoutId = controller
     ? window.setTimeout(() => controller.abort(), timeoutMs)
     : null;
-  const requestUrl = resolveBackendApiUrl(url);
   const headers = await buildBrowserBackendHeaders({
     Accept: "application/json",
   });
 
   let response: Response;
   try {
-    response = await fetch(requestUrl, {
+    response = await fetchBackendApi(url, {
       headers,
       cache: "no-store",
       signal: controller?.signal,
@@ -468,7 +415,7 @@ export const dashboardClient = {
     const request = buildBrowserBackendHeaders({
       Accept: "application/json",
       "Content-Type": "application/json",
-    }).then((headers) => fetch(resolveBackendApiUrl("/api/scan/terminal/ai"), {
+    }).then((headers) => fetchBackendApi("/api/scan/terminal/ai", {
       method: "POST",
       headers,
       cache: "no-store",
@@ -525,59 +472,6 @@ export const dashboardClient = {
       });
 
     pendingHistoryRequests.set(requestKey, request);
-    return request;
-  },
-
-  async askAssistant(payload: {
-    question: string;
-    locale: string;
-    snapshotId: string;
-    context: AssistantContextPayload;
-  }) {
-    const question = String(payload.question || "").trim();
-    const snapshotId = String(payload.snapshotId || "").trim();
-    if (!question) {
-      throw new Error("Question is required");
-    }
-    if (!snapshotId) {
-      throw new Error("Snapshot id is required");
-    }
-
-    const requestKey = [
-      snapshotId,
-      payload.locale,
-      question.toLowerCase(),
-    ].join("::");
-    const existing = pendingAssistantRequests.get(requestKey);
-    if (existing) {
-      return existing;
-    }
-
-    const request = fetch("/api/assistant/chat", {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      cache: "no-store",
-      body: JSON.stringify({
-        question,
-        locale: payload.locale,
-        snapshot_id: snapshotId,
-        context: payload.context,
-      }),
-    })
-      .then(async (response) => {
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        return response.json() as Promise<AssistantChatResponse>;
-      })
-      .finally(() => {
-        pendingAssistantRequests.delete(requestKey);
-      });
-
-    pendingAssistantRequests.set(requestKey, request);
     return request;
   },
 
