@@ -16,16 +16,19 @@ import { normalizeCityKey } from "./decision-utils";
 
 const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v3";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
+const AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS = 2;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
 const pendingAiCityForecastRequests = new Map<
   string,
   Promise<AiCityForecastPayload>
 >();
+const queuedAiCityForecastTasks: Array<() => void> = [];
 const aiCityForecastStateCache = new Map<
   string,
   { state: AiCityForecastState; updatedAt: number }
 >();
+let activeAiCityForecastStreams = 0;
 
 type AiCityStreamProgress = {
   stage?: string | null;
@@ -111,6 +114,33 @@ function writeCachedAiForecastState(key: string, state: AiCityForecastState) {
   aiCityForecastStateCache.set(key, {
     state,
     updatedAt: Date.now(),
+  });
+}
+
+function runQueuedAiCityForecastTask<T>(
+  task: () => Promise<T>,
+  onQueued?: () => void,
+) {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      activeAiCityForecastStreams += 1;
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          activeAiCityForecastStreams = Math.max(
+            0,
+            activeAiCityForecastStreams - 1,
+          );
+          const next = queuedAiCityForecastTasks.shift();
+          if (next) next();
+        });
+    };
+    if (activeAiCityForecastStreams < AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS) {
+      run();
+    } else {
+      onQueued?.();
+      queuedAiCityForecastTasks.push(run);
+    }
   });
 }
 
@@ -221,52 +251,57 @@ function requestAiCityForecast({
   const pending = pendingAiCityForecastRequests.get(requestKey);
   if (pending) return pending;
 
-  const request = buildBrowserBackendHeaders({
-    Accept: "text/event-stream",
-    "Content-Type": "application/json",
-  })
-    .then((headers) =>
-      fetchBackendApi("/api/scan/terminal/ai-city/stream", {
-        method: "POST",
-        headers,
-        cache: "no-store",
-        body: JSON.stringify({
-          city,
-          force_refresh: forceRefresh,
-          locale,
-        }),
+  const request = runQueuedAiCityForecastTask(async () => {
+    const headers = await buildBrowserBackendHeaders({
+      Accept: "text/event-stream",
+      "Content-Type": "application/json",
+    });
+    const response = await fetchBackendApi("/api/scan/terminal/ai-city/stream", {
+      method: "POST",
+      headers,
+      cache: "no-store",
+      body: JSON.stringify({
+        city,
+        force_refresh: forceRefresh,
+        locale,
       }),
-    )
-    .then(async (response) => {
-      if (!response.ok) {
-        let detailMessage = "";
-        try {
-          const raw = await response.text();
-          const errorPayload = JSON.parse(raw);
-          const message = String(errorPayload?.error || "").trim();
-          const rawDetail = String(errorPayload?.detail || "").trim();
-          const elapsed = Number(errorPayload?.elapsed_ms);
-          const timeout = Number(errorPayload?.timeout_ms);
-          detailMessage = [
-            message,
-            rawDetail,
-            Number.isFinite(elapsed) && Number.isFinite(timeout)
-              ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
-              : "",
-          ]
-            .filter(Boolean)
-            .join(" · ");
-        } catch {
-          detailMessage = "";
-        }
-        throw new Error(
-          detailMessage
-            ? `HTTP ${response.status} · ${detailMessage}`
-          : `HTTP ${response.status}`,
-        );
+    });
+    if (!response.ok) {
+      let detailMessage = "";
+      try {
+        const raw = await response.text();
+        const errorPayload = JSON.parse(raw);
+        const message = String(errorPayload?.error || "").trim();
+        const rawDetail = String(errorPayload?.detail || "").trim();
+        const elapsed = Number(errorPayload?.elapsed_ms);
+        const timeout = Number(errorPayload?.timeout_ms);
+        detailMessage = [
+          message,
+          rawDetail,
+          Number.isFinite(elapsed) && Number.isFinite(timeout)
+            ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" · ");
+      } catch {
+        detailMessage = "";
       }
-      return readAiCityForecastStream(response, locale, onProgress);
-    })
+      throw new Error(
+        detailMessage
+          ? `HTTP ${response.status} · ${detailMessage}`
+          : `HTTP ${response.status}`,
+      );
+    }
+    return readAiCityForecastStream(response, locale, onProgress);
+  }, () => {
+    onProgress?.({
+      stage: "queued",
+      message_en:
+        "AI airport-bulletin read is queued behind the cities already streaming...",
+      message_zh: "AI 机场报文解读已排队，正在等待前面的城市完成流式生成…",
+    });
+  })
     .finally(() => {
       pendingAiCityForecastRequests.delete(requestKey);
     });

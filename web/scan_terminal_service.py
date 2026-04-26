@@ -74,12 +74,12 @@ SCAN_AI_TIMEOUT_SEC = _env_int(
 )
 SCAN_CITY_AI_TIMEOUT_SEC = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC",
-    18,
+    30,
     min_value=10,
     max_value=120,
 )
 SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR = str(
-    os.getenv("POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR") or "false"
+    os.getenv("POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR") or "true"
 ).strip().lower() in {"1", "true", "yes", "on"}
 SCAN_AI_CACHE_TTL_SEC = max(
     30,

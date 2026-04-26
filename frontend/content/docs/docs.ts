@@ -55,14 +55,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "你会在页面上看到什么",
             blocks: [
-              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "专业气象结论条：先给今日主判断、置信度、基准/上修/下修路径和下一观测点。", "校准模型概率 / 模型区间与分歧：概率层看当前生产概率引擎输出；EMOS / LGBM 只有在评估通过或 shadow 对照时进入解释层，模型区间用于解释分歧。", "气象证据链 / 失效条件 / 确认条件：解释为什么这么判断，以及什么情况会让判断降级。", "历史对账：查看已结算样本、DEB MAE、单模型表现和新增模型参考。"] },
+              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "专业气象结论条：先给今日主判断、置信度、基准/上修/下修路径和下一观测点。", "城市决策卡：从地图进入城市简报，读取 AI 机场报文解读、最高温中枢、市场温度桶和模型-市场差。", "校准模型概率 / 模型区间与分歧：概率层看当前生产概率引擎输出；EMOS / LGBM 只有在评估通过或 shadow 对照时进入解释层，模型区间用于解释分歧。", "气象证据链 / 失效条件 / 确认条件：解释为什么这么判断，以及什么情况会让判断降级。", "历史对账：查看已结算样本、DEB MAE、单模型表现和新增模型参考。"] },
             ],
           },
           {
             id: "how-to-read",
             title: "如何快速读懂主站",
             blocks: [
-              { type: "steps", items: ["先看专业气象结论条，确认今日主判断、基准路径和下一观测点。", "再看锚点状态和今日气温预测图，确认机场实测、DEB、峰值窗口和关键档位线。", "接着看气象证据链、失效条件和确认条件，判断这个路径有没有被新观测破坏。", "最后看校准模型概率、模型区间和市场参考，判断概率是否已经被市场充分计价。"] },
+              { type: "steps", items: ["先看专业气象结论条或城市决策卡，确认今日主判断、最高温中枢和下一观测点。", "再看锚点状态和今日气温预测图，确认机场实测、DEB、峰值窗口和关键档位线。", "接着看 AI 机场报文解读、气象证据链、失效条件和确认条件，判断这个路径有没有被新观测破坏。", "最后看校准模型概率、模型区间、市场温度桶和模型-市场差，判断概率是否已经被市场充分计价。"] },
             ],
           },
         ],
@@ -83,14 +83,14 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "What you see on the site",
             blocks: [
-              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Professional meteorology read: headline, confidence, base/upside/downside path, and next observation point.", "Calibrated model probability / model spread: probability comes from the calibrated engine; spread explains model disagreement.", "Evidence chain / failure modes / confirmation: why the read is valid and what would downgrade it.", "History reconciliation: settled-sample MAE, single-model performance, and the new model reference stack."] },
+              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Professional meteorology read: headline, confidence, base/upside/downside path, and next observation point.", "City decision cards: map-launched city briefs with the AI airport read, expected-high center, market bucket, and model-market difference.", "Calibrated model probability / model spread: probability comes from the calibrated engine; spread explains model disagreement.", "Evidence chain / failure modes / confirmation: why the read is valid and what would downgrade it.", "History reconciliation: settled-sample MAE, single-model performance, and the new model reference stack."] },
             ],
           },
           {
             id: "how-to-read",
             title: "How to read the dashboard quickly",
             blocks: [
-              { type: "steps", items: ["Start with the professional meteorology read: headline, base path, and next observation point.", "Use anchor status and the intraday chart to check current observations, DEB, peak window, and key bucket lines.", "Read the evidence chain, failure modes, and confirmation rules to see whether the path is still valid.", "Then compare the calibrated probability, model spread, and market reference."] },
+              { type: "steps", items: ["Start with the professional meteorology read or city decision card: headline, expected-high center, base path, and next observation point.", "Use anchor status and the intraday chart to check current observations, DEB, peak window, and key bucket lines.", "Read the AI airport read, evidence chain, failure modes, and confirmation rules to see whether the path is still valid.", "Then compare calibrated probability, model spread, market bucket, and model-market difference."] },
             ],
           },
         ],
@@ -171,6 +171,88 @@ export const DOCS_PAGES: DocsPage[] = [
             title: "How to read the trading language",
             blocks: [
               { type: "bullets", items: ["Supportive: the setup still supports more warming. Do not call the high too early.", "Suppressive: further upside looks less reliable. Do not chase the high blindly.", "Wait / confirm: the setup is still mixed. Let the next move decide first."] },
+            ],
+          },
+        ],
+      },
+    },
+  },
+  {
+    slug: "city-decision-cards",
+    group: "analysis",
+    content: {
+      "zh-CN": {
+        title: "城市决策卡",
+        description: "这页解释地图城市决策卡如何把 AI 机场报文解读、最高温中枢、市场温度桶和模型-市场差组合成可验证判断。",
+        sections: [
+          {
+            id: "entry-and-permission",
+            title: "从地图进入决策卡",
+            blocks: [
+              { type: "paragraph", text: "用户可以从地图点击城市进入城市决策卡。机会榜和日历属于 Pro 能力；地图探索和城市简报仍可作为轻量入口使用。" },
+              { type: "callout", tone: "info", title: "先天气、后市场", text: "决策卡顶部的天气判断层不读取市场价格，先用 METAR、DEB、多模型集合和 AI 解读确定最高温中枢，再把该中枢映射到市场温度桶。" },
+            ],
+          },
+          {
+            id: "ai-airport-read",
+            title: "AI 机场报文解读包括什么",
+            blocks: [
+              { type: "bullets", items: ["最终判断：预计最高温中枢、上修/下修空间和当前操作口径。", "METAR 解读：报文时间、实测温度、露点/湿度、风向风速、能见度、云量、气压和 NOSIG / TAF 等机场侧信号。", "推理说明：把最新实测、DEB、多模型集群和午后对流/云雨/风向风险合并成日内节奏判断。", "模型集群备注：展示模型数量、模型区间，以及是否集中在 DEB ±2°C 内。", "风险提示：后续 METAR 或路径明显偏离时，说明应如何上调或下修。", "原始 METAR：保留原始报文，便于人工复核。"] },
+            ],
+          },
+          {
+            id: "market-layer",
+            title: "市场价格层怎么读",
+            blocks: [
+              { type: "paragraph", text: "温度桶标签来自完整市场桶列表，并会按 label / slug / question 识别 exact、or higher、or lower、range 等方向，避免把 30.5°C 错配到不合理的 16°C 或反向尾部桶。" },
+              { type: "callout", tone: "info", title: "模型-市场差", text: "模型-市场差 = 模型概率 − 市场隐含概率。正数表示天气概率高于市场报价；负数表示市场已经把该 YES 计价得更充分。它不是温度变化，也不是收益率。" },
+              { type: "paragraph", text: "YES 买入价以可执行报价为主；没有可靠模型概率或 YES 价格时，决策卡会显示报价已匹配但暂不计算模型-市场差。" },
+            ],
+          },
+          {
+            id: "cache-behavior",
+            title: "为什么切换选项卡后不应重新空白加载",
+            blocks: [
+              { type: "paragraph", text: "城市决策卡会用 city + local_date + locale + METAR signature 作为 AI 解读缓存键。METAR signature 优先使用原始报文，缺失时回退到报文时间、观测时间和温度。" },
+              { type: "bullets", items: ["页面内存缓存：保存 loading 状态、流式进度、机场报文解读片段和最终结果；从其他选项卡切回时优先恢复旧内容。", "浏览器 localStorage：保存最终成功的 AI payload，默认 TTL 为 1 小时。", "后端 AI 缓存：不再把 local_time 放入缓存键，避免同一报文因当前时间变化反复失效。", "市场扫描缓存：完整 all_buckets 结果按城市和日期缓存，默认 TTL 为 10 分钟。"] },
+            ],
+          },
+        ],
+      },
+      "en-US": {
+        title: "City Decision Cards",
+        description: "How the city card combines the AI airport read, expected-high center, market bucket mapping, and model-market difference into a verifiable decision.",
+        sections: [
+          {
+            id: "entry-and-permission",
+            title: "Opening a card from the map",
+            blocks: [
+              { type: "paragraph", text: "Users can click a city on the map to open its city decision card. The opportunity board and calendar are Pro surfaces; map exploration and city briefs remain the lightweight entry point." },
+              { type: "callout", tone: "info", title: "Weather first, market second", text: "The weather decision layer does not use market price input. It first sets the expected-high center from METAR, DEB, the model cluster, and AI reasoning, then maps that center to the relevant market bucket." },
+            ],
+          },
+          {
+            id: "ai-airport-read",
+            title: "What the AI airport read contains",
+            blocks: [
+              { type: "bullets", items: ["Final judgment: expected-high center, upside/downside room, and the working decision.", "METAR read: report time, observed temperature, dew point / humidity, wind, visibility, clouds, pressure, and NOSIG / TAF airport-side signals.", "Reasoning: combines live observations, DEB, the model cluster, and convective / cloud / wind risks into an intraday pace read.", "Model-cluster note: model count, model range, and whether the cluster sits within DEB ±2°C.", "Risk notes: how later METAR/path breaks should raise or lower the high center.", "Raw METAR: preserved so the read can be manually audited."] },
+            ],
+          },
+          {
+            id: "market-layer",
+            title: "How to read the market layer",
+            blocks: [
+              { type: "paragraph", text: "Bucket labels come from the full market bucket list. The card reads label / slug / question text to distinguish exact, or-higher, or-lower, and range buckets, so a 30.5°C weather center is not matched to an unreasonable 16°C or reverse-tail bucket." },
+              { type: "callout", tone: "info", title: "Model-market difference", text: "Model-market difference = model probability minus market-implied probability. A positive value means the weather probability is above market pricing; a negative value means the YES is already priced more fully by the market. It is not a temperature delta or return." },
+              { type: "paragraph", text: "YES buy uses executable quote data when available. If either model probability or YES price is incomplete, the card shows the quote match but withholds the model-market difference." },
+            ],
+          },
+          {
+            id: "cache-behavior",
+            title: "Why tab switching should not blank the AI read",
+            blocks: [
+              { type: "paragraph", text: "The card keys AI reads by city + local_date + locale + METAR signature. The signature prefers the raw report and falls back to report time, observation time, and temperature." },
+              { type: "bullets", items: ["In-page memory cache: stores loading state, stream progress, airport-read snippets, and final results so returning from another tab restores prior content first.", "Browser localStorage: stores final successful AI payloads for one hour by default.", "Backend AI cache: excludes local_time from the key so the same report does not expire merely because the current clock changed.", "Market-scan cache: stores full all_buckets results by city and date for 10 minutes by default."] },
             ],
           },
         ],
