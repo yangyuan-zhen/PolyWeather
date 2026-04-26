@@ -10982,6 +10982,275 @@
   text-align: right;
 }
 
+.root :global(.scan-opportunity-overview) {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(77, 163, 255, 0.16), transparent 32%),
+    #0b1220;
+  padding: 18px;
+}
+
+.root :global(.scan-opportunity-overview.loading),
+.root :global(.scan-opportunity-overview.empty) {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  text-align: center;
+  color: #9fb2c7;
+}
+
+.root :global(.scan-opportunity-overview.empty strong) {
+  color: #e6edf3;
+  font-size: 22px;
+}
+
+.root :global(.scan-opportunity-overview.empty button) {
+  border: 1px solid rgba(77, 163, 255, 0.38);
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  cursor: pointer;
+  font-weight: 900;
+  padding: 10px 16px;
+}
+
+.root :global(.scan-opportunity-hero) {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+  gap: 18px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.root :global(.scan-opportunity-hero > div:first-child) {
+  border: 1px solid rgba(77, 163, 255, 0.2);
+  border-radius: 18px;
+  background: rgba(17, 26, 46, 0.78);
+  padding: 18px;
+}
+
+.root :global(.scan-opportunity-hero span) {
+  color: #4da3ff;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.root :global(.scan-opportunity-hero strong) {
+  display: block;
+  margin-top: 4px;
+  color: #e6edf3;
+  font-size: 26px;
+  line-height: 1.15;
+}
+
+.root :global(.scan-opportunity-hero p) {
+  max-width: 680px;
+  margin: 9px 0 0;
+  color: #9fb2c7;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.root :global(.scan-opportunity-summary) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.root :global(.scan-opportunity-summary span) {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(13, 17, 23, 0.52);
+  color: #9fb2c7;
+  padding: 12px;
+}
+
+.root :global(.scan-opportunity-summary b) {
+  color: #e6edf3;
+  font-size: 18px;
+}
+
+.root :global(.scan-opportunity-lanes) {
+  display: grid;
+  gap: 16px;
+}
+
+.root :global(.scan-opportunity-lane) {
+  border: 1px solid rgba(77, 163, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(13, 17, 23, 0.38);
+  padding: 14px;
+}
+
+.root :global(.scan-opportunity-lane-head) {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.root :global(.scan-opportunity-lane-head strong) {
+  color: #e6edf3;
+  font-size: 17px;
+}
+
+.root :global(.scan-opportunity-lane-head p) {
+  margin: 3px 0 0;
+  color: #9fb2c7;
+  font-size: 12px;
+}
+
+.root :global(.scan-opportunity-lane-head > span) {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  font-weight: 900;
+}
+
+.root :global(.scan-opportunity-card-grid) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.root :global(.scan-opportunity-decision-card) {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  background: rgba(17, 26, 46, 0.78);
+  color: inherit;
+  cursor: pointer;
+  padding: 14px;
+  transition: border-color 0.18s ease, transform 0.18s ease, background 0.18s ease;
+}
+
+.root :global(.scan-opportunity-decision-card:hover),
+.root :global(.scan-opportunity-decision-card.selected) {
+  border-color: rgba(77, 163, 255, 0.42);
+  background: rgba(20, 34, 58, 0.9);
+  transform: translateY(-1px);
+}
+
+.root :global(.scan-opportunity-decision-card.trade) {
+  border-color: rgba(34, 197, 94, 0.34);
+}
+
+.root :global(.scan-opportunity-decision-card.wait) {
+  border-color: rgba(245, 158, 11, 0.34);
+}
+
+.root :global(.scan-opportunity-decision-card.risk),
+.root :global(.scan-opportunity-decision-card.avoid) {
+  border-color: rgba(239, 68, 68, 0.32);
+}
+
+.root :global(.scan-opportunity-decision-head),
+.root :global(.scan-opportunity-decision-primary),
+.root :global(.scan-opportunity-decision-foot) {
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.root :global(.scan-opportunity-decision-head span),
+.root :global(.scan-opportunity-decision-primary span),
+.root :global(.scan-opportunity-decision-foot small) {
+  color: #9fb2c7;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.root :global(.scan-opportunity-decision-head strong) {
+  display: block;
+  margin-top: 3px;
+  color: #e6edf3;
+  font-size: 18px;
+}
+
+.root :global(.scan-opportunity-decision-head > b) {
+  align-self: start;
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.14);
+  color: #9ecbff;
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.root :global(.scan-opportunity-decision-card.trade .scan-opportunity-decision-head > b) {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.root :global(.scan-opportunity-decision-card.wait .scan-opportunity-decision-head > b) {
+  background: rgba(245, 158, 11, 0.14);
+  color: #facc15;
+}
+
+.root :global(.scan-opportunity-decision-card.risk .scan-opportunity-decision-head > b),
+.root :global(.scan-opportunity-decision-card.avoid .scan-opportunity-decision-head > b) {
+  background: rgba(239, 68, 68, 0.14);
+  color: #fca5a5;
+}
+
+.root :global(.scan-opportunity-decision-primary span) {
+  display: grid;
+  gap: 4px;
+  flex: 1;
+  border-radius: 12px;
+  background: rgba(13, 17, 23, 0.52);
+  padding: 9px;
+}
+
+.root :global(.scan-opportunity-decision-primary b) {
+  color: #e6edf3;
+  font-size: 14px;
+}
+
+.root :global(.scan-opportunity-decision-card p) {
+  min-height: 38px;
+  margin: 0;
+  color: #b6c7db;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.root :global(.scan-opportunity-decision-foot) {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.root :global(.scan-opportunity-decision-foot small) {
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.08);
+  padding: 5px 8px;
+}
+
+.root :global(.scan-opportunity-decision-card button) {
+  justify-self: start;
+  border: 1px solid rgba(77, 163, 255, 0.34);
+  border-radius: 10px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 8px 10px;
+}
+
 .root :global(.scan-ai-city-stack) {
   display: grid;
   gap: 18px;
@@ -11243,6 +11512,81 @@
   color: #fbbf24 !important;
   font-size: 12px;
   font-weight: 800;
+}
+
+.root :global(.scan-ai-market-decision) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(11, 18, 32, 0.44);
+  padding: 12px;
+}
+
+.root :global(.scan-ai-market-decision.warm) {
+  border-color: rgba(34, 197, 94, 0.36);
+}
+
+.root :global(.scan-ai-market-decision.cold) {
+  border-color: rgba(239, 68, 68, 0.36);
+}
+
+.root :global(.scan-ai-market-decision.watch) {
+  border-color: rgba(245, 158, 11, 0.38);
+}
+
+.root :global(.scan-ai-market-decision span) {
+  color: #9fb2c7;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-market-decision strong) {
+  margin-top: 3px;
+  color: #e6edf3;
+  font-size: 15px;
+}
+
+.root :global(.scan-ai-market-decision p) {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.root :global(.scan-ai-market-decision-stats) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  gap: 8px;
+}
+
+.root :global(.scan-ai-market-decision-stats small) {
+  display: grid;
+  gap: 3px;
+  border-radius: 10px;
+  background: rgba(17, 26, 46, 0.82);
+  color: #9fb2c7;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 8px;
+}
+
+.root :global(.scan-ai-market-decision-stats b) {
+  color: #e6edf3;
+  font-size: 13px;
+}
+
+.root :global(.scan-ai-market-link) {
+  border: 1px solid rgba(77, 163, 255, 0.34);
+  border-radius: 10px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 9px 10px;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .root :global(.scan-ai-decision-metrics) {
@@ -12671,119 +13015,216 @@
   min-height: 520px;
   display: grid;
   place-items: center;
-  align-content: center;
-  justify-items: center;
-  gap: 14px;
   padding: 48px 32px;
   text-align: center;
 }
 
-.root :global(.scan-loading-orb) {
+.root :global(.scan-loading-signal) {
   position: relative;
-  width: 74px;
-  height: 74px;
-  border-radius: 999px;
+  width: min(100%, 420px);
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 28px 30px;
+  border: 1px solid rgba(125, 211, 252, 0.14);
+  border-radius: 28px;
   background:
-    radial-gradient(circle at center, rgba(77, 163, 255, 0.2) 0 22%, transparent 23%),
-    conic-gradient(from 20deg, rgba(77, 163, 255, 0.08), rgba(77, 163, 255, 0.95), rgba(34, 197, 94, 0.78), rgba(77, 163, 255, 0.08));
+    radial-gradient(circle at 18% 18%, rgba(77, 163, 255, 0.18), transparent 34%),
+    linear-gradient(145deg, rgba(12, 20, 36, 0.92), rgba(5, 11, 22, 0.74));
   box-shadow:
-    0 0 0 1px rgba(77, 163, 255, 0.14),
-    0 18px 42px rgba(77, 163, 255, 0.18);
-  animation: scan-loading-spin 1.25s linear infinite;
+    0 22px 70px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  overflow: hidden;
 }
 
-.root :global(.scan-loading-orb::before) {
+.root :global(.scan-loading-signal::before) {
   content: "";
   position: absolute;
-  inset: 8px;
-  border-radius: inherit;
-  background: #0b1220;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 0%,
+    rgba(125, 211, 252, 0.08) 42%,
+    rgba(34, 197, 94, 0.1) 50%,
+    transparent 58%
+  );
+  transform: translateX(-120%);
+  animation: scan-loading-sweep 2.6s ease-in-out infinite;
+  pointer-events: none;
 }
 
-.root :global(.scan-loading-orb span) {
-  position: absolute;
-  inset: 26px;
-  z-index: 1;
-  border-radius: inherit;
-  background: #4da3ff;
-  box-shadow:
-    0 0 18px rgba(77, 163, 255, 0.72),
-    0 0 36px rgba(34, 197, 94, 0.28);
-  animation: scan-loading-pulse 1.25s ease-in-out infinite;
+.root :global(.scan-loading-signal.compact) {
+  width: min(100%, 340px);
+  gap: 12px;
+  padding: 18px 20px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 20% 20%, rgba(77, 163, 255, 0.14), transparent 36%),
+    rgba(10, 18, 32, 0.62);
+  box-shadow: none;
 }
 
-.root :global(.scan-loading-orb i) {
-  position: absolute;
+.root :global(.scan-loading-decision-flow) {
+  position: relative;
   z-index: 1;
-  top: 4px;
-  left: 50%;
-  width: 9px;
-  height: 9px;
-  margin-left: -4.5px;
+  display: grid;
+  grid-template-columns: 16px minmax(70px, 1fr) 16px minmax(70px, 1fr) 16px;
+  align-items: center;
+  width: min(100%, 300px);
+}
+
+.root :global(.scan-loading-node) {
+  width: 16px;
+  height: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.16);
   border-radius: 999px;
-  background: #e6edf3;
-  box-shadow: 0 0 18px rgba(230, 237, 243, 0.86);
+  background: #0b1220;
+  box-shadow: 0 0 0 5px rgba(77, 163, 255, 0.05);
 }
 
-.root :global(.scan-loading-title) {
+.root :global(.scan-loading-node.hot) {
+  background: linear-gradient(135deg, #f97316, #fde047);
+  box-shadow: 0 0 24px rgba(251, 146, 60, 0.26);
+}
+
+.root :global(.scan-loading-node.market) {
+  background: linear-gradient(135deg, #38bdf8, #4da3ff);
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.26);
+}
+
+.root :global(.scan-loading-node.action) {
+  background: linear-gradient(135deg, #22c55e, #1be392);
+  box-shadow: 0 0 24px rgba(34, 197, 94, 0.3);
+  animation: scan-loading-node-breathe 1.8s ease-in-out infinite;
+}
+
+.root :global(.scan-loading-rail) {
+  position: relative;
+  height: 2px;
+  overflow: hidden;
+  background: rgba(148, 163, 184, 0.16);
+}
+
+.root :global(.scan-loading-rail i) {
+  position: absolute;
+  inset: 0;
+  width: 48%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, transparent, #7dd3fc, #22c55e);
+  transform: translateX(-110%);
+  animation: scan-loading-rail-flow 1.55s ease-in-out infinite;
+}
+
+.root :global(.scan-loading-rail:nth-of-type(4) i) {
+  animation-delay: 0.45s;
+}
+
+.root :global(.scan-loading-copy-block) {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+}
+
+.root :global(.scan-loading-copy-block strong) {
   color: #e6edf3;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 900;
+  letter-spacing: -0.02em;
 }
 
-.root :global(.scan-loading-copy) {
+.root :global(.scan-loading-copy-block span) {
+  max-width: 320px;
   color: #9fb2c7;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 650;
+  line-height: 1.55;
 }
 
-.root :global(.scan-loading-steps) {
-  display: inline-flex;
-  gap: 7px;
-  margin-top: 2px;
+.root :global(.scan-loading-signal-bars) {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: end;
+  gap: 5px;
+  height: 28px;
 }
 
-.root :global(.scan-loading-steps span) {
-  width: 32px;
-  height: 3px;
-  border-radius: 999px;
-  background: rgba(77, 163, 255, 0.24);
-  animation: scan-loading-step 1.2s ease-in-out infinite;
+.root :global(.scan-loading-signal-bars span) {
+  width: 7px;
+  min-height: 8px;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, #7dd3fc, #4da3ff 52%, #1be392);
+  opacity: 0.42;
+  transform-origin: center bottom;
+  animation: scan-loading-bars 1.35s ease-in-out infinite;
 }
 
-.root :global(.scan-loading-steps span:nth-child(2)) {
+.root :global(.scan-loading-signal-bars span:nth-child(1)) {
+  height: 12px;
+}
+
+.root :global(.scan-loading-signal-bars span:nth-child(2)) {
+  height: 22px;
   animation-delay: 0.16s;
 }
 
-.root :global(.scan-loading-steps span:nth-child(3)) {
+.root :global(.scan-loading-signal-bars span:nth-child(3)) {
+  height: 16px;
   animation-delay: 0.32s;
 }
 
-@keyframes scan-loading-spin {
-  to {
-    transform: rotate(360deg);
+.root :global(.scan-loading-signal-bars span:nth-child(4)) {
+  height: 25px;
+  animation-delay: 0.48s;
+}
+
+@keyframes scan-loading-sweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  46%,
+  100% {
+    transform: translateX(130%);
   }
 }
 
-@keyframes scan-loading-pulse {
-  0%,
-  100% {
-    transform: scale(0.82);
-    opacity: 0.74;
+@keyframes scan-loading-rail-flow {
+  0% {
+    transform: translateX(-110%);
+    opacity: 0.15;
   }
-  50% {
-    transform: scale(1);
+  45% {
     opacity: 1;
   }
+  100% {
+    transform: translateX(220%);
+    opacity: 0.15;
+  }
 }
 
-@keyframes scan-loading-step {
+@keyframes scan-loading-node-breathe {
   0%,
   100% {
-    background: rgba(77, 163, 255, 0.2);
+    transform: scale(0.92);
+    filter: saturate(0.9);
   }
   50% {
-    background: rgba(77, 163, 255, 0.9);
+    transform: scale(1.08);
+    filter: saturate(1.25);
+  }
+}
+
+@keyframes scan-loading-bars {
+  0%,
+  100% {
+    opacity: 0.38;
+    transform: scaleY(0.72);
+  }
+  50% {
+    opacity: 0.95;
+    transform: scaleY(1);
   }
 }
 
@@ -12841,7 +13282,7 @@
 .root :global(.scan-terminal.light .scan-detail-city-sub),
 .root :global(.scan-terminal.light .scan-detail-volume-caption),
 .root :global(.scan-terminal.light .scan-empty-copy),
-.root :global(.scan-terminal.light .scan-loading-copy),
+.root :global(.scan-terminal.light .scan-loading-copy-block span),
 .root :global(.scan-terminal.light .scan-kv span:first-child),
 .root :global(.scan-terminal.light .scan-chart-label),
 .root :global(.scan-terminal.light .scan-trade-sub),
@@ -12849,12 +13290,39 @@
   color: #475569;
 }
 
-.root :global(.scan-terminal.light .scan-loading-title) {
+.root :global(.scan-terminal.light .scan-loading-copy-block strong) {
   color: #0f172a;
 }
 
-.root :global(.scan-terminal.light .scan-loading-orb::before) {
-  background: #f7f9fc;
+.root :global(.scan-terminal.light .scan-loading-signal) {
+  border-color: #dbeafe;
+  background:
+    radial-gradient(circle at 18% 18%, rgba(59, 130, 246, 0.12), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.96), rgba(241, 245, 249, 0.9));
+  box-shadow: 0 16px 34px rgba(40, 70, 110, 0.1);
+}
+
+.root :global(.scan-terminal.light .scan-loading-signal.compact) {
+  background:
+    radial-gradient(circle at 18% 18%, rgba(59, 130, 246, 0.1), transparent 34%),
+    rgba(255, 255, 255, 0.78);
+}
+
+.root :global(.scan-terminal.light .scan-loading-node) {
+  background: #ffffff;
+  border-color: rgba(148, 163, 184, 0.22);
+}
+
+.root :global(.scan-terminal.light .scan-loading-node.hot) {
+  background: linear-gradient(135deg, #f97316, #fde047);
+}
+
+.root :global(.scan-terminal.light .scan-loading-node.market) {
+  background: linear-gradient(135deg, #38bdf8, #2563eb);
+}
+
+.root :global(.scan-terminal.light .scan-loading-node.action) {
+  background: linear-gradient(135deg, #16a34a, #22c55e);
 }
 
 .root :global(.scan-terminal.light .scan-list-tabs button),
@@ -13157,6 +13625,38 @@
   border-color: #e2e8f0;
 }
 
+.root :global(.scan-terminal.light .scan-opportunity-overview) {
+  background: #f7f9fc;
+  border-color: #e2e8f0;
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-hero > div:first-child),
+.root :global(.scan-terminal.light .scan-opportunity-summary span),
+.root :global(.scan-terminal.light .scan-opportunity-lane),
+.root :global(.scan-terminal.light .scan-opportunity-decision-card),
+.root :global(.scan-terminal.light .scan-opportunity-decision-primary span) {
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-hero strong),
+.root :global(.scan-terminal.light .scan-opportunity-summary b),
+.root :global(.scan-terminal.light .scan-opportunity-lane-head strong),
+.root :global(.scan-terminal.light .scan-opportunity-decision-head strong),
+.root :global(.scan-terminal.light .scan-opportunity-decision-primary b) {
+  color: #0f172a;
+}
+
+.root :global(.scan-terminal.light .scan-opportunity-hero p),
+.root :global(.scan-terminal.light .scan-opportunity-summary span),
+.root :global(.scan-terminal.light .scan-opportunity-lane-head p),
+.root :global(.scan-terminal.light .scan-opportunity-decision-card p),
+.root :global(.scan-terminal.light .scan-opportunity-decision-head span),
+.root :global(.scan-terminal.light .scan-opportunity-decision-primary span),
+.root :global(.scan-terminal.light .scan-opportunity-decision-foot small) {
+  color: #64748b;
+}
+
 .root :global(.scan-terminal.light .scan-ai-city-card),
 .root :global(.scan-terminal.light .scan-ai-city-hero) {
   background: #ffffff;
@@ -13165,6 +13665,8 @@
 
 .root :global(.scan-terminal.light .scan-ai-city-section),
 .root :global(.scan-terminal.light .scan-ai-decision-band),
+.root :global(.scan-terminal.light .scan-ai-market-decision),
+.root :global(.scan-terminal.light .scan-ai-market-decision-stats small),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket),
 .root :global(.scan-terminal.light .scan-ai-city-pills span) {
@@ -13179,7 +13681,9 @@
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
 .root :global(.scan-terminal.light .scan-ai-market-bucket strong),
 .root :global(.scan-terminal.light .scan-ai-weather-summary),
-.root :global(.scan-terminal.light .scan-ai-decision-reasons small) {
+.root :global(.scan-terminal.light .scan-ai-decision-reasons small),
+.root :global(.scan-terminal.light .scan-ai-market-decision strong),
+.root :global(.scan-terminal.light .scan-ai-market-decision-stats b) {
   color: #0f172a;
 }
 
@@ -13189,6 +13693,9 @@
 .root :global(.scan-terminal.light .scan-ai-city-pills span),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket span),
+.root :global(.scan-terminal.light .scan-ai-market-decision span),
+.root :global(.scan-terminal.light .scan-ai-market-decision p),
+.root :global(.scan-terminal.light .scan-ai-market-decision-stats small),
 .root :global(.scan-terminal.light .scan-ai-city-muted),
 .root :global(.scan-terminal.light .scan-ai-city-loading),
 .root :global(.scan-terminal.light .scan-ai-city-chart-legend),
@@ -13381,10 +13888,15 @@
   }
 
   .root :global(.scan-ai-workspace-head),
+  .root :global(.scan-opportunity-hero),
   .root :global(.scan-ai-city-hero),
   .root :global(.scan-ai-city-section-head) {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .root :global(.scan-opportunity-hero) {
+    display: flex;
   }
 
   .root :global(.scan-ai-workspace-head p),
@@ -13395,6 +13907,11 @@
 
   .root :global(.scan-ai-decision-metrics) {
     min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-opportunity-card-grid),
+  .root :global(.scan-opportunity-summary) {
     grid-template-columns: 1fr;
   }
 

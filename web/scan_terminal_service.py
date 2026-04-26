@@ -390,11 +390,20 @@ def _extract_provider_stream_delta(data: Any) -> str:
         return ""
     choices = data.get("choices") or []
     if not choices or not isinstance(choices[0], dict):
-        return ""
+        text = data.get("text") or data.get("content")
+        return str(text or "")
     delta = choices[0].get("delta") or {}
-    if not isinstance(delta, dict):
-        return ""
-    return str(delta.get("content") or "")
+    if isinstance(delta, dict):
+        content = delta.get("content")
+        if content:
+            return str(content)
+    message = choices[0].get("message") or {}
+    if isinstance(message, dict):
+        content = message.get("content")
+        if content:
+            return str(content)
+    text = choices[0].get("text") or data.get("text") or data.get("content")
+    return str(text or "")
 
 
 def _provider_response_meta(data: Any) -> Dict[str, Any]:
@@ -487,6 +496,12 @@ def _build_city_ai_fallback(
     looks_like_truncated_json = bool(content_preview.startswith("{") and not content_preview.rstrip().endswith("}"))
     reason_preview = _truncate_ai_text(reason, 260)
     reason_lower = str(reason or "").lower()
+    if reason_lower.strip() == "empty ai content":
+        reason_preview_zh = "模型没有返回可解析正文"
+        reason_preview_en = "model returned no parseable content"
+    else:
+        reason_preview_zh = reason_preview
+        reason_preview_en = reason_preview
     timed_out = "timeout" in reason_lower or "timed out" in reason_lower or "超时" in str(reason or "")
     if content_preview and not looks_like_truncated_json:
         metar_zh = f"DeepSeek V4-Pro 返回了非结构化解读，系统已保留摘要：{content_preview}"
@@ -507,8 +522,8 @@ def _build_city_ai_fallback(
     else:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；AI 输出格式异常，已降级为模型/METAR 兜底判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; AI output was not strict JSON, so this is a model/METAR fallback."
-    reasoning_zh = f"DEB、多模型集合和最新 METAR 仍可用于判断方向；原始失败原因：{reason_preview or 'AI 输出不是 JSON object'}。"
-    reasoning_en = f"DEB, the model cluster and latest METAR still support a directional read; raw failure: {reason_preview or 'AI output was not a JSON object'}."
+    reasoning_zh = f"DEB、多模型集合和最新 METAR 仍可用于判断方向；原始失败原因：{reason_preview_zh or 'AI 输出不是 JSON object'}。"
+    reasoning_en = f"DEB, the model cluster and latest METAR still support a directional read; raw failure: {reason_preview_en or 'AI output was not a JSON object'}."
     risks_zh = (
         ["DeepSeek V4-Pro 本次超时，需刷新重试确认 AI 细节。"]
         if timed_out
@@ -1536,7 +1551,6 @@ def _build_city_ai_stream_request(
         "model": SCAN_AI_MODEL,
         "temperature": 0.2,
         "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
-        "response_format": {"type": "json_object"},
         "stream": True,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -1575,6 +1589,13 @@ def _cache_city_ai_payload(
             "city_display_name": data.get("display_name"),
             "payload": ai_raw,
         }
+
+
+def _is_city_ai_fallback(ai_raw: Any) -> bool:
+    if not isinstance(ai_raw, dict):
+        return True
+    meta = ai_raw.get("_polyweather_meta")
+    return bool(isinstance(meta, dict) and meta.get("fallback"))
 
 
 def _build_city_ai_result_payload(
@@ -1677,6 +1698,24 @@ def stream_scan_city_ai_forecast_payload(
         detail_mode="full",
     )
     ai_input = _build_city_ai_prompt(data)
+    preview_raw = _build_city_ai_fallback(
+        ai_input,
+        locale=normalized_locale,
+        reason="stream preview",
+    )
+    yield _sse_event(
+        "preview",
+        {
+            "city": data.get("name") or city_name,
+            "city_display_name": data.get("display_name") or city_name,
+            "metar_read_zh": preview_raw.get("metar_read_zh"),
+            "metar_read_en": preview_raw.get("metar_read_en"),
+            "final_judgment_zh": preview_raw.get("final_judgment_zh"),
+            "final_judgment_en": preview_raw.get("final_judgment_en"),
+            "model_cluster_note_zh": preview_raw.get("model_cluster_note_zh"),
+            "model_cluster_note_en": preview_raw.get("model_cluster_note_en"),
+        },
+    )
     yield _sse_event(
         "progress",
         {
@@ -1767,6 +1806,8 @@ def stream_scan_city_ai_forecast_payload(
                                 "raw_length": len(accumulated),
                             },
                         )
+        degraded = False
+        degraded_reason: Optional[str] = None
         try:
             ai_raw = _extract_ai_json_object(accumulated)
             if isinstance(ai_raw, dict):
@@ -1775,19 +1816,50 @@ def stream_scan_city_ai_forecast_payload(
                     "streamed": True,
                 }
         except Exception as exc:
-            ai_raw = _build_city_ai_fallback(
-                ai_input,
-                locale=normalized_locale,
-                reason=str(exc),
-                raw_content=accumulated,
+            retry_reason = str(exc)
+            yield _sse_event(
+                "progress",
+                {
+                    "stage": "retry_non_stream",
+                    "message_zh": "流式内容为空或 JSON 不完整，正在改用非流式严格 JSON 重试…",
+                    "message_en": "Stream content was empty or incomplete JSON; retrying with a strict non-stream request…",
+                    "raw_length": len(accumulated),
+                    "reason": retry_reason,
+                },
             )
+            try:
+                ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
+                if isinstance(ai_raw, dict):
+                    meta = ai_raw.get("_polyweather_meta")
+                    if not isinstance(meta, dict):
+                        meta = {}
+                    ai_raw["_polyweather_meta"] = {
+                        **meta,
+                        "streamed": False,
+                        "stream_retry_non_stream": True,
+                        "stream_retry_reason": retry_reason,
+                        "stream_raw_length": len(accumulated),
+                    }
+                if _is_city_ai_fallback(ai_raw):
+                    degraded = True
+                    degraded_reason = retry_reason
+            except Exception as retry_exc:
+                degraded = True
+                degraded_reason = str(retry_exc)
+                ai_raw = _build_city_ai_fallback(
+                    ai_input,
+                    locale=normalized_locale,
+                    reason=degraded_reason or retry_reason,
+                    raw_content=accumulated,
+                )
         generated_at = datetime.utcnow().isoformat() + "Z"
-        _cache_city_ai_payload(
-            cache_key,
-            data=data,
-            generated_at=generated_at,
-            ai_raw=ai_raw,
-        )
+        if not _is_city_ai_fallback(ai_raw):
+            _cache_city_ai_payload(
+                cache_key,
+                data=data,
+                generated_at=generated_at,
+                ai_raw=ai_raw,
+            )
         yield _sse_event(
             "final",
             _build_city_ai_result_payload(
@@ -1795,6 +1867,10 @@ def stream_scan_city_ai_forecast_payload(
                 generated_at=generated_at,
                 started_at=started_at,
                 ai_raw=ai_raw,
+                degraded=degraded,
+                reason=degraded_reason,
+                reason_en=degraded_reason,
+                reason_zh=degraded_reason,
             ),
         )
     except httpx.TimeoutException as exc:
