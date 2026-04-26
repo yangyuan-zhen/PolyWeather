@@ -11183,6 +11183,14 @@
   border-color: rgba(34, 197, 94, 0.34);
 }
 
+.root :global(.scan-ai-decision-band.watch) {
+  border-color: rgba(245, 158, 11, 0.38);
+}
+
+.root :global(.scan-ai-decision-main) {
+  min-width: 0;
+}
+
 .root :global(.scan-ai-decision-band span) {
   color: #4da3ff;
   font-size: 12px;
@@ -11201,6 +11209,40 @@
   margin: 8px 0 0;
   color: #9fb2c7;
   line-height: 1.55;
+}
+
+.root :global(.scan-ai-decision-reasons) {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.root :global(.scan-ai-decision-reasons small) {
+  position: relative;
+  display: block;
+  padding-left: 16px;
+  color: #c9d7e8;
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.root :global(.scan-ai-decision-reasons small::before) {
+  position: absolute;
+  top: 0.58em;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #4da3ff;
+  content: "";
+}
+
+.root :global(.scan-ai-decision-risk) {
+  margin-top: 12px !important;
+  color: #fbbf24 !important;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .root :global(.scan-ai-decision-metrics) {
@@ -13136,7 +13178,8 @@
 .root :global(.scan-terminal.light .scan-ai-decision-band strong),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
 .root :global(.scan-terminal.light .scan-ai-market-bucket strong),
-.root :global(.scan-terminal.light .scan-ai-weather-summary) {
+.root :global(.scan-terminal.light .scan-ai-weather-summary),
+.root :global(.scan-terminal.light .scan-ai-decision-reasons small) {
   color: #0f172a;
 }
 

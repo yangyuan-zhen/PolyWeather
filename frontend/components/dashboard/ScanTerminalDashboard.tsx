@@ -619,6 +619,150 @@ function waitForDeepAnalysisQueue(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+type WeatherDecisionView = {
+  action: string;
+  confidence: string;
+  expectedHigh: string;
+  kicker: string;
+  reasons: string[];
+  risk: string;
+  targetRange: string;
+  tone: "cold" | "neutral" | "warm" | "watch";
+};
+
+function buildWeatherDecisionView({
+  aiCityForecast,
+  currentTemp,
+  deb,
+  isEn,
+  localModelSupportNote,
+  modelEntries,
+  modelMax,
+  modelMin,
+  paceTone,
+  paceView,
+  peakWindow,
+  tempSymbol,
+}: {
+  aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
+  currentTemp: number | null;
+  deb: number | null;
+  isEn: boolean;
+  localModelSupportNote: string;
+  modelEntries: Array<readonly [string, number]>;
+  modelMax: number | null;
+  modelMin: number | null;
+  paceTone: string;
+  paceView: ReturnType<typeof getTodayPaceView> | null;
+  peakWindow: string;
+  tempSymbol: string;
+}): WeatherDecisionView {
+  const aiPredicted = Number(aiCityForecast?.predicted_max);
+  const center = Number.isFinite(aiPredicted)
+    ? aiPredicted
+    : paceView?.paceAdjustedHigh != null
+      ? paceView.paceAdjustedHigh
+      : deb;
+  const aiLow = Number(aiCityForecast?.range_low);
+  const aiHigh = Number(aiCityForecast?.range_high);
+  const low = Number.isFinite(aiLow)
+    ? aiLow
+    : modelMin != null
+      ? modelMin
+      : center != null
+        ? center - 1
+        : null;
+  const high = Number.isFinite(aiHigh)
+    ? aiHigh
+    : modelMax != null
+      ? modelMax
+      : center != null
+        ? center + 1
+        : null;
+  const spread = modelMax != null && modelMin != null ? modelMax - modelMin : null;
+  const modelCount = modelEntries.length;
+  const aiConfidence = String(aiCityForecast?.confidence || "").trim();
+  const confidence =
+    aiConfidence ||
+    (modelCount >= 4 && spread != null && spread <= 2
+      ? isEn
+        ? "High"
+        : "高"
+      : modelCount >= 2
+        ? isEn
+          ? "Medium"
+          : "中"
+        : isEn
+          ? "Low"
+          : "低");
+  const tone =
+    modelCount <= 1
+      ? "watch"
+      : paceTone === "warm" || paceTone === "cold" || paceTone === "neutral"
+        ? paceTone
+        : "neutral";
+  const action =
+    modelCount <= 1
+      ? isEn
+        ? "Wait for model cluster"
+        : "等待模型补齐"
+      : paceTone === "warm"
+        ? isEn
+          ? "Watch hotter range"
+          : "关注偏高温区间"
+        : paceTone === "cold"
+          ? isEn
+            ? "Avoid chasing high"
+            : "暂不追高温"
+          : isEn
+            ? "Wait for peak-window confirmation"
+            : "等待峰值窗口确认";
+  const expectedHigh =
+    center != null && Number.isFinite(Number(center))
+      ? formatTemperatureValue(Number(center), tempSymbol, { digits: 1 })
+      : "--";
+  const targetRange =
+    low != null && high != null && Number.isFinite(Number(low)) && Number.isFinite(Number(high))
+      ? `${formatTemperatureValue(Number(low), tempSymbol, { digits: 1 })} ~ ${formatTemperatureValue(Number(high), tempSymbol, { digits: 1 })}`
+      : expectedHigh;
+  const reasons = [
+    localModelSupportNote,
+    paceView?.summary || "",
+    currentTemp != null
+      ? isEn
+        ? `Latest observed anchor is ${formatTemperatureValue(currentTemp, tempSymbol, { digits: 1 })}.`
+        : `最新实测锚点为 ${formatTemperatureValue(currentTemp, tempSymbol, { digits: 1 })}。`
+      : "",
+  ]
+    .filter(Boolean)
+    .slice(0, 3);
+  const risk =
+    paceTone === "warm"
+      ? isEn
+        ? "Risk trigger: if later METAR cools back toward the curve before the peak window, downgrade the hotter read."
+        : "风险触发：如果后续 METAR 在峰值窗口前回落到曲线附近，需要下调偏高温判断。"
+      : paceTone === "cold"
+        ? isEn
+          ? "Risk trigger: only restore higher buckets if observations recover before the peak window."
+          : "风险触发：只有实测在峰值窗口前修复，才重新考虑更高温区间。"
+        : isEn
+          ? "Risk trigger: a clear METAR/path break before the peak window should decide direction."
+          : "风险触发：峰值窗口前若 METAR 或路径明显偏离，再决定方向。";
+
+  return {
+    action,
+    confidence,
+    expectedHigh,
+    kicker: isEn
+      ? "Weather decision layer · no market price input"
+      : "天气决策层 · 未接入市场价格",
+    reasons,
+    risk,
+    targetRange,
+    tone,
+  };
+}
+
 function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale } = useI18n();
   const chartData = useMemo(
@@ -724,7 +868,7 @@ function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
     <section className="scan-ai-city-section chart">
       <div className="scan-ai-city-section-title">
         <BarChart3 size={15} />
-        <span>{locale === "en-US" ? "Intraday path" : "今日日内分析"}</span>
+        <span>{locale === "en-US" ? "Evidence · intraday path" : "证据 · 今日日内路径"}</span>
       </div>
       <div className="scan-ai-city-chart">
         <canvas ref={canvasRef} />
@@ -1002,6 +1146,20 @@ function AiPinnedCityCard({
     : isEn
       ? "Model support is unavailable, so this city must rely on DEB path and METAR observations."
       : "暂无可用多模型支撑，需要主要参考 DEB 路径和 METAR 实测。";
+  const decisionView = buildWeatherDecisionView({
+    aiCityForecast,
+    currentTemp,
+    deb,
+    isEn,
+    localModelSupportNote,
+    modelEntries,
+    modelMax,
+    modelMin,
+    paceTone,
+    paceView,
+    peakWindow,
+    tempSymbol,
+  });
   const localizedRisksRaw =
     (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
   const localizedRisks = Array.isArray(localizedRisksRaw)
@@ -1096,27 +1254,33 @@ function AiPinnedCityCard({
 
       {detail && !collapsed ? (
         <div className="scan-ai-city-body" id={collapseId}>
-          <section className={clsx("scan-ai-decision-band", paceTone)}>
-            <div>
-              <span>{isEn ? "Final read" : "最终判断"}</span>
-              <strong>
-                {paceTone === "warm"
-                  ? isEn
-                    ? "Running above DEB path"
-                    : "实测高于 DEB 路径"
-                  : paceTone === "cold"
-                    ? isEn
-                      ? "Running below DEB path"
-                      : "实测低于 DEB 路径"
-                    : isEn
-                      ? "Tracking DEB path"
-                      : "基本贴合 DEB 路径"}
-              </strong>
-              <p>{paceText}</p>
+          <section className={clsx("scan-ai-decision-band", decisionView.tone)}>
+            <div className="scan-ai-decision-main">
+              <span>{decisionView.kicker}</span>
+              <strong>{decisionView.action}</strong>
+              <p>{localizedFinalJudgment || paceText}</p>
+              <div className="scan-ai-decision-reasons">
+                {decisionView.reasons.map((reason, index) => (
+                  <small key={`${reason}-${index}`}>{reason}</small>
+                ))}
+              </div>
+              <p className="scan-ai-decision-risk">{decisionView.risk}</p>
             </div>
             <div className="scan-ai-decision-metrics">
               <span>
-                {isEn ? "Observed" : "实测"}{" "}
+                {isEn ? "Expected high" : "预计高点"}
+                <b>{decisionView.expectedHigh}</b>
+              </span>
+              <span>
+                {isEn ? "Weather range" : "天气区间"}
+                <b>{decisionView.targetRange}</b>
+              </span>
+              <span>
+                {isEn ? "Confidence" : "信心"}
+                <b>{decisionView.confidence}</b>
+              </span>
+              <span>
+                {isEn ? "Observed" : "实测"}
                 <b>
                   {currentTemp != null
                     ? formatTemperatureValue(currentTemp, tempSymbol, { digits: 1 })
@@ -1127,7 +1291,7 @@ function AiPinnedCityCard({
                 {isEn ? "Path delta" : "路径偏差"} <b>{paceView?.deltaText || "--"}</b>
               </span>
               <span>
-                {isEn ? "Model support" : "模型支持"} <b>{modelValues.length}</b>
+                {isEn ? "Peak window" : "峰值窗口"} <b>{peakWindow}</b>
               </span>
             </div>
           </section>
@@ -1136,7 +1300,7 @@ function AiPinnedCityCard({
             <AiCityTemperatureChart detail={detail} />
             <section className="scan-ai-city-section">
               <div className="scan-ai-city-section-title">
-                {isEn ? "AI airport weather read" : "AI 机场报文解读"}
+                {isEn ? "Evidence · AI airport read" : "证据 · AI 机场报文解读"}
               </div>
               {aiForecast.status === "loading" ? (
                 <>
@@ -1227,7 +1391,7 @@ function AiPinnedCityCard({
 
           <section className="scan-ai-city-section models">
             <div className="scan-ai-city-section-title">
-              {isEn ? "Multi-model support" : "多模型支撑"}
+              {isEn ? "Evidence · multi-model support" : "证据 · 多模型支撑"}
             </div>
             <ModelForecast detail={detail} targetDate={detail.local_date} hideTitle />
           </section>
