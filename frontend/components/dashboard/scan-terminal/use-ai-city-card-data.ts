@@ -22,6 +22,10 @@ const pendingAiCityForecastRequests = new Map<
   string,
   Promise<AiCityForecastPayload>
 >();
+const aiCityForecastStateCache = new Map<
+  string,
+  { state: AiCityForecastState; updatedAt: number }
+>();
 
 type AiCityStreamProgress = {
   stage?: string | null;
@@ -90,6 +94,24 @@ function removeCachedPayload(key: string) {
   } catch {
     // Ignore privacy-mode failures; the next network request can still proceed.
   }
+}
+
+function readCachedAiForecastState(key: string, ttlMs: number) {
+  const cached = aiCityForecastStateCache.get(key);
+  if (!cached) return null;
+  if (Date.now() - cached.updatedAt > ttlMs) {
+    aiCityForecastStateCache.delete(key);
+    return null;
+  }
+  return cached.state;
+}
+
+function writeCachedAiForecastState(key: string, state: AiCityForecastState) {
+  if (!key || state.status === "idle") return;
+  aiCityForecastStateCache.set(key, {
+    state,
+    updatedAt: Date.now(),
+  });
 }
 
 function parseAiCityStreamBlock(block: string): AiCityStreamEvent | null {
@@ -400,32 +422,65 @@ export function useAiCityForecast({
         !cachedPayload.degraded &&
         cachedPayload.city_forecast
       ) {
-        setAiForecast({ payload: cachedPayload, status: "ready" });
+        const readyState: AiCityForecastState = {
+          payload: cachedPayload,
+          status: "ready",
+        };
+        writeCachedAiForecastState(cacheKey, readyState);
+        setAiForecast(readyState);
         return () => {
           cancelled = true;
         };
       }
       removeCachedPayload(cacheKey);
     }
+    const cachedState =
+      aiRefreshToken <= 0
+        ? readCachedAiForecastState(cacheKey, AI_CITY_FORECAST_CACHE_TTL_MS)
+        : null;
+    if (cachedState?.status === "ready") {
+      setAiForecast(cachedState);
+      return () => {
+        cancelled = true;
+      };
+    }
     const initialFallback = buildAiCityFallbackPayload({ detail, isEn, report });
-    setAiForecast({
-      status: "loading",
-      streamText:
-        (isEn
-          ? initialFallback.city_forecast?.metar_read_en
-          : initialFallback.city_forecast?.metar_read_zh) ||
-        (isEn
-          ? "Reading the latest airport bulletin with model/METAR fallback ready..."
-          : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek 补充…"),
-    });
+    const loadingState: AiCityForecastState =
+      cachedState?.status === "loading"
+        ? cachedState
+        : {
+            status: "loading",
+            streamText:
+              (isEn
+                ? initialFallback.city_forecast?.metar_read_en
+                : initialFallback.city_forecast?.metar_read_zh) ||
+              (isEn
+                ? "Reading the latest airport bulletin with model/METAR fallback ready..."
+                : "已先用最新 METAR 给出兜底解读，正在等待 DeepSeek 补充…"),
+          };
+    writeCachedAiForecastState(cacheKey, loadingState);
+    setAiForecast(loadingState);
     void requestAiCityForecast({
         city: detailCityName,
         forceRefresh: aiRefreshToken > 0,
         locale,
         onProgress: (progress) => {
-          if (cancelled) return;
           const progressText = getAiCityStreamProgressText(progress, isEn);
           if (!progressText) return;
+          const cachedProgressState = readCachedAiForecastState(
+            cacheKey,
+            AI_CITY_FORECAST_CACHE_TTL_MS,
+          );
+          const nextStreamText =
+            progress.stage === "calling_ai" && cachedProgressState?.streamText
+              ? cachedProgressState.streamText
+              : progressText;
+          writeCachedAiForecastState(cacheKey, {
+            ...cachedProgressState,
+            status: "loading",
+            streamText: nextStreamText,
+          });
+          if (cancelled) return;
           setAiForecast((current) => ({
             ...current,
             status: "loading",
@@ -451,18 +506,26 @@ export function useAiCityForecast({
         if (usablePayload.status === "ready" && !usablePayload.degraded) {
           writeCachedPayload(cacheKey, usablePayload);
         }
+        writeCachedAiForecastState(cacheKey, {
+          payload: usablePayload,
+          status: "ready",
+        });
         if (!cancelled) {
           setAiForecast({ payload: usablePayload, status: "ready" });
         }
       })
       .catch((error) => {
+        const fallbackPayload = buildAiCityFallbackPayload({
+          detail,
+          error,
+          isEn,
+          report,
+        });
+        writeCachedAiForecastState(cacheKey, {
+          payload: fallbackPayload,
+          status: "ready",
+        });
         if (!cancelled) {
-          const fallbackPayload = buildAiCityFallbackPayload({
-            detail,
-            error,
-            isEn,
-            report,
-          });
           setAiForecast({ payload: fallbackPayload, status: "ready" });
         }
       });

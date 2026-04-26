@@ -375,7 +375,7 @@ function AiPinnedCityCard({
                     {isEn ? "YES" : "YES 买入"} <b>{marketDecisionView.priceText}</b>
                   </small>
                   <small>
-                    {isEn ? "Edge" : "概率差"} <b>{marketDecisionView.edgeText}</b>
+                    {isEn ? "Model-market" : "模型-市场差"} <b>{marketDecisionView.edgeText}</b>
                   </small>
                 </div>
                 {marketDecisionView.marketUrl ? (

@@ -1,5 +1,9 @@
 import type { MarketScan, MarketTopBucket } from "@/lib/dashboard-types";
-import { formatTemperatureValue, getTodayPaceView } from "@/lib/dashboard-utils";
+import {
+  formatTemperatureValue,
+  getTodayPaceView,
+  normalizeTemperatureLabel,
+} from "@/lib/dashboard-utils";
 import type { AiCityForecastPayload } from "@/components/dashboard/scan-terminal/types";
 
 export type WeatherDecisionView = {
@@ -126,7 +130,12 @@ export function normalizeMarketComparableTemp(
 export function getMarketBucketLabel(bucket?: MarketTopBucket | null, tempSymbol = "°C") {
   const direct = String(bucket?.label || "").trim();
   if (direct && /[°]?[CF]\b|\d+\s*[+-]?$/i.test(direct) && !/[�｡紊]/.test(direct)) {
-    return direct.replace(/\bC\b/g, "°C").replace(/\bF\b/g, "°F");
+    const labelSymbol = /°?\s*F\b/i.test(direct)
+      ? "°F"
+      : /°?\s*C\b/i.test(direct)
+        ? "°C"
+        : tempSymbol;
+    return normalizeTemperatureLabel(direct, labelSymbol).replace(/\s+°([CF])\b/g, "°$1");
   }
   const numeric = toFiniteMarketNumber(bucket?.temp ?? bucket?.value ?? bucket?.lower);
   if (numeric != null) {
