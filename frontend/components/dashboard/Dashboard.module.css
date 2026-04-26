@@ -9644,6 +9644,19 @@
   color: #ffd078;
 }
 
+.root :global(button.scan-status-chip.refresh) {
+  cursor: pointer;
+}
+
+.root :global(button.scan-status-chip.refresh:disabled) {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.root :global(.scan-status-chip .spin) {
+  animation: spin 1s linear infinite;
+}
+
 .root :global(.scan-table-shell) {
   display: flex;
   flex-direction: column;

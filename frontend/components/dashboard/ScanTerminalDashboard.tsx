@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   LogIn,
   Moon,
+  RefreshCw,
   Sun,
   UserRound,
 } from "lucide-react";
@@ -59,6 +60,9 @@ import {
 
 type ContentView = "opportunities" | "analysis" | "map" | "calendar";
 type ThemeMode = "dark" | "light";
+const SCAN_TERMINAL_AUTO_REFRESH_MS = 10 * 60_000;
+const SCAN_TERMINAL_MANUAL_REFRESH_COOLDOWN_MS = 2 * 60_000;
+
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -81,6 +85,9 @@ function ScanTerminalScreen() {
   const aiFullHydrationRef = useRef<Set<string>>(new Set());
   const aiHydrationQueueRef = useRef<string[]>([]);
   const aiHydrationRunningRef = useRef(false);
+  const scanRequestSeqRef = useRef(0);
+  const scanLoadingRef = useRef(false);
+  const lastForcedScanRefreshAtRef = useRef(0);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -222,18 +229,25 @@ function ScanTerminalScreen() {
     }
   }, [activeView, isPro, store.proAccess.loading]);
 
-  useEffect(() => {
-    if (store.proAccess.loading) return;
-    if (!isPro) {
-      setScanLoading(false);
+  const fetchScanTerminal = useCallback(
+    async ({
+      forceRefresh = false,
+      showLoading = false,
+    }: {
+      forceRefresh?: boolean;
+      showLoading?: boolean;
+    } = {}) => {
+      if (store.proAccess.loading || !isPro) return;
+      const requestSeq = ++scanRequestSeqRef.current;
+      const controller = new AbortController();
+      if (forceRefresh) {
+        lastForcedScanRefreshAtRef.current = Date.now();
+      }
+      if (showLoading) {
+        scanLoadingRef.current = true;
+        setScanLoading(true);
+      }
       setScanError(null);
-      setTerminalData(null);
-      return;
-    }
-    let cancelled = false;
-    const controller = new AbortController();
-    setScanLoading(true);
-    setScanError(null);
     const params = new URLSearchParams({
       scan_mode: "tradable",
       min_price: "0.05",
@@ -243,20 +257,20 @@ function ScanTerminalScreen() {
       market_type: "maxtemp",
       time_range: "today",
       limit: "36",
+      force_refresh: String(forceRefresh),
     });
-    void buildBrowserBackendHeaders({
-      Accept: "application/json",
-    })
-      .then((headers) => {
-        if (cancelled) return null;
-        return fetchBackendApi(`/api/scan/terminal?${params.toString()}`, {
+      if (forceRefresh) {
+        params.set("_ts", String(Date.now()));
+      }
+      try {
+        const headers = await buildBrowserBackendHeaders({
+          Accept: "application/json",
+        });
+        const response = await fetchBackendApi(`/api/scan/terminal?${params.toString()}`, {
           cache: "no-store",
           headers,
           signal: controller.signal,
         });
-      })
-      .then(async (response) => {
-        if (!response) return null;
         if (!response.ok) {
           let message = `HTTP ${response.status}`;
           try {
@@ -267,28 +281,58 @@ function ScanTerminalScreen() {
           }
           throw new Error(message);
         }
-        return response.json() as Promise<ScanTerminalResponse>;
-      })
-      .then((payload) => {
-        if (!payload) return;
-        if (cancelled) return;
+        const payload = (await response.json()) as ScanTerminalResponse;
+        if (requestSeq !== scanRequestSeqRef.current) return;
         setTerminalData(payload);
         setScanError(null);
-      })
-      .catch((error) => {
-        if (cancelled || controller.signal.aborted) return;
+      } catch (error) {
+        if (controller.signal.aborted || requestSeq !== scanRequestSeqRef.current) return;
         setScanError(error instanceof Error ? error.message : String(error));
-      })
-      .finally(() => {
-        if (!cancelled) {
+      } finally {
+        if (showLoading) {
+          scanLoadingRef.current = false;
           setScanLoading(false);
         }
-      });
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [isPro, store.proAccess.loading]);
+      }
+    },
+    [isPro, store.proAccess.loading],
+  );
+
+  useEffect(() => {
+    if (store.proAccess.loading) return;
+    if (!isPro) {
+      scanLoadingRef.current = false;
+      setScanLoading(false);
+      setScanError(null);
+      setTerminalData(null);
+      return;
+    }
+    void fetchScanTerminal({ forceRefresh: false, showLoading: true });
+  }, [fetchScanTerminal, isPro, store.proAccess.loading]);
+
+  const refreshScanTerminalManually = useCallback(() => {
+    const now = Date.now();
+    const lastForced = lastForcedScanRefreshAtRef.current;
+    const withinCooldown =
+      lastForced > 0 &&
+      now - lastForced < SCAN_TERMINAL_MANUAL_REFRESH_COOLDOWN_MS &&
+      terminalData;
+    if (withinCooldown) {
+      setScanError(null);
+      return;
+    }
+    void fetchScanTerminal({ forceRefresh: true, showLoading: true });
+  }, [fetchScanTerminal, terminalData]);
+
+  useEffect(() => {
+    if (store.proAccess.loading || !isPro) return;
+    const intervalId = window.setInterval(() => {
+      if (document.hidden) return;
+      if (scanLoadingRef.current) return;
+      void fetchScanTerminal({ forceRefresh: true, showLoading: false });
+    }, SCAN_TERMINAL_AUTO_REFRESH_MS);
+    return () => window.clearInterval(intervalId);
+  }, [fetchScanTerminal, isPro, store.proAccess.loading]);
 
   useEffect(() => {
     setUserLocalTime(formatUserLocalTime());
@@ -712,10 +756,38 @@ function ScanTerminalScreen() {
                 </button>
               </div>
               <div className="scan-list-status">
+                {terminalData?.generated_at ? (
+                  <span className="scan-status-chip live">
+                    {isEn ? "Updated" : "已更新"}{" "}
+                    {new Date(terminalData.generated_at).toLocaleTimeString(
+                      isEn ? "en-US" : "zh-CN",
+                      {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      },
+                    )}
+                  </span>
+                ) : null}
                 {terminalData?.stale ? (
                   <span className="scan-status-chip stale">
                     {isEn ? "Delayed snapshot" : "延迟快照"}
                   </span>
+                ) : null}
+                {isPro ? (
+                  <button
+                    type="button"
+                    className="scan-status-chip refresh"
+                    onClick={refreshScanTerminalManually}
+                    disabled={scanLoading}
+                    title={
+                      isEn
+                        ? "Force refresh opportunity board and calendar"
+                        : "强制刷新今日机会榜和日历视图"
+                    }
+                  >
+                    <RefreshCw size={14} className={scanLoading ? "spin" : undefined} />
+                    {isEn ? "Refresh" : "刷新"}
+                  </button>
                 ) : null}
               </div>
             </div>
