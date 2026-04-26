@@ -1691,7 +1691,6 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
         "model": SCAN_CITY_AI_MODEL,
         "city": ai_input.get("city"),
         "local_date": ai_input.get("local_date"),
-        "local_time": ai_input.get("local_time"),
         "deb": (ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None,
         "metar": (ai_input.get("airport_current") or {}).get("raw_metar") if isinstance(ai_input.get("airport_current"), dict) else None,
         "obs": ai_input.get("metar_today_obs") or ai_input.get("metar_recent_obs") or [],

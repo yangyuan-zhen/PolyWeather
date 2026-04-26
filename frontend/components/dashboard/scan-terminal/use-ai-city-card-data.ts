@@ -14,7 +14,7 @@ import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
-const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v2";
+const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v3";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v2";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -357,10 +357,26 @@ export function useAiCityForecast({
   });
   const [aiRefreshToken, setAiRefreshToken] = useState(0);
   const aiForecastKey = useMemo(
-    () =>
-      detail
-        ? `${normalizeCityKey(detailCityName)}:${detail.local_date || ""}:${locale}:${report || ""}`
-        : "",
+    () => {
+      if (!detail) return "";
+      const airportCurrent = detail.airport_current || detail.current || {};
+      const metarSignature =
+        String(report || "").trim() ||
+        [
+          airportCurrent.report_time,
+          airportCurrent.obs_time_epoch,
+          airportCurrent.obs_time,
+          airportCurrent.temp,
+        ]
+          .filter((part) => part != null && part !== "")
+          .join("|");
+      return [
+        normalizeCityKey(detailCityName),
+        detail.local_date || "",
+        locale,
+        metarSignature,
+      ].join(":");
+    },
     [detail, detailCityName, locale, report],
   );
   useEffect(() => {
@@ -423,19 +439,19 @@ export function useAiCityForecast({
       })
       .then((payload) => {
         if (!payload) return;
+        const usablePayload =
+          payload?.city_forecast
+            ? payload
+            : buildAiCityFallbackPayload({
+                detail,
+                error: payload?.reason || payload?.raw_reason || payload?.status,
+                isEn,
+                report,
+              });
+        if (usablePayload.status === "ready" && !usablePayload.degraded) {
+          writeCachedPayload(cacheKey, usablePayload);
+        }
         if (!cancelled) {
-          const usablePayload =
-            payload?.city_forecast
-              ? payload
-              : buildAiCityFallbackPayload({
-                  detail,
-                  error: payload?.reason || payload?.raw_reason || payload?.status,
-                  isEn,
-                  report,
-                });
-          if (usablePayload.status === "ready" && !usablePayload.degraded) {
-            writeCachedPayload(cacheKey, usablePayload);
-          }
           setAiForecast({ payload: usablePayload, status: "ready" });
         }
       })
@@ -529,7 +545,7 @@ export function useCityMarketScan({
       setMarketStatus("loading");
     }
     void ensureCityMarketScan(detailCityName, false, {
-      lite: true,
+      lite: false,
       targetDate: detail.local_date || null,
     })
       .then((payload) => {

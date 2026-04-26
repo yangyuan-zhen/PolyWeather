@@ -142,6 +142,24 @@ function getBucketAnchor(bucket: MarketTopBucket) {
   return toFiniteMarketNumber(bucket.temp ?? bucket.value ?? bucket.lower);
 }
 
+function marketBucketLabelText(bucket?: MarketTopBucket | null) {
+  return String(`${bucket?.label || ""} ${bucket?.slug || ""} ${bucket?.question || ""}`)
+    .trim()
+    .toLowerCase();
+}
+
+function isMarketBucketAbove(bucket?: MarketTopBucket | null) {
+  return /\b(or[-\s]?higher|or[-\s]?above|above|higher|at least|greater than)\b/i.test(
+    marketBucketLabelText(bucket),
+  );
+}
+
+function isMarketBucketBelow(bucket?: MarketTopBucket | null) {
+  return /\b(or[-\s]?lower|or[-\s]?below|below|lower|at most|less than)\b/i.test(
+    marketBucketLabelText(bucket),
+  );
+}
+
 function getRoundedWeatherBucketValue(
   expectedHigh: number | null,
   tempSymbol: string,
@@ -212,9 +230,16 @@ export function pickMarketBucketForWeatherCenter(
     const comparable = normalizeMarketComparableTemp(expectedHigh, tempSymbol, bucket);
     const anchor = getBucketAnchor(bucket);
     if (comparable == null || anchor == null) return false;
-    const unit = String(bucket.unit || "").toUpperCase();
-    const maxReasonableDelta = unit === "F" ? 16 : 8;
-    return Math.abs(anchor - comparable) <= maxReasonableDelta;
+    const roundedTarget = Math.round(comparable);
+    const roundedAnchor = Math.round(anchor);
+    const lower = bucket.lower != null ? Number(bucket.lower) : anchor;
+    const upper = bucket.upper != null ? Number(bucket.upper) : null;
+    if (upper != null && Number.isFinite(lower) && Number.isFinite(upper)) {
+      return roundedTarget >= lower - 0.01 && roundedTarget <= upper + 0.01;
+    }
+    if (isMarketBucketAbove(bucket)) return roundedTarget >= roundedAnchor;
+    if (isMarketBucketBelow(bucket)) return roundedTarget <= roundedAnchor;
+    return roundedAnchor === roundedTarget;
   };
   if (!buckets.length || expectedHigh == null || !Number.isFinite(expectedHigh)) {
     return isReasonableFallback(selectedBucket) ? selectedBucket : null;
