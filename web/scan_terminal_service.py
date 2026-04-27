@@ -720,12 +720,12 @@ def _build_city_ai_fallback(
     reasoning_zh = str(partial_ai.get("reasoning_zh") or "").strip() or (
         f"AI {bulletin_zh}解读已用于校准日内节奏；DEB 与多模型集合继续约束最高温中枢，后续{source_name_zh}用于确认是否需要上调或下修。"
         if partial_ai
-        else f"AI {bulletin_zh}解读正常；当前结合 DEB、多模型集合和最新{source_name_zh}，共同支撑本轮最高温中枢判断。"
+        else f"当前为快速证据模式；DEB、多模型集合和最新{source_name_zh}共同支撑本轮最高温中枢，完整 AI {bulletin_zh}解读返回后再合并。"
     )
     reasoning_en = str(partial_ai.get("reasoning_en") or "").strip() or (
         f"The AI {bulletin_en} read is already used to calibrate the intraday pace; DEB and the model cluster still constrain the high-temperature center, while later {source_name_en} updates confirm whether to revise it."
         if partial_ai
-        else f"The AI {bulletin_en} read is available; DEB, the model cluster and latest {source_name_en} jointly support the current daily-high center."
+        else f"This is the fast evidence mode; DEB, the model cluster and latest {source_name_en} jointly support the current daily-high center, and the full AI {bulletin_en} read will be merged when available."
     )
     risks_zh = [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
     risks_en = [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]

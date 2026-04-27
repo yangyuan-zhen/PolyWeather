@@ -100,7 +100,7 @@ def test_metrics_endpoint_returns_prometheus_payload():
     assert 'polyweather_http_requests_total' in response.text
 
 
-def test_city_ai_fallback_reasoning_says_ai_read_is_normal():
+def test_city_ai_fallback_reasoning_identifies_fast_evidence_mode():
     payload = scan_terminal_service._build_city_ai_fallback(
         {
             "city_display_name": "Tokyo",
@@ -128,7 +128,9 @@ def test_city_ai_fallback_reasoning_says_ai_read_is_normal():
         reason="preview",
     )
 
-    assert "AI 机场报文解读正常" in payload["reasoning_zh"]
+    assert "当前为快速证据模式" in payload["reasoning_zh"]
+    assert "完整 AI 机场报文解读返回后再合并" in payload["reasoning_zh"]
+    assert "AI 机场报文解读正常" not in payload["reasoning_zh"]
     assert "后补" not in payload["reasoning_zh"]
     assert "AI 增强可作为后续补充" not in payload["reasoning_zh"]
 
