@@ -353,6 +353,15 @@ function AiPinnedCityCard({
         String((row as { window_phase?: string | null } | null)?.window_phase || "").toLowerCase(),
       ),
   );
+  const modelSpread = modelMax != null && modelMin != null ? modelMax - modelMin : null;
+  const modelHighlyConsistent =
+    modelEntries.length >= 4 && modelSpread != null && modelSpread <= 2;
+  const needsNextBulletin =
+    !observationStale &&
+    !observedHighBreak &&
+    !observedLowBreak &&
+    !peakHasPassed &&
+    (observedLowLag || paceTone === "neutral" || aiForecast.status === "loading");
   const observationFreshnessLabel = buildObservationFreshnessLabel({
     detail,
     displayTime: metarReportTimeDisplay,
@@ -410,26 +419,8 @@ function AiPinnedCityCard({
   const statusTags = uniqueStatusTags([
     observedHighBreak
       ? {
-          label: isEn ? "Observed above models" : "实测突破模型",
+          label: isEn ? "Observed breakout" : "实测突破",
           tone: "red",
-        }
-      : null,
-    observedLowBreak
-      ? {
-          label: isEn ? "Peak revised down" : "峰值下修",
-          tone: "blue",
-        }
-      : null,
-    observedLowLag
-      ? {
-          label: isEn ? "Warm-up needs proof" : "等待升温确认",
-          tone: "amber",
-        }
-      : null,
-    observationStale
-      ? {
-          label: isEn ? "Stale observation" : "观测过旧",
-          tone: "amber",
         }
       : null,
     peakHasPassed
@@ -438,15 +429,49 @@ function AiPinnedCityCard({
           tone: "muted",
         }
       : null,
-    {
-      label: aiStatusLabel,
-      tone: aiStatusTone,
-    },
-    {
-      label: marketFreshnessLabel,
-      tone: marketStatusTone,
-    },
-  ]).slice(0, 6);
+    observationStale
+      ? {
+          label: isEn
+            ? isHkoObservation
+              ? "HKO stale"
+              : "METAR stale"
+            : isHkoObservation
+              ? "观测过旧"
+              : "METAR 过旧",
+          tone: "amber",
+        }
+      : null,
+    observedLowBreak
+      ? {
+          label: isEn ? "Peak revised down" : "峰值下修",
+          tone: "blue",
+        }
+      : null,
+    aiForecast.status === "loading"
+      ? {
+          label: isEn ? "AI reading" : "AI 解读中",
+          tone: aiStatusTone,
+        }
+      : null,
+    marketDecisionView.status === "unavailable"
+      ? {
+          label: isEn ? "Market missing" : "市场价格缺失",
+          tone: marketStatusTone,
+        }
+      : null,
+    modelHighlyConsistent
+      ? {
+          label: isEn ? "Models agree" : "模型高度一致",
+          tone: "green",
+        }
+      : null,
+    observedLowLag || needsNextBulletin
+      ? {
+          label: isEn ? "Wait next report" : "需要等待下一报文",
+          tone: "amber",
+        }
+      : null,
+  ]).slice(0, 3);
   const localizedRisksRaw =
     (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
   const localizedRisks = Array.isArray(localizedRisksRaw)
@@ -475,6 +500,16 @@ function AiPinnedCityCard({
             {isEn ? "Deep analysis" : "城市深度分析"}
           </span>
           <h3>{displayName}</h3>
+          <div className="scan-ai-city-status-tags">
+            {statusTags.map((tag) => (
+              <span
+                key={tag.label}
+                className={clsx("scan-ai-city-status-tag", tag.tone)}
+              >
+                {tag.label}
+              </span>
+            ))}
+          </div>
           <div className="scan-ai-city-pills">
             <span>{detail?.local_time || row?.local_time || "--"}</span>
             <span>
@@ -485,16 +520,6 @@ function AiPinnedCityCard({
             </span>
             <span>{isEn ? "Model" : "模型"} {modelRange}</span>
             <span>{isEn ? "Peak" : "峰值"} {peakWindow}</span>
-          </div>
-          <div className="scan-ai-city-status-tags">
-            {statusTags.map((tag) => (
-              <span
-                key={tag.label}
-                className={clsx("scan-ai-city-status-tag", tag.tone)}
-              >
-                {tag.label}
-              </span>
-            ))}
           </div>
           <div className="scan-ai-city-freshness">
             <span>{observationFreshnessLabel}</span>
