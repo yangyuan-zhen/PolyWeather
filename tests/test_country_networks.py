@@ -17,17 +17,21 @@ class _DummyMetarSource(MetarSourceMixin):
     metar_fast_cache_ttl_sec = 60
 
 
-def test_new_south_asia_city_registry_entries_are_wired():
+def test_new_city_registry_entries_are_wired():
     assert CITY_REGISTRY["manila"]["settlement_source"] == "wunderground"
     assert CITY_REGISTRY["manila"]["settlement_station_code"] == "RPLL"
     assert CITY_REGISTRY["karachi"]["settlement_source"] == "wunderground"
     assert CITY_REGISTRY["karachi"]["settlement_station_code"] == "OPKC"
+    assert CITY_REGISTRY["qingdao"]["settlement_source"] == "wunderground"
+    assert CITY_REGISTRY["qingdao"]["settlement_station_code"] == "ZSQD"
     assert CITY_REGISTRY["masroor air base"]["icao"] == "OPMR"
     assert ALIASES["rpll"] == "manila"
     assert ALIASES["opkc"] == "karachi"
+    assert ALIASES["zsqd"] == "qingdao"
     assert ALIASES["opmr"] == "masroor air base"
     assert CITIES["manila"]["lat"] == CITY_REGISTRY["manila"]["lat"]
     assert CITIES["karachi"]["lon"] == CITY_REGISTRY["karachi"]["lon"]
+    assert CITIES["qingdao"]["lat"] == CITY_REGISTRY["qingdao"]["lat"]
     assert CITIES["masroor air base"]["settlement_source"] == "metar"
 
 
@@ -38,6 +42,7 @@ def test_city_time_zone_mapping_covers_every_city_and_dst_offsets():
     april = datetime(2026, 4, 19, 6, 30, tzinfo=timezone.utc)
 
     assert get_city_utc_offset_seconds("guangzhou", april) == 28800
+    assert get_city_utc_offset_seconds("qingdao", april) == 28800
     assert get_city_utc_offset_seconds("ankara", april) == 10800
     assert get_city_utc_offset_seconds("london", april) == 3600
     assert get_city_utc_offset_seconds("paris", april) == 7200

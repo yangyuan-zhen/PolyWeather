@@ -50,6 +50,7 @@ CITY_TIME_ZONES = {
     "new york": "America/New_York",
     "panama city": "America/Panama",
     "paris": "Europe/Paris",
+    "qingdao": "Asia/Shanghai",
     "san francisco": "America/Los_Angeles",
     "sao paulo": "America/Sao_Paulo",
     "seattle": "America/Los_Angeles",

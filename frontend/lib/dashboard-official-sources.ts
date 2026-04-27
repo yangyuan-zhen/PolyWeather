@@ -617,6 +617,23 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
+  qingdao: [
+    {
+      label: "Wunderground ZSQD",
+      href: "https://www.wunderground.com/history/daily/cn/qingdao/ZSQD",
+      kind: "agency",
+    },
+    {
+      label: "青岛胶东国际机场",
+      href: "https://www.qdairport.com/",
+      kind: "airport",
+    },
+    {
+      label: "ZSQD METAR",
+      href: "https://aviationweather.gov/data/metar/?id=ZSQD&decoded=1&taf=1",
+      kind: "metar",
+    },
+  ],
   "kuala lumpur": [
     {
       label: "Wunderground WMKK",

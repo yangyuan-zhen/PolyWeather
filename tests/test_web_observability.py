@@ -590,6 +590,7 @@ def test_cities_endpoint_includes_new_wunderground_cities():
     names = {item["name"] for item in payload["cities"]}
     assert {
         "busan",
+        "qingdao",
         "panama city",
         "kuala lumpur",
         "jakarta",

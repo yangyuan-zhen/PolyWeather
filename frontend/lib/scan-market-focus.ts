@@ -107,6 +107,7 @@ const CITY_REGION_FALLBACK: Record<string, MarketRegionKey> = {
   chongqing: "asia_pacific",
   shenzhen: "asia_pacific",
   guangzhou: "asia_pacific",
+  qingdao: "asia_pacific",
   beijing: "asia_pacific",
   wuhan: "asia_pacific",
 };

@@ -21,6 +21,7 @@ DEFAULT_CITIES = [
     "beijing",
     "shenzhen",
     "guangzhou",
+    "qingdao",
     "wuhan",
     "chengdu",
     "chongqing",

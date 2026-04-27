@@ -25,6 +25,7 @@ const CITY_TO_MARKET_SLUG: Record<string, string> = {
   munich: "munich",
   "new york": "nyc",
   paris: "paris",
+  qingdao: "qingdao",
   "san francisco": "san-francisco",
   "sao paulo": "sao-paulo",
   seattle: "seattle",
