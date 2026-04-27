@@ -603,8 +603,8 @@ export function buildWeatherDecisionView({
     confidence,
     expectedHigh,
     kicker: isEn
-      ? "Weather decision layer · no market price input"
-      : "天气决策层 · 未接入市场价格",
+      ? "Weather-first read · market price shown separately"
+      : "天气优先判断 · 市场价格另列",
     reasons,
     risk,
     targetRange,
