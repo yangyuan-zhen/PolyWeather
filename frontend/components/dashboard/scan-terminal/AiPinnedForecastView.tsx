@@ -368,23 +368,46 @@ function AiPinnedCityCard({
     isEn,
     isHkoObservation,
   });
+  const aiRuleEvidenceMode = Boolean(
+    aiForecast.status === "failed" ||
+      (aiForecast.status === "ready" && !aiCityForecast) ||
+      aiForecast.payload?.degraded ||
+      aiMeta?.fallback,
+  );
+  const aiReadInProgressText = isEn
+    ? isHkoObservation
+      ? "Fast read is ready; AI is adding HKO observation details..."
+      : "Fast read is ready; AI is adding airport bulletin details..."
+    : isHkoObservation
+      ? "快速判断已完成，AI 正在补充香港天文台观测细节…"
+      : "快速判断已完成，AI 正在补充机场报文细节…";
+  const aiReadCompleteText = isEn
+    ? isHkoObservation
+      ? "AI HKO observation read is complete."
+      : "AI airport bulletin read is complete."
+    : isHkoObservation
+      ? "AI 香港天文台观测解读已完成"
+      : "AI 机场报文解读已完成";
+  const aiRuleEvidenceText = isEn
+    ? "AI read did not return completely; rule evidence is being used."
+    : "AI 解读未完整返回，当前使用规则证据";
   const aiStatusLabel =
     aiForecast.status === "loading"
       ? isEn
-        ? "AI reading"
-        : "AI 解读中"
+        ? "Fast read ready"
+        : "快速判断已完成"
       : aiForecast.status === "ready" && aiCityForecast
-        ? aiForecast.payload?.degraded || aiMeta?.fallback
+        ? aiRuleEvidenceMode
           ? isEn
-            ? "Rule fallback"
-            : "规则兜底"
+            ? "Rule evidence"
+            : "规则证据模式"
           : isEn
-            ? "AI ready"
-            : "AI 已完成"
-        : aiForecast.status === "failed"
+            ? "AI read complete"
+            : "AI 解读已完成"
+        : aiRuleEvidenceMode
           ? isEn
-            ? "AI failed"
-            : "AI 失败"
+            ? "Rule evidence"
+            : "规则证据模式"
           : isEn
             ? "AI pending"
             : "AI 待返回";
@@ -392,11 +415,11 @@ function AiPinnedCityCard({
     aiForecast.status === "loading"
       ? "blue"
       : aiForecast.status === "ready" && aiCityForecast
-        ? aiForecast.payload?.degraded || aiMeta?.fallback
+        ? aiRuleEvidenceMode
           ? "amber"
           : "green"
-        : aiForecast.status === "failed"
-          ? "red"
+        : aiRuleEvidenceMode
+          ? "amber"
           : "muted";
   const marketFreshnessLabel =
     marketDecisionView.status === "ready"
@@ -449,7 +472,7 @@ function AiPinnedCityCard({
       : null,
     aiForecast.status === "loading"
       ? {
-          label: isEn ? "AI reading" : "AI 解读中",
+          label: isEn ? "Fast read ready" : "快速判断已完成",
           tone: aiStatusTone,
         }
       : null,
@@ -685,17 +708,14 @@ function AiPinnedCityCard({
               </div>
               {aiForecast.status === "loading" ? (
                 <>
-                  <p className={aiForecast.streamText ? "scan-ai-weather-summary" : undefined}>
-                    {localizedFinalJudgment ||
-                      aiForecast.streamText ||
-                      (isEn
-                        ? isHkoObservation
-                          ? "Fast read is ready; AI is adding HKO observation details..."
-                          : "Fast read is ready; AI is adding airport bulletin details..."
-                        : isHkoObservation
-                          ? "快速判断已完成，AI 正在补充香港天文台观测细节…"
-                          : "快速判断已完成，AI 正在补充机场报文细节…")}
+                  <p className="scan-ai-weather-summary">
+                    {aiReadInProgressText}
                   </p>
+                  {localizedFinalJudgment || aiForecast.streamText ? (
+                    <p className="scan-ai-city-muted">
+                      {localizedFinalJudgment || aiForecast.streamText}
+                    </p>
+                  ) : null}
                   <p className="scan-ai-city-muted">
                     {isEn
                       ? isHkoObservation
@@ -709,11 +729,13 @@ function AiPinnedCityCard({
               ) : aiForecast.status === "ready" && aiCityForecast ? (
                 <>
                   <p className="scan-ai-weather-summary">
-                    {localizedFinalJudgment ||
-                      (isEn ? "AI read returned without a final sentence." : "AI 已返回，但缺少最终判断。")}
+                    {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
                   </p>
                   <ul className="scan-ai-weather-bullets">
-                    {aiBullets.map((line, index) => (
+                    {[
+                      localizedFinalJudgment,
+                      ...aiBullets,
+                    ].filter((line) => String(line || "").trim()).map((line, index) => (
                       <li key={`${line}-${index}`}>{line}</li>
                     ))}
                   </ul>
@@ -723,34 +745,22 @@ function AiPinnedCityCard({
                 </>
               ) : aiForecast.status === "ready" ? (
                 <>
-                  <p>
-                    {aiForecast.payload?.status === "timeout"
-                      ? isEn
-                        ? "DeepSeek enhancement timed out. You can retry; city data and the right briefing were not refreshed."
-                        : "DeepSeek 增强本次超时，可稍后重试；城市数据和右侧简报不会被刷新。"
-                      : fallbackAiReason ||
-                        (isEn
-                          ? "AI read is unavailable for this city right now."
-                          : "该城市暂时没有可用的 AI 解读。")}
+                  <p className="scan-ai-weather-summary">
+                    {aiRuleEvidenceText}
                   </p>
                   <ul className="scan-ai-weather-bullets">
+                    {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
                     <li>{localModelSupportNote}</li>
                     <li>{rawObservationText}</li>
                   </ul>
                 </>
               ) : aiForecast.status === "failed" ? (
                 <>
-                  <p>
-                    {isEn
-                      ? isHkoObservation
-                        ? "AI read failed. Model support and the HKO observation remain as fallback context."
-                        : "AI read failed. Model support and the raw METAR remain as fallback context."
-                      : isHkoObservation
-                        ? "AI 解读失败。下方保留多模型支撑和香港天文台观测作为兜底上下文。"
-                        : "AI 解读失败。下方保留多模型支撑和原始 METAR 作为兜底上下文。"}
-                    {aiForecast.error ? ` ${aiForecast.error}` : ""}
+                  <p className="scan-ai-weather-summary">
+                    {aiRuleEvidenceText}
                   </p>
                   <ul className="scan-ai-weather-bullets">
+                    {aiForecast.error ? <li>{aiForecast.error}</li> : null}
                     <li>{localModelSupportNote}</li>
                     <li>{rawObservationText}</li>
                   </ul>
