@@ -474,6 +474,104 @@ def test_city_ai_schema_completion_trims_dangling_taf_clause():
     ]
 
 
+def test_city_ai_schema_completion_guards_stale_observation_text():
+    payload = scan_terminal_service._complete_city_ai_payload(
+        {
+            "predicted_max": 36.0,
+            "range_low": 35.0,
+            "range_high": 37.0,
+            "unit": "°C",
+            "confidence": "medium",
+            "final_judgment_zh": "Manila 最新 METAR 已经支撑 36°C 高温中枢。",
+            "final_judgment_en": "Manila latest METAR supports a 36°C high center.",
+            "metar_read_zh": "RPLL 最新 METAR 显示 36°C，当前作为强实况锚点。",
+            "metar_read_en": "RPLL latest METAR shows 36°C and is a strong live anchor.",
+            "reasoning_zh": "最新 METAR 与模型共同支撑上修。",
+            "reasoning_en": "Latest METAR and models jointly support an upward revision.",
+            "risks_zh": ["若继续升温，需要上修。"],
+            "risks_en": ["If it keeps warming, revise upward."],
+            "model_cluster_note_zh": "3/3 个模型集中。",
+            "model_cluster_note_en": "3/3 models are clustered.",
+        },
+        {
+            "city_display_name": "Manila",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 34.0},
+            "model_cluster": {
+                "sources": [{"value": 33.5}, {"value": 34.0}, {"value": 34.4}]
+            },
+            "metar_context": {
+                "stale_for_today": True,
+                "last_observation_time": "00:00Z",
+            },
+            "observation_anchor": {"is_airport_metar": True, "station_code": "RPLL"},
+            "airport_current": {
+                "station_code": "RPLL",
+                "temp": 36.0,
+                "report_time": "00:00Z",
+                "raw_metar": "RPLL 270000Z 34004KT CAVOK 36/24 Q1009",
+            },
+        },
+        locale="zh-CN",
+    )
+
+    assert payload["predicted_max"] == 34.0
+    assert "过旧" in payload["metar_read_zh"]
+    assert "不能作为强实况锚点" in payload["metar_read_zh"]
+    assert "先以 DEB 和多模型路径为主" in payload["final_judgment_zh"]
+    assert "共同支撑上修" not in payload["reasoning_zh"]
+    assert "deterministic_guard_fields" in payload["_polyweather_meta"]
+
+
+def test_city_ai_schema_completion_guards_observed_high_break_numbers():
+    payload = scan_terminal_service._complete_city_ai_payload(
+        {
+            "predicted_max": 34.0,
+            "range_low": 32.5,
+            "range_high": 34.7,
+            "unit": "°C",
+            "confidence": "medium",
+            "final_judgment_zh": "Manila 最高温仍以 34.0°C 为中枢。",
+            "final_judgment_en": "Manila high remains centered near 34.0°C.",
+            "metar_read_zh": "RPLL 最新 METAR 显示 35°C，CAVOK。",
+            "metar_read_en": "RPLL latest METAR shows 35°C and CAVOK.",
+            "reasoning_zh": "模型区间仍覆盖当前路径，无需上修。",
+            "reasoning_en": "The model range still covers the path, so no upward revision is needed.",
+            "risks_zh": ["后续报文偏离再修正。"],
+            "risks_en": ["Revise if later reports diverge."],
+            "model_cluster_note_zh": "4/4 个模型集中。",
+            "model_cluster_note_en": "4/4 models are clustered.",
+        },
+        {
+            "city_display_name": "Manila",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 34.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 32.5},
+                    {"value": 33.8},
+                    {"value": 34.0},
+                    {"value": 34.7},
+                ]
+            },
+            "observation_anchor": {"is_airport_metar": True, "station_code": "RPLL"},
+            "airport_current": {
+                "station_code": "RPLL",
+                "temp": 35.0,
+                "report_time": "03:00Z / 当地 11:00",
+                "raw_metar": "RPLL 270300Z 34004KT CAVOK 35/24 Q1009",
+            },
+        },
+        locale="zh-CN",
+    )
+
+    assert payload["predicted_max"] == 35.0
+    assert payload["range_high"] == 35.0
+    assert "上修到至少 35.0°C" in payload["final_judgment_zh"]
+    assert "无需上修" not in payload["reasoning_zh"]
+    assert "deterministic_guard_fields" in payload["_polyweather_meta"]
+
+
 def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200

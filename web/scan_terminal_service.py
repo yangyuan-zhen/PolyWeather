@@ -888,6 +888,23 @@ def _build_city_ai_fallback(
     else:
         risks_zh = [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
         risks_en = [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]
+    evidence_guard = {
+        "observation_stale": observation_stale,
+        "observed_high_break": observed_high_break,
+        "observed_low_break": observed_low_break,
+        "observed_low_lag": observed_low_lag,
+        "peak_has_passed": peak_has_passed,
+        "peak_is_closing": peak_is_closing,
+        "peak_not_started": peak_not_started,
+        "observed_high_so_far": observed_high_so_far,
+        "observed_high_for_revision": observed_high_for_revision,
+        "original_predicted": original_predicted,
+        "model_range_low": model_range_low,
+        "model_range_high": model_range_high,
+        "predicted_max": predicted,
+        "range_low": range_low,
+        "range_high": range_high,
+    }
     return {
         "predicted_max": partial_ai.get("predicted_max", predicted),
         "range_low": partial_ai.get("range_low", range_low),
@@ -913,6 +930,7 @@ def _build_city_ai_fallback(
             "raw_content_preview": content_preview,
             "partial_ai_fields": sorted(partial_ai.keys()),
             "raw_metar": _truncate_ai_text(raw_metar, 1000),
+            "evidence_guard": evidence_guard,
         },
     }
 
@@ -996,6 +1014,65 @@ def _complete_city_ai_payload(
         meta["schema_completed_fields"] = completed
     if trimmed:
         meta["trimmed_incomplete_fields"] = sorted(set(trimmed))
+    guard_meta = (fallback.get("_polyweather_meta") or {}).get("evidence_guard")
+    if isinstance(guard_meta, dict):
+        deterministic_fields: List[str] = []
+        numeric_guard_active = bool(
+            guard_meta.get("observed_high_break")
+            or guard_meta.get("observed_low_break")
+            or guard_meta.get("observation_stale")
+        )
+        text_guard_active = bool(
+            numeric_guard_active
+            or guard_meta.get("peak_has_passed")
+            or (guard_meta.get("observed_low_lag") and guard_meta.get("peak_not_started"))
+        )
+        if numeric_guard_active:
+            for field in ("predicted_max", "range_low", "range_high"):
+                guarded_value = fallback.get(field)
+                if guarded_value is not None and out.get(field) != guarded_value:
+                    out[field] = guarded_value
+                    deterministic_fields.append(field)
+        if guard_meta.get("observation_stale"):
+            guarded_text_fields = (
+                "metar_read_zh",
+                "metar_read_en",
+                "final_judgment_zh",
+                "final_judgment_en",
+                "reasoning_zh",
+                "reasoning_en",
+                "risks_zh",
+                "risks_en",
+            )
+        elif text_guard_active:
+            guarded_text_fields = (
+                "final_judgment_zh",
+                "final_judgment_en",
+                "reasoning_zh",
+                "reasoning_en",
+                "risks_zh",
+                "risks_en",
+            )
+        else:
+            guarded_text_fields = ()
+        for field in guarded_text_fields:
+            guarded_value = fallback.get(field)
+            if guarded_value not in (None, "", []) and out.get(field) != guarded_value:
+                out[field] = guarded_value
+                deterministic_fields.append(field)
+        if deterministic_fields:
+            meta["deterministic_guard_fields"] = sorted(set(deterministic_fields))
+            meta["deterministic_guard_reason"] = {
+                key: guard_meta.get(key)
+                for key in (
+                    "observation_stale",
+                    "observed_high_break",
+                    "observed_low_break",
+                    "observed_low_lag",
+                    "peak_has_passed",
+                )
+                if guard_meta.get(key)
+            }
     out["_polyweather_meta"] = meta
     return out
 
