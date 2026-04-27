@@ -133,6 +133,90 @@ def test_city_ai_fallback_reasoning_says_ai_read_is_normal():
     assert "AI 增强可作为后续补充" not in payload["reasoning_zh"]
 
 
+def test_city_ai_partial_json_trims_dangling_taf_clause():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "London",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 24.3},
+            "model_cluster": {
+                "sources": [
+                    {"value": 22.3},
+                    {"value": 23.1},
+                    {"value": 24.3},
+                    {"value": 26.3},
+                ]
+            },
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "EGLL",
+            },
+            "airport_current": {
+                "station_code": "EGLL",
+                "temp": 21.0,
+                "report_time": "09:00Z",
+                "raw_metar": "EGLL 270900Z 34004KT CAVOK 21/09 Q1016",
+            },
+        },
+        locale="zh-CN",
+        reason="AI content is not a JSON object",
+        raw_content=(
+            '{"metar_read_zh":"最新METAR报文09:00观测温度21°C，西北风4节（340°），'
+            'CAVOK（能见度良好，无重要云）。当前西北风弱，趋向增温但影响有限；'
+            'TAF预示10-11点转南风（18012KT），南风可能带来凉爽海风抑制升温。",'
+            '"reasoning_zh":"DEB预测24.3°C，多数模型集中在23-26°C，'
+            '当前09时实测21°C处于快速升温路径，但TAF显示'
+        ),
+    )
+
+    assert "但TAF显示" not in payload["reasoning_zh"]
+    assert payload["reasoning_zh"].endswith("。")
+    assert "当前09时实测21°C处于快速升温路径" in payload["reasoning_zh"]
+
+
+def test_city_ai_schema_completion_trims_dangling_taf_clause():
+    payload = scan_terminal_service._complete_city_ai_payload(
+        {
+            "predicted_max": 24.3,
+            "range_low": 22.3,
+            "range_high": 26.3,
+            "unit": "°C",
+            "confidence": "medium",
+            "final_judgment_zh": "London 最高温中枢暂看24°C附近。",
+            "final_judgment_en": "London high is centered near 24°C.",
+            "metar_read_zh": "最新METAR报文09:00观测温度21°C，西北风4节，CAVOK。",
+            "metar_read_en": "The latest METAR shows 21°C at 09:00 with northwesterly wind and CAVOK.",
+            "reasoning_zh": "当前09时实测21°C处于快速升温路径，但TAF显示",
+            "reasoning_en": "The 09:00 observation is on a fast warming path, but TAF shows",
+            "risks_zh": ["后续METAR若升温放缓，需要下修。"],
+            "risks_en": ["If later METAR warming slows, revise lower."],
+            "model_cluster_note_zh": "4/4 个模型落在 DEB ±2°C 内。",
+            "model_cluster_note_en": "4/4 models sit within 2°C of DEB.",
+        },
+        {
+            "city_display_name": "London",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 24.3},
+            "model_cluster": {"sources": [{"value": 22.3}, {"value": 26.3}]},
+            "observation_anchor": {"is_airport_metar": True, "station_code": "EGLL"},
+            "airport_current": {
+                "station_code": "EGLL",
+                "temp": 21.0,
+                "report_time": "09:00Z",
+                "raw_metar": "EGLL 270900Z 34004KT CAVOK 21/09 Q1016",
+            },
+        },
+        locale="zh-CN",
+    )
+
+    assert payload["reasoning_zh"] == "当前09时实测21°C处于快速升温路径。"
+    assert payload["reasoning_en"] == "The 09:00 observation is on a fast warming path."
+    assert payload["_polyweather_meta"]["trimmed_incomplete_fields"] == [
+        "reasoning_en",
+        "reasoning_zh",
+    ]
+
+
 def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200

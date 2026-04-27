@@ -14,7 +14,7 @@ import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
-const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v4";
+const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v5";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
 const AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS = 2;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
@@ -384,8 +384,8 @@ function buildAiCityFallbackPayload({
   const metarEn = rawMetar
     ? `Latest METAR shows ${currentText}; use it as the live anchor while later reports confirm the path.`
     : `Use ${currentText} and the model path for now while waiting for the next ${bulletinEn}.`;
-  const reasonZh = `DEB、多模型集合和最新${sourceZh}已足够给出当前方向判断；DeepSeek 增强可作为后续补充。`;
-  const reasonEn = `DEB, the model cluster and latest ${sourceEn} are enough for the current directional read; DeepSeek enhancement can be added later.`;
+  const reasonZh = `DEB、多模型集合和最新${sourceZh}已足够给出当前方向判断；页面会在 DeepSeek 返回后合并完整机场报文解读。`;
+  const reasonEn = `DEB, the model cluster and latest ${sourceEn} are enough for the current directional read; the page will merge the full airport-bulletin read when DeepSeek returns.`;
 
   return {
     city_forecast: {

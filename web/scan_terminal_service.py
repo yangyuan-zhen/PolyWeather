@@ -98,7 +98,7 @@ SCAN_CITY_AI_MAX_TOKENS = _env_int(
     min_value=800,
     max_value=64000,
 )
-SCAN_CITY_AI_PROMPT_VERSION = "city-observation-read-v4"
+SCAN_CITY_AI_PROMPT_VERSION = "city-observation-read-v5"
 
 CITY_AI_REQUIRED_FIELDS = [
     "metar_read_zh",
@@ -408,7 +408,7 @@ def _decode_json_string_fragment(fragment: str) -> str:
         )
 
 
-def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
+def _extract_json_string_field_fragment(raw_text: str, field: str) -> tuple[str, bool]:
     """Best-effort extraction from a streamed/incomplete JSON object.
 
     DeepSeek may stream useful fields first but still end with truncated JSON.
@@ -419,10 +419,11 @@ def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
     text = str(raw_text or "")
     match = re.search(rf'"{re.escape(field)}"\s*:\s*"', text)
     if not match:
-        return ""
+        return "", False
     idx = match.end()
     chars: List[str] = []
     escaped = False
+    closed = False
     while idx < len(text):
         char = text[idx]
         idx += 1
@@ -434,11 +435,75 @@ def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
             escaped = True
             continue
         if char == '"':
+            closed = True
             break
         chars.append(char)
     if escaped:
         chars.append("\\")
-    return _decode_json_string_fragment("".join(chars)).strip()
+    return _decode_json_string_fragment("".join(chars)).strip(), closed
+
+
+def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
+    value, _closed = _extract_json_string_field_fragment(raw_text, field)
+    return value
+
+
+_CITY_AI_TEXT_FIELDS = {
+    "metar_read_zh",
+    "metar_read_en",
+    "final_judgment_zh",
+    "final_judgment_en",
+    "reasoning_zh",
+    "reasoning_en",
+    "model_cluster_note_zh",
+    "model_cluster_note_en",
+}
+
+
+_INCOMPLETE_TAIL_RE = re.compile(
+    r"(?:(?:[，,；;]\s*)?(?:但|但是|不过|然而|而且|并且|因为|由于|若|如果|but|however|although|because|if|while|and)\s*)?"
+    r"(?:TAF|METAR|报文|机场预报|机场报文)?\s*(?:显示|提示|预示|表明|show(?:s)?|indicate(?:s)?|suggest(?:s)?)?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _strip_incomplete_ai_sentence(value: Any) -> str:
+    """Remove dangling provider fragments such as "但TAF显示".
+
+    The city AI endpoint can fall back to partially streamed JSON. If the stream
+    stops in the middle of a string, keeping the whole fragment produces broken
+    UI text. Prefer the last complete sentence/clause; if the whole field is too
+    incomplete, let schema completion use the deterministic fallback.
+    """
+
+    text = re.sub(r"\s+", " ", str(value or "")).strip()
+    if not text:
+        return ""
+    if re.search(r"[。！？.!?]$", text):
+        return text
+
+    stripped = _INCOMPLETE_TAIL_RE.sub("", text).rstrip(" ，,；;：:")
+    if stripped != text:
+        text = stripped.strip()
+        if not text:
+            return ""
+        if re.search(r"[。！？.!?]$", text):
+            return text
+        return text.rstrip(" ，,；;：:") + ("." if re.search(r"[A-Za-z]$", text) else "。")
+
+    # If the provider stopped after a semicolon/comma-delimited clause, keep the
+    # complete preceding clause instead of showing a dangling tail.
+    for punct in ("；", ";", "。", "！", "？", ".", "!", "?"):
+        idx = text.rfind(punct)
+        if idx >= 0:
+            candidate = text[: idx + 1].strip()
+            if len(candidate) >= 8:
+                return candidate.rstrip("；;") + ("." if punct == ";" else "。" if punct == "；" else "")
+
+    # If no dangling connector is visible, keep the provider text and add only
+    # terminal punctuation. This avoids replacing otherwise useful long reads
+    # just because the JSON string missed its closing quote.
+    return text.rstrip(" ，,；;：:") + ("." if re.search(r"[A-Za-z]$", text) else "。")
 
 
 def _extract_json_number_field_from_fragment(raw_text: str, field: str) -> Optional[float]:
@@ -466,7 +531,9 @@ def _extract_city_ai_partial_fields(raw_text: str) -> Dict[str, Any]:
         "confidence",
         "unit",
     ):
-        value = _extract_json_string_field_from_fragment(text, field)
+        value, closed = _extract_json_string_field_fragment(text, field)
+        if value and field in _CITY_AI_TEXT_FIELDS and not closed:
+            value = _strip_incomplete_ai_sentence(value)
         if value:
             out[field] = value
     for field in ("predicted_max", "range_low", "range_high"):
@@ -731,16 +798,36 @@ def _complete_city_ai_payload(
     )
     completed: List[str] = []
     out = dict(ai_raw)
+    trimmed: List[str] = []
     for field in CITY_AI_REQUIRED_FIELDS:
         value = out.get(field)
+        if isinstance(value, str) and field in _CITY_AI_TEXT_FIELDS:
+            clean_value = _strip_incomplete_ai_sentence(value)
+            if clean_value != value:
+                trimmed.append(field)
+                value = clean_value
+                out[field] = clean_value
         if value is None or value == "" or value == []:
             out[field] = fallback.get(field)
             completed.append(field)
+    for field in ("risks_zh", "risks_en"):
+        value = out.get(field)
+        if isinstance(value, list):
+            cleaned_risks = []
+            for item in value:
+                clean_item = _strip_incomplete_ai_sentence(item)
+                if clean_item:
+                    cleaned_risks.append(clean_item)
+            if cleaned_risks != value:
+                trimmed.append(field)
+                out[field] = cleaned_risks or fallback.get(field)
     meta = out.get("_polyweather_meta")
     if not isinstance(meta, dict):
         meta = {}
     if completed:
         meta["schema_completed_fields"] = completed
+    if trimmed:
+        meta["trimmed_incomplete_fields"] = sorted(set(trimmed))
     out["_polyweather_meta"] = meta
     return out
 
