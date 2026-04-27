@@ -115,7 +115,29 @@ function formatFreshnessAge(value: unknown, isEn: boolean) {
   return isEn ? `${hours}h ${remaining}m ago` : `${hours} 小时 ${remaining} 分钟前`;
 }
 
-function buildObservationFreshnessLabel({
+function formatUpdateTime(value: unknown, locale: string) {
+  const epochMs = parseEpochMs(value);
+  if (epochMs == null) return "";
+  const date = new Date(epochMs);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  const time = date.toLocaleTimeString(locale === "en-US" ? "en-US" : "zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  if (locale === "en-US") {
+    const day = sameDay
+      ? "today"
+      : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return `${day} ${time} updated`;
+  }
+  const day = sameDay
+    ? "今日"
+    : date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  return `${day} ${time} 更新`;
+}
+
+function buildObservationFreshnessValue({
   detail,
   displayTime,
   isEn,
@@ -126,20 +148,50 @@ function buildObservationFreshnessLabel({
   isEn: boolean;
   isHkoObservation: boolean;
 }) {
-  const source = isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR";
   const stale = Boolean(
     detail?.metar_status?.stale_for_today ||
       detail?.airport_current?.stale_for_today ||
       detail?.current?.observation_status === "stale",
   );
-  if (stale) return isEn ? `${source} stale` : `${source} 过旧`;
+  if (stale) {
+    return isEn ? "stale; background only" : "已过旧，仅作背景参考";
+  }
   const ageLabel = formatFreshnessAge(
     isHkoObservation ? detail?.current?.obs_age_min : detail?.airport_current?.obs_age_min ?? detail?.current?.obs_age_min,
     isEn,
   );
-  if (ageLabel) return `${source} ${ageLabel}`;
-  if (displayTime) return `${source} ${displayTime}`;
-  return isEn ? `${source} time pending` : `${source} 时间待确认`;
+  if (ageLabel) return ageLabel;
+  if (displayTime) return displayTime;
+  return isEn ? "time pending" : "时间待确认";
+}
+
+function buildModelFreshnessValue(detail: CityDetail | null, locale: string, isEn: boolean) {
+  return (
+    formatUpdateTime(detail?.updated_at, locale) ||
+    (isEn ? "latest run loaded" : "已加载最新模型")
+  );
+}
+
+function buildMarketFreshnessValue({
+  isEn,
+  marketScan,
+  marketStatus,
+}: {
+  isEn: boolean;
+  marketScan: ReturnType<typeof useCityMarketScan>["marketScan"];
+  marketStatus: ReturnType<typeof useCityMarketScan>["marketStatus"];
+}) {
+  if (marketStatus === "loading") return isEn ? "syncing" : "同步中";
+  if (!marketScan?.available) return isEn ? "missing" : "缺失";
+  const quoteAgeMs = Number(
+    marketScan.quote_age_ms ??
+      marketScan.yes_token?.quote_age_ms ??
+      marketScan.no_token?.quote_age_ms,
+  );
+  if (Number.isFinite(quoteAgeMs) && quoteAgeMs >= 0) {
+    return formatFreshnessAge(quoteAgeMs / 60_000, isEn);
+  }
+  return isEn ? "synced" : "已同步";
 }
 
 function uniqueStatusTags(tags: Array<StatusTag | null | undefined>) {
@@ -362,12 +414,6 @@ function AiPinnedCityCard({
     !observedLowBreak &&
     !peakHasPassed &&
     (observedLowLag || paceTone === "neutral" || aiForecast.status === "loading");
-  const observationFreshnessLabel = buildObservationFreshnessLabel({
-    detail,
-    displayTime: metarReportTimeDisplay,
-    isEn,
-    isHkoObservation,
-  });
   const aiRuleEvidenceMode = Boolean(
     aiForecast.status === "failed" ||
       (aiForecast.status === "ready" && !aiCityForecast) ||
@@ -421,24 +467,40 @@ function AiPinnedCityCard({
         : aiRuleEvidenceMode
           ? "amber"
           : "muted";
-  const marketFreshnessLabel =
-    marketDecisionView.status === "ready"
-      ? isEn
-        ? "Market synced"
-        : "市场已同步"
-      : marketDecisionView.status === "loading"
-        ? isEn
-          ? "Market loading"
-          : "市场同步中"
-        : isEn
-          ? "No market price"
-          : "暂无市场价";
   const marketStatusTone: StatusTagTone =
     marketDecisionView.status === "ready"
       ? "green"
       : marketDecisionView.status === "loading"
         ? "blue"
         : "muted";
+  const dataFreshnessRows = [
+    {
+      label: isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR",
+      value: buildObservationFreshnessValue({
+        detail,
+        displayTime: metarReportTimeDisplay,
+        isEn,
+        isHkoObservation,
+      }),
+      tone: observationStale ? "stale" : "fresh",
+    },
+    {
+      label: isEn ? "Models" : "模型",
+      value: buildModelFreshnessValue(detail, locale, isEn),
+      tone: "fresh",
+    },
+    {
+      label: isEn ? "Market" : "市场价格",
+      value: buildMarketFreshnessValue({ isEn, marketScan, marketStatus }),
+      tone:
+        marketDecisionView.status === "ready"
+          ? "fresh"
+          : marketDecisionView.status === "loading"
+            ? "loading"
+            : "stale",
+    },
+  ];
+  const freshnessSeparator = isEn ? ": " : "：";
   const statusTags = uniqueStatusTags([
     observedHighBreak
       ? {
@@ -544,10 +606,18 @@ function AiPinnedCityCard({
             <span>{isEn ? "Model" : "模型"} {modelRange}</span>
             <span>{isEn ? "Peak" : "峰值"} {peakWindow}</span>
           </div>
-          <div className="scan-ai-city-freshness">
-            <span>{observationFreshnessLabel}</span>
-            <span>{marketFreshnessLabel}</span>
-            <span>{aiStatusLabel}</span>
+          <div className="scan-ai-city-freshness" aria-label={isEn ? "Data freshness" : "数据新鲜度"}>
+            <strong>{isEn ? "Data freshness" : "数据新鲜度"}</strong>
+            {dataFreshnessRows.map((freshness) => (
+              <span key={freshness.label} className={freshness.tone}>
+                <b>{freshness.label}{freshnessSeparator}</b>
+                <em>{freshness.value}</em>
+              </span>
+            ))}
+            <span className={aiStatusTone}>
+              <b>AI{freshnessSeparator}</b>
+              <em>{aiStatusLabel}</em>
+            </span>
           </div>
         </div>
         <div className="scan-ai-city-hero-side">

@@ -11377,19 +11377,62 @@
 }
 
 .root :global(.scan-ai-city-freshness) {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 8px;
-  color: #8fa4bd;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 620px;
+  margin-top: 10px;
+  color: #9fb2c7;
   font-size: 11px;
   font-weight: 760;
 }
 
+.root :global(.scan-ai-city-freshness strong) {
+  grid-column: 1 / -1;
+  color: #d8e7f8;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .root :global(.scan-ai-city-freshness span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   border-radius: 8px;
   background: rgba(148, 163, 184, 0.08);
   padding: 4px 7px;
+}
+
+.root :global(.scan-ai-city-freshness b) {
+  color: #d6e2f0;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.root :global(.scan-ai-city-freshness em) {
+  color: #9fb2c7;
+  font-style: normal;
+}
+
+.root :global(.scan-ai-city-freshness span.fresh em),
+.root :global(.scan-ai-city-freshness span.green em) {
+  color: #86efac;
+}
+
+.root :global(.scan-ai-city-freshness span.loading em),
+.root :global(.scan-ai-city-freshness span.blue em) {
+  color: #9ecbff;
+}
+
+.root :global(.scan-ai-city-freshness span.stale em),
+.root :global(.scan-ai-city-freshness span.amber em) {
+  color: #fcd34d;
+}
+
+.root :global(.scan-ai-city-freshness span.red em) {
+  color: #fca5a5;
 }
 
 .root :global(.scan-ai-city-hero-side) {
@@ -12102,6 +12145,14 @@
   color: #9fb4d2;
   font-size: 12px;
   font-weight: 800;
+}
+
+.root :global(.scan-calendar-reason) {
+  margin: 10px 0 0;
+  color: #d6e4f5;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
 }
 
 .root :global(.scan-summary-grid) {
@@ -13467,6 +13518,10 @@
 
 .root :global(.scan-terminal.light .scan-calendar-action b) {
   color: #122033;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-reason) {
+  color: #243b5a;
 }
 
 .root :global(.scan-terminal.light .scan-calendar-countdown) {
