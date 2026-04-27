@@ -456,11 +456,6 @@ def _extract_json_string_field_fragment(raw_text: str, field: str) -> tuple[str,
     return _decode_json_string_fragment("".join(chars)).strip(), closed
 
 
-def _extract_json_string_field_from_fragment(raw_text: str, field: str) -> str:
-    value, _closed = _extract_json_string_field_fragment(raw_text, field)
-    return value
-
-
 _CITY_AI_TEXT_FIELDS = {
     "metar_read_zh",
     "metar_read_en",
@@ -678,34 +673,107 @@ def _build_city_ai_fallback(
     current_temp = _safe_float(
         airport_current.get("temp") if is_airport_metar else current_obs.get("temp")
     )
+    current_max_so_far = _safe_float(
+        ai_input.get("current_max_so_far")
+        or current_obs.get("max_so_far")
+        or airport_current.get("max_so_far")
+    )
+    observed_high_so_far = max(
+        [value for value in (current_temp, current_max_so_far) if value is not None],
+        default=None,
+    )
     predicted = deb_value
     if predicted is None and values:
         predicted = sum(values) / len(values)
     if predicted is None:
-        predicted = current_temp
+        predicted = observed_high_so_far
     range_low = min(values) if values else predicted
     range_high = max(values) if values else predicted
+    peak = ai_input.get("peak") if isinstance(ai_input.get("peak"), dict) else {}
+    window_phase = str(
+        ai_input.get("window_phase")
+        or peak.get("window_phase")
+        or peak.get("phase")
+        or ""
+    ).strip().lower()
+    remaining_window_minutes = _safe_float(
+        ai_input.get("remaining_window_minutes")
+        if ai_input.get("remaining_window_minutes") is not None
+        else peak.get("remaining_window_minutes")
+        if peak.get("remaining_window_minutes") is not None
+        else peak.get("remaining_minutes")
+    )
+    minutes_until_peak_start = _safe_float(
+        ai_input.get("minutes_until_peak_start")
+        if ai_input.get("minutes_until_peak_start") is not None
+        else peak.get("minutes_until_peak_start")
+    )
+    minutes_until_peak_end = _safe_float(
+        ai_input.get("minutes_until_peak_end")
+        if ai_input.get("minutes_until_peak_end") is not None
+        else peak.get("minutes_until_peak_end")
+    )
+    peak_window_label = str(
+        ai_input.get("peak_window_label")
+        or peak.get("peak_window_label")
+        or peak.get("label")
+        or ""
+    ).strip()
+    peak_has_passed = (
+        window_phase in {"post_peak", "past"}
+        or (minutes_until_peak_end is not None and minutes_until_peak_end < 0)
+    )
+    peak_is_closing = (
+        window_phase == "active_peak"
+        and remaining_window_minutes is not None
+        and remaining_window_minutes <= 90
+    )
+    peak_not_started = (
+        window_phase in {"early_today", "setup_today", "tomorrow", "week_ahead"}
+        or (minutes_until_peak_start is not None and minutes_until_peak_start > 0)
+    )
     model_range_high = range_high
+    model_range_low = range_low
     current_above_predicted = (
-        current_temp is not None
+        observed_high_so_far is not None
         and predicted is not None
-        and current_temp > predicted + 0.2
+        and observed_high_so_far > predicted + 0.2
     )
     current_above_model_range = (
-        current_temp is not None
+        observed_high_so_far is not None
         and model_range_high is not None
-        and current_temp > model_range_high + 0.2
+        and observed_high_so_far > model_range_high + 0.2
     )
     observed_high_break = bool(current_above_predicted or current_above_model_range)
+    current_below_predicted = (
+        observed_high_so_far is not None
+        and predicted is not None
+        and observed_high_so_far < predicted - 1.5
+    )
+    current_below_model_range = (
+        observed_high_so_far is not None
+        and model_range_low is not None
+        and observed_high_so_far < model_range_low - 0.2
+    )
+    observed_low_break = bool(current_below_predicted and (peak_has_passed or peak_is_closing))
+    observed_low_lag = bool(current_below_predicted and not observed_low_break)
     original_predicted = predicted
     if observed_high_break:
         predicted = max(
             value
-            for value in (predicted, current_temp)
+            for value in (predicted, observed_high_so_far)
             if value is not None
         )
-        if range_high is not None and current_temp is not None:
-            range_high = max(range_high, current_temp)
+        if range_high is not None and observed_high_so_far is not None:
+            range_high = max(range_high, observed_high_so_far)
+    elif observed_low_break:
+        predicted = min(
+            value
+            for value in (predicted, observed_high_so_far)
+            if value is not None
+        )
+        if range_low is not None and observed_high_so_far is not None:
+            range_low = min(range_low, observed_high_so_far)
     city = str(ai_input.get("city_display_name") or ai_input.get("city") or "this city")
     station = str((airport_current.get("station_code") if is_airport_metar else None) or observation_anchor.get("station_code") or current_obs.get("station_code") or "")
     raw_metar = str(airport_current.get("raw_metar") or "").strip() if is_airport_metar else ""
@@ -739,9 +807,12 @@ def _build_city_ai_fallback(
         metar_zh = f"当前没有可用的{source_name_zh}正文，暂以 DEB、多模型路径与最新实测为主。"
         metar_en = f"No raw {source_name_en} text is available, so DEB, latest observations and the model cluster carry the read."
     predicted_text = _format_ai_temperature(predicted, unit) or "--"
-    current_text = _format_ai_temperature(current_temp, unit) or "--"
+    current_text = _format_ai_temperature(observed_high_so_far, unit) or "--"
     original_predicted_text = _format_ai_temperature(original_predicted, unit) or "--"
     model_range_high_text = _format_ai_temperature(model_range_high, unit) or "--"
+    model_range_low_text = _format_ai_temperature(model_range_low, unit) or "--"
+    peak_label_text_zh = f"（{peak_window_label}）" if peak_window_label else ""
+    peak_label_text_en = f" ({peak_window_label})" if peak_window_label else ""
     if partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en"):
         final_zh = str(partial_ai.get("final_judgment_zh") or partial_ai.get("final_judgment_en") or "").strip()
         final_en = str(partial_ai.get("final_judgment_en") or partial_ai.get("final_judgment_zh") or "").strip()
@@ -751,36 +822,53 @@ def _build_city_ai_fallback(
     elif observed_high_break:
         final_zh = f"{city} 最新实测已达 {current_text}，高于原先 {original_predicted_text} 中枢；最高温中枢需先上修到至少 {predicted_text} 附近。"
         final_en = f"{city} latest observation has reached {current_text}, above the prior {original_predicted_text} center; the daily-high center should be revised up to at least near {predicted_text}."
+    elif observed_low_break:
+        final_zh = f"{city} 峰值窗口{peak_label_text_zh}已过或接近结束，实测最高仍约 {current_text}，低于原先 {original_predicted_text} 中枢；最高温中枢需先下修到 {predicted_text} 附近。"
+        final_en = f"{city} peak window{peak_label_text_en} has passed or is nearly over, and observed high is still near {current_text}, below the prior {original_predicted_text} center; revise the daily-high center down toward {predicted_text}."
+    elif peak_has_passed:
+        final_zh = f"{city} 峰值窗口{peak_label_text_zh}已过；最高温暂以 {predicted_text} 附近为中枢，并以已观测到的高点为主要校准。"
+        final_en = f"{city} peak window{peak_label_text_en} has passed; the daily high stays centered near {predicted_text}, calibrated mainly against the observed high so far."
     elif timed_out:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和{source_name_zh}快速证据模式判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/{source_name_en} evidence mode."
     else:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和{source_name_zh}快速证据模式判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/{source_name_en} evidence mode."
-    reasoning_zh = str(partial_ai.get("reasoning_zh") or "").strip() or (
-        f"AI {bulletin_zh}解读已用于校准日内节奏；DEB 与多模型集合继续约束最高温中枢，后续{source_name_zh}用于确认是否需要上调或下修。"
-        if partial_ai
-        else f"当前为快速证据模式；最新{source_name_zh}已高于原先 {original_predicted_text} 中枢{('，并超过模型上沿 ' + model_range_high_text) if current_above_model_range else ''}，本轮最高温判断应优先承认实测突破并等待完整 AI {bulletin_zh}解读合并。"
-        if observed_high_break
-        else f"当前为快速证据模式；DEB、多模型集合和最新{source_name_zh}共同支撑本轮最高温中枢，完整 AI {bulletin_zh}解读返回后再合并。"
-    )
-    reasoning_en = str(partial_ai.get("reasoning_en") or "").strip() or (
-        f"The AI {bulletin_en} read is already used to calibrate the intraday pace; DEB and the model cluster still constrain the high-temperature center, while later {source_name_en} updates confirm whether to revise it."
-        if partial_ai
-        else f"This is the fast evidence mode; latest {source_name_en} is above the prior {original_predicted_text} center{(' and above the model upper edge ' + model_range_high_text) if current_above_model_range else ''}, so the high-temperature read should first acknowledge the observed break and merge the full AI {bulletin_en} read when available."
-        if observed_high_break
-        else f"This is the fast evidence mode; DEB, the model cluster and latest {source_name_en} jointly support the current daily-high center, and the full AI {bulletin_en} read will be merged when available."
-    )
-    risks_zh = (
-        [f"最新{source_name_zh}已突破原模型路径，若后续报文继续持平或升温，需要继续上修最高温中枢。"]
-        if observed_high_break
-        else [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
-    )
-    risks_en = (
-        [f"Latest {source_name_en} has already broken above the prior model path; if later reports hold steady or warm further, keep revising the daily-high center upward."]
-        if observed_high_break
-        else [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]
-    )
+    if partial_ai:
+        fallback_reasoning_zh = f"AI {bulletin_zh}解读已用于校准日内节奏；DEB 与多模型集合继续约束最高温中枢，后续{source_name_zh}用于确认是否需要上调或下修。"
+        fallback_reasoning_en = f"The AI {bulletin_en} read is already used to calibrate the intraday pace; DEB and the model cluster still constrain the high-temperature center, while later {source_name_en} updates confirm whether to revise it."
+    elif observed_high_break:
+        fallback_reasoning_zh = f"当前为快速证据模式；最新{source_name_zh}已高于原先 {original_predicted_text} 中枢{('，并超过模型上沿 ' + model_range_high_text) if current_above_model_range else ''}，本轮最高温判断应优先承认实测突破并等待完整 AI {bulletin_zh}解读合并。"
+        fallback_reasoning_en = f"This is the fast evidence mode; latest {source_name_en} is above the prior {original_predicted_text} center{(' and above the model upper edge ' + model_range_high_text) if current_above_model_range else ''}, so the high-temperature read should first acknowledge the observed break and merge the full AI {bulletin_en} read when available."
+    elif observed_low_break:
+        fallback_reasoning_zh = f"当前为快速证据模式；峰值窗口已过或接近结束，最新实测高点仍低于原先 {original_predicted_text} 中枢{('，并低于模型下沿 ' + model_range_low_text) if current_below_model_range else ''}，本轮最高温判断应优先承认下修压力并等待完整 AI {bulletin_zh}解读合并。"
+        fallback_reasoning_en = f"This is the fast evidence mode; the peak window has passed or is nearly over, and the observed high remains below the prior {original_predicted_text} center{(' and below the model lower edge ' + model_range_low_text) if current_below_model_range else ''}, so the high-temperature read should first acknowledge downward revision pressure and merge the full AI {bulletin_en} read when available."
+    elif observed_low_lag and peak_not_started:
+        fallback_reasoning_zh = f"当前为快速证据模式；最新{source_name_zh}仍低于原先 {original_predicted_text} 中枢，但峰值窗口尚未到来，暂不直接下修，只把后续升温是否追上模型路径作为关键确认。"
+        fallback_reasoning_en = f"This is the fast evidence mode; latest {source_name_en} remains below the prior {original_predicted_text} center, but the peak window has not arrived, so do not revise down yet and use later warming as the key confirmation."
+    elif peak_has_passed:
+        fallback_reasoning_zh = f"当前为快速证据模式；峰值窗口已过，后续{source_name_zh}主要用于确认是否已形成日内高点，而不是继续按待升温路径解读。"
+        fallback_reasoning_en = f"This is the fast evidence mode; the peak window has passed, so later {source_name_en} updates mainly confirm whether the daily high is already set rather than assuming further warming."
+    else:
+        fallback_reasoning_zh = f"当前为快速证据模式；DEB、多模型集合和最新{source_name_zh}共同支撑本轮最高温中枢，完整 AI {bulletin_zh}解读返回后再合并。"
+        fallback_reasoning_en = f"This is the fast evidence mode; DEB, the model cluster and latest {source_name_en} jointly support the current daily-high center, and the full AI {bulletin_en} read will be merged when available."
+    reasoning_zh = str(partial_ai.get("reasoning_zh") or "").strip() or fallback_reasoning_zh
+    reasoning_en = str(partial_ai.get("reasoning_en") or "").strip() or fallback_reasoning_en
+    if observed_high_break:
+        risks_zh = [f"最新{source_name_zh}已突破原模型路径，若后续报文继续持平或升温，需要继续上修最高温中枢。"]
+        risks_en = [f"Latest {source_name_en} has already broken above the prior model path; if later reports hold steady or warm further, keep revising the daily-high center upward."]
+    elif observed_low_break:
+        risks_zh = [f"峰值窗口已过或接近结束且实测仍偏低，若后续{source_name_zh}没有反弹，需要继续下修最高温中枢。"]
+        risks_en = [f"The peak window has passed or is nearly over while observations remain low; if later {source_name_en} does not rebound, keep revising the daily-high center lower."]
+    elif observed_low_lag:
+        risks_zh = [f"最新{source_name_zh}仍未追上原模型路径；若峰值窗口前继续偏低，需要下修最高温中枢。"]
+        risks_en = [f"Latest {source_name_en} has not caught up with the prior model path; if it stays low before the peak window, revise the daily-high center lower."]
+    elif peak_has_passed:
+        risks_zh = [f"峰值窗口已过，后续{source_name_zh}若未再创新高，应避免继续上调最高温中枢。"]
+        risks_en = [f"The peak window has passed; avoid raising the daily-high center unless later {source_name_en} sets a new high."]
+    else:
+        risks_zh = [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
+        risks_en = [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]
     return {
         "predicted_max": partial_ai.get("predicted_max", predicted),
         "range_low": partial_ai.get("range_low", range_low),
@@ -964,27 +1052,6 @@ def _compact_ai_candidate(row: Dict[str, Any]) -> Dict[str, Any]:
 
 def _normalize_ai_city_key(value: Any) -> str:
     return str(value or "").strip().lower().replace(" ", "").replace("-", "").replace("_", "")
-
-
-def _compact_ai_distribution(row: Dict[str, Any]) -> List[Dict[str, Any]]:
-    raw_items = row.get("distribution_full") or row.get("distribution_preview") or []
-    if not isinstance(raw_items, list):
-        return []
-    out: List[Dict[str, Any]] = []
-    for item in raw_items:
-        if not isinstance(item, dict):
-            continue
-        out.append(
-            {
-                "label": item.get("label"),
-                "value": item.get("value"),
-                "unit": item.get("unit") or row.get("target_unit") or row.get("temp_symbol"),
-                "model_probability": item.get("model_probability"),
-                "market_probability": item.get("market_probability"),
-                "highlighted": item.get("highlighted"),
-            }
-        )
-    return out
 
 
 def _compact_ai_model_sources(row: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -1943,10 +2010,6 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
     }
     raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False, default=str)
     return "city-ai:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
-
-
-def _city_forecast_cache_key(city_name: str) -> str:
-    return f"city_forecast:{SCAN_CITY_AI_PROMPT_VERSION}:{city_name.lower()}"
 
 
 def _sse_event(event: str, payload: Dict[str, Any]) -> str:

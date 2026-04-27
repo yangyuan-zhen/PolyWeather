@@ -173,6 +173,118 @@ def test_city_ai_fallback_revises_up_when_latest_metar_breaks_above_models():
     assert "继续上修最高温中枢" in payload["risks_zh"][0]
 
 
+def test_city_ai_fallback_revises_down_after_peak_when_observed_high_lags():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "London",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 30.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 29.2},
+                    {"value": 30.0},
+                    {"value": 31.1},
+                ]
+            },
+            "window_phase": "post_peak",
+            "peak_window_label": "14:00-16:59",
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "EGLL",
+            },
+            "airport_current": {
+                "station_code": "EGLL",
+                "temp": 27.0,
+                "max_so_far": 27.5,
+                "report_time": "16:30Z",
+                "raw_metar": "EGLL 271630Z 22008KT 9999 SCT030 27/15 Q1012",
+            },
+        },
+        locale="zh-CN",
+        reason="stream preview",
+    )
+
+    assert payload["predicted_max"] == 27.5
+    assert "峰值窗口（14:00-16:59）已过或接近结束" in payload["final_judgment_zh"]
+    assert "最高温中枢需先下修到 27.5°C" in payload["final_judgment_zh"]
+    assert "共同支撑本轮最高温中枢" not in payload["reasoning_zh"]
+    assert "下修压力" in payload["reasoning_zh"]
+    assert "继续下修最高温中枢" in payload["risks_zh"][0]
+
+
+def test_city_ai_fallback_does_not_downrevise_before_peak_window():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "Dubai",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 41.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 40.5},
+                    {"value": 41.0},
+                    {"value": 41.6},
+                ]
+            },
+            "window_phase": "early_today",
+            "minutes_until_peak_start": 240,
+            "peak_window_label": "14:00-16:59",
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "OMDB",
+            },
+            "airport_current": {
+                "station_code": "OMDB",
+                "temp": 35.0,
+                "report_time": "08:00Z",
+                "raw_metar": "OMDB 270800Z 29007KT CAVOK 35/20 Q1008",
+            },
+        },
+        locale="zh-CN",
+        reason="stream preview",
+    )
+
+    assert payload["predicted_max"] == 41.0
+    assert "暂不直接下修" in payload["reasoning_zh"]
+    assert "峰值窗口尚未到来" in payload["reasoning_zh"]
+    assert "若峰值窗口前继续偏低，需要下修最高温中枢" in payload["risks_zh"][0]
+
+
+def test_city_ai_fallback_marks_peak_window_passed_without_waiting_for_warming():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "Paris",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 28.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 27.6},
+                    {"value": 28.0},
+                    {"value": 28.5},
+                ]
+            },
+            "window_phase": "post_peak",
+            "peak_window_label": "13:00-15:59",
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "LFPG",
+            },
+            "airport_current": {
+                "station_code": "LFPG",
+                "temp": 27.0,
+                "max_so_far": 27.2,
+                "report_time": "17:00Z",
+                "raw_metar": "LFPG 271700Z 25006KT 9999 FEW035 27/13 Q1014",
+            },
+        },
+        locale="zh-CN",
+        reason="stream preview",
+    )
+
+    assert "峰值窗口（13:00-15:59）已过" in payload["final_judgment_zh"]
+    assert "不是继续按待升温路径解读" in payload["reasoning_zh"]
+    assert "避免继续上调最高温中枢" in payload["risks_zh"][0]
+
+
 def test_city_ai_stream_request_only_asks_provider_for_observation_read():
     request_payload = scan_terminal_service._build_city_ai_stream_request(
         {
