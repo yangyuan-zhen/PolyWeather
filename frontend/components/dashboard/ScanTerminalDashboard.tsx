@@ -701,6 +701,26 @@ function ScanTerminalScreen() {
             </div>
           </div>
 
+          <section className="scan-upgrade-announcement" aria-label={isEn ? "Upgrade announcement" : "升级公告"}>
+            <div className="scan-upgrade-announcement-copy">
+              <span>{isEn ? "v1.5.5 upgrade" : "v1.5.5 升级公告"}</span>
+              <strong>
+                {isEn ? "PolyWeather is now upgraded to v1.5.5" : "网站已升级到 v1.5.5"}
+              </strong>
+              <p>
+                {isEn
+                  ? "All members received an extra 7 days. The decision terminal now explains more evidence without making unavailable quotes look like a system failure."
+                  : "所有会员已额外延长 7 天。新版会把证据讲得更清楚，也不会让暂无报价看起来像系统故障。"}
+              </p>
+            </div>
+            <ul>
+              <li>{isEn ? "DeepSeek airport bulletin read" : "DeepSeek 机场报文解读"}</li>
+              <li>{isEn ? "Action calendar view" : "日历行动视图"}</li>
+              <li>{isEn ? "Local-time peak window" : "本地时间峰值窗口"}</li>
+              <li>{isEn ? "AI evidence guardrails" : "AI 证据护栏"}</li>
+            </ul>
+          </section>
+
           <AiForecastKPIBar
             pinnedCount={aiPinnedCities.length}
             activeCityName={kpiCityName}

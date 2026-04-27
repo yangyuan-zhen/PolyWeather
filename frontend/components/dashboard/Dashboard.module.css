@@ -9384,6 +9384,68 @@
   font-variant-numeric: tabular-nums;
 }
 
+.root :global(.scan-upgrade-announcement) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 16px;
+  align-items: center;
+  margin: -4px 0 6px;
+  border: 1px solid rgba(77, 163, 255, 0.2);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(77, 163, 255, 0.18), transparent 36%),
+    linear-gradient(135deg, rgba(18, 33, 58, 0.96), rgba(15, 23, 42, 0.92));
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.2);
+  padding: 16px 18px;
+}
+
+.root :global(.scan-upgrade-announcement-copy) {
+  min-width: 0;
+}
+
+.root :global(.scan-upgrade-announcement-copy span) {
+  color: #86efac;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.root :global(.scan-upgrade-announcement-copy strong) {
+  display: block;
+  margin-top: 5px;
+  color: #f3f8ff;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.root :global(.scan-upgrade-announcement-copy p) {
+  margin: 6px 0 0;
+  color: #b4c8e2;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.root :global(.scan-upgrade-announcement ul) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.root :global(.scan-upgrade-announcement li) {
+  border: 1px solid rgba(77, 163, 255, 0.22);
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #d7e5f7;
+  font-size: 12px;
+  font-weight: 850;
+  padding: 7px 10px;
+}
+
 .root :global(.scan-ghost-button),
 .root :global(.scan-cta-ghost),
 .root :global(.scan-theme-button),
@@ -11314,6 +11376,10 @@
   line-height: 1.1;
 }
 
+.root :global(.scan-ai-city-mobile-priority) {
+  display: none;
+}
+
 .root :global(.scan-ai-city-pills) {
   display: flex;
   flex-wrap: wrap;
@@ -11598,6 +11664,17 @@
   line-height: 1.55;
 }
 
+.root :global(.scan-ai-decision-why) {
+  display: inline-flex;
+  max-width: 100%;
+  border: 1px solid rgba(77, 163, 255, 0.24);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #d8e7f8 !important;
+  font-weight: 900;
+  padding: 9px 11px;
+}
+
 .root :global(.scan-ai-decision-reasons) {
   display: grid;
   gap: 8px;
@@ -11630,6 +11707,10 @@
   color: #fbbf24 !important;
   font-size: 12px;
   font-weight: 800;
+}
+
+.root :global(.scan-ai-market-mobile-line) {
+  display: none;
 }
 
 .root :global(.scan-ai-market-decision) {
@@ -11751,6 +11832,41 @@
   font-size: 13px;
   font-weight: 900;
   margin-bottom: 12px;
+}
+
+.root :global(.scan-ai-city-ai-read) {
+  overflow: hidden;
+}
+
+.root :global(.scan-ai-city-ai-read summary) {
+  cursor: pointer;
+  list-style: none;
+}
+
+.root :global(.scan-ai-city-ai-read summary::-webkit-details-marker) {
+  display: none;
+}
+
+.root :global(.scan-ai-city-ai-read summary::after) {
+  width: 18px;
+  height: 18px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  content: "⌄";
+  font-size: 12px;
+  line-height: 1;
+  transition: transform 0.18s ease;
+}
+
+.root :global(.scan-ai-city-ai-read[open] summary::after) {
+  transform: rotate(180deg);
+}
+
+.root :global(.scan-ai-city-section-body) {
+  margin-top: 2px;
 }
 
 .root :global(.scan-ai-city-section p) {
@@ -14055,6 +14171,14 @@
     align-items: flex-start;
   }
 
+  .root :global(.scan-upgrade-announcement) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-upgrade-announcement ul) {
+    justify-content: flex-start;
+  }
+
   .root :global(.scan-table-header),
   .root :global(.scan-table-row) {
     grid-template-columns: 1fr;
@@ -14098,6 +14222,10 @@
 
   .root :global(.scan-ai-decision-metrics) {
     min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-market-decision) {
     grid-template-columns: 1fr;
   }
 
@@ -14155,6 +14283,114 @@
   .root :global(.scan-topbar-tabs) {
     gap: 14px;
     flex-wrap: wrap;
+  }
+
+  .root :global(.scan-upgrade-announcement) {
+    padding: 14px;
+  }
+
+  .root :global(.scan-upgrade-announcement-copy strong) {
+    font-size: 16px;
+  }
+
+  .root :global(.scan-upgrade-announcement ul) {
+    gap: 6px;
+  }
+
+  .root :global(.scan-upgrade-announcement li) {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .root :global(.scan-ai-city-hero) {
+    padding: 16px;
+  }
+
+  .root :global(.scan-ai-city-hero h3) {
+    margin-bottom: 10px;
+    font-size: 24px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 12px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority span) {
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(77, 163, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(77, 163, 255, 0.09);
+    padding: 9px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority small) {
+    color: #9fb2c7;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority b) {
+    color: #f3f8ff;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .root :global(.scan-ai-city-pills) {
+    display: none;
+  }
+
+  .root :global(.scan-ai-city-freshness) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-decision-band) {
+    padding: 14px;
+  }
+
+  .root :global(.scan-ai-decision-band strong) {
+    font-size: 20px;
+  }
+
+  .root :global(.scan-ai-decision-long),
+  .root :global(.scan-ai-decision-reasons),
+  .root :global(.scan-ai-decision-risk) {
+    display: none;
+  }
+
+  .root :global(.scan-ai-market-mobile-line) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    border: 1px solid rgba(77, 163, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(11, 18, 32, 0.48);
+    padding: 10px 12px;
+  }
+
+  .root :global(.scan-ai-market-mobile-line span) {
+    color: #9fb2c7;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .root :global(.scan-ai-market-mobile-line b) {
+    color: #e6edf3;
+    font-size: 13px;
+    text-align: right;
+  }
+
+  .root :global(.scan-ai-market-decision) {
+    margin-top: 10px;
+  }
+
+  .root :global(.scan-ai-city-ai-read:not([open])) {
+    padding-bottom: 4px;
   }
 
   .root :global(.scan-list-header) {
@@ -14320,4 +14556,41 @@
 
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-status-tag.red) {
   color: #b91c1c !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement) {
+  background:
+    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 36%),
+    #ffffff !important;
+  border-color: rgba(37, 99, 235, 0.16) !important;
+  box-shadow: 0 16px 36px rgba(61, 100, 145, 0.12) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement-copy strong),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-mobile-priority b),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-market-mobile-line b) {
+  color: #0f172a !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement-copy p),
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement li),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-mobile-priority small),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-market-mobile-line span) {
+  color: #334155 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement-copy span) {
+  color: #047857 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement li),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-mobile-priority span),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-decision-why),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-market-mobile-line) {
+  background: #eef7ff !important;
+  border-color: rgba(37, 99, 235, 0.16) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-decision-why) {
+  color: #1d4ed8 !important;
 }

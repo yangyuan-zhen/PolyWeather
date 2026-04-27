@@ -369,13 +369,11 @@ export function buildMarketDecisionView({
       impliedText: "--",
       modelText: "--",
       priceText: "--",
-      reason:
-        marketScan?.reason ||
-        (isEn
-          ? "No active matched Polymarket temperature market is available for this city yet."
-          : "该城市暂未匹配到可用的 Polymarket 温度市场。"),
+      reason: isEn
+        ? "No tradable quote is available yet; weather evidence is still shown."
+        : "暂无可交易价格，仅展示天气证据。天气判断仍可参考。",
       status: "unavailable",
-      title: isEn ? "No market quote" : "暂无市场报价",
+      title: isEn ? "Market price temporarily unavailable" : "市场价格暂不可用",
       tone: "watch",
     };
   }

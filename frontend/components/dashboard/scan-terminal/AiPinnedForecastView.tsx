@@ -182,7 +182,7 @@ function buildMarketFreshnessValue({
   marketStatus: ReturnType<typeof useCityMarketScan>["marketStatus"];
 }) {
   if (marketStatus === "loading") return isEn ? "syncing" : "同步中";
-  if (!marketScan?.available) return isEn ? "missing" : "缺失";
+  if (!marketScan?.available) return isEn ? "temporarily unavailable" : "暂不可用";
   const quoteAgeMs = Number(
     marketScan.quote_age_ms ??
       marketScan.yes_token?.quote_age_ms ??
@@ -307,6 +307,16 @@ function AiPinnedCityCard({
     enabled: Boolean(detail),
   });
   const isRefreshing = refreshingDetail || aiForecast.status === "loading";
+  const [isCompactCard, setIsCompactCard] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(max-width: 820px)");
+    const syncCompactMode = () => setIsCompactCard(media.matches);
+    syncCompactMode();
+    media.addEventListener("change", syncCompactMode);
+    return () => media.removeEventListener("change", syncCompactMode);
+  }, []);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
   const localizedFinalJudgmentRaw =
@@ -376,6 +386,14 @@ function AiPinnedCityCard({
     peakWindow,
     tempSymbol,
   });
+  const expectedHighText =
+    decisionExpectedHighNumber != null
+      ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
+      : "--";
+  const currentTempText =
+    currentTempNumber != null
+      ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
+      : "--";
   const marketDecisionView = buildMarketDecisionView({
     expectedHigh: decisionExpectedHighNumber,
     isEn,
@@ -540,7 +558,7 @@ function AiPinnedCityCard({
       : null,
     marketDecisionView.status === "unavailable"
       ? {
-          label: isEn ? "Market missing" : "市场价格缺失",
+          label: isEn ? "Market unavailable" : "市场价暂不可用",
           tone: marketStatusTone,
         }
       : null,
@@ -574,6 +592,43 @@ function AiPinnedCityCard({
     (isEn ? aiForecast.payload?.reason_en : aiForecast.payload?.reason_zh) ||
     aiForecast.payload?.reason ||
     "";
+  const decisionWhyText = observedHighBreak
+    ? isEn
+      ? "Worth watching now: observation has broken above the model range."
+      : "当前值得关注：实测已突破模型上沿。"
+    : peakHasPassed
+      ? isEn
+        ? "Avoid chasing now: peak window has passed; wait to confirm no new high."
+        : "当前不宜追高：峰值窗口已过，等待确认是否还有新高。"
+      : observationStale
+        ? isEn
+          ? "Use as background only: observation is stale and needs the next report."
+          : "当前仅作背景：观测已过旧，需要下一报文确认。"
+        : marketDecisionView.status === "unavailable"
+          ? isEn
+            ? "Weather evidence remains usable, but no tradable quote is available yet."
+            : "当前可参考天气：暂无可交易价格。"
+          : modelHighlyConsistent
+            ? isEn
+              ? "Worth watching now: models agree; wait for observation confirmation."
+              : "当前值得关注：模型高度一致，等待实测确认。"
+            : needsNextBulletin
+              ? isEn
+                ? "Wait for confirmation: the next bulletin should decide direction."
+                : "当前建议等待：下一报文更适合决定方向。"
+              : isEn
+                ? "Watch the peak window and compare observations against the expected high."
+                : "当前重点：盯住峰值窗口，把实测与预计高点对照。";
+  const marketLineText =
+    marketDecisionView.status === "ready"
+      ? `${marketDecisionView.bucketLabel} · ${marketDecisionView.priceText}`
+      : marketDecisionView.status === "loading"
+        ? isEn
+          ? "syncing"
+          : "同步中"
+        : isEn
+          ? "temporarily unavailable"
+          : "暂不可用";
 
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
 
@@ -585,6 +640,20 @@ function AiPinnedCityCard({
             {isEn ? "Deep analysis" : "城市深度分析"}
           </span>
           <h3>{displayName}</h3>
+          <div className="scan-ai-city-mobile-priority" aria-label={isEn ? "Key city decision metrics" : "城市决策重点"}>
+            <span>
+              <small>{isEn ? "Observed" : "当前温度"}</small>
+              <b>{currentTempText}</b>
+            </span>
+            <span>
+              <small>{isEn ? "Expected high" : "预测高点"}</small>
+              <b>{expectedHighText}</b>
+            </span>
+            <span>
+              <small>{isEn ? "Peak" : "峰值时间"}</small>
+              <b>{peakWindow}</b>
+            </span>
+          </div>
           <div className="scan-ai-city-status-tags">
             {statusTags.map((tag) => (
               <span
@@ -623,9 +692,7 @@ function AiPinnedCityCard({
         <div className="scan-ai-city-hero-side">
           <span>{isEn ? "Expected high" : "预计最高温"}</span>
           <strong>
-            {decisionExpectedHighNumber != null
-              ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
-              : "--"}
+            {expectedHighText}
           </strong>
           <div className="scan-ai-city-actions">
             <button
@@ -687,13 +754,18 @@ function AiPinnedCityCard({
             <div className="scan-ai-decision-main">
               <span>{decisionView.kicker}</span>
               <strong>{decisionView.action}</strong>
-              <p>{localizedFinalJudgment || paceText}</p>
+              <p className="scan-ai-decision-why">{decisionWhyText}</p>
+              <p className="scan-ai-decision-long">{localizedFinalJudgment || paceText}</p>
               <div className="scan-ai-decision-reasons">
                 {decisionView.reasons.map((reason, index) => (
                   <small key={`${reason}-${index}`}>{reason}</small>
                 ))}
               </div>
               <p className="scan-ai-decision-risk">{decisionView.risk}</p>
+              <div className={clsx("scan-ai-market-mobile-line", marketDecisionView.tone)}>
+                <span>{isEn ? "Market price" : "市场价格"}</span>
+                <b>{marketLineText}</b>
+              </div>
               <div className={clsx("scan-ai-market-decision", marketDecisionView.tone)}>
                 <div>
                   <span>
@@ -740,11 +812,7 @@ function AiPinnedCityCard({
               </span>
               <span>
                 {isEn ? "Observed" : "实测"}
-                <b>
-                  {currentTempNumber != null
-                    ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
-                    : "--"}
-                </b>
+                <b>{currentTempText}</b>
               </span>
               <span>
                 {isEn ? "Path delta" : "路径偏差"} <b>{paceView?.deltaText || "--"}</b>
@@ -766,8 +834,8 @@ function AiPinnedCityCard({
 
           <div className="scan-ai-city-analysis-grid">
             <AiCityTemperatureChart detail={detail} />
-            <section className="scan-ai-city-section">
-              <div className="scan-ai-city-section-title">
+            <details className="scan-ai-city-section scan-ai-city-ai-read" open={!isCompactCard}>
+              <summary className="scan-ai-city-section-title">
                 {isHkoObservation
                   ? isEn
                     ? "Evidence · AI HKO observation read"
@@ -775,78 +843,80 @@ function AiPinnedCityCard({
                   : isEn
                     ? "Evidence · AI airport read"
                     : "证据 · AI 机场报文解读"}
-              </div>
-              {aiForecast.status === "loading" ? (
-                <>
-                  <p className="scan-ai-weather-summary">
-                    {aiReadInProgressText}
-                  </p>
-                  {localizedFinalJudgment || aiForecast.streamText ? (
-                    <p className="scan-ai-city-muted">
-                      {localizedFinalJudgment || aiForecast.streamText}
+              </summary>
+              <div className="scan-ai-city-section-body">
+                {aiForecast.status === "loading" ? (
+                  <>
+                    <p className="scan-ai-weather-summary">
+                      {aiReadInProgressText}
                     </p>
-                  ) : null}
-                  <p className="scan-ai-city-muted">
+                    {localizedFinalJudgment || aiForecast.streamText ? (
+                      <p className="scan-ai-city-muted">
+                        {localizedFinalJudgment || aiForecast.streamText}
+                      </p>
+                    ) : null}
+                    <p className="scan-ai-city-muted">
+                      {isEn
+                        ? isHkoObservation
+                          ? "Rule evidence is shown first; the full HKO AI read will merge automatically."
+                          : "Rule evidence is shown first; the full airport AI read will merge automatically."
+                        : isHkoObservation
+                          ? "先展示规则证据，完整香港天文台 AI 解读返回后会自动合并。"
+                          : "先展示规则证据，完整机场 AI 解读返回后会自动合并。"}
+                    </p>
+                  </>
+                ) : aiForecast.status === "ready" && aiCityForecast ? (
+                  <>
+                    <p className="scan-ai-weather-summary">
+                      {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
+                    </p>
+                    <ul className="scan-ai-weather-bullets">
+                      {[
+                        localizedFinalJudgment,
+                        ...aiBullets,
+                      ].filter((line) => String(line || "").trim()).map((line, index) => (
+                        <li key={`${line}-${index}`}>{line}</li>
+                      ))}
+                    </ul>
+                    <p className="scan-ai-raw-metar">
+                      {rawObservationText}
+                    </p>
+                  </>
+                ) : aiForecast.status === "ready" ? (
+                  <>
+                    <p className="scan-ai-weather-summary">
+                      {aiRuleEvidenceText}
+                    </p>
+                    <ul className="scan-ai-weather-bullets">
+                      {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
+                      <li>{localModelSupportNote}</li>
+                      <li>{rawObservationText}</li>
+                    </ul>
+                  </>
+                ) : aiForecast.status === "failed" ? (
+                  <>
+                    <p className="scan-ai-weather-summary">
+                      {aiRuleEvidenceText}
+                    </p>
+                    <ul className="scan-ai-weather-bullets">
+                      {aiForecast.error ? <li>{aiForecast.error}</li> : null}
+                      <li>{localModelSupportNote}</li>
+                      <li>{rawObservationText}</li>
+                    </ul>
+                  </>
+                ) : (
+                  <p>
                     {isEn
                       ? isHkoObservation
-                        ? "Rule evidence is shown first; the full HKO AI read will merge automatically."
-                        : "Rule evidence is shown first; the full airport AI read will merge automatically."
+                        ? "Waiting for AI to read the latest HKO observation."
+                        : "Waiting for AI to read the latest airport bulletin."
                       : isHkoObservation
-                        ? "先展示规则证据，完整香港天文台 AI 解读返回后会自动合并。"
-                        : "先展示规则证据，完整机场 AI 解读返回后会自动合并。"}
+                        ? "等待 AI 解读最新香港天文台观测。"
+                        : "等待 AI 解读最新机场报文。"}
                   </p>
-                </>
-              ) : aiForecast.status === "ready" && aiCityForecast ? (
-                <>
-                  <p className="scan-ai-weather-summary">
-                    {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
-                  </p>
-                  <ul className="scan-ai-weather-bullets">
-                    {[
-                      localizedFinalJudgment,
-                      ...aiBullets,
-                    ].filter((line) => String(line || "").trim()).map((line, index) => (
-                      <li key={`${line}-${index}`}>{line}</li>
-                    ))}
-                  </ul>
-                  <p className="scan-ai-raw-metar">
-                    {rawObservationText}
-                  </p>
-                </>
-              ) : aiForecast.status === "ready" ? (
-                <>
-                  <p className="scan-ai-weather-summary">
-                    {aiRuleEvidenceText}
-                  </p>
-                  <ul className="scan-ai-weather-bullets">
-                    {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
-                    <li>{localModelSupportNote}</li>
-                    <li>{rawObservationText}</li>
-                  </ul>
-                </>
-              ) : aiForecast.status === "failed" ? (
-                <>
-                  <p className="scan-ai-weather-summary">
-                    {aiRuleEvidenceText}
-                  </p>
-                  <ul className="scan-ai-weather-bullets">
-                    {aiForecast.error ? <li>{aiForecast.error}</li> : null}
-                    <li>{localModelSupportNote}</li>
-                    <li>{rawObservationText}</li>
-                  </ul>
-                </>
-              ) : (
-                <p>
-                  {isEn
-                    ? isHkoObservation
-                      ? "Waiting for AI to read the latest HKO observation."
-                      : "Waiting for AI to read the latest airport bulletin."
-                    : isHkoObservation
-                      ? "等待 AI 解读最新香港天文台观测。"
-                      : "等待 AI 解读最新机场报文。"}
-                </p>
-              )}
-            </section>
+                )}
+              </div>
+            </details>
           </div>
 
           <section className="scan-ai-city-section models">
