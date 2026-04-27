@@ -670,6 +670,12 @@ def _build_city_ai_fallback(
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
     airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
     current_obs = ai_input.get("current") if isinstance(ai_input.get("current"), dict) else {}
+    metar_context = ai_input.get("metar_context") if isinstance(ai_input.get("metar_context"), dict) else {}
+    observation_stale = bool(
+        metar_context.get("stale_for_today")
+        or airport_current.get("stale_for_today")
+        or current_obs.get("stale_for_today")
+    )
     current_temp = _safe_float(
         airport_current.get("temp") if is_airport_metar else current_obs.get("temp")
     )
@@ -682,6 +688,7 @@ def _build_city_ai_fallback(
         [value for value in (current_temp, current_max_so_far) if value is not None],
         default=None,
     )
+    observed_high_for_revision = None if observation_stale else observed_high_so_far
     predicted = deb_value
     if predicted is None and values:
         predicted = sum(values) / len(values)
@@ -735,25 +742,25 @@ def _build_city_ai_fallback(
     model_range_high = range_high
     model_range_low = range_low
     current_above_predicted = (
-        observed_high_so_far is not None
+        observed_high_for_revision is not None
         and predicted is not None
-        and observed_high_so_far > predicted + 0.2
+        and observed_high_for_revision > predicted + 0.2
     )
     current_above_model_range = (
-        observed_high_so_far is not None
+        observed_high_for_revision is not None
         and model_range_high is not None
-        and observed_high_so_far > model_range_high + 0.2
+        and observed_high_for_revision > model_range_high + 0.2
     )
     observed_high_break = bool(current_above_predicted or current_above_model_range)
     current_below_predicted = (
-        observed_high_so_far is not None
+        observed_high_for_revision is not None
         and predicted is not None
-        and observed_high_so_far < predicted - 1.5
+        and observed_high_for_revision < predicted - 1.5
     )
     current_below_model_range = (
-        observed_high_so_far is not None
+        observed_high_for_revision is not None
         and model_range_low is not None
-        and observed_high_so_far < model_range_low - 0.2
+        and observed_high_for_revision < model_range_low - 0.2
     )
     observed_low_break = bool(current_below_predicted and (peak_has_passed or peak_is_closing))
     observed_low_lag = bool(current_below_predicted and not observed_low_break)
@@ -761,19 +768,19 @@ def _build_city_ai_fallback(
     if observed_high_break:
         predicted = max(
             value
-            for value in (predicted, observed_high_so_far)
+            for value in (predicted, observed_high_for_revision)
             if value is not None
         )
-        if range_high is not None and observed_high_so_far is not None:
-            range_high = max(range_high, observed_high_so_far)
+        if range_high is not None and observed_high_for_revision is not None:
+            range_high = max(range_high, observed_high_for_revision)
     elif observed_low_break:
         predicted = min(
             value
-            for value in (predicted, observed_high_so_far)
+            for value in (predicted, observed_high_for_revision)
             if value is not None
         )
-        if range_low is not None and observed_high_so_far is not None:
-            range_low = min(range_low, observed_high_so_far)
+        if range_low is not None and observed_high_for_revision is not None:
+            range_low = min(range_low, observed_high_for_revision)
     city = str(ai_input.get("city_display_name") or ai_input.get("city") or "this city")
     station = str((airport_current.get("station_code") if is_airport_metar else None) or observation_anchor.get("station_code") or current_obs.get("station_code") or "")
     raw_metar = str(airport_current.get("raw_metar") or "").strip() if is_airport_metar else ""
@@ -800,6 +807,9 @@ def _build_city_ai_fallback(
     elif content_preview:
         metar_zh = f"{bulletin_zh}快速解读已先完成；本轮 AI 增强未完整返回，当前以 DEB、多模型与{source_name_zh}为准。"
         metar_en = f"The fast {bulletin_en} read is available; this AI enhancement was incomplete, so DEB, model cluster and {source_name_en} carry the read."
+    elif raw_metar and observation_stale:
+        metar_zh = f"{station} 可用 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；但该观测已标记为过旧，当前只能作为背景参考，不能作为强实况锚点。"
+        metar_en = f"{station} available METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}, but the observation is flagged as stale, so treat it as background context rather than a strong live anchor."
     elif raw_metar:
         metar_zh = f"{station} 最新 METAR 显示 {metar_temp or '温度未知'}，报文时间 {obs_time or '未知'}；当前先把它作为实况锚点，并结合后续报文确认温度路径。"
         metar_en = f"{station} latest METAR shows {metar_temp or 'unknown temperature'} at {obs_time or 'unknown time'}; use it as the live anchor while later reports confirm the path."
@@ -828,6 +838,9 @@ def _build_city_ai_fallback(
     elif peak_has_passed:
         final_zh = f"{city} 峰值窗口{peak_label_text_zh}已过；最高温暂以 {predicted_text} 附近为中枢，并以已观测到的高点为主要校准。"
         final_en = f"{city} peak window{peak_label_text_en} has passed; the daily high stays centered near {predicted_text}, calibrated mainly against the observed high so far."
+    elif observation_stale:
+        final_zh = f"{city} 最高温暂以 {predicted_text} 附近为中枢；当前可用{source_name_zh}已过旧，先以 DEB 和多模型路径为主。"
+        final_en = f"{city} daily high is centered near {predicted_text}; the available {source_name_en} is stale, so DEB and the model path carry the read for now."
     elif timed_out:
         final_zh = f"{city} 预计最高温暂以 {predicted_text} 附近为中枢；当前已先用 DEB、多模型和{source_name_zh}快速证据模式判断。"
         final_en = f"{city} daily high is centered near {predicted_text}; the current read uses the fast DEB/model/{source_name_en} evidence mode."
@@ -849,6 +862,9 @@ def _build_city_ai_fallback(
     elif peak_has_passed:
         fallback_reasoning_zh = f"当前为快速证据模式；峰值窗口已过，后续{source_name_zh}主要用于确认是否已形成日内高点，而不是继续按待升温路径解读。"
         fallback_reasoning_en = f"This is the fast evidence mode; the peak window has passed, so later {source_name_en} updates mainly confirm whether the daily high is already set rather than assuming further warming."
+    elif observation_stale:
+        fallback_reasoning_zh = f"当前为快速证据模式；可用{source_name_zh}已过旧，不能作为强实况锚点，暂由 DEB 和多模型集合支撑本轮最高温中枢，等待新的{source_name_zh}确认。"
+        fallback_reasoning_en = f"This is the fast evidence mode; the available {source_name_en} is stale and should not be used as a strong live anchor, so DEB and the model cluster carry the current daily-high center until a newer {source_name_en} confirms it."
     else:
         fallback_reasoning_zh = f"当前为快速证据模式；DEB、多模型集合和最新{source_name_zh}共同支撑本轮最高温中枢，完整 AI {bulletin_zh}解读返回后再合并。"
         fallback_reasoning_en = f"This is the fast evidence mode; DEB, the model cluster and latest {source_name_en} jointly support the current daily-high center, and the full AI {bulletin_en} read will be merged when available."
@@ -866,6 +882,9 @@ def _build_city_ai_fallback(
     elif peak_has_passed:
         risks_zh = [f"峰值窗口已过，后续{source_name_zh}若未再创新高，应避免继续上调最高温中枢。"]
         risks_en = [f"The peak window has passed; avoid raising the daily-high center unless later {source_name_en} sets a new high."]
+    elif observation_stale:
+        risks_zh = [f"当前{source_name_zh}过旧；新报文若明显偏离 DEB 和模型路径，需要重新校准最高温中枢。"]
+        risks_en = [f"The current {source_name_en} is stale; if a newer report diverges from DEB and the model path, recalibrate the daily-high center."]
     else:
         risks_zh = [f"后续{source_name_zh}若明显偏离模型路径，需及时修正最高温中枢。"]
         risks_en = [f"If later {source_name_en} updates diverge from the model path, revise the daily-high center promptly."]
@@ -1991,11 +2010,30 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
     observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
     airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
+    current_obs = ai_input.get("current") if isinstance(ai_input.get("current"), dict) else {}
+    metar_context = ai_input.get("metar_context") if isinstance(ai_input.get("metar_context"), dict) else {}
     observation_obs = (
         ai_input.get("metar_today_obs") or ai_input.get("metar_recent_obs") or []
         if is_airport_metar
         else ai_input.get("settlement_today_obs") or ai_input.get("settlement_recent_obs") or []
     )
+    observation_fingerprint = {
+        "stale_for_today": metar_context.get("stale_for_today"),
+        "last_observation_time": metar_context.get("last_observation_time"),
+        "last_time": metar_context.get("last_time"),
+        "last_temp": metar_context.get("last_temp"),
+        "max_time": metar_context.get("max_time"),
+        "max_temp": metar_context.get("max_temp"),
+        "airport_obs_time": airport_current.get("obs_time"),
+        "airport_report_time": airport_current.get("report_time"),
+        "airport_receipt_time": airport_current.get("receipt_time"),
+        "airport_temp": airport_current.get("temp"),
+        "airport_max_so_far": airport_current.get("max_so_far"),
+        "current_obs_time": current_obs.get("obs_time"),
+        "current_report_time": current_obs.get("report_time"),
+        "current_temp": current_obs.get("temp"),
+        "current_max_so_far": current_obs.get("max_so_far"),
+    }
     key_payload = {
         "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
         "schema_version": ai_input.get("schema_version"),
@@ -2006,6 +2044,7 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
         "observation_source": observation_anchor.get("source") or ("metar" if is_airport_metar else "official"),
         "station": observation_anchor.get("station_code"),
         "metar": airport_current.get("raw_metar") if is_airport_metar else None,
+        "observation_fingerprint": observation_fingerprint,
         "obs": observation_obs,
     }
     raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False, default=str)

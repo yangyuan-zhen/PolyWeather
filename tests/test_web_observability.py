@@ -285,6 +285,81 @@ def test_city_ai_fallback_marks_peak_window_passed_without_waiting_for_warming()
     assert "避免继续上调最高温中枢" in payload["risks_zh"][0]
 
 
+def test_city_ai_fallback_treats_stale_metar_as_background_not_anchor():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "Manila",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 34.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 33.5},
+                    {"value": 34.0},
+                    {"value": 34.4},
+                ]
+            },
+            "metar_context": {
+                "stale_for_today": True,
+                "last_observation_time": "00:00Z",
+            },
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "RPLL",
+            },
+            "airport_current": {
+                "station_code": "RPLL",
+                "temp": 36.0,
+                "report_time": "00:00Z",
+                "raw_metar": "RPLL 270000Z 34004KT CAVOK 36/24 Q1009",
+            },
+        },
+        locale="zh-CN",
+        reason="stream preview",
+    )
+
+    assert payload["predicted_max"] == 34.0
+    assert "过旧" in payload["metar_read_zh"]
+    assert "不能作为强实况锚点" in payload["metar_read_zh"]
+    assert "先以 DEB 和多模型路径为主" in payload["final_judgment_zh"]
+    assert "不能作为强实况锚点" in payload["reasoning_zh"]
+    assert "上修到至少 36.0°C" not in payload["final_judgment_zh"]
+
+
+def test_city_ai_cache_key_changes_when_observation_fingerprint_changes():
+    base_input = {
+        "schema_version": "single_city_forecast_v2",
+        "city": "Manila",
+        "local_date": "2026-04-28",
+        "deb": {"prediction": 34.0},
+        "observation_anchor": {
+            "source": "METAR",
+            "is_airport_metar": True,
+            "station_code": "RPLL",
+        },
+        "airport_current": {
+            "station_code": "RPLL",
+            "temp": 34.0,
+            "report_time": "03:00Z",
+            "receipt_time": "2026-04-28T03:02:00Z",
+            "raw_metar": "RPLL 280300Z 34004KT CAVOK 34/24 Q1009",
+        },
+        "metar_context": {
+            "stale_for_today": False,
+            "last_observation_time": "03:00Z",
+        },
+        "metar_today_obs": [{"time": "03:00Z", "temp": 34.0}],
+    }
+    changed_input = {
+        **base_input,
+        "airport_current": {
+            **base_input["airport_current"],
+            "receipt_time": "2026-04-28T03:30:00Z",
+        },
+    }
+
+    assert scan_terminal_service._scan_city_ai_cache_key(base_input) != scan_terminal_service._scan_city_ai_cache_key(changed_input)
+
+
 def test_city_ai_stream_request_only_asks_provider_for_observation_read():
     request_payload = scan_terminal_service._build_city_ai_stream_request(
         {

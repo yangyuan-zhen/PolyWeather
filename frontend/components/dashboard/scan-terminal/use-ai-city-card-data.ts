@@ -14,7 +14,7 @@ import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
-const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v5";
+const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v6";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
 const AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS = 2;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
@@ -447,8 +447,12 @@ export function useAiCityForecast({
           observationCurrent.report_time,
           observationCurrent.obs_time_epoch,
           observationCurrent.obs_time,
+          observationCurrent.receipt_time,
           observationCurrent.temp,
+          observationCurrent.max_so_far,
           observationCurrent.station_code,
+          detail.metar_status?.stale_for_today,
+          detail.metar_status?.last_observation_time,
         ]
           .filter((part) => part != null && part !== "")
           .join("|");
