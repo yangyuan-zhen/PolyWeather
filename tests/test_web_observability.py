@@ -135,6 +135,36 @@ def test_city_ai_fallback_reasoning_identifies_fast_evidence_mode():
     assert "AI 增强可作为后续补充" not in payload["reasoning_zh"]
 
 
+def test_city_ai_stream_request_only_asks_provider_for_observation_read():
+    request_payload = scan_terminal_service._build_city_ai_stream_request(
+        {
+            "city": "Tokyo",
+            "city_display_name": "Tokyo",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 17.8},
+            "model_cluster": {"sources": [{"value": 17.0}, {"value": 17.8}]},
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "read_label_zh": "机场报文解读",
+            },
+            "airport_current": {
+                "station_code": "RJTT",
+                "temp": 16.0,
+                "report_time": "21:30Z",
+                "raw_metar": "RJTT 262130Z AUTO 00000KT 9999 FEW030 16/10 Q1015",
+            },
+        },
+        locale="zh-CN",
+    )
+
+    user_payload = request_payload["messages"][1]["content"]
+    assert request_payload["stream"] is True
+    assert request_payload["max_tokens"] <= 650
+    assert request_payload["max_tokens"] < scan_terminal_service.SCAN_AI_MAX_TOKENS
+    assert '"required_json_keys": ["metar_read_zh", "metar_read_en", "reasoning_zh", "reasoning_en"]' in user_payload
+    assert "Do not return final_judgment" in user_payload
+
+
 def test_city_ai_partial_json_trims_dangling_taf_clause():
     payload = scan_terminal_service._build_city_ai_fallback(
         {

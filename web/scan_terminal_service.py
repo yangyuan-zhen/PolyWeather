@@ -79,7 +79,7 @@ SCAN_CITY_AI_TIMEOUT_SEC = _env_int(
     max_value=120,
 )
 SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR = str(
-    os.getenv("POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR") or "true"
+    os.getenv("POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR") or "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
 SCAN_AI_CACHE_TTL_SEC = max(
     30,
@@ -94,11 +94,17 @@ SCAN_AI_MAX_TOKENS = _env_int(
 )
 SCAN_CITY_AI_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS",
-    900,
-    min_value=800,
+    650,
+    min_value=300,
     max_value=64000,
 )
-SCAN_CITY_AI_PROMPT_VERSION = "city-observation-read-v5"
+SCAN_CITY_AI_STREAM_MAX_TOKENS = _env_int(
+    "POLYWEATHER_SCAN_CITY_AI_STREAM_MAX_TOKENS",
+    min(SCAN_CITY_AI_MAX_TOKENS, 650),
+    min_value=300,
+    max_value=64000,
+)
+SCAN_CITY_AI_PROMPT_VERSION = "city-observation-read-v6"
 
 CITY_AI_REQUIRED_FIELDS = [
     "metar_read_zh",
@@ -116,6 +122,13 @@ CITY_AI_REQUIRED_FIELDS = [
     "risks_en",
     "model_cluster_note_zh",
     "model_cluster_note_en",
+]
+
+CITY_AI_STREAM_PROVIDER_FIELDS = [
+    "metar_read_zh",
+    "metar_read_en",
+    "reasoning_zh",
+    "reasoning_en",
 ]
 
 
@@ -775,6 +788,15 @@ def _city_ai_response_example(unit: str) -> Dict[str, Any]:
         "risks_en": ["If later observations show slower warming or stronger cloud/rain, revise the center lower."],
         "model_cluster_note_zh": "7/8 个模型落在 DEB ±2°C 内，模型支撑较集中。",
         "model_cluster_note_en": "7/8 models are within DEB ±2°C, so model support is clustered.",
+    }
+
+
+def _city_ai_stream_response_example(unit: str) -> Dict[str, Any]:
+    return {
+        "metar_read_zh": f"最新 METAR 显示 37.0{unit or '°C'}，报文时间 04:30Z；风和云量暂未显示强降温信号，后续报文用于确认升温路径。",
+        "metar_read_en": f"The latest METAR shows 37.0{unit or '°C'} at 04:30Z; wind and cloud signals do not yet show a strong cooling break, so later reports should confirm the warming path.",
+        "reasoning_zh": "当前观测仍贴近上午升温路径，若后续风向转为海风或云雨增强，再下修最高温中枢。",
+        "reasoning_en": "The latest observation still fits the morning warming path; revise the daily-high center lower if later wind turns onshore or cloud/rain strengthens.",
     }
 
 
@@ -1907,13 +1929,12 @@ def _build_city_ai_stream_request(
     read_label = str(observation_anchor.get("read_label_zh") or ("机场报文解读" if is_airport_metar else "官方观测解读"))
     source_instruction = str(observation_anchor.get("instruction_zh") or "")
     system_prompt = (
-        f"你是 PolyWeather 的城市最高温与{role_label}。"
+        f"你是 PolyWeather 的{role_label}。"
         "只返回一个紧凑 JSON object，不要 Markdown。"
-        f"必须先写 metar_read_zh 和 metar_read_en 字段，便于前端流式显示{read_label}；"
-        "然后写 final_judgment_zh/final_judgment_en、predicted_max、range_low、range_high、unit、confidence、"
-        "reasoning_zh/reasoning_en、risks_zh/risks_en、model_cluster_note_zh/model_cluster_note_en。"
+        f"只解读最新观测/报文对今日最高温路径的影响，必须只写 metar_read_zh、metar_read_en、reasoning_zh、reasoning_en 四个字段，便于前端快速显示{read_label}；"
+        "最高温数值、模型一致性和风险清单由后端规则补齐，不要生成这些字段。"
         f"{source_instruction}"
-        "观测解读必须具体说明观测/报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；"
+        "观测解读必须具体说明观测/报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；每个字段最多 1 句。"
         "涉及风时要说明当前风向对站点最高温路径倾向增温、降温还是中性，并给出理由。"
         "如果 observation_anchor.is_airport_metar 为 false，不得使用 METAR、TAF、机场报文等称谓。"
         "所有 *_zh 字段写简体中文，所有 *_en 字段写英文，不得留空。"
@@ -1922,7 +1943,7 @@ def _build_city_ai_stream_request(
     return {
         "model": SCAN_CITY_AI_MODEL,
         "temperature": 0.2,
-        "max_tokens": SCAN_CITY_AI_MAX_TOKENS,
+        "max_tokens": SCAN_CITY_AI_STREAM_MAX_TOKENS,
         "response_format": {"type": "json_object"},
         "stream": True,
         "messages": [
@@ -1933,14 +1954,12 @@ def _build_city_ai_stream_request(
                     {
                         "locale": normalized_locale,
                         "task": (
-                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, "
-                            "final_judgment_zh, final_judgment_en, predicted_max, range_low, range_high, "
-                            "unit, confidence, reasoning_zh, reasoning_en, risks_zh, risks_en, "
-                            "model_cluster_note_zh, model_cluster_note_en. Keep it compact. "
+                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, reasoning_zh, reasoning_en. "
+                            "Do not return final_judgment, predicted_max, ranges, risks or model_cluster_note. Keep it compact. "
                             "Return exactly one JSON object and no markdown."
                         ),
-                        "required_json_keys": CITY_AI_REQUIRED_FIELDS,
-                        "json_example": _city_ai_response_example(
+                        "required_json_keys": CITY_AI_STREAM_PROVIDER_FIELDS,
+                        "json_example": _city_ai_stream_response_example(
                             str(ai_input.get("temp_symbol") or "°C")
                         ),
                         "city_snapshot": ai_input,
@@ -2159,10 +2178,11 @@ def stream_scan_city_ai_forecast_payload(
     last_meta: Dict[str, Any] = {}
     try:
         logger.info(
-            "scan city AI stream request city={} locale={} input_bytes={} timeout_sec={}",
+            "scan city AI stream request city={} locale={} input_bytes={} max_tokens={} timeout_sec={}",
             ai_input.get("city"),
             normalized_locale,
             len(json.dumps(request_json, ensure_ascii=False, default=str).encode("utf-8")),
+            request_json.get("max_tokens"),
             SCAN_CITY_AI_TIMEOUT_SEC,
         )
         with httpx.Client(timeout=timeout) as client:
