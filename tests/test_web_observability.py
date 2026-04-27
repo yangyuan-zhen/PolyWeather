@@ -135,6 +135,44 @@ def test_city_ai_fallback_reasoning_identifies_fast_evidence_mode():
     assert "AI 增强可作为后续补充" not in payload["reasoning_zh"]
 
 
+def test_city_ai_fallback_revises_up_when_latest_metar_breaks_above_models():
+    payload = scan_terminal_service._build_city_ai_fallback(
+        {
+            "city_display_name": "Manila",
+            "temp_symbol": "°C",
+            "deb": {"prediction": 34.0},
+            "model_cluster": {
+                "sources": [
+                    {"value": 32.5},
+                    {"value": 33.8},
+                    {"value": 34.0},
+                    {"value": 34.7},
+                ]
+            },
+            "observation_anchor": {
+                "is_airport_metar": True,
+                "station_code": "RPLL",
+            },
+            "airport_current": {
+                "station_code": "RPLL",
+                "temp": 35.0,
+                "report_time": "03:00Z / 当地 11:00",
+                "raw_metar": "RPLL 270300Z 34004KT CAVOK 35/24 Q1009",
+            },
+        },
+        locale="zh-CN",
+        reason="stream preview",
+    )
+
+    assert payload["predicted_max"] == 35.0
+    assert payload["range_high"] == 35.0
+    assert "高于原先 34.0°C 中枢" in payload["final_judgment_zh"]
+    assert "上修到至少 35.0°C" in payload["final_judgment_zh"]
+    assert "共同支撑本轮最高温中枢" not in payload["reasoning_zh"]
+    assert "超过模型上沿 34.7°C" in payload["reasoning_zh"]
+    assert "继续上修最高温中枢" in payload["risks_zh"][0]
+
+
 def test_city_ai_stream_request_only_asks_provider_for_observation_read():
     request_payload = scan_terminal_service._build_city_ai_stream_request(
         {
