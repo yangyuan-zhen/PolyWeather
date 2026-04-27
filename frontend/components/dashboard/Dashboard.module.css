@@ -11330,6 +11330,68 @@
   padding: 7px 10px;
 }
 
+.root :global(.scan-ai-city-status-tags) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.root :global(.scan-ai-city-status-tag) {
+  border: 1px solid rgba(159, 178, 199, 0.16);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.62);
+  color: #cbd5e1;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  padding: 5px 9px;
+}
+
+.root :global(.scan-ai-city-status-tag.green) {
+  border-color: rgba(34, 197, 94, 0.34);
+  background: rgba(34, 197, 94, 0.12);
+  color: #86efac;
+}
+
+.root :global(.scan-ai-city-status-tag.blue) {
+  border-color: rgba(77, 163, 255, 0.36);
+  background: rgba(77, 163, 255, 0.13);
+  color: #9ecbff;
+}
+
+.root :global(.scan-ai-city-status-tag.amber) {
+  border-color: rgba(245, 158, 11, 0.38);
+  background: rgba(245, 158, 11, 0.13);
+  color: #fcd34d;
+}
+
+.root :global(.scan-ai-city-status-tag.red) {
+  border-color: rgba(248, 113, 113, 0.4);
+  background: rgba(239, 68, 68, 0.13);
+  color: #fca5a5;
+}
+
+.root :global(.scan-ai-city-status-tag.muted) {
+  color: #94a3b8;
+}
+
+.root :global(.scan-ai-city-freshness) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 8px;
+  color: #8fa4bd;
+  font-size: 11px;
+  font-weight: 760;
+}
+
+.root :global(.scan-ai-city-freshness span) {
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.08);
+  padding: 4px 7px;
+}
+
 .root :global(.scan-ai-city-hero-side) {
   min-width: 180px;
   display: grid;
@@ -13688,7 +13750,8 @@
 .root :global(.scan-terminal.light .scan-ai-market-decision-stats small),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket),
-.root :global(.scan-terminal.light .scan-ai-city-pills span) {
+.root :global(.scan-terminal.light .scan-ai-city-pills span),
+.root :global(.scan-terminal.light .scan-ai-city-freshness span) {
   background: #eef2f7;
   border-color: #e2e8f0;
 }
@@ -13710,6 +13773,7 @@
 .root :global(.scan-terminal.light .scan-ai-city-section p),
 .root :global(.scan-terminal.light .scan-ai-decision-band p),
 .root :global(.scan-terminal.light .scan-ai-city-pills span),
+.root :global(.scan-terminal.light .scan-ai-city-freshness),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket span),
 .root :global(.scan-terminal.light .scan-ai-market-decision span),
@@ -14174,7 +14238,8 @@
 .root:global(.light) :global(.scan-terminal.light .scan-ai-decision-band),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-market-decision),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-decision-metrics span),
-.root:global(.light) :global(.scan-terminal.light .scan-ai-city-pills span) {
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-pills span),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-freshness span) {
   background: #eef7ff !important;
   border-color: rgba(37, 99, 235, 0.16) !important;
 }
@@ -14184,4 +14249,20 @@
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-card small),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-card span:not(.scan-ai-city-kicker)) {
   color: #334155 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-status-tag.green) {
+  color: #047857 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-status-tag.blue) {
+  color: #1d4ed8 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-status-tag.amber) {
+  color: #b45309 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-status-tag.red) {
+  color: #b91c1c !important;
 }

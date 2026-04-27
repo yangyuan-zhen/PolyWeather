@@ -3,6 +3,14 @@ export type AiPinnedCity = {
   displayName?: string | null;
   addedAt: number;
 };
+
+export type AiCityForecastMeta = {
+  fallback?: boolean | null;
+  deterministic_guard_fields?: string[] | null;
+  deterministic_guard_reason?: Record<string, unknown> | null;
+  [key: string]: unknown;
+};
+
 export type AiCityForecastPayload = {
   status?: string | null;
   reason?: string | null;
@@ -29,6 +37,7 @@ export type AiCityForecastPayload = {
     risks_en?: string[] | null;
     model_cluster_note_zh?: string | null;
     model_cluster_note_en?: string | null;
+    _polyweather_meta?: AiCityForecastMeta | null;
   } | null;
 };
 export type AiCityForecastState = {

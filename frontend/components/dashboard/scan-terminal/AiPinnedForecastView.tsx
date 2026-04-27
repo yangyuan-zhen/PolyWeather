@@ -94,6 +94,63 @@ function isHkoObservationCity(detail?: CityDetail | null) {
   return source === "hko";
 }
 
+type StatusTagTone = "green" | "blue" | "amber" | "red" | "muted";
+
+type StatusTag = {
+  label: string;
+  tone: StatusTagTone;
+};
+
+function formatFreshnessAge(value: unknown, isEn: boolean) {
+  const minutes = Number(value);
+  if (!Number.isFinite(minutes) || minutes < 0) return "";
+  if (minutes < 1) return isEn ? "just now" : "刚刚";
+  if (minutes < 60) {
+    const rounded = Math.max(1, Math.round(minutes));
+    return isEn ? `${rounded}m ago` : `${rounded} 分钟前`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const remaining = Math.round(minutes % 60);
+  if (remaining <= 0) return isEn ? `${hours}h ago` : `${hours} 小时前`;
+  return isEn ? `${hours}h ${remaining}m ago` : `${hours} 小时 ${remaining} 分钟前`;
+}
+
+function buildObservationFreshnessLabel({
+  detail,
+  displayTime,
+  isEn,
+  isHkoObservation,
+}: {
+  detail: CityDetail | null;
+  displayTime: string;
+  isEn: boolean;
+  isHkoObservation: boolean;
+}) {
+  const source = isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR";
+  const stale = Boolean(
+    detail?.metar_status?.stale_for_today ||
+      detail?.airport_current?.stale_for_today ||
+      detail?.current?.observation_status === "stale",
+  );
+  if (stale) return isEn ? `${source} stale` : `${source} 过旧`;
+  const ageLabel = formatFreshnessAge(
+    isHkoObservation ? detail?.current?.obs_age_min : detail?.airport_current?.obs_age_min ?? detail?.current?.obs_age_min,
+    isEn,
+  );
+  if (ageLabel) return `${source} ${ageLabel}`;
+  if (displayTime) return `${source} ${displayTime}`;
+  return isEn ? `${source} time pending` : `${source} 时间待确认`;
+}
+
+function uniqueStatusTags(tags: Array<StatusTag | null | undefined>) {
+  const seen = new Set<string>();
+  return tags.filter((tag): tag is StatusTag => {
+    if (!tag?.label || seen.has(tag.label)) return false;
+    seen.add(tag.label);
+    return true;
+  });
+}
+
 function AiPinnedCityCard({
   item,
   detail,
@@ -274,6 +331,122 @@ function AiPinnedCityCard({
     marketStatus,
     tempSymbol,
   });
+  const aiMeta = aiCityForecast?._polyweather_meta || null;
+  const guardReason = aiMeta?.deterministic_guard_reason || {};
+  const observationStale = Boolean(
+    detail?.metar_status?.stale_for_today ||
+      detail?.airport_current?.stale_for_today ||
+      detail?.current?.observation_status === "stale" ||
+      guardReason.observation_stale,
+  );
+  const observedHighBreak = Boolean(
+    guardReason.observed_high_break ||
+      (currentTempNumber != null &&
+        modelMax != null &&
+        currentTempNumber > modelMax + 0.2),
+  );
+  const observedLowBreak = Boolean(guardReason.observed_low_break);
+  const observedLowLag = Boolean(guardReason.observed_low_lag);
+  const peakHasPassed = Boolean(
+    guardReason.peak_has_passed ||
+      ["past", "post_peak", "after_peak"].includes(
+        String((row as { window_phase?: string | null } | null)?.window_phase || "").toLowerCase(),
+      ),
+  );
+  const observationFreshnessLabel = buildObservationFreshnessLabel({
+    detail,
+    displayTime: metarReportTimeDisplay,
+    isEn,
+    isHkoObservation,
+  });
+  const aiStatusLabel =
+    aiForecast.status === "loading"
+      ? isEn
+        ? "AI reading"
+        : "AI 解读中"
+      : aiForecast.status === "ready" && aiCityForecast
+        ? aiForecast.payload?.degraded || aiMeta?.fallback
+          ? isEn
+            ? "Rule fallback"
+            : "规则兜底"
+          : isEn
+            ? "AI ready"
+            : "AI 已完成"
+        : aiForecast.status === "failed"
+          ? isEn
+            ? "AI failed"
+            : "AI 失败"
+          : isEn
+            ? "AI pending"
+            : "AI 待返回";
+  const aiStatusTone: StatusTagTone =
+    aiForecast.status === "loading"
+      ? "blue"
+      : aiForecast.status === "ready" && aiCityForecast
+        ? aiForecast.payload?.degraded || aiMeta?.fallback
+          ? "amber"
+          : "green"
+        : aiForecast.status === "failed"
+          ? "red"
+          : "muted";
+  const marketFreshnessLabel =
+    marketDecisionView.status === "ready"
+      ? isEn
+        ? "Market synced"
+        : "市场已同步"
+      : marketDecisionView.status === "loading"
+        ? isEn
+          ? "Market loading"
+          : "市场同步中"
+        : isEn
+          ? "No market price"
+          : "暂无市场价";
+  const marketStatusTone: StatusTagTone =
+    marketDecisionView.status === "ready"
+      ? "green"
+      : marketDecisionView.status === "loading"
+        ? "blue"
+        : "muted";
+  const statusTags = uniqueStatusTags([
+    observedHighBreak
+      ? {
+          label: isEn ? "Observed above models" : "实测突破模型",
+          tone: "red",
+        }
+      : null,
+    observedLowBreak
+      ? {
+          label: isEn ? "Peak revised down" : "峰值下修",
+          tone: "blue",
+        }
+      : null,
+    observedLowLag
+      ? {
+          label: isEn ? "Warm-up needs proof" : "等待升温确认",
+          tone: "amber",
+        }
+      : null,
+    observationStale
+      ? {
+          label: isEn ? "Stale observation" : "观测过旧",
+          tone: "amber",
+        }
+      : null,
+    peakHasPassed
+      ? {
+          label: isEn ? "Peak window passed" : "峰值窗口已过",
+          tone: "muted",
+        }
+      : null,
+    {
+      label: aiStatusLabel,
+      tone: aiStatusTone,
+    },
+    {
+      label: marketFreshnessLabel,
+      tone: marketStatusTone,
+    },
+  ]).slice(0, 6);
   const localizedRisksRaw =
     (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
   const localizedRisks = Array.isArray(localizedRisksRaw)
@@ -312,6 +485,21 @@ function AiPinnedCityCard({
             </span>
             <span>{isEn ? "Model" : "模型"} {modelRange}</span>
             <span>{isEn ? "Peak" : "峰值"} {peakWindow}</span>
+          </div>
+          <div className="scan-ai-city-status-tags">
+            {statusTags.map((tag) => (
+              <span
+                key={tag.label}
+                className={clsx("scan-ai-city-status-tag", tag.tone)}
+              >
+                {tag.label}
+              </span>
+            ))}
+          </div>
+          <div className="scan-ai-city-freshness">
+            <span>{observationFreshnessLabel}</span>
+            <span>{marketFreshnessLabel}</span>
+            <span>{aiStatusLabel}</span>
           </div>
         </div>
         <div className="scan-ai-city-hero-side">
@@ -477,20 +665,20 @@ function AiPinnedCityCard({
                       aiForecast.streamText ||
                       (isEn
                         ? isHkoObservation
-                          ? "DeepSeek is reading the HKO observation and city context..."
-                          : "DeepSeek is reading the airport bulletin and city context..."
+                          ? "Fast read is ready; AI is adding HKO observation details..."
+                          : "Fast read is ready; AI is adding airport bulletin details..."
                         : isHkoObservation
-                          ? "DeepSeek 正在统一解读香港天文台观测和城市上下文…"
-                          : "DeepSeek 正在统一解读机场报文和城市上下文…")}
+                          ? "快速判断已完成，AI 正在补充香港天文台观测细节…"
+                          : "快速判断已完成，AI 正在补充机场报文细节…")}
                   </p>
                   <p className="scan-ai-city-muted">
                     {isEn
                       ? isHkoObservation
-                        ? "One v4-flash stream now drives both the HKO observation read and city judgment."
-                        : "One v4-flash stream now drives both the airport read and city judgment."
+                        ? "Rule evidence is shown first; the full HKO AI read will merge automatically."
+                        : "Rule evidence is shown first; the full airport AI read will merge automatically."
                       : isHkoObservation
-                        ? "现在由 v4-flash 一条流同时生成香港天文台观测解读和城市判断。"
-                        : "现在由 v4-flash 一条流同时生成机场报文解读和城市判断。"}
+                        ? "先展示规则证据，完整香港天文台 AI 解读返回后会自动合并。"
+                        : "先展示规则证据，完整机场 AI 解读返回后会自动合并。"}
                   </p>
                 </>
               ) : aiForecast.status === "ready" && aiCityForecast ? (
