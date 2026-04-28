@@ -3437,6 +3437,122 @@
   transform: rotate(-90deg);
 }
 
+.root :global(.scan-mobile-decision-card) {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.root :global(.scan-mobile-decision-head) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 0;
+}
+
+.root :global(.scan-mobile-decision-head h3) {
+  margin: 6px 0 0;
+  color: #e6edf3;
+  font-size: 24px;
+  line-height: 1.08;
+}
+
+.root :global(.scan-mobile-decision-metrics) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.root :global(.scan-mobile-decision-metrics span) {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.09);
+  padding: 9px;
+}
+
+.root :global(.scan-mobile-decision-metrics small) {
+  color: #9fb2c7;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.root :global(.scan-mobile-decision-metrics b) {
+  color: #f3f8ff;
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.root :global(.scan-mobile-decision-reason) {
+  margin: 0 14px;
+  border: 1px solid rgba(77, 163, 255, 0.24);
+  border-radius: 13px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #d8e7f8;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.45;
+  padding: 11px 12px;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-city-status-tags),
+.root :global(.scan-mobile-decision-card .scan-ai-city-freshness),
+.root :global(.scan-mobile-decision-card .scan-ai-market-mobile-line),
+.root :global(.scan-mobile-decision-folds) {
+  margin-right: 14px;
+  margin-left: 14px;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-city-freshness) {
+  grid-template-columns: 1fr;
+  max-width: none;
+  margin-top: 0;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-market-mobile-line) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-market-decision) {
+  display: none;
+}
+
+.root :global(.scan-mobile-decision-folds) {
+  display: grid;
+  gap: 10px;
+}
+
+.root :global(.scan-mobile-fold) {
+  padding: 13px 14px;
+}
+
+.root :global(.scan-mobile-fold summary) {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.root :global(.scan-mobile-fold summary::-webkit-details-marker) {
+  display: none;
+}
+
+.root :global(.scan-mobile-fold[open] summary) {
+  margin-bottom: 10px;
+}
+
+.root :global(.scan-mobile-fold .scan-ai-city-section.models) {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
 .root :global(.scan-ai-city-collapse svg) {
   transition: transform 0.18s ease;
 }
@@ -6404,7 +6520,9 @@
 .root:global(.light) :global(.scan-terminal.light .scan-ai-market-decision),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-pills span),
-.root:global(.light) :global(.scan-terminal.light .scan-ai-city-freshness span) {
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-freshness span),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-metrics span),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-reason) {
   background: #eef7ff !important;
   border-color: rgba(37, 99, 235, 0.16) !important;
 }
@@ -6442,6 +6560,9 @@
 
 .root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement-copy strong),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-mobile-priority b),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-metrics b),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-reason),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-head h3),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-market-mobile-line b) {
   color: #0f172a !important;
 }
@@ -6449,6 +6570,7 @@
 .root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement-copy p),
 .root:global(.light) :global(.scan-terminal.light .scan-upgrade-announcement li),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-mobile-priority small),
+.root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-metrics small),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-market-mobile-line span) {
   color: #334155 !important;
 }

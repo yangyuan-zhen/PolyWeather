@@ -1,10 +1,12 @@
 "use client";
 
 import clsx from "clsx";
+import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
+import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
 import { WeatherDecisionBand } from "@/components/dashboard/scan-terminal/WeatherDecisionBand";
 import {
@@ -13,6 +15,10 @@ import {
   resolveExpectedHighCandidate,
 } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
 import { buildCityDecisionState } from "@/components/dashboard/scan-terminal/city-decision-state";
+import {
+  getAiReadCopy,
+  getCityLoadingCopy,
+} from "@/components/dashboard/scan-terminal/decision-copy";
 import { getPeakWindowLabel, normalizeCityKey } from "@/components/dashboard/scan-terminal/decision-utils";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { AiPinnedCity } from "@/components/dashboard/scan-terminal/types";
@@ -430,23 +436,10 @@ export function AiPinnedCityCard({
       aiForecast.payload?.degraded ||
       aiMeta?.fallback,
   );
-  const aiReadInProgressText = isEn
-    ? isHkoObservation
-      ? "Fast read is ready; AI is adding HKO observation details..."
-      : "Fast read is ready; AI is adding airport bulletin details..."
-    : isHkoObservation
-      ? "快速判断已完成，AI 正在补充香港天文台观测细节…"
-      : "快速判断已完成，AI 正在补充机场报文细节…";
-  const aiReadCompleteText = isEn
-    ? isHkoObservation
-      ? "AI HKO observation read is complete."
-      : "AI airport bulletin read is complete."
-    : isHkoObservation
-      ? "AI 香港天文台观测解读已完成"
-      : "AI 机场报文解读已完成";
-  const aiRuleEvidenceText = isEn
-    ? "AI read did not return completely; rule evidence is being used."
-    : "AI 解读未完整返回，当前使用规则证据";
+  const aiReadCopy = getAiReadCopy({ isEn, isHkoObservation });
+  const aiReadInProgressText = aiReadCopy.inProgress;
+  const aiReadCompleteText = aiReadCopy.complete;
+  const aiRuleEvidenceText = aiReadCopy.ruleEvidence;
   const decisionState = buildCityDecisionState({
     aiCityForecast,
     aiForecast,
@@ -519,109 +512,142 @@ export function AiPinnedCityCard({
           : "暂不可用";
 
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
+  const loadingCopy = getCityLoadingCopy({ isEn, isHkoObservation });
+  const handleRefresh = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (refreshingDetail) return;
+    setRefreshingDetail(true);
+    void onRefreshCityDetail(detailCityName)
+      .catch(() => {})
+      .finally(() => {
+        refreshAiForecast();
+        setRefreshingDetail(false);
+      });
+  };
+  const handleRemove = (event: MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onRemove();
+  };
 
   return (
     <article
-      className={clsx("scan-ai-city-card", collapsed && "collapsed", removing && "removing")}
+      className={clsx(
+        "scan-ai-city-card",
+        isCompactCard && "scan-mobile-decision-card",
+        collapsed && !isCompactCard && "collapsed",
+        removing && "removing",
+      )}
       data-ai-status={decisionState.aiStatus}
       data-evidence-quality={decisionState.evidenceQuality}
       data-market-status={decisionState.marketStatus}
       data-recommendation={decisionState.recommendation}
       data-urgency={decisionState.urgency}
     >
-      <CityCardHeader
-        aiStatusLabel={decisionState.aiStatusLabel}
-        aiStatusTone={decisionState.aiStatusTone}
-        collapseId={collapseId}
-        collapsed={collapsed}
-        currentTempText={currentTempText}
-        dataFreshnessRows={dataFreshnessRows}
-        debText={debText}
-        detailLocalTime={detail?.local_time}
-        displayName={displayName}
-        expectedHighText={expectedHighText}
-        freshnessSeparator={freshnessSeparator}
-        isEn={isEn}
-        isRefreshing={isRefreshing}
-        modelRange={modelRange}
-        onRefresh={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          if (refreshingDetail) return;
-          setRefreshingDetail(true);
-          void onRefreshCityDetail(detailCityName)
-            .catch(() => {})
-            .finally(() => {
-              refreshAiForecast();
-              setRefreshingDetail(false);
-            });
-        }}
-        onRemove={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          onRemove();
-        }}
-        onToggleCollapsed={onToggleCollapsed}
-        peakWindow={peakWindow}
-        removing={removing}
-        rowLocalTime={row?.local_time}
-        statusTags={decisionState.badges}
-      />
-
-      {detail && !collapsed ? (
-        <div className="scan-ai-city-body" id={collapseId}>
-          <WeatherDecisionBand
+      {isCompactCard ? (
+        <MobileDecisionCard
+          aiBullets={aiBullets}
+          aiCityForecast={aiCityForecast}
+          aiForecast={aiForecast}
+          aiReadCompleteText={aiReadCompleteText}
+          aiReadInProgressText={aiReadInProgressText}
+          aiRuleEvidenceMode={aiRuleEvidenceMode}
+          aiRuleEvidenceText={aiRuleEvidenceText}
+          currentTempText={currentTempText}
+          dataFreshnessRows={dataFreshnessRows}
+          decisionState={decisionState}
+          detail={detail}
+          displayName={displayName}
+          expectedHighText={expectedHighText}
+          fallbackAiReason={fallbackAiReason}
+          freshnessSeparator={freshnessSeparator}
+          isEn={isEn}
+          isHkoObservation={isHkoObservation}
+          isRefreshing={isRefreshing}
+          localModelSupportNote={localModelSupportNote}
+          localizedFinalJudgment={localizedFinalJudgment}
+          marketDecisionView={marketDecisionView}
+          marketLineText={marketLineText}
+          onRefresh={handleRefresh}
+          onRemove={handleRemove}
+          peakWindow={peakWindow}
+          rawObservationText={rawObservationText}
+          removing={removing}
+        />
+      ) : (
+        <>
+          <CityCardHeader
+            aiStatusLabel={decisionState.aiStatusLabel}
+            aiStatusTone={decisionState.aiStatusTone}
+            collapseId={collapseId}
+            collapsed={collapsed}
             currentTempText={currentTempText}
-            decisionView={decisionView}
-            decisionWhyText={decisionState.primaryReason}
+            dataFreshnessRows={dataFreshnessRows}
+            debText={debText}
+            detailLocalTime={detail?.local_time}
+            displayName={displayName}
+            expectedHighText={expectedHighText}
+            freshnessSeparator={freshnessSeparator}
             isEn={isEn}
-            longText={localizedFinalJudgment || paceText}
-            marketDecisionView={marketDecisionView}
-            marketLineText={marketLineText}
-            paceDeltaText={paceView?.deltaText || "--"}
+            isRefreshing={isRefreshing}
+            modelRange={modelRange}
+            onRefresh={handleRefresh}
+            onRemove={handleRemove}
+            onToggleCollapsed={onToggleCollapsed}
             peakWindow={peakWindow}
+            removing={removing}
+            rowLocalTime={row?.local_time}
+            statusTags={decisionState.badges}
           />
 
-          <div className="scan-ai-city-analysis-grid">
-            <AiCityTemperatureChart detail={detail} />
-            <AiEvidencePanel
-              aiBullets={aiBullets}
-              aiCityForecast={aiCityForecast}
-              aiForecast={aiForecast}
-              aiReadCompleteText={aiReadCompleteText}
-              aiReadInProgressText={aiReadInProgressText}
-              aiRuleEvidenceMode={aiRuleEvidenceMode}
-              aiRuleEvidenceText={aiRuleEvidenceText}
-              fallbackAiReason={fallbackAiReason}
-              isCompactCard={isCompactCard}
-              isEn={isEn}
-              isHkoObservation={isHkoObservation}
-              localModelSupportNote={localModelSupportNote}
-              localizedFinalJudgment={localizedFinalJudgment}
-              rawObservationText={rawObservationText}
-            />
-          </div>
+          {detail && !collapsed ? (
+            <div className="scan-ai-city-body" id={collapseId}>
+              <WeatherDecisionBand
+                currentTempText={currentTempText}
+                decisionView={decisionView}
+                decisionWhyText={decisionState.primaryReason}
+                isEn={isEn}
+                longText={localizedFinalJudgment || paceText}
+                marketDecisionView={marketDecisionView}
+                marketLineText={marketLineText}
+                paceDeltaText={paceView?.deltaText || "--"}
+                peakWindow={peakWindow}
+              />
 
-          <ModelEvidencePanel detail={detail} isEn={isEn} />
+              <div className="scan-ai-city-analysis-grid">
+                <AiCityTemperatureChart detail={detail} />
+                <AiEvidencePanel
+                  aiBullets={aiBullets}
+                  aiCityForecast={aiCityForecast}
+                  aiForecast={aiForecast}
+                  aiReadCompleteText={aiReadCompleteText}
+                  aiReadInProgressText={aiReadInProgressText}
+                  aiRuleEvidenceMode={aiRuleEvidenceMode}
+                  aiRuleEvidenceText={aiRuleEvidenceText}
+                  fallbackAiReason={fallbackAiReason}
+                  isCompactCard={isCompactCard}
+                  isEn={isEn}
+                  isHkoObservation={isHkoObservation}
+                  localModelSupportNote={localModelSupportNote}
+                  localizedFinalJudgment={localizedFinalJudgment}
+                  rawObservationText={rawObservationText}
+                />
+              </div>
 
-        </div>
-      ) : !detail ? (
-        <div className="scan-ai-city-loading">
-          <LoadingSignal
-            title={isEn ? "Loading city decision data" : "正在加载城市决策数据"}
-            description={
-              isEn
-                ? isHkoObservation
-                  ? "Hydrating today’s model stack, HKO observation context and market layer."
-                  : "Hydrating today’s model stack, METAR context and market layer."
-                : isHkoObservation
-                  ? "正在补全今日模型、香港天文台观测和市场价格层。"
-                  : "正在补全今日模型、机场报文和市场价格层。"
-            }
-            compact
-          />
-        </div>
-      ) : null}
+              <ModelEvidencePanel detail={detail} isEn={isEn} />
+            </div>
+          ) : !detail ? (
+            <div className="scan-ai-city-loading">
+              <LoadingSignal
+                title={loadingCopy.title}
+                description={loadingCopy.description}
+                compact
+              />
+            </div>
+          ) : null}
+        </>
+      )}
     </article>
   );
 }
