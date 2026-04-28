@@ -29,6 +29,11 @@ export type AiCityStreamProgress = {
   raw_length?: number | null;
 };
 
+export const scanTerminalQueryPolicy = {
+  autoRefreshMs: 10 * 60_000,
+  manualForceRefreshCooldownMs: 2 * 60_000,
+} as const;
+
 type AiCityStreamEvent = {
   data: Record<string, unknown>;
   event: string;
@@ -98,6 +103,32 @@ export function toRemoteError<T>(
     previous: readPreviousRemoteData(current),
     status: "error",
   };
+}
+
+export function shouldSkipManualTerminalRefresh({
+  hasCurrentData,
+  lastForcedRefreshAt,
+  now = Date.now(),
+}: {
+  hasCurrentData: boolean;
+  lastForcedRefreshAt: number;
+  now?: number;
+}) {
+  return (
+    hasCurrentData &&
+    lastForcedRefreshAt > 0 &&
+    now - lastForcedRefreshAt < scanTerminalQueryPolicy.manualForceRefreshCooldownMs
+  );
+}
+
+export function shouldRunAutoTerminalRefresh({
+  documentHidden,
+  isLoading,
+}: {
+  documentHidden: boolean;
+  isLoading: boolean;
+}) {
+  return !documentHidden && !isLoading;
 }
 
 async function readJsonOrThrow<T>(path: string, init?: RequestInit): Promise<T> {

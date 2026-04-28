@@ -1,0 +1,413 @@
+/* Scan terminal mobile action-card layout and responsive overrides. */
+
+.root :global(.scan-mobile-decision-card) {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.root :global(.scan-mobile-decision-head) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 16px 0;
+}
+
+.root :global(.scan-mobile-decision-head h3) {
+  margin: 6px 0 0;
+  color: #e6edf3;
+  font-size: 24px;
+  line-height: 1.08;
+}
+
+.root :global(.scan-mobile-decision-metrics) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 14px;
+}
+
+.root :global(.scan-mobile-decision-metrics span) {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.09);
+  padding: 9px;
+}
+
+.root :global(.scan-mobile-decision-metrics small) {
+  color: #9fb2c7;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.root :global(.scan-mobile-decision-metrics b) {
+  color: #f3f8ff;
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.root :global(.scan-mobile-decision-reason) {
+  margin: 0 14px;
+  border: 1px solid rgba(77, 163, 255, 0.24);
+  border-radius: 13px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #d8e7f8;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.45;
+  padding: 11px 12px;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-city-status-tags),
+.root :global(.scan-mobile-decision-card .scan-ai-city-freshness),
+.root :global(.scan-mobile-decision-card .scan-ai-market-mobile-line),
+.root :global(.scan-mobile-decision-folds) {
+  margin-right: 14px;
+  margin-left: 14px;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-city-freshness) {
+  grid-template-columns: 1fr;
+  max-width: none;
+  margin-top: 0;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-market-mobile-line) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0;
+}
+
+.root :global(.scan-mobile-decision-card .scan-ai-market-decision) {
+  display: none;
+}
+
+.root :global(.scan-mobile-decision-folds) {
+  display: grid;
+  gap: 10px;
+}
+
+.root :global(.scan-mobile-fold) {
+  padding: 13px 14px;
+}
+
+.root :global(.scan-mobile-fold summary) {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.root :global(.scan-mobile-fold summary::-webkit-details-marker) {
+  display: none;
+}
+
+.root :global(.scan-mobile-fold[open] summary) {
+  margin-bottom: 10px;
+}
+
+.root :global(.scan-mobile-fold .scan-ai-city-section.models) {
+  border: 0;
+  background: transparent;
+  padding: 0;
+}
+
+.root :global(.scan-ai-city-collapse svg) {
+  transition: transform 0.18s ease;
+}
+
+
+@media (max-width: 1480px) {
+  .root :global(.scan-terminal) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
+    position: relative;
+    top: auto;
+    grid-column: 1 / -1;
+    height: auto;
+    max-height: none;
+    min-height: auto;
+  }
+
+  .root :global(.scan-detail-panel) {
+    grid-column: 1 / -1;
+    min-height: auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .root :global(.scan-terminal) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-filter-panel),
+  .root :global(.scan-data-grid),
+  .root :global(.scan-detail-panel),
+  .root :global(.scan-terminal > .detail-panel.scan-city-detail-rail) {
+    min-height: auto;
+  }
+
+  .root :global(.scan-kpi-bar) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .root :global(.scan-topbar) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .root :global(.scan-upgrade-announcement) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-upgrade-announcement ul) {
+    justify-content: flex-start;
+  }
+
+  .root :global(.scan-table-header),
+  .root :global(.scan-table-row) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-table-header) {
+    display: none;
+  }
+
+  .root :global(.scan-opportunity-group-head),
+  .root :global(.scan-opportunity-item) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-forecast-city-head),
+  .root :global(.scan-forecast-row-main),
+  .root :global(.scan-ai-brief-grid),
+  .root :global(.scan-ai-city-analysis-grid),
+  .root :global(.scan-ai-decision-band),
+  .root :global(.scan-ai-evidence-line) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-workspace-head),
+  .root :global(.scan-opportunity-hero),
+  .root :global(.scan-ai-city-hero),
+  .root :global(.scan-ai-city-section-head) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .root :global(.scan-opportunity-hero) {
+    display: flex;
+  }
+
+  .root :global(.scan-ai-workspace-head p),
+  .root :global(.scan-ai-city-hero-side) {
+    text-align: left;
+    justify-items: start;
+  }
+
+  .root :global(.scan-ai-decision-metrics) {
+    min-width: 0;
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-market-decision) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-opportunity-card-grid),
+  .root :global(.scan-opportunity-summary) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-forecast-city-read) {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .root :global(.scan-forecast-signals),
+  .root :global(.scan-ai-temperature-line) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-opportunity-phase) {
+    flex-wrap: wrap;
+  }
+
+  .root :global(.scan-opportunity-branch) {
+    display: none;
+  }
+
+  .root :global(.scan-opportunity-stat.edge) {
+    justify-self: start;
+    justify-items: start;
+  }
+
+  .root :global(.scan-opportunity-ai),
+  .root :global(.scan-v4-analysis) {
+    grid-column: 1 / -1;
+  }
+
+  .root :global(.scan-v4-analysis) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-trade-cards) {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .root :global(.scan-terminal) {
+    padding: 10px;
+  }
+
+  .root :global(.scan-kpi-bar) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-topbar-tabs) {
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+
+  .root :global(.scan-upgrade-announcement) {
+    padding: 14px;
+  }
+
+  .root :global(.scan-upgrade-announcement-copy strong) {
+    font-size: 16px;
+  }
+
+  .root :global(.scan-upgrade-announcement ul) {
+    gap: 6px;
+  }
+
+  .root :global(.scan-upgrade-announcement li) {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+
+  .root :global(.scan-ai-city-hero) {
+    padding: 16px;
+  }
+
+  .root :global(.scan-ai-city-hero h3) {
+    margin-bottom: 10px;
+    font-size: 24px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority) {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 12px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority span) {
+    display: grid;
+    gap: 4px;
+    border: 1px solid rgba(77, 163, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(77, 163, 255, 0.09);
+    padding: 9px;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority small) {
+    color: #9fb2c7;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .root :global(.scan-ai-city-mobile-priority b) {
+    color: #f3f8ff;
+    font-size: 13px;
+    line-height: 1.15;
+  }
+
+  .root :global(.scan-ai-city-pills) {
+    display: none;
+  }
+
+  .root :global(.scan-ai-city-freshness) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.scan-ai-decision-band) {
+    padding: 14px;
+  }
+
+  .root :global(.scan-ai-decision-band strong) {
+    font-size: 20px;
+  }
+
+  .root :global(.scan-ai-decision-long),
+  .root :global(.scan-ai-decision-reasons),
+  .root :global(.scan-ai-decision-risk) {
+    display: none;
+  }
+
+  .root :global(.scan-ai-market-mobile-line) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 12px;
+    border: 1px solid rgba(77, 163, 255, 0.18);
+    border-radius: 12px;
+    background: rgba(11, 18, 32, 0.48);
+    padding: 10px 12px;
+  }
+
+  .root :global(.scan-ai-market-mobile-line span) {
+    color: #9fb2c7;
+    font-size: 12px;
+    font-weight: 900;
+  }
+
+  .root :global(.scan-ai-market-mobile-line b) {
+    color: #e6edf3;
+    font-size: 13px;
+    text-align: right;
+  }
+
+  .root :global(.scan-ai-market-decision) {
+    margin-top: 10px;
+  }
+
+  .root :global(.scan-ai-city-ai-read:not([open])) {
+    padding-bottom: 4px;
+  }
+
+  .root :global(.scan-list-header) {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .root :global(.scan-opportunity-groups) {
+    padding: 12px;
+  }
+
+  .root :global(.scan-opportunity-models span) {
+    white-space: normal;
+  }
+
+  .root :global(.scan-forecast-city-title strong) {
+    font-size: 21px;
+  }
+
+  .root :global(.scan-forecast-row-main),
+  .root :global(.scan-ai-analysis) {
+    padding: 13px;
+  }
+
+  .root :global(.scan-forecast-ai-line) {
+    grid-template-columns: 1fr;
+    padding: 0 13px 13px;
+  }
+}

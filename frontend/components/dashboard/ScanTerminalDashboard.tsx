@@ -19,6 +19,11 @@ import {
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
+import scanTerminalCalendarStyles from "./ScanTerminalCalendar.module.css";
+import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
+import scanTerminalLightThemeStyles from "./ScanTerminalLightTheme.module.css";
+import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
+import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
 import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
@@ -78,6 +83,18 @@ function ScanTerminalScreen() {
   const userLocalTime = useUserLocalClock();
   const { setThemeMode, themeMode } = useScanTerminalTheme();
   const lastMapSelectedCityRef = useRef<string>("");
+  const scanTerminalRootClassName = clsx(
+    styles.root,
+    scanTerminalStyles.root,
+    scanTerminalOpportunityStyles.root,
+    scanTerminalCardStyles.root,
+    scanTerminalCalendarStyles.root,
+    scanTerminalMobileStyles.root,
+    scanTerminalLightThemeStyles.root,
+    detailChromeStyles.root,
+    modalChromeStyles.root,
+    themeMode === "light" && "light",
+  );
 
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(terminalData?.rows || []),
@@ -373,7 +390,7 @@ function ScanTerminalScreen() {
 
   if (store.proAccess.loading) {
     return (
-      <div className={clsx(styles.root, scanTerminalStyles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
+      <div className={scanTerminalRootClassName}>
         <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
           <main className="scan-data-grid">
             <div className="scan-loading-state">
@@ -393,7 +410,7 @@ function ScanTerminalScreen() {
   }
 
   return (
-    <div className={clsx(styles.root, scanTerminalStyles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
+    <div className={scanTerminalRootClassName}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
         <main className="scan-data-grid">
           <div className="scan-topbar">

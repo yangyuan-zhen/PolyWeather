@@ -1,0 +1,168 @@
+/* Scan terminal calendar/action view styles. */
+
+.root :global(.scan-calendar-view) {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-right: 4px;
+}
+
+.root :global(.scan-calendar-group) {
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  border-radius: 18px;
+  background: rgba(8, 17, 30, 0.8);
+  overflow: hidden;
+}
+
+.root :global(.scan-calendar-group-head) {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(90, 123, 166, 0.1);
+}
+
+.root :global(.scan-calendar-date) {
+  font-size: 16px;
+  font-weight: 800;
+  color: #eef7ff;
+}
+
+.root :global(.scan-calendar-count) {
+  font-size: 13px;
+  color: #8fa4c3;
+}
+
+.root :global(.scan-calendar-subtitle) {
+  margin-top: 4px;
+  color: #7f96b6;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.root :global(.scan-calendar-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  padding: 14px;
+}
+
+.root :global(.scan-calendar-card),
+.root :global(.scan-summary-card),
+.root :global(.scan-settings-card) {
+  border: 1px solid rgba(90, 123, 166, 0.12);
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(10, 20, 35, 0.92), rgba(8, 17, 29, 0.92));
+}
+
+.root :global(.scan-calendar-card) {
+  text-align: left;
+  padding: 14px;
+  cursor: pointer;
+}
+
+.root :global(.scan-calendar-card.selected) {
+  box-shadow: inset 0 0 0 1px rgba(23, 217, 139, 0.42);
+}
+
+.root :global(.scan-calendar-card.peak-active) {
+  border-color: rgba(23, 217, 139, 0.34);
+  background: linear-gradient(180deg, rgba(12, 42, 38, 0.9), rgba(8, 20, 30, 0.94));
+}
+
+.root :global(.scan-calendar-card.peak-next) {
+  border-color: rgba(94, 234, 212, 0.3);
+}
+
+.root :global(.scan-calendar-card.peak-past) {
+  opacity: 0.78;
+}
+
+.root :global(.scan-calendar-city) {
+  font-size: 16px;
+  font-weight: 800;
+  color: #eef7ff;
+}
+
+.root :global(.scan-calendar-action) {
+  margin-top: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: #dcecff;
+}
+
+.root :global(.scan-calendar-action span) {
+  color: #8fa4c3;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-calendar-action b) {
+  color: #eef7ff;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.root :global(.scan-calendar-action.buy) {
+  color: #21e391;
+}
+
+.root :global(.scan-calendar-action.sell) {
+  color: #ff6e6e;
+}
+
+.root :global(.scan-calendar-meta) {
+  margin-top: 10px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #8fa4c3;
+  font-size: 13px;
+}
+
+.root :global(.scan-calendar-countdown) {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(94, 234, 212, 0.18);
+  border-radius: 12px;
+  background: rgba(20, 184, 166, 0.1);
+  color: #5fffe8;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.root :global(.scan-calendar-countdown small) {
+  display: block;
+  margin-top: 4px;
+  color: #9fb4d2;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-calendar-reason) {
+  margin: 10px 0 0;
+  color: #d6e4f5;
+  font-size: 13px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.root :global(.scan-summary-grid) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.root :global(.scan-summary-grid.monitor) {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.root :global(.scan-summary-card),
+.root :global(.scan-settings-card) {
+  padding: 18px;
+}
