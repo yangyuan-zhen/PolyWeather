@@ -29,7 +29,6 @@ from web.scan_city_ai_helpers import (
     _extract_provider_stream_delta,
     _provider_response_meta,
     _safe_float,
-    _strip_incomplete_ai_sentence,
     _truncate_ai_text,
 )
 
