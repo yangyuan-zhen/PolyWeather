@@ -11,8 +11,8 @@ import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import {
   getModelView,
   getProbabilityView,
-  getTodayPaceView,
 } from "@/lib/dashboard-utils";
+import { getTodayPaceView } from "@/lib/pace-utils";
 import {
   formatTemperatureValue,
   normalizeTemperatureLabel,

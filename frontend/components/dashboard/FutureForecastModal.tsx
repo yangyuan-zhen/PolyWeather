@@ -27,10 +27,10 @@ import {
   getFutureModalView,
   getModelView,
   getProbabilityView,
-  getTodayPaceView,
   getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
+import { getTodayPaceView } from "@/lib/pace-utils";
 import { dashboardClient } from "@/lib/dashboard-client";
 import {
   normalizeObservationSourceCode,

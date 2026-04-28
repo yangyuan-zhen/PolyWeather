@@ -1,5 +1,5 @@
 import type { MarketScan, MarketTopBucket } from "@/lib/dashboard-types";
-import { getTodayPaceView } from "@/lib/dashboard-utils";
+import { getTodayPaceView } from "@/lib/pace-utils";
 import {
   formatTemperatureValue,
   normalizeTemperatureLabel,

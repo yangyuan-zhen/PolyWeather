@@ -1,5 +1,5 @@
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
-import { getTodayPaceView } from "@/lib/dashboard-utils";
+import { getTodayPaceView } from "@/lib/pace-utils";
 import { formatTemperatureValue } from "@/lib/temperature-utils";
 import { getPeakWindowLabel } from "@/components/dashboard/scan-terminal/decision-utils";
 
