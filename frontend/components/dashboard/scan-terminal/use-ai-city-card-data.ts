@@ -9,6 +9,12 @@ import {
   scanTerminalClient,
   type AiCityStreamProgress,
 } from "@/components/dashboard/scan-terminal/scan-terminal-client";
+import {
+  buildStorageKey,
+  readCachedPayload,
+  removeCachedPayload,
+  writeCachedPayload,
+} from "@/components/dashboard/scan-terminal/scan-terminal-cache";
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { normalizeCityKey } from "./decision-utils";
 
@@ -21,21 +27,6 @@ const aiCityForecastStateCache = new Map<
   { state: AiCityForecastState; updatedAt: number }
 >();
 
-function getStorage() {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage;
-  } catch {
-    return null;
-  }
-}
-
-function buildStorageKey(prefix: string, parts: Array<string | null | undefined>) {
-  return `${prefix}:${parts
-    .map((part) => encodeURIComponent(String(part || "").trim()))
-    .join(":")}`;
-}
-
 function isHkoObservationCity(detail?: CityDetail | null) {
   const source = String(
     detail?.current?.settlement_source ||
@@ -45,44 +36,6 @@ function isHkoObservationCity(detail?: CityDetail | null) {
     .trim()
     .toLowerCase();
   return source === "hko";
-}
-
-function readCachedPayload<T>(key: string, ttlMs: number): T | null {
-  const storage = getStorage();
-  if (!storage) return null;
-  try {
-    const raw = storage.getItem(key);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as { cachedAt?: number; payload?: T };
-    if (!parsed?.payload) return null;
-    if (Date.now() - Number(parsed.cachedAt || 0) > ttlMs) {
-      storage.removeItem(key);
-      return null;
-    }
-    return parsed.payload;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedPayload<T>(key: string, payload: T) {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(key, JSON.stringify({ cachedAt: Date.now(), payload }));
-  } catch {
-    // Ignore quota/privacy-mode failures; network fallbacks still work.
-  }
-}
-
-function removeCachedPayload(key: string) {
-  const storage = getStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(key);
-  } catch {
-    // Ignore privacy-mode failures; the next network request can still proceed.
-  }
 }
 
 function readCachedAiForecastState(key: string, ttlMs: number) {
