@@ -22,6 +22,7 @@ import { formatTafMarkerType } from "@/lib/taf-utils";
 import { normalizeHm } from "@/lib/time-utils";
 
 export { getTemperatureChartData } from "@/lib/chart-utils";
+export { getModelView, getProbabilityView } from "@/lib/model-utils";
 export { getTodayPaceView } from "@/lib/pace-utils";
 export {
   formatTemperatureValue,
@@ -244,56 +245,6 @@ export function getHeroMetaItems(detail: CityDetail, locale: Locale = "zh-CN") {
   }
 
   return parts;
-}
-
-export function getProbabilityView(detail: CityDetail, targetDate?: string | null) {
-  const date = targetDate || detail.local_date;
-  if (date === detail.local_date) {
-    return {
-      calibrationMode: detail.probabilities?.calibration_mode ?? null,
-      calibrationVersion: detail.probabilities?.calibration_version ?? null,
-      engine: detail.probabilities?.engine ?? null,
-      mu: detail.probabilities?.mu ?? null,
-      probabilities: detail.probabilities?.distribution || [],
-      probabilitiesAll:
-        detail.probabilities?.distribution_all ||
-        detail.probabilities?.distribution ||
-        [],
-      shadowProbabilities: detail.probabilities?.shadow_distribution || [],
-      shadowProbabilitiesAll:
-        detail.probabilities?.shadow_distribution_all ||
-        detail.probabilities?.shadow_distribution ||
-        [],
-    };
-  }
-
-  const daily = detail.multi_model_daily?.[date];
-  return {
-    calibrationMode: null,
-    calibrationVersion: null,
-    engine: null,
-    mu: daily?.deb?.prediction ?? null,
-    probabilities: daily?.probabilities || [],
-    probabilitiesAll: daily?.probabilities_all || daily?.probabilities || [],
-    shadowProbabilities: [],
-    shadowProbabilitiesAll: [],
-  };
-}
-
-export function getModelView(detail: CityDetail, targetDate?: string | null) {
-  const date = targetDate || detail.local_date;
-  const daily = detail.multi_model_daily?.[date];
-  if (daily) {
-    return {
-      deb: daily.deb?.prediction ?? null,
-      models: daily.models || {},
-    };
-  }
-
-  return {
-    deb: detail.deb?.prediction ?? null,
-    models: detail.multi_model || {},
-  };
 }
 
 export function parseAiAnalysis(analysis: CityDetail["ai_analysis"]) {

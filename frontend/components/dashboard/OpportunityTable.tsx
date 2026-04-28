@@ -8,10 +8,7 @@ import type {
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
-import {
-  getModelView,
-  getProbabilityView,
-} from "@/lib/dashboard-utils";
+import { getModelView, getProbabilityView } from "@/lib/model-utils";
 import { getTodayPaceView } from "@/lib/pace-utils";
 import {
   formatTemperatureValue,

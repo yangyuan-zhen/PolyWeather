@@ -15,11 +15,10 @@ import {
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import {
   getHeroMetaItems,
-  getModelView,
-  getProbabilityView,
   getRiskBadgeLabel,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
+import { getModelView, getProbabilityView } from "@/lib/model-utils";
 import {
   normalizeObservationSourceCode,
   normalizeObservationSourceLabel,
