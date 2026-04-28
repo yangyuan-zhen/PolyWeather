@@ -3,8 +3,9 @@ from fastapi.testclient import TestClient
 
 from web.app import app
 import web.routes as routes
+import web.scan_terminal_cache as scan_terminal_cache
 import web.scan_terminal_service as scan_terminal_service
-from web.scan_terminal_service import _scan_terminal_cache_key
+from web.scan_terminal_cache import scan_terminal_cache_key
 from src.database.db_manager import DBManager
 from src.database.runtime_state import TruthRecordRepository, TrainingFeatureRecordRepository
 
@@ -737,7 +738,7 @@ def test_ops_truth_history_returns_filtered_rows(monkeypatch):
 def test_scan_terminal_service_returns_stale_payload_after_failed_refresh(monkeypatch):
     filters = {"scan_mode": "tradable", "limit": 5}
     normalized_filters = scan_terminal_service._normalize_scan_terminal_filters(filters)
-    scan_terminal_service._SCAN_TERMINAL_CACHE.clear()
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
 
     monkeypatch.setattr(
         scan_terminal_service,
@@ -778,7 +779,7 @@ def test_scan_terminal_service_returns_stale_payload_after_failed_refresh(monkey
 
 def test_scan_terminal_service_returns_failed_without_success_snapshot(monkeypatch):
     filters = {"scan_mode": "tradable", "limit": 5}
-    scan_terminal_service._SCAN_TERMINAL_CACHE.clear()
+    scan_terminal_cache._SCAN_TERMINAL_CACHE.clear()
 
     def _explode(*_args, **_kwargs):
         raise RuntimeError("network down")
@@ -837,14 +838,14 @@ def test_scan_terminal_endpoint_forwards_filters(monkeypatch):
 
 
 def test_scan_terminal_cache_key_includes_filter_dimensions():
-    first = _scan_terminal_cache_key(
+    first = scan_terminal_cache_key(
         {
             "scan_mode": "tradable",
             "time_range": "today",
             "limit": 25,
         }
     )
-    second = _scan_terminal_cache_key(
+    second = scan_terminal_cache_key(
         {
             "scan_mode": "trend",
             "time_range": "week",
