@@ -1,0 +1,163 @@
+"use client";
+
+import type { ChartConfiguration } from "chart.js";
+import { useMemo } from "react";
+import { useChart } from "@/hooks/useChart";
+import { useDashboardStore, useHistoryData } from "@/hooks/useDashboardStore";
+import { useI18n } from "@/hooks/useI18n";
+import { getHistorySummary } from "@/lib/dashboard-utils";
+
+export function HistoryChart() {
+  const store = useDashboardStore();
+  const { locale } = useI18n();
+  const { data } = useHistoryData();
+  const isNoaaSettlement =
+    store.selectedDetail?.current?.settlement_source === "noaa" ||
+    store.selectedDetail?.current?.settlement_source_label === "NOAA";
+  const noaaStationCode = String(
+    store.selectedDetail?.current?.station_code ||
+      store.selectedDetail?.risk?.icao ||
+      "NOAA",
+  )
+    .trim()
+    .toUpperCase();
+  const summary = useMemo(
+    () => getHistorySummary(data, store.selectedDetail?.local_date),
+    [data, store.selectedDetail?.local_date],
+  );
+  const hasMgm =
+    store.selectedCity === "ankara" &&
+    summary.mgmSeriesComplete &&
+    summary.mgms.some((value) => value != null);
+  const hasBestBaseline =
+    Boolean(summary.bestModelName) &&
+    summary.bestModelName !== "MGM" &&
+    summary.bestModelSeries.some((value) => value != null);
+
+  const canvasRef = useChart(() => {
+    const datasets: NonNullable<
+      ChartConfiguration<"line">["data"]
+    >["datasets"] = [
+      {
+        backgroundColor: "rgba(248, 113, 113, 0.1)",
+        borderColor: "#f87171",
+        borderWidth: 2,
+        data: summary.actuals,
+        label: isNoaaSettlement
+          ? locale === "en-US"
+            ? `NOAA Settled High (${noaaStationCode})`
+            : `NOAA 结算最高温 (${noaaStationCode})`
+          : locale === "en-US"
+            ? "Observed High"
+            : "实测最高温",
+        pointBackgroundColor: "#f87171",
+        pointBorderColor: "#fff",
+        pointHoverRadius: 7,
+        pointRadius: 5,
+        tension: 0.2,
+      },
+      {
+        backgroundColor: "transparent",
+        borderColor: "#34d399",
+        borderDash: [5, 4],
+        borderWidth: 2,
+        data: summary.debs,
+        label: locale === "en-US" ? "DEB Fusion" : "DEB 融合",
+        pointHoverRadius: 6,
+        pointRadius: 4,
+        tension: 0.2,
+      },
+    ];
+
+    if (hasMgm) {
+      datasets.push({
+        backgroundColor: "transparent",
+        borderColor: "#fb923c",
+        borderWidth: 2,
+        data: summary.mgms,
+        label: locale === "en-US" ? "MGM Official Forecast" : "MGM 官方预报",
+        pointHoverRadius: 6,
+        pointRadius: 4,
+        tension: 0.2,
+      });
+    }
+
+    if (hasBestBaseline) {
+      datasets.push({
+        backgroundColor: "transparent",
+        borderColor: "#60a5fa",
+        borderDash: [4, 3],
+        borderWidth: 2,
+        data: summary.bestModelSeries,
+        label:
+          locale === "en-US"
+            ? `Best Baseline (${summary.bestModelName})`
+            : `最佳单模型 (${summary.bestModelName})`,
+        pointHoverRadius: 6,
+        pointRadius: 4,
+        tension: 0.2,
+      });
+    }
+
+    return {
+      data: {
+        datasets,
+        labels: summary.dates,
+      },
+      options: {
+        interaction: { intersect: false, mode: "index" },
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            labels: {
+              boxHeight: 12,
+              boxWidth: 34,
+              color: "#94a3b8",
+              font: { family: "Inter", size: 14 },
+              padding: 18,
+            },
+          },
+          tooltip: {
+            backgroundColor: "rgba(15, 23, 42, 0.9)",
+            borderColor: "rgba(255, 255, 255, 0.1)",
+            borderWidth: 1,
+            bodyFont: { family: "Inter", size: 13 },
+            titleFont: { family: "Inter", size: 13, weight: 600 },
+            callbacks: {
+              label: (ctx) =>
+                `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}°`,
+            },
+          },
+        },
+        responsive: true,
+        scales: {
+          x: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: {
+              color: "#64748b",
+              font: { family: "Inter", size: 12 },
+              padding: 8,
+            },
+          },
+          y: {
+            grid: { color: "rgba(255,255,255,0.04)" },
+            ticks: {
+              color: "#64748b",
+              font: { family: "Inter", size: 12 },
+              padding: 8,
+            },
+          },
+        },
+      },
+      type: "line",
+    } satisfies ChartConfiguration<"line">;
+  }, [hasBestBaseline, hasMgm, isNoaaSettlement, noaaStationCode, summary, locale]);
+
+  if (!summary.recentData.length) return null;
+
+  return (
+    <div className="history-chart-wrapper">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}

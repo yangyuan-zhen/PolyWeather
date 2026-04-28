@@ -1,6 +1,7 @@
 "use client";
 
 import clsx from "clsx";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   LogIn,
@@ -17,7 +18,15 @@ import {
   useState,
 } from "react";
 import styles from "./Dashboard.module.css";
+import dashboardHomeStyles from "./DashboardHomeIntelligence.module.css";
+import dashboardMapStyles from "./DashboardMap.module.css";
+import dashboardModalGuideStyles from "./DashboardModalGuide.module.css";
+import dashboardShellStyles from "./DashboardShell.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
+import detailContentStyles from "./DetailPanelContent.module.css";
+import detailSectionsStyles from "./DetailPanelSections.module.css";
+import futureForecastModalStyles from "./FutureForecastModal.module.css";
+import historyModalStyles from "./HistoryModal.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
 import scanTerminalCalendarStyles from "./ScanTerminalCalendar.module.css";
 import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
@@ -25,9 +34,12 @@ import scanTerminalLightThemeStyles from "./ScanTerminalLightTheme.module.css";
 import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
-import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
-import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
-import { MapCanvas } from "@/components/dashboard/MapCanvas";
+import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
+import scanTerminalDetailStyles from "./ScanTerminalDetail.module.css";
+import scanTerminalFiltersStyles from "./ScanTerminalFilters.module.css";
+import scanTerminalListStyles from "./ScanTerminalList.module.css";
+import scanTerminalShellStyles from "./ScanTerminalShell.module.css";
+import scanTerminalStateStyles from "./ScanTerminalState.module.css";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
@@ -59,6 +71,30 @@ import {
 
 type ContentView = "opportunities" | "analysis" | "map" | "calendar";
 
+const CityDetailPanel = dynamic(
+  () =>
+    import("@/components/dashboard/DetailPanel").then(
+      (module) => module.DetailPanel,
+    ),
+  { ssr: false },
+);
+
+const FutureForecastModal = dynamic(
+  () =>
+    import("@/components/dashboard/FutureForecastModal").then(
+      (module) => module.FutureForecastModal,
+    ),
+  { ssr: false },
+);
+
+const MapCanvas = dynamic(
+  () =>
+    import("@/components/dashboard/MapCanvas").then(
+      (module) => module.MapCanvas,
+    ),
+  { ssr: false },
+);
+
 function ScanTerminalScreen() {
   const store = useDashboardStore();
   const { locale, toggleLocale } = useI18n();
@@ -85,14 +121,28 @@ function ScanTerminalScreen() {
   const lastMapSelectedCityRef = useRef<string>("");
   const scanTerminalRootClassName = clsx(
     styles.root,
+    dashboardHomeStyles.root,
+    dashboardMapStyles.root,
+    dashboardShellStyles.root,
+    dashboardModalGuideStyles.root,
     scanTerminalStyles.root,
+    scanTerminalShellStyles.root,
+    scanTerminalFiltersStyles.root,
+    scanTerminalListStyles.root,
+    scanTerminalBoardStyles.root,
+    scanTerminalDetailStyles.root,
+    scanTerminalStateStyles.root,
     scanTerminalOpportunityStyles.root,
     scanTerminalCardStyles.root,
     scanTerminalCalendarStyles.root,
     scanTerminalMobileStyles.root,
     scanTerminalLightThemeStyles.root,
     detailChromeStyles.root,
+    detailContentStyles.root,
+    detailSectionsStyles.root,
     modalChromeStyles.root,
+    futureForecastModalStyles.root,
+    historyModalStyles.root,
     themeMode === "light" && "light",
   );
 

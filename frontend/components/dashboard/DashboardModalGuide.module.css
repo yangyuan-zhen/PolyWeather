@@ -1,0 +1,303 @@
+.root :global(.scan-select) {
+  border: none;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #4DA3FF, #00b383);
+  color: #000;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 224, 164, 0.2);
+}
+
+.root :global(.scan-cta-button:hover:not(:disabled)) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(0, 224, 164, 0.4);
+  filter: brightness(1.1);
+}
+
+.root :global(.scan-cta-button:active:not(:disabled)) {
+  transform: translateY(1px);
+}
+
+.root :global(.modal-overlay) {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(2, 6, 23, 0.75);
+  backdrop-filter: blur(12px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.root :global(.modal-content) {
+  background: #16213A;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 700px;
+  max-height: calc(100vh - 48px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.root :global(.modal-header) {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.root :global(.modal-header h2) {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  min-width: 0;
+}
+.root :global(.future-modal-title-with-actions) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.root :global(.future-refresh-btn) {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.root :global(.future-refresh-btn:hover) {
+  color: var(--accent-cyan);
+  background: rgba(34, 211, 238, 0.1);
+}
+
+.root :global(.future-refresh-btn.spinning svg) {
+  animation: spin 1s linear infinite;
+  color: var(--accent-cyan);
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.root :global(.modal-close) {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.root :global(.modal-close:hover) {
+  color: var(--accent-red);
+}
+
+.root :global(.modal-body) {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+/* Keep scroll behavior but hide visual scrollbar in today's/future analysis modal */
+.root :global(.modal-content.large.future-modal .modal-body) {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.root
+  :global(.modal-content.large.future-modal .modal-body::-webkit-scrollbar) {
+  width: 0;
+  height: 0;
+}
+
+@media (max-width: 640px) {
+  .root :global(.modal-content) {
+    border-radius: 14px;
+    max-height: calc(100vh - 16px);
+  }
+
+  .root :global(.modal-header) {
+    padding: 14px 14px 12px;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .root :global(.modal-header h2) {
+    font-size: 15px;
+    line-height: 1.35;
+  }
+
+  .root :global(.modal-body) {
+    padding: 14px;
+  }
+
+}
+
+/* ── Info Button ── */
+.root :global(.account-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(34, 211, 238, 0.34);
+  background: rgba(34, 211, 238, 0.08);
+  color: var(--accent-cyan);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: var(--transition);
+}
+.root :global(.account-btn:hover) {
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.62);
+  color: #f8fbff;
+  transform: translateY(-1px);
+}
+
+.root :global(.account-renew-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.root :global(.account-renew-badge:hover) {
+  background: rgba(245, 158, 11, 0.18);
+  border-color: rgba(245, 158, 11, 0.6);
+  color: #fff6d5;
+  transform: translateY(-1px);
+}
+
+.root :global(.account-renew-badge.expired) {
+  border-color: rgba(239, 68, 68, 0.34);
+  background: rgba(239, 68, 68, 0.12);
+  color: #fca5a5;
+}
+
+.root :global(.trial-promo-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 211, 238, 0.28);
+  background: rgba(34, 211, 238, 0.1);
+  color: #a5f3fc;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+  transition: var(--transition);
+}
+
+.root :global(.trial-promo-badge:hover) {
+  background: rgba(34, 211, 238, 0.16);
+  border-color: rgba(34, 211, 238, 0.45);
+  color: #ecfeff;
+  transform: translateY(-1px);
+}
+
+.root :global(.info-btn) {
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  color: var(--accent-blue);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.root :global(.info-btn:hover) {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: var(--accent-blue);
+  transform: translateY(-1px);
+}
+
+.root :global(.info-btn.active) {
+  background: rgba(34, 211, 238, 0.14);
+  border-color: rgba(34, 211, 238, 0.42);
+  color: #e0fbff;
+}
+
+/* ── Guide Modal Customizations ── */
+.root :global(.modal-content.large) {
+  max-width: 900px;
+}
+
+
+.root :global(.guide-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+  padding: 4px;
+}
+
+.root :global(.guide-card) {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 16px;
+  transition: var(--transition);
+}
+.root :global(.guide-card:hover) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-glass);
+}
+.root :global(.guide-card h3) {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.root :global(.guide-card p) {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+.root :global(.guide-card b) {
+  color: var(--text-primary);
+}
+
+.root :global(.guide-footer) {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-muted);
+}

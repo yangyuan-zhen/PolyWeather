@@ -978,6 +978,8 @@
   border-radius: 18px;
   background: rgba(13, 17, 23, 0.38);
   padding: 14px;
+  content-visibility: auto;
+  contain-intrinsic-size: 520px;
 }
 
 .root :global(.scan-opportunity-lane-head) {

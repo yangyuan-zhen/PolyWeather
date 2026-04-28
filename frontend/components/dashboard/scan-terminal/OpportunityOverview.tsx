@@ -93,7 +93,7 @@ const OpportunityDecisionCard = memo(function OpportunityDecisionCard({
   );
 });
 
-export function OpportunityOverview({
+export const OpportunityOverview = memo(function OpportunityOverview({
   rows,
   terminalData,
   loading,
@@ -212,5 +212,5 @@ export function OpportunityOverview({
       </div>
     </div>
   );
-}
+});
 

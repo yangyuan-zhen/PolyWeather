@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
+import { getWindowPhaseMeta } from "@/components/dashboard/opportunity-window-phase";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { formatTemperatureValue } from "@/lib/temperature-utils";
@@ -73,7 +73,7 @@ const CalendarActionCard = memo(function CalendarActionCard({
   );
 });
 
-export function CalendarView({
+export const CalendarView = memo(function CalendarView({
   rows,
   locale,
   selectedRowId,
@@ -181,5 +181,5 @@ export function CalendarView({
       ))}
     </div>
   );
-}
+});
 

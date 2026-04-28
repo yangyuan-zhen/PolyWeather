@@ -13,6 +13,8 @@
   border-radius: 18px;
   background: rgba(8, 17, 30, 0.8);
   overflow: hidden;
+  content-visibility: auto;
+  contain-intrinsic-size: 460px;
 }
 
 .root :global(.scan-calendar-group-head) {

@@ -1,0 +1,530 @@
+/* History modal styles moved out of Dashboard.module.css. */
+
+.root :global(.history-btn) {
+  background: rgba(34, 211, 238, 0.1);
+  color: var(--accent-cyan);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-left: 8px;
+}
+
+.root :global(.history-btn:hover) {
+  background: rgba(34, 211, 238, 0.2);
+  border-color: var(--accent-cyan);
+}
+
+.root :global(.history-btn:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.root :global(.modal-content.history-modal) {
+  width: min(96vw, 1180px);
+  max-width: 1180px;
+  max-height: calc(100vh - 32px);
+}
+
+.root :global(.history-modal .modal-body) {
+  padding: 24px 28px 28px;
+}
+
+.root :global(.history-modal .history-stats) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.root :global(.history-modal .h-stat-card) {
+  min-width: 0;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.035) 0%,
+    rgba(255, 255, 255, 0.02) 100%
+  );
+}
+
+.root :global(.history-modal .h-stat-card .label) {
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.root :global(.history-modal .h-stat-card .val) {
+  font-size: 32px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+.root :global(.history-modal .history-chart-wrapper) {
+  height: 420px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 12px 14px 8px;
+}
+
+.root :global(.history-modal .history-chart-wrapper canvas) {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.root :global(.history-modal .history-chart-loading) {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.025),
+      rgba(96, 165, 250, 0.08),
+      rgba(255, 255, 255, 0.025)
+    );
+  background-size: 220% 100%;
+  animation: history-chart-loading 1.4s ease-in-out infinite;
+}
+
+@keyframes history-chart-loading {
+  0% {
+    background-position: 100% 0;
+  }
+
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.root :global(.history-modal .history-modal-loading) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 420px;
+}
+
+.root :global(.history-modal .history-fetch-loading) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: min(100%, 420px);
+  padding: 24px 26px;
+  border-radius: 24px;
+  border: 1px solid rgba(96, 165, 250, 0.16);
+  background: linear-gradient(
+    180deg,
+    rgba(10, 18, 36, 0.72) 0%,
+    rgba(8, 14, 30, 0.5) 100%
+  );
+  box-shadow:
+    0 18px 48px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+.root :global(.history-modal .history-fetch-scan) {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(14, 165, 233, 0.08) 0%,
+    rgba(14, 165, 233, 0.02) 62%,
+    transparent 100%
+  );
+}
+
+.root :global(.history-modal .history-fetch-ring) {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(56, 189, 248, 0.16);
+}
+
+.root :global(.history-modal .history-fetch-ring-1) {
+  transform: scale(0.7);
+}
+
+.root :global(.history-modal .history-fetch-ring-2) {
+  transform: scale(0.92);
+}
+
+.root :global(.history-modal .history-fetch-sweep) {
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 120deg,
+    rgba(34, 211, 238, 0) 0deg,
+    rgba(34, 211, 238, 0.04) 220deg,
+    rgba(56, 189, 248, 0.78) 300deg,
+    rgba(253, 224, 71, 0.32) 332deg,
+    rgba(34, 211, 238, 0) 360deg
+  );
+  animation: history-fetch-spin 2.2s linear infinite;
+}
+
+.root :global(.history-modal .history-fetch-core) {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(103, 232, 249, 0.95);
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.42);
+}
+
+.root :global(.history-modal .history-fetch-bars) {
+  display: flex;
+  align-items: end;
+  gap: 7px;
+  height: 22px;
+}
+
+.root :global(.history-modal .history-fetch-bar) {
+  width: 8px;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(250, 204, 21, 0.18) 0%,
+    rgba(251, 146, 60, 0.9) 100%
+  );
+  animation: history-fetch-pulse 1.6s ease-in-out infinite;
+}
+
+.root :global(.history-modal .history-fetch-bar-1) {
+  height: 10px;
+}
+
+.root :global(.history-modal .history-fetch-bar-2) {
+  height: 18px;
+  animation-delay: 0.18s;
+}
+
+.root :global(.history-modal .history-fetch-bar-3) {
+  height: 14px;
+  animation-delay: 0.34s;
+}
+
+.root :global(.history-modal .history-fetch-bar-4) {
+  height: 20px;
+  animation-delay: 0.5s;
+}
+
+.root :global(.history-modal .history-fetch-lines) {
+  position: relative;
+  width: 180px;
+  height: 22px;
+  overflow: hidden;
+}
+
+.root :global(.history-modal .history-fetch-line) {
+  position: absolute;
+  left: -26%;
+  height: 1px;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(34, 211, 238, 0) 0%,
+    rgba(125, 211, 252, 0.72) 48%,
+    rgba(34, 211, 238, 0) 100%
+  );
+  animation: history-fetch-flow 2.4s linear infinite;
+}
+
+.root :global(.history-modal .history-fetch-line-1) {
+  top: 4px;
+  width: 122px;
+}
+
+.root :global(.history-modal .history-fetch-line-2) {
+  top: 11px;
+  width: 168px;
+  animation-delay: -0.8s;
+}
+
+.root :global(.history-modal .history-fetch-line-3) {
+  top: 18px;
+  width: 138px;
+  animation-delay: -1.4s;
+}
+
+.root :global(.history-modal .history-fetch-copy) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.root :global(.history-modal .history-fetch-copy strong) {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(103, 232, 249, 0.94);
+}
+
+.root :global(.history-modal .history-fetch-copy span) {
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: rgba(203, 213, 225, 0.82);
+}
+
+@keyframes history-fetch-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes history-fetch-pulse {
+  0%,
+  100% {
+    transform: scaleY(0.86);
+    opacity: 0.8;
+  }
+
+  50% {
+    transform: scaleY(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes history-fetch-flow {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(150%);
+  }
+}
+
+.root :global(.history-modal .history-peak-reference) {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.root :global(.history-modal .history-model-reference) {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(34, 211, 238, 0.18);
+  border-radius: 16px;
+  background: rgba(8, 47, 73, 0.2);
+}
+
+.root :global(.history-modal .history-peak-reference-title) {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+
+.root :global(.history-modal .history-model-reference-scroll),
+.root :global(.history-modal .history-peak-reference-scroll) {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 6px;
+  scrollbar-width: thin;
+}
+
+.root :global(.history-modal .history-model-reference-scroll) {
+  scrollbar-color: rgba(34, 211, 238, 0.5) rgba(15, 23, 42, 0.32);
+}
+
+.root :global(.history-modal .history-peak-reference-scroll) {
+  scrollbar-color: rgba(96, 165, 250, 0.5) rgba(15, 23, 42, 0.32);
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar) {
+  width: 8px;
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar-track) {
+  background: rgba(15, 23, 42, 0.32);
+  border-radius: 999px;
+}
+
+.root :global(.history-modal .history-peak-reference-scroll::-webkit-scrollbar-thumb) {
+  background: linear-gradient(
+    180deg,
+    rgba(56, 189, 248, 0.72) 0%,
+    rgba(96, 165, 250, 0.52) 100%
+  );
+  border-radius: 999px;
+}
+
+.root :global(.history-modal .history-peak-reference-row),
+.root :global(.history-modal .history-model-reference-row) {
+  display: grid;
+  grid-template-columns: minmax(72px, 88px) 1fr;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.root :global(.history-modal .history-peak-reference-date) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.root :global(.history-modal .history-model-reference-body) {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.root :global(.history-modal .history-model-reference-summary) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.root :global(.history-modal .history-model-reference-summary strong) {
+  color: var(--text-primary);
+}
+
+.root :global(.history-modal .history-model-reference-models) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.root :global(.history-modal .history-model-reference-model) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.38);
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.root :global(.history-modal .history-model-name) {
+  overflow: hidden;
+  color: var(--accent-cyan);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.history-modal .history-model-error) {
+  color: var(--text-muted);
+}
+
+.root :global(.history-modal .history-peak-reference-meta) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+@media (max-width: 980px) {
+  .root :global(.history-modal .modal-body) {
+    padding: 18px;
+  }
+
+  .root :global(.history-modal .history-stats) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .root :global(.history-modal .history-chart-wrapper) {
+    height: 360px;
+  }
+
+  .root :global(.history-modal .history-modal-loading) {
+    min-height: 340px;
+  }
+
+  .root :global(.history-modal .history-fetch-loading) {
+    width: min(100%, 360px);
+  }
+
+  .root :global(.history-modal .history-peak-reference-scroll),
+  .root :global(.history-modal .history-model-reference-scroll) {
+    max-height: 320px;
+  }
+
+  .root :global(.history-modal .history-model-reference-models) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .root :global(.modal-content.history-modal) {
+    width: min(100vw - 12px, 100%);
+    max-width: none;
+  }
+
+  .root :global(.history-modal .history-stats) {
+    grid-template-columns: 1fr;
+  }
+
+  .root :global(.history-modal .h-stat-card .val) {
+    font-size: 28px;
+  }
+
+  .root :global(.history-modal .history-chart-wrapper) {
+    height: 300px;
+    padding: 8px 10px 6px;
+  }
+
+  .root :global(.history-modal .history-modal-loading) {
+    min-height: 280px;
+  }
+
+  .root :global(.history-modal .history-fetch-loading) {
+    width: 100%;
+    padding: 18px 16px;
+  }
+
+  .root :global(.history-modal .history-fetch-lines) {
+    width: 150px;
+  }
+
+  .root :global(.history-modal .history-fetch-scan) {
+    width: 72px;
+    height: 72px;
+  }
+
+  .root :global(.history-modal .history-peak-reference),
+  .root :global(.history-modal .history-model-reference) {
+    padding: 12px;
+  }
+
+  .root :global(.history-modal .history-peak-reference-scroll),
+  .root :global(.history-modal .history-model-reference-scroll) {
+    max-height: 260px;
+    padding-right: 2px;
+  }
+
+  .root :global(.history-modal .history-peak-reference-row),
+  .root :global(.history-modal .history-model-reference-row) {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .root :global(.history-modal .history-model-reference-models) {
+    grid-template-columns: 1fr;
+  }
+}
