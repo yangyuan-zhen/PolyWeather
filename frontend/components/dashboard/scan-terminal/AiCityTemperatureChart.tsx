@@ -4,7 +4,7 @@ import { BarChart3 } from "lucide-react";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { useChart } from "@/hooks/useChart";
 import { useI18n } from "@/hooks/useI18n";
-import { getTemperatureChartData } from "@/lib/dashboard-utils";
+import { getTemperatureChartData } from "@/lib/chart-utils";
 
 type TemperatureChartData = NonNullable<ReturnType<typeof getTemperatureChartData>>;
 

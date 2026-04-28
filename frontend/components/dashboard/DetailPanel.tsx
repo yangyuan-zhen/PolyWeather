@@ -12,10 +12,10 @@ import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { CityDetail } from "@/lib/dashboard-types";
 import { trackAppEvent } from "@/lib/app-analytics";
 import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
+import { getTemperatureChartData } from "@/lib/chart-utils";
 import {
   getCityProfileStats,
   getRiskBadgeLabel,
-  getTemperatureChartData,
 } from "@/lib/dashboard-utils";
 import { normalizeObservationSourceLabel } from "@/lib/source-labels";
 

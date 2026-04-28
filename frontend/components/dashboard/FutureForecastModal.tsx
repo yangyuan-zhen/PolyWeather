@@ -23,11 +23,11 @@ import {
   ModelForecast,
   ProbabilityDistribution,
 } from "@/components/dashboard/PanelSections";
+import { getTemperatureChartData } from "@/lib/chart-utils";
 import {
   getFutureModalView,
   getModelView,
   getProbabilityView,
-  getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
 import { getTodayPaceView } from "@/lib/pace-utils";

@@ -12,12 +12,12 @@ import {
   MarketTopBucket,
   ProbabilityBucket,
 } from "@/lib/dashboard-types";
+import { getTemperatureChartData } from "@/lib/chart-utils";
 import {
   getHeroMetaItems,
   getModelView,
   getProbabilityView,
   getRiskBadgeLabel,
-  getTemperatureChartData,
   getWeatherSummary,
 } from "@/lib/dashboard-utils";
 import {
