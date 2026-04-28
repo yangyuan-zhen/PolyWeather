@@ -14,19 +14,12 @@ import { normalizeCityKey } from "./decision-utils";
 
 const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v6";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
-const AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS = 2;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
-const pendingAiCityForecastRequests = new Map<
-  string,
-  Promise<AiCityForecastPayload>
->();
-const queuedAiCityForecastTasks: Array<() => void> = [];
 const aiCityForecastStateCache = new Map<
   string,
   { state: AiCityForecastState; updatedAt: number }
 >();
-let activeAiCityForecastStreams = 0;
 
 function getStorage() {
   if (typeof window === "undefined") return null;
@@ -108,72 +101,6 @@ function writeCachedAiForecastState(key: string, state: AiCityForecastState) {
     state,
     updatedAt: Date.now(),
   });
-}
-
-function runQueuedAiCityForecastTask<T>(
-  task: () => Promise<T>,
-  onQueued?: () => void,
-) {
-  return new Promise<T>((resolve, reject) => {
-    const run = () => {
-      activeAiCityForecastStreams += 1;
-      task()
-        .then(resolve, reject)
-        .finally(() => {
-          activeAiCityForecastStreams = Math.max(
-            0,
-            activeAiCityForecastStreams - 1,
-          );
-          const next = queuedAiCityForecastTasks.shift();
-          if (next) next();
-        });
-    };
-    if (activeAiCityForecastStreams < AI_CITY_FORECAST_MAX_CONCURRENT_STREAMS) {
-      run();
-    } else {
-      onQueued?.();
-      queuedAiCityForecastTasks.push(run);
-    }
-  });
-}
-
-function requestAiCityForecast({
-  city,
-  forceRefresh,
-  locale,
-  onProgress,
-  requestKey,
-}: {
-  city: string;
-  forceRefresh: boolean;
-  locale: string;
-  onProgress?: (progress: AiCityStreamProgress) => void;
-  requestKey: string;
-}) {
-  const pending = pendingAiCityForecastRequests.get(requestKey);
-  if (pending) return pending;
-
-  const request = runQueuedAiCityForecastTask(async () => {
-    return scanTerminalClient.streamAiCityRead({
-      city,
-      forceRefresh,
-      locale,
-      onProgress,
-    });
-  }, () => {
-    onProgress?.({
-      stage: "queued",
-      message_en:
-        "AI observation read is queued behind the cities already streaming...",
-      message_zh: "AI 观测解读已排队，正在等待前面的城市完成流式生成…",
-    });
-  })
-    .finally(() => {
-      pendingAiCityForecastRequests.delete(requestKey);
-    });
-
-  pendingAiCityForecastRequests.set(requestKey, request);
-  return request;
 }
 
 function getAiCityStreamProgressText(progress: AiCityStreamProgress, isEn: boolean) {
@@ -379,7 +306,7 @@ export function useAiCityForecast({
           };
     writeCachedAiForecastState(cacheKey, loadingState);
     setAiForecast(loadingState);
-    void requestAiCityForecast({
+    void scanTerminalClient.streamAiCityRead({
         city: detailCityName,
         forceRefresh: aiRefreshToken > 0,
         locale,

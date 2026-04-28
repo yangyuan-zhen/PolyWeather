@@ -54,9 +54,15 @@ type AiCityReadOptions = {
   city: string;
   forceRefresh?: boolean;
   locale: string;
+  requestKey?: string;
   onProgress?: (progress: AiCityStreamProgress) => void;
   signal?: AbortSignal;
 };
+
+const AI_CITY_READ_MAX_CONCURRENT_STREAMS = 2;
+const pendingAiCityReadRequests = new Map<string, Promise<AiCityForecastPayload>>();
+const queuedAiCityReadTasks: Array<() => void> = [];
+let activeAiCityReadStreams = 0;
 
 function getRemoteError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
@@ -265,13 +271,34 @@ async function getMarketScan(city: string, options: MarketScanQueryOptions = {})
   );
 }
 
-async function streamAiCityRead({
+function runQueuedAiCityReadTask<T>(task: () => Promise<T>, onQueued?: () => void) {
+  return new Promise<T>((resolve, reject) => {
+    const run = () => {
+      activeAiCityReadStreams += 1;
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          activeAiCityReadStreams = Math.max(0, activeAiCityReadStreams - 1);
+          const next = queuedAiCityReadTasks.shift();
+          if (next) next();
+        });
+    };
+    if (activeAiCityReadStreams < AI_CITY_READ_MAX_CONCURRENT_STREAMS) {
+      run();
+    } else {
+      onQueued?.();
+      queuedAiCityReadTasks.push(run);
+    }
+  });
+}
+
+async function streamAiCityReadRequest({
   city,
   forceRefresh = false,
   locale,
   onProgress,
   signal,
-}: AiCityReadOptions) {
+}: Omit<AiCityReadOptions, "requestKey">) {
   const headers = await buildBrowserBackendHeaders({
     Accept: "text/event-stream",
     "Content-Type": "application/json",
@@ -315,6 +342,31 @@ async function streamAiCityRead({
     );
   }
   return readAiCityForecastStream(response, locale, onProgress);
+}
+
+function streamAiCityRead(options: AiCityReadOptions) {
+  const pendingKey = options.requestKey || "";
+  const pending = pendingKey ? pendingAiCityReadRequests.get(pendingKey) : null;
+  if (pending) return pending;
+
+  const request = runQueuedAiCityReadTask(
+    () => streamAiCityReadRequest(options),
+    () => {
+      options.onProgress?.({
+        stage: "queued",
+        message_en:
+          "AI observation read is queued behind the cities already streaming...",
+        message_zh: "AI 观测解读已排队，正在等待前面的城市完成流式生成…",
+      });
+    },
+  ).finally(() => {
+    if (pendingKey) pendingAiCityReadRequests.delete(pendingKey);
+  });
+
+  if (pendingKey) {
+    pendingAiCityReadRequests.set(pendingKey, request);
+  }
+  return request;
 }
 
 export const scanTerminalClient = {
