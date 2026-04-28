@@ -12,6 +12,7 @@ import {
   buildWeatherDecisionView,
   resolveExpectedHighCandidate,
 } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
+import { buildCityDecisionState } from "@/components/dashboard/scan-terminal/city-decision-state";
 import { getPeakWindowLabel, normalizeCityKey } from "@/components/dashboard/scan-terminal/decision-utils";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { AiPinnedCity } from "@/components/dashboard/scan-terminal/types";
@@ -94,13 +95,6 @@ function isHkoObservationCity(detail?: CityDetail | null) {
     .toLowerCase();
   return source === "hko";
 }
-
-type StatusTagTone = "green" | "blue" | "amber" | "red" | "muted";
-
-type StatusTag = {
-  label: string;
-  tone: StatusTagTone;
-};
 
 function formatFreshnessAge(value: unknown, isEn: boolean) {
   const minutes = Number(value);
@@ -193,15 +187,6 @@ function buildMarketFreshnessValue({
     return formatFreshnessAge(quoteAgeMs / 60_000, isEn);
   }
   return isEn ? "synced" : "已同步";
-}
-
-function uniqueStatusTags(tags: Array<StatusTag | null | undefined>) {
-  const seen = new Set<string>();
-  return tags.filter((tag): tag is StatusTag => {
-    if (!tag?.label || seen.has(tag.label)) return false;
-    seen.add(tag.label);
-    return true;
-  });
 }
 
 export function AiPinnedCityCard({
@@ -460,42 +445,21 @@ export function AiPinnedCityCard({
   const aiRuleEvidenceText = isEn
     ? "AI read did not return completely; rule evidence is being used."
     : "AI 解读未完整返回，当前使用规则证据";
-  const aiStatusLabel =
-    aiForecast.status === "loading"
-      ? isEn
-        ? "Fast read ready"
-        : "快速判断已完成"
-      : aiForecast.status === "ready" && aiCityForecast
-        ? aiRuleEvidenceMode
-          ? isEn
-            ? "Rule evidence"
-            : "规则证据模式"
-          : isEn
-            ? "AI read complete"
-            : "AI 解读已完成"
-        : aiRuleEvidenceMode
-          ? isEn
-            ? "Rule evidence"
-            : "规则证据模式"
-          : isEn
-            ? "AI pending"
-            : "AI 待返回";
-  const aiStatusTone: StatusTagTone =
-    aiForecast.status === "loading"
-      ? "blue"
-      : aiForecast.status === "ready" && aiCityForecast
-        ? aiRuleEvidenceMode
-          ? "amber"
-          : "green"
-        : aiRuleEvidenceMode
-          ? "amber"
-          : "muted";
-  const marketStatusTone: StatusTagTone =
-    marketDecisionView.status === "ready"
-      ? "green"
-      : marketDecisionView.status === "loading"
-        ? "blue"
-        : "muted";
+  const decisionState = buildCityDecisionState({
+    aiCityForecast,
+    aiForecast,
+    aiRuleEvidenceMode,
+    isEn,
+    isHkoObservation,
+    marketDecisionView,
+    modelHighlyConsistent,
+    needsNextBulletin,
+    observationStale,
+    observedHighBreak,
+    observedLowBreak,
+    observedLowLag,
+    peakHasPassed,
+  });
   const dataFreshnessRows = [
     {
       label: isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR",
@@ -524,62 +488,6 @@ export function AiPinnedCityCard({
     },
   ];
   const freshnessSeparator = isEn ? ": " : "：";
-  const statusTags = uniqueStatusTags([
-    observedHighBreak
-      ? {
-          label: isEn ? "Observed breakout" : "实测突破",
-          tone: "red",
-        }
-      : null,
-    peakHasPassed
-      ? {
-          label: isEn ? "Peak window passed" : "峰值窗口已过",
-          tone: "muted",
-        }
-      : null,
-    observationStale
-      ? {
-          label: isEn
-            ? isHkoObservation
-              ? "HKO stale"
-              : "METAR stale"
-            : isHkoObservation
-              ? "观测过旧"
-              : "METAR 过旧",
-          tone: "amber",
-        }
-      : null,
-    observedLowBreak
-      ? {
-          label: isEn ? "Peak revised down" : "峰值下修",
-          tone: "blue",
-        }
-      : null,
-    aiForecast.status === "loading"
-      ? {
-          label: isEn ? "Fast read ready" : "快速判断已完成",
-          tone: aiStatusTone,
-        }
-      : null,
-    marketDecisionView.status === "unavailable"
-      ? {
-          label: isEn ? "Market unavailable" : "市场价暂不可用",
-          tone: marketStatusTone,
-        }
-      : null,
-    modelHighlyConsistent
-      ? {
-          label: isEn ? "Models agree" : "模型高度一致",
-          tone: "green",
-        }
-      : null,
-    observedLowLag || needsNextBulletin
-      ? {
-          label: isEn ? "Wait next report" : "需要等待下一报文",
-          tone: "amber",
-        }
-      : null,
-  ]).slice(0, 3);
   const localizedRisksRaw =
     (isEn ? aiCityForecast?.risks_en : aiCityForecast?.risks_zh) || [];
   const localizedRisks = Array.isArray(localizedRisksRaw)
@@ -597,33 +505,6 @@ export function AiPinnedCityCard({
     (isEn ? aiForecast.payload?.reason_en : aiForecast.payload?.reason_zh) ||
     aiForecast.payload?.reason ||
     "";
-  const decisionWhyText = observedHighBreak
-    ? isEn
-      ? "Worth watching now: observation has broken above the model range."
-      : "当前值得关注：实测已突破模型上沿。"
-    : peakHasPassed
-      ? isEn
-        ? "Avoid chasing now: peak window has passed; wait to confirm no new high."
-        : "当前不宜追高：峰值窗口已过，等待确认是否还有新高。"
-      : observationStale
-        ? isEn
-          ? "Use as background only: observation is stale and needs the next report."
-          : "当前仅作背景：观测已过旧，需要下一报文确认。"
-        : marketDecisionView.status === "unavailable"
-          ? isEn
-            ? "Weather evidence remains usable, but no tradable quote is available yet."
-            : "当前可参考天气：暂无可交易价格。"
-          : modelHighlyConsistent
-            ? isEn
-              ? "Worth watching now: models agree; wait for observation confirmation."
-              : "当前值得关注：模型高度一致，等待实测确认。"
-            : needsNextBulletin
-              ? isEn
-                ? "Wait for confirmation: the next bulletin should decide direction."
-                : "当前建议等待：下一报文更适合决定方向。"
-              : isEn
-                ? "Watch the peak window and compare observations against the expected high."
-                : "当前重点：盯住峰值窗口，把实测与预计高点对照。";
   const marketLineText =
     marketDecisionView.status === "ready"
       ? `${marketDecisionView.bucketLabel} · ${marketDecisionView.priceText}`
@@ -638,10 +519,17 @@ export function AiPinnedCityCard({
   const collapseId = `ai-city-body-${normalizeCityKey(item.cityName) || item.addedAt}`;
 
   return (
-    <article className={clsx("scan-ai-city-card", collapsed && "collapsed", removing && "removing")}>
+    <article
+      className={clsx("scan-ai-city-card", collapsed && "collapsed", removing && "removing")}
+      data-ai-status={decisionState.aiStatus}
+      data-evidence-quality={decisionState.evidenceQuality}
+      data-market-status={decisionState.marketStatus}
+      data-recommendation={decisionState.recommendation}
+      data-urgency={decisionState.urgency}
+    >
       <CityCardHeader
-        aiStatusLabel={aiStatusLabel}
-        aiStatusTone={aiStatusTone}
+        aiStatusLabel={decisionState.aiStatusLabel}
+        aiStatusTone={decisionState.aiStatusTone}
         collapseId={collapseId}
         collapsed={collapsed}
         currentTempText={currentTempText}
@@ -675,7 +563,7 @@ export function AiPinnedCityCard({
         peakWindow={peakWindow}
         removing={removing}
         rowLocalTime={row?.local_time}
-        statusTags={statusTags}
+        statusTags={decisionState.badges}
       />
 
       {detail && !collapsed ? (
@@ -683,7 +571,7 @@ export function AiPinnedCityCard({
           <WeatherDecisionBand
             currentTempText={currentTempText}
             decisionView={decisionView}
-            decisionWhyText={decisionWhyText}
+            decisionWhyText={decisionState.primaryReason}
             isEn={isEn}
             longText={localizedFinalJudgment || paceText}
             marketDecisionView={marketDecisionView}
