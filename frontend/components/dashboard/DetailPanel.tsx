@@ -13,11 +13,9 @@ import { CityDetail } from "@/lib/dashboard-types";
 import { trackAppEvent } from "@/lib/app-analytics";
 import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
 import { getTemperatureChartData } from "@/lib/chart-utils";
-import {
-  getCityProfileStats,
-  getRiskBadgeLabel,
-} from "@/lib/dashboard-utils";
+import { getCityProfileStats } from "@/lib/dashboard-utils";
 import { normalizeObservationSourceLabel } from "@/lib/source-labels";
+import { getRiskBadgeLabel } from "@/lib/weather-summary-utils";
 
 function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale, t } = useI18n();

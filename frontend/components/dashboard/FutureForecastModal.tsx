@@ -26,11 +26,11 @@ import {
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import {
   getFutureModalView,
-  getWeatherSummary,
 } from "@/lib/dashboard-utils";
 import { getModelView, getProbabilityView } from "@/lib/model-utils";
 import { getTodayPaceView } from "@/lib/pace-utils";
 import { dashboardClient } from "@/lib/dashboard-client";
+import { getWeatherSummary } from "@/lib/weather-summary-utils";
 import {
   normalizeObservationSourceCode,
   normalizeObservationSourceLabel,

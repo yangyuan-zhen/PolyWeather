@@ -13,16 +13,16 @@ import {
   ProbabilityBucket,
 } from "@/lib/dashboard-types";
 import { getTemperatureChartData } from "@/lib/chart-utils";
-import {
-  getHeroMetaItems,
-  getRiskBadgeLabel,
-  getWeatherSummary,
-} from "@/lib/dashboard-utils";
 import { getModelView, getProbabilityView } from "@/lib/model-utils";
 import {
   normalizeObservationSourceCode,
   normalizeObservationSourceLabel,
 } from "@/lib/source-labels";
+import {
+  getHeroMetaItems,
+  getRiskBadgeLabel,
+  getWeatherSummary,
+} from "@/lib/weather-summary-utils";
 
 function EmptyState({ text }: { text: string }) {
   return (
