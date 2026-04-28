@@ -6,7 +6,8 @@
     "dev": "node scripts/sync-next-server-chunks.mjs --clean-root && next dev",
     "build": "next build && node scripts/sync-next-server-chunks.mjs",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:business": "node scripts/run-business-state-tests.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
