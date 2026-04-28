@@ -31,37 +31,27 @@ import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import type {
   CityDetail,
   ScanOpportunityRow,
-  ScanTerminalResponse,
 } from "@/lib/dashboard-types";
-import {
-  buildBrowserBackendHeaders,
-  fetchBackendApi,
-} from "@/lib/backend-api";
-import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { CalendarView } from "@/components/dashboard/scan-terminal/CalendarView";
 import { AiForecastKPIBar } from "@/components/dashboard/scan-terminal/AiForecastKPIBar";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import { OpportunityOverview } from "@/components/dashboard/scan-terminal/OpportunityOverview";
-import {
-  findDetailForCity,
-  isFullEnoughForDeepAnalysis,
-  waitForDeepAnalysisQueue,
-} from "@/components/dashboard/scan-terminal/city-detail-utils";
-import type { AiPinnedCity } from "@/components/dashboard/scan-terminal/types";
+import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
   findRowForCity,
-  formatUserLocalTime,
   normalizeCityKey,
-  prettifyCityName,
   rowMatchesCity,
   sortRowsByUserTime,
 } from "@/components/dashboard/scan-terminal/decision-utils";
+import { useAiPinnedCityWorkspace } from "@/components/dashboard/scan-terminal/use-ai-pinned-city-workspace";
+import { useScanTerminalQuery } from "@/components/dashboard/scan-terminal/use-scan-terminal-query";
+import {
+  useScanTerminalTheme,
+  useUserLocalClock,
+} from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 
 type ContentView = "opportunities" | "analysis" | "map" | "calendar";
-type ThemeMode = "dark" | "light";
-const SCAN_TERMINAL_AUTO_REFRESH_MS = 10 * 60_000;
-const SCAN_TERMINAL_MANUAL_REFRESH_COOLDOWN_MS = 2 * 60_000;
 
 function ScanTerminalScreen() {
   const store = useDashboardStore();
@@ -71,40 +61,37 @@ function ScanTerminalScreen() {
   const accountHref = store.proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
-  const [scanLoading, setScanLoading] = useState(false);
-  const [scanError, setScanError] = useState<string | null>(null);
+  const {
+    refreshScanTerminalManually,
+    scanError,
+    scanLoading,
+    terminalData,
+  } = useScanTerminalQuery({
+    isPro,
+    proAccessLoading: store.proAccess.loading,
+  });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ContentView>("opportunities");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
-  const [aiPinnedCities, setAiPinnedCities] = useState<AiPinnedCity[]>([]);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
-  const [userLocalTime, setUserLocalTime] = useState("--");
-  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const userLocalTime = useUserLocalClock();
+  const { setThemeMode, themeMode } = useScanTerminalTheme();
   const lastMapSelectedCityRef = useRef<string>("");
-  const aiFullHydrationRef = useRef<Set<string>>(new Set());
-  const aiHydrationQueueRef = useRef<string[]>([]);
-  const aiHydrationRunningRef = useRef(false);
-  const scanRequestSeqRef = useRef(0);
-  const scanLoadingRef = useRef(false);
-  const lastForcedScanRefreshAtRef = useRef(0);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    const hadLight = root.classList.contains("light");
-    const hadDark = root.classList.contains("dark");
-    root.classList.toggle("light", themeMode === "light");
-    root.classList.toggle("dark", themeMode === "dark");
-    return () => {
-      root.classList.toggle("light", hadLight);
-      root.classList.toggle("dark", hadDark);
-    };
-  }, [themeMode]);
 
   const timeSortedRows = useMemo(
     () => sortRowsByUserTime(terminalData?.rows || []),
     [terminalData?.rows],
   );
+  const {
+    addAiPinnedCity,
+    aiPinnedCities,
+    refreshAiPinnedCityDetail,
+    removeAiPinnedCity,
+  } = useAiPinnedCityWorkspace({
+    locale,
+    store,
+    timeSortedRows,
+  });
   const selectedRow = useMemo(() => {
     if (!timeSortedRows.length) return null;
     return timeSortedRows.find((row) => row.id === selectedRowId) || timeSortedRows[0] || null;
@@ -229,130 +216,6 @@ function ScanTerminalScreen() {
     }
   }, [activeView, isPro, store.proAccess.loading]);
 
-  const fetchScanTerminal = useCallback(
-    async ({
-      forceRefresh = false,
-      showLoading = false,
-    }: {
-      forceRefresh?: boolean;
-      showLoading?: boolean;
-    } = {}) => {
-      if (store.proAccess.loading || !isPro) return;
-      const requestSeq = ++scanRequestSeqRef.current;
-      const controller = new AbortController();
-      if (forceRefresh) {
-        lastForcedScanRefreshAtRef.current = Date.now();
-      }
-      if (showLoading) {
-        scanLoadingRef.current = true;
-        setScanLoading(true);
-      }
-      setScanError(null);
-    const params = new URLSearchParams({
-      scan_mode: "tradable",
-      min_price: "0.05",
-      max_price: "0.95",
-      min_edge_pct: "2",
-      min_liquidity: "500",
-      market_type: "maxtemp",
-      time_range: "today",
-      limit: "36",
-      force_refresh: String(forceRefresh),
-    });
-      if (forceRefresh) {
-        params.set("_ts", String(Date.now()));
-      }
-      try {
-        const headers = await buildBrowserBackendHeaders({
-          Accept: "application/json",
-        });
-        const response = await fetchBackendApi(`/api/scan/terminal?${params.toString()}`, {
-          cache: "no-store",
-          headers,
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          let message = `HTTP ${response.status}`;
-          try {
-            const payload = await response.json();
-            message = String(payload?.error || payload?.detail || message);
-          } catch {
-            // Keep HTTP status message.
-          }
-          throw new Error(message);
-        }
-        const payload = (await response.json()) as ScanTerminalResponse;
-        if (requestSeq !== scanRequestSeqRef.current) return;
-        setTerminalData(payload);
-        setScanError(null);
-      } catch (error) {
-        if (controller.signal.aborted || requestSeq !== scanRequestSeqRef.current) return;
-        setScanError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (showLoading) {
-          scanLoadingRef.current = false;
-          setScanLoading(false);
-        }
-      }
-    },
-    [isPro, store.proAccess.loading],
-  );
-
-  useEffect(() => {
-    if (store.proAccess.loading) return;
-    if (!isPro) {
-      scanLoadingRef.current = false;
-      setScanLoading(false);
-      setScanError(null);
-      setTerminalData(null);
-      return;
-    }
-    void fetchScanTerminal({ forceRefresh: false, showLoading: true });
-  }, [fetchScanTerminal, isPro, store.proAccess.loading]);
-
-  const refreshScanTerminalManually = useCallback(() => {
-    const now = Date.now();
-    const lastForced = lastForcedScanRefreshAtRef.current;
-    const withinCooldown =
-      lastForced > 0 &&
-      now - lastForced < SCAN_TERMINAL_MANUAL_REFRESH_COOLDOWN_MS &&
-      terminalData;
-    if (withinCooldown) {
-      setScanError(null);
-      return;
-    }
-    void fetchScanTerminal({ forceRefresh: true, showLoading: true });
-  }, [fetchScanTerminal, terminalData]);
-
-  useEffect(() => {
-    if (store.proAccess.loading || !isPro) return;
-    const intervalId = window.setInterval(() => {
-      if (document.hidden) return;
-      if (scanLoadingRef.current) return;
-      void fetchScanTerminal({ forceRefresh: true, showLoading: false });
-    }, SCAN_TERMINAL_AUTO_REFRESH_MS);
-    return () => window.clearInterval(intervalId);
-  }, [fetchScanTerminal, isPro, store.proAccess.loading]);
-
-  useEffect(() => {
-    setUserLocalTime(formatUserLocalTime());
-    const intervalId = window.setInterval(() => {
-      setUserLocalTime(formatUserLocalTime());
-    }, 10_000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("polyweather_scan_theme");
-    if (stored === "light") {
-      setThemeMode("light");
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("polyweather_scan_theme", themeMode);
-  }, [themeMode]);
-
   const resolvedView: ContentView = activeView;
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
   const activeDetailRow =
@@ -368,115 +231,6 @@ function ScanTerminalScreen() {
       void store.ensureCityDetail(activeDetailRow.city, false, "panel").catch(() => {});
     }
   }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
-
-  const runAiHydrationQueue = useCallback(async () => {
-    if (aiHydrationRunningRef.current) return;
-    aiHydrationRunningRef.current = true;
-    try {
-      while (aiHydrationQueueRef.current.length > 0) {
-        const nextCity = aiHydrationQueueRef.current.shift();
-        const key = normalizeCityKey(nextCity || "");
-        if (!nextCity || !key) continue;
-        const existingDetail = findDetailForCity(store.cityDetailsByName, nextCity);
-        try {
-          const detail = await store.ensureCityDetail(
-            nextCity,
-            Boolean(existingDetail) && !isFullEnoughForDeepAnalysis(existingDetail),
-            "full",
-          );
-          if (!isFullEnoughForDeepAnalysis(detail)) {
-            aiFullHydrationRef.current.delete(key);
-          }
-        } catch {
-          aiFullHydrationRef.current.delete(key);
-        }
-        await waitForDeepAnalysisQueue(1200);
-      }
-    } finally {
-      aiHydrationRunningRef.current = false;
-      if (aiHydrationQueueRef.current.length > 0) {
-        void runAiHydrationQueue();
-      }
-    }
-  }, [store.cityDetailsByName, store.ensureCityDetail]);
-
-  const queueAiFullHydration = useCallback(
-    (cityName: string) => {
-      const key = normalizeCityKey(cityName);
-      if (!key || aiFullHydrationRef.current.has(key)) return;
-      aiFullHydrationRef.current.add(key);
-      aiHydrationQueueRef.current.push(cityName);
-      void runAiHydrationQueue();
-    },
-    [runAiHydrationQueue],
-  );
-
-  const addAiPinnedCity = useCallback((cityName: string) => {
-    const cleanName = String(cityName || "").trim();
-    const key = normalizeCityKey(cleanName);
-    if (!key) return;
-    const matchedRow = findRowForCity(timeSortedRows, cleanName);
-    const prettyName = prettifyCityName(cleanName);
-    const displayName =
-      matchedRow?.city_display_name ||
-      matchedRow?.display_name ||
-      getLocalizedCityName(cleanName, prettyName || cleanName, locale) ||
-      prettyName ||
-      cleanName;
-    setAiPinnedCities((current) => {
-      const existing = current.findIndex(
-        (item) => normalizeCityKey(item.cityName) === key,
-      );
-      const nextItem = {
-        cityName: matchedRow?.city || cleanName,
-        displayName,
-        addedAt: Date.now(),
-      };
-      if (existing >= 0) {
-        const next = [...current];
-        next[existing] = { ...next[existing], ...nextItem };
-        return [
-          next[existing],
-          ...next.filter((_, index) => index !== existing),
-        ];
-      }
-      return [nextItem, ...current].slice(0, 8);
-    });
-    queueAiFullHydration(matchedRow?.city || cleanName);
-  }, [locale, queueAiFullHydration, timeSortedRows]);
-
-  const removeAiPinnedCity = useCallback((cityName: string) => {
-    const key = normalizeCityKey(cityName);
-    aiFullHydrationRef.current.delete(key);
-    aiHydrationQueueRef.current = aiHydrationQueueRef.current.filter(
-      (queuedCity) => normalizeCityKey(queuedCity) !== key,
-    );
-    setAiPinnedCities((current) =>
-      current.filter((item) => normalizeCityKey(item.cityName) !== key),
-    );
-  }, []);
-
-  const refreshAiPinnedCityDetail = useCallback(
-    async (cityName: string) => {
-      const key = normalizeCityKey(cityName);
-      if (key) {
-        aiFullHydrationRef.current.delete(key);
-      }
-      await store.ensureCityDetail(cityName, true, "full");
-    },
-    [store.ensureCityDetail],
-  );
-
-  useEffect(() => {
-    aiPinnedCities.forEach((item) => {
-      const key = normalizeCityKey(item.cityName);
-      if (!key || aiFullHydrationRef.current.has(key)) return;
-      const detail = findDetailForCity(store.cityDetailsByName, item.cityName);
-      const needsFullHydration = !isFullEnoughForDeepAnalysis(detail);
-      if (!needsFullHydration) return;
-      queueAiFullHydration(item.cityName);
-    });
-  }, [aiPinnedCities, queueAiFullHydration, store.cityDetailsByName]);
 
   const handleMapCitySelect = useCallback((cityName: string) => {
     setMapSelectedCityName(cityName);
