@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
@@ -24,6 +24,12 @@ type CalendarActionGroup = {
   label: string;
   subtitle: string;
   sort: number;
+};
+
+type CalendarActionItem = {
+  row: ScanOpportunityRow;
+  meta: CalendarMeta;
+  reason: string;
 };
 
 function normalizeCalendarCityKey(value?: string | null) {
@@ -291,6 +297,66 @@ function buildCalendarCoreReason(
       : "先放入行动面板，等待下一轮观测";
 }
 
+const CalendarActionCard = memo(function CalendarActionCard({
+  item,
+  locale,
+  selected,
+  onSelectRow,
+}: {
+  item: CalendarActionItem;
+  locale: string;
+  selected: boolean;
+  onSelectRow: (row: ScanOpportunityRow) => void;
+}) {
+  const { row, meta, reason } = item;
+  const tempSymbol = row.temp_symbol || "°C";
+  const phaseMeta = getWindowPhaseMeta(row, locale);
+
+  return (
+    <button
+      type="button"
+      className={`scan-calendar-card peak-${meta.tone} ${selected ? "selected" : ""}`}
+      onClick={() => onSelectRow(row)}
+    >
+      <div className="scan-calendar-city">
+        {getLocalizedCityName(
+          row.city,
+          row.city_display_name || row.display_name || row.city,
+          locale,
+        )}
+      </div>
+      <div className="scan-calendar-countdown">
+        {meta.title}
+        {meta.localWindowLabel ? (
+          <small>
+            {locale === "en-US" ? "Your time: " : "本地时间："}
+            {meta.localWindowLabel}
+          </small>
+        ) : null}
+        <small>
+          {locale === "en-US" ? "City window: " : "城市窗口："}
+          {meta.cityWindowLabel || meta.detail}
+        </small>
+      </div>
+      <p className="scan-calendar-reason">{reason}</p>
+      <div className="scan-calendar-action">
+        <span>{locale === "en-US" ? "DEB high" : "DEB 预测高点"}</span>
+        <b>
+          {row.deb_prediction != null
+            ? formatTemperatureValue(row.deb_prediction, tempSymbol)
+            : "--"}
+        </b>
+      </div>
+      <div className="scan-calendar-meta">
+        <span>
+          {formatShortDate(row.selected_date || row.local_date, locale)} · {row.local_time || "--"}
+        </span>
+        <span>{phaseMeta.label}</span>
+      </div>
+    </button>
+  );
+});
+
 export function CalendarView({
   rows,
   locale,
@@ -324,7 +390,7 @@ export function CalendarView({
         label: string;
         subtitle: string;
         sort: number;
-        items: Array<{ row: ScanOpportunityRow; meta: CalendarMeta; reason: string }>;
+        items: CalendarActionItem[];
       }
     >();
     dedupeCalendarRows(rows).forEach((row) => {
@@ -385,57 +451,14 @@ export function CalendarView({
             </div>
           </div>
           <div className="scan-calendar-grid">
-            {group.items.map(({ row, meta, reason }) => (
-              <button
-                key={row.id}
-                type="button"
-                className={`scan-calendar-card peak-${meta.tone} ${selectedRowId === row.id ? "selected" : ""}`}
-                onClick={() => onSelectRow(row)}
-              >
-                {(() => {
-                  const tempSymbol = row.temp_symbol || "°C";
-                  const phaseMeta = getWindowPhaseMeta(row, locale);
-                  return (
-                    <>
-                <div className="scan-calendar-city">
-                  {getLocalizedCityName(
-                    row.city,
-                    row.city_display_name || row.display_name || row.city,
-                    locale,
-                  )}
-                </div>
-                <div className="scan-calendar-countdown">
-                  {meta.title}
-                  {meta.localWindowLabel ? (
-                    <small>
-                      {locale === "en-US" ? "Your time: " : "本地时间："}
-                      {meta.localWindowLabel}
-                    </small>
-                  ) : null}
-                  <small>
-                    {locale === "en-US" ? "City window: " : "城市窗口："}
-                    {meta.cityWindowLabel || meta.detail}
-                  </small>
-                </div>
-                <p className="scan-calendar-reason">{reason}</p>
-                <div className="scan-calendar-action">
-                  <span>{locale === "en-US" ? "DEB high" : "DEB 预测高点"}</span>
-                  <b>
-                    {row.deb_prediction != null
-                      ? formatTemperatureValue(row.deb_prediction, tempSymbol)
-                      : "--"}
-                  </b>
-                </div>
-                <div className="scan-calendar-meta">
-                  <span>
-                    {formatShortDate(row.selected_date || row.local_date, locale)} · {row.local_time || "--"}
-                  </span>
-                  <span>{phaseMeta.label}</span>
-                </div>
-                    </>
-                  );
-                })()}
-              </button>
+            {group.items.map((item) => (
+              <CalendarActionCard
+                key={item.row.id}
+                item={item}
+                locale={locale}
+                selected={selectedRowId === item.row.id}
+                onSelectRow={onSelectRow}
+              />
             ))}
           </div>
         </section>

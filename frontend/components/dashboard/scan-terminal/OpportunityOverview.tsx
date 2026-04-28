@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useMemo } from "react";
 import clsx from "clsx";
 import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
 import { formatTemperatureValue } from "@/lib/dashboard-utils";
@@ -13,7 +13,7 @@ import {
   pickOpportunitySections,
 } from "@/components/dashboard/scan-terminal/decision-utils";
 
-function OpportunityDecisionCard({
+const OpportunityDecisionCard = memo(function OpportunityDecisionCard({
   row,
   locale,
   selected,
@@ -91,7 +91,7 @@ function OpportunityDecisionCard({
       </button>
     </article>
   );
-}
+});
 
 export function OpportunityOverview({
   rows,
@@ -116,7 +116,10 @@ export function OpportunityOverview({
 }) {
   const isEn = locale === "en-US";
   const sections = useMemo(() => pickOpportunitySections(rows, locale), [locale, rows]);
-  const visibleSections = sections.filter((section) => section.rows.length > 0);
+  const visibleSections = useMemo(
+    () => sections.filter((section) => section.rows.length > 0),
+    [sections],
+  );
   const summary = terminalData?.summary;
 
   if (loading) {
