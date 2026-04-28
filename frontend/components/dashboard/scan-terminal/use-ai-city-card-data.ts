@@ -8,6 +8,10 @@ import type {
 import {
   scanTerminalClient,
   type AiCityStreamProgress,
+  type RemoteData,
+  toRemoteError,
+  toRemoteLoading,
+  toRemoteSuccess,
 } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import {
   buildStorageKey,
@@ -22,6 +26,7 @@ const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v6";
 const AI_CITY_FORECAST_CACHE_TTL_MS = 60 * 60 * 1000;
 const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
+type CityMarketScanStatus = "idle" | "loading" | "ready" | "failed";
 const aiCityForecastStateCache = new Map<
   string,
   { state: AiCityForecastState; updatedAt: number }
@@ -349,17 +354,13 @@ export function useCityMarketScan({
   detailCityName: string;
   enabled?: boolean;
 }) {
-  const [marketScan, setMarketScan] = useState<MarketScan | null>(
-    detail?.market_scan || null,
+  const [marketRemote, setMarketRemote] = useState<RemoteData<MarketScan>>(
+    detail?.market_scan ? toRemoteSuccess(detail.market_scan) : { status: "idle" },
   );
-  const [marketStatus, setMarketStatus] = useState<
-    "idle" | "loading" | "ready" | "failed"
-  >(detail?.market_scan ? "ready" : "idle");
 
   useEffect(() => {
     if (!detail) {
-      setMarketScan(null);
-      setMarketStatus("idle");
+      setMarketRemote({ status: "idle" });
       return;
     }
     const cacheKey = buildStorageKey(CITY_MARKET_SCAN_CACHE_PREFIX, [
@@ -369,8 +370,7 @@ export function useCityMarketScan({
     ]);
     let cancelled = false;
     if (detail.market_scan) {
-      setMarketScan(detail.market_scan);
-      setMarketStatus("ready");
+      setMarketRemote(toRemoteSuccess(detail.market_scan));
       writeCachedPayload(cacheKey, detail.market_scan);
       return () => {
         cancelled = true;
@@ -382,11 +382,9 @@ export function useCityMarketScan({
         CITY_MARKET_SCAN_CACHE_TTL_MS,
       );
       if (cached) {
-        setMarketScan(cached);
-        setMarketStatus("ready");
+        setMarketRemote(toRemoteSuccess(cached));
       } else {
-        setMarketScan(null);
-        setMarketStatus("idle");
+        setMarketRemote({ status: "idle" });
       }
       return () => {
         cancelled = true;
@@ -397,13 +395,12 @@ export function useCityMarketScan({
       CITY_MARKET_SCAN_CACHE_TTL_MS,
     );
     if (cached) {
-      setMarketScan(cached);
-      setMarketStatus("ready");
+      setMarketRemote(toRemoteSuccess(cached));
       return () => {
         cancelled = true;
       };
     } else {
-      setMarketStatus("loading");
+      setMarketRemote((current) => toRemoteLoading(current));
     }
     const controller = new AbortController();
     void scanTerminalClient.getMarketScan(detailCityName, {
@@ -416,13 +413,20 @@ export function useCityMarketScan({
         if (payload) {
           writeCachedPayload(cacheKey, payload);
         }
-        setMarketScan(payload || detail.market_scan || null);
-        setMarketStatus("ready");
+        const nextPayload = payload || detail.market_scan || null;
+        if (nextPayload) {
+          setMarketRemote(toRemoteSuccess(nextPayload));
+        } else {
+          setMarketRemote({ status: "idle" });
+        }
       })
-      .catch(() => {
+      .catch((error) => {
         if (cancelled) return;
-        setMarketScan(detail.market_scan || null);
-        setMarketStatus(detail.market_scan ? "ready" : "failed");
+        if (detail.market_scan) {
+          setMarketRemote(toRemoteSuccess(detail.market_scan));
+        } else {
+          setMarketRemote((current) => toRemoteError(error, current));
+        }
       });
     return () => {
       cancelled = true;
@@ -430,5 +434,24 @@ export function useCityMarketScan({
     };
   }, [detail, detailCityName, enabled]);
 
-  return { marketScan, marketStatus };
+  const previousMarketScan =
+    marketRemote.status === "loading" || marketRemote.status === "error"
+      ? marketRemote.previous ?? null
+      : null;
+  const marketScan =
+    marketRemote.status === "success"
+      ? marketRemote.data
+      : previousMarketScan ?? detail?.market_scan ?? null;
+  const marketStatus: CityMarketScanStatus =
+    marketRemote.status === "success"
+      ? "ready"
+      : marketRemote.status === "loading"
+        ? "loading"
+        : marketRemote.status === "error"
+          ? marketScan
+            ? "ready"
+            : "failed"
+          : "idle";
+
+  return { marketRemote, marketScan, marketStatus };
 }
