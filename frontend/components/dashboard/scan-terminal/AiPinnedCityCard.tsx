@@ -21,7 +21,8 @@ import {
   useCityMarketScan,
 } from "@/components/dashboard/scan-terminal/use-ai-city-card-data";
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
-import { formatTemperatureValue, getModelView, getTodayPaceView } from "@/lib/dashboard-utils";
+import { getModelView, getTodayPaceView } from "@/lib/dashboard-utils";
+import { formatTemperatureValue } from "@/lib/temperature-utils";
 
 function toFiniteDecisionNumber(value: unknown) {
   if (value == null || value === "") return null;

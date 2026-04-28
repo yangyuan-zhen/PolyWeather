@@ -9,13 +9,15 @@ import type {
 } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
 import {
-  formatTemperatureValue,
   getModelView,
   getProbabilityView,
   getTodayPaceView,
+} from "@/lib/dashboard-utils";
+import {
+  formatTemperatureValue,
   normalizeTemperatureLabel,
   normalizeTemperatureSymbol,
-} from "@/lib/dashboard-utils";
+} from "@/lib/temperature-utils";
 
 type PhaseMeta = {
   label: string;

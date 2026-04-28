@@ -2,7 +2,7 @@ import { memo, useEffect, useMemo, useState } from "react";
 import { getWindowPhaseMeta } from "@/components/dashboard/OpportunityTable";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getLocalizedCityName } from "@/lib/dashboard-home-copy";
-import { formatTemperatureValue } from "@/lib/dashboard-utils";
+import { formatTemperatureValue } from "@/lib/temperature-utils";
 import {
   formatShortDate,
   getPeakCountdownMeta,

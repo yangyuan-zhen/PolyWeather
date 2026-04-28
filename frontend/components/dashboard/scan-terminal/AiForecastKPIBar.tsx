@@ -1,5 +1,6 @@
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
-import { formatTemperatureValue, getTodayPaceView } from "@/lib/dashboard-utils";
+import { getTodayPaceView } from "@/lib/dashboard-utils";
+import { formatTemperatureValue } from "@/lib/temperature-utils";
 import { getPeakWindowLabel } from "@/components/dashboard/scan-terminal/decision-utils";
 
 export function AiForecastKPIBar({

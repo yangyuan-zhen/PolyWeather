@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import clsx from "clsx";
 import type { ScanOpportunityRow, ScanTerminalResponse } from "@/lib/dashboard-types";
-import { formatTemperatureValue } from "@/lib/dashboard-utils";
+import { formatTemperatureValue } from "@/lib/temperature-utils";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import {
   formatRowPrice,

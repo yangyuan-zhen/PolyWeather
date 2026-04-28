@@ -1,9 +1,9 @@
 import type { MarketScan, MarketTopBucket } from "@/lib/dashboard-types";
+import { getTodayPaceView } from "@/lib/dashboard-utils";
 import {
   formatTemperatureValue,
-  getTodayPaceView,
   normalizeTemperatureLabel,
-} from "@/lib/dashboard-utils";
+} from "@/lib/temperature-utils";
 import type { AiCityForecastPayload } from "@/components/dashboard/scan-terminal/types";
 
 export type WeatherDecisionView = {
