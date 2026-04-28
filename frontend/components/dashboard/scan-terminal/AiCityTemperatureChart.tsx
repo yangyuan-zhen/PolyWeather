@@ -1,5 +1,5 @@
 import type { ChartConfiguration } from "chart.js";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BarChart3 } from "lucide-react";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { useChart } from "@/hooks/useChart";
@@ -63,11 +63,16 @@ function buildTemperatureChartSignature(detail: CityDetail) {
 
 export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale } = useI18n();
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const [shouldRenderChart, setShouldRenderChart] = useState(false);
   const cityKey = `${detail.name || detail.display_name || ""}:${detail.local_date || ""}`;
-  const chartSignature = useMemo(() => buildTemperatureChartSignature(detail), [detail]);
+  const chartSignature = useMemo(
+    () => (shouldRenderChart ? buildTemperatureChartSignature(detail) : ""),
+    [detail, shouldRenderChart],
+  );
   const computedChartData = useMemo(
-    () => getTemperatureChartData(detail, locale),
-    [chartSignature, locale],
+    () => (shouldRenderChart ? getTemperatureChartData(detail, locale) : null),
+    [chartSignature, detail, locale, shouldRenderChart],
   );
   const lastChartDataRef = useRef<{
     cityKey: string;
@@ -183,14 +188,40 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
     } satisfies ChartConfiguration<"line">;
   }, [chartData, detail.temp_symbol, forecastLabel, observationLabel]);
 
+  useEffect(() => {
+    if (shouldRenderChart) return;
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      setShouldRenderChart(true);
+      return;
+    }
+    const target = sectionRef.current;
+    if (!target) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return;
+        setShouldRenderChart(true);
+        observer.disconnect();
+      },
+      { rootMargin: "220px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [shouldRenderChart]);
+
   return (
-    <section className="scan-ai-city-section chart">
+    <section className="scan-ai-city-section chart" ref={sectionRef}>
       <div className="scan-ai-city-section-title">
         <BarChart3 size={15} />
         <span>{locale === "en-US" ? "Evidence · intraday path" : "证据 · 今日日内路径"}</span>
       </div>
       <div className="scan-ai-city-chart">
-        <canvas ref={canvasRef} />
+        {shouldRenderChart ? (
+          <canvas ref={canvasRef} />
+        ) : (
+          <div className="scan-ai-city-chart-placeholder">
+            {locale === "en-US" ? "Chart will render when visible" : "图表进入视口后再渲染"}
+          </div>
+        )}
       </div>
       {chartData ? (
         <div className="scan-ai-city-chart-legend">

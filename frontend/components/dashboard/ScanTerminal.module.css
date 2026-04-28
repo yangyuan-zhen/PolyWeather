@@ -3778,6 +3778,18 @@
   height: 100% !important;
 }
 
+.root :global(.scan-ai-city-chart-placeholder) {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  border: 1px dashed rgba(77, 163, 255, 0.22);
+  border-radius: 14px;
+  background: rgba(11, 18, 32, 0.35);
+  color: #7f96b6;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .root :global(.scan-ai-city-chart-legend) {
   display: flex;
   gap: 14px;
@@ -5815,6 +5827,12 @@
 
 .root :global(.scan-terminal.light .scan-ai-raw-metar) {
   border-top-color: #e2e8f0;
+  color: #64748b;
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-chart-placeholder) {
+  border-color: #cbd5e1;
+  background: #f8fafc;
   color: #64748b;
 }
 

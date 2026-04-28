@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type {
   AiCityForecastPayload,
   AiCityForecastState,
@@ -36,8 +37,18 @@ export function AiEvidencePanel({
   localizedFinalJudgment: string;
   rawObservationText: string;
 }) {
+  const [isOpen, setIsOpen] = useState(() => !isCompactCard);
+
+  useEffect(() => {
+    setIsOpen(!isCompactCard);
+  }, [isCompactCard]);
+
   return (
-    <details className="scan-ai-city-section scan-ai-city-ai-read" open={!isCompactCard}>
+    <details
+      className="scan-ai-city-section scan-ai-city-ai-read"
+      open={isOpen}
+      onToggle={(event) => setIsOpen(event.currentTarget.open)}
+    >
       <summary className="scan-ai-city-section-title">
         {isHkoObservation
           ? isEn
@@ -47,69 +58,71 @@ export function AiEvidencePanel({
             ? "Evidence · AI airport read"
             : "证据 · AI 机场报文解读"}
       </summary>
-      <div className="scan-ai-city-section-body">
-        {aiForecast.status === "loading" ? (
-          <>
-            <p className="scan-ai-weather-summary">{aiReadInProgressText}</p>
-            {localizedFinalJudgment || aiForecast.streamText ? (
+      {isOpen ? (
+        <div className="scan-ai-city-section-body">
+          {aiForecast.status === "loading" ? (
+            <>
+              <p className="scan-ai-weather-summary">{aiReadInProgressText}</p>
+              {localizedFinalJudgment || aiForecast.streamText ? (
+                <p className="scan-ai-city-muted">
+                  {localizedFinalJudgment || aiForecast.streamText}
+                </p>
+              ) : null}
               <p className="scan-ai-city-muted">
-                {localizedFinalJudgment || aiForecast.streamText}
+                {isEn
+                  ? isHkoObservation
+                    ? "Rule evidence is shown first; the full HKO AI read will merge automatically."
+                    : "Rule evidence is shown first; the full airport AI read will merge automatically."
+                  : isHkoObservation
+                    ? "先展示规则证据，完整香港天文台 AI 解读返回后会自动合并。"
+                    : "先展示规则证据，完整机场 AI 解读返回后会自动合并。"}
               </p>
-            ) : null}
-            <p className="scan-ai-city-muted">
+            </>
+          ) : aiForecast.status === "ready" && aiCityForecast ? (
+            <>
+              <p className="scan-ai-weather-summary">
+                {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
+              </p>
+              <ul className="scan-ai-weather-bullets">
+                {[localizedFinalJudgment, ...aiBullets]
+                  .filter((line) => String(line || "").trim())
+                  .map((line, index) => (
+                    <li key={`${line}-${index}`}>{line}</li>
+                  ))}
+              </ul>
+              <p className="scan-ai-raw-metar">{rawObservationText}</p>
+            </>
+          ) : aiForecast.status === "ready" ? (
+            <>
+              <p className="scan-ai-weather-summary">{aiRuleEvidenceText}</p>
+              <ul className="scan-ai-weather-bullets">
+                {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
+                <li>{localModelSupportNote}</li>
+                <li>{rawObservationText}</li>
+              </ul>
+            </>
+          ) : aiForecast.status === "failed" ? (
+            <>
+              <p className="scan-ai-weather-summary">{aiRuleEvidenceText}</p>
+              <ul className="scan-ai-weather-bullets">
+                {aiForecast.error ? <li>{aiForecast.error}</li> : null}
+                <li>{localModelSupportNote}</li>
+                <li>{rawObservationText}</li>
+              </ul>
+            </>
+          ) : (
+            <p>
               {isEn
                 ? isHkoObservation
-                  ? "Rule evidence is shown first; the full HKO AI read will merge automatically."
-                  : "Rule evidence is shown first; the full airport AI read will merge automatically."
+                  ? "Waiting for AI to read the latest HKO observation."
+                  : "Waiting for AI to read the latest airport bulletin."
                 : isHkoObservation
-                  ? "先展示规则证据，完整香港天文台 AI 解读返回后会自动合并。"
-                  : "先展示规则证据，完整机场 AI 解读返回后会自动合并。"}
+                  ? "等待 AI 解读最新香港天文台观测。"
+                  : "等待 AI 解读最新机场报文。"}
             </p>
-          </>
-        ) : aiForecast.status === "ready" && aiCityForecast ? (
-          <>
-            <p className="scan-ai-weather-summary">
-              {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
-            </p>
-            <ul className="scan-ai-weather-bullets">
-              {[localizedFinalJudgment, ...aiBullets]
-                .filter((line) => String(line || "").trim())
-                .map((line, index) => (
-                  <li key={`${line}-${index}`}>{line}</li>
-                ))}
-            </ul>
-            <p className="scan-ai-raw-metar">{rawObservationText}</p>
-          </>
-        ) : aiForecast.status === "ready" ? (
-          <>
-            <p className="scan-ai-weather-summary">{aiRuleEvidenceText}</p>
-            <ul className="scan-ai-weather-bullets">
-              {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
-              <li>{localModelSupportNote}</li>
-              <li>{rawObservationText}</li>
-            </ul>
-          </>
-        ) : aiForecast.status === "failed" ? (
-          <>
-            <p className="scan-ai-weather-summary">{aiRuleEvidenceText}</p>
-            <ul className="scan-ai-weather-bullets">
-              {aiForecast.error ? <li>{aiForecast.error}</li> : null}
-              <li>{localModelSupportNote}</li>
-              <li>{rawObservationText}</li>
-            </ul>
-          </>
-        ) : (
-          <p>
-            {isEn
-              ? isHkoObservation
-                ? "Waiting for AI to read the latest HKO observation."
-                : "Waiting for AI to read the latest airport bulletin."
-              : isHkoObservation
-                ? "等待 AI 解读最新香港天文台观测。"
-                : "等待 AI 解读最新机场报文。"}
-          </p>
-        )}
-      </div>
+          )}
+        </div>
+      ) : null}
     </details>
   );
 }
