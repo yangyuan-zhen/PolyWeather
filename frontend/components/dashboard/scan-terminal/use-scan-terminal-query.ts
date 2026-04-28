@@ -2,9 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  buildBrowserBackendHeaders,
-  fetchBackendApi,
-} from "@/lib/backend-api";
+  scanTerminalClient,
+  toRemoteError,
+  toRemoteLoading,
+  toRemoteSuccess,
+  type RemoteData,
+} from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 
 const SCAN_TERMINAL_AUTO_REFRESH_MS = 10 * 60_000;
@@ -18,8 +21,12 @@ export function useScanTerminalQuery({
   proAccessLoading: boolean;
 }) {
   const [terminalData, setTerminalData] = useState<ScanTerminalResponse | null>(null);
+  const [scanRemote, setScanRemote] = useState<RemoteData<ScanTerminalResponse>>({
+    status: "idle",
+  });
   const [scanLoading, setScanLoading] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
+  const scanAbortRef = useRef<AbortController | null>(null);
   const scanRequestSeqRef = useRef(0);
   const scanLoadingRef = useRef(false);
   const lastForcedScanRefreshAtRef = useRef(0);
@@ -34,56 +41,36 @@ export function useScanTerminalQuery({
     } = {}) => {
       if (proAccessLoading || !isPro) return;
       const requestSeq = ++scanRequestSeqRef.current;
+      scanAbortRef.current?.abort();
       const controller = new AbortController();
+      scanAbortRef.current = controller;
       if (forceRefresh) {
         lastForcedScanRefreshAtRef.current = Date.now();
       }
       if (showLoading) {
         scanLoadingRef.current = true;
         setScanLoading(true);
+        setScanRemote((current) => toRemoteLoading(current));
       }
       setScanError(null);
-      const params = new URLSearchParams({
-        scan_mode: "tradable",
-        min_price: "0.05",
-        max_price: "0.95",
-        min_edge_pct: "2",
-        min_liquidity: "500",
-        market_type: "maxtemp",
-        time_range: "today",
-        limit: "36",
-        force_refresh: String(forceRefresh),
-      });
-      if (forceRefresh) {
-        params.set("_ts", String(Date.now()));
-      }
       try {
-        const headers = await buildBrowserBackendHeaders({
-          Accept: "application/json",
-        });
-        const response = await fetchBackendApi(`/api/scan/terminal?${params.toString()}`, {
-          cache: "no-store",
-          headers,
+        const payload = await scanTerminalClient.getTerminal({
+          forceRefresh,
           signal: controller.signal,
         });
-        if (!response.ok) {
-          let message = `HTTP ${response.status}`;
-          try {
-            const payload = await response.json();
-            message = String(payload?.error || payload?.detail || message);
-          } catch {
-            // Keep HTTP status message.
-          }
-          throw new Error(message);
-        }
-        const payload = (await response.json()) as ScanTerminalResponse;
         if (requestSeq !== scanRequestSeqRef.current) return;
         setTerminalData(payload);
+        setScanRemote(toRemoteSuccess(payload));
         setScanError(null);
       } catch (error) {
         if (controller.signal.aborted || requestSeq !== scanRequestSeqRef.current) return;
-        setScanError(error instanceof Error ? error.message : String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        setScanError(message);
+        setScanRemote((current) => toRemoteError(error, current));
       } finally {
+        if (scanAbortRef.current === controller) {
+          scanAbortRef.current = null;
+        }
         if (showLoading) {
           scanLoadingRef.current = false;
           setScanLoading(false);
@@ -100,10 +87,17 @@ export function useScanTerminalQuery({
       setScanLoading(false);
       setScanError(null);
       setTerminalData(null);
+      setScanRemote({ status: "idle" });
       return;
     }
     void fetchScanTerminal({ forceRefresh: false, showLoading: true });
   }, [fetchScanTerminal, isPro, proAccessLoading]);
+
+  useEffect(() => {
+    return () => {
+      scanAbortRef.current?.abort();
+    };
+  }, []);
 
   const refreshScanTerminalManually = useCallback(() => {
     const now = Date.now();
@@ -133,6 +127,7 @@ export function useScanTerminalQuery({
     refreshScanTerminalManually,
     scanError,
     scanLoading,
+    scanRemote,
     terminalData,
   };
 }

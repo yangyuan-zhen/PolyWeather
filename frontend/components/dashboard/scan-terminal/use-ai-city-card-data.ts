@@ -5,13 +5,11 @@ import type {
   AiCityForecastPayload,
   AiCityForecastState,
 } from "@/components/dashboard/scan-terminal/types";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
 import {
-  buildBrowserBackendHeaders,
-  fetchBackendApi,
-} from "@/lib/backend-api";
+  scanTerminalClient,
+  type AiCityStreamProgress,
+} from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
-import { extractStreamingAirportRead } from "./ai-city-stream";
 import { normalizeCityKey } from "./decision-utils";
 
 const AI_CITY_FORECAST_CACHE_PREFIX = "polyWeather_aiCityForecast_v6";
@@ -29,22 +27,6 @@ const aiCityForecastStateCache = new Map<
   { state: AiCityForecastState; updatedAt: number }
 >();
 let activeAiCityForecastStreams = 0;
-
-type AiCityStreamProgress = {
-  stage?: string | null;
-  message_en?: string | null;
-  message_zh?: string | null;
-  final_judgment_en?: string | null;
-  final_judgment_zh?: string | null;
-  metar_read_en?: string | null;
-  metar_read_zh?: string | null;
-  raw_length?: number | null;
-};
-
-type AiCityStreamEvent = {
-  data: Record<string, unknown>;
-  event: string;
-};
 
 function getStorage() {
   if (typeof window === "undefined") return null;
@@ -155,97 +137,6 @@ function runQueuedAiCityForecastTask<T>(
   });
 }
 
-function parseAiCityStreamBlock(block: string): AiCityStreamEvent | null {
-  const eventLines = block
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter(Boolean);
-  let event = "message";
-  const dataLines: string[] = [];
-  eventLines.forEach((line) => {
-    if (line.startsWith("event:")) {
-      event = line.slice("event:".length).trim() || event;
-    } else if (line.startsWith("data:")) {
-      dataLines.push(line.slice("data:".length).trimStart());
-    }
-  });
-  if (!dataLines.length) return null;
-  try {
-    const data = JSON.parse(dataLines.join("\n")) as Record<string, unknown>;
-    return { data, event };
-  } catch {
-    return null;
-  }
-}
-
-async function readAiCityForecastStream(
-  response: Response,
-  locale: string,
-  onProgress?: (progress: AiCityStreamProgress) => void,
-) {
-  if (!response.body) {
-    return response.json() as Promise<AiCityForecastPayload>;
-  }
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let accumulatedRaw = "";
-  let finalPayload: AiCityForecastPayload | null = null;
-
-  const consumeBlock = (block: string) => {
-    const parsed = parseAiCityStreamBlock(block);
-    if (!parsed) return;
-    const { data, event } = parsed;
-    if (event === "final") {
-      finalPayload = data as AiCityForecastPayload;
-      return;
-    }
-    if (event === "progress" || event === "preview") {
-      onProgress?.(data as AiCityStreamProgress);
-      return;
-    }
-    if (event === "delta") {
-      const content = String(data.content || "");
-      const rawLength = Number(data.raw_length);
-      if (content) {
-        accumulatedRaw += content;
-      }
-      const streamingAirportRead = extractStreamingAirportRead(
-        accumulatedRaw,
-        locale,
-      );
-      const progress: AiCityStreamProgress = {
-        raw_length: Number.isFinite(rawLength) ? rawLength : null,
-      };
-      if (streamingAirportRead) {
-        if (locale === "en-US") {
-          progress.metar_read_en = streamingAirportRead;
-        } else {
-          progress.metar_read_zh = streamingAirportRead;
-        }
-      }
-      onProgress?.(progress);
-    }
-  };
-
-  for (;;) {
-    const { done, value } = await reader.read();
-    buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
-    const blocks = buffer.split(/\r?\n\r?\n/);
-    buffer = blocks.pop() || "";
-    blocks.forEach(consumeBlock);
-    if (done) break;
-  }
-  if (buffer.trim()) {
-    consumeBlock(buffer);
-  }
-  if (!finalPayload) {
-    throw new Error("AI stream ended before final payload");
-  }
-  return finalPayload;
-}
-
 function requestAiCityForecast({
   city,
   forceRefresh,
@@ -263,48 +154,12 @@ function requestAiCityForecast({
   if (pending) return pending;
 
   const request = runQueuedAiCityForecastTask(async () => {
-    const headers = await buildBrowserBackendHeaders({
-      Accept: "text/event-stream",
-      "Content-Type": "application/json",
+    return scanTerminalClient.streamAiCityRead({
+      city,
+      forceRefresh,
+      locale,
+      onProgress,
     });
-    const response = await fetchBackendApi("/api/scan/terminal/ai-city/stream", {
-      method: "POST",
-      headers,
-      cache: "no-store",
-      body: JSON.stringify({
-        city,
-        force_refresh: forceRefresh,
-        locale,
-      }),
-    });
-    if (!response.ok) {
-      let detailMessage = "";
-      try {
-        const raw = await response.text();
-        const errorPayload = JSON.parse(raw);
-        const message = String(errorPayload?.error || "").trim();
-        const rawDetail = String(errorPayload?.detail || "").trim();
-        const elapsed = Number(errorPayload?.elapsed_ms);
-        const timeout = Number(errorPayload?.timeout_ms);
-        detailMessage = [
-          message,
-          rawDetail,
-          Number.isFinite(elapsed) && Number.isFinite(timeout)
-            ? `elapsed ${Math.round(elapsed / 1000)}s / timeout ${Math.round(timeout / 1000)}s`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" · ");
-      } catch {
-        detailMessage = "";
-      }
-      throw new Error(
-        detailMessage
-          ? `HTTP ${response.status} · ${detailMessage}`
-          : `HTTP ${response.status}`,
-      );
-    }
-    return readAiCityForecastStream(response, locale, onProgress);
   }, () => {
     onProgress?.({
       stage: "queued",
@@ -614,7 +469,6 @@ export function useCityMarketScan({
   detailCityName: string;
   enabled?: boolean;
 }) {
-  const ensureCityMarketScan = useDashboardStore().ensureCityMarketScan;
   const [marketScan, setMarketScan] = useState<MarketScan | null>(
     detail?.market_scan || null,
   );
@@ -671,8 +525,10 @@ export function useCityMarketScan({
     } else {
       setMarketStatus("loading");
     }
-    void ensureCityMarketScan(detailCityName, false, {
+    const controller = new AbortController();
+    void scanTerminalClient.getMarketScan(detailCityName, {
       lite: false,
+      signal: controller.signal,
       targetDate: detail.local_date || null,
     })
       .then((payload) => {
@@ -690,8 +546,9 @@ export function useCityMarketScan({
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [detail, detailCityName, enabled, ensureCityMarketScan]);
+  }, [detail, detailCityName, enabled]);
 
   return { marketScan, marketStatus };
 }
