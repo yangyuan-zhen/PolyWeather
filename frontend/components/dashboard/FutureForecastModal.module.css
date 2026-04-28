@@ -1174,6 +1174,52 @@
   padding: 14px;
 }
 
+.root :global(.future-forward-stats) {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.root :global(.future-forward-stat-card) {
+  min-width: 0;
+  overflow: hidden;
+  padding: 16px 18px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: linear-gradient(
+    180deg,
+    rgba(34, 211, 238, 0.075) 0%,
+    rgba(255, 255, 255, 0.025) 100%
+  );
+  box-shadow: 0 16px 42px rgba(2, 6, 23, 0.18);
+}
+
+.root :global(.future-forward-stat-card .label) {
+  display: block;
+  margin-bottom: 8px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.root :global(.future-forward-stat-card .val) {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .root :global(.future-modal-section h3) {
   margin: 0 0 14px;
   font-size: 14px;
@@ -1409,6 +1455,10 @@
     grid-template-columns: 1fr;
   }
 
+  .root :global(.future-forward-stats) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .root :global(.future-v2-mini-item strong) {
     font-size: 18px;
   }
@@ -1497,6 +1547,23 @@
     min-height: 280px;
   }
 
+  .root :global(.future-forward-stats) {
+    gap: 10px;
+  }
+
+  .root :global(.future-forward-stat-card) {
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .root :global(.future-forward-stat-card .label) {
+    font-size: 10px;
+  }
+
+  .root :global(.future-forward-stat-card .val) {
+    font-size: 24px;
+  }
+
   .root :global(.future-chart-wrapper) {
     height: 190px;
   }
@@ -1539,5 +1606,11 @@
   .root :global(.future-front-pill) {
     width: 100%;
     justify-content: center;
+  }
+}
+
+@media (max-width: 420px) {
+  .root :global(.future-forward-stats) {
+    grid-template-columns: 1fr;
   }
 }

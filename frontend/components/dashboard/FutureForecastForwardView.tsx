@@ -28,22 +28,22 @@ export function FutureForecastForwardView({
 }) {
   return (
     <>
-      <div className="history-stats">
-        <div className="h-stat-card">
+      <div className="future-forward-stats">
+        <div className="future-forward-stat-card">
           <span className="label">{t("future.targetForecast")}</span>
           <span className="val">
             {view.forecastEntry?.max_temp ?? "--"}
             {detail.temp_symbol}
           </span>
         </div>
-        <div className="h-stat-card">
+        <div className="future-forward-stat-card">
           <span className="label">{t("future.deb")}</span>
           <span className="val">
             {view.deb ?? "--"}
             {detail.temp_symbol}
           </span>
         </div>
-        <div className="h-stat-card">
+        <div className="future-forward-stat-card">
           <span className="label">{t("future.mu")}</span>
           <span className="val">
             {view.mu != null
@@ -51,7 +51,7 @@ export function FutureForecastForwardView({
               : "--"}
           </span>
         </div>
-        <div className="h-stat-card">
+        <div className="future-forward-stat-card">
           <span className="label">{t("future.score")}</span>
           <span className="val">
             {view.front.score > 0 ? "+" : ""}
