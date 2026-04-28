@@ -19,6 +19,7 @@ import {
 import styles from "./Dashboard.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
+import scanTerminalStyles from "./ScanTerminal.module.css";
 import { DetailPanel as CityDetailPanel } from "@/components/dashboard/DetailPanel";
 import { FutureForecastModal } from "@/components/dashboard/FutureForecastModal";
 import { MapCanvas } from "@/components/dashboard/MapCanvas";
@@ -372,7 +373,7 @@ function ScanTerminalScreen() {
 
   if (store.proAccess.loading) {
     return (
-      <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
+      <div className={clsx(styles.root, scanTerminalStyles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
         <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
           <main className="scan-data-grid">
             <div className="scan-loading-state">
@@ -392,7 +393,7 @@ function ScanTerminalScreen() {
   }
 
   return (
-    <div className={clsx(styles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
+    <div className={clsx(styles.root, scanTerminalStyles.root, detailChromeStyles.root, modalChromeStyles.root, themeMode === "light" && "light")}>
       <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
         <main className="scan-data-grid">
           <div className="scan-topbar">
