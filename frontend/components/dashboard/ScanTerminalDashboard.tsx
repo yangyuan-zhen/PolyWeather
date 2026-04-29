@@ -461,7 +461,13 @@ function ScanTerminalScreen() {
 
   return (
     <div className={scanTerminalRootClassName}>
-      <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
+      <div
+        className={clsx(
+          "scan-terminal",
+          resolvedView === "map" && "map-view-active",
+          themeMode === "light" && "light",
+        )}
+      >
         <main className="scan-data-grid">
           <div className="scan-topbar">
             <div className="scan-topbar-title">

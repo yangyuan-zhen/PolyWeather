@@ -16,16 +16,40 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
+  block-size: 100%;
 }
 
 .root :global(.scan-map-shell) {
   position: relative;
   flex: 1;
-  min-height: 520px;
+  min-height: clamp(560px, calc(100dvh - 292px), 760px);
   border: 1px solid rgba(90, 123, 166, 0.12);
   border-radius: 18px;
   overflow: hidden;
   background: rgba(8, 17, 30, 0.8);
+}
+
+.root :global(.scan-terminal.map-view-active .scan-upgrade-announcement),
+.root :global(.scan-terminal.map-view-active .scan-kpi-bar) {
+  display: none;
+}
+
+.root :global(.scan-terminal.map-view-active .scan-data-grid) {
+  gap: 12px;
+}
+
+.root :global(.scan-terminal.map-view-active .scan-list-section) {
+  min-height: min(760px, calc(100dvh - 164px));
+}
+
+.root :global(.scan-terminal.map-view-active .scan-list-header) {
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1680px), (max-height: 900px) {
+  .root :global(.scan-terminal.map-view-active > .detail-panel.scan-city-detail-rail) {
+    display: none;
+  }
 }
 
 .root :global(.scan-map-shell .map) {
