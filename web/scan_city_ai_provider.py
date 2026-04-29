@@ -35,7 +35,7 @@ def _call_deepseek_city_ai(
     timeout_sec: int,
 ) -> Dict[str, Any]:
     if not api_key:
-        raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
+        raise RuntimeError("scan AI API key is not configured")
     normalized_locale = _normalize_locale(locale)
     timeout = httpx.Timeout(
         timeout=float(timeout_sec),

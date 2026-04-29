@@ -84,6 +84,7 @@ def merge_scan_ai_result(
     cache_ttl_sec: int,
     base_url: str,
     cached: bool = False,
+    provider: str = "openai-compatible",
     duration_ms: Optional[int] = None,
     input_rows: Optional[int] = None,
 ) -> Dict[str, Any]:
@@ -229,7 +230,7 @@ def merge_scan_ai_result(
         "duration_ms": duration_ms,
         "timeout_sec": timeout_sec,
         "cache_ttl_sec": cache_ttl_sec,
-        "provider": "deepseek",
+        "provider": provider,
         "base_url": base_url,
         "summary_zh": ai_raw.get("summary_zh"),
         "summary_en": ai_raw.get("summary_en"),

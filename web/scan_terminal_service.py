@@ -95,17 +95,68 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     8,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
 )
-SCAN_AI_MODEL = str(
-    os.getenv("POLYWEATHER_SCAN_AI_MODEL") or "deepseek-v4-flash"
-).strip()
-SCAN_CITY_AI_MODEL = str(
-    os.getenv("POLYWEATHER_SCAN_CITY_AI_MODEL")
-    or os.getenv("POLYWEATHER_SCAN_AI_MODEL")
-    or "deepseek-v4-flash"
-).strip()
-SCAN_AI_BASE_URL = str(
-    os.getenv("POLYWEATHER_DEEPSEEK_BASE_URL") or "https://api.deepseek.com"
-).strip().rstrip("/")
+DEFAULT_SCAN_AI_MODEL = "MiMo-V2.5-Pro"
+DEFAULT_SCAN_AI_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
+SCAN_AI_API_KEY_ENV_HINT = (
+    "POLYWEATHER_SCAN_AI_API_KEY "
+    "(or POLYWEATHER_MIMO_API_KEY / POLYWEATHER_DEEPSEEK_API_KEY)"
+)
+
+
+def _env_str(*names: str, default: str = "") -> str:
+    for name in names:
+        value = str(os.getenv(name) or "").strip()
+        if value:
+            return value
+    return str(default).strip()
+
+
+def _scan_ai_api_key() -> str:
+    return _env_str(
+        "POLYWEATHER_SCAN_AI_API_KEY",
+        "POLYWEATHER_MIMO_API_KEY",
+        "POLYWEATHER_DEEPSEEK_API_KEY",
+    )
+
+
+def _infer_scan_ai_provider(base_url: str, model: str) -> str:
+    text = f"{base_url} {model}".lower()
+    if "xiaomimimo" in text or "mimo" in text:
+        return "mimo"
+    if "deepseek" in text:
+        return "deepseek"
+    return "openai-compatible"
+
+
+def _scan_ai_provider_label(provider: str) -> str:
+    normalized = provider.strip().lower()
+    if normalized == "mimo":
+        return "MiMo"
+    if normalized == "deepseek":
+        return "DeepSeek"
+    return "AI provider"
+
+
+SCAN_AI_MODEL = _env_str("POLYWEATHER_SCAN_AI_MODEL", default=DEFAULT_SCAN_AI_MODEL)
+SCAN_CITY_AI_MODEL = _env_str(
+    "POLYWEATHER_SCAN_CITY_AI_MODEL",
+    "POLYWEATHER_SCAN_AI_MODEL",
+    default=SCAN_AI_MODEL or DEFAULT_SCAN_AI_MODEL,
+)
+SCAN_AI_BASE_URL = _env_str(
+    "POLYWEATHER_SCAN_AI_BASE_URL",
+    "POLYWEATHER_MIMO_BASE_URL",
+    "POLYWEATHER_DEEPSEEK_BASE_URL",
+    default=DEFAULT_SCAN_AI_BASE_URL,
+).rstrip("/")
+SCAN_AI_PROVIDER = _env_str(
+    "POLYWEATHER_SCAN_AI_PROVIDER",
+    default=_infer_scan_ai_provider(SCAN_AI_BASE_URL, SCAN_CITY_AI_MODEL),
+)
+SCAN_AI_PROVIDER_LABEL = _env_str(
+    "POLYWEATHER_SCAN_AI_PROVIDER_LABEL",
+    default=_scan_ai_provider_label(SCAN_AI_PROVIDER),
+)
 SCAN_AI_ENABLED = str(
     os.getenv("POLYWEATHER_SCAN_AI_ENABLED") or "false"
 ).strip().lower() in {"1", "true", "yes", "on"}
@@ -182,9 +233,9 @@ def _start_scan_terminal_background_refresh(filters: Dict[str, Any]) -> bool:
 
 
 def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
-    api_key = str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip()
+    api_key = _scan_ai_api_key()
     if not api_key:
-        raise RuntimeError("POLYWEATHER_DEEPSEEK_API_KEY is not configured")
+        raise RuntimeError(f"{SCAN_AI_API_KEY_ENV_HINT} is not configured")
 
     system_prompt = (
         "你是 PolyWeather 的付费 V4-Pro 城市最高温预测员。你只能基于用户提供的 JSON 快照做判断，"
@@ -357,7 +408,7 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
     return _call_deepseek_city_ai_provider(
         ai_input,
         locale=locale,
-        api_key=str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip(),
+        api_key=_scan_ai_api_key(),
         base_url=SCAN_AI_BASE_URL,
         model=SCAN_CITY_AI_MODEL,
         max_tokens=SCAN_CITY_AI_MAX_TOKENS,
@@ -470,7 +521,7 @@ def _build_city_ai_result_payload(
         "status": "ready",
         "cached": cached,
         "model": SCAN_CITY_AI_MODEL,
-        "provider": "deepseek",
+        "provider": SCAN_AI_PROVIDER,
         "city": data.get("name"),
         "city_display_name": data.get("display_name"),
         "generated_at": generated_at,
@@ -508,7 +559,7 @@ def stream_scan_city_ai_forecast_payload(
             {
                 "status": "failed",
                 "model": SCAN_CITY_AI_MODEL,
-                "provider": "deepseek",
+                "provider": SCAN_AI_PROVIDER,
                 "city": city_name,
                 "city_display_name": str(city or "").strip() or city_name,
                 "reason": reason_en if normalized_locale == "en-US" else reason_zh,
@@ -544,7 +595,7 @@ def stream_scan_city_ai_forecast_payload(
                         "status": "ready",
                         "cached": True,
                         "model": SCAN_CITY_AI_MODEL,
-                        "provider": "deepseek",
+                        "provider": SCAN_AI_PROVIDER,
                         "city": cached.get("city") or city_name,
                         "city_display_name": cached.get("city_display_name") or city_name,
                         "generated_at": cached.get("generated_at"),
@@ -561,14 +612,14 @@ def stream_scan_city_ai_forecast_payload(
     observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
     calling_message_zh = (
-        "DeepSeek 正在快速增强机场报文解读…"
+        f"{SCAN_AI_PROVIDER_LABEL} 正在快速增强机场报文解读…"
         if is_airport_metar
-        else "DeepSeek 正在快速增强香港天文台观测解读…"
+        else f"{SCAN_AI_PROVIDER_LABEL} 正在快速增强香港天文台观测解读…"
     )
     calling_message_en = (
-        "DeepSeek is adding a fast airport-bulletin enhancement…"
+        f"{SCAN_AI_PROVIDER_LABEL} is adding a fast airport-bulletin enhancement…"
         if is_airport_metar
-        else "DeepSeek is adding a fast HKO observation enhancement…"
+        else f"{SCAN_AI_PROVIDER_LABEL} is adding a fast HKO observation enhancement…"
     )
     yield _sse_event(
         "preview",
@@ -600,23 +651,23 @@ def stream_scan_city_ai_forecast_payload(
             {
                 "status": "disabled",
                 "model": SCAN_CITY_AI_MODEL,
-                "provider": "deepseek",
+                "provider": SCAN_AI_PROVIDER,
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
                 "reason": "POLYWEATHER_SCAN_AI_ENABLED is not enabled",
             },
         )
         return
-    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+    if not _scan_ai_api_key():
         yield _sse_event(
             "final",
             {
                 "status": "missing_key",
                 "model": SCAN_CITY_AI_MODEL,
-                "provider": "deepseek",
+                "provider": SCAN_AI_PROVIDER,
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
-                "reason": "POLYWEATHER_DEEPSEEK_API_KEY is not configured",
+                "reason": f"{SCAN_AI_API_KEY_ENV_HINT} is not configured",
             },
         )
         return
@@ -630,7 +681,7 @@ def stream_scan_city_ai_forecast_payload(
         pool=5.0,
     )
     headers = {
-        "Authorization": f"Bearer {os.getenv('POLYWEATHER_DEEPSEEK_API_KEY')}",
+        "Authorization": f"Bearer {_scan_ai_api_key()}",
         "Content-Type": "application/json",
     }
     accumulated = ""
@@ -758,8 +809,8 @@ def stream_scan_city_ai_forecast_payload(
         )
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
-        reason_en = f"DeepSeek city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"DeepSeek 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_en = f"{SCAN_AI_PROVIDER_LABEL} city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+        reason_zh = f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
         logger.warning(
             "scan city AI stream timeout fallback city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
@@ -800,7 +851,7 @@ def stream_scan_city_ai_forecast_payload(
             {
                 "status": "failed",
                 "model": SCAN_CITY_AI_MODEL,
-                "provider": "deepseek",
+                "provider": SCAN_AI_PROVIDER,
                 "city": data.get("name") or city_name,
                 "city_display_name": data.get("display_name") or city_name,
                 "duration_ms": int((time.time() - started_at) * 1000),
@@ -827,7 +878,7 @@ def build_scan_city_ai_forecast_payload(
         return {
             "status": "failed",
             "model": SCAN_CITY_AI_MODEL,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "city": city_name,
             "city_display_name": str(city or "").strip() or city_name,
             "reason": (
@@ -866,7 +917,7 @@ def build_scan_city_ai_forecast_payload(
                     "status": "ready",
                     "cached": True,
                     "model": SCAN_CITY_AI_MODEL,
-                    "provider": "deepseek",
+                    "provider": SCAN_AI_PROVIDER,
                     "city": cached.get("city") or city_name,
                     "city_display_name": cached.get("city_display_name") or city_name,
                     "generated_at": cached.get("generated_at"),
@@ -883,24 +934,24 @@ def build_scan_city_ai_forecast_payload(
         return {
             "status": "disabled",
             "model": SCAN_CITY_AI_MODEL,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "reason": "POLYWEATHER_SCAN_AI_ENABLED is not enabled",
         }
-    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+    if not _scan_ai_api_key():
         logger.warning(
-            "scan city AI forecast missing DeepSeek key city={} model={}",
+            "scan city AI forecast missing provider key city={} model={}",
             data.get("name") or city_name,
             SCAN_CITY_AI_MODEL,
         )
         return {
             "status": "missing_key",
             "model": SCAN_CITY_AI_MODEL,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
-            "reason": "POLYWEATHER_DEEPSEEK_API_KEY is not configured",
+            "reason": f"{SCAN_AI_API_KEY_ENV_HINT} is not configured",
         }
 
     try:
@@ -918,8 +969,8 @@ def build_scan_city_ai_forecast_payload(
         ai_raw = _call_deepseek_city_ai(ai_input, locale=normalized_locale)
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
-        reason_en = f"DeepSeek city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"DeepSeek 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_en = f"{SCAN_AI_PROVIDER_LABEL} city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
+        reason_zh = f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
         ai_raw = _build_city_ai_fallback(
             ai_input,
             locale=normalized_locale,
@@ -938,7 +989,7 @@ def build_scan_city_ai_forecast_payload(
             "degraded": True,
             "cached": False,
             "model": SCAN_CITY_AI_MODEL,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "generated_at": generated_at,
@@ -953,12 +1004,12 @@ def build_scan_city_ai_forecast_payload(
         raw_reason = str(exc)
         empty_ai_content = raw_reason.strip().lower() == "empty ai content"
         reason_en = (
-            "DeepSeek city AI returned no usable text. Retry the city analysis."
+            f"{SCAN_AI_PROVIDER_LABEL} city AI returned no usable text. Retry the city analysis."
             if empty_ai_content
             else raw_reason
         )
         reason_zh = (
-            "DeepSeek 城市 AI 没有返回有效正文，请刷新重试。"
+            f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 没有返回有效正文，请刷新重试。"
             if empty_ai_content
             else raw_reason
         )
@@ -980,7 +1031,7 @@ def build_scan_city_ai_forecast_payload(
             "degraded": True,
             "cached": False,
             "model": SCAN_CITY_AI_MODEL,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "city": data.get("name") or city_name,
             "city_display_name": data.get("display_name") or city_name,
             "generated_at": generated_at,
@@ -1009,7 +1060,7 @@ def build_scan_city_ai_forecast_payload(
         "status": "ready",
         "cached": False,
         "model": SCAN_CITY_AI_MODEL,
-        "provider": "deepseek",
+        "provider": SCAN_AI_PROVIDER,
         "city": data.get("name") or city_name,
         "city_display_name": data.get("display_name") or city_name,
         "generated_at": generated_at,
@@ -1039,7 +1090,7 @@ def _build_scan_ai_unavailable_payload(
             "duration_ms": duration_ms,
             "timeout_sec": SCAN_AI_TIMEOUT_SEC,
             "cache_ttl_sec": SCAN_AI_CACHE_TTL_SEC,
-            "provider": "deepseek",
+            "provider": SCAN_AI_PROVIDER,
             "base_url": SCAN_AI_BASE_URL,
             "reason": reason,
         },
@@ -1250,11 +1301,11 @@ def build_scan_terminal_ai_payload(
             status="disabled",
             reason="POLYWEATHER_SCAN_AI_ENABLED is not enabled",
         )
-    if not str(os.getenv("POLYWEATHER_DEEPSEEK_API_KEY") or "").strip():
+    if not _scan_ai_api_key():
         return _build_scan_ai_unavailable_payload(
             payload,
             status="missing_key",
-            reason="POLYWEATHER_DEEPSEEK_API_KEY is not configured",
+            reason=f"{SCAN_AI_API_KEY_ENV_HINT} is not configured",
         )
 
     cached = get_cached_scan_ai_result(
@@ -1279,6 +1330,7 @@ def build_scan_terminal_ai_payload(
             cache_ttl_sec=SCAN_AI_CACHE_TTL_SEC,
             base_url=SCAN_AI_BASE_URL,
             cached=True,
+            provider=SCAN_AI_PROVIDER,
             duration_ms=0,
             input_rows=len(payload.get("rows") or []),
         )
@@ -1323,6 +1375,7 @@ def build_scan_terminal_ai_payload(
             cache_ttl_sec=SCAN_AI_CACHE_TTL_SEC,
             base_url=SCAN_AI_BASE_URL,
             cached=False,
+            provider=SCAN_AI_PROVIDER,
             duration_ms=duration_ms,
             input_rows=len(payload.get("rows") or []),
         )

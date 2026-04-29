@@ -181,11 +181,12 @@ def test_merge_scan_ai_result_applies_city_forecast_and_metadata():
     merged = merge_scan_ai_result(
         payload,
         ai_raw,
-        model="deepseek-v4-flash",
+        model="MiMo-V2.5-Pro",
         max_rows=40,
         timeout_sec=40,
         cache_ttl_sec=1800,
-        base_url="https://api.deepseek.com",
+        base_url="https://token-plan-cn.xiaomimimo.com/v1",
+        provider="mimo",
         duration_ms=123,
         input_rows=1,
     )
@@ -197,3 +198,6 @@ def test_merge_scan_ai_result_applies_city_forecast_and_metadata():
     assert merged["ai_scan"]["sent_cities"] == 1
     assert merged["ai_scan"]["sent_rows"] == 1
     assert merged["ai_scan"]["duration_ms"] == 123
+    assert merged["ai_scan"]["model"] == "MiMo-V2.5-Pro"
+    assert merged["ai_scan"]["provider"] == "mimo"
+    assert merged["ai_scan"]["base_url"] == "https://token-plan-cn.xiaomimimo.com/v1"

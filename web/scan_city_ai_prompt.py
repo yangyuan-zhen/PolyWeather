@@ -41,7 +41,7 @@ def build_city_ai_request_json(
     observation_label_zh = context["read_label_zh"]
     observation_instruction = context["instruction_zh"]
     system_prompt = (
-        "你是 PolyWeather 的 DeepSeek 城市最高温预测员。你必须直接阅读用户给出的城市 JSON，"
+        "你是 PolyWeather 的城市最高温 AI 预测员。你必须直接阅读用户给出的城市 JSON，"
         "判断该城市今日最高温路径。不要写套利、交易、BUY YES/NO、价格、edge 或 Kelly。"
         f"你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、{observation_label_zh}、判断依据和风险。"
         "必须综合 DEB 最终融合值、全部天气模型预测、实测序列、最新观测、峰值窗口、当地时间、季节背景。"
