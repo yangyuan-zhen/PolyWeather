@@ -287,7 +287,7 @@ POLYWEATHER_SCAN_CITY_AI_MODEL=mimo-v2.5-pro
 - `docker-compose.yml` 会把这个目录同时挂载到容器内的 `/var/lib/polyweather` 和 `/app/data`，兼容现有缓存与 SQLite 路径。
 - `POLYWEATHER_STATE_STORAGE_MODE` 当前线上推荐直接使用 `sqlite`。
 - `POLYWEATHER_PAYMENT_RPC_URLS` 支持逗号分隔多个 RPC；如果暂时只用单 RPC，也可以继续只配 `POLYWEATHER_PAYMENT_RPC_URL`。
-- 机器人市场监控当前以 `关注清单` 为主，按固定间隔主动推送。
+- 机器人市场监控包含 `关键提醒` 与 `关注清单`：关键提醒逐城判断并受冷却控制，关注清单每轮先扫描完整城市列表，再按全局 Top N 推送；同一轮已经触发关键提醒的城市不会重复出现在关注清单里。
 - `POLYWEATHER_SCAN_AI_*` 走 OpenAI-compatible `/chat/completions`；当前临时默认 MiMo，可用 `POLYWEATHER_SCAN_AI_BASE_URL` 与 `POLYWEATHER_SCAN_AI_MODEL` 随时切回其他兼容 provider。
 - `TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC` 表示主动推送间隔，默认 `1800` 秒（30 分钟）。
 - `POLYMARKET_WALLET_ACTIVITY_ENABLED` 已退役，保留为 `false` 即可，不建议再启用钱包异动监听。
@@ -354,7 +354,7 @@ POLYMARKET_WALLET_ACTIVITY_ENABLED=false
 说明：
 
 - `TELEGRAM_ALERT_MISPRICING_ONLY=true` 表示关键提醒优先围绕错价/市场触发，不把机器人做成泛通知器。
-- `TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC=1800` 表示频道每 30 分钟主动推送一轮机会清单。
+- `TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC=1800` 表示频道每 30 分钟主动推送一轮全局机会清单；每轮会先扫描完整 `TELEGRAM_ALERT_CITIES`，再选 Top N。
 - `TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N=5` 建议先保持较小，避免机器人一次推太多城市。
 - `POLYMARKET_WALLET_ACTIVITY_ENABLED=false` 表示停用旧的钱包异动监听，统一收敛到市场监控。
 

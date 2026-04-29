@@ -337,9 +337,9 @@ def _focus_push_window_config() -> Dict[str, int]:
 def _focus_push_window_label() -> str:
     config = _focus_push_window_config()
     return (
-        f"当地 {config['start_local_hour']:02d}:00 后，"
-        f"峰值前 {_format_minutes_window(config['before_peak_min'])} / "
-        f"峰值后 {_format_minutes_window(config['after_peak_min'])} 内"
+        f"当地 {config['start_local_hour']:02d}:00 后；"
+        f"有日内高点参考时，保留高点前 {_format_minutes_window(config['before_peak_min'])} / "
+        f"高点后 {_format_minutes_window(config['after_peak_min'])} 内"
     )
 
 
@@ -464,6 +464,39 @@ def _focus_trigger_summary(alert_payload: Dict[str, Any]) -> str:
     return _join_trigger_types_cn_local(rules) or "市场与天气分歧待观察"
 
 
+def _market_signal_brief(snapshot: Dict[str, Any]) -> str:
+    if not isinstance(snapshot, dict):
+        return ""
+
+    signal = str(snapshot.get("signal_label") or "").strip().upper()
+    signal_label = {
+        "BUY YES": "方向 BUY YES",
+        "BUY NO": "方向 BUY NO",
+        "MONITOR": "方向 MONITOR",
+    }.get(signal, f"方向 {signal}" if signal else "")
+
+    edge = _safe_float(snapshot.get("edge_percent"))
+    confidence = str(snapshot.get("confidence") or "").strip()
+    forecast_bucket = snapshot.get("forecast_bucket") or {}
+    if not isinstance(forecast_bucket, dict):
+        forecast_bucket = {}
+    yes_buy = _fmt_cents(forecast_bucket.get("yes_buy"))
+    yes_sell = _fmt_cents(forecast_bucket.get("yes_sell"))
+
+    parts: List[str] = []
+    if signal_label:
+        parts.append(signal_label)
+    if edge is not None:
+        parts.append(f"edge {edge:+.1f}%")
+    if confidence:
+        parts.append(f"置信 {confidence}")
+    if yes_buy:
+        parts.append(f"Yes买 {yes_buy}")
+    if yes_sell:
+        parts.append(f"Yes卖 {yes_sell}")
+    return " | ".join(parts)
+
+
 def _shortlist_focus_payloads(
     payloads: List[Dict[str, Any]],
     *,
@@ -538,6 +571,9 @@ def _build_focus_digest_message(
         score = _market_monitor_score(payload)
         lines.append(f"{idx}. {city_name} | {_priority_label(score)}")
         lines.append("   " + f"关注桶 {bucket}")
+        signal_brief = _market_signal_brief(snapshot)
+        if signal_brief:
+            lines.append("   " + signal_brief)
         local_time = str(peak_context.get("local_time") or "").strip()
         peak_time = str(peak_context.get("peak_time") or "").strip()
         window_label = str(peak_context.get("window_label") or "").strip()
@@ -546,7 +582,7 @@ def _build_focus_digest_message(
             if local_time:
                 context_parts.append(f"当地 {local_time}")
             if peak_time:
-                context_parts.append(f"峰值参考 {peak_time}")
+                context_parts.append(f"日内高点参考 {peak_time}")
             if window_label:
                 context_parts.append(window_label)
             lines.append("   " + " | ".join(context_parts))
@@ -1027,6 +1063,8 @@ def _maybe_send_alert(
     last_by_city = state.setdefault("last_by_city", {})
     last_city = last_by_city.get(city) or {}
     is_active = _severity_ok(alert_payload, min_severity, min_trigger_count)
+    if mispricing_only and not _is_market_mispricing_signal(alert_payload):
+        is_active = False
     if not _market_price_cap_ok(
         alert_payload,
         require_actionable_quote=mispricing_only,
@@ -1091,6 +1129,95 @@ def _maybe_send_alert(
     return True
 
 
+def _is_market_mispricing_signal(alert_payload: Dict[str, Any]) -> bool:
+    market = alert_payload.get("market_snapshot") or {}
+    if not isinstance(market, dict) or not market.get("available"):
+        return False
+
+    evidence = alert_payload.get("evidence") or {}
+    evidence_market = evidence.get("market") if isinstance(evidence, dict) else {}
+    low_yes_signal = (
+        evidence_market.get("low_yes_signal")
+        if isinstance(evidence_market, dict)
+        else None
+    )
+    if isinstance(low_yes_signal, dict) and bool(low_yes_signal.get("should_push")):
+        return True
+
+    signal = str(market.get("signal_label") or "").strip().upper()
+    if signal in {"BUY YES", "BUY NO"}:
+        return True
+    return False
+
+
+def _run_market_monitor_cycle(
+    bot: Any,
+    config: Dict[str, Any],
+    *,
+    chat_ids: List[str],
+    cities: List[str],
+    state: Dict[str, Any],
+    focus_digest_enabled: bool,
+    focus_digest_interval_sec: int,
+    focus_digest_top_n: int,
+    alert_cooldown_sec: int,
+    mispricing_interval_sec: int,
+    min_severity: str,
+    min_trigger_count: int,
+    mispricing_only: bool,
+    sleep_between_cities_sec: float = 1.0,
+) -> bool:
+    state_dirty = False
+    cycle_payloads: List[Dict[str, Any]] = []
+    critical_pushed_cities: set[str] = set()
+
+    for city in cities:
+        try:
+            alert_payload = build_trade_alert_for_city(city, config)
+            cycle_payloads.append(alert_payload)
+            is_mispricing = _is_market_mispricing_signal(alert_payload)
+            cooldown_sec = mispricing_interval_sec if is_mispricing else alert_cooldown_sec
+            if _maybe_send_alert(
+                bot=bot,
+                chat_ids=chat_ids,
+                city=city,
+                alert_payload=alert_payload,
+                state=state,
+                cooldown_sec=cooldown_sec,
+                min_severity=min_severity,
+                min_trigger_count=min_trigger_count,
+                mispricing_only=mispricing_only,
+            ):
+                state_dirty = True
+                critical_pushed_cities.add(str(city).strip().lower())
+        except Exception:
+            logger.exception(f"telegram market monitor loop failed for city={city}")
+        if sleep_between_cities_sec > 0:
+            time.sleep(sleep_between_cities_sec)
+
+    if focus_digest_enabled:
+        try:
+            digest_payloads = [
+                payload
+                for payload in cycle_payloads
+                if str(payload.get("city") or "").strip().lower()
+                not in critical_pushed_cities
+            ]
+            if _maybe_send_focus_digest(
+                bot=bot,
+                chat_ids=chat_ids,
+                payloads=digest_payloads,
+                state=state,
+                digest_interval_sec=focus_digest_interval_sec,
+                top_n=focus_digest_top_n,
+            ):
+                state_dirty = True
+        except Exception:
+            logger.exception("failed to push market focus digest")
+
+    return state_dirty
+
+
 def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[threading.Thread]:
     enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
     chat_ids = get_telegram_chat_ids_from_env()
@@ -1104,65 +1231,56 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
+    alert_cooldown_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800))
+    mispricing_interval_sec = max(
+        alert_cooldown_sec,
+        _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200),
+    )
+    min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 2))
+    min_severity = str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "medium").strip().lower()
+    if min_severity not in SEVERITY_RANK:
+        min_severity = "medium"
+    mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
     focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
     focus_digest_top_n = max(3, min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)))
     focus_digest_interval_sec = max(
         300,
         _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
     )
-    focus_digest_batch_size = max(4, min(12, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_BATCH_SIZE", 8)))
     def _runner() -> None:
         try:
             _save_state(state_path, _load_state(state_path))
         except Exception:
             logger.exception(f"failed to initialize market monitor state path={state_path}")
         logger.info(
-            f"telegram market monitor loop started mode=focus-digest-only "
+            f"telegram market monitor loop started mode=critical-alerts-and-focus-digest "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
+            f"alert_cooldown={alert_cooldown_sec}s mispricing_interval={mispricing_interval_sec}s "
+            f"min_severity={min_severity} min_trigger_count={min_trigger_count} "
+            f"mispricing_only={mispricing_only} "
             f"focus_digest_enabled={focus_digest_enabled} focus_interval={focus_digest_interval_sec}s "
-            f"focus_batch_size={focus_digest_batch_size} "
             f"state_path={state_path}"
         )
         while True:
             cycle_started = time.time()
             state = _load_state(state_path)
             _cleanup_state(state, int(cycle_started))
-            cycle_payloads: List[Dict[str, Any]] = []
-
-            for city in cities:
-                try:
-                    alert_payload = build_trade_alert_for_city(city, config)
-                    cycle_payloads.append(alert_payload)
-                except Exception:
-                    logger.exception(f"telegram market monitor loop failed for city={city}")
-                if focus_digest_enabled and cycle_payloads and len(cycle_payloads) % focus_digest_batch_size == 0:
-                    try:
-                        if _maybe_send_focus_digest(
-                            bot=bot,
-                            chat_ids=chat_ids,
-                            payloads=cycle_payloads,
-                            state=state,
-                            digest_interval_sec=focus_digest_interval_sec,
-                            top_n=focus_digest_top_n,
-                        ):
-                            _save_state(state_path, state)
-                    except Exception:
-                        logger.exception("failed to push market focus digest mid-cycle")
-                time.sleep(1)
-
-            if focus_digest_enabled:
-                try:
-                    if _maybe_send_focus_digest(
-                        bot=bot,
-                        chat_ids=chat_ids,
-                        payloads=cycle_payloads,
-                        state=state,
-                        digest_interval_sec=focus_digest_interval_sec,
-                        top_n=focus_digest_top_n,
-                    ):
-                        _save_state(state_path, state)
-                except Exception:
-                    logger.exception("failed to push market focus digest")
+            if _run_market_monitor_cycle(
+                bot=bot,
+                config=config,
+                chat_ids=chat_ids,
+                cities=cities,
+                state=state,
+                focus_digest_enabled=focus_digest_enabled,
+                focus_digest_interval_sec=focus_digest_interval_sec,
+                focus_digest_top_n=focus_digest_top_n,
+                alert_cooldown_sec=alert_cooldown_sec,
+                mispricing_interval_sec=mispricing_interval_sec,
+                min_severity=min_severity,
+                min_trigger_count=min_trigger_count,
+                mispricing_only=mispricing_only,
+            ):
+                _save_state(state_path, state)
 
             elapsed = time.time() - cycle_started
             sleep_sec = max(5, interval_sec - int(elapsed))

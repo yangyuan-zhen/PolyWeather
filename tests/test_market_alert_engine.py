@@ -1,6 +1,7 @@
 from src.analysis.market_alert_engine import build_trading_alerts
 from src.utils.telegram_push import (
     _build_focus_digest_message,
+    _run_market_monitor_cycle,
     _shortlist_focus_payloads,
     build_market_monitor_digest,
 )
@@ -201,23 +202,57 @@ def test_market_monitor_digest_skips_non_tradable_market(monkeypatch):
     assert digest == "ℹ️ 当前没有可用的市场监控摘要。"
 
 
-def _focus_payload(*, local_time: str = "14:00", peak_time: str = "12:00"):
+class _DigestBot:
+    def __init__(self):
+        self.messages = []
+
+    def send_message(self, chat_id, text, **kwargs):
+        self.messages.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "kwargs": kwargs,
+            }
+        )
+
+
+def _focus_payload(
+    *,
+    city: str = "madrid",
+    local_time: str = "14:00",
+    peak_time: str = "12:00",
+    severity: str = "medium",
+    trigger_count: int = 1,
+    edge_percent: float = 5.0,
+    signal_label: str = "MONITOR",
+    yes_buy: float = 0.18,
+):
     return {
-        "city": "madrid",
-        "severity": "medium",
-        "trigger_count": 1,
-        "rules": {},
+        "city": city,
+        "severity": severity,
+        "trigger_count": trigger_count,
+        "rules": {
+            "momentum_spike": {
+                "triggered": trigger_count > 0,
+            },
+        },
         "market_snapshot": {
             "available": True,
             "forecast_bucket": {
                 "label": "30°C",
                 "value": 30,
-                "yes_buy": 0.18,
+                "yes_buy": yes_buy,
+                "yes_sell": min(0.99, yes_buy + 0.02),
                 "market_url": "https://example.com/market",
             },
             "market_url": "https://example.com/market",
             "confidence": "medium",
-            "edge_percent": 5.0,
+            "edge_percent": edge_percent,
+            "signal_label": signal_label,
+            "market_active": True,
+            "market_closed": False,
+            "market_accepting_orders": True,
+            "market_tradable": True,
         },
         "evidence": {
             "generated_local_time": local_time,
@@ -226,10 +261,26 @@ def _focus_payload(*, local_time: str = "14:00", peak_time: str = "12:00"):
                 "deb_prediction": 30.2,
             },
             "trigger_summary": {
+                "trigger_types": ["momentum_spike"] if trigger_count > 0 else [],
                 "suppression_snapshot": {
                     "max_temp_time": peak_time,
                 },
             },
+            "market": {
+                "low_yes_signal": {
+                    "should_push": signal_label in {"BUY YES", "BUY NO"},
+                },
+            },
+        },
+        "triggered_alerts": [
+            {
+                "type": "momentum_spike",
+            }
+        ]
+        if trigger_count > 0
+        else [],
+        "telegram": {
+            "zh": f"CRITICAL {city}",
         },
     }
 
@@ -258,3 +309,150 @@ def test_focus_digest_footer_explains_no_daily_signal_cap(monkeypatch):
 
     assert "没有每日信号次数上限" in message
     assert "观察窗口" in message
+
+
+def test_focus_digest_message_shows_market_direction_and_signed_edge():
+    message = _build_focus_digest_message(
+        [
+            _focus_payload(
+                city="new york",
+                signal_label="BUY NO",
+                edge_percent=-9.25,
+            )
+        ],
+        slot_label="白天关注",
+        top_n=5,
+    )
+
+    assert "方向 BUY NO" in message
+    assert "edge -9.2%" in message
+
+
+def test_market_monitor_cycle_sends_digest_after_full_city_scan(monkeypatch):
+    payloads = {
+        "early a": _focus_payload(city="early a", edge_percent=4.0, yes_buy=0.2),
+        "early b": _focus_payload(city="early b", edge_percent=4.0, yes_buy=0.2),
+        "late best": _focus_payload(
+            city="late best",
+            severity="high",
+            trigger_count=3,
+            edge_percent=20.0,
+            signal_label="BUY YES",
+            yes_buy=0.05,
+        ),
+    }
+
+    monkeypatch.setattr(
+        "src.utils.telegram_push.build_trade_alert_for_city",
+        lambda city, config: payloads[city],
+    )
+    monkeypatch.setenv("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", "1800")
+    bot = _DigestBot()
+    state = {}
+
+    dirty = _run_market_monitor_cycle(
+        bot=bot,
+        config={},
+        chat_ids=["chat"],
+        cities=["early a", "early b", "late best"],
+        state=state,
+        focus_digest_enabled=True,
+        focus_digest_interval_sec=1800,
+        focus_digest_top_n=3,
+        alert_cooldown_sec=1800,
+        mispricing_interval_sec=7200,
+        min_severity="high",
+        min_trigger_count=99,
+        mispricing_only=True,
+        sleep_between_cities_sec=0,
+    )
+
+    assert dirty is True
+    assert len(bot.messages) == 1
+    assert "Late Best" in bot.messages[0]["text"]
+    assert "Early A" in bot.messages[0]["text"]
+    assert state.get("last_focus_digest_ts")
+
+
+def test_market_monitor_cycle_restores_critical_alert_push(monkeypatch):
+    payload = _focus_payload(
+        city="ankara",
+        severity="high",
+        trigger_count=2,
+        signal_label="BUY YES",
+        yes_buy=0.05,
+        edge_percent=12.0,
+    )
+    monkeypatch.setattr(
+        "src.utils.telegram_push.build_trade_alert_for_city",
+        lambda city, config: payload,
+    )
+    bot = _DigestBot()
+    state = {}
+
+    dirty = _run_market_monitor_cycle(
+        bot=bot,
+        config={},
+        chat_ids=["chat"],
+        cities=["ankara"],
+        state=state,
+        focus_digest_enabled=False,
+        focus_digest_interval_sec=1800,
+        focus_digest_top_n=5,
+        alert_cooldown_sec=1800,
+        mispricing_interval_sec=7200,
+        min_severity="medium",
+        min_trigger_count=2,
+        mispricing_only=True,
+        sleep_between_cities_sec=0,
+    )
+
+    assert dirty is True
+    assert [row["text"] for row in bot.messages] == ["CRITICAL ankara"]
+    assert state["last_by_city"]["ankara"]["active"] is True
+
+
+def test_market_monitor_cycle_excludes_critical_alert_city_from_digest(monkeypatch):
+    payloads = {
+        "critical": _focus_payload(
+            city="critical",
+            severity="high",
+            trigger_count=2,
+            signal_label="BUY YES",
+            yes_buy=0.05,
+            edge_percent=15.0,
+        ),
+        "digest a": _focus_payload(city="digest a", edge_percent=5.0, yes_buy=0.18),
+        "digest b": _focus_payload(city="digest b", edge_percent=4.0, yes_buy=0.2),
+    }
+    monkeypatch.setattr(
+        "src.utils.telegram_push.build_trade_alert_for_city",
+        lambda city, config: payloads[city],
+    )
+    bot = _DigestBot()
+    state = {}
+
+    dirty = _run_market_monitor_cycle(
+        bot=bot,
+        config={},
+        chat_ids=["chat"],
+        cities=["critical", "digest a", "digest b"],
+        state=state,
+        focus_digest_enabled=True,
+        focus_digest_interval_sec=1800,
+        focus_digest_top_n=3,
+        alert_cooldown_sec=1800,
+        mispricing_interval_sec=7200,
+        min_severity="medium",
+        min_trigger_count=2,
+        mispricing_only=True,
+        sleep_between_cities_sec=0,
+    )
+
+    assert dirty is True
+    assert len(bot.messages) == 2
+    assert bot.messages[0]["text"] == "CRITICAL critical"
+    digest_text = bot.messages[1]["text"]
+    assert "Critical" not in digest_text
+    assert "Digest A" in digest_text
+    assert "Digest B" in digest_text

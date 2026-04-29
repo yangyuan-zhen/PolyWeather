@@ -157,10 +157,21 @@ class StartupCoordinator:
         interval = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
         cities_count = _parse_csv_count(os.getenv("TELEGRAM_ALERT_CITIES"))
         details = {
-            "mode": "focus-digest-only",
+            "mode": "critical-alerts-and-focus-digest",
             "interval_sec": interval,
             "cities_count": cities_count,
             "chat_targets": len(chat_ids),
+            "alert_cooldown_sec": max(
+                60,
+                _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800),
+            ),
+            "mispricing_interval_sec": max(
+                max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800)),
+                _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200),
+            ),
+            "min_trigger_count": max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 2)),
+            "min_severity": str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "medium").strip().lower(),
+            "mispricing_only": _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True),
             "focus_digest_enabled": _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True),
             "focus_digest_interval_sec": max(
                 300,
