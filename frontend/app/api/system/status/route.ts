@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -22,10 +26,9 @@ export async function GET(req: NextRequest) {
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 500) },
-        { status: res.status },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw, {
+        detailLimit: 500,
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
 
@@ -35,9 +38,8 @@ export async function GET(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch system status", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to fetch system status",
+    });
   }
 }

@@ -4,6 +4,10 @@ import {
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
 import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
+import {
   getLocalDevAuthPayload,
   isLocalFullAccessHost,
 } from "@/lib/local-dev-access";
@@ -70,10 +74,7 @@ export async function GET(req: NextRequest) {
         });
         return applyAuthResponseCookies(response, auth.response);
       }
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: res.status },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
@@ -98,10 +99,9 @@ export async function GET(req: NextRequest) {
       });
       return applyAuthResponseCookies(response, auth.response);
     }
-    return NextResponse.json(
-      { error: "Failed to fetch auth profile", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to fetch auth profile",
+    });
   }
 }
 

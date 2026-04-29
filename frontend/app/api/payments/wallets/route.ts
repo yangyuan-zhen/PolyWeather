@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -21,10 +25,9 @@ export async function GET(req: NextRequest) {
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 350) },
-        { status: res.status },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw, {
+        detailLimit: 350,
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
@@ -33,10 +36,9 @@ export async function GET(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to fetch wallets", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to fetch wallets",
+    });
   }
 }
 
@@ -65,11 +67,9 @@ export async function DELETE(req: NextRequest) {
     });
     const raw = await res.text();
     if (!res.ok) {
-      const response = NextResponse.json(
-        {
-          error: `Backend returned ${res.status}`,
-          detail: raw.slice(0, 350),
-          proxy_debug: {
+      const response = buildUpstreamErrorResponse(res.status, raw, {
+        detailLimit: 350,
+        extraDebug: {
             incoming_has_authorization: Boolean(
               String(req.headers.get("authorization") || "").trim(),
             ),
@@ -79,10 +79,8 @@ export async function DELETE(req: NextRequest) {
               "x-polyweather-auth-user-id",
             ),
             has_forwarded_email: proxiedHeaders.has("x-polyweather-auth-email"),
-          },
         },
-        { status: res.status },
-      );
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
     let data: unknown = { ok: true };
@@ -98,10 +96,9 @@ export async function DELETE(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to unbind wallet", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to unbind wallet",
+    });
   }
 }
 

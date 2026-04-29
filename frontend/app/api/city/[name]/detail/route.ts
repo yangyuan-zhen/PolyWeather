@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -41,20 +45,16 @@ export async function GET(
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: 502 },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
     const response = NextResponse.json(data);
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    const response = NextResponse.json(
-      { error: "Failed to fetch city detail aggregate", detail: String(error) },
-      { status: 500 },
-    );
+    const response = buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to fetch city detail aggregate",
+    });
     return response;
   }
 }

@@ -31,7 +31,6 @@ import modalChromeStyles from "./ModalChrome.module.css";
 import scanTerminalCalendarStyles from "./ScanTerminalCalendar.module.css";
 import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
 import scanTerminalLightThemeStyles from "./ScanTerminalLightTheme.module.css";
-import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
 import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
@@ -40,6 +39,7 @@ import scanTerminalFiltersStyles from "./ScanTerminalFilters.module.css";
 import scanTerminalListStyles from "./ScanTerminalList.module.css";
 import scanTerminalShellStyles from "./ScanTerminalShell.module.css";
 import scanTerminalStateStyles from "./ScanTerminalState.module.css";
+import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,

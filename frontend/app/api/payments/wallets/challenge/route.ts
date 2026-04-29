@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -26,30 +30,25 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        {
-          error: `Backend returned ${res.status}`,
-          detail: raw.slice(0, 350),
-          proxy_debug: {
+      const response = buildUpstreamErrorResponse(res.status, raw, {
+        detailLimit: 350,
+        extraDebug: {
             has_authorization: proxiedHeaders.has("authorization"),
             has_entitlement: proxiedHeaders.has("x-polyweather-entitlement"),
             has_forwarded_user_id: proxiedHeaders.has(
               "x-polyweather-auth-user-id",
             ),
             has_forwarded_email: proxiedHeaders.has("x-polyweather-auth-email"),
-          },
         },
-        { status: res.status },
-      );
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
     const response = NextResponse.json(data);
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to create wallet challenge", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to create wallet challenge",
+    });
   }
 }

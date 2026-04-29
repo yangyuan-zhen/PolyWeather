@@ -3,6 +3,7 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -47,15 +48,15 @@ export async function forwardPriorityWarmHint(req: NextRequest) {
 
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        {
+      const response = buildProxyExceptionResponse(raw, {
+        status: 202,
+        publicMessage: "Priority warm hint was skipped",
+        extra: {
           ok: false,
           skipped: true,
-          error: `Backend returned ${res.status}`,
-          detail: raw.slice(0, 500),
+          upstream_status: res.status,
         },
-        { status: 202 },
-      );
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
 
@@ -65,14 +66,13 @@ export async function forwardPriorityWarmHint(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      {
+    return buildProxyExceptionResponse(error, {
+      status: 202,
+      publicMessage: "Failed to send priority warm hint",
+      extra: {
         ok: false,
         skipped: true,
-        error: "Failed to send priority warm hint",
-        detail: String(error),
       },
-      { status: 202 },
-    );
+    });
   }
 }

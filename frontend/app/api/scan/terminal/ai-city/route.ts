@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const AI_CITY_GATEWAY_TIMEOUT_MS = Math.max(
@@ -63,10 +67,7 @@ export async function POST(req: NextRequest) {
         status: res.status,
         detail: raw.slice(0, 180),
       });
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: res.status === 402 || res.status === 403 ? res.status : 502 },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
@@ -93,18 +94,17 @@ export async function POST(req: NextRequest) {
       timeout_ms: AI_CITY_GATEWAY_TIMEOUT_MS,
       error: String(error),
     });
-    const response = NextResponse.json(
-      {
-        error: timedOut
-          ? "City AI gateway timed out before backend responded"
-          : "Failed to fetch city AI data",
-        detail: String(error),
+    const response = buildProxyExceptionResponse(error, {
+      publicMessage: timedOut
+        ? "City AI gateway timed out before backend responded"
+        : "Failed to fetch city AI data",
+      status: timedOut ? 504 : 500,
+      extra: {
         elapsed_ms: elapsedMs,
         timeout_ms: AI_CITY_GATEWAY_TIMEOUT_MS,
         city: requestBody.city,
       },
-      { status: timedOut ? 504 : 500 },
-    );
+    });
     return auth ? applyAuthResponseCookies(response, auth.response) : response;
   } finally {
     clearTimeout(timeoutId);

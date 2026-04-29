@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -40,10 +44,7 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok || !res.body) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: res.status === 402 || res.status === 403 ? res.status : 502 },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
     }
 
@@ -57,14 +58,10 @@ export async function POST(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    const response = NextResponse.json(
-      {
-        error: "Failed to stream city AI data",
-        detail: String(error),
-        city: requestBody.city,
-      },
-      { status: 500 },
-    );
+    const response = buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to stream city AI data",
+      extra: { city: requestBody.city },
+    });
     return applyAuthResponseCookies(response, auth.response);
   }
 }

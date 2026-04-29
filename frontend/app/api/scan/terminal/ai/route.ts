@@ -3,6 +3,10 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_AI_PROXY_TIMEOUT_MS = Math.max(
@@ -46,10 +50,7 @@ export async function POST(req: NextRequest) {
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        { error: `Backend returned ${res.status}`, detail: raw.slice(0, 300) },
-        { status: res.status === 402 || res.status === 403 ? res.status : 502 },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw);
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
@@ -61,15 +62,12 @@ export async function POST(req: NextRequest) {
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     const timedOut = controller.signal.aborted;
-    const response = NextResponse.json(
-      {
-        error: timedOut
-          ? "Scan AI request timed out"
-          : "Failed to fetch scan AI data",
-        detail: String(error),
-      },
-      { status: timedOut ? 504 : 500 },
-    );
+    const response = buildProxyExceptionResponse(error, {
+      publicMessage: timedOut
+        ? "Scan AI request timed out"
+        : "Failed to fetch scan AI data",
+      status: timedOut ? 504 : 500,
+    });
     return auth ? applyAuthResponseCookies(response, auth.response) : response;
   } finally {
     clearTimeout(timeoutId);

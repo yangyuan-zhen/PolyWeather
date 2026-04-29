@@ -3,16 +3,12 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import {
+  buildProxyExceptionResponse,
+  buildUpstreamErrorResponse,
+} from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
-
-function parseBackendError(raw: string) {
-  try {
-    return JSON.parse(raw) as unknown;
-  } catch {
-    return raw.slice(0, 800);
-  }
-}
 
 export async function GET(
   req: NextRequest,
@@ -56,14 +52,10 @@ export async function GET(
     });
     if (!res.ok) {
       const raw = await res.text();
-      const response = NextResponse.json(
-        {
-          error: "Backend city market scan failed",
-          upstream_status: res.status,
-          detail: parseBackendError(raw),
-        },
-        { status: 502 },
-      );
+      const response = buildUpstreamErrorResponse(res.status, raw, {
+        detailLimit: 800,
+        error: "Backend city market scan failed",
+      });
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
@@ -74,13 +66,10 @@ export async function GET(
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    const response = NextResponse.json(
-      {
-        error: "Failed to fetch city market scan",
-        detail: String(error),
-      },
-      { status: 502 },
-    );
+    const response = buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to fetch city market scan",
+      status: 502,
+    });
     return response;
   }
 }

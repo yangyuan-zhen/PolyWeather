@@ -3,6 +3,7 @@ import {
   applyAuthResponseCookies,
   buildBackendRequestHeaders,
 } from "@/lib/backend-auth";
+import { buildProxyExceptionResponse } from "@/lib/api-proxy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -31,9 +32,8 @@ export async function POST(req: NextRequest) {
     });
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
-    return NextResponse.json(
-      { error: "Failed to reconcile latest payment", detail: String(error) },
-      { status: 500 },
-    );
+    return buildProxyExceptionResponse(error, {
+      publicMessage: "Failed to reconcile latest payment",
+    });
   }
 }
