@@ -36,7 +36,12 @@ export default async function EntitlementRequiredPage({ searchParams }: Props) {
           This dashboard is protected. If Supabase auth is enabled, please go to{" "}
           <a
             href={`/auth/login?next=${encodeURIComponent(nextPath)}`}
-            style={{ color: "#8fc5ff" }}
+            style={{
+              color: "#8fc5ff",
+              display: "inline-flex",
+              minHeight: 36,
+              alignItems: "center",
+            }}
           >
             /auth/login
           </a>{" "}

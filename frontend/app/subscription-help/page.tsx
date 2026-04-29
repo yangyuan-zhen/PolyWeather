@@ -82,7 +82,7 @@ export default function SubscriptionHelpPage() {
               <Link
                 href={TELEGRAM_GROUP_URL}
                 target="_blank"
-                className="text-sm font-semibold text-blue-300 underline decoration-blue-500/50 underline-offset-4"
+                className="inline-flex min-h-9 items-center text-sm font-semibold text-blue-300 underline decoration-blue-500/50 underline-offset-4"
               >
                 加入社群即可赚取积分
               </Link>

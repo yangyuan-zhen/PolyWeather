@@ -285,15 +285,15 @@ const InfoRow = ({
   value,
   isPrimary = false,
 }: InfoRowProps) => (
-  <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group">
-    <div className="flex items-center gap-3">
-      <div className="p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
+  <div className="flex min-w-0 flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex min-w-0 items-center gap-3">
+      <div className="shrink-0 p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
         {Icon && <Icon size={18} />}
       </div>
-      <span className="text-slate-400 text-sm font-medium">{label}</span>
+      <span className="min-w-0 text-slate-400 text-sm font-medium leading-5">{label}</span>
     </div>
     <span
-      className={`text-sm font-semibold font-mono ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
+      className={`min-w-0 break-all text-left text-sm font-semibold font-mono sm:text-right ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
     >
       {value}
     </span>
@@ -2772,7 +2772,7 @@ export function AccountCenter() {
                       href={TELEGRAM_BOT_URL}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-1.5 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
                     >
                       {copy.telegramBotLink}
                       <ExternalLink size={12} />
@@ -2783,7 +2783,7 @@ export function AccountCenter() {
                       href={TELEGRAM_MARKET_CHANNEL_URL}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/20"
                     >
                       {copy.telegramMarketChannelLink}
                       <ExternalLink size={12} />
@@ -2794,7 +2794,7 @@ export function AccountCenter() {
                       href={TELEGRAM_GROUP_URL}
                       target="_blank"
                       rel="noreferrer"
-                      className="inline-flex items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
+                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-500/20"
                     >
                       {copy.telegramGroupLink}
                       <ExternalLink size={12} />
