@@ -124,7 +124,7 @@ Scan Terminal 的城市决策卡现在承担“从天气分析到市场动作解
 
 1. **地图点击与 pinned city**：免费/付费入口都会先把城市加入决策卡；未付费用户若权限不足，仍应保留卡片承载升级/限制提示，而不是点击后无反馈。
 2. **full detail hydration**：卡片请求城市 full detail，拿到 DEB、当前/历史实测、多模型区间与最新 METAR。现阶段 detail hydration 仍偏保守串行，优先保障后端数据源稳定；真正消耗 LLM 的 AI 解读另行限流。
-3. **AI 机场报文解读**：前端最多同时保留 2 条城市 AI stream，第三个及以后城市会进入队列并展示排队提示，避免多个 provider stream 同时竞争导致第三城/第四城解析失败。当前临时使用 MiMo：`POLYWEATHER_SCAN_AI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1`、`POLYWEATHER_SCAN_CITY_AI_MODEL=MiMo-V2.5-Pro`；其他后端城市 AI 配置建议为 `POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC=30`、`POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS=900`、`POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR=true`。
+3. **AI 机场报文解读**：前端最多同时保留 2 条城市 AI stream，第三个及以后城市会进入队列并展示排队提示，避免多个 provider stream 同时竞争导致第三城/第四城解析失败。当前临时使用 MiMo：`POLYWEATHER_SCAN_AI_BASE_URL=https://token-plan-cn.xiaomimimo.com/v1`、`POLYWEATHER_SCAN_CITY_AI_MODEL=mimo-v2.5-pro`；其他后端城市 AI 配置建议为 `POLYWEATHER_SCAN_CITY_AI_TIMEOUT_SEC=30`、`POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS=900`、`POLYWEATHER_SCAN_CITY_AI_RETRY_ON_STREAM_PARSE_ERROR=true`。
 4. **缓存策略**：页面内存缓存保留 loading/stream/final 状态，切换选项卡返回时不应空白重拉；localStorage 持久化最终成功、非 degraded 的 payload；后端 city AI cache key 已移除当前 `local_time` 干扰，主要按城市、日期与 METAR signature 失效。
 5. **市场桶匹配**：城市市场扫描必须使用 full `all_buckets`，按温度 exact/range/“or higher”/“or lower” 方向严格匹配；不再用宽松 ±8°C fallback，以避免拿到 16°C 之类错误桶。前端展示统一使用“模型-市场差”，即 `model_probability - market_implied_probability`，并修复温度单位重复渲染（如 `31°°C`）。
 
