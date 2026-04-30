@@ -7,10 +7,18 @@ import type { RemoteData } from "@/components/dashboard/scan-terminal/scan-termi
 import type { CityDetail, MarketScan } from "@/lib/dashboard-types";
 import { normalizeCityKey } from "./decision-utils";
 
-const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v3";
+const CITY_MARKET_SCAN_CACHE_PREFIX = "polyWeather_cityMarketScan_v4";
 const CITY_MARKET_SCAN_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export type CityMarketScanStatus = "idle" | "loading" | "ready" | "failed";
+
+export type CityMarketScanApiPayload =
+  | MarketScan
+  | {
+      fetched_at?: string | null;
+      market_scan?: MarketScan | null;
+      selected_date?: string | null;
+    };
 
 export type CityMarketScanSnapshot =
   | { action: "reset"; cacheKey?: string }
@@ -32,11 +40,28 @@ export function buildCityMarketScanCacheKey({
 }
 
 export function readCachedCityMarketScan(cacheKey: string) {
-  return readCachedPayload<MarketScan>(cacheKey, CITY_MARKET_SCAN_CACHE_TTL_MS);
+  return normalizeCityMarketScanPayload(
+    readCachedPayload<CityMarketScanApiPayload>(cacheKey, CITY_MARKET_SCAN_CACHE_TTL_MS),
+  );
 }
 
 export function writeCachedCityMarketScan(cacheKey: string, payload: MarketScan) {
   writeCachedPayload(cacheKey, payload);
+}
+
+export function normalizeCityMarketScanPayload(
+  payload: CityMarketScanApiPayload | null | undefined,
+): MarketScan | null {
+  if (!payload || typeof payload !== "object") return null;
+  if ("market_scan" in payload) {
+    const scan = payload.market_scan;
+    if (!scan || typeof scan !== "object") return null;
+    return {
+      ...scan,
+      selected_date: scan.selected_date ?? payload.selected_date ?? null,
+    };
+  }
+  return payload as MarketScan;
 }
 
 export function resolveCityMarketScanSnapshot({

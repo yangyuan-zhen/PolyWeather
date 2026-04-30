@@ -1,6 +1,10 @@
 "use client";
 
 import { extractStreamingAirportRead } from "@/components/dashboard/scan-terminal/ai-city-stream";
+import {
+  normalizeCityMarketScanPayload,
+  type CityMarketScanApiPayload,
+} from "@/components/dashboard/scan-terminal/market-scan-state";
 import type { AiCityForecastPayload } from "@/components/dashboard/scan-terminal/types";
 import {
   buildBrowserBackendHeaders,
@@ -292,13 +296,19 @@ async function getMarketScan(city: string, options: MarketScanQueryOptions = {})
   if (options.marketSlug) params.set("market_slug", options.marketSlug);
   if (options.lite != null) params.set("lite", String(options.lite));
   const headers = await buildBrowserBackendHeaders({ Accept: "application/json" });
-  return readJsonOrThrow<MarketScan>(
+  const payload = await readJsonOrThrow<CityMarketScanApiPayload>(
     `/api/city/${encodeURIComponent(city)}/market-scan?${params.toString()}`,
     {
       cache: "no-store",
       headers,
       signal: options.signal,
     },
+  );
+  return (
+    normalizeCityMarketScanPayload(payload) ?? {
+      available: false,
+      reason: "No market scan payload returned.",
+    }
   );
 }
 

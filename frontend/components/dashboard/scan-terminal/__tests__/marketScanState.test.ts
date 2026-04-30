@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   buildCityMarketScanCacheKey,
   deriveCityMarketScanView,
+  normalizeCityMarketScanPayload,
   resolveCityMarketScanSnapshot,
   writeCachedCityMarketScan,
 } from "@/components/dashboard/scan-terminal/market-scan-state";
@@ -73,6 +74,35 @@ export function runTests() {
   if (cachedSnapshot.action === "success") {
     assert.equal((cachedSnapshot.payload as unknown as { label: string }).label, "cached");
   }
+
+  storage.clear();
+  writeCachedCityMarketScan(cacheKey, {
+    market_scan: {
+      available: true,
+      market_price: 0.41,
+      selected_slug: "highest-temperature-in-nyc-on-april-30-2026-60-61f",
+    },
+    selected_date: "2026-04-30",
+  } as unknown as MarketScan);
+  const wrappedCachedSnapshot = resolveCityMarketScanSnapshot({
+    detail: cityDetail(),
+    detailCityName: "Test City",
+    enabled: true,
+  });
+  assert.equal(wrappedCachedSnapshot.action, "success");
+  if (wrappedCachedSnapshot.action === "success") {
+    assert.equal(wrappedCachedSnapshot.payload.available, true);
+    assert.equal(wrappedCachedSnapshot.payload.market_price, 0.41);
+    assert.equal(wrappedCachedSnapshot.payload.selected_date, "2026-04-30");
+  }
+
+  const wrappedResponse = normalizeCityMarketScanPayload({
+    market_scan: { available: true, yes_buy: 0.42 } as MarketScan,
+    selected_date: "2026-04-30",
+  });
+  assert.equal(wrappedResponse?.available, true);
+  assert.equal(wrappedResponse?.yes_buy, 0.42);
+  assert.equal(wrappedResponse?.selected_date, "2026-04-30");
 
   storage.clear();
   assert.equal(
