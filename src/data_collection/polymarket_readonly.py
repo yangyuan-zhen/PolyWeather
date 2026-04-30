@@ -87,6 +87,15 @@ MARKET_CITY_ALIASES: Dict[str, str] = {
     "lau fau shan": "shenzhen",
 }
 
+MARKET_CITY_SLUG_ALIASES: Dict[str, str] = {
+    # Polymarket's weather event URL uses the colloquial NYC slug, while
+    # PolyWeather keeps the canonical registry key as "new york".
+    "new york": "nyc",
+    # The tracked station is Buckley/Aurora, but Polymarket lists this market
+    # under the user-facing Denver city name.
+    "aurora": "denver",
+}
+
 
 def _resolve_market_city_key(city_key: str) -> str:
     return MARKET_CITY_ALIASES.get(city_key, city_key)
@@ -397,7 +406,7 @@ class PolymarketReadOnlyLayer:
             .strip()
             .rstrip("/")
         )
-        self.http_timeout = _safe_float(os.getenv("POLYMARKET_HTTP_TIMEOUT_SEC")) or 8.0
+        self.http_timeout = _safe_float(os.getenv("POLYMARKET_HTTP_TIMEOUT_SEC")) or 20.0
         self.market_cache_ttl = _safe_int(
             os.getenv("POLYMARKET_MARKET_CACHE_TTL_SEC", "60"),
             60,
@@ -418,7 +427,7 @@ class PolymarketReadOnlyLayer:
             _safe_float(os.getenv("POLYMARKET_SIGNAL_MIN_LIQUIDITY")) or 500.0
         )
         self.edge_threshold = _safe_float(os.getenv("POLYMARKET_SIGNAL_EDGE_PCT")) or 2.0
-        fast_price_only = _safe_bool(os.getenv("POLYMARKET_FAST_PRICE_ONLY", "true"))
+        fast_price_only = _safe_bool(os.getenv("POLYMARKET_FAST_PRICE_ONLY", "false"))
         self.fast_price_only = True if fast_price_only is None else bool(fast_price_only)
 
         self._session = httpx.Client(
@@ -653,8 +662,16 @@ class PolymarketReadOnlyLayer:
             )
             return scan
 
-        yes_prices = self._get_token_market_data(str(yes_token.get("token_id")))
-        no_prices = self._get_token_market_data(str(no_token.get("token_id")))
+        yes_prices = self._merge_market_quote_fallback(
+            self._get_token_market_data(str(yes_token.get("token_id"))),
+            market,
+            "yes",
+        )
+        no_prices = self._merge_market_quote_fallback(
+            self._get_token_market_data(str(no_token.get("token_id"))),
+            market,
+            "no",
+        )
 
         if liquidity is None:
             liquidity = _extract_price(yes_prices.get("book_liquidity"))
@@ -1510,7 +1527,8 @@ class PolymarketReadOnlyLayer:
             dt = datetime.fromisoformat(str(target_date))
         except Exception:
             return None
-        city_slug = str(city_key or "").strip().lower().replace(" ", "-")
+        market_slug_key = MARKET_CITY_SLUG_ALIASES.get(city_key, city_key)
+        city_slug = str(market_slug_key or "").strip().lower().replace(" ", "-")
         if not city_slug:
             return None
         month_name = dt.strftime("%B").lower()
@@ -1804,6 +1822,115 @@ class PolymarketReadOnlyLayer:
             "book_liquidity": book_liquidity,
         }
 
+    def _has_quote_prices(self, quote: Optional[Dict[str, Any]]) -> bool:
+        if not isinstance(quote, dict) or not quote:
+            return False
+        return any(
+            _extract_price(quote.get(key)) is not None
+            for key in ("buy", "sell", "midpoint", "last_trade_price")
+        )
+
+    def _build_market_quote_fallback(
+        self,
+        market: Dict[str, Any],
+        outcome_side: str,
+    ) -> Dict[str, Any]:
+        """Build a price fallback from Gamma market-level quote fields.
+
+        CLOB `/price` and `/book` remain the preferred source. Gamma's market
+        payload still carries public `bestBid` / `bestAsk` / `outcomePrices`;
+        using it prevents a total "price unavailable" state when the CLOB
+        endpoint, batch payload, or token lookup is temporarily unavailable.
+        """
+
+        if not isinstance(market, dict) or not market:
+            return {}
+
+        side = str(outcome_side or "").strip().lower()
+        outcome_prices = _json_or_list(market.get("outcomePrices"))
+        yes_probability = _extract_price(outcome_prices[0]) if len(outcome_prices) >= 1 else None
+        no_probability = _extract_price(outcome_prices[1]) if len(outcome_prices) >= 2 else None
+        best_bid = _extract_price(
+            market.get("bestBid")
+            or market.get("best_bid")
+            or market.get("bid")
+        )
+        best_ask = _extract_price(
+            market.get("bestAsk")
+            or market.get("best_ask")
+            or market.get("ask")
+        )
+        spread = _extract_price(market.get("spread"))
+        if spread is None and best_bid is not None and best_ask is not None:
+            spread = max(0.0, float(best_ask) - float(best_bid))
+        midpoint = (
+            (best_bid + best_ask) / 2.0
+            if best_bid is not None and best_ask is not None
+            else yes_probability
+        )
+        last_trade = _extract_price(market.get("lastTradePrice") or market.get("last_trade_price"))
+
+        if side == "no":
+            buy = _clamp_probability(1.0 - best_bid) if best_bid is not None else None
+            sell = _clamp_probability(1.0 - best_ask) if best_ask is not None else None
+            resolved_midpoint = (
+                _clamp_probability(1.0 - midpoint)
+                if midpoint is not None
+                else _clamp_probability(no_probability)
+            )
+            resolved_last_trade = (
+                _clamp_probability(1.0 - last_trade)
+                if last_trade is not None
+                else None
+            )
+        else:
+            buy = _clamp_probability(best_ask)
+            sell = _clamp_probability(best_bid)
+            resolved_midpoint = _clamp_probability(midpoint)
+            resolved_last_trade = _clamp_probability(last_trade)
+
+        if not any(value is not None for value in (buy, sell, resolved_midpoint, resolved_last_trade)):
+            return {}
+
+        return {
+            "buy": buy,
+            "sell": sell,
+            "midpoint": resolved_midpoint,
+            "spread": spread,
+            "last_trade_price": resolved_last_trade,
+            "quote_source": "polymarket_gamma_market_fallback",
+            "quote_age_ms": 0,
+            "book": None,
+            "book_liquidity": _extract_price(
+                market.get("liquidityClob")
+                or market.get("liquidityNum")
+                or market.get("liquidity")
+            ),
+        }
+
+    def _merge_market_quote_fallback(
+        self,
+        quote: Optional[Dict[str, Any]],
+        market: Dict[str, Any],
+        outcome_side: str,
+    ) -> Dict[str, Any]:
+        fallback = self._build_market_quote_fallback(market, outcome_side)
+        if not fallback:
+            return dict(quote or {})
+        if not isinstance(quote, dict) or not quote:
+            return fallback
+
+        merged = dict(fallback)
+        for key, value in quote.items():
+            if value is None:
+                continue
+            if isinstance(value, str) and not value.strip():
+                continue
+            merged[key] = value
+        if self._has_quote_prices(quote):
+            merged["quote_source"] = quote.get("quote_source") or merged.get("quote_source")
+        return merged
+
     def _clob_get(self, path: str, params: Dict[str, Any]) -> Any:
         url = f"{self.clob_url}{path}"
         try:
@@ -1940,8 +2067,24 @@ class PolymarketReadOnlyLayer:
 
             yes_token_id = str(yes_token.get("token_id") or "").strip()
             no_token_id = str(no_token.get("token_id") or "").strip()
-            yes_prices = self._get_token_market_data(yes_token_id) if yes_token_id else {}
-            no_prices = self._get_token_market_data(no_token_id) if no_token_id else {}
+            yes_prices = (
+                self._merge_market_quote_fallback(
+                    self._get_token_market_data(yes_token_id),
+                    market,
+                    "yes",
+                )
+                if yes_token_id
+                else {}
+            )
+            no_prices = (
+                self._merge_market_quote_fallback(
+                    self._get_token_market_data(no_token_id),
+                    market,
+                    "no",
+                )
+                if no_token_id
+                else {}
+            )
 
             yes_midpoint = _extract_price(yes_prices.get("midpoint"))
             yes_implied = _extract_price(yes_token.get("implied_probability"))
@@ -2803,8 +2946,16 @@ class PolymarketReadOnlyLayer:
         broad_quotes = self._batch_get_token_market_data(token_ids, include_books=False)
         bias_inputs: List[Tuple[float, float]] = []
         for entry in market_entries:
-            yes_quote = broad_quotes.get(entry["yes_token_id"], {})
-            no_quote = broad_quotes.get(entry["no_token_id"], {})
+            yes_quote = self._merge_market_quote_fallback(
+                broad_quotes.get(entry["yes_token_id"], {}),
+                entry["market"],
+                "yes",
+            )
+            no_quote = self._merge_market_quote_fallback(
+                broad_quotes.get(entry["no_token_id"], {}),
+                entry["market"],
+                "no",
+            )
             market_event_probability = (
                 _extract_price(yes_quote.get("midpoint"))
                 or _extract_price(yes_quote.get("buy"))
@@ -3333,8 +3484,16 @@ class PolymarketReadOnlyLayer:
             market_slug = str(entry["market"].get("slug") or "").strip()
             if market_slug not in seen_slugs:
                 continue
-            yes_quote = precise_quotes.get(entry["yes_token_id"], {})
-            no_quote = precise_quotes.get(entry["no_token_id"], {})
+            yes_quote = self._merge_market_quote_fallback(
+                precise_quotes.get(entry["yes_token_id"], {}),
+                entry["market"],
+                "yes",
+            )
+            no_quote = self._merge_market_quote_fallback(
+                precise_quotes.get(entry["no_token_id"], {}),
+                entry["market"],
+                "no",
+            )
             if yes_quote:
                 entry["yes_ask"] = _extract_price(yes_quote.get("buy")) or entry.get("yes_ask")
                 entry["yes_bid"] = _extract_price(yes_quote.get("sell")) or entry.get("yes_bid")

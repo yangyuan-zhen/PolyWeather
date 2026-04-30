@@ -71,6 +71,7 @@ def test_fetch_token_market_data_uses_rest_orderbook_executable_prices():
 
 def test_fetch_token_market_data_fast_price_only_skips_heavy_endpoints():
     layer = PolymarketReadOnlyLayer()
+    layer.fast_price_only = True
     calls = []
     payloads = {
         ("/price", "BUY"): {"price": "0.23"},
@@ -120,6 +121,62 @@ def test_fetch_token_market_data_keeps_buy_sell_semantics_without_orderbook():
     assert data["buy"] == 0.27
     assert data["sell"] == 0.23
     assert data["midpoint"] == 0.25
+
+
+def test_weather_event_slug_uses_polymarket_city_aliases():
+    layer = PolymarketReadOnlyLayer()
+
+    assert (
+        layer._build_weather_event_slug("new york", "2026-04-30")
+        == "highest-temperature-in-nyc-on-april-30-2026"
+    )
+    assert (
+        layer._build_weather_event_slug("aurora", "2026-04-30")
+        == "highest-temperature-in-denver-on-april-30-2026"
+    )
+
+
+def test_market_quote_fallback_uses_gamma_best_bid_ask_when_clob_missing():
+    layer = PolymarketReadOnlyLayer()
+    market = {
+        "bestBid": "0.53",
+        "bestAsk": "0.54",
+        "lastTradePrice": "0.54",
+        "spread": "0.01",
+        "outcomePrices": '["0.535", "0.465"]',
+        "liquidityClob": "57040.5",
+    }
+
+    yes = layer._merge_market_quote_fallback({}, market, "yes")
+    no = layer._merge_market_quote_fallback({}, market, "no")
+
+    assert yes["buy"] == 0.54
+    assert yes["sell"] == 0.53
+    assert yes["midpoint"] == 0.535
+    assert yes["quote_source"] == "polymarket_gamma_market_fallback"
+    assert no["buy"] == 0.47
+    assert round(no["sell"], 6) == 0.46
+    assert round(no["midpoint"], 6) == 0.465
+    assert no["book_liquidity"] == 57040.5
+
+
+def test_market_quote_fallback_preserves_clob_prices_when_available():
+    layer = PolymarketReadOnlyLayer()
+    market = {
+        "bestBid": "0.53",
+        "bestAsk": "0.54",
+        "outcomePrices": '["0.535", "0.465"]',
+    }
+
+    merged = layer._merge_market_quote_fallback(
+        {"buy": 0.55, "sell": 0.52, "midpoint": 0.535, "quote_source": "polymarket_clob_rest"},
+        market,
+        "yes",
+    )
+
+    assert merged["buy"] == 0.55
+    assert merged["sell"] == 0.52
+    assert merged["quote_source"] == "polymarket_clob_rest"
 
 
 def test_get_token_market_data_uses_price_cache_within_ttl():
