@@ -23,38 +23,37 @@ export function AiPinnedForecastView({
   onRemoveCity: (cityName: string) => void;
 }) {
   const isEn = locale === "en-US";
-  const [collapsedCities, setCollapsedCities] = useState<Set<string>>(
-    () => new Set(),
-  );
+  const [expandedCityKey, setExpandedCityKey] = useState<string | null>(null);
   const [removingCities, setRemovingCities] = useState<Set<string>>(
     () => new Set(),
   );
+  const cityCardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const knownCityKeysRef = useRef<Set<string>>(new Set());
+  const previousFirstCityKeyRef = useRef<string | null>(null);
   const removeTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   useEffect(() => {
-    const activeKeys = new Set(
-      items.map((item) => normalizeCityKey(item.cityName) || item.cityName),
+    const activeKeyList = items.map(
+      (item) => normalizeCityKey(item.cityName) || item.cityName,
     );
-    setCollapsedCities((current) => {
-      const next = new Set<string>();
-      let changed = false;
-      current.forEach((key) => {
-        if (activeKeys.has(key)) {
-          next.add(key);
-        } else {
-          changed = true;
-        }
-      });
-      items.forEach((item) => {
-        const stableKey = normalizeCityKey(item.cityName) || item.cityName;
-        if (!knownCityKeysRef.current.has(stableKey)) {
-          changed = true;
-        }
-      });
-      return changed ? next : current;
+    const activeKeys = new Set(activeKeyList);
+    const firstCityKey = activeKeyList[0] ?? null;
+    const hasNewCity = activeKeyList.some((key) => !knownCityKeysRef.current.has(key));
+    const firstCityChanged = firstCityKey !== previousFirstCityKeyRef.current;
+
+    setExpandedCityKey((current) => {
+      if (!firstCityKey) return null;
+      if (hasNewCity || firstCityChanged) return firstCityKey;
+      if (current && activeKeys.has(current)) return current;
+      return firstCityKey;
+    });
+    Object.keys(cityCardRefs.current).forEach((key) => {
+      if (!activeKeys.has(key)) {
+        delete cityCardRefs.current[key];
+      }
     });
     knownCityKeysRef.current = activeKeys;
+    previousFirstCityKeyRef.current = firstCityKey;
   }, [items]);
 
   useEffect(() => {
@@ -85,6 +84,18 @@ export function AiPinnedForecastView({
     },
     [onRemoveCity],
   );
+
+  const scrollToCity = useCallback((stableKey: string) => {
+    cityCardRefs.current[stableKey]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, []);
+
+  const focusCity = useCallback((stableKey: string) => {
+    setExpandedCityKey(stableKey);
+    window.requestAnimationFrame(() => scrollToCity(stableKey));
+  }, [scrollToCity]);
 
   if (!items.length) {
     return (
@@ -120,36 +131,50 @@ export function AiPinnedForecastView({
             : "地图点击会把城市加入这里；城市分析会保留，直到你手动移除。"}
         </p>
       </div>
+      <div className="scan-ai-city-jumpbar" aria-label={isEn ? "Selected city shortcuts" : "已选城市快捷跳转"}>
+        {items.map((item) => {
+          const stableKey = normalizeCityKey(item.cityName) || item.cityName;
+          return (
+            <button
+              key={stableKey}
+              type="button"
+              onClick={() => focusCity(stableKey)}
+            >
+              {item.cityName}
+            </button>
+          );
+        })}
+      </div>
       <div className="scan-ai-city-stack">
         {items.map((item) => {
           const detail = findDetailForCity(detailsByName, item.cityName);
           const row = findRowForCity(rows, item.cityName);
           const key = normalizeCityKey(item.cityName);
           const stableKey = key || item.cityName;
-          const isKnownCity = knownCityKeysRef.current.has(stableKey);
           return (
-            <AiPinnedCityCard
+            <div
               key={stableKey}
-              item={item}
-              detail={detail}
-              row={row}
-              locale={locale}
-              collapsed={!isKnownCity || collapsedCities.has(stableKey)}
-              removing={removingCities.has(stableKey)}
-              onRefreshCityDetail={onRefreshCityDetail}
-              onRemove={() => removeCityWithMotion(item, stableKey)}
-              onToggleCollapsed={() => {
-                setCollapsedCities((current) => {
-                  const next = new Set(current);
-                  if (next.has(stableKey)) {
-                    next.delete(stableKey);
-                  } else {
-                    next.add(stableKey);
-                  }
-                  return next;
-                });
+              ref={(node) => {
+                cityCardRefs.current[stableKey] = node;
               }}
-            />
+              className="scan-ai-city-anchor"
+            >
+              <AiPinnedCityCard
+                item={item}
+                detail={detail}
+                row={row}
+                locale={locale}
+                collapsed={expandedCityKey !== stableKey}
+                removing={removingCities.has(stableKey)}
+                onRefreshCityDetail={onRefreshCityDetail}
+                onRemove={() => removeCityWithMotion(item, stableKey)}
+                onToggleCollapsed={() => {
+                  setExpandedCityKey((current) =>
+                    current === stableKey ? null : stableKey,
+                  );
+                }}
+              />
+            </div>
           );
         })}
       </div>

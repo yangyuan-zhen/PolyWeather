@@ -465,6 +465,8 @@ function ScanTerminalScreen() {
         className={clsx(
           "scan-terminal",
           resolvedView === "map" && "map-view-active",
+          resolvedView !== "opportunities" && "focus-view-active",
+          resolvedView === "analysis" && "analysis-view-active",
           themeMode === "light" && "light",
         )}
       >

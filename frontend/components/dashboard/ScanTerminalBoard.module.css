@@ -29,21 +29,25 @@
   background: rgba(8, 17, 30, 0.8);
 }
 
-.root :global(.scan-terminal.map-view-active .scan-upgrade-announcement),
-.root :global(.scan-terminal.map-view-active .scan-kpi-bar) {
+.root :global(.scan-terminal.focus-view-active .scan-upgrade-announcement),
+.root :global(.scan-terminal.focus-view-active .scan-kpi-bar) {
   display: none;
 }
 
-.root :global(.scan-terminal.map-view-active .scan-data-grid) {
+.root :global(.scan-terminal.focus-view-active .scan-data-grid) {
   gap: 12px;
 }
 
-.root :global(.scan-terminal.map-view-active .scan-list-section) {
-  min-height: min(760px, calc(100dvh - 164px));
+.root :global(.scan-terminal.focus-view-active .scan-list-section) {
+  min-height: min(780px, calc(100dvh - 136px));
 }
 
-.root :global(.scan-terminal.map-view-active .scan-list-header) {
+.root :global(.scan-terminal.focus-view-active .scan-list-header) {
   margin-bottom: 8px;
+}
+
+.root :global(.scan-terminal.focus-view-active .scan-topbar) {
+  padding-bottom: 12px;
 }
 
 @media (max-width: 1680px), (max-height: 900px) {

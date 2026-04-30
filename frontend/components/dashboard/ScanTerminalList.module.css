@@ -489,10 +489,11 @@
   max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scroll-padding-top: 64px;
   border: 1px solid rgba(77, 163, 255, 0.16);
   border-radius: 18px;
   background: #0b1220;
-  padding: 18px;
+  padding: 14px;
 }
 
 .root :global(.scan-ai-workspace::-webkit-scrollbar) {
@@ -514,7 +515,7 @@
   justify-content: space-between;
   gap: 18px;
   align-items: flex-end;
-  margin-bottom: 18px;
+  margin-bottom: 10px;
   padding: 0 2px;
 }
 
@@ -529,7 +530,7 @@
 .root :global(.scan-ai-workspace-head strong) {
   display: block;
   color: #e6edf3;
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.2;
   margin-top: 4px;
 }
@@ -541,4 +542,58 @@
   font-size: 13px;
   line-height: 1.55;
   text-align: right;
+}
+
+.root :global(.scan-ai-city-jumpbar) {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px;
+  overflow-x: auto;
+  border: 1px solid rgba(77, 163, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(11, 18, 32, 0.92);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.22);
+  scrollbar-width: none;
+}
+
+.root :global(.scan-ai-city-jumpbar::-webkit-scrollbar) {
+  display: none;
+}
+
+.root :global(.scan-ai-city-jumpbar button) {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(77, 163, 255, 0.26);
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.1);
+  color: #cfe5ff;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.root :global(.scan-ai-city-jumpbar button:hover) {
+  border-color: rgba(111, 183, 255, 0.62);
+  background: rgba(77, 163, 255, 0.18);
+}
+
+.root :global(.scan-ai-city-anchor) {
+  scroll-margin-top: 66px;
+}
+
+.root :global(.scan-ai-city-card:not(.collapsed)) {
+  overflow: visible;
+}
+
+.root :global(.scan-ai-city-card:not(.collapsed) .scan-ai-city-hero) {
+  position: sticky;
+  top: 54px;
+  z-index: 6;
+  border-radius: 18px 18px 0 0;
 }
