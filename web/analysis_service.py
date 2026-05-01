@@ -32,6 +32,7 @@ from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
+from src.database.runtime_state import IntradayPathSnapshotRepository
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
@@ -1539,6 +1540,75 @@ def _build_intraday_meteorology(data: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
+    """Persist replayable intraday path inputs visible at analysis time."""
+    hourly = result.get("hourly") or {}
+    times = hourly.get("times") if isinstance(hourly, dict) else []
+    temps = hourly.get("temps") if isinstance(hourly, dict) else []
+    if not isinstance(times, list) or not isinstance(temps, list) or not times:
+        return
+
+    forecast = result.get("forecast") or {}
+    deb = result.get("deb") or {}
+    current = result.get("current") or {}
+    forecast_today_high = _sf(forecast.get("today_high"))
+    deb_prediction = _sf(deb.get("prediction"))
+    offset = (
+        deb_prediction - forecast_today_high
+        if deb_prediction is not None and forecast_today_high is not None
+        else 0.0
+    )
+    deb_base_temps = [
+        round(float(value) + offset, 1) if _sf(value) is not None else None
+        for value in temps
+    ]
+    utc_offset = int(result.get("utc_offset_seconds") or 0)
+    snapshot_time = datetime.now(timezone.utc).astimezone(
+        timezone(timedelta(seconds=utc_offset))
+    ).isoformat(timespec="seconds")
+    payload = {
+        "schema_version": 1,
+        "city": city,
+        "target_date": str(result.get("local_date") or "").strip(),
+        "snapshot_time": snapshot_time,
+        "local_time": str(result.get("local_time") or "").strip(),
+        "utc_offset_seconds": utc_offset,
+        "temp_symbol": result.get("temp_symbol"),
+        "deb_prediction": deb_prediction,
+        "forecast_today_high": forecast_today_high,
+        "deb_base_path": {
+            "times": [str(item) for item in times],
+            "temps": deb_base_temps,
+            "source": "hourly_plus_deb_offset",
+            "offset": round(offset, 3),
+        },
+        "hourly": {
+            "times": [str(item) for item in times],
+            "temps": temps,
+        },
+        "metar_today_obs": result.get("metar_today_obs") or [],
+        "settlement_today_obs": result.get("settlement_today_obs") or [],
+        "current": {
+            "temp": _sf(current.get("temp")),
+            "max_so_far": _sf(current.get("max_so_far")),
+            "obs_time": current.get("obs_time"),
+            "settlement_source": current.get("settlement_source"),
+            "settlement_source_label": current.get("settlement_source_label"),
+        },
+        "forecast": {
+            "today_high": forecast_today_high,
+            "sunrise": forecast.get("sunrise"),
+            "sunset": forecast.get("sunset"),
+        },
+        "peak": result.get("peak") or {},
+        "metar_status": result.get("metar_status") or {},
+    }
+    try:
+        IntradayPathSnapshotRepository().append_snapshot(payload)
+    except Exception as exc:
+        logger.debug(f"intraday path snapshot archive skipped for {city}: {exc}")
+
+
 def _analyze(
     city: str,
     force_refresh: bool = False,
@@ -2474,6 +2544,8 @@ def _analyze(
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
     result["intraday_meteorology"] = _build_intraday_meteorology(result)
+    if normalized_detail_mode == "full":
+        _archive_intraday_path_snapshot(city, result)
 
     if include_llm_commentary:
         result["dynamic_commentary"] = _maybe_enrich_dynamic_commentary_with_groq(

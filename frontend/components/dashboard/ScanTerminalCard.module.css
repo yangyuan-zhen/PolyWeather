@@ -994,7 +994,19 @@
   width: 18px;
   height: 3px;
   border-radius: 999px;
-  background: #4da3ff;
+  background: rgba(100, 116, 139, 0.72);
+}
+
+.root :global(.scan-ai-city-chart-legend i.forecast) {
+  background: repeating-linear-gradient(
+    90deg,
+    rgba(100, 116, 139, 0.72) 0 6px,
+    transparent 6px 10px
+  );
+}
+
+.root :global(.scan-ai-city-chart-legend i.calibrated) {
+  background: #38bdf8;
 }
 
 .root :global(.scan-ai-city-chart-legend i.observation) {

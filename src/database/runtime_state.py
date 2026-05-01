@@ -209,6 +209,26 @@ class RuntimeStateDB:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_official_intraday_obs_station_date ON official_intraday_observations_store(source_code, station_code, target_date, observation_time)"
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS intraday_path_snapshots_store (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    city TEXT NOT NULL,
+                    target_date TEXT NOT NULL,
+                    snapshot_time TEXT NOT NULL,
+                    local_time TEXT,
+                    deb_prediction REAL,
+                    forecast_today_high REAL,
+                    current_temp REAL,
+                    max_so_far REAL,
+                    observation_count INTEGER NOT NULL DEFAULT 0,
+                    payload_json TEXT NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_intraday_path_snapshots_city_date ON intraday_path_snapshots_store(city, target_date, id DESC)"
+            )
             conn.commit()
 
 
@@ -1052,6 +1072,72 @@ class OfficialIntradayObservationRepository:
                 out.append(point)
         return out
 
+
+class IntradayPathSnapshotRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def append_snapshot(self, payload: Dict[str, Any]) -> None:
+        observations = []
+        for key in ("metar_today_obs", "settlement_today_obs"):
+            rows = payload.get(key)
+            if isinstance(rows, list):
+                observations.extend(rows)
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO intraday_path_snapshots_store (
+                    city, target_date, snapshot_time, local_time,
+                    deb_prediction, forecast_today_high, current_temp,
+                    max_so_far, observation_count, payload_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    payload.get("city"),
+                    payload.get("target_date"),
+                    payload.get("snapshot_time"),
+                    payload.get("local_time"),
+                    payload.get("deb_prediction"),
+                    payload.get("forecast_today_high"),
+                    payload.get("current_temp"),
+                    payload.get("max_so_far"),
+                    len(observations),
+                    json.dumps(payload, ensure_ascii=False),
+                ),
+            )
+            conn.commit()
+
+    def load_rows_by_city_date(self, city: str, target_date: str) -> List[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT payload_json
+                FROM intraday_path_snapshots_store
+                WHERE city = ? AND target_date = ?
+                ORDER BY id ASC
+                """,
+                (city, target_date),
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                out.append(json.loads(row["payload_json"]))
+            except Exception:
+                continue
+        return out
+
+    def load_all_rows(self) -> List[Dict[str, Any]]:
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                "SELECT payload_json FROM intraday_path_snapshots_store ORDER BY id ASC"
+            ).fetchall()
+        out: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                out.append(json.loads(row["payload_json"]))
+            except Exception:
+                continue
+        return out
 
 def _top_bucket(snapshot: Optional[List[Dict[str, Any]]]) -> Optional[int]:
     best_value = None

@@ -358,6 +358,114 @@ def evaluate_city_date(con: sqlite3.Connection, city: str, date: str, min_obs: i
     return results
 
 
+def load_path_snapshot_rows(
+    con: sqlite3.Connection,
+    *,
+    cities: list[str],
+    dates_filter: set[str],
+) -> list[dict[str, Any]]:
+    try:
+        con.execute("select 1 from intraday_path_snapshots_store limit 1").fetchone()
+    except sqlite3.Error:
+        return []
+    params: list[Any] = []
+    clauses: list[str] = []
+    if cities:
+        clauses.append("city in (" + ",".join("?" for _ in cities) + ")")
+        params.extend(cities)
+    if dates_filter:
+        clauses.append("target_date in (" + ",".join("?" for _ in dates_filter) + ")")
+        params.extend(sorted(dates_filter))
+    where = " where " + " and ".join(clauses) if clauses else ""
+    rows = con.execute(
+        f"select payload_json from intraday_path_snapshots_store{where} order by id asc",
+        params,
+    ).fetchall()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            continue
+        if isinstance(payload, dict):
+            out.append(payload)
+    return out
+
+
+def observation_rows_from_snapshot(snapshot: dict[str, Any]) -> list[Observation]:
+    rows: list[Observation] = []
+    for key in ("metar_today_obs", "settlement_today_obs"):
+        raw_rows = snapshot.get(key)
+        if not isinstance(raw_rows, list):
+            continue
+        for item in raw_rows:
+            if not isinstance(item, dict):
+                continue
+            temp = sf(item.get("temp"))
+            time_text = str(item.get("time") or "").strip()[:5]
+            if temp is not None and hm_to_minutes(time_text) is not None:
+                rows.append(Observation(time_text, temp))
+    return dedupe_observations(rows)
+
+
+def evaluate_path_snapshot(
+    con: sqlite3.Connection,
+    snapshot: dict[str, Any],
+    min_obs: int,
+) -> SampleResult | None:
+    city = str(snapshot.get("city") or "").strip().lower()
+    date = str(snapshot.get("target_date") or snapshot.get("date") or "").strip()
+    if not city or not date:
+        return None
+    actual_high = get_actual_high(con, city, date)
+    deb_high = sf(snapshot.get("deb_prediction"))
+    if actual_high is None or deb_high is None:
+        return None
+    path = snapshot.get("deb_base_path") or {}
+    times = path.get("times") if isinstance(path, dict) else []
+    deb_path = path.get("temps") if isinstance(path, dict) else []
+    if not isinstance(times, list) or not isinstance(deb_path, list) or not times:
+        return None
+    deb_values = [sf(v) for v in deb_path]
+    observations = observation_rows_from_snapshot(snapshot)
+    if len(observations) < min_obs:
+        return None
+    local_time = str(snapshot.get("local_time") or "").strip()
+    current_minute = hm_to_minutes(local_time)
+    if current_minute is None:
+        current_minute = hm_to_minutes(observations[-1].time)
+    if current_minute is None:
+        return None
+    forecast = snapshot.get("forecast") if isinstance(snapshot.get("forecast"), dict) else {}
+    reversion_minute = hm_to_minutes(forecast.get("sunset")) or hm_to_minutes("18:00") or 18 * 60
+    calibrated_path, adjustment = calibrated_future_path(
+        times=[str(t) for t in times],
+        deb_path=deb_values,
+        observations=observations,
+        current_minute=current_minute,
+        reversion_minute=reversion_minute,
+    )
+    future_values = [v for v in calibrated_path if v is not None]
+    current = snapshot.get("current") if isinstance(snapshot.get("current"), dict) else {}
+    max_so_far = sf(current.get("max_so_far"))
+    observed_so_far = max([o.temp for o in observations] + ([max_so_far] if max_so_far is not None else []))
+    calibrated_high = max([observed_so_far, *future_values], default=observed_so_far)
+    return SampleResult(
+        city=city,
+        date=date,
+        current_time=local_time or observations[-1].time,
+        obs_count=len(observations),
+        actual_high=actual_high,
+        deb_high=deb_high,
+        calibrated_high=calibrated_high,
+        deb_abs_error=abs(deb_high - actual_high),
+        calibrated_abs_error=abs(calibrated_high - actual_high),
+        delta_vs_deb=adjustment if adjustment is not None else 0.0,
+        bucket_deb_hit=bucket_hit(city, deb_high, actual_high),
+        bucket_calibrated_hit=bucket_hit(city, calibrated_high, actual_high),
+    )
+
+
 def summarize(samples: list[SampleResult]) -> dict[str, Any]:
     if not samples:
         return {"samples": 0}
@@ -396,6 +504,12 @@ def main() -> int:
     parser.add_argument("--city", action="append", help="City key; can be repeated. Defaults to cities found in daily_records_store.")
     parser.add_argument("--date", action="append", help="YYYY-MM-DD; can be repeated.")
     parser.add_argument("--min-obs", type=int, default=2)
+    parser.add_argument(
+        "--source",
+        choices=("strict", "snapshots", "both"),
+        default="both",
+        help="strict uses reconstructed legacy stores; snapshots uses intraday_path_snapshots_store.",
+    )
     parser.add_argument("--output", default=str(ROOT / "tmp_metar_calibration_backtest.csv"))
     args = parser.parse_args()
 
@@ -406,28 +520,41 @@ def main() -> int:
     dates_filter = set(args.date or [])
 
     all_samples: list[SampleResult] = []
-    skipped = {"no_records_or_inputs": 0}
-    for city in cities:
-        rows = con.execute(
-            "select distinct target_date from daily_records_store where city=? order by target_date",
-            (city,),
-        ).fetchall()
-        for row in rows:
-            date = row[0]
-            if dates_filter and date not in dates_filter:
-                continue
-            samples = evaluate_city_date(con, city, date, args.min_obs)
-            if samples:
-                all_samples.extend(samples)
+    skipped = {"no_records_or_inputs": 0, "snapshots_unusable": 0}
+    if args.source in {"strict", "both"}:
+        for city in cities:
+            rows = con.execute(
+                "select distinct target_date from daily_records_store where city=? order by target_date",
+                (city,),
+            ).fetchall()
+            for row in rows:
+                date = row[0]
+                if dates_filter and date not in dates_filter:
+                    continue
+                samples = evaluate_city_date(con, city, date, args.min_obs)
+                if samples:
+                    all_samples.extend(samples)
+                else:
+                    skipped["no_records_or_inputs"] += 1
+    if args.source in {"snapshots", "both"}:
+        snapshot_rows = load_path_snapshot_rows(
+            con,
+            cities=cities or [],
+            dates_filter=dates_filter,
+        )
+        for snapshot in snapshot_rows:
+            sample = evaluate_path_snapshot(con, snapshot, args.min_obs)
+            if sample:
+                all_samples.append(sample)
             else:
-                skipped["no_records_or_inputs"] += 1
+                skipped["snapshots_unusable"] += 1
 
     summary = summarize(all_samples)
     write_csv(Path(args.output), all_samples)
     print(json.dumps({"summary": summary, "skipped": skipped, "output": args.output}, ensure_ascii=False, indent=2))
     if not all_samples:
         print(
-            "No usable samples. Need matching daily_records + open_meteo_cache hourly forecast + intraday observations for the same city/date.",
+            "No usable samples. Need strict store matches or rows in intraday_path_snapshots_store with later actual_high.",
             file=sys.stderr,
         )
         return 2

@@ -86,16 +86,17 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
     (lastChartDataRef.current?.cityKey === cityKey
       ? lastChartDataRef.current.data
       : null);
-  const forecastLabel = chartData?.datasets.hasMgmHourly
-    ? locale === "en-US"
-      ? "MGM forecast"
-      : "MGM 预测"
-    : locale === "en-US"
-      ? "DEB forecast"
-      : "DEB 预测";
+  const forecastLabel = locale === "en-US" ? "DEB baseline" : "DEB 原始路径";
+  const calibratedLabel =
+    locale === "en-US"
+      ? "METAR-calibrated path"
+      : "METAR 修正路径";
   const observationLabel =
     chartData?.observationLabel ||
     (locale === "en-US" ? "METAR obs" : "METAR 实况");
+  const hasCalibratedPath = Boolean(
+    chartData?.datasets.calibratedFuture.some((value) => value != null),
+  );
   const canvasRef = useChart(() => {
     if (!chartData) {
       return {
@@ -103,36 +104,53 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
         type: "line",
       } satisfies ChartConfiguration<"line">;
     }
-    const forecastPoints = chartData.datasets.hasMgmHourly
-      ? chartData.datasets.mgmHourlyPoints
-      : chartData.datasets.debPast.map(
+    const datasets: NonNullable<
+      ChartConfiguration<"line">["data"]
+    >["datasets"] = [
+      {
+        borderColor: "rgba(100, 116, 139, 0.72)",
+        borderDash: [6, 4],
+        borderWidth: 1.6,
+        data: chartData.datasets.debPast.map(
           (value, index) => value ?? chartData.datasets.debFuture[index],
-        );
+        ),
+        fill: false,
+        label: forecastLabel,
+        pointRadius: 0,
+        spanGaps: true,
+        tension: 0.28,
+      },
+    ];
+
+    if (hasCalibratedPath) {
+      datasets.push({
+        borderColor: "#38bdf8",
+        borderWidth: 2.3,
+        data: chartData.datasets.calibratedFuture,
+        fill: false,
+        label: calibratedLabel,
+        pointHoverRadius: 5,
+        pointRadius: 0,
+        spanGaps: true,
+        tension: 0.32,
+      });
+    }
+
+    datasets.push({
+      backgroundColor: "#22C55E",
+      borderColor: "#22C55E",
+      borderWidth: 0,
+      data: chartData.datasets.metarPoints,
+      fill: false,
+      label: observationLabel,
+      pointHoverRadius: 5,
+      pointRadius: 3.5,
+      showLine: false,
+    });
+
     return {
       data: {
-        datasets: [
-          {
-            borderColor: "#4DA3FF",
-            borderWidth: 2,
-            data: forecastPoints,
-            fill: false,
-            label: forecastLabel,
-            pointRadius: 0,
-            spanGaps: true,
-            tension: 0.32,
-          },
-          {
-            backgroundColor: "#22C55E",
-            borderColor: "#22C55E",
-            borderWidth: 0,
-            data: chartData.datasets.metarPoints,
-            fill: false,
-            label: observationLabel,
-            pointHoverRadius: 5,
-            pointRadius: 3.5,
-            showLine: false,
-          },
-        ],
+        datasets,
         labels: chartData.times,
       },
       options: {
@@ -186,7 +204,14 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [chartData, detail.temp_symbol, forecastLabel, observationLabel]);
+  }, [
+    calibratedLabel,
+    chartData,
+    detail.temp_symbol,
+    forecastLabel,
+    hasCalibratedPath,
+    observationLabel,
+  ]);
 
   useEffect(() => {
     if (shouldRenderChart) return;
@@ -226,6 +251,9 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
       {chartData ? (
         <div className="scan-ai-city-chart-legend">
           <span><i className="forecast" />{forecastLabel}</span>
+          {hasCalibratedPath ? (
+            <span><i className="calibrated" />{calibratedLabel}</span>
+          ) : null}
           <span><i className="observation" />{observationLabel}</span>
         </div>
       ) : null}
