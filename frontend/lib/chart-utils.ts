@@ -142,13 +142,32 @@ function buildCalibratedFuturePath({
     };
   }
 
-  const deltas = dedupeObservationItems(observations)
+  const normalizedObservations = dedupeObservationItems(observations);
+  const latestObservationMinute = normalizedObservations.reduce<number | null>(
+    (latest, item) => {
+      const minute = hmToMinutes(item.time);
+      if (minute == null) return latest;
+      return latest == null ? minute : Math.max(latest, minute);
+    },
+    null,
+  );
+  // In practice the backend `local_time` can lag the latest METAR/official
+  // observation by one refresh cycle. Anchor the future line to the newest
+  // observation when it is newer, otherwise the "no future obs" guard can
+  // suppress the calibrated path even though the user already sees a fresh
+  // green observation point on the chart.
+  const pathStartMinutes =
+    latestObservationMinute != null
+      ? Math.max(currentMinutes, latestObservationMinute)
+      : currentMinutes;
+
+  const deltas = normalizedObservations
     .map((item) => {
       const minute = hmToMinutes(item.time);
       const observed = Number(item.temp);
       if (
         minute == null ||
-        minute > currentMinutes + 30 ||
+        minute > pathStartMinutes + 30 ||
         !Number.isFinite(observed)
       ) {
         return null;
@@ -193,18 +212,18 @@ function buildCalibratedFuturePath({
     .filter((minute): minute is number => minute != null)
     .at(-1);
   const returnToBaselineMinute =
-    reversionMinutes != null && reversionMinutes > currentMinutes
+    reversionMinutes != null && reversionMinutes > pathStartMinutes
       ? reversionMinutes
-      : lastSeriesMinute != null && lastSeriesMinute > currentMinutes
+      : lastSeriesMinute != null && lastSeriesMinute > pathStartMinutes
         ? lastSeriesMinute
-        : currentMinutes + 6 * 60;
+        : pathStartMinutes + 6 * 60;
 
   const future = times.map((time, index) => {
     const minute = hmToMinutes(time);
     const base = debTemps[index];
     if (
       minute == null ||
-      minute < currentMinutes ||
+      minute < pathStartMinutes ||
       base == null ||
       !Number.isFinite(base)
     ) {
@@ -212,8 +231,8 @@ function buildCalibratedFuturePath({
     }
     const progressToEvening = Math.min(
       Math.max(
-        (minute - currentMinutes) /
-          Math.max(returnToBaselineMinute - currentMinutes, 1),
+        (minute - pathStartMinutes) /
+          Math.max(returnToBaselineMinute - pathStartMinutes, 1),
         0,
       ),
       1,
