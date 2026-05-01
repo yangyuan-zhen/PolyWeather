@@ -24,11 +24,15 @@ export async function GET(
 
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
+  const depth = req.nextUrl.searchParams.get("depth");
   const marketSlug = req.nextUrl.searchParams.get("market_slug");
   const targetDate = req.nextUrl.searchParams.get("target_date");
   const searchParams = new URLSearchParams({
     force_refresh: forceRefresh,
   });
+  if (depth) {
+    searchParams.set("depth", depth);
+  }
   if (marketSlug) {
     searchParams.set("market_slug", marketSlug);
   }

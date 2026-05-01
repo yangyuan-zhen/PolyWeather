@@ -49,6 +49,7 @@ type TerminalQueryOptions = {
 };
 
 type CityDetailQueryOptions = {
+  depth?: "panel" | "market" | "nearby" | "full";
   forceRefresh?: boolean;
   marketSlug?: string | null;
   signal?: AbortSignal;
@@ -273,6 +274,7 @@ async function getTerminal({
 
 async function getCityDetail(city: string, options: CityDetailQueryOptions = {}) {
   const params = new URLSearchParams({
+    depth: options.depth || "full",
     force_refresh: String(options.forceRefresh ?? false),
   });
   if (options.marketSlug) params.set("market_slug", options.marketSlug);

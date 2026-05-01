@@ -37,6 +37,15 @@ export function countDetailForecastDays(detail?: CityDetail | null) {
 export function isFullEnoughForDeepAnalysis(detail?: CityDetail | null) {
   if (!detail) return false;
   if (detail.detail_depth && detail.detail_depth !== "full") return false;
+  const hourlyTimes = Array.isArray(detail.hourly?.times)
+    ? detail.hourly?.times || []
+    : [];
+  const hourlyTemps = Array.isArray(detail.hourly?.temps)
+    ? detail.hourly?.temps || []
+    : [];
+  if (!detail.local_time || hourlyTimes.length === 0 || hourlyTemps.length === 0) {
+    return false;
+  }
   return (
     countDetailModels(detail, detail.local_date) > 1 &&
     countDetailForecastDays(detail) > 1

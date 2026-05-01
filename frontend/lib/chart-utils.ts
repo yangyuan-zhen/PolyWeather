@@ -135,7 +135,7 @@ function buildCalibratedFuturePath({
   currentMinutes: number | null;
   reversionMinutes?: number | null;
 }) {
-  if (currentMinutes == null || !times.length || !observations.length) {
+  if (!times.length || !observations.length) {
     return {
       adjustmentDelta: null as number | null,
       future: new Array(times.length).fill(null) as Array<number | null>,
@@ -151,15 +151,21 @@ function buildCalibratedFuturePath({
     },
     null,
   );
+  if (latestObservationMinute == null && currentMinutes == null) {
+    return {
+      adjustmentDelta: null as number | null,
+      future: new Array(times.length).fill(null) as Array<number | null>,
+    };
+  }
   // In practice the backend `local_time` can lag the latest METAR/official
   // observation by one refresh cycle. Anchor the future line to the newest
   // observation when it is newer, otherwise the "no future obs" guard can
   // suppress the calibrated path even though the user already sees a fresh
   // green observation point on the chart.
   const pathStartMinutes =
-    latestObservationMinute != null
-      ? Math.max(currentMinutes, latestObservationMinute)
-      : currentMinutes;
+    latestObservationMinute == null || currentMinutes == null
+      ? latestObservationMinute ?? currentMinutes ?? 0
+      : Math.max(currentMinutes, latestObservationMinute);
 
   const deltas = normalizedObservations
     .map((item) => {
