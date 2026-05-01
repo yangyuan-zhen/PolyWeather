@@ -8,21 +8,22 @@ import { getTemperatureChartData } from "@/lib/chart-utils";
 import type { CityDetail } from "@/lib/dashboard-types";
 
 export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
-  const { locale, t } = useI18n();
+  const { locale } = useI18n();
   const chartData = useMemo(
     () => getTemperatureChartData(detail, locale),
     [detail, locale],
   );
-  const forecastLabel = chartData?.datasets.hasMgmHourly
-    ? locale === "en-US"
-      ? "MGM Forecast"
-      : "MGM 预测"
-    : locale === "en-US"
-      ? "DEB Forecast"
-      : "DEB 预测";
+  const forecastLabel = locale === "en-US" ? "DEB baseline" : "DEB 原始路径";
+  const calibratedLabel =
+    locale === "en-US"
+      ? "METAR-calibrated path"
+      : "METAR 修正路径";
   const observationLabel =
     chartData?.observationLabel ||
     (locale === "en-US" ? "METAR Observation" : "METAR 实况");
+  const hasCalibratedPath = Boolean(
+    chartData?.datasets.calibratedFuture.some((value) => value != null),
+  );
 
   const canvasRef = useChart(() => {
     if (!chartData) {
@@ -32,39 +33,52 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
       } satisfies ChartConfiguration<"line">;
     }
 
-    const forecastPoints = chartData.datasets.hasMgmHourly
-      ? chartData.datasets.mgmHourlyPoints
-      : chartData.datasets.debPast.map(
+    const datasets: NonNullable<
+      ChartConfiguration<"line">["data"]
+    >["datasets"] = [
+      {
+        borderColor: "rgba(100, 116, 139, 0.72)",
+        borderDash: [6, 4],
+        borderWidth: 1.5,
+        data: chartData.datasets.debPast.map(
           (value, index) => value ?? chartData.datasets.debFuture[index],
-        );
+        ),
+        fill: false,
+        label: forecastLabel,
+        pointRadius: 0,
+        spanGaps: true,
+        tension: 0.28,
+      },
+    ];
+
+    if (hasCalibratedPath) {
+      datasets.push({
+        borderColor: "#38bdf8",
+        borderWidth: 2.1,
+        data: chartData.datasets.calibratedFuture,
+        fill: false,
+        label: calibratedLabel,
+        pointRadius: 0,
+        spanGaps: true,
+        tension: 0.3,
+      });
+    }
+
+    datasets.push({
+      backgroundColor: "#22c55e",
+      borderColor: "#22c55e",
+      borderWidth: 0,
+      data: chartData.datasets.metarPoints,
+      fill: false,
+      label: observationLabel,
+      pointHoverRadius: 5,
+      pointRadius: 3.2,
+      showLine: false,
+    });
 
     return {
       data: {
-        datasets: [
-          {
-            borderColor: chartData.datasets.hasMgmHourly
-              ? "rgba(250, 204, 21, 0.92)"
-              : "rgba(52, 211, 153, 0.86)",
-            borderWidth: 1.8,
-            data: forecastPoints,
-            fill: false,
-            label: forecastLabel,
-            pointRadius: 0,
-            spanGaps: true,
-            tension: 0.28,
-          },
-          {
-            backgroundColor: "#4DA3FF",
-            borderColor: "#4DA3FF",
-            borderWidth: 0,
-            data: chartData.datasets.metarPoints,
-            fill: false,
-            label: observationLabel,
-            pointHoverRadius: 5,
-            pointRadius: 3.2,
-            showLine: false,
-          },
-        ],
+        datasets,
         labels: chartData.times,
       },
       options: {
@@ -111,7 +125,14 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
       },
       type: "line",
     } satisfies ChartConfiguration<"line">;
-  }, [chartData, detail.temp_symbol, forecastLabel, observationLabel]);
+  }, [
+    calibratedLabel,
+    chartData,
+    detail.temp_symbol,
+    forecastLabel,
+    hasCalibratedPath,
+    observationLabel,
+  ]);
 
   return (
     <div className="detail-mini-chart-wrap">
@@ -121,9 +142,15 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
       {chartData ? (
         <div className="detail-mini-chart-legend">
           <span>
-            <i className="forecast" />
+            <i className="forecast baseline" />
             {forecastLabel}
           </span>
+          {hasCalibratedPath ? (
+            <span>
+              <i className="forecast calibrated" />
+              {calibratedLabel}
+            </span>
+          ) : null}
           <span>
             <i className="observation" />
             {observationLabel}

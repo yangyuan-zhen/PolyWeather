@@ -134,13 +134,17 @@
 }
 
 .root :global(.detail-mini-chart-legend i.forecast) {
-  background: rgba(52, 211, 153, 0.86);
+  background: rgba(100, 116, 139, 0.72);
+}
+
+.root :global(.detail-mini-chart-legend i.forecast.calibrated) {
+  background: #38bdf8;
 }
 
 .root :global(.detail-mini-chart-legend i.observation) {
   width: 7px;
   height: 7px;
-  background: #4DA3FF;
+  background: #22c55e;
 }
 
 .root :global(.detail-mini-meta) {

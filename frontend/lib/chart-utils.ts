@@ -118,6 +118,116 @@ function buildObservationPoints(items: Array<{ time?: string; temp?: number | nu
     .filter((point): point is { labelTime: string; x: number; y: number } => point != null);
 }
 
+function clampTemperatureDelta(value: number, min = -4, max = 4) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function buildCalibratedFuturePath({
+  observations,
+  times,
+  debTemps,
+  currentMinutes,
+  reversionMinutes,
+}: {
+  observations: Array<{ time?: string | null; temp?: number | null }>;
+  times: string[];
+  debTemps: Array<number | null>;
+  currentMinutes: number | null;
+  reversionMinutes?: number | null;
+}) {
+  if (currentMinutes == null || !times.length || !observations.length) {
+    return {
+      adjustmentDelta: null as number | null,
+      future: new Array(times.length).fill(null) as Array<number | null>,
+    };
+  }
+
+  const deltas = dedupeObservationItems(observations)
+    .map((item) => {
+      const minute = hmToMinutes(item.time);
+      const observed = Number(item.temp);
+      if (
+        minute == null ||
+        minute > currentMinutes + 30 ||
+        !Number.isFinite(observed)
+      ) {
+        return null;
+      }
+      const expected = interpolateSeriesAtMinutes(times, debTemps, minute);
+      if (expected == null || !Number.isFinite(expected)) return null;
+      return {
+        delta: clampTemperatureDelta(observed - expected),
+        minute,
+      };
+    })
+    .filter(
+      (item): item is { delta: number; minute: number } => item != null,
+    )
+    .slice(-3);
+
+  if (!deltas.length) {
+    return {
+      adjustmentDelta: null as number | null,
+      future: new Array(times.length).fill(null) as Array<number | null>,
+    };
+  }
+
+  const weighted = deltas.reduce(
+    (acc, item, index) => {
+      const weight = index + 1;
+      return {
+        total: acc.total + item.delta * weight,
+        weight: acc.weight + weight,
+      };
+    },
+    { total: 0, weight: 0 },
+  );
+  const adjustmentDelta = Number(
+    clampTemperatureDelta(weighted.total / Math.max(weighted.weight, 1)).toFixed(
+      1,
+    ),
+  );
+
+  const lastSeriesMinute = times
+    .map((time) => hmToMinutes(time))
+    .filter((minute): minute is number => minute != null)
+    .at(-1);
+  const returnToBaselineMinute =
+    reversionMinutes != null && reversionMinutes > currentMinutes
+      ? reversionMinutes
+      : lastSeriesMinute != null && lastSeriesMinute > currentMinutes
+        ? lastSeriesMinute
+        : currentMinutes + 6 * 60;
+
+  const future = times.map((time, index) => {
+    const minute = hmToMinutes(time);
+    const base = debTemps[index];
+    if (
+      minute == null ||
+      minute < currentMinutes ||
+      base == null ||
+      !Number.isFinite(base)
+    ) {
+      return null;
+    }
+    const progressToEvening = Math.min(
+      Math.max(
+        (minute - currentMinutes) /
+          Math.max(returnToBaselineMinute - currentMinutes, 1),
+        0,
+      ),
+      1,
+    );
+    // Strongest right after the latest observation, then smoothly fades back
+    // to the unchanged DEB baseline by evening/sunset. This keeps one METAR
+    // point from dragging the whole-day forecast away from the base path.
+    const decay = Math.pow(1 - progressToEvening, 1.35);
+    return Number((base + adjustmentDelta * decay).toFixed(1));
+  });
+
+  return { adjustmentDelta, future };
+}
+
 function sortObservationItemsByTime<T extends { time?: string | null }>(items: T[]) {
   return [...items].sort((left, right) => {
     const leftMinutes = hmToMinutes(left.time);
@@ -385,6 +495,18 @@ export function getTemperatureChartData(
         existing == null ? temp : Math.max(Number(existing), temp);
     }
   });
+  const calibrationObservationSource = dedupeObservationItems(
+    metarObservationSource.length ? metarObservationSource : observationSource,
+  );
+  const calibratedPath = buildCalibratedFuturePath({
+    observations: calibrationObservationSource,
+    times,
+    debTemps,
+    currentMinutes: hmToMinutes(detail.local_time),
+    reversionMinutes:
+      hmToMinutes(detail.forecast?.sunset) ?? hmToMinutes("18:00"),
+  });
+  const calibratedFuture = calibratedPath.future;
 
   const mgmPoints = new Array(times.length).fill(null);
   if (
@@ -415,6 +537,7 @@ export function getTemperatureChartData(
 
   const allValues = [
     ...debTemps.filter((value) => value != null),
+    ...calibratedFuture.filter((value) => value != null),
     ...metarPoints.filter((value) => value != null),
     ...airportMetarPoints.filter((value) => value != null),
     ...mgmPoints.filter((value) => value != null),
@@ -447,7 +570,7 @@ export function getTemperatureChartData(
     }
     return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
   };
-  const hmToMinutes = (value: string | null) => {
+  const chartHmToMinutes = (value: string | null) => {
     if (!value) return null;
     const [hourPart, minutePart] = value.split(":");
     const hour = Number.parseInt(hourPart || "", 10);
@@ -464,7 +587,7 @@ export function getTemperatureChartData(
     }
     return hour * 60 + minute;
   };
-  const currentMinutes = hmToMinutes(normalizeHm(detail.local_time));
+  const currentMinutes = chartHmToMinutes(normalizeHm(detail.local_time));
   const peakFirstHour = Number(detail.peak?.first_h);
   const peakLastHour = Number(detail.peak?.last_h);
   const peakWindowStartMinutes =
@@ -524,23 +647,23 @@ export function getTemperatureChartData(
   const currentTafMarker =
     currentMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = hmToMinutes(normalizeHm(marker.startLocal));
-          const end = hmToMinutes(normalizeHm(marker.endLocal));
+          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
+          const end = chartHmToMinutes(normalizeHm(marker.endLocal));
           return start !== null && end !== null && currentMinutes >= start && currentMinutes <= end;
         }) || null
       : null;
   const nextTafMarker =
     currentMinutes !== null && !currentTafMarker
       ? tafMarkers.find((marker) => {
-          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
           return start !== null && start > currentMinutes;
         }) || null
       : null;
   const peakWindowTafMarker =
     peakWindowStartMinutes !== null && peakWindowEndMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = hmToMinutes(normalizeHm(marker.startLocal));
-          const end = hmToMinutes(normalizeHm(marker.endLocal));
+          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
+          const end = chartHmToMinutes(normalizeHm(marker.endLocal));
           return (
             start !== null &&
             end !== null &&
@@ -588,6 +711,14 @@ export function getTemperatureChartData(
       isEnglish(locale)
         ? `DEB offset ${sign}${offset.toFixed(1)}${detail.temp_symbol} vs OM`
         : `DEB 偏移 ${sign}${offset.toFixed(1)}${detail.temp_symbol} vs OM`,
+    );
+  }
+  if (calibratedPath.adjustmentDelta != null) {
+    const sign = calibratedPath.adjustmentDelta > 0 ? "+" : "";
+    legendParts.push(
+      isEnglish(locale)
+        ? `METAR-calibrated path applies latest observation bias ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}.`
+        : `修正路径使用最新 METAR 偏差 ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}。`,
     );
   }
   if (hasMgmHourly) {
@@ -684,6 +815,8 @@ export function getTemperatureChartData(
 
   const debPastSeries = buildSeriesPoints(times, debPast);
   const debFutureSeries = buildSeriesPoints(times, debFuture);
+  const debSeries = buildSeriesPoints(times, debTemps);
+  const calibratedFutureSeries = buildSeriesPoints(times, calibratedFuture);
   const tempsSeries = buildSeriesPoints(times, temps);
   const mgmHourlySeries = buildSeriesPoints(times, mgmHourlyPoints);
   const metarSeries = buildObservationPoints(observationSource);
@@ -696,7 +829,7 @@ export function getTemperatureChartData(
     .filter((marker) => marker.isCurrent)
     .map((marker) => ({
       marker,
-      x: hmToMinutes(marker.labelTime) ?? 0,
+      x: chartHmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue,
     }))
     .filter((point) => point.x > 0);
@@ -704,28 +837,32 @@ export function getTemperatureChartData(
     .filter((marker) => marker.isPeakWindow && !marker.isCurrent)
     .map((marker) => ({
       marker,
-      x: hmToMinutes(marker.labelTime) ?? 0,
+      x: chartHmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue - 0.15,
     }))
     .filter((point) => point.x > 0);
   const tafMarkerSeries = tafMarkers
     .map((marker) => ({
       marker,
-      x: hmToMinutes(marker.labelTime) ?? 0,
+      x: chartHmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue,
     }))
     .filter((point) => point.x > 0);
-  const xMin = times.length ? hmToMinutes(times[0]) ?? 0 : 0;
-  const xMax = times.length ? hmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
+  const xMin = times.length ? chartHmToMinutes(times[0]) ?? 0 : 0;
+  const xMax = times.length ? chartHmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
 
   return {
     datasets: {
       airportMetarPoints,
       airportMetarSeries,
+      calibratedFuture,
+      calibratedFutureSeries,
+      calibrationAdjustmentDelta: calibratedPath.adjustmentDelta,
       debFuture,
       debFutureSeries,
       debPast,
       debPastSeries,
+      debSeries,
       hasMgmHourly,
       metarPoints,
       metarSeries,

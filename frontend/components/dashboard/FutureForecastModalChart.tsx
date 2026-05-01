@@ -40,49 +40,55 @@ export function DailyTemperatureChart({
         ChartConfiguration<"line">["data"]
       >["datasets"] = [];
 
+      datasets.push({
+        borderColor: "rgba(100, 116, 139, 0.72)",
+        borderDash: [6, 4],
+        borderWidth: 1.6,
+        data: todayChartData.datasets.debSeries,
+        fill: false,
+        label: locale === "en-US" ? "DEB baseline" : "DEB 原始路径",
+        parsing: false,
+        pointRadius: 0,
+        tension: 0.3,
+      });
+
+      if (todayChartData.datasets.calibratedFutureSeries.length > 0) {
+        datasets.push({
+          borderColor: "#38bdf8",
+          borderWidth: 2.4,
+          data: todayChartData.datasets.calibratedFutureSeries,
+          fill: false,
+          label:
+            locale === "en-US"
+              ? "METAR-calibrated path"
+              : "METAR 修正路径",
+          parsing: false,
+          pointHoverRadius: 5,
+          pointRadius: 0,
+          tension: 0.32,
+        });
+      }
+
       if (todayChartData.datasets.hasMgmHourly) {
         datasets.push({
           backgroundColor: "rgba(234, 179, 8, 0.05)",
           borderColor: "rgba(234, 179, 8, 0.8)",
-          borderWidth: 2,
+          borderDash: [3, 3],
+          borderWidth: 1.2,
           data: todayChartData.datasets.mgmHourlySeries,
           fill: false,
           label: locale === "en-US" ? "MGM Forecast" : "MGM 预测",
           parsing: false,
           pointHoverRadius: 6,
-          pointRadius: 3,
+          pointRadius: 0,
           spanGaps: true,
-          tension: 0.3,
-        });
-      } else {
-        datasets.push({
-          backgroundColor: "rgba(77, 163, 255, 0.06)",
-          borderColor: "rgba(77, 163, 255, 0.66)",
-          borderWidth: 1.5,
-          data: todayChartData.datasets.debPastSeries,
-          fill: true,
-          label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
-          parsing: false,
-          pointHoverRadius: 3,
-          pointRadius: 0,
-          tension: 0.3,
-        });
-        datasets.push({
-          borderColor: "rgba(77, 163, 255, 0.36)",
-          borderDash: [5, 3],
-          borderWidth: 1.5,
-          data: todayChartData.datasets.debFutureSeries,
-          fill: false,
-          label: locale === "en-US" ? "DEB Forecast" : "DEB 预测",
-          parsing: false,
-          pointRadius: 0,
           tension: 0.3,
         });
       }
 
       datasets.push({
-        backgroundColor: "#4DA3FF",
-        borderColor: "#4DA3FF",
+        backgroundColor: "#22c55e",
+        borderColor: "#22c55e",
         borderWidth: 0,
         data: todayChartData.datasets.metarSeries,
         fill: false,
@@ -98,8 +104,8 @@ export function DailyTemperatureChart({
 
       if (todayChartData.datasets.airportMetarSeries?.length > 0) {
         datasets.push({
-          backgroundColor: "#60a5fa",
-          borderColor: "#60a5fa",
+          backgroundColor: "#86efac",
+          borderColor: "#86efac",
           borderWidth: 1,
           data: todayChartData.datasets.airportMetarSeries,
           fill: false,
