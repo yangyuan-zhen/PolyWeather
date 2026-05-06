@@ -188,14 +188,14 @@ SCAN_AI_MAX_TOKENS = _env_int(
 )
 SCAN_CITY_AI_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS",
-    650,
-    min_value=300,
+    1200,
+    min_value=400,
     max_value=64000,
 )
 SCAN_CITY_AI_STREAM_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_STREAM_MAX_TOKENS",
-    min(SCAN_CITY_AI_MAX_TOKENS, 650),
-    min_value=300,
+    min(SCAN_CITY_AI_MAX_TOKENS, 900),
+    min_value=400,
     max_value=64000,
 )
 
