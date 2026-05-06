@@ -330,8 +330,24 @@ def _city_observation_anchor(data: Dict[str, Any]) -> Dict[str, Any]:
             "station_label": station_label,
             "read_label_zh": "香港天文台观测解读",
             "read_label_en": "Hong Kong Observatory observation read",
-            "instruction_zh": "该城市使用香港天文台/HKO 官方站点观测，不是机场 METAR；不得称为机场报文或 METAR。",
-            "instruction_en": "This city uses Hong Kong Observatory/HKO station observations, not an airport METAR; do not call it an airport bulletin or METAR.",
+            "instruction_zh": (
+                "该城市使用香港天文台/HKO 官方站点观测，提供温度、今日最高/最低温、相对湿度、"
+                "10分钟平均风速和风向数据。它不是机场 METAR，不得使用 METAR、TAF、机场报文、报文时间等称谓，"
+                "应使用「观测时间」「风速」「风向」「湿度」等官方气象站用语。"
+                "观测解读必须具体说明：最新观测时间、温度、风向风速对升温路径的影响（增温/降温/中性）、"
+                "湿度是否可能压制日间升温。涉及风时必须说明具体风向及来源（如「偏北风」「海风/陆风」）。"
+                "如果有今日最高温和最低温数据，应结合判断温度走势。"
+            ),
+            "instruction_en": (
+                "This city uses Hong Kong Observatory/HKO official station observations, providing temperature, "
+                "today's high/low, relative humidity, 10-min mean wind speed and direction. "
+                "It is NOT an airport METAR; do not use METAR, TAF, airport bulletin, or report time terminology. "
+                "Use terms like observation time, wind speed, wind direction, humidity. "
+                "The observation read must be specific: latest observation time, temperature, whether the wind "
+                "direction tends to warm, cool or be neutral for today's high path and why, and whether humidity "
+                "may suppress daytime heating. When mentioning wind, specify the direction and source "
+                "(e.g. northerly, sea breeze/land breeze). If today's high/low are available, use them to assess the trend."
+            ),
         }
     return {
         "source": "metar",
