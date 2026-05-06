@@ -917,6 +917,89 @@
   line-height: 1.6;
 }
 
+.root :global(.scan-ai-prediction-dual) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.root :global(.scan-ai-prediction-card) {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(13, 27, 48, 0.62);
+}
+
+.root :global(.scan-ai-prediction-card.ai) {
+  border-color: rgba(34, 211, 238, 0.32);
+  background: linear-gradient(180deg, rgba(8, 36, 52, 0.72), rgba(10, 24, 42, 0.72));
+}
+
+.root :global(.scan-ai-prediction-card.deb) {
+  border-color: rgba(77, 163, 255, 0.18);
+}
+
+.root :global(.scan-ai-prediction-card small) {
+  color: #7d92b2;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.root :global(.scan-ai-prediction-card strong) {
+  color: #eef7ff;
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.root :global(.scan-ai-prediction-card.ai strong) {
+  color: #4ef2d6;
+}
+
+.root :global(.scan-ai-prediction-card em) {
+  display: block;
+  color: #8fa4c3;
+  font-size: 11px;
+  font-weight: 800;
+  font-style: normal;
+}
+
+.root :global(.scan-ai-confidence) {
+  display: inline-block;
+  width: fit-content;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+}
+
+.root :global(.scan-ai-confidence.high) {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+}
+
+.root :global(.scan-ai-confidence.medium) {
+  background: rgba(245, 158, 11, 0.14);
+  color: #facc15;
+}
+
+.root :global(.scan-ai-confidence.low) {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+}
+
+.root :global(.scan-ai-confidence.neutral) {
+  background: rgba(77, 163, 255, 0.08);
+  color: #7d92b2;
+}
+
 .root :global(.scan-ai-weather-summary) {
   color: #e6edf3;
   font-weight: 850;

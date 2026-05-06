@@ -21,11 +21,11 @@ export function getAiReadCopy({
         : "AI 机场报文解读已完成",
     inProgress: isEn
       ? isHkoObservation
-        ? "Fast read is ready; AI is adding HKO observation details..."
-        : "Fast read is ready; AI is adding airport bulletin details..."
+        ? "Fast read is ready; AI is predicting today's high from the HKO observation..."
+        : "Fast read is ready; AI is predicting today's high from the airport bulletin..."
       : isHkoObservation
-        ? "快速判断已完成，AI 正在补充香港天文台观测细节…"
-        : "快速判断已完成，AI 正在补充机场报文细节…",
+        ? "快速判断已完成，AI 正在基于最新观测预测今日最高温…"
+        : "快速判断已完成，AI 正在基于最新报文预测今日最高温…",
     ruleEvidence: isEn
       ? "AI read did not return completely; rule evidence is being used."
       : "AI 解读未完整返回，当前使用规则证据",

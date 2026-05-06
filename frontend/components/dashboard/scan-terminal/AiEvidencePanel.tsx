@@ -5,15 +5,28 @@ import type {
   AiCityForecastPayload,
   AiCityForecastState,
 } from "@/components/dashboard/scan-terminal/types";
+import { formatTemperatureValue } from "@/lib/temperature-utils";
+
+function confidenceBadge(confidence: string | null, isEn: boolean) {
+  const c = String(confidence || "").toLowerCase();
+  if (c === "high") return { label: isEn ? "High" : "高", tone: "high" };
+  if (c === "medium") return { label: isEn ? "Medium" : "中", tone: "medium" };
+  return { label: isEn ? "Low" : "低", tone: "low" };
+}
 
 export function AiEvidencePanel({
   aiBullets,
   aiCityForecast,
   aiForecast,
+  aiPredictedMax,
+  aiRangeLow,
+  aiRangeHigh,
+  aiConfidence,
   aiReadCompleteText,
   aiReadInProgressText,
   aiRuleEvidenceMode,
   aiRuleEvidenceText,
+  debPrediction,
   fallbackAiReason,
   isCompactCard,
   isEn,
@@ -21,14 +34,20 @@ export function AiEvidencePanel({
   localModelSupportNote,
   localizedFinalJudgment,
   rawObservationText,
+  tempSymbol,
 }: {
   aiBullets: string[];
   aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
   aiForecast: AiCityForecastState;
+  aiPredictedMax: number | null;
+  aiRangeLow: number | null;
+  aiRangeHigh: number | null;
+  aiConfidence: string | null;
   aiReadCompleteText: string;
   aiReadInProgressText: string;
   aiRuleEvidenceMode: boolean;
   aiRuleEvidenceText: string;
+  debPrediction: number | null;
   fallbackAiReason: string;
   isCompactCard: boolean;
   isEn: boolean;
@@ -36,12 +55,21 @@ export function AiEvidencePanel({
   localModelSupportNote: string;
   localizedFinalJudgment: string;
   rawObservationText: string;
+  tempSymbol: string;
 }) {
   const [isOpen, setIsOpen] = useState(() => !isCompactCard);
 
   useEffect(() => {
     setIsOpen(!isCompactCard);
   }, [isCompactCard]);
+
+  const aiConfidenceMeta = confidenceBadge(aiConfidence, isEn);
+  const hasAiPrediction = aiPredictedMax != null;
+  const hasDebPrediction = debPrediction != null;
+  const aiRangeText =
+    aiRangeLow != null && aiRangeHigh != null
+      ? `${formatTemperatureValue(aiRangeLow, tempSymbol, { digits: 0 })} ~ ${formatTemperatureValue(aiRangeHigh, tempSymbol, { digits: 0 })}`
+      : null;
 
   return (
     <details
@@ -60,6 +88,30 @@ export function AiEvidencePanel({
       </summary>
       {isOpen ? (
         <div className="scan-ai-city-section-body">
+          {hasAiPrediction || hasDebPrediction ? (
+            <div className="scan-ai-prediction-dual">
+              {hasAiPrediction ? (
+                <div className="scan-ai-prediction-card ai">
+                  <small>{isEn ? "AI predicted high" : "AI 预测最高温"}</small>
+                  <strong>{formatTemperatureValue(aiPredictedMax!, tempSymbol, { digits: 1 })}</strong>
+                  <span className={`scan-ai-confidence ${aiConfidenceMeta.tone}`}>
+                    {aiConfidenceMeta.label}
+                  </span>
+                  {aiRangeText ? <em>{aiRangeText}</em> : null}
+                </div>
+              ) : null}
+              {hasDebPrediction ? (
+                <div className="scan-ai-prediction-card deb">
+                  <small>{isEn ? "DEB fusion" : "DEB 融合"}</small>
+                  <strong>{formatTemperatureValue(debPrediction!, tempSymbol, { digits: 1 })}</strong>
+                  <span className="scan-ai-confidence neutral">
+                    {isEn ? "Reference" : "参考"}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
           {aiForecast.status === "loading" ? (
             <>
               <p className="scan-ai-weather-summary">{aiReadInProgressText}</p>

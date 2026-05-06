@@ -32,13 +32,18 @@ import type { CityDetail } from "@/lib/dashboard-types";
 export function MobileDecisionCard({
   aiBullets,
   aiCityForecast,
+  aiConfidence,
   aiForecast,
+  aiPredictedMax,
+  aiRangeHigh,
+  aiRangeLow,
   aiReadCompleteText,
   aiReadInProgressText,
   aiRuleEvidenceMode,
   aiRuleEvidenceText,
   currentTempText,
   dataFreshnessRows,
+  debPrediction,
   decisionState,
   detail,
   displayName,
@@ -57,16 +62,22 @@ export function MobileDecisionCard({
   peakWindow,
   rawObservationText,
   removing,
+  tempSymbol,
 }: {
   aiBullets: string[];
   aiCityForecast: AiCityForecastPayload["city_forecast"] | null;
+  aiConfidence: string | null;
   aiForecast: AiCityForecastState;
+  aiPredictedMax: number | null;
+  aiRangeHigh: number | null;
+  aiRangeLow: number | null;
   aiReadCompleteText: string;
   aiReadInProgressText: string;
   aiRuleEvidenceMode: boolean;
   aiRuleEvidenceText: string;
   currentTempText: string;
   dataFreshnessRows: DataFreshnessRow[];
+  debPrediction: number | null;
   decisionState: CityDecisionState;
   detail: CityDetail | null;
   displayName: string;
@@ -85,6 +96,7 @@ export function MobileDecisionCard({
   peakWindow: string;
   rawObservationText: string;
   removing?: boolean;
+  tempSymbol: string;
 }) {
   const copy = getMobileDecisionCopy(isEn);
   const loadingCopy = getCityLoadingCopy({ isEn, isHkoObservation });
@@ -170,11 +182,16 @@ export function MobileDecisionCard({
           <AiEvidencePanel
             aiBullets={aiBullets}
             aiCityForecast={aiCityForecast}
+            aiConfidence={aiConfidence}
             aiForecast={aiForecast}
+            aiPredictedMax={aiPredictedMax}
+            aiRangeHigh={aiRangeHigh}
+            aiRangeLow={aiRangeLow}
             aiReadCompleteText={aiReadCompleteText}
             aiReadInProgressText={aiReadInProgressText}
             aiRuleEvidenceMode={aiRuleEvidenceMode}
             aiRuleEvidenceText={aiRuleEvidenceText}
+            debPrediction={debPrediction}
             fallbackAiReason={fallbackAiReason}
             isCompactCard
             isEn={isEn}
@@ -182,6 +199,7 @@ export function MobileDecisionCard({
             localModelSupportNote={localModelSupportNote}
             localizedFinalJudgment={localizedFinalJudgment}
             rawObservationText={rawObservationText}
+            tempSymbol={tempSymbol}
           />
 
           <details

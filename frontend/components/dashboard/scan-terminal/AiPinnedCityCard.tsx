@@ -358,6 +358,9 @@ export function AiPinnedCityCard({
       ? `Model support is unavailable, so this city must rely on DEB path and ${observationSourceEn}.`
       : `暂无可用多模型支撑，需要主要参考 DEB 路径和${observationSourceZh}。`;
   const aiPredictedMax = toFiniteDecisionNumber(aiCityForecast?.predicted_max);
+  const aiRangeLow = toFiniteDecisionNumber(aiCityForecast?.range_low);
+  const aiRangeHigh = toFiniteDecisionNumber(aiCityForecast?.range_high);
+  const aiConfidence = String(aiCityForecast?.confidence || "").trim() || null;
   const decisionExpectedHighNumber = resolveExpectedHighCandidate({
     aiPredictedMax,
     currentTemp: currentTempNumber,
@@ -549,13 +552,18 @@ export function AiPinnedCityCard({
         <MobileDecisionCard
           aiBullets={aiBullets}
           aiCityForecast={aiCityForecast}
+          aiConfidence={aiConfidence}
           aiForecast={aiForecast}
+          aiPredictedMax={aiPredictedMax}
+          aiRangeHigh={aiRangeHigh}
+          aiRangeLow={aiRangeLow}
           aiReadCompleteText={aiReadCompleteText}
           aiReadInProgressText={aiReadInProgressText}
           aiRuleEvidenceMode={aiRuleEvidenceMode}
           aiRuleEvidenceText={aiRuleEvidenceText}
           currentTempText={currentTempText}
           dataFreshnessRows={dataFreshnessRows}
+          debPrediction={debNumber}
           decisionState={decisionState}
           detail={detail}
           displayName={displayName}
@@ -574,6 +582,7 @@ export function AiPinnedCityCard({
           peakWindow={peakWindow}
           rawObservationText={rawObservationText}
           removing={removing}
+          tempSymbol={tempSymbol}
         />
       ) : (
         <>
@@ -620,11 +629,16 @@ export function AiPinnedCityCard({
                 <AiEvidencePanel
                   aiBullets={aiBullets}
                   aiCityForecast={aiCityForecast}
+                  aiConfidence={aiConfidence}
                   aiForecast={aiForecast}
+                  aiPredictedMax={aiPredictedMax}
+                  aiRangeHigh={aiRangeHigh}
+                  aiRangeLow={aiRangeLow}
                   aiReadCompleteText={aiReadCompleteText}
                   aiReadInProgressText={aiReadInProgressText}
                   aiRuleEvidenceMode={aiRuleEvidenceMode}
                   aiRuleEvidenceText={aiRuleEvidenceText}
+                  debPrediction={debNumber}
                   fallbackAiReason={fallbackAiReason}
                   isCompactCard={isCompactCard}
                   isEn={isEn}
@@ -632,6 +646,7 @@ export function AiPinnedCityCard({
                   localModelSupportNote={localModelSupportNote}
                   localizedFinalJudgment={localizedFinalJudgment}
                   rawObservationText={rawObservationText}
+                  tempSymbol={tempSymbol}
                 />
               </div>
 
