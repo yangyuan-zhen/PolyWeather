@@ -2792,6 +2792,49 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     if deb_val is None:
         deb_val = om_today
 
+    # LGBM enhancement (same as _analyze, so DEB is a single source of truth)
+    if current_forecasts and deb_val is not None:
+        h_times = om_hourly.get("time", [])
+        h_temps = om_hourly.get("temperature_2m", [])
+        h_rad = om_hourly.get("shortwave_radiation", [])
+        peak_hours: list[str] = []
+        if h_temps and h_times and len(h_temps) == len(h_times) and h_rad and len(h_rad) == len(h_times):
+            for i, ts in enumerate(h_times):
+                if isinstance(ts, str) and "T" in ts:
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                        local_h = dt.hour + dt.minute / 60.0
+                    except Exception:
+                        continue
+                    if 11 <= local_h <= 17 and (h_rad[i] and h_rad[i] > 200):
+                        peak_hours.append(ts.split("T")[1][:5])
+        first_peak_h = int(peak_hours[0].split(":")[0]) if peak_hours else 13
+        last_peak_h = int(peak_hours[-1].split(":")[0]) if peak_hours else 15
+        if local_hour_frac > last_peak_h:
+            peak_status = "past"
+        elif first_peak_h <= local_hour_frac <= last_peak_h:
+            peak_status = "in_window"
+        else:
+            peak_status = "before"
+        lgbm_val, _ = predict_lgbm_daily_high(
+            city_name=city,
+            current_forecasts=current_forecasts,
+            deb_prediction=deb_val,
+            current_temp=cur_temp,
+            max_so_far=max_so_far,
+            humidity=_sf(primary_current.get("humidity")),
+            wind_speed_kt=_sf(primary_current.get("wind_speed_kt")),
+            visibility_mi=_sf(primary_current.get("visibility_mi")),
+            local_hour=local_hour,
+            local_date=local_date_str,
+            peak_status=peak_status,
+        )
+        if lgbm_val is not None:
+            current_forecasts["LGBM"] = lgbm_val
+            blended, _weights_info = calculate_dynamic_weights(city, current_forecasts)
+            if blended is not None:
+                deb_val = blended
+
     settlement_today_obs = []
     if use_settlement_current:
         explicit_obs = settlement_current.get("today_obs") or []
@@ -3101,6 +3144,8 @@ def _build_city_detail_payload(
             for k, v in (data.get("multi_model") or {}).items()
             if not _is_excluded_model_name(k)
         },
+        "deb": data.get("deb") or {},
+        "multi_model_daily": data.get("multi_model_daily") or {},
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
         "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
         "intraday_meteorology": data.get("intraday_meteorology")

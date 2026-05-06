@@ -37,15 +37,16 @@ export function getProbabilityView(detail: CityDetail, targetDate?: string | nul
 export function getModelView(detail: CityDetail, targetDate?: string | null) {
   const date = targetDate || detail.local_date;
   const daily = detail.multi_model_daily?.[date];
+  const deb = detail.deb?.prediction ?? daily?.deb?.prediction ?? null;
   if (daily) {
     return {
-      deb: daily.deb?.prediction ?? null,
+      deb,
       models: daily.models || {},
     };
   }
 
   return {
-    deb: detail.deb?.prediction ?? null,
+    deb,
     models: detail.multi_model || {},
   };
 }
