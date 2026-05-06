@@ -43,16 +43,6 @@ def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str
         (_safe_float(item.get("value")) for item in sources if isinstance(item, dict) and "DEB" in str(item.get("model") or "")),
         None,
     )
-    non_deb_values = [
-        _safe_float(item.get("value"))
-        for item in sources
-        if isinstance(item, dict) and _safe_float(item.get("value")) is not None and "DEB" not in str(item.get("model") or "")
-    ]
-    cluster_median = (
-        sorted(non_deb_values)[len(non_deb_values) // 2]
-        if non_deb_values
-        else (values[0] if values else None)
-    )
     if locale == "en-US":
         if count <= 0:
             return f"No usable model cluster was returned; rely on {observation_label} only."

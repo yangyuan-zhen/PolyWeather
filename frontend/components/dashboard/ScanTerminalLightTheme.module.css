@@ -446,14 +446,28 @@
 .root :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root :global(.scan-terminal.light .scan-ai-market-bucket),
 .root :global(.scan-terminal.light .scan-ai-city-pills span),
-.root :global(.scan-terminal.light .scan-ai-city-freshness span) {
+.root :global(.scan-terminal.light .scan-ai-city-freshness span),
+.root :global(.scan-terminal.light .scan-ai-city-metrics > span) {
   background: #eef2f7;
   border-color: #e2e8f0;
 }
 
+.root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary) {
+  background: #dbeafe;
+  border-color: rgba(59, 130, 246, 0.28);
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-metrics > span.primary b) {
+  color: #1d4ed8;
+}
+
+.root :global(.scan-terminal.light .scan-ai-city-metrics small) {
+  color: #64748b;
+}
+
 .root :global(.scan-terminal.light .scan-ai-workspace-head strong),
 .root :global(.scan-terminal.light .scan-ai-city-hero h3),
-.root :global(.scan-terminal.light .scan-ai-city-hero-side > strong),
+.root :global(.scan-terminal.light .scan-ai-city-metrics b),
 .root :global(.scan-terminal.light .scan-ai-decision-band strong),
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
 .root :global(.scan-terminal.light .scan-ai-market-bucket strong),
@@ -770,10 +784,28 @@
 .root:global(.light) :global(.scan-terminal.light .scan-ai-decision-metrics span),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-pills span),
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-freshness span),
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-metrics > span),
 .root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-metrics span),
 .root:global(.light) :global(.scan-terminal.light .scan-mobile-decision-reason) {
   background: #eef7ff !important;
   border-color: rgba(37, 99, 235, 0.16) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-metrics > span.primary) {
+  background: #dbeafe !important;
+  border-color: rgba(59, 130, 246, 0.34) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-metrics b) {
+  color: #0f172a !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-metrics > span.primary b) {
+  color: #1d4ed8 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-metrics small) {
+  color: #64748b !important;
 }
 
 .root:global(.light) :global(.scan-terminal.light .scan-ai-city-card p),

@@ -59,32 +59,12 @@ export function CityCardHeader({
 }) {
   return (
     <header className="scan-ai-city-hero">
-      <div>
+      <div className="scan-ai-city-hero-left">
         <span className="scan-ai-city-kicker">
           {isEn ? "Deep analysis" : "城市深度分析"}
         </span>
         <h3>{displayName}</h3>
-        <div className="scan-ai-city-mobile-priority" aria-label={isEn ? "Key city decision metrics" : "城市决策重点"}>
-          <span>
-            <small>{isEn ? "Observed" : "当前温度"}</small>
-            <b>{currentTempText}</b>
-          </span>
-          <span>
-            <small>{isEn ? "Expected high" : "预测高点"}</small>
-            <b>{expectedHighText}</b>
-          </span>
-          <span>
-            <small>{isEn ? "Peak" : "峰值时间"}</small>
-            <b>{peakWindow}</b>
-          </span>
-        </div>
         <CityStatusTags tags={statusTags} />
-        <div className="scan-ai-city-pills">
-          <span>{detailLocalTime || rowLocalTime || "--"}</span>
-          <span>DEB {debText}</span>
-          <span>{isEn ? "Model" : "模型"} {modelRange}</span>
-          <span>{isEn ? "Peak" : "峰值"} {peakWindow}</span>
-        </div>
         <DataFreshnessBar
           aiStatusLabel={aiStatusLabel}
           aiStatusTone={aiStatusTone}
@@ -94,8 +74,20 @@ export function CityCardHeader({
         />
       </div>
       <div className="scan-ai-city-hero-side">
-        <span>{isEn ? "Expected high" : "预计最高温"}</span>
-        <strong>{expectedHighText}</strong>
+        <div className="scan-ai-city-metrics">
+          <span>
+            <small>{isEn ? "Observed" : "当前温度"}</small>
+            <b>{currentTempText}</b>
+          </span>
+          <span className="primary">
+            <small>{isEn ? "Expected high" : "预计最高温"}</small>
+            <b>{expectedHighText}</b>
+          </span>
+          <span>
+            <small>{isEn ? "Peak" : "峰值时间"}</small>
+            <b>{peakWindow}</b>
+          </span>
+        </div>
         <div className="scan-ai-city-actions">
           <button
             type="button"
