@@ -839,3 +839,73 @@
 .root:global(.light) :global(.scan-terminal.light .scan-ai-decision-why) {
   color: #1d4ed8 !important;
 }
+
+/* ── AI prediction dual-card light mode ── */
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-dual) {
+  gap: 10px;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card) {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card.ai) {
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.52), #ffffff) !important;
+  border-color: rgba(14, 165, 233, 0.28) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card.deb) {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card small) {
+  color: #64748b !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card strong) {
+  color: #0f172a !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card.ai strong) {
+  color: #0369a1 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card em) {
+  color: #64748b !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card.ai.pending) {
+  background: rgba(219, 234, 254, 0.28) !important;
+  border-color: rgba(14, 165, 233, 0.16) !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-card.ai.pending strong) {
+  color: #94a3b8 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-confidence) {
+  background: rgba(59, 130, 246, 0.1) !important;
+  color: #2563eb !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-confidence.high) {
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #047857 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-confidence.medium) {
+  background: rgba(245, 158, 11, 0.12) !important;
+  color: #b45309 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-confidence.low) {
+  background: rgba(148, 163, 184, 0.12) !important;
+  color: #64748b !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-confidence.neutral) {
+  background: rgba(148, 163, 184, 0.08) !important;
+  color: #64748b !important;
+}
