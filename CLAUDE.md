@@ -6,6 +6,26 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 PolyWeather Pro — a production weather-intelligence stack for temperature settlement markets. Aggregates observations and forecasts for 52 monitored cities globally, blends multi-model highs using DEB (Dynamic Error Balancing), generates calibrated probability buckets for settlement, maps weather to Polymarket quotes for mispricing scans, and serves both a Next.js dashboard (Vercel) and a Telegram bot.
 
+## Environment & Preferences (ALWAYS follow)
+
+### Working Directory
+- All commands run from the repo root: `E:/web/PolyWeather`
+- Frontend dev server: `cd frontend && npm run dev` → http://localhost:3000
+- Backend API server: `uvicorn web.app:app --reload --host 0.0.0.0 --port 8000` → http://localhost:8000
+- When I say "start the server", assume the correct working directory is `E:/web/PolyWeather`
+
+### Git Conventions
+- **Commit language: Chinese (简体中文) ONLY**
+- Format: Lore Commit Protocol — intent line in Chinese, trailers in English
+- Examples: `重构城市决策卡 hero 布局` or `统一 DEB 数据源为单一计算路径`
+- **NEVER** use English for commit subject lines
+
+### Tooling
+- Package manager: **npm** (not yarn/pnpm)
+- Python: `python` (not python3), venv at `venv/`
+- Lint: `ruff check .` (Python) + `npx tsc --noEmit` (TypeScript)
+- NEVER ask me about these preferences again — commit to memory
+
 ## Architecture
 
 ```
