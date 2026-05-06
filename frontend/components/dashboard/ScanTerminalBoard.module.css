@@ -29,6 +29,62 @@
   background: rgba(8, 17, 30, 0.8);
 }
 
+.root :global(.scan-upgrade-announcement) {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  padding: 16px 20px;
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, rgba(77, 163, 255, 0.08), transparent 36%),
+    rgba(11, 18, 32, 0.66);
+  backdrop-filter: blur(8px);
+}
+
+.root :global(.scan-upgrade-announcement-copy) {
+  display: grid;
+  gap: 6px;
+}
+
+.root :global(.scan-upgrade-announcement-copy span) {
+  color: #4da3ff;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.root :global(.scan-upgrade-announcement-copy strong) {
+  color: #e6edf3;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.root :global(.scan-upgrade-announcement-copy p) {
+  color: #9fb2c7;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.root :global(.scan-upgrade-announcement ul) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.root :global(.scan-upgrade-announcement li) {
+  padding: 5px 10px;
+  border: 1px solid rgba(77, 163, 255, 0.14);
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.08);
+  color: #cfe5ff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .root :global(.scan-terminal.focus-view-active .scan-upgrade-announcement),
 .root :global(.scan-terminal.focus-view-active .scan-kpi-bar) {
   display: none;
