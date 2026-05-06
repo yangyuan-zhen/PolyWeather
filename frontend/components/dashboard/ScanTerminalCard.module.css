@@ -1000,6 +1000,21 @@
   color: #7d92b2;
 }
 
+.root :global(.scan-ai-prediction-card.ai.pending) {
+  border-color: rgba(34, 211, 238, 0.14);
+  background: rgba(8, 36, 52, 0.28);
+}
+
+.root :global(.scan-ai-prediction-card.ai.pending strong) {
+  color: #4a7d9a;
+  animation: pulse-pending 2s ease-in-out infinite;
+}
+
+@keyframes pulse-pending {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.6; }
+}
+
 .root :global(.scan-ai-weather-summary) {
   color: #e6edf3;
   font-weight: 850;

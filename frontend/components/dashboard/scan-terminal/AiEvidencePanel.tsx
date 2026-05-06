@@ -99,6 +99,14 @@ export function AiEvidencePanel({
                   </span>
                   {aiRangeText ? <em>{aiRangeText}</em> : null}
                 </div>
+              ) : aiForecast.status === "loading" && hasDebPrediction ? (
+                <div className="scan-ai-prediction-card ai pending">
+                  <small>{isEn ? "AI predicted high" : "AI 预测最高温"}</small>
+                  <strong>{isEn ? "..." : "…"}</strong>
+                  <span className="scan-ai-confidence low">
+                    {isEn ? "Predicting" : "预测中"}
+                  </span>
+                </div>
               ) : null}
               {hasDebPrediction ? (
                 <div className="scan-ai-prediction-card deb">
@@ -109,6 +117,23 @@ export function AiEvidencePanel({
                   </span>
                 </div>
               ) : null}
+            </div>
+          ) : hasDebPrediction ? (
+            <div className="scan-ai-prediction-dual">
+              <div className="scan-ai-prediction-card deb">
+                <small>{isEn ? "DEB fusion" : "DEB 融合"}</small>
+                <strong>{formatTemperatureValue(debPrediction!, tempSymbol, { digits: 1 })}</strong>
+                <span className="scan-ai-confidence neutral">
+                  {isEn ? "Reference" : "参考"}
+                </span>
+              </div>
+              <div className="scan-ai-prediction-card ai pending">
+                <small>{isEn ? "AI predicted high" : "AI 预测最高温"}</small>
+                <strong>{isEn ? "..." : "…"}</strong>
+                <span className="scan-ai-confidence low">
+                  {isEn ? "Predicting" : "预测中"}
+                </span>
+              </div>
             </div>
           ) : null}
 
