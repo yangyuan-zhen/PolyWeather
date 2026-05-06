@@ -640,7 +640,6 @@ export function AiPinnedCityCard({
                   aiRuleEvidenceText={aiRuleEvidenceText}
                   debPrediction={debNumber}
                   fallbackAiReason={fallbackAiReason}
-                  isCompactCard={isCompactCard}
                   isEn={isEn}
                   isHkoObservation={isHkoObservation}
                   localModelSupportNote={localModelSupportNote}

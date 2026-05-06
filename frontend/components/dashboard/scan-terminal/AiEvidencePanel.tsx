@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type {
   AiCityForecastPayload,
   AiCityForecastState,
@@ -28,7 +27,6 @@ export function AiEvidencePanel({
   aiRuleEvidenceText,
   debPrediction,
   fallbackAiReason,
-  isCompactCard,
   isEn,
   isHkoObservation,
   localModelSupportNote,
@@ -49,7 +47,6 @@ export function AiEvidencePanel({
   aiRuleEvidenceText: string;
   debPrediction: number | null;
   fallbackAiReason: string;
-  isCompactCard: boolean;
   isEn: boolean;
   isHkoObservation: boolean;
   localModelSupportNote: string;
@@ -57,12 +54,6 @@ export function AiEvidencePanel({
   rawObservationText: string;
   tempSymbol: string;
 }) {
-  const [isOpen, setIsOpen] = useState(() => !isCompactCard);
-
-  useEffect(() => {
-    setIsOpen(!isCompactCard);
-  }, [isCompactCard]);
-
   const aiConfidenceMeta = confidenceBadge(aiConfidence, isEn);
   const hasAiPrediction = aiPredictedMax != null;
   const hasDebPrediction = debPrediction != null;
@@ -72,12 +63,8 @@ export function AiEvidencePanel({
       : null;
 
   return (
-    <details
-      className="scan-ai-city-section scan-ai-city-ai-read"
-      open={isOpen}
-      onToggle={(event) => setIsOpen(event.currentTarget.open)}
-    >
-      <summary className="scan-ai-city-section-title">
+    <section className="scan-ai-city-section scan-ai-city-ai-read">
+      <div className="scan-ai-city-section-title">
         {isHkoObservation
           ? isEn
             ? "Evidence · AI HKO observation read"
@@ -85,9 +72,8 @@ export function AiEvidencePanel({
           : isEn
             ? "Evidence · AI airport read"
             : "证据 · AI 机场报文解读"}
-      </summary>
-      {isOpen ? (
-        <div className="scan-ai-city-section-body">
+      </div>
+      <div className="scan-ai-city-section-body">
           {hasAiPrediction || hasDebPrediction ? (
             <div className="scan-ai-prediction-dual">
               {hasAiPrediction ? (
@@ -199,7 +185,6 @@ export function AiEvidencePanel({
             </p>
           )}
         </div>
-      ) : null}
-    </details>
+    </section>
   );
 }

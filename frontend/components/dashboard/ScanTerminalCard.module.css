@@ -879,10 +879,6 @@
   overflow: hidden;
 }
 
-.root :global(.scan-ai-city-ai-read summary) {
-  cursor: pointer;
-  list-style: none;
-}
 
 .root :global(.scan-ai-city-ai-read summary::-webkit-details-marker) {
   display: none;

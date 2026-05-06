@@ -193,7 +193,6 @@ export function MobileDecisionCard({
             aiRuleEvidenceText={aiRuleEvidenceText}
             debPrediction={debPrediction}
             fallbackAiReason={fallbackAiReason}
-            isCompactCard
             isEn={isEn}
             isHkoObservation={isHkoObservation}
             localModelSupportNote={localModelSupportNote}
