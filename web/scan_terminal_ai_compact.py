@@ -356,7 +356,6 @@ def _compact_ai_city_group(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
         "temp_symbol": first.get("temp_symbol") or first.get("target_unit"),
         "current_temp": first.get("current_temp"),
         "current_max_so_far": first.get("current_max_so_far"),
-        "deb_prediction": first.get("deb_prediction"),
         "window_phase": first.get("window_phase"),
         "remaining_window_minutes": first.get("remaining_window_minutes"),
         "peak_window_label": first.get("peak_window_label"),

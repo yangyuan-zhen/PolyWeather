@@ -39,26 +39,37 @@ def _city_ai_model_cluster_note(ai_input: Dict[str, Any], *, locale: str) -> str
         if isinstance(item, dict) and _safe_float(item.get("value")) is not None
     ]
     count = len(values)
-    deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
+    deb_value = next(
+        (_safe_float(item.get("value")) for item in sources if isinstance(item, dict) and "DEB" in str(item.get("model") or "")),
+        None,
+    )
+    non_deb_values = [
+        _safe_float(item.get("value"))
+        for item in sources
+        if isinstance(item, dict) and _safe_float(item.get("value")) is not None and "DEB" not in str(item.get("model") or "")
+    ]
+    cluster_median = (
+        sorted(non_deb_values)[len(non_deb_values) // 2]
+        if non_deb_values
+        else (values[0] if values else None)
+    )
     if locale == "en-US":
         if count <= 0:
-            return f"No usable model cluster was returned; rely on DEB and {observation_label} only."
+            return f"No usable model cluster was returned; rely on {observation_label} only."
         if count <= 2:
             return f"Only {count} model source(s) are available, so model support is thin and should be treated as context."
         range_text = f"{min(values):.1f}{unit} to {max(values):.1f}{unit}"
         if deb_value is None:
-            return f"{count} model sources cluster between {range_text}; DEB support cannot be cross-checked."
-        supporting = sum(1 for value in values if abs(value - deb_value) <= 2.0)
-        return f"{supporting}/{count} model sources sit within 2{unit} of DEB; model range is {range_text}."
+            return f"{count} model sources cluster between {range_text}."
+        return f"{count} model sources cluster between {range_text}; DEB sits at {deb_value:.1f}{unit}."
     if count <= 0:
-        return f"没有可用的多模型集合，只能把 DEB 与{observation_label}作为主要依据。"
+        return f"没有可用的多模型集合，只能把{observation_label}作为主要依据。"
     if count <= 2:
         return f"当前只有 {count} 个模型来源，模型支撑偏薄，只能作为辅助上下文。"
     range_text = f"{min(values):.1f}{unit} ~ {max(values):.1f}{unit}"
     if deb_value is None:
-        return f"{count} 个模型集中在 {range_text}，但无法与 DEB 做一致性校验。"
-    supporting = sum(1 for value in values if abs(value - deb_value) <= 2.0)
-    return f"{supporting}/{count} 个模型落在 DEB ±2{unit} 内；模型区间为 {range_text}。"
+        return f"{count} 个模型集中在 {range_text}。"
+    return f"{count} 个模型集中在 {range_text}；DEB 位于 {deb_value:.1f}{unit}。"
 
 
 def _build_city_ai_fallback(
@@ -71,12 +82,26 @@ def _build_city_ai_fallback(
 ) -> Dict[str, Any]:
     unit = str(ai_input.get("temp_symbol") or "")
     cluster = ai_input.get("model_cluster") if isinstance(ai_input.get("model_cluster"), dict) else {}
+    all_sources = cluster.get("sources") if isinstance(cluster.get("sources"), list) else []
     values = [
         _safe_float(item.get("value"))
-        for item in (cluster.get("sources") if isinstance(cluster.get("sources"), list) else [])
+        for item in all_sources
         if isinstance(item, dict) and _safe_float(item.get("value")) is not None
     ]
-    deb_value = _safe_float((ai_input.get("deb") or {}).get("prediction") if isinstance(ai_input.get("deb"), dict) else None)
+    deb_value = next(
+        (_safe_float(item.get("value")) for item in all_sources if isinstance(item, dict) and "DEB" in str(item.get("model") or "")),
+        None,
+    )
+    non_deb_values = [
+        _safe_float(item.get("value"))
+        for item in all_sources
+        if isinstance(item, dict) and _safe_float(item.get("value")) is not None and "DEB" not in str(item.get("model") or "")
+    ]
+    cluster_median = (
+        sorted(non_deb_values)[len(non_deb_values) // 2]
+        if non_deb_values
+        else (sorted(values)[len(values) // 2] if values else None)
+    )
     observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
     airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
@@ -100,7 +125,9 @@ def _build_city_ai_fallback(
         default=None,
     )
     observed_high_for_revision = None if observation_stale else observed_high_so_far
-    predicted = deb_value
+    predicted = cluster_median
+    if predicted is None and deb_value is not None:
+        predicted = deb_value
     if predicted is None and values:
         predicted = sum(values) / len(values)
     if predicted is None:

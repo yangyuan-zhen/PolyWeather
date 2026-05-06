@@ -354,18 +354,18 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
             "icao": risk.get("icao") or airport_current.get("station_code") or airport_primary.get("station_code"),
             "distance_km": risk.get("distance_km"),
         },
-        "deb": {
-            "prediction": ((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None)
-            or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None),
-            "weights_info": ((data.get("deb") or {}).get("weights_info") if isinstance(data.get("deb"), dict) else None),
-        },
         "model_cluster": {
             "sources": [
-                {"model": str(name), "value": value}
-                for name, value in (models or {}).items()
-                if _safe_float(value) is not None
+                *([
+                    {"model": "DEB (fusion)", "value": ((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)}
+                ] if (((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)) is not None else []),
+                *[
+                    {"model": str(name), "value": value}
+                    for name, value in (models or {}).items()
+                    if _safe_float(value) is not None
+                ],
             ],
-            "model_count": len(model_values),
+            "model_count": len(model_values) + (1 if (((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)) is not None else 0),
             "min": min(model_values) if model_values else None,
             "max": max(model_values) if model_values else None,
             "spread": (max(model_values) - min(model_values)) if len(model_values) >= 2 else None,
