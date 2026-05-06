@@ -840,6 +840,31 @@
   color: #1d4ed8 !important;
 }
 
+/* ── Section titles (Evidence, Model, etc.) ── */
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-section-title) {
+  color: #1d4ed8 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-decision-band span) {
+  color: #1d4ed8 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-decision-band p) {
+  color: #475569 !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-decision-band strong) {
+  color: #0f172a !important;
+}
+
+.root:global(.light) :global(.scan-terminal.light .scan-ai-city-body) {
+  scrollbar-color: rgba(37, 99, 235, 0.18) transparent;
+}
+
+.root:global(.light) :global(.scan-ai-city-body::-webkit-scrollbar-thumb) {
+  background: rgba(37, 99, 235, 0.22) !important;
+}
+
 /* ── AI prediction dual-card light mode ── */
 .root:global(.light) :global(.scan-terminal.light .scan-ai-prediction-dual) {
   gap: 10px;
