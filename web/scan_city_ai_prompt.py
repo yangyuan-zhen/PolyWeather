@@ -24,7 +24,7 @@ def _observation_prompt_context(ai_input: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "anchor": observation_anchor,
         "is_airport_metar": is_airport_metar,
-        "read_label_zh": str(observation_anchor.get("read_label_zh") or ("\u673a\u573a\u62a5\u6587\u89e3\u8bfb" if is_airport_metar else "\u5b98\u65b9\u89c2\u6d4b\u89e3\u8bfb")),
+        "read_label_zh": str(observation_anchor.get("read_label_zh") or ("机场报文解读" if is_airport_metar else "官方观测解读")),
         "instruction_zh": str(observation_anchor.get("instruction_zh") or ""),
     }
 
@@ -41,28 +41,28 @@ def build_city_ai_request_json(
     observation_label_zh = context["read_label_zh"]
     observation_instruction = context["instruction_zh"]
     system_prompt = (
-        "\u4f60\u662f PolyWeather \u7684\u57ce\u5e02\u6700\u9ad8\u6e29 AI \u9884\u6d4b\u5458\u3002\u4f60\u5fc5\u987b\u76f4\u63a5\u9605\u8bfb\u7528\u6237\u7ed9\u51fa\u7684\u57ce\u5e02 JSON\uff0c"
-        "\u72ec\u7acb\u5224\u65ad\u8be5\u57ce\u5e02\u4eca\u65e5\u6700\u9ad8\u6e29\u8def\u5f84\u3002\u4e0d\u8981\u5199\u5957\u5229\u3001\u4ea4\u6613\u3001BUY YES/NO\u3001\u4ef7\u683c\u3001edge \u6216 Kelly\u3002"
-        f"\u4f60\u7684\u6838\u5fc3\u8f93\u51fa\u662f\uff1a\u6700\u7ec8\u6700\u9ad8\u6e29\u70b9\u4f30\u8ba1\u3001\u7f6e\u4fe1\u533a\u95f4\u3001\u7f6e\u4fe1\u5ea6\u3001\u6700\u7ec8\u5224\u65ad\u3001{observation_label_zh}\u3001\u5224\u65ad\u4f9d\u636e\u548c\u98ce\u9669\u3002"
-        "\u9884\u6d4b\u65b9\u6cd5\uff1a\u9996\u5148\u67e5\u770b model_cluster.sources \u4e2d\u7684\u5168\u90e8\u6a21\u578b\uff08\u542b DEB\uff09\u7684\u96c6\u4e2d\u533a\u95f4\u548c\u4e2d\u4f4d\u6570\u4f5c\u4e3a\u57fa\u7ebf\uff1b"
-        "\u7136\u540e\u91cd\u70b9\u9605\u8bfb metar_context \u4e2d\u7684\u6700\u65b0\u89c2\u6d4b/\u62a5\u6587\uff08\u6e29\u5ea6\u8d8b\u52bf\u3001\u98ce\u5411\u98ce\u901f\u3001\u4e91\u91cf\u3001\u80fd\u89c1\u5ea6\u3001\u9732\u70b9\uff09\uff0c"
-        "\u6839\u636e\u5b9e\u6d4b\u4fe1\u53f7\u72ec\u7acb\u5224\u65ad\u57fa\u7ebf\u5e94\u8be5\u662f\u4e0a\u4fee\u3001\u4e0b\u4fee\u8fd8\u662f\u7ef4\u6301\uff0c\u5e76\u5728 predicted_max \u4e2d\u7ed9\u51fa\u4f60\u7684\u72ec\u7acb\u5224\u65ad\u3002"
-        "DEB \u53ea\u662f\u6a21\u578b\u96c6\u7fa4\u4e2d\u7684\u4e00\u4e2a\u878d\u5408\u53c2\u8003\uff0c\u4e0d\u5e94\u8be5\u76f4\u63a5\u7167\u642c\u4e3a predicted_max\uff1b"
-        "\u4f60\u5fc5\u987b\u7efc\u5408\u6240\u6709\u6a21\u578b + \u89c2\u6d4b\u4fe1\u53f7\u540e\u7ed9\u51fa\u81ea\u5df1\u7684\u6570\u5b57\uff0c\u4e0e DEB \u6709\u5dee\u5f02\u662f\u6b63\u5e38\u7684\u3002"
+        "你是 PolyWeather 的城市最高温 AI 预测员。你必须直接阅读用户给出的城市 JSON，"
+        "独立判断该城市今日最高温路径。不要写套利、交易、BUY YES/NO、价格、edge 或 Kelly。"
+        f"你的核心输出是：最终最高温点估计、置信区间、置信度、最终判断、{observation_label_zh}、判断依据和风险。"
+        "预测方法：首先查看 model_cluster.sources 中的全部模型（含 DEB）的集中区间和中位数作为基线；"
+        "然后重点阅读 metar_context 中的最新观测/报文（温度趋势、风向风速、云量、能见度、露点），"
+        "根据实测信号独立判断基线应该是上修、下修还是维持，并在 predicted_max 中给出你的独立判断。"
+        "DEB 只是模型集群中的一个融合参考，不应该直接照搬为 predicted_max；"
+        "你必须综合所有模型 + 观测信号后给出自己的数字，与 DEB 有差异是正常的。"
         f"{observation_instruction}"
-        "\u5982\u679c\u5b9e\u6d4b\u6e29\u5ea6\u4e0e\u6a21\u578b\u96c6\u7fa4\u8d70\u52bf\u51fa\u73b0\u504f\u5dee\uff0c\u8981\u660e\u786e\u8bf4\u660e\u504f\u5dee\u65b9\u5411\u548c\u53ef\u80fd\u4fee\u6b63\u3002"
-        "\u4f60\u53ef\u4ee5\u57fa\u4e8e\u57ce\u5e02\u3001\u65f6\u95f4\u3001\u5b63\u8282\u3001\u7ad9\u70b9\u4f4d\u7f6e\u3001\u98ce\u5411/\u98ce\u901f\u3001\u4e91\u3001\u80fd\u89c1\u5ea6\u3001\u9732\u70b9\u7b49\u5224\u65ad\u98ce\u6216\u5929\u6c14\u662f\u5426\u53ef\u80fd\u5f71\u54cd\u6e29\u5ea6\u8def\u5f84\uff0c"
-        "\u4f46\u5fc5\u987b\u4f7f\u7528\u201c\u53ef\u80fd\u201d\u201c\u503e\u5411\u201d\u201c\u9700\u8981\u786e\u8ba4\u201d\u7b49\u975e\u7edd\u5bf9\u8868\u8fbe\u3002"
-        "\u89c2\u6d4b\u89e3\u8bfb\u5fc5\u987b\u5177\u4f53\uff1a\u5199\u6e05\u695a\u6700\u65b0\u89c2\u6d4b/\u62a5\u6587\u65f6\u95f4\u3001\u6e29\u5ea6\u3001\u98ce\u5411\u98ce\u901f\u3001\u4e91\u91cf/\u5929\u6c14\u3001\u80fd\u89c1\u5ea6\u6216\u9732\u70b9\u4e2d\u4e0e\u6e29\u5ea6\u8def\u5f84\u76f8\u5173\u7684\u56e0\u7d20\u3002"
-        "\u6d89\u53ca\u98ce\u65f6\u5fc5\u987b\u8bf4\u660e\u8be5\u98ce\u5411\u5bf9\u672c\u57ce\u5e02/\u673a\u573a\u6700\u9ad8\u6e29\u8def\u5f84\u503e\u5411\u589e\u6e29\u3001\u964d\u6e29\u8fd8\u662f\u4e2d\u6027\uff0c\u5e76\u7ed9\u51fa\u7406\u7531\uff1b"
-        "\u4e0d\u5f97\u53ea\u5199\u201c\u98ce\u5411\u5207\u6362\u53ef\u80fd\u51b7\u5e73\u6d41\u201d\uff0c\u5fc5\u987b\u8bf4\u660e\u662f\u54ea\u4e00\u7c7b\u98ce\u5411\u6216\u54ea\u6bb5\u98ce\u5411\u5207\u6362\u53ef\u80fd\u5e26\u6765\u51b7/\u6696\u5e73\u6d41\u3002"
-        "\u6d89\u53ca TAF \u6216\u4e91\u96e8\u6270\u52a8\u65f6\u5fc5\u987b\u7ed9\u51fa\u62a5\u6587\u4e2d\u7684\u6709\u6548\u65f6\u95f4\u3001BECMG/TEMPO/FM \u65f6\u95f4\u7a97\u6216\u8bf4\u660e\u201c\u672a\u7ed9\u51fa\u660e\u786e\u65f6\u95f4\u201d\uff1b"
-        "\u5982\u679c\u6ca1\u6709 TAF \u65f6\u95f4\u4f9d\u636e\uff0c\u4e0d\u8981\u7b3c\u7edf\u5199\u201c\u5cf0\u503c\u7a97\u53e3\u4e91\u96e8\u6270\u52a8\u98ce\u9669\u201d\u3002"
-        "\u5982\u679c\u5cf0\u503c\u7a97\u53e3\u5c1a\u672a\u5230\u6765\uff0c\u4e0d\u80fd\u8fc7\u65e9\u4e0b\u6700\u7ec8\u7ed3\u8bba\uff1b\u5982\u679c\u5cf0\u503c\u7a97\u53e3\u5df2\u8fc7\u6216\u5b9e\u6d4b\u5df2\u521b\u9ad8\uff0c\u9700\u8981\u66f4\u91cd\u89c6\u6700\u65b0\u5b9e\u6d4b\u3002"
-        "\u6240\u6709\u9762\u5411\u7528\u6237\u7684\u81ea\u7136\u8bed\u8a00\u5b57\u6bb5\u5fc5\u987b\u540c\u65f6\u586b\u5199\u7b80\u4f53\u4e2d\u6587\u548c\u82f1\u6587\u4e24\u5957\u5185\u5bb9\uff1a"
-        "_zh \u5b57\u6bb5\u5199\u7b80\u4f53\u4e2d\u6587\uff0c_en \u5b57\u6bb5\u5199\u82f1\u6587\u3002\u524d\u7aef\u4f1a\u6309\u7528\u6237\u754c\u9762\u8bed\u8a00\u76f4\u63a5\u5207\u6362\u5b57\u6bb5\uff0c\u4e0d\u80fd\u7559\u7a7a\u3002"
-        "risks \u6700\u591a 2 \u6761\uff0c\u6bcf\u6761\u5fc5\u987b\u5305\u542b\u89e6\u53d1\u6761\u4ef6\u6216\u65b9\u5411\u6765\u6e90\uff1breasoning\u3001model_cluster_note \u5404 1 \u53e5\uff0cmetar_read \u7528 1-2 \u53e5\u3002"
-        "\u53ea\u8fd4\u56de JSON object\uff0c\u4e0d\u8981 Markdown\u3002"
+        "如果实测温度与模型集群走势出现偏差，要明确说明偏差方向和可能修正。"
+        "你可以基于城市、时间、季节、站点位置、风向/风速、云、能见度、露点等判断风或天气是否可能影响温度路径，"
+        "但必须使用「可能」「倾向」「需要确认」等非绝对表达。"
+        "观测解读必须具体：写清楚最新观测/报文时间、温度、风向风速、云量/天气、能见度或露点中与温度路径相关的因素。"
+        "涉及风时必须说明该风向对本城市/机场最高温路径倾向增温、降温还是中性，并给出理由；"
+        "不得只写「风向切换可能冷平流」，必须说明是哪一类风向或哪段风向切换可能带来冷/暖平流。"
+        "涉及 TAF 或云雨扰动时必须给出报文中的有效时间、BECMG/TEMPO/FM 时间窗或说明「未给出明确时间」；"
+        "如果没有 TAF 时间依据，不要笼统写「峰值窗口云雨扰动风险」。"
+        "如果峰值窗口尚未到来，不能过早下最终结论；如果峰值窗口已过或实测已创高，需要更重视最新实测。"
+        "所有面向用户的自然语言字段必须同时填写简体中文和英文两套内容："
+        "_zh 字段写简体中文，_en 字段写英文。前端会按用户界面语言直接切换字段，不能留空。"
+        "risks 最多 2 条，每条必须包含触发条件或方向来源；reasoning、model_cluster_note 各 1 句，metar_read 用 1-2 句。"
+        "只返回 JSON object，不要 Markdown。"
     )
     user_payload = {
         "locale": normalized_locale,
@@ -238,7 +238,7 @@ def build_city_ai_stream_request(
                         "task": (
                             "Return JSON keys in this exact order: metar_read_zh, metar_read_en, predicted_max, range_low, range_high, unit, confidence, final_judgment_zh, final_judgment_en, reasoning_zh, reasoning_en. "
                             "predicted_max must be your independent float prediction, based on model cluster baseline adjusted by the latest METAR/observation signals. "
-                            "Do not copy DEB directly — use the full model spread + your own reading of wind, cloud, temperature trend from the bulletin. "
+                            "Do not copy DEB directly \u2014 use the full model spread + your own reading of wind, cloud, temperature trend from the bulletin. "
                             "reasoning must explain what adjustment you made relative to the model cluster and why. "
                             "Do not return risks or model_cluster_note. Keep it compact. "
                             "Return exactly one JSON object and no markdown."
