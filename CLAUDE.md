@@ -109,3 +109,21 @@ curl http://127.0.0.1:8000/metrics
 ## Commit Convention
 
 This repo uses the **Lore Commit Protocol** — structured decision records with git trailers (`Constraint:`, `Rejected:`, `Confidence:`, `Scope-risk:`, `Directive:`, `Tested:`, `Not-tested:`). Intent line first (why, not what).
+
+- Always write git commit messages in **Chinese (简体中文)**.
+
+## Code Style
+
+- Never use Unicode escape sequences (`\uXXXX`) in source code; write characters directly in UTF-8 encoding.
+- When modifying UI components, update both **dark-mode and light-mode CSS files** in the same edit batch.
+
+## Quality Gates (MANDATORY)
+
+Before marking any task as complete, you MUST:
+
+1. **Type check** — Run `npx tsc --noEmit` (frontend) or `python -m ruff check .` (backend) on modified files
+2. **No Unicode escapes** — Verify that NO `\uXXXX` sequences were introduced; if found, revert and fix
+3. **Dual-theme CSS** — For any UI change, confirm BOTH the dark CSS module AND `ScanTerminalLightTheme.module.css` were updated
+4. **Show the diff** — Output `git diff --stat` and test results before declaring success
+
+If any gate fails, fix it BEFORE reporting success.
