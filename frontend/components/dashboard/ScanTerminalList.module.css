@@ -545,9 +545,6 @@
 }
 
 .root :global(.scan-ai-city-jumpbar) {
-  position: sticky;
-  top: 0;
-  z-index: 8;
   display: flex;
   gap: 8px;
   margin: 0 0 12px;
@@ -583,9 +580,6 @@
   background: rgba(77, 163, 255, 0.18);
 }
 
-.root :global(.scan-ai-city-anchor) {
-  scroll-margin-top: 66px;
-}
 
 .root :global(.scan-ai-city-card:not(.collapsed)) {
   overflow: visible;
