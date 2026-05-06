@@ -30,14 +30,19 @@ export function useAiCityForecast({
   locale: string;
   report: string;
 }) {
-  const [aiForecast, setAiForecast] = useState<AiCityForecastState>({
-    status: "idle",
-  });
   const [aiRefreshToken, setAiRefreshToken] = useState(0);
   const aiForecastKey = useMemo(
     () => buildAiCityForecastKey({ detail, detailCityName, locale, report }),
     [detail, detailCityName, locale, report],
   );
+
+  const [aiForecast, setAiForecast] = useState<AiCityForecastState>(() => {
+    if (!enabled || !aiForecastKey) return { status: "idle" };
+    const cacheKey = buildAiCityForecastCacheKey(aiForecastKey);
+    const cached = readReadyCachedAiForecastState(cacheKey, 0);
+    if (cached) return cached;
+    return { status: "idle" };
+  });
 
   useEffect(() => {
     if (!enabled || !aiForecastKey) {
@@ -47,16 +52,16 @@ export function useAiCityForecast({
     let cancelled = false;
     const cacheKey = buildAiCityForecastCacheKey(aiForecastKey);
     const requestKey = buildAiCityForecastRequestKey(cacheKey, aiRefreshToken);
-    const readyCachedState = readReadyCachedAiForecastState(
-      cacheKey,
-      aiRefreshToken,
-    );
-    if (readyCachedState) {
-      setAiForecast(readyCachedState);
-      return () => {
-        cancelled = true;
-      };
+
+    // If cache was loaded into initial state and no force refresh, skip
+    if (aiRefreshToken === 0) {
+      const cached = readReadyCachedAiForecastState(cacheKey, 0);
+      if (cached) {
+        setAiForecast(cached);
+        return () => { cancelled = true; };
+      }
     }
+
     const loadingState = buildAiCityLoadingForecastState({
       cacheKey,
       detail,
