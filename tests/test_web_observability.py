@@ -387,8 +387,9 @@ def test_city_ai_stream_request_only_asks_provider_for_observation_read():
     assert request_payload["stream"] is True
     assert request_payload["max_tokens"] <= 650
     assert request_payload["max_tokens"] < scan_terminal_service.SCAN_AI_MAX_TOKENS
-    assert '"required_json_keys": ["metar_read_zh", "metar_read_en", "reasoning_zh", "reasoning_en"]' in user_payload
-    assert "Do not return final_judgment" in user_payload
+    assert '"required_json_keys": ["metar_read_zh", "metar_read_en", "predicted_max", "range_low", "range_high", "unit", "confidence", "final_judgment_zh", "final_judgment_en", "reasoning_zh", "reasoning_en"]' in user_payload
+    assert "predicted_max" in user_payload
+    assert "final_judgment" in user_payload
 
 
 def test_city_ai_partial_json_trims_dangling_taf_clause():

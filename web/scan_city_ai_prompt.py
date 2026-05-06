@@ -197,18 +197,20 @@ def build_city_ai_stream_request(
     normalized_locale = _normalize_locale(locale)
     context = _observation_prompt_context(ai_input)
     is_airport_metar = context["is_airport_metar"]
-    role_label = "机场 METAR 解读员" if is_airport_metar else "官方观测站解读员"
+    role_label = "机场 METAR 解读与最高温预测员" if is_airport_metar else "官方观测站解读与最高温预测员"
     read_label = context["read_label_zh"]
     source_instruction = context["instruction_zh"]
     system_prompt = (
         f"你是 PolyWeather 的{role_label}。"
         "只返回一个紧凑 JSON object，不要 Markdown。"
-        f"只解读最新观测/报文对今日最高温路径的影响，必须只写 metar_read_zh、metar_read_en、reasoning_zh、reasoning_en 四个字段，便于前端快速显示{read_label}；"
-        "最高温数值、模型一致性和风险清单由后端规则补齐，不要生成这些字段。"
+        f"必须基于最新观测/报文判断该城市今日最高温，输出 metar_read_zh、metar_read_en、predicted_max、range_low、range_high、unit、confidence、final_judgment_zh、final_judgment_en、reasoning_zh、reasoning_en 字段，便于前端快速显示{read_label}和最高温预测；"
+        "模型一致性和风险清单由后端规则补齐，不要生成这些字段。"
         f"{source_instruction}"
-        "观测解读必须具体说明观测/报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；每个字段最多 1 句。"
+        "观测解读必须具体说明观测/报文时间、温度、风向风速、云量/天气/能见度/露点中与温度路径相关的因素；每个字段最多 1-2 句。"
         "涉及风时要说明当前风向对站点最高温路径倾向增温、降温还是中性，并给出理由。"
         "如果 observation_anchor.is_airport_metar 为 false，不得使用 METAR、TAF、机场报文等称谓。"
+        "predicted_max 是根据最新观测和模型趋势给出的今日最高温数值预测（float），range_low/range_high 是预测区间，unit 为温度单位，confidence 为 low/medium/high。"
+        "final_judgment 用一句话给出今日最高温结论。"
         "所有 *_zh 字段写简体中文，所有 *_en 字段写英文，不得留空。"
         "不要写交易建议、BUY/SELL、Kelly 或套利。"
     )
@@ -226,8 +228,9 @@ def build_city_ai_stream_request(
                     {
                         "locale": normalized_locale,
                         "task": (
-                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, reasoning_zh, reasoning_en. "
-                            "Do not return final_judgment, predicted_max, ranges, risks or model_cluster_note. Keep it compact. "
+                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, predicted_max, range_low, range_high, unit, confidence, final_judgment_zh, final_judgment_en, reasoning_zh, reasoning_en. "
+                            "predicted_max must be a float number representing today's predicted daily high temperature based on the latest observation and model trends. "
+                            "Do not return risks or model_cluster_note. Keep it compact. "
                             "Return exactly one JSON object and no markdown."
                         ),
                         "required_json_keys": CITY_AI_STREAM_PROVIDER_FIELDS,

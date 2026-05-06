@@ -25,6 +25,13 @@ CITY_AI_REQUIRED_FIELDS = [
 CITY_AI_STREAM_PROVIDER_FIELDS = [
     "metar_read_zh",
     "metar_read_en",
+    "predicted_max",
+    "range_low",
+    "range_high",
+    "unit",
+    "confidence",
+    "final_judgment_zh",
+    "final_judgment_en",
     "reasoning_zh",
     "reasoning_en",
 ]
@@ -283,6 +290,13 @@ def _city_ai_stream_response_example(unit: str) -> Dict[str, Any]:
     return {
         "metar_read_zh": f"最新 METAR 显示 37.0{unit or '°C'}，报文时间 04:30Z；风和云量暂未显示强降温信号，后续报文用于确认升温路径。",
         "metar_read_en": f"The latest METAR shows 37.0{unit or '°C'} at 04:30Z; wind and cloud signals do not yet show a strong cooling break, so later reports should confirm the warming path.",
+        "predicted_max": 43.0,
+        "range_low": 42.0,
+        "range_high": 44.0,
+        "unit": unit or "°C",
+        "confidence": "medium",
+        "final_judgment_zh": f"预计最高温暂以 43.0{unit or '°C'} 附近为中枢。",
+        "final_judgment_en": f"The expected daily high is centered near 43.0{unit or '°C'}.",
         "reasoning_zh": "当前观测仍贴近上午升温路径，若后续风向转为海风或云雨增强，再下修最高温中枢。",
         "reasoning_en": "The latest observation still fits the morning warming path; revise the daily-high center lower if later wind turns onshore or cloud/rain strengthens.",
     }
