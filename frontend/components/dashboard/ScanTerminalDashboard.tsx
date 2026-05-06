@@ -54,7 +54,6 @@ import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPin
 import { CalendarView } from "@/components/dashboard/scan-terminal/CalendarView";
 import { AiForecastKPIBar } from "@/components/dashboard/scan-terminal/AiForecastKPIBar";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
-import { OpportunityOverview } from "@/components/dashboard/scan-terminal/OpportunityOverview";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
   findRowForCity,
@@ -69,7 +68,7 @@ import {
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 
-type ContentView = "opportunities" | "analysis" | "map" | "calendar";
+type ContentView = "analysis" | "map" | "calendar";
 
 const CityDetailPanel = dynamic(
   () =>
@@ -113,7 +112,7 @@ function ScanTerminalScreen() {
     proAccessLoading: store.proAccess.loading,
   });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ContentView>("opportunities");
+  const [activeView, setActiveView] = useState<ContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const userLocalTime = useUserLocalClock();
@@ -355,36 +354,6 @@ function ScanTerminalScreen() {
   }, []);
 
   const renderMainView = () => {
-    if (resolvedView === "opportunities") {
-      if (!isPro) {
-        return (
-          <div className="scan-opportunity-overview empty">
-            <strong>{isEn ? "Opportunity board is Pro" : "今日机会榜需 Pro 权限"}</strong>
-            <p>
-              {isEn
-                ? "Map exploration and city briefing are still available."
-                : "地图探索和城市简报仍可使用。"}
-            </p>
-            <button type="button" onClick={openScanPaywall}>
-              {isEn ? "Unlock opportunity board" : "解锁机会榜"}
-            </button>
-          </div>
-        );
-      }
-      return (
-        <OpportunityOverview
-          rows={timeSortedRows}
-          terminalData={terminalData}
-          loading={scanLoading}
-          error={scanError}
-          locale={locale}
-          selectedRowId={selectedRowId}
-          onOpenDecision={handleOpenDecisionRow}
-          onSelectRow={handleSelectRow}
-          onOpenMap={() => setActiveView("map")}
-        />
-      );
-    }
     if (resolvedView === "map") {
       return (
         <div className="scan-map-view">
@@ -465,7 +434,7 @@ function ScanTerminalScreen() {
         className={clsx(
           "scan-terminal",
           resolvedView === "map" && "map-view-active",
-          resolvedView !== "opportunities" && "focus-view-active",
+          resolvedView !== "map" && "focus-view-active",
           resolvedView === "analysis" && "analysis-view-active",
           themeMode === "light" && "light",
         )}
@@ -476,8 +445,8 @@ function ScanTerminalScreen() {
               <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
               <span>
                 {isEn
-                  ? "Start from opportunities, then open city cards to verify weather evidence"
-                  : "先看今日机会榜，再打开城市决策卡验证天气证据"}
+                  ? "Start from the map, then open city cards to verify weather evidence"
+                  : "从地图选城市，再打开决策卡验证天气证据"}
               </span>
             </div>
             <div className="scan-topbar-actions">
@@ -564,15 +533,6 @@ function ScanTerminalScreen() {
               <div className="scan-list-tabs">
                 <button
                   type="button"
-                  className={resolvedView === "opportunities" ? "active" : ""}
-                  onClick={() => {
-                    setActiveView("opportunities");
-                  }}
-                >
-                  {isEn ? "Opportunity Board" : "今日机会榜"}
-                </button>
-                <button
-                  type="button"
                   className={resolvedView === "map" ? "active" : ""}
                   onClick={() => {
                     lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
@@ -631,8 +591,8 @@ function ScanTerminalScreen() {
                     disabled={scanLoading}
                     title={
                       isEn
-                        ? "Force refresh opportunity board and calendar"
-                        : "强制刷新今日机会榜和日历视图"
+                        ? "Force refresh decision cards and calendar"
+                        : "强制刷新决策卡和日历视图"
                     }
                   >
                     <RefreshCw size={14} className={scanLoading ? "spin" : undefined} />
