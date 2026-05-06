@@ -1228,24 +1228,24 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
         logger.warning("telegram market monitor loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
-    interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
+    interval_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 1800))
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
-    alert_cooldown_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 1800))
+    alert_cooldown_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 21600))
     mispricing_interval_sec = max(
         alert_cooldown_sec,
-        _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 7200),
+        _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 43200),
     )
-    min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 2))
-    min_severity = str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "medium").strip().lower()
+    min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 3))
+    min_severity = str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "high").strip().lower()
     if min_severity not in SEVERITY_RANK:
-        min_severity = "medium"
+        min_severity = "high"
     mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
     focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
     focus_digest_top_n = max(3, min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)))
     focus_digest_interval_sec = max(
         300,
-        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
+        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 21600),
     )
     def _runner() -> None:
         try:
