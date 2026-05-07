@@ -812,57 +812,6 @@ def _build_advice_cn(
     return "，".join(parts) + "。"
 
 
-def _classify_low_yes_signal(
-    rules: Dict[str, Dict[str, Any]],
-    market_snapshot: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
-    snapshot = market_snapshot or {}
-    forecast_bucket = snapshot.get("forecast_bucket") or {}
-    yes_buy = _norm_probability(forecast_bucket.get("yes_buy"))
-    center_deb = rules.get("ankara_center_deb_hit", {}) or {}
-    momentum = rules.get("momentum_spike", {}) or {}
-    advection = rules.get("advection", {}) or {}
-    breakthrough = rules.get("forecast_breakthrough", {}) or {}
-
-    cheap_yes = yes_buy is not None and yes_buy < 0.10
-    center_hit = bool(center_deb.get("triggered"))
-    momentum_direction = str(momentum.get("direction") or "neutral").lower()
-    momentum_up = bool(momentum.get("triggered")) and momentum_direction == "up"
-    momentum_down = bool(momentum.get("triggered")) and momentum_direction == "down"
-    warm_flow = bool(advection.get("triggered"))
-    model_break = bool(breakthrough.get("triggered"))
-
-    bullish_confirmation = momentum_up or warm_flow or model_break
-    bearish_conflict = momentum_down and not warm_flow and not model_break
-
-    if cheap_yes and center_hit and bullish_confirmation:
-        return {
-            "label": "undervalued",
-            "should_push": True,
-            "reason_cn": "该桶 Yes 价格 < 10c，且天气信号与上行方向一致，疑似低估",
-        }
-
-    if cheap_yes and center_hit and bearish_conflict:
-        return {
-            "label": "conflicted",
-            "should_push": False,
-            "reason_cn": "该桶 Yes 价格虽 < 10c，但短时动量转弱，暂不判定低估",
-        }
-
-    if cheap_yes:
-        return {
-            "label": "watch",
-            "should_push": False,
-            "reason_cn": "该桶 Yes 价格 < 10c，但方向确认不足，先观察",
-        }
-
-    return {
-        "label": "none",
-        "should_push": False,
-        "reason_cn": "当前未出现明确的低价错配信号",
-    }
-
-
 def _build_telegram_messages(
     city_weather: Dict[str, Any],
     rules: Dict[str, Dict[str, Any]],
@@ -1057,143 +1006,6 @@ def _build_telegram_messages(
     return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
 
 
-def _build_telegram_messages_mispricing(
-    city_weather: Dict[str, Any],
-    rules: Dict[str, Dict[str, Any]],
-    market_snapshot: Optional[Dict[str, Any]] = None,
-    suppression: Optional[Dict[str, Any]] = None,
-    map_url: Optional[str] = None,
-) -> Dict[str, str]:
-    temp_symbol = str(city_weather.get("temp_symbol") or "°C")
-    city_name = city_weather.get("display_name") or city_weather.get("name", "").title()
-    current = city_weather.get("current") or {}
-    current_temp = _sf(current.get("temp"))
-    if current_temp is None:
-        return {"zh": "", "en": ""}
-
-    snapshot = market_snapshot or _extract_market_snapshot(city_weather)
-    momentum = rules.get("momentum_spike", {})
-    center_deb = rules.get("ankara_center_deb_hit", {})
-    signal_state = _classify_low_yes_signal(rules, snapshot)
-    local_time = str(city_weather.get("local_time") or "").strip()
-    obs_time = str(current.get("obs_time") or "").strip()
-    suppressed = bool((suppression or {}).get("suppressed"))
-    has_active_trigger = any(rule.get("triggered") for rule in rules.values())
-    types_cn = "高温已过（暂停推送）" if suppressed else (_join_trigger_types_cn(rules) or "天气状态快照")
-
-    delta_temp = _sf(momentum.get("delta_temp"))
-    delta_min = momentum.get("delta_minutes")
-    momentum_emoji = "➡️"
-    if delta_temp is not None:
-        momentum_emoji = "🚀" if delta_temp > 0 else ("📉" if delta_temp < 0 else "➡️")
-
-    dynamic_text = f"实测 {current_temp:.1f}{temp_symbol}"
-    if delta_temp is not None and delta_min is not None:
-        dynamic_text = (
-            f"实测 {current_temp:.1f}{temp_symbol} "
-            f"({int(delta_min)}min 内 {delta_temp:+.1f}{temp_symbol}) {momentum_emoji}"
-        )
-
-    anchor_high_c = _sf(snapshot.get("anchor_today_high_c"))
-    if anchor_high_c is None:
-        anchor_high_c = _sf(snapshot.get("open_meteo_today_high_c"))
-    anchor_settle = snapshot.get("anchor_settlement")
-    if anchor_settle is None:
-        anchor_settle = snapshot.get("open_meteo_settlement")
-    anchor_model = str(snapshot.get("anchor_model") or "").strip()
-    forecast_bucket = snapshot.get("forecast_bucket") or {}
-    match_bucket_label = str(forecast_bucket.get("label") or "--").strip() or "--"
-    match_bucket_yes_prob = _norm_probability(forecast_bucket.get("yes_buy"))
-    match_bucket_yes = (
-        _fmt_cents(match_bucket_yes_prob)
-        if match_bucket_yes_prob is not None and match_bucket_yes_prob > 0.0
-        else "--"
-    )
-    market_url = str(
-        snapshot.get("market_url")
-        or snapshot.get("primary_market_url")
-        or ""
-    ).strip()
-    final_map = map_url or "https://polyweather-pro.vercel.app/"
-    advice = _build_advice_cn(rules, temp_symbol, suppression=suppression)
-
-    center_line = ""
-    if center_deb.get("triggered"):
-        center_station = center_deb.get("center_station") or {}
-        center_name = center_station.get("name") or "Ankara Center"
-        center_temp = _sf(center_station.get("temp"))
-        deb_prediction = _sf(center_deb.get("deb_prediction"))
-        airport_temp = _sf(center_deb.get("airport_temp"))
-        lead_gap = _sf(center_deb.get("center_lead_vs_airport"))
-        if center_temp is not None and deb_prediction is not None:
-            center_line = (
-                f"Center信号：{center_name} {center_temp:.1f}{temp_symbol} 已达到 DEB {deb_prediction:.1f}{temp_symbol}"
-            )
-            if airport_temp is not None:
-                center_line += f" | 机场 {airport_temp:.1f}{temp_symbol}"
-            if lead_gap is not None:
-                center_line += f" | 领先 {lead_gap:+.1f}{temp_symbol}"
-
-    if snapshot.get("available") and signal_state.get("should_push"):
-        title_zh = "🚨 PolyWeather 市场监控"
-    elif snapshot.get("available"):
-        title_zh = "📍 PolyWeather 市场观察"
-    else:
-        title_zh = "🚨 PolyWeather 市场提醒" if (has_active_trigger or suppressed) else "📍 PolyWeather 状态快照"
-
-    lines_zh = [f"{title_zh} [{city_name}]"]
-    lines_zh.append("")
-    lines_zh.append(f"类型：{types_cn}")
-    if anchor_high_c is not None and anchor_settle is not None:
-        if anchor_model:
-            lines_zh.append(
-                f"基准：多模型最高温 {anchor_model} {anchor_high_c:.1f}°C （结算参考 {anchor_settle}°C ）"
-            )
-        else:
-            lines_zh.append(
-                f"基准：多模型最高温 {anchor_high_c:.1f}C（结算参考 {anchor_settle}C）"
-            )
-    else:
-        lines_zh.append("基准：多模型最高温 --（结算参考 --）")
-    lines_zh.append(f"命中桶：{match_bucket_label} | Yes: {match_bucket_yes}")
-    lines_zh.append(f"触发：{signal_state.get('reason_cn')}")
-    if center_line:
-        lines_zh.append(center_line)
-    lines_zh.append("")
-    lines_zh.append(f"动态：{dynamic_text}")
-    if local_time or obs_time:
-        if local_time and obs_time:
-            lines_zh.append(f"时间：当地 {local_time} | 观测 {obs_time}")
-        elif local_time:
-            lines_zh.append(f"时间：当地 {local_time}")
-        else:
-            lines_zh.append(f"时间：观测 {obs_time}")
-    lines_zh.append(f"建议：{advice}")
-    lines_zh.append("")
-    if market_url:
-        lines_zh.append(f"市场链接：{market_url}")
-    lines_zh.append(f"地图：{final_map}")
-
-    title_en = (
-        "🚨 PolyWeather Market Monitor"
-        if snapshot.get("available") and signal_state.get("should_push")
-        else "📍 PolyWeather Market Watch"
-        if snapshot.get("available")
-        else "🚨 PolyWeather Alert"
-    )
-    lines_en = [
-        f"{title_en} [{city_name}]",
-        "",
-        f"Type: {types_cn}",
-        f"Now: {dynamic_text}",
-    ]
-    if market_url:
-        lines_en.append(f"Market link: {market_url}")
-    lines_en.append(f"Map: {final_map}")
-
-    return {"zh": "\n".join(lines_zh), "en": "\n".join(lines_en)}
-
-
 def _select_rule_evidence(rule: Dict[str, Any], keys: List[str]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     for key in keys:
@@ -1234,7 +1046,6 @@ def _build_alert_evidence(
 
     trigger_types = [row.get("type") for row in triggered if row.get("type")]
     forecast_bucket = market_snapshot.get("forecast_bucket") or {}
-    low_yes_signal = _classify_low_yes_signal(rules, market_snapshot)
 
     return {
         "version": 1,
@@ -1315,7 +1126,11 @@ def _build_alert_evidence(
         },
         "market": {
             "available": bool(market_snapshot.get("available")),
-            "low_yes_signal": low_yes_signal,
+            "low_yes_signal": {
+                "label": "removed",
+                "should_push": False,
+                "reason_cn": "mispricing signals have been removed",
+            },
             "market_prob": market_snapshot.get("market_prob"),
             "model_prob": market_snapshot.get("model_prob"),
             "edge_percent": market_snapshot.get("edge_percent"),
@@ -1358,7 +1173,6 @@ def build_trading_alerts(
     city = city_weather.get("name", "")
     now = datetime.now(timezone.utc).isoformat()
     market_snapshot = _extract_market_snapshot(city_weather)
-    low_yes_signal = _classify_low_yes_signal({}, {})
 
     rules: Dict[str, Dict[str, Any]] = {
         "ankara_center_deb_hit": _calc_ankara_center_deb_alert(city_weather, temp_symbol),
@@ -1366,7 +1180,6 @@ def build_trading_alerts(
         "forecast_breakthrough": _calc_forecast_breakthrough_alert(city_weather, temp_symbol),
         "advection": _calc_advection_alert(city_weather, temp_symbol),
     }
-    low_yes_signal = _classify_low_yes_signal(rules, market_snapshot)
 
     triggered = [
         {
@@ -1396,22 +1209,13 @@ def build_trading_alerts(
         if force_push and severity == "none":
             severity = "medium"
 
-    if market_snapshot.get("available") and low_yes_signal.get("should_push"):
-        telegram = _build_telegram_messages_mispricing(
-            city_weather=city_weather,
-            rules=rules,
-            market_snapshot=market_snapshot,
-            suppression=suppression,
-            map_url=map_url,
-        )
-    else:
-        telegram = _build_telegram_messages(
-            city_weather=city_weather,
-            rules=rules,
-            map_url=map_url,
-            market_snapshot=market_snapshot,
-            suppression=suppression,
-        )
+    telegram = _build_telegram_messages(
+        city_weather=city_weather,
+        rules=rules,
+        map_url=map_url,
+        market_snapshot=market_snapshot,
+        suppression=suppression,
+    )
     evidence = _build_alert_evidence(
         city_weather=city_weather,
         rules=rules,

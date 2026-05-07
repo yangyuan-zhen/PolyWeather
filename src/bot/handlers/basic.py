@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import threading
 from typing import Any
 from typing import Callable
 
@@ -252,42 +251,17 @@ class BasicCommandHandler:
             if chat_type and chat_type != "private":
                 self.bot.reply_to(
                     message,
-                    "ℹ️ `/markets` 仅支持私聊机器人查询。\n频道继续接收自动推送；如需手动查看当前市场概览，请私聊 bot 发送 `/markets`。",
+                    "ℹ️ `/markets` 仅支持私聊机器人查询。",
                     parse_mode="Markdown",
                 )
                 trace.set_status("blocked", f"unsupported_chat_type:{chat_type}")
                 return
 
-            chat_id = getattr(getattr(message, "chat", None), "id", None)
-            from src.utils.telegram_push import (
-                build_market_monitor_digest,
-                load_cached_market_monitor_digest,
+            self.bot.reply_to(
+                message,
+                "ℹ️ 市场概览 (Focus Digest) 功能已移除。\n频道继续接收关键市场警报推送；如需查看当前市场状态，请访问 https://polyweather-pro.vercel.app/",
+                disable_web_page_preview=True,
             )
-
-            cached_summary = load_cached_market_monitor_digest()
-            if cached_summary:
-                self.bot.reply_to(message, cached_summary, disable_web_page_preview=True)
-            else:
-                self.bot.reply_to(message, "⏳ 正在生成当前市场概览，请稍候...")
-
-            def _worker() -> None:
-                try:
-                    summary = build_market_monitor_digest(
-                        self.config,
-                        slot_label="当前市场概览",
-                        force_refresh=False,
-                    )
-                    if not cached_summary or summary.strip() != cached_summary.strip():
-                        self.bot.send_message(chat_id, summary, disable_web_page_preview=True)
-                except Exception:
-                    if not cached_summary:
-                        self.bot.send_message(chat_id, "❌ 当前市场概览生成失败，请稍后重试。")
-
-            threading.Thread(
-                target=_worker,
-                name="telegram-markets-manual-query",
-                daemon=True,
-            ).start()
-            trace.set_status("accepted")
+            trace.set_status("ok", "removed")
         finally:
             trace.emit()

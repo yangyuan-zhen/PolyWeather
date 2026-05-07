@@ -157,7 +157,7 @@ class StartupCoordinator:
         interval = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 1800))
         cities_count = _parse_csv_count(os.getenv("TELEGRAM_ALERT_CITIES"))
         details = {
-            "mode": "critical-alerts-and-focus-digest",
+            "mode": "critical-alerts",
             "interval_sec": interval,
             "cities_count": cities_count,
             "chat_targets": len(chat_ids),
@@ -165,31 +165,8 @@ class StartupCoordinator:
                 60,
                 _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 21600),
             ),
-            "mispricing_interval_sec": max(
-                max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 21600)),
-                _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 43200),
-            ),
             "min_trigger_count": max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 3)),
             "min_severity": str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "high").strip().lower(),
-            "mispricing_only": _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True),
-            "focus_digest_enabled": _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True),
-            "focus_digest_interval_sec": max(
-                300,
-                _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 21600),
-            ),
-            "focus_push_start_local_hour": min(
-                23,
-                max(0, _env_int("TELEGRAM_MARKET_FOCUS_PUSH_START_LOCAL_HOUR", 8)),
-            ),
-            "focus_push_before_peak_min": max(
-                0,
-                _env_int("TELEGRAM_MARKET_FOCUS_PUSH_BEFORE_PEAK_MIN", 480),
-            ),
-            "focus_push_after_peak_min": max(
-                0,
-                _env_int("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", 300),
-            ),
-            "schedule_basis": "city_local_time_for_push_window",
             "daily_signal_cap": "none",
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"

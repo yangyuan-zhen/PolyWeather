@@ -234,7 +234,7 @@ def _save_state(path: str, state: Dict[str, Any]) -> None:
 
 
 def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400) -> None:
-    for bucket_name in ("by_signature", "focus_digest_slots"):
+    for bucket_name in ("by_signature",):
         bucket = state.get(bucket_name, {})
         if not isinstance(bucket, dict):
             state[bucket_name] = {}
@@ -256,528 +256,6 @@ def _cleanup_state(state: Dict[str, Any], now_ts: int, keep_sec: int = 7 * 86400
         last_by_city.pop(city, None)
 
 
-def _cache_market_monitor_digest(
-    state: Dict[str, Any],
-    *,
-    message: str,
-    slot_label: str,
-    generated_at_ts: Optional[int] = None,
-) -> None:
-    state["last_market_monitor_digest"] = {
-        "message": str(message or "").strip(),
-        "slot_label": str(slot_label or "").strip(),
-        "generated_at_ts": int(generated_at_ts or time.time()),
-    }
-
-
-def load_cached_market_monitor_digest() -> str:
-    state = _load_state(_state_file())
-    cached = state.get("last_market_monitor_digest") or {}
-    if not isinstance(cached, dict):
-        return ""
-    return str(cached.get("message") or "").strip()
-
-
-def _minute_of_day(text: Optional[str]) -> Optional[int]:
-    raw = str(text or "").strip()
-    if not raw or ":" not in raw:
-        return None
-    try:
-        hour_s, minute_s = raw.split(":", 1)
-        hour = int(hour_s)
-        minute = int(minute_s[:2])
-    except Exception:
-        return None
-    if not (0 <= hour <= 23 and 0 <= minute <= 59):
-        return None
-    return hour * 60 + minute
-
-
-def _format_minutes_window(delta_minutes: int) -> str:
-    total = abs(int(delta_minutes))
-    hours = total // 60
-    minutes = total % 60
-    if hours > 0 and minutes > 0:
-        text = f"{hours}h{minutes:02d}m"
-    elif hours > 0:
-        text = f"{hours}h"
-    else:
-        text = f"{minutes}m"
-    return text
-
-
-def _format_interval_brief(seconds: int) -> str:
-    total = max(1, int(seconds))
-    if total % 3600 == 0:
-        hours = total // 3600
-        return f"{hours}小时"
-    if total % 60 == 0:
-        minutes = total // 60
-        return f"{minutes}分钟"
-    return f"{total}秒"
-
-
-def _focus_push_window_config() -> Dict[str, int]:
-    return {
-        "start_local_hour": min(
-            23,
-            max(0, _env_int("TELEGRAM_MARKET_FOCUS_PUSH_START_LOCAL_HOUR", 8)),
-        ),
-        "before_peak_min": max(
-            0,
-            _env_int("TELEGRAM_MARKET_FOCUS_PUSH_BEFORE_PEAK_MIN", 480),
-        ),
-        "after_peak_min": max(
-            0,
-            _env_int("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", 300),
-        ),
-    }
-
-
-def _focus_push_window_label() -> str:
-    config = _focus_push_window_config()
-    return (
-        f"当地 {config['start_local_hour']:02d}:00 后；"
-        f"有日内高点参考时，保留高点前 {_format_minutes_window(config['before_peak_min'])} / "
-        f"高点后 {_format_minutes_window(config['after_peak_min'])} 内"
-    )
-
-
-def _local_peak_context(alert_payload: Dict[str, Any]) -> Dict[str, Any]:
-    evidence = alert_payload.get("evidence") or {}
-    generated_local_time = str(evidence.get("generated_local_time") or "").strip()
-    trigger_summary = evidence.get("trigger_summary") or {}
-    suppression_snapshot = trigger_summary.get("suppression_snapshot") or {}
-    peak_time = str(suppression_snapshot.get("max_temp_time") or "").strip()
-
-    local_min = _minute_of_day(generated_local_time)
-    peak_min = _minute_of_day(peak_time)
-    if local_min is None or peak_min is None:
-        return {
-            "local_time": generated_local_time,
-            "peak_time": peak_time,
-            "minutes_to_peak": None,
-            "score_adjustment": 0.0,
-            "window_label": "",
-        }
-
-    delta = peak_min - local_min
-    score = 0.0
-    window_label = ""
-    if 0 <= delta <= 120:
-        score = 18.0
-        window_label = f"峰值前 {_format_minutes_window(delta)}"
-    elif 120 < delta <= 360:
-        score = 10.0
-        window_label = f"距峰值 {_format_minutes_window(delta)}"
-    elif -90 <= delta < 0:
-        score = 6.0
-        window_label = f"峰值后 {_format_minutes_window(delta)}"
-    elif delta < -90:
-        score = -8.0
-        window_label = "峰值已过较久"
-
-    return {
-        "local_time": generated_local_time,
-        "peak_time": peak_time,
-        "minutes_to_peak": delta,
-        "score_adjustment": score,
-        "window_label": window_label,
-    }
-
-
-def _market_monitor_score(alert_payload: Dict[str, Any]) -> float:
-    severity = str(alert_payload.get("severity") or "none").lower()
-    severity_score = {"high": 36.0, "medium": 24.0, "none": 0.0}.get(severity, 0.0)
-    trigger_count = int(alert_payload.get("trigger_count") or 0)
-    trigger_score = min(18.0, float(trigger_count) * 9.0)
-
-    snapshot = alert_payload.get("market_snapshot") or {}
-    if not isinstance(snapshot, dict):
-        snapshot = {}
-    if not snapshot.get("available"):
-        return 0.0
-
-    edge_percent = abs(_safe_float(snapshot.get("edge_percent")) or 0.0)
-    edge_score = min(22.0, edge_percent * 2.5)
-
-    yes_buy = _norm_prob(snapshot.get("yes_buy"))
-    if yes_buy is None:
-        forecast_bucket = snapshot.get("forecast_bucket") or {}
-        if isinstance(forecast_bucket, dict):
-            yes_buy = _norm_prob(forecast_bucket.get("yes_buy"))
-    pricing_score = 0.0
-    if yes_buy is not None:
-        if yes_buy < 0.10:
-            pricing_score = 14.0
-        elif yes_buy < 0.20:
-            pricing_score = 9.0
-        elif yes_buy < 0.35:
-            pricing_score = 5.0
-
-    confidence = str(snapshot.get("confidence") or "").strip().lower()
-    confidence_score = {"high": 10.0, "medium": 6.0, "low": 2.0}.get(confidence, 0.0)
-
-    suppression = alert_payload.get("suppression") or {}
-    suppressed_penalty = -20.0 if bool(suppression.get("suppressed")) else 0.0
-    peak_context = _local_peak_context(alert_payload)
-
-    return max(
-        0.0,
-        severity_score
-        + trigger_score
-        + edge_score
-        + pricing_score
-        + confidence_score
-        + suppressed_penalty
-        + float(peak_context.get("score_adjustment") or 0.0),
-    )
-
-
-def _priority_label(score: float) -> str:
-    if score >= 72:
-        return "高优先级"
-    if score >= 48:
-        return "重点观察"
-    return "继续观察"
-
-
-def _join_trigger_types_cn_local(rules: Dict[str, Dict[str, Any]]) -> str:
-    label_map = {
-        "ankara_center_deb_hit": "中心站触及 DEB",
-        "momentum_spike": "短时动量异动",
-        "forecast_breakthrough": "实测击穿模型",
-        "advection": "暖平流信号",
-    }
-    parts: List[str] = []
-    for key, label in label_map.items():
-        row = rules.get(key) or {}
-        if row.get("triggered"):
-            parts.append(label)
-    return " + ".join(parts)
-
-
-def _focus_trigger_summary(alert_payload: Dict[str, Any]) -> str:
-    rules = alert_payload.get("rules") or {}
-    if not isinstance(rules, dict):
-        return "市场与天气分歧待观察"
-    return _join_trigger_types_cn_local(rules) or "市场与天气分歧待观察"
-
-
-def _market_signal_brief(snapshot: Dict[str, Any]) -> str:
-    if not isinstance(snapshot, dict):
-        return ""
-
-    signal = str(snapshot.get("signal_label") or "").strip().upper()
-    signal_label = {
-        "BUY YES": "方向 BUY YES",
-        "BUY NO": "方向 BUY NO",
-        "MONITOR": "方向 MONITOR",
-    }.get(signal, f"方向 {signal}" if signal else "")
-
-    edge = _safe_float(snapshot.get("edge_percent"))
-    confidence = str(snapshot.get("confidence") or "").strip()
-    forecast_bucket = snapshot.get("forecast_bucket") or {}
-    if not isinstance(forecast_bucket, dict):
-        forecast_bucket = {}
-    yes_buy = _fmt_cents(forecast_bucket.get("yes_buy"))
-    yes_sell = _fmt_cents(forecast_bucket.get("yes_sell"))
-
-    parts: List[str] = []
-    if signal_label:
-        parts.append(signal_label)
-    if edge is not None:
-        parts.append(f"edge {edge:+.1f}%")
-    if confidence:
-        parts.append(f"置信 {confidence}")
-    if yes_buy:
-        parts.append(f"Yes买 {yes_buy}")
-    if yes_sell:
-        parts.append(f"Yes卖 {yes_sell}")
-    return " | ".join(parts)
-
-
-def _shortlist_focus_payloads(
-    payloads: List[Dict[str, Any]],
-    *,
-    top_n: int,
-    for_push: bool = False,
-) -> List[Dict[str, Any]]:
-    ranked = sorted(
-        payloads,
-        key=lambda item: _market_monitor_score(item),
-        reverse=True,
-    )
-    shortlisted: List[Dict[str, Any]] = []
-    for item in ranked:
-        if not bool((item.get("market_snapshot") or {}).get("available")):
-            continue
-        if not _market_price_cap_ok(item, require_actionable_quote=True):
-            continue
-        if for_push:
-            window_config = _focus_push_window_config()
-            peak_context = _local_peak_context(item)
-            local_min = _minute_of_day(peak_context.get("local_time"))
-            minutes_to_peak = peak_context.get("minutes_to_peak")
-            if local_min is not None and local_min < window_config["start_local_hour"] * 60:
-                continue
-            if isinstance(minutes_to_peak, (int, float)):
-                if minutes_to_peak > window_config["before_peak_min"]:
-                    continue
-                if minutes_to_peak < -window_config["after_peak_min"]:
-                    continue
-        shortlisted.append(item)
-        if len(shortlisted) >= top_n:
-            break
-    return shortlisted
-
-
-def _build_focus_digest_message(
-    payloads: List[Dict[str, Any]],
-    *,
-    slot_label: str,
-    top_n: int,
-) -> str:
-    scan_interval = _format_interval_brief(_env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 300))
-    digest_interval = _format_interval_brief(
-        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 1800),
-    )
-    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=True)
-    if not shortlisted:
-        return ""
-
-    lines = [
-        f"🌐 PolyWeather 市场监控 · {slot_label}",
-        "",
-    ]
-
-    for idx, payload in enumerate(shortlisted, start=1):
-        city = str(payload.get("city") or "").strip().lower()
-        city_name = (CITY_REGISTRY.get(city) or {}).get("display_name") or city.title() or "--"
-        snapshot = payload.get("market_snapshot") or {}
-        evidence = payload.get("evidence") or {}
-        inputs = evidence.get("inputs") or {}
-
-        bucket = str(
-            (snapshot.get("forecast_bucket") or {}).get("label")
-            or snapshot.get("top_bucket")
-            or "--"
-        ).strip()
-        current_temp = _safe_float(inputs.get("current_temp"))
-        deb_prediction = _safe_float(inputs.get("deb_prediction"))
-        market_url = str(snapshot.get("market_url") or snapshot.get("primary_market_url") or "").strip()
-        peak_context = _local_peak_context(payload)
-
-        score = _market_monitor_score(payload)
-        lines.append(f"{idx}. {city_name} | {_priority_label(score)}")
-        lines.append("   " + f"关注桶 {bucket}")
-        signal_brief = _market_signal_brief(snapshot)
-        if signal_brief:
-            lines.append("   " + signal_brief)
-        local_time = str(peak_context.get("local_time") or "").strip()
-        peak_time = str(peak_context.get("peak_time") or "").strip()
-        window_label = str(peak_context.get("window_label") or "").strip()
-        if local_time or peak_time or window_label:
-            context_parts: List[str] = []
-            if local_time:
-                context_parts.append(f"当地 {local_time}")
-            if peak_time:
-                context_parts.append(f"日内高点参考 {peak_time}")
-            if window_label:
-                context_parts.append(window_label)
-            lines.append("   " + " | ".join(context_parts))
-        if current_temp is not None or deb_prediction is not None:
-            lines.append(
-                "   "
-                + (f"实测 {current_temp:.1f}°C" if current_temp is not None else "实测 --")
-                + " | "
-                + (
-                    f"DEB 预报 {deb_prediction:.1f}°C"
-                    if deb_prediction is not None
-                    else "DEB 预报 --"
-                )
-            )
-        lines.append(f"   触发：{_focus_trigger_summary(payload)}")
-        if market_url:
-            lines.append(f"   链接：{market_url}")
-        lines.append("")
-
-    frequency_parts = [
-        f"后台扫描：约每{scan_interval}一次",
-        f"主动推送：约每{digest_interval}一次",
-        f"观察窗口：{_focus_push_window_label()}",
-        "没有每日信号次数上限",
-    ]
-    lines.append("更新频率：" + "；".join(frequency_parts))
-    return "\n".join(lines).strip()
-
-
-def _maybe_send_focus_digest(
-    bot: Any,
-    chat_ids: List[str],
-    payloads: List[Dict[str, Any]],
-    state: Dict[str, Any],
-    *,
-    digest_interval_sec: int,
-    top_n: int,
-) -> bool:
-    if not chat_ids or not payloads or digest_interval_sec <= 0:
-        logger.info(
-            "market focus digest skipped reason=invalid_runtime chat_targets={} payloads={} interval_sec={}",
-            len(chat_ids),
-            len(payloads),
-            digest_interval_sec,
-        )
-        return False
-
-    now_ts = int(time.time())
-    last_digest_ts = int(state.get("last_focus_digest_ts") or 0)
-    available_count = sum(
-        1 for item in payloads
-        if bool((item.get("market_snapshot") or {}).get("available"))
-    )
-    actionable_count = sum(
-        1 for item in payloads
-        if bool((item.get("market_snapshot") or {}).get("available"))
-        and _market_price_cap_ok(item, require_actionable_quote=True)
-    )
-    shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=True)
-    reference_shortlisted = _shortlist_focus_payloads(payloads, top_n=top_n, for_push=False)
-    high_priority_count = sum(1 for item in shortlisted if _market_monitor_score(item) >= 72)
-    logger.info(
-        "market focus digest evaluate payloads={} available={} actionable={} shortlisted={} reference_shortlisted={} high_priority={} interval_sec={} top_n={} push_window={}",
-        len(payloads),
-        available_count,
-        actionable_count,
-        len(shortlisted),
-        len(reference_shortlisted),
-        high_priority_count,
-        digest_interval_sec,
-        top_n,
-        _focus_push_window_label(),
-    )
-    if last_digest_ts and now_ts - last_digest_ts < digest_interval_sec:
-        logger.info(
-            "market focus digest skipped reason=cooldown elapsed_sec={} required_sec={} shortlisted={} high_priority={}",
-            now_ts - last_digest_ts,
-            digest_interval_sec,
-            len(shortlisted),
-            high_priority_count,
-        )
-        return False
-
-    if not shortlisted:
-        logger.info(
-            "market focus digest skipped reason=no_candidates payloads={} available={} actionable={} top_n={}",
-            len(payloads),
-            available_count,
-            actionable_count,
-            top_n,
-        )
-        return False
-    # Tighten channel pushes: require either multiple candidates or one truly high-priority market.
-    if len(shortlisted) < 2 and high_priority_count < 1:
-        first_city = str(shortlisted[0].get("city") or "--") if shortlisted else "--"
-        first_score = _market_monitor_score(shortlisted[0]) if shortlisted else 0
-        logger.info(
-            "market focus digest skipped reason=too_few_candidates shortlisted={} high_priority={} first_city={} first_score={}",
-            len(shortlisted),
-            high_priority_count,
-            first_city,
-            first_score,
-        )
-        return False
-
-    local_now = datetime.now().astimezone()
-    hour = local_now.hour
-    if 6 <= hour < 15:
-        slot_label = "白天关注"
-    elif 15 <= hour < 23:
-        slot_label = "今晚关注"
-    else:
-        slot_label = "夜间关注"
-    message = _build_focus_digest_message(
-        shortlisted,
-        slot_label=slot_label,
-        top_n=top_n,
-    )
-    if not message:
-        logger.info(
-            "market focus digest skipped reason=empty_message shortlisted={} slot_label={}",
-            len(shortlisted),
-            slot_label,
-        )
-        return False
-
-    _cache_market_monitor_digest(
-        state,
-        message=message,
-        slot_label=slot_label,
-    )
-
-    sent_count = 0
-    for chat_id in chat_ids:
-        try:
-            bot.send_message(chat_id, message, disable_web_page_preview=True)
-            sent_count += 1
-        except Exception as exc:
-            logger.warning(
-                "market focus digest push failed interval_sec={} chat_id={} error={}",
-                digest_interval_sec,
-                chat_id,
-                exc,
-            )
-    if sent_count <= 0:
-        return False
-
-    state["last_focus_digest_ts"] = now_ts
-    logger.info(
-        "market focus digest pushed interval_sec={} shortlisted={} payloads={} chat_targets={} slot_label={}",
-        digest_interval_sec,
-        len(shortlisted),
-        len(payloads),
-        sent_count,
-        slot_label,
-    )
-    return True
-
-
-def build_market_monitor_digest(
-    config: Dict[str, Any],
-    *,
-    slot_label: str = "当前概览",
-    top_n: Optional[int] = None,
-    force_refresh: bool = False,
-) -> str:
-    cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
-
-    digest_top_n = top_n if top_n is not None else max(
-        3,
-        min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)),
-    )
-    payloads: List[Dict[str, Any]] = []
-    for city in cities:
-        try:
-            payloads.append(build_trade_alert_for_city(city, config, force_refresh=force_refresh))
-        except Exception as exc:
-            logger.warning("market monitor digest build skipped city={} error={}", city, exc)
-    message = _build_focus_digest_message(
-        payloads,
-        slot_label=slot_label,
-        top_n=digest_top_n,
-    )
-    if message:
-        state = _load_state(_state_file())
-        _cache_market_monitor_digest(
-            state,
-            message=message,
-            slot_label=slot_label,
-        )
-        _save_state(_state_file(), state)
-        return message
-    return "ℹ️ 当前没有可用的市场监控摘要。"
-
-
 def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_count: int) -> bool:
     triggered_alerts = alert_payload.get("triggered_alerts") or []
     if any(alert.get("force_push") for alert in triggered_alerts):
@@ -792,17 +270,9 @@ def _severity_ok(alert_payload: Dict[str, Any], min_severity: str, min_trigger_c
 
 def _market_price_cap_ok(
     alert_payload: Dict[str, Any],
-    require_actionable_quote: bool = False,
 ) -> bool:
     market = alert_payload.get("market_snapshot") or {}
     if not isinstance(market, dict) or not market.get("available"):
-        if require_actionable_quote:
-            logger.info(
-                "trade alert skipped: market snapshot unavailable city={}".format(
-                    alert_payload.get("city"),
-                )
-            )
-            return False
         return True
 
     primary_market = market.get("primary_market") or {}
@@ -1057,18 +527,12 @@ def _maybe_send_alert(
     cooldown_sec: int,
     min_severity: str,
     min_trigger_count: int,
-    mispricing_only: bool,
 ) -> bool:
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
     last_city = last_by_city.get(city) or {}
     is_active = _severity_ok(alert_payload, min_severity, min_trigger_count)
-    if mispricing_only and not _is_market_mispricing_signal(alert_payload):
-        is_active = False
-    if not _market_price_cap_ok(
-        alert_payload,
-        require_actionable_quote=mispricing_only,
-    ):
+    if not _market_price_cap_ok(alert_payload):
         is_active = False
     message = ((alert_payload.get("telegram") or {}).get("zh") or "").strip()
 
@@ -1129,27 +593,6 @@ def _maybe_send_alert(
     return True
 
 
-def _is_market_mispricing_signal(alert_payload: Dict[str, Any]) -> bool:
-    market = alert_payload.get("market_snapshot") or {}
-    if not isinstance(market, dict) or not market.get("available"):
-        return False
-
-    evidence = alert_payload.get("evidence") or {}
-    evidence_market = evidence.get("market") if isinstance(evidence, dict) else {}
-    low_yes_signal = (
-        evidence_market.get("low_yes_signal")
-        if isinstance(evidence_market, dict)
-        else None
-    )
-    if isinstance(low_yes_signal, dict) and bool(low_yes_signal.get("should_push")):
-        return True
-
-    signal = str(market.get("signal_label") or "").strip().upper()
-    if signal in {"BUY YES", "BUY NO"}:
-        return True
-    return False
-
-
 def _run_market_monitor_cycle(
     bot: Any,
     config: Dict[str, Any],
@@ -1157,63 +600,31 @@ def _run_market_monitor_cycle(
     chat_ids: List[str],
     cities: List[str],
     state: Dict[str, Any],
-    focus_digest_enabled: bool,
-    focus_digest_interval_sec: int,
-    focus_digest_top_n: int,
     alert_cooldown_sec: int,
-    mispricing_interval_sec: int,
     min_severity: str,
     min_trigger_count: int,
-    mispricing_only: bool,
     sleep_between_cities_sec: float = 1.0,
 ) -> bool:
     state_dirty = False
-    cycle_payloads: List[Dict[str, Any]] = []
-    critical_pushed_cities: set[str] = set()
 
     for city in cities:
         try:
             alert_payload = build_trade_alert_for_city(city, config)
-            cycle_payloads.append(alert_payload)
-            is_mispricing = _is_market_mispricing_signal(alert_payload)
-            cooldown_sec = mispricing_interval_sec if is_mispricing else alert_cooldown_sec
             if _maybe_send_alert(
                 bot=bot,
                 chat_ids=chat_ids,
                 city=city,
                 alert_payload=alert_payload,
                 state=state,
-                cooldown_sec=cooldown_sec,
+                cooldown_sec=alert_cooldown_sec,
                 min_severity=min_severity,
                 min_trigger_count=min_trigger_count,
-                mispricing_only=mispricing_only,
             ):
                 state_dirty = True
-                critical_pushed_cities.add(str(city).strip().lower())
         except Exception:
             logger.exception(f"telegram market monitor loop failed for city={city}")
         if sleep_between_cities_sec > 0:
             time.sleep(sleep_between_cities_sec)
-
-    if focus_digest_enabled:
-        try:
-            digest_payloads = [
-                payload
-                for payload in cycle_payloads
-                if str(payload.get("city") or "").strip().lower()
-                not in critical_pushed_cities
-            ]
-            if _maybe_send_focus_digest(
-                bot=bot,
-                chat_ids=chat_ids,
-                payloads=digest_payloads,
-                state=state,
-                digest_interval_sec=focus_digest_interval_sec,
-                top_n=focus_digest_top_n,
-            ):
-                state_dirty = True
-        except Exception:
-            logger.exception("failed to push market focus digest")
 
     return state_dirty
 
@@ -1232,33 +643,20 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     cities = _parse_city_list(os.getenv("TELEGRAM_ALERT_CITIES"))
     state_path = _state_file()
     alert_cooldown_sec = max(60, _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 21600))
-    mispricing_interval_sec = max(
-        alert_cooldown_sec,
-        _env_int("TELEGRAM_ALERT_MISPRICING_INTERVAL_SEC", 43200),
-    )
     min_trigger_count = max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 3))
     min_severity = str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "high").strip().lower()
     if min_severity not in SEVERITY_RANK:
         min_severity = "high"
-    mispricing_only = _env_bool("TELEGRAM_ALERT_MISPRICING_ONLY", True)
-    focus_digest_enabled = _env_bool("TELEGRAM_MARKET_FOCUS_DIGEST_ENABLED", True)
-    focus_digest_top_n = max(3, min(8, _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_TOP_N", 5)))
-    focus_digest_interval_sec = max(
-        300,
-        _env_int("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", 21600),
-    )
     def _runner() -> None:
         try:
             _save_state(state_path, _load_state(state_path))
         except Exception:
             logger.exception(f"failed to initialize market monitor state path={state_path}")
         logger.info(
-            f"telegram market monitor loop started mode=critical-alerts-and-focus-digest "
+            f"telegram market monitor loop started mode=critical-alerts "
             f"cities={len(cities)} interval={interval_sec}s chat_targets={len(chat_ids)} "
-            f"alert_cooldown={alert_cooldown_sec}s mispricing_interval={mispricing_interval_sec}s "
+            f"alert_cooldown={alert_cooldown_sec}s "
             f"min_severity={min_severity} min_trigger_count={min_trigger_count} "
-            f"mispricing_only={mispricing_only} "
-            f"focus_digest_enabled={focus_digest_enabled} focus_interval={focus_digest_interval_sec}s "
             f"state_path={state_path}"
         )
         while True:
@@ -1271,14 +669,9 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
                 chat_ids=chat_ids,
                 cities=cities,
                 state=state,
-                focus_digest_enabled=focus_digest_enabled,
-                focus_digest_interval_sec=focus_digest_interval_sec,
-                focus_digest_top_n=focus_digest_top_n,
                 alert_cooldown_sec=alert_cooldown_sec,
-                mispricing_interval_sec=mispricing_interval_sec,
                 min_severity=min_severity,
                 min_trigger_count=min_trigger_count,
-                mispricing_only=mispricing_only,
             ):
                 _save_state(state_path, state)
 

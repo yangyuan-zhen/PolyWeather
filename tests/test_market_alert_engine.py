@@ -1,10 +1,5 @@
 from src.analysis.market_alert_engine import build_trading_alerts
-from src.utils.telegram_push import (
-    _build_focus_digest_message,
-    _run_market_monitor_cycle,
-    _shortlist_focus_payloads,
-    build_market_monitor_digest,
-)
+from src.utils.telegram_push import _run_market_monitor_cycle
 
 
 def _sample_weather_payload():
@@ -181,27 +176,6 @@ def test_peak_passed_guard_suppresses_late_day_cooldown_alerts():
     assert "暂停主动推送" in out["telegram"]["zh"]
 
 
-def test_market_monitor_digest_skips_non_tradable_market(monkeypatch):
-    payload = build_trading_alerts(
-        city_weather=_sample_weather_payload(),
-        map_url="https://example.com/map",
-    )
-    payload["market_snapshot"]["available"] = True
-    payload["market_snapshot"]["market_closed"] = True
-    payload["market_snapshot"]["market_tradable"] = False
-    payload["market_snapshot"]["market_accepting_orders"] = False
-    payload["market_snapshot"]["market_tradable_reason"] = "in_review"
-
-    monkeypatch.setattr(
-        "src.utils.telegram_push.build_trade_alert_for_city",
-        lambda city, config, force_refresh=False: payload,
-    )
-    monkeypatch.setenv("TELEGRAM_ALERT_CITIES", "ankara")
-
-    digest = build_market_monitor_digest({}, slot_label="当前市场概览")
-    assert digest == "ℹ️ 当前没有可用的市场监控摘要。"
-
-
 class _DigestBot:
     def __init__(self):
         self.messages = []
@@ -285,95 +259,6 @@ def _focus_payload(
     }
 
 
-def test_focus_digest_push_window_does_not_cut_off_after_2pm_spanish_time(monkeypatch):
-    monkeypatch.delenv("TELEGRAM_MARKET_FOCUS_PUSH_AFTER_PEAK_MIN", raising=False)
-
-    shortlisted = _shortlist_focus_payloads(
-        [_focus_payload(local_time="14:00", peak_time="12:00")],
-        top_n=5,
-        for_push=True,
-    )
-
-    assert len(shortlisted) == 1
-
-
-def test_focus_digest_footer_explains_no_daily_signal_cap(monkeypatch):
-    monkeypatch.setenv("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", "300")
-    monkeypatch.setenv("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", "1800")
-
-    message = _build_focus_digest_message(
-        [_focus_payload(local_time="14:00", peak_time="12:00")],
-        slot_label="白天关注",
-        top_n=5,
-    )
-
-    assert "没有每日信号次数上限" in message
-    assert "观察窗口" in message
-
-
-def test_focus_digest_message_shows_market_direction_and_signed_edge():
-    message = _build_focus_digest_message(
-        [
-            _focus_payload(
-                city="new york",
-                signal_label="BUY NO",
-                edge_percent=-9.25,
-            )
-        ],
-        slot_label="白天关注",
-        top_n=5,
-    )
-
-    assert "方向 BUY NO" in message
-    assert "edge -9.2%" in message
-
-
-def test_market_monitor_cycle_sends_digest_after_full_city_scan(monkeypatch):
-    payloads = {
-        "early a": _focus_payload(city="early a", edge_percent=4.0, yes_buy=0.2),
-        "early b": _focus_payload(city="early b", edge_percent=4.0, yes_buy=0.2),
-        "late best": _focus_payload(
-            city="late best",
-            severity="high",
-            trigger_count=3,
-            edge_percent=20.0,
-            signal_label="BUY YES",
-            yes_buy=0.05,
-        ),
-    }
-
-    monkeypatch.setattr(
-        "src.utils.telegram_push.build_trade_alert_for_city",
-        lambda city, config: payloads[city],
-    )
-    monkeypatch.setenv("TELEGRAM_MARKET_FOCUS_DIGEST_INTERVAL_SEC", "1800")
-    bot = _DigestBot()
-    state = {}
-
-    dirty = _run_market_monitor_cycle(
-        bot=bot,
-        config={},
-        chat_ids=["chat"],
-        cities=["early a", "early b", "late best"],
-        state=state,
-        focus_digest_enabled=True,
-        focus_digest_interval_sec=1800,
-        focus_digest_top_n=3,
-        alert_cooldown_sec=1800,
-        mispricing_interval_sec=7200,
-        min_severity="high",
-        min_trigger_count=99,
-        mispricing_only=True,
-        sleep_between_cities_sec=0,
-    )
-
-    assert dirty is True
-    assert len(bot.messages) == 1
-    assert "Late Best" in bot.messages[0]["text"]
-    assert "Early A" in bot.messages[0]["text"]
-    assert state.get("last_focus_digest_ts")
-
-
 def test_market_monitor_cycle_restores_critical_alert_push(monkeypatch):
     payload = _focus_payload(
         city="ankara",
@@ -396,14 +281,9 @@ def test_market_monitor_cycle_restores_critical_alert_push(monkeypatch):
         chat_ids=["chat"],
         cities=["ankara"],
         state=state,
-        focus_digest_enabled=False,
-        focus_digest_interval_sec=1800,
-        focus_digest_top_n=5,
         alert_cooldown_sec=1800,
-        mispricing_interval_sec=7200,
         min_severity="medium",
         min_trigger_count=2,
-        mispricing_only=True,
         sleep_between_cities_sec=0,
     )
 
@@ -412,47 +292,3 @@ def test_market_monitor_cycle_restores_critical_alert_push(monkeypatch):
     assert state["last_by_city"]["ankara"]["active"] is True
 
 
-def test_market_monitor_cycle_excludes_critical_alert_city_from_digest(monkeypatch):
-    payloads = {
-        "critical": _focus_payload(
-            city="critical",
-            severity="high",
-            trigger_count=2,
-            signal_label="BUY YES",
-            yes_buy=0.05,
-            edge_percent=15.0,
-        ),
-        "digest a": _focus_payload(city="digest a", edge_percent=5.0, yes_buy=0.18),
-        "digest b": _focus_payload(city="digest b", edge_percent=4.0, yes_buy=0.2),
-    }
-    monkeypatch.setattr(
-        "src.utils.telegram_push.build_trade_alert_for_city",
-        lambda city, config: payloads[city],
-    )
-    bot = _DigestBot()
-    state = {}
-
-    dirty = _run_market_monitor_cycle(
-        bot=bot,
-        config={},
-        chat_ids=["chat"],
-        cities=["critical", "digest a", "digest b"],
-        state=state,
-        focus_digest_enabled=True,
-        focus_digest_interval_sec=1800,
-        focus_digest_top_n=3,
-        alert_cooldown_sec=1800,
-        mispricing_interval_sec=7200,
-        min_severity="medium",
-        min_trigger_count=2,
-        mispricing_only=True,
-        sleep_between_cities_sec=0,
-    )
-
-    assert dirty is True
-    assert len(bot.messages) == 2
-    assert bot.messages[0]["text"] == "CRITICAL critical"
-    digest_text = bot.messages[1]["text"]
-    assert "Critical" not in digest_text
-    assert "Digest A" in digest_text
-    assert "Digest B" in digest_text
