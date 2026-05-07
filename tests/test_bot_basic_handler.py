@@ -76,7 +76,7 @@ def test_basic_handler_diag_returns_html():
     assert "Bot 启动诊断" in bot.replies[0]["text"]
 
 
-def test_basic_handler_markets_returns_summary(monkeypatch):
+def test_basic_handler_markets_returns_summary():
     bot = DummyBot()
     io_layer = SimpleNamespace(
         build_welcome_text=lambda: "WELCOME",
@@ -95,25 +95,11 @@ def test_basic_handler_markets_returns_summary(monkeypatch):
         config={},
     )
 
-    monkeypatch.setattr(
-        "src.utils.telegram_push.build_market_monitor_digest",
-        lambda config, slot_label="当前概览", top_n=None, force_refresh=False: "MARKET DIGEST",
-    )
-    monkeypatch.setattr(
-        "src.utils.telegram_push.load_cached_market_monitor_digest",
-        lambda: "",
-    )
-    monkeypatch.setattr(
-        "src.bot.handlers.basic.threading.Thread",
-        lambda target, name=None, daemon=None: SimpleNamespace(start=target),
-    )
-
     handler.handle_markets(_message("/markets"))
 
     assert len(bot.replies) == 1
-    assert "正在生成当前市场概览" in bot.replies[0]["text"]
-    assert len(bot.sent_messages) == 1
-    assert bot.sent_messages[0]["text"] == "MARKET DIGEST"
+    assert "市场概览" in bot.replies[0]["text"]
+    assert "已移除" in bot.replies[0]["text"]
 
 
 def test_basic_handler_markets_rejects_channel_chat():
