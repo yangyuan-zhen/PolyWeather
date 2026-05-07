@@ -635,6 +635,11 @@ def stream_scan_city_ai_forecast_payload(
             "final_judgment_en": preview_raw.get("final_judgment_en"),
             "model_cluster_note_zh": preview_raw.get("model_cluster_note_zh"),
             "model_cluster_note_en": preview_raw.get("model_cluster_note_en"),
+            "predicted_max": preview_raw.get("predicted_max"),
+            "range_low": preview_raw.get("range_low"),
+            "range_high": preview_raw.get("range_high"),
+            "confidence": preview_raw.get("confidence"),
+            "unit": preview_raw.get("unit"),
         },
     )
     yield _sse_event(

@@ -30,7 +30,14 @@ export type AiCityStreamProgress = {
   final_judgment_zh?: string | null;
   metar_read_en?: string | null;
   metar_read_zh?: string | null;
+  model_cluster_note_en?: string | null;
+  model_cluster_note_zh?: string | null;
   raw_length?: number | null;
+  predicted_max?: number | null;
+  range_low?: number | null;
+  range_high?: number | null;
+  confidence?: string | null;
+  unit?: string | null;
 };
 
 export const scanTerminalQueryPolicy = {

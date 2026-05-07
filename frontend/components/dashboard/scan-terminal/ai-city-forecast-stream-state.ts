@@ -146,6 +146,40 @@ function getAiCityStreamProgressText(
   return "";
 }
 
+function computeFallbackPredictedMax(detail: CityDetail | null): number | null {
+  if (!detail) return null;
+  const multiModel = detail.multi_model ?? {};
+  const entries = Object.entries(multiModel).filter(
+    ([, v]) => v != null && Number.isFinite(v),
+  ) as [string, number][];
+  const values = entries.map(([, v]) => v);
+  const debValue = detail.deb?.prediction ?? null;
+  const nonDebValues = entries
+    .filter(([name]) => !name.toLowerCase().includes("deb"))
+    .map(([, v]) => v);
+  const sorted = [...nonDebValues].sort((a, b) => a - b);
+  const clusterMedian =
+    sorted.length > 0 ? sorted[Math.floor(sorted.length / 2)] : null;
+  let predicted = clusterMedian;
+  if (predicted == null && debValue != null && Number.isFinite(debValue))
+    predicted = debValue;
+  if (predicted == null && values.length > 0)
+    predicted = values.reduce((a, b) => a + b, 0) / values.length;
+  if (predicted == null) {
+    const isHkoObservation = isHkoObservationCity(detail);
+    const currentTemp =
+      (isHkoObservation
+        ? detail?.current?.temp
+        : detail?.airport_current?.temp ??
+          detail?.airport_primary?.temp ??
+          detail?.current?.temp) ?? null;
+    predicted = currentTemp != null && Number.isFinite(currentTemp)
+      ? currentTemp
+      : null;
+  }
+  return predicted;
+}
+
 export function buildAiCityFallbackPayload({
   detail,
   error,
@@ -195,6 +229,12 @@ export function buildAiCityFallbackPayload({
   const reasonZh = `DEB、多模型集合和最新${sourceZh}已足够给出当前方向判断；页面会在 DeepSeek 返回后合并完整机场报文解读。`;
   const reasonEn = `DEB, the model cluster and latest ${sourceEn} are enough for the current directional read; the page will merge the full airport-bulletin read when DeepSeek returns.`;
 
+  const fallbackPredictedMax = computeFallbackPredictedMax(detail);
+  const multiModel = detail?.multi_model ?? {};
+  const modelValues = Object.values(multiModel).filter(
+    (v): v is number => v != null && Number.isFinite(v),
+  );
+
   return {
     city_forecast: {
       confidence: "low",
@@ -204,9 +244,9 @@ export function buildAiCityFallbackPayload({
       metar_read_zh: metarZh,
       model_cluster_note_en: "",
       model_cluster_note_zh: "",
-      predicted_max: null,
-      range_high: null,
-      range_low: null,
+      predicted_max: fallbackPredictedMax,
+      range_high: modelValues.length > 0 ? Math.max(...modelValues) : null,
+      range_low: modelValues.length > 0 ? Math.min(...modelValues) : null,
       reasoning_en: reasonEn,
       reasoning_zh: reasonZh,
       risks_en: [],
@@ -251,6 +291,60 @@ export function buildAiCityLoadingForecastState({
   return loadingState;
 }
 
+function hasPreviewQuantFields(progress: AiCityStreamProgress) {
+  return (
+    progress.predicted_max != null ||
+    progress.range_low != null ||
+    progress.range_high != null
+  );
+}
+
+function mergePreviewQuantPayload(
+  current: AiCityForecastState,
+  progress: AiCityStreamProgress,
+): AiCityForecastPayload {
+  const prev = current.payload ?? {};
+  const prevCf = prev.city_forecast ?? {};
+  return {
+    ...prev,
+    status: prev.status ?? "ready",
+    city_forecast: {
+      ...prevCf,
+      ...(progress.predicted_max != null
+        ? { predicted_max: progress.predicted_max }
+        : {}),
+      ...(progress.range_low != null
+        ? { range_low: progress.range_low }
+        : {}),
+      ...(progress.range_high != null
+        ? { range_high: progress.range_high }
+        : {}),
+      ...(progress.confidence != null
+        ? { confidence: progress.confidence }
+        : {}),
+      ...(progress.unit != null ? { unit: progress.unit } : {}),
+      ...(progress.metar_read_zh != null
+        ? { metar_read_zh: progress.metar_read_zh }
+        : {}),
+      ...(progress.metar_read_en != null
+        ? { metar_read_en: progress.metar_read_en }
+        : {}),
+      ...(progress.final_judgment_zh != null
+        ? { final_judgment_zh: progress.final_judgment_zh }
+        : {}),
+      ...(progress.final_judgment_en != null
+        ? { final_judgment_en: progress.final_judgment_en }
+        : {}),
+      ...(progress.model_cluster_note_zh != null
+        ? { model_cluster_note_zh: progress.model_cluster_note_zh }
+        : {}),
+      ...(progress.model_cluster_note_en != null
+        ? { model_cluster_note_en: progress.model_cluster_note_en }
+        : {}),
+    },
+  };
+}
+
 export function buildAiCityProgressForecastState({
   cacheKey,
   current,
@@ -263,25 +357,36 @@ export function buildAiCityProgressForecastState({
   progress: AiCityStreamProgress;
 }) {
   const progressText = getAiCityStreamProgressText(progress, isEn);
-  if (!progressText) return null;
+  const hasQuant = hasPreviewQuantFields(progress);
+  if (!progressText && !hasQuant) return null;
   const cachedProgressState = readCachedAiForecastState(cacheKey);
   const nextStreamText =
     progress.stage === "calling_ai" && cachedProgressState?.streamText
       ? cachedProgressState.streamText
-      : progressText;
+      : progressText || cachedProgressState?.streamText || "";
+  const nextPayload = hasQuant
+    ? mergePreviewQuantPayload(
+        cachedProgressState ?? current,
+        progress,
+      )
+    : cachedProgressState?.payload ?? current.payload;
   const cachedNextState: AiCityForecastState = {
     ...cachedProgressState,
     status: "loading",
     streamText: nextStreamText,
+    payload: nextPayload,
   };
   writeCachedAiForecastState(cacheKey, cachedNextState);
   return {
     ...current,
-    status: "loading",
+    status: "loading" as const,
     streamText:
       progress.stage === "calling_ai" && current.streamText
         ? current.streamText
-        : progressText,
+        : progressText || current.streamText || "",
+    payload: hasQuant
+      ? mergePreviewQuantPayload(current, progress)
+      : current.payload,
   } satisfies AiCityForecastState;
 }
 
