@@ -17,6 +17,10 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ![PolyWeather Ankara analysis](docs/images/demo_ankara.png)
 
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
+
 ## Product Status (2026-04-27)
 
 - Subscription live: `Pro Monthly 5 USDC`.
