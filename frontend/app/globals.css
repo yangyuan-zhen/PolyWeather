@@ -305,6 +305,17 @@
   }
 }
 
+/* ── Extreme temperature emphasis ── */
+.temp-extreme-hot {
+  color: #f97316;
+  text-shadow: 0 0 12px rgba(249, 115, 22, 0.35);
+}
+
+.temp-extreme-cold {
+  color: #38bdf8;
+  text-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+}
+
 /* ══════════════════════════════════════════════════════════════
    Map Marker Components (nearby stations, city bubbles)
    ══════════════════════════════════════════════════════════════ */

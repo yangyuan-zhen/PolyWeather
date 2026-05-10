@@ -1,5 +1,13 @@
 "use client";
 
+function getTempExtremeClass(temp: number | null | undefined, symbol?: string | null) {
+  if (temp == null || !Number.isFinite(temp)) return "";
+  const isF = String(symbol || "").toUpperCase().includes("F");
+  if (isF ? temp >= 104 : temp >= 40) return "temp-extreme-hot";
+  if (isF ? temp <= 23 : temp <= -5) return "temp-extreme-cold";
+  return "";
+}
+
 import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
 import { startTransition, useMemo } from "react";
@@ -65,7 +73,7 @@ export function HeroSummary() {
           {weatherIcon} {weatherText}
         </span>
       </div>
-      <div className="hero-temp">
+      <div className={`hero-temp ${getTempExtremeClass(current.temp, data.temp_symbol)}`}>
         <span className="hero-value">
           {current.temp != null ? current.temp.toFixed(1) : "--"}
         </span>

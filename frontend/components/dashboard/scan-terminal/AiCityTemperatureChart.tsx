@@ -192,12 +192,12 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
             grid: { color: "rgba(159, 178, 199, 0.08)" },
             ticks: {
               callback: (_value, index) =>
-                typeof index === "number" && index % 4 === 0
+                typeof index === "number" && index % 3 === 0
                   ? chartData.times[index]
                   : "",
               color: "#6B7A90",
               font: { size: 10 },
-              maxTicksLimit: 6,
+              maxTicksLimit: 8,
               maxRotation: 0,
             },
           },
