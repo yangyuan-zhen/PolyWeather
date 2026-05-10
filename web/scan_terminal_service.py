@@ -351,6 +351,8 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
             "wind_speed_kt": current.get("wind_speed_kt"),
             "wind_dir": current.get("wind_dir"),
             "humidity": current.get("humidity"),
+            "pressure_hpa": current.get("pressure_hpa"),
+            "observation_source": current.get("settlement_source"),
         },
         "airport": {
             "name": risk.get("airport") or airport_current.get("station_label") or airport_primary.get("station_label"),
