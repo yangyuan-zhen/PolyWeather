@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import time
+from html import unescape
 from datetime import datetime
 from typing import Any, Dict, Optional
 
@@ -16,6 +17,13 @@ from loguru import logger
 from src.utils.metrics import record_source_call
 
 AMOS_BASE_URL = "https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do"
+AMOS_AIRPORT_QUERY_KEYS = (
+    "stnCd",
+    "icao",
+    "airport",
+    "airportCd",
+    "airPort",
+)
 
 AMOS_AIRPORT_CODES: Dict[str, Dict[str, str]] = {
     "seoul": {
@@ -72,7 +80,19 @@ def _amos_extract_metar_wind(metar_line: str) -> Optional[float]:
     return None
 
 
-def _amos_parse_runway_table(text: str) -> list[dict[str, Any]]:
+def _amos_to_lines(text: str) -> list[str]:
+    """Convert the AMOS HTML/plain text page to parseable text lines."""
+    normalized = unescape(str(text or ""))
+    # The public AMOS page is table-heavy.  Preserve cell boundaries as
+    # whitespace/newlines so regexes work both on raw HTML and crawler text.
+    normalized = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", normalized)
+    normalized = re.sub(r"(?i)</\s*(?:tr|div|p|li|h\d|table)\s*>", "\n", normalized)
+    normalized = re.sub(r"<[^>]+>", " ", normalized)
+    normalized = normalized.replace("\xa0", " ")
+    return [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines() if line.strip()]
+
+
+def _amos_parse_runway_table(text: str) -> dict[str, Any]:
     """Parse the runway-level data from AMOS page HTML text.
 
     The page shows data organized by runway direction pairs.
@@ -85,44 +105,109 @@ def _amos_parse_runway_table(text: str) -> list[dict[str, Any]]:
       TEMP/DEW 16.5/9.2
       PRECIP 0 QNH 1015.8
     """
-    # Match runway pair headers like 15L/33R
-    rwy_pattern = re.compile(r"(\d{2}[LR]?)\s*/\s*(\d{2}[LR]?)")
-    runway_pairs = rwy_pattern.findall(text)
+    lines = _amos_to_lines(text)
+    normalized_text = "\n".join(lines)
 
-    # Temperature/Dew pattern
-    temp_pattern = re.compile(r"TEMP\s*/\s*DEW\s*(\d+\.?\d*)\s*/\s*(\d+\.?\d*)")
+    runway_pairs: list[tuple[str, str]] = []
+    temperatures: list[tuple[float, float]] = []
+    pressures_hpa: list[float] = []
+    wind_directions: list[tuple[int, int, int]] = []
+    wind_speeds: list[tuple[float, float, float]] = []
+    visibility_mor: list[int] = []
+    rvr: list[int] = []
 
-    # Pressure pattern
-    qnh_pattern = re.compile(r"QNH\s*(\d+\.?\d*)\s*hPa")
+    pending_temp: float | None = None
 
-    # Wind direction pattern
-    wd_pattern = re.compile(r"WD\s*(\d+)\s*\(\s*(\d+)\s*-\s*(\d+)\s*\)")
+    # Current public page format is line/table-cell based:
+    #   15R AVG MIN MAX
+    #   WD 240 220 250
+    #   WS 4.7 2.9 6.8
+    #   TEMP(℃) 13.7
+    #   DEW (℃) 9.8
+    #   QNH (hPa) 1021.0
+    #   33L AVG MIN MAX
+    # Older crawler output may use "15R/33L" and "TEMP/DEW 13.7/9.8".
+    for line in lines:
+        runway_header = re.match(r"^(\d{2}[LR]?)\s+AVG\s+MIN\s+MAX\b", line, re.I)
+        if runway_header:
+            continue
 
-    # Wind speed pattern
-    ws_pattern = re.compile(r"WS\s*(\d+\.?\d*)\s*\(\s*(\d+\.?\d*)\s*-\s*(\d+\.?\d*)\s*\)")
+        pair_match = re.match(r"^(\d{2}[LR]?)\s*/\s*(\d{2}[LR]?)$", line)
+        if not pair_match:
+            pair_match = re.match(r"^(\d{2}[LR]?)\s+(\d{2}[LR]?)$", line)
+        if pair_match:
+            pair = (pair_match.group(1), pair_match.group(2))
+            # Ignore bare duplicated orientation rows such as "15 33" when
+            # richer L/R pair labels are present nearby, but keep them as a
+            # fallback for airports without side designators.
+            if pair not in runway_pairs:
+                runway_pairs.append(pair)
+            continue
 
-    # Visibility pattern
-    mor_pattern = re.compile(r"MOR\s*(\d+)")
+        wd = re.match(r"^WD\s+(\d+)\s+(\d+)\s+(\d+)\b", line, re.I)
+        if wd:
+            wind_directions.append((int(wd.group(1)), int(wd.group(2)), int(wd.group(3))))
+            continue
 
-    # RVR pattern
-    rvr_pattern = re.compile(r"RVR\s*P?(\d+)")
+        ws = re.match(r"^WS\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)\b", line, re.I)
+        if ws:
+            wind_speeds.append((float(ws.group(1)), float(ws.group(2)), float(ws.group(3))))
+            continue
 
-    temps = temp_pattern.findall(text)
-    qnhs = qnh_pattern.findall(text)
+        temp_dew = re.search(
+            r"TEMP\s*/\s*DEW\s*(\d+(?:\.\d+)?)\s*/\s*(\d+(?:\.\d+)?)",
+            line,
+            re.I,
+        )
+        if temp_dew:
+            temperatures.append((float(temp_dew.group(1)), float(temp_dew.group(2))))
+            continue
 
-    wd_matches = list(wd_pattern.finditer(text))
-    ws_matches = list(ws_pattern.finditer(text))
-    mor_matches = list(mor_pattern.finditer(text))
-    rvr_matches = list(rvr_pattern.finditer(text))
+        temp_match = re.search(r"TEMP\s*\([^)]*\)\s*(\d+(?:\.\d+)?)", line, re.I)
+        if temp_match:
+            pending_temp = float(temp_match.group(1))
+            continue
+
+        dew_match = re.search(r"DEW\s*\([^)]*\)\s*(\d+(?:\.\d+)?)", line, re.I)
+        if dew_match and pending_temp is not None:
+            temperatures.append((pending_temp, float(dew_match.group(1))))
+            pending_temp = None
+            continue
+
+        qnh = re.search(r"QNH\s*(?:\(\s*hPa\s*\))?\s*(\d+(?:\.\d+)?)", line, re.I)
+        if qnh:
+            pressures_hpa.append(float(qnh.group(1)))
+            continue
+
+        mor = re.match(r"^MOR\s+(\d+)", line, re.I)
+        if mor:
+            visibility_mor.append(int(mor.group(1)))
+            continue
+
+        rvr_match = re.match(r"^RVR\s+P?(\d+)", line, re.I)
+        if rvr_match:
+            rvr.append(int(rvr_match.group(1)))
+
+    # Prefer concrete runway-side pairs (15L/33R) over repeated orientation
+    # rows (15/33).  If no paired label exists, pair runway headers in order.
+    side_pairs = [p for p in runway_pairs if any(ch in "".join(p) for ch in ("L", "R", "C"))]
+    if side_pairs:
+        runway_pairs = side_pairs
+    elif not runway_pairs:
+        headers = re.findall(r"^(\d{2}[LRC]?)\s+AVG\s+MIN\s+MAX\b", normalized_text, re.I | re.M)
+        runway_pairs = [
+            (headers[i], headers[i + 1])
+            for i in range(0, len(headers) - 1, 2)
+        ]
 
     return {
-        "runway_pairs": [(r[0], r[1]) for r in runway_pairs],
-        "temperatures": [(float(t[0]), float(t[1])) for t in temps],
-        "pressures_hpa": [float(q) for q in qnhs],
-        "wind_directions": [(int(m.group(1)), int(m.group(2)), int(m.group(3))) for m in wd_matches],
-        "wind_speeds": [(float(m.group(1)), float(m.group(2)), float(m.group(3))) for m in ws_matches],
-        "visibility_mor": [int(m.group(1)) for m in mor_matches],
-        "rvr": [int(m.group(1)) for m in rvr_matches],
+        "runway_pairs": runway_pairs,
+        "temperatures": temperatures,
+        "pressures_hpa": pressures_hpa,
+        "wind_directions": wind_directions,
+        "wind_speeds": wind_speeds,
+        "visibility_mor": visibility_mor,
+        "rvr": rvr,
     }
 
 
@@ -134,30 +219,33 @@ class AmosStationSourceMixin:
     def _amos_get_page(self, icao: str) -> Optional[str]:
         """Fetch the AMOS page.
 
-        The AMOS site (global.amo.go.kr) always loads Incheon (RKSI) by default.
-        Airport switching is done via JavaScript — not via URL parameters or POST.
-        This means RKPK (Busan/Gimhae) cannot be fetched reliably from this endpoint.
-        For non-RKSI airports, we fall back to standard METAR sources.
+        The AMOS site loads Incheon (RKSI) by default.  Keep the default URL
+        for RKSI and try common airport-code query keys for other airports;
+        only accept a response when the requested ICAO is present, so ignored
+        parameters cannot accidentally attach RKSI data to Busan/RKPK.
         """
         started = time.perf_counter()
+        icao = str(icao or "").strip().upper()
+        urls = [AMOS_BASE_URL]
         if icao != "RKSI":
-            logger.debug("AMOS page only supports RKSI (Incheon), not {}", icao)
-            return None
+            urls = [f"{AMOS_BASE_URL}?{key}={icao}" for key in AMOS_AIRPORT_QUERY_KEYS]
 
         try:
-            getter = getattr(self, "_http_get_text", None)
-            if callable(getter):
-                text = str(getter(AMOS_BASE_URL))
-            elif hasattr(self, "session"):
-                resp = self.session.get(AMOS_BASE_URL, timeout=float(getattr(self, "timeout", 4.0)))
-                resp.raise_for_status()
-                text = resp.text
-            else:
-                return None
+            for url in urls:
+                getter = getattr(self, "_http_get_text", None)
+                if callable(getter):
+                    text = str(getter(url))
+                elif hasattr(self, "session"):
+                    resp = self.session.get(url, timeout=float(getattr(self, "timeout", 4.0)))
+                    resp.raise_for_status()
+                    text = resp.text
+                else:
+                    return None
 
-            if text and "RKSI" in text.upper():
-                record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
-                return text
+                if text and re.search(rf"\({icao}\)|\b(?:METAR|TAF)\s+{icao}\b", text, re.I):
+                    record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
+                    return text
+            logger.debug("AMOS page did not expose requested airport {}", icao)
             return None
         except Exception as exc:
             logger.debug("AMOS page fetch failed icao={}: {}", icao, exc)
@@ -193,12 +281,13 @@ class AmosStationSourceMixin:
                 return None
 
             # Parse METAR line
-            metar_match = re.search(r"METAR\s+(RKSI|RKPK)\s.*?=", html, re.DOTALL)
+            icao_pattern = re.escape(icao)
+            metar_match = re.search(rf"METAR\s+{icao_pattern}\s.*?=", html, re.DOTALL)
             metar_line = metar_match.group(0) if metar_match else ""
             metar_line = re.sub(r"\s+", " ", metar_line).strip()
 
             # Parse TAF line
-            taf_match = re.search(r"TAF\s+(RKSI|RKPK)\s.*?=", html, re.DOTALL)
+            taf_match = re.search(rf"TAF\s+{icao_pattern}\s.*?=", html, re.DOTALL)
             taf_line = taf_match.group(0) if taf_match else ""
             taf_line = re.sub(r"\s+", " ", taf_line).strip()
 

@@ -39,7 +39,7 @@ export function AmosRunwayPanel({
 
   // Fallback: single-card METAR observation for non-AMOS airports
   if (!hasAmosRunway) {
-    if (!airportCurrent?.temp && !airportCurrent?.wind_speed_kt) return null;
+    if (airportCurrent?.temp == null && airportCurrent?.wind_speed_kt == null) return null;
     const sourceLabel = airportCurrent?.source_label || (isEn ? "METAR" : "机场报文");
     const staleNote = airportCurrent?.stale_for_today
       ? isEn ? " (stale)" : "（过旧）"
