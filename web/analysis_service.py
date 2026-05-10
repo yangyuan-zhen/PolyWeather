@@ -1733,6 +1733,9 @@ def _analyze(
     mg_cur = mgm.get("current", {}) if mgm else {}
     sc_cur = settlement_current.get("current", {}) if settlement_current else {}
     amos_data = raw.get("amos") or {}
+    if amos_data:
+        logger.info("AMOS _analyze: found amos data for city={} temp_c={} source={}",
+                    city, amos_data.get("temp_c"), amos_data.get("source"))
     use_settlement_current = settlement_source in {"hko", "cwa", "noaa", "wunderground"} and bool(sc_cur)
     live_mc = mc if metar_current_is_today else {}
     primary_current = sc_cur if use_settlement_current else live_mc

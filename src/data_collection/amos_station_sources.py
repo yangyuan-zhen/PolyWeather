@@ -384,12 +384,13 @@ class AmosStationSourceMixin:
                     return None
 
                 if text and re.search(rf"\({icao}\)|\b(?:METAR|TAF)\s+{icao}\b", text, re.I):
+                    logger.info("AMOS page matched icao={} length={}", icao, len(text))
                     record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
                     return text
-            logger.debug("AMOS page did not expose requested airport {}", icao)
+            logger.warning("AMOS page did not expose requested airport {} (tried {} urls)", icao, len(urls))
             return None
         except Exception as exc:
-            logger.debug("AMOS page fetch failed icao={}: {}", icao, exc)
+            logger.warning("AMOS page fetch failed icao={}: {}", icao, exc)
             record_source_call("amos", "page", "error", (time.perf_counter() - started) * 1000.0)
             return None
 
@@ -419,7 +420,10 @@ class AmosStationSourceMixin:
         try:
             html = self._amos_get_page(icao)
             if not html:
+                logger.warning("AMOS fetch_amos_official_current: no HTML for {}", icao)
                 return None
+
+            logger.info("AMOS fetch_amos_official_current: got HTML for {} ({} chars), parsing METAR/runway", icao, len(html))
 
             # Parse METAR line
             icao_pattern = re.escape(icao)

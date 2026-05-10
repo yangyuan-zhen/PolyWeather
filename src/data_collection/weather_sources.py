@@ -879,13 +879,19 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if city_lower not in ("seoul", "busan"):
             return
         try:
+            logger.info("AMOS: fetching for city={}", city_lower)
             amos_data = self.fetch_amos_official_current(
                 city_lower, use_fahrenheit=use_fahrenheit
             )
             if amos_data:
+                logger.info("AMOS: got data for city={} temp_c={} source={} runway_pairs={}",
+                            city_lower, amos_data.get("temp_c"), amos_data.get("temp_source"),
+                            len(amos_data.get("runway_obs", {}).get("runway_pairs", []) or []))
                 results["amos"] = amos_data
+            else:
+                logger.warning("AMOS: no data returned for city={}", city_lower)
         except Exception as exc:
-            logger.debug("AMOS attach failed city={}: {}", city_lower, exc)
+            logger.warning("AMOS attach failed city={}: {}", city_lower, exc)
 
     def _attach_russia_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
