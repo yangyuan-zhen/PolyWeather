@@ -136,43 +136,76 @@ class AmosStationSourceMixin:
     amos_cache_ttl_sec: int = 300  # 5 minutes
 
     def _amos_get_page(self, icao: str) -> Optional[str]:
-        """Fetch the AMOS page for a given ICAO code."""
+        """Fetch the AMOS page for a given ICAO code.
+
+        The AMOS site uses JavaScript airport switching. We try multiple
+        approaches: GET with parameters, POST with form data, and cookie replay.
+        """
         started = time.perf_counter()
+        station_id = AMOS_STATION_IDS.get(icao, "")
+        airport_label_ko = {
+            "RKSI": "인천",
+            "RKPK": "김해",
+        }.get(icao, "")
+
+        fetch_impl = None
+        if hasattr(self, "session") and hasattr(self.session, "get"):
+            def _get(url: str) -> str:
+                resp = self.session.get(url, timeout=float(getattr(self, "timeout", 4.0)))
+                resp.raise_for_status()
+                return resp.text
+
+            def _post(url: str, data: dict) -> str:
+                resp = self.session.post(url, data=data, timeout=float(getattr(self, "timeout", 4.0)))
+                resp.raise_for_status()
+                return resp.text
+            fetch_impl = (_get, _post)
+        else:
+            getter = getattr(self, "_http_get_text", None)
+            if not callable(getter):
+                return None
+            def _get(url: str) -> str:
+                return str(getter(url))
+            def _post(url: str, data: dict) -> str:
+                return str(getter(url))
+            fetch_impl = (_get, _post)
+
+        http_get, http_post = fetch_impl
+
         try:
-            # Try multiple URL patterns
-            urls = [
-                f"{AMOS_BASE_URL}?icao={icao}",
-                f"{AMOS_BASE_URL}?stn={AMOS_STATION_IDS.get(icao, '')}",
-                AMOS_BASE_URL,  # default page (usually RKSI)
-            ]
-            for url in urls:
+            # Strategy 1: GET first to establish session, then POST to switch
+            _ = http_get(AMOS_BASE_URL)
+            for form_data in [
+                {"icao": icao, "stn": station_id, "airport": airport_label_ko},
+                {"stnId": station_id},
+                {"code": icao},
+                {"selectAirport": icao},
+            ]:
                 try:
-                    getter = getattr(self, "_http_get_text", None)
-                    if callable(getter):
-                        text = str(getter(url))
-                    else:
-                        if not hasattr(self, "session"):
-                            break
-                        response = self.session.get(
-                            url, timeout=float(getattr(self, "timeout", 4.0))
-                        )
-                        response.raise_for_status()
-                        text = response.text
-                    if text and icao in text.upper():
-                        record_source_call(
-                            "amos", "page", "success",
-                            (time.perf_counter() - started) * 1000.0,
-                        )
+                    text = http_post(AMOS_BASE_URL, form_data)
+                    if text and (icao in text.upper() or airport_label_ko in text):
+                        record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
                         return text
                 except Exception:
                     continue
+
+            # Strategy 2: GET with query parameters
+            for url in [
+                f"{AMOS_BASE_URL}?icao={icao}",
+                f"{AMOS_BASE_URL}?stn={station_id}",
+            ]:
+                try:
+                    text = http_get(url)
+                    if text and (icao in text.upper() or airport_label_ko in text):
+                        record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
+                        return text
+                except Exception:
+                    continue
+
             return None
         except Exception as exc:
             logger.debug("AMOS page fetch failed icao={}: {}", icao, exc)
-            record_source_call(
-                "amos", "page", "error",
-                (time.perf_counter() - started) * 1000.0,
-            )
+            record_source_call("amos", "page", "error", (time.perf_counter() - started) * 1000.0)
             return None
 
     def fetch_amos_official_current(

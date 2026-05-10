@@ -24,9 +24,14 @@ export function AmosRunwayPanel({
   const runwayVis = amos.runway_obs?.visibility_mor;
   const runwayRvr = amos.runway_obs?.rvr;
 
-  if (!runwayPairs || !runwayTemps || runwayPairs.length === 0) return null;
+  if (!runwayPairs || runwayPairs.length === 0) return null;
 
-  const pairs = runwayPairs.slice(0, runwayTemps.length);
+  const maxItems = Math.max(
+    runwayPairs.length,
+    runwayTemps?.length || 0,
+    runwayWinds?.length || 0,
+  );
+  const pairs = runwayPairs.slice(0, maxItems);
 
   return (
     <div className="scan-amos-runway-panel">
@@ -49,17 +54,15 @@ export function AmosRunwayPanel({
               <div className="scan-amos-runway-label">
                 {rwyA}/{rwyB}
               </div>
-              {temps ? (
-                <div className={`scan-amos-runway-temp ${runwayTempClass(temps[0])}`}>
-                  {temps[0].toFixed(1)}{tempSymbol}
-                  {temps[1] != null ? (
-                    <small>
-                      {isEn ? " Dew " : " 露点 "}
-                      {temps[1].toFixed(1)}{tempSymbol}
-                    </small>
-                  ) : null}
-                </div>
-              ) : null}
+              <div className={`scan-amos-runway-temp ${runwayTempClass(temps?.[0])}`}>
+                {temps?.[0] != null ? `${temps[0].toFixed(1)}${tempSymbol}` : "--"}
+                {temps?.[1] != null ? (
+                  <small>
+                    {isEn ? " Dew " : " 露点 "}
+                    {temps[1].toFixed(1)}{tempSymbol}
+                  </small>
+                ) : null}
+              </div>
               {vis != null && vis > 0 ? (
                 <div className="scan-amos-runway-detail">
                   {isEn ? "Vis " : "能见度 "}
