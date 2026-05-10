@@ -176,10 +176,6 @@
     max-width: 100%;
   }
 
-  .root :global(.scan-kpi-bar) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .root :global(.scan-topbar) {
     flex-direction: column;
     align-items: flex-start;
@@ -310,10 +306,6 @@
     font-size: 13px;
   }
 
-  .root :global(.scan-kpi-bar) {
-    grid-template-columns: 1fr;
-  }
-
   .root :global(.scan-topbar-tabs) {
     gap: 14px;
     flex-wrap: wrap;
@@ -387,12 +379,6 @@
 
   .root :global(.scan-ai-decision-band strong) {
     font-size: 20px;
-  }
-
-  .root :global(.scan-ai-decision-long),
-  .root :global(.scan-ai-decision-reasons),
-  .root :global(.scan-ai-decision-risk) {
-    display: none;
   }
 
   .root :global(.scan-ai-market-mobile-line) {

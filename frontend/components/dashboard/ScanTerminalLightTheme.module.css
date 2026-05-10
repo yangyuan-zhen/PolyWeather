@@ -104,8 +104,7 @@
 .root :global(.scan-terminal.light .panel-meta-chip),
 .root :global(.scan-terminal.light .panel-weather-chip),
 .root :global(.scan-terminal.light .scan-distribution-card),
-.root :global(.scan-terminal.light .scan-chart-legend),
-.root :global(.scan-terminal.light .scan-kpi-note) {
+.root :global(.scan-terminal.light .scan-chart-legend) {
   color: #94A3B8;
 }
 
@@ -120,7 +119,6 @@
 .root :global(.scan-terminal.light .scan-mode-tab),
 .root :global(.scan-terminal.light .scan-table-shell),
 .root :global(.scan-terminal.light .scan-table-header),
-.root :global(.scan-terminal.light .scan-kpi-card),
 .root :global(.scan-terminal.light .scan-calendar-group),
 .root :global(.scan-terminal.light .scan-calendar-card),
 .root :global(.scan-terminal.light .scan-summary-card),
@@ -195,11 +193,6 @@
   background: linear-gradient(180deg, rgba(248, 252, 255, 0.96), rgba(238, 247, 255, 0.96));
 }
 
-.root :global(.scan-terminal.light .scan-kpi-card) {
-  box-shadow: 0 10px 24px rgba(40, 70, 110, 0.08);
-}
-
-.root :global(.scan-terminal.light .scan-kpi-value),
 .root :global(.scan-terminal.light .scan-opportunity-phase > span) {
   color: #14253a;
 }
@@ -472,7 +465,6 @@
 .root :global(.scan-terminal.light .scan-ai-decision-metrics b),
 .root :global(.scan-terminal.light .scan-ai-market-bucket strong),
 .root :global(.scan-terminal.light .scan-ai-weather-summary),
-.root :global(.scan-terminal.light .scan-ai-decision-reasons small),
 .root :global(.scan-terminal.light .scan-ai-market-decision strong),
 .root :global(.scan-terminal.light .scan-ai-market-decision-stats b) {
   color: #0f172a;
@@ -646,7 +638,6 @@
 .root :global(.scan-terminal.light .panel-weather-chip),
 .root :global(.scan-terminal.light .scan-distribution-card),
 .root :global(.scan-terminal.light .scan-chart-legend),
-.root :global(.scan-terminal.light .scan-kpi-note),
 .root :global(.scan-terminal.light .scan-calendar-subtitle),
 .root :global(.scan-terminal.light .scan-calendar-action span),
 .root :global(.scan-terminal.light .scan-calendar-countdown small),

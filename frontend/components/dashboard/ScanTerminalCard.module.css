@@ -750,40 +750,6 @@
   padding: 9px 11px;
 }
 
-.root :global(.scan-ai-decision-reasons) {
-  display: grid;
-  gap: 8px;
-  margin-top: 14px;
-}
-
-.root :global(.scan-ai-decision-reasons small) {
-  position: relative;
-  display: block;
-  padding-left: 16px;
-  color: #c9d7e8;
-  font-size: 12px;
-  font-weight: 760;
-  line-height: 1.45;
-}
-
-.root :global(.scan-ai-decision-reasons small::before) {
-  position: absolute;
-  top: 0.58em;
-  left: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: #4da3ff;
-  content: "";
-}
-
-.root :global(.scan-ai-decision-risk) {
-  margin-top: 12px !important;
-  color: #fbbf24 !important;
-  font-size: 12px;
-  font-weight: 800;
-}
-
 .root :global(.scan-ai-market-mobile-line) {
   display: none;
 }

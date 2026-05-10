@@ -52,7 +52,6 @@ import type {
 } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { CalendarView } from "@/components/dashboard/scan-terminal/CalendarView";
-import { AiForecastKPIBar } from "@/components/dashboard/scan-terminal/AiForecastKPIBar";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
@@ -190,19 +189,6 @@ function ScanTerminalScreen() {
       mapSelectedCityName || store.selectedCity,
     );
   }, [mapSelectedCityName, store.selectedCity, timeSortedRows]);
-  const kpiCityName =
-    mapSelectedCityName ||
-    store.selectedCity ||
-    aiPinnedCities[0]?.cityName ||
-    null;
-  const kpiDetail =
-    findDetailForCity(store.cityDetailsByName, kpiCityName) ||
-    (store.selectedDetail &&
-    normalizeCityKey(store.selectedDetail.name) === normalizeCityKey(kpiCityName)
-      ? store.selectedDetail
-      : null);
-  const kpiRow = findRowForCity(timeSortedRows, kpiCityName);
-
   const mapFallbackRow = useMemo(() => {
     const rawCityName = mapSelectedCityName || store.selectedCity;
     const cityKey = normalizeCityKey(rawCityName);
@@ -513,14 +499,6 @@ function ScanTerminalScreen() {
               ) : null}
             </div>
           </div>
-
-          <AiForecastKPIBar
-            pinnedCount={aiPinnedCities.length}
-            activeCityName={kpiCityName}
-            activeDetail={kpiDetail}
-            activeRow={kpiRow}
-            locale={locale}
-          />
 
           {showAnnouncement ? (
           <section className="scan-upgrade-announcement" aria-label={isEn ? "Upgrade announcement" : "升级公告"}>

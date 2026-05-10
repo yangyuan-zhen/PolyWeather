@@ -613,15 +613,12 @@ export function AiPinnedCityCard({
           {detail && !collapsed ? (
             <div className="scan-ai-city-body" id={collapseId}>
               <WeatherDecisionBand
-                currentTempText={currentTempText}
                 decisionView={decisionView}
                 decisionWhyText={decisionState.primaryReason}
                 isEn={isEn}
-                longText={localizedFinalJudgment || paceText}
                 marketDecisionView={marketDecisionView}
                 marketLineText={marketLineText}
                 paceDeltaText={paceView?.deltaText || "--"}
-                peakWindow={peakWindow}
               />
 
               <div className="scan-ai-city-analysis-grid">

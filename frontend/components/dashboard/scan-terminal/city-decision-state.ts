@@ -142,31 +142,31 @@ export function buildCityDecisionState({
         : "watch";
   const primaryReason = observedHighBreak
     ? isEn
-      ? "Worth watching now: observation has broken above the model range."
-      : "当前值得关注：实测已突破模型上沿。"
+      ? "Observation has broken above the model range."
+      : "实测已突破模型上沿。"
     : peakHasPassed
       ? isEn
-        ? "Avoid chasing now: peak window has passed; wait to confirm no new high."
-        : "当前不宜追高：峰值窗口已过，等待确认是否还有新高。"
+        ? "Peak window has passed; confirm whether a new high can still form."
+        : "峰值窗口已过，确认是否还会出现新高。"
       : observationStale
         ? isEn
-          ? "Use as background only: observation is stale and needs the next report."
-          : "当前仅作背景：观测已过旧，需要下一报文确认。"
+          ? "Observation is stale and needs the next report."
+          : "观测已过旧，需要下一报文确认。"
         : marketStatus === "unavailable"
           ? isEn
-            ? "Weather evidence remains usable, but no tradable quote is available yet."
-            : "当前可参考天气：暂无可交易价格。"
+            ? "Weather evidence is usable, but no tradable quote is available yet."
+            : "天气证据可参考，但暂无可交易价格。"
           : modelHighlyConsistent
             ? isEn
-              ? "Worth watching now: models agree; wait for observation confirmation."
-              : "当前值得关注：模型高度一致，等待实测确认。"
+              ? "Models are aligned; wait for observation confirmation."
+              : "模型高度一致，等待实测确认。"
             : needsNextBulletin
               ? isEn
-                ? "Wait for confirmation: the next bulletin should decide direction."
-                : "当前建议等待：下一报文更适合决定方向。"
+                ? "The next bulletin is more likely to decide direction."
+                : "下一报文更可能决定方向。"
               : isEn
-                ? "Watch the peak window and compare observations against the expected high."
-                : "当前重点：盯住峰值窗口，把实测与预计高点对照。";
+                ? "Compare new observations with the expected high through the peak window."
+                : "在峰值窗口内继续对照实测与预计高点。";
 
   const badges = uniqueStatusBadges([
     observedHighBreak

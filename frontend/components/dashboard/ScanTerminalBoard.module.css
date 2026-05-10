@@ -85,8 +85,7 @@
   font-weight: 800;
 }
 
-.root :global(.scan-terminal.focus-view-active .scan-upgrade-announcement),
-.root :global(.scan-terminal.focus-view-active .scan-kpi-bar) {
+.root :global(.scan-terminal.focus-view-active .scan-upgrade-announcement) {
   display: none;
 }
 
