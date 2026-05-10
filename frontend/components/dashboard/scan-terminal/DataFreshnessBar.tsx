@@ -4,6 +4,7 @@ import type { StatusTone } from "@/components/dashboard/scan-terminal/CityStatus
 
 export type DataFreshnessRow = {
   label: string;
+  labelTitle?: string;
   value: string;
   tone: string;
 };
@@ -26,7 +27,7 @@ export function DataFreshnessBar({
       <strong>{isEn ? "Data freshness" : "数据新鲜度"}</strong>
       {rows.map((freshness) => (
         <span key={freshness.label} className={freshness.tone}>
-          <b>{freshness.label}{freshnessSeparator}</b>
+          <b title={freshness.labelTitle}>{freshness.label}{freshnessSeparator}</b>
           <em>{freshness.value}</em>
         </span>
       ))}

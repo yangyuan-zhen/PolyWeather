@@ -555,15 +555,15 @@ export function buildWeatherDecisionView({
         : "等待模型补齐"
       : paceTone === "warm"
         ? isEn
-          ? "Watch hotter range"
-          : "关注偏高温区间"
+          ? "Revise upward"
+          : "预计最高温上修"
         : paceTone === "cold"
           ? isEn
-            ? "Avoid chasing high"
-            : "暂不追高温"
+            ? "Revise downward"
+            : "预计最高温下修"
           : isEn
-            ? "Wait for peak-window confirmation"
-            : "等待峰值窗口确认";
+            ? "Stay with model base"
+            : "维持模型基准";
   const expectedHigh =
     center != null && Number.isFinite(Number(center))
       ? formatTemperatureValue(Number(center), tempSymbol, { digits: 1 })

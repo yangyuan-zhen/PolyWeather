@@ -142,28 +142,28 @@ export function buildCityDecisionState({
         : "watch";
   const primaryReason = observedHighBreak
     ? isEn
-      ? "Observation has broken above the model range."
-      : "实测已突破模型上沿。"
+      ? "Observation has broken above the model range. Consider the upside scenario; wait for the next bulletin to confirm the breakout."
+      : "实测已突破模型上沿。建议关注偏高温区间，等待下一报文确认突破是否持续。"
     : peakHasPassed
       ? isEn
-        ? "Peak window has passed; confirm whether a new high can still form."
-        : "峰值窗口已过，确认是否还会出现新高。"
+        ? "Peak window has passed; confirm whether a new high can still form. Avoid chasing if no new high prints."
+        : "峰值窗口已过，确认是否还会出现新高。若无新高，建议避免追高。"
       : observationStale
         ? isEn
-          ? "Observation is stale and needs the next report."
-          : "观测已过旧，需要下一报文确认。"
+          ? "Observation is stale and needs the next report. Use only as background reference until fresh data arrives."
+          : "观测已过旧，需要下一报文确认。当前数据仅作背景参考，建议等待新报文后再做判断。"
         : marketStatus === "unavailable"
           ? isEn
-            ? "Weather evidence is usable, but no tradable quote is available yet."
-            : "天气证据可参考，但暂无可交易价格。"
+            ? "Weather evidence is usable, but no tradable quote is available yet. Weather judgment still applies."
+            : "天气证据可参考，但暂无可交易价格。天气判断仍可参考，无需急于操作。"
           : modelHighlyConsistent
             ? isEn
-              ? "Models are aligned; wait for observation confirmation."
-              : "模型高度一致，等待实测确认。"
+              ? "Models are aligned; wait for observation confirmation. A clear direction should emerge after the next report."
+              : "模型高度一致，等待实测确认。下一报文后方向会更明确。"
             : needsNextBulletin
               ? isEn
-                ? "The next bulletin is more likely to decide direction."
-                : "下一报文更可能决定方向。"
+                ? "The next bulletin is more likely to decide direction. Hold until the picture clears."
+                : "下一报文更可能决定方向。建议等待信号明确后再做决策。"
               : isEn
                 ? "Compare new observations with the expected high through the peak window."
                 : "在峰值窗口内继续对照实测与预计高点。";

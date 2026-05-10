@@ -461,6 +461,9 @@ export function AiPinnedCityCard({
   const dataFreshnessRows = [
     {
       label: isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR",
+      labelTitle: isHkoObservation
+        ? (isEn ? "Hong Kong Observatory official readings" : "香港天文台官方实测")
+        : (isEn ? "Meteorological Aerodrome Report — airport weather observation" : "机场气象观测报文"),
       value: buildObservationFreshnessValue({
         detail,
         displayTime: metarReportTimeDisplay,

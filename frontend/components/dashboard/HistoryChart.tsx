@@ -125,7 +125,7 @@ export function HistoryChart() {
             titleFont: { family: "Inter", size: 13, weight: 600 },
             callbacks: {
               label: (ctx) =>
-                `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}°`,
+                `${ctx.dataset.label}: ${ctx.parsed.y?.toFixed(1)}${store.selectedDetail?.temp_symbol || "°C"}`,
             },
           },
         },

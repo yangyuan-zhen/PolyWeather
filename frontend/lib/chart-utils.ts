@@ -877,6 +877,7 @@ export function getTemperatureChartData(
   const xMax = times.length ? chartHmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
 
   return {
+    currentIndex,
     datasets: {
       airportMetarPoints,
       airportMetarSeries,

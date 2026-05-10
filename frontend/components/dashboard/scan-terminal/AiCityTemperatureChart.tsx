@@ -109,7 +109,6 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
     >["datasets"] = [
       {
         borderColor: "rgba(100, 116, 139, 0.72)",
-        borderDash: [6, 4],
         borderWidth: 1.6,
         data: chartData.datasets.debPast.map(
           (value, index) => value ?? chartData.datasets.debFuture[index],
@@ -117,6 +116,10 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
         fill: false,
         label: forecastLabel,
         pointRadius: 0,
+        segment: {
+          borderDash: (ctx: { p0DataIndex: number }) =>
+            chartData.currentIndex != null && ctx.p0DataIndex < chartData.currentIndex ? [] : [6, 4],
+        },
         spanGaps: true,
         tension: 0.28,
       },
@@ -148,6 +151,23 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
       showLine: false,
     });
 
+    const ci = chartData.currentIndex;
+    if (ci != null && ci >= 0 && ci < (chartData.times?.length || 0)) {
+      datasets.push({
+        backgroundColor: "rgba(77, 163, 255, 0.5)",
+        borderColor: "rgba(77, 163, 255, 0.5)",
+        borderDash: [3, 4],
+        borderWidth: 1.2,
+        data: [
+          { x: ci, y: chartData.max },
+          { x: ci, y: chartData.min },
+        ],
+        label: "Now",
+        pointRadius: 0,
+        showLine: true,
+      });
+    }
+
     return {
       data: {
         datasets,
@@ -165,7 +185,7 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
             borderColor: "rgba(77, 163, 255, 0.38)",
             borderWidth: 1,
           },
-        },
+        } as Record<string, unknown>,
         responsive: true,
         scales: {
           x: {
