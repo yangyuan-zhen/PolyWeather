@@ -1011,10 +1011,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
+                self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
@@ -1053,10 +1053,10 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_mgm=include_mgm,
                     include_nearby=include_nearby,
                 )
+                self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
