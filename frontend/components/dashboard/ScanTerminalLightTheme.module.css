@@ -30,7 +30,7 @@
 .root :global(.scan-terminal.light .scan-detail-volume-big),
 .root :global(.scan-terminal.light .scan-kv strong),
 .root :global(.scan-terminal.light .scan-time-main),
-.root :global(.scan-terminal.light .scan-calendar-date),
+.root :global(.scan-terminal.light .scan-calendar-group-label),
 .root :global(.scan-terminal.light .scan-summary-value),
 .root :global(.scan-terminal.light .scan-distribution-card strong),
 .root :global(.scan-terminal.light .scan-table-header),
@@ -170,29 +170,64 @@
   color: #475569;
 }
 
-.root :global(.scan-terminal.light .scan-calendar-subtitle),
-.root :global(.scan-terminal.light .scan-calendar-action span),
-.root :global(.scan-terminal.light .scan-calendar-countdown small) {
+.root :global(.scan-terminal.light .scan-calendar-group-sub),
+.root :global(.scan-terminal.light .scan-calendar-deb span),
+.root :global(.scan-terminal.light .scan-calendar-city-time) {
   color: #647a98;
 }
 
-.root :global(.scan-terminal.light .scan-calendar-action b) {
+.root :global(.scan-terminal.light .scan-calendar-deb b) {
   color: #122033;
 }
 
 .root :global(.scan-terminal.light .scan-calendar-reason) {
-  color: #243b5a;
-}
-
-.root :global(.scan-terminal.light .scan-calendar-countdown) {
-  border-color: rgba(10, 160, 100, 0.18);
-  background: rgba(220, 252, 239, 0.68);
-  color: #087b55;
+  color: #334155;
 }
 
 .root :global(.scan-terminal.light .scan-calendar-card.peak-active) {
   border-color: rgba(10, 160, 100, 0.34);
   background: linear-gradient(180deg, rgba(220, 252, 239, 0.84), rgba(255, 255, 255, 0.86));
+}
+
+.root :global(.scan-terminal.light .scan-calendar-header) {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(16, 185, 129, 0.03));
+  border-color: rgba(37, 99, 235, 0.14);
+}
+
+.root :global(.scan-terminal.light .scan-calendar-clock-time) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-clock-date) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-clock-meta) {
+  color: #64748B;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-user-time) {
+  background: rgba(37, 99, 235, 0.04);
+}
+
+.root :global(.scan-terminal.light .scan-calendar-user-label),
+.root :global(.scan-terminal.light .scan-calendar-phase),
+.root :global(.scan-terminal.light .scan-calendar-group-sub),
+.root :global(.scan-terminal.light .scan-calendar-city-time) {
+  color: #64748B;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-group-count) {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563EB;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-empty-title) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .scan-calendar-empty-sub) {
+  color: #475569;
 }
 
 .root :global(.scan-terminal.light .scan-mode-tab.active .scan-mode-icon) {
@@ -660,9 +695,9 @@
 .root :global(.scan-terminal.light .panel-weather-chip),
 .root :global(.scan-terminal.light .scan-distribution-card),
 .root :global(.scan-terminal.light .scan-chart-legend),
-.root :global(.scan-terminal.light .scan-calendar-subtitle),
-.root :global(.scan-terminal.light .scan-calendar-action span),
-.root :global(.scan-terminal.light .scan-calendar-countdown small),
+.root :global(.scan-terminal.light .scan-calendar-group-sub),
+.root :global(.scan-terminal.light .scan-calendar-deb span),
+.root :global(.scan-terminal.light .scan-calendar-city-time),
 .root :global(.scan-terminal.light .scan-opportunity-ai small),
 .root :global(.scan-terminal.light .scan-ai-log-head span),
 .root :global(.scan-terminal.light .scan-ai-log-time),
