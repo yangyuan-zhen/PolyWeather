@@ -256,10 +256,11 @@ function ScanTerminalScreen() {
     setMapSelectedCityName(cityName);
     lastMapSelectedCityRef.current = normalizeCityKey(cityName);
     const matchedRow = findRowForCity(timeSortedRows, cityName);
+    if (matchedRow) store.preloadCityFromRow(matchedRow);
     setSelectedRowId(matchedRow?.id || null);
     addAiPinnedCity(cityName);
     setActiveView("analysis");
-  }, [addAiPinnedCity, timeSortedRows]);
+  }, [addAiPinnedCity, store, timeSortedRows]);
 
   useEffect(() => {
     if (activeView !== "map") return;
@@ -277,6 +278,7 @@ function ScanTerminalScreen() {
     const cityName = row.city || row.city_display_name || row.display_name || "";
     if (!cityName) return;
     setSelectedRowId(row.id);
+    store.preloadCityFromRow(row);
     const selectedCityKey = normalizeCityKey(store.selectedCity);
     const rowCityKey = normalizeCityKey(cityName);
     const hasCachedDetail =
@@ -297,6 +299,7 @@ function ScanTerminalScreen() {
     const cityName = row.city || row.city_display_name || row.display_name || "";
     if (!cityName) return;
     setSelectedRowId(row.id);
+    store.preloadCityFromRow(row);
     addAiPinnedCity(cityName);
     setActiveView("analysis");
     void store.selectCity(cityName);

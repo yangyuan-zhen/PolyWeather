@@ -59,6 +59,7 @@ interface DashboardStoreValue extends DashboardState {
   forecastModalMode: ForecastModalMode | null;
   futureModalDate: string | null;
   loadCities: () => Promise<void>;
+  preloadCityFromRow: (row: { city?: string | null; city_display_name?: string | null; display_name?: string | null }) => void;
   openFutureModal: (dateStr: string, forceRefresh?: boolean) => Promise<void>;
   openHistory: () => Promise<void>;
   openTodayModal: (forceRefresh?: boolean) => Promise<void>;
@@ -682,6 +683,23 @@ export function DashboardStoreProvider({
     dashboardClient.clearCityDetailCache();
   }, [proAccess]);
 
+  const preloadCityFromRow = (row: { city?: string | null; city_display_name?: string | null; display_name?: string | null; [key: string]: unknown }) => {
+    const cityName = (row.city || row.city_display_name || row.display_name || "").trim();
+    if (!cityName || findCachedCityDetail(cityDetailsByName, cityName)) return;
+    // Pre-populate cache from scan terminal row so detail panel shows data immediately
+    const now = Date.now();
+    setCityDetailsByName((current) => ({
+      ...current,
+      [cityName]: { display_name: cityName, local_date: "", local_time: "", deb: {}, probabilities: {}, multi_model: {}, } as CityDetail,
+    }));
+    setCityDetailMetaByName((current) => ({
+      ...current,
+      [cityName]: { cachedAt: now - CACHE_TTL_MS, revision: `scan-${now}` },
+    }));
+  };
+
+  const CACHE_TTL_MS = 30 * 60 * 1000; // reuse same TTL as dashboard-client
+
   const ensureCityDetail = async (
     cityName: string,
     force = false,
@@ -706,31 +724,32 @@ export function DashboardStoreProvider({
     }
 
     if (!force && cached && hasRequestedDepth) {
-      try {
-        const latestDetail = await dashboardClient.getCityDetail(cityName, {
-          force: true,
-          depth,
-        });
-        const detail = latestDetail;
-        setCityDetailsByName((current) => ({
-          ...current,
-          [cityName]: mergeCityDetail(current[cityName], detail),
-        }));
-        setCitySummariesByName((current) => ({
-          ...current,
-          [cityName]: toCitySummary(detail),
-        }));
-        setCityDetailMetaByName((current) => ({
-          ...current,
-          [cityName]: {
-            cachedAt: Date.now(),
-            revision: getCityRevision(detail),
-          },
-        }));
-        return detail;
-      } catch {
-        return cached;
-      }
+      // stale-while-revalidate: return cached immediately, refresh in background
+      void (async () => {
+        try {
+          const latestDetail = await dashboardClient.getCityDetail(cityName, {
+            force: true,
+            depth,
+          });
+          const detail = latestDetail;
+          setCityDetailsByName((current) => ({
+            ...current,
+            [cityName]: mergeCityDetail(current[cityName], detail),
+          }));
+          setCitySummariesByName((current) => ({
+            ...current,
+            [cityName]: toCitySummary(detail),
+          }));
+          setCityDetailMetaByName((current) => ({
+            ...current,
+            [cityName]: {
+              cachedAt: Date.now(),
+              revision: getCityRevision(detail),
+            },
+          }));
+        } catch { /* keep cached data on failure */ }
+      })();
+      return cached;
     }
 
     const latestDetail = await dashboardClient.getCityDetail(cityName, {
@@ -1371,6 +1390,7 @@ export function DashboardStoreProvider({
       historyState,
       isPanelOpen,
       loadCities,
+      preloadCityFromRow,
       loadingState,
       proAccess,
       openFutureModal: async (dateStr: string, forceRefresh = false) => {
