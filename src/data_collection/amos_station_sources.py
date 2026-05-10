@@ -490,6 +490,7 @@ class AmosStationSourceMixin:
                 "wind_kt": wind_kt,
                 "temp_source": temp_source,
                 "runway_temps": runway_temps,
+                "runway_temp_range": None,
                 "source": "amos",
                 "source_label": f"AMOS {airport_meta['label_en']} ({icao})",
                 "source_code": "amos",
@@ -507,6 +508,13 @@ class AmosStationSourceMixin:
                 "observation_source_zh": "AMOS 跑道传感器",
                 "observation_time": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             }
+
+            # Compute runway temp range for compact display ("14.6~15.2")
+            valid = [t[0] for t in runway_temps if t[0] is not None and -50 < float(t[0]) < 60]
+            if len(valid) >= 2:
+                result["runway_temp_range"] = (round(min(valid), 1), round(max(valid), 1))
+            elif len(valid) == 1:
+                result["runway_temp_range"] = (round(valid[0], 1), round(valid[0], 1))
 
             record_source_call(
                 "amos", "current", "success",

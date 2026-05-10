@@ -18,6 +18,7 @@ export function CityCardHeader({
   collapseId,
   collapsed,
   currentTempText,
+  observedLabel,
   dataFreshnessRows,
   debText,
   detailLocalTime,
@@ -40,6 +41,7 @@ export function CityCardHeader({
   collapseId: string;
   collapsed: boolean;
   currentTempText: string;
+  observedLabel?: string;
   dataFreshnessRows: DataFreshnessRow[];
   debText: string;
   detailLocalTime?: string | null;
@@ -76,7 +78,7 @@ export function CityCardHeader({
       <div className="scan-ai-city-hero-side">
         <div className="scan-ai-city-metrics">
           <span>
-            <small>{isEn ? "Observed" : "当前温度"}</small>
+            <small>{observedLabel || (isEn ? "Observed" : "当前温度")}</small>
             <b>{currentTempText}</b>
           </span>
           <span className="primary">

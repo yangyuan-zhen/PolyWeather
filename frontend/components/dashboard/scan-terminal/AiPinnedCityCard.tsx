@@ -388,8 +388,11 @@ export function AiPinnedCityCard({
     decisionExpectedHighNumber != null
       ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
       : "--";
-  const currentTempText =
-    currentTempNumber != null
+  const amosRange = detail?.amos?.runway_temp_range;
+  const observedLabel = amosRange ? (isEn ? "Runway" : "跑道实况") : undefined;
+  const currentTempText = amosRange
+    ? `${amosRange[0].toFixed(1)}~${amosRange[1].toFixed(1)}${tempSymbol}`
+    : currentTempNumber != null
       ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
       : "--";
   const debText =
@@ -597,6 +600,7 @@ export function AiPinnedCityCard({
             collapseId={collapseId}
             collapsed={collapsed}
             currentTempText={currentTempText}
+            observedLabel={observedLabel}
             dataFreshnessRows={dataFreshnessRows}
             debText={debText}
             detailLocalTime={detail?.local_time}

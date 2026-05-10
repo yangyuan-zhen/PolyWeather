@@ -923,6 +923,7 @@ export interface AmosData {
   wind_kt?: number | null;
   temp_source?: string | null;
   runway_temps?: Array<[number | null, number | null]> | null;
+  runway_temp_range?: [number, number] | null;
   source?: string | null;
   source_label?: string | null;
   icao?: string | null;
