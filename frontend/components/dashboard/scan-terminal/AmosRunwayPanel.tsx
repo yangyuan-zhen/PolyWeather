@@ -28,8 +28,8 @@ export function AmosRunwayPanel({
 
   const maxItems = Math.max(
     runwayPairs.length,
-    runwayTemps?.length || 0,
-    runwayWinds?.length || 0,
+    runwayTemps?.length ?? 0,
+    runwayWinds?.length ?? 0,
   );
   const pairs = runwayPairs.slice(0, maxItems);
 
@@ -45,7 +45,7 @@ export function AmosRunwayPanel({
       </div>
       <div className="scan-amos-runway-grid">
         {pairs.map(([rwyA, rwyB], idx) => {
-          const temps = runwayTemps[idx];
+          const temps = runwayTemps?.[idx];
           const wind = runwayWinds?.[idx];
           const vis = runwayVis?.[idx];
           const rvr = runwayRvr?.[idx];
