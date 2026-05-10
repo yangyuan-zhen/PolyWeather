@@ -102,6 +102,7 @@ export interface AirportCurrentConditions {
   is_official?: boolean;
   is_settlement_anchor?: boolean;
   stale_for_today?: boolean;
+  pressure_hpa?: number | null;
   last_observation_local_date?: string | null;
   current_local_date?: string | null;
 }

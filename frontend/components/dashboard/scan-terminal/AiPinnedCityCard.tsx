@@ -651,11 +651,12 @@ export function AiPinnedCityCard({
                 />
               </div>
 
-              {detail?.amos ? (
+              {(detail?.amos || detail?.airport_current) ? (
                 <AmosRunwayPanel
                   amos={detail.amos}
                   isEn={isEn}
                   tempSymbol={tempSymbol}
+                  airportCurrent={detail?.airport_current ?? null}
                 />
               ) : null}
 

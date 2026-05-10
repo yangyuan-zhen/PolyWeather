@@ -13,16 +13,70 @@ export function AmosRunwayPanel({
   amos,
   isEn,
   tempSymbol,
+  airportCurrent,
 }: {
-  amos: AmosData;
+  amos?: AmosData | null;
   isEn: boolean;
   tempSymbol: string;
+  airportCurrent?: {
+    temp?: number | null;
+    wind_speed_kt?: number | null;
+    wind_dir?: number | null;
+    pressure_hpa?: number | null;
+    visibility_mi?: number | null;
+    raw_metar?: string | null;
+    source_label?: string | null;
+    obs_time?: string | null;
+    stale_for_today?: boolean | null;
+  } | null;
 }) {
-  const runwayPairs = amos.runway_obs?.runway_pairs;
-  const runwayTemps = amos.runway_obs?.temperatures ?? amos.runway_temps;
-  const runwayWinds = amos.runway_obs?.wind_speeds;
-  const runwayVis = amos.runway_obs?.visibility_mor;
-  const runwayRvr = amos.runway_obs?.rvr;
+  const runwayPairs = amos?.runway_obs?.runway_pairs;
+  const runwayTemps = amos?.runway_obs?.temperatures ?? amos?.runway_temps;
+  const runwayWinds = amos?.runway_obs?.wind_speeds;
+  const runwayVis = amos?.runway_obs?.visibility_mor;
+  const runwayRvr = amos?.runway_obs?.rvr;
+  const hasAmosRunway = runwayPairs && runwayPairs.length > 0;
+
+  // Fallback: single-card METAR observation for non-AMOS airports
+  if (!hasAmosRunway) {
+    if (!airportCurrent?.temp && !airportCurrent?.wind_speed_kt) return null;
+    const sourceLabel = airportCurrent?.source_label || (isEn ? "METAR" : "机场报文");
+    const staleNote = airportCurrent?.stale_for_today
+      ? isEn ? " (stale)" : "（过旧）"
+      : "";
+    return (
+      <div className="scan-amos-runway-panel">
+        <div className="scan-ai-city-section-title">
+          {isEn ? "Airport Observation" : "机场观测"} · {sourceLabel}{staleNote}
+        </div>
+        <div className="scan-amos-runway-grid scan-amos-single">
+          <div className="scan-amos-runway-card">
+            <div className={`scan-amos-runway-temp ${runwayTempClass(airportCurrent.temp)}`}>
+              {airportCurrent.temp != null ? `${airportCurrent.temp.toFixed(1)}${tempSymbol}` : "--"}
+            </div>
+            {airportCurrent.wind_speed_kt != null ? (
+              <div className="scan-amos-runway-detail">
+                {isEn ? "Wind " : "风 "}
+                {airportCurrent.wind_dir != null ? `${airportCurrent.wind_dir}° ` : ""}
+                {airportCurrent.wind_speed_kt}kt
+              </div>
+            ) : null}
+            {airportCurrent.pressure_hpa != null ? (
+              <div className="scan-amos-runway-detail">
+                QNH {airportCurrent.pressure_hpa.toFixed(1)} hPa
+              </div>
+            ) : null}
+            {airportCurrent.visibility_mi != null ? (
+              <div className="scan-amos-runway-detail">
+                {isEn ? "Vis " : "能见度 "}
+                {(airportCurrent.visibility_mi * 1609).toFixed(0)}m
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!runwayPairs || runwayPairs.length === 0) return null;
 
