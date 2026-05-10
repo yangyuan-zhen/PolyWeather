@@ -2487,7 +2487,7 @@ def _analyze(
         "mgm": mgm_data,
         "mgm_nearby": raw.get("mgm_nearby", []),
         "nearby_source": raw.get("nearby_source") or ("mgm" if city.lower() in TURKISH_MGM_CITIES else "metar_cluster"),
-        "amos": amos_data if amos_data and (amos_data.get("temp_c") is not None or amos_data.get("runway_obs") is not None) else None,
+        "amos": amos_data if amos_data and amos_data.get("source") else None,
         "forecast": {
             "today_high": om_today,
             "daily": forecast_daily,
