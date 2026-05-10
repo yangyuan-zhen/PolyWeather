@@ -2054,6 +2054,7 @@ def _analyze(
     else:
         peak_status = "before"
 
+    lgbm_val = None
     if current_forecasts and deb_val is not None:
         lgbm_val, _ = predict_lgbm_daily_high(
             city_name=city,
@@ -2069,11 +2070,8 @@ def _analyze(
             peak_status=peak_status,
         )
         if lgbm_val is not None:
-            current_forecasts["LGBM"] = lgbm_val
-            blended, winfo = calculate_dynamic_weights(city, current_forecasts)
-            if blended is not None:
-                deb_val = blended
-                deb_weights = winfo
+            # LGBM is kept as an independent reference, not fed back into DEB
+            # to avoid circular dependency (DEB → LGBM training → DEB)
 
     deviation_monitor = _build_deviation_monitor(
         current_temp=cur_temp,
@@ -2496,6 +2494,7 @@ def _analyze(
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
+        "lgbm": {"prediction": lgbm_val},
         "deviation_monitor": deviation_monitor,
         "ensemble": ens_data,
         "probabilities": {

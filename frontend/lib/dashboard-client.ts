@@ -542,15 +542,19 @@ export const dashboardClient = {
     meta: Record<string, CityCacheMeta>,
   ) {
     if (!isClient()) return;
+    // Keep only the 3 most-recently-accessed cities to prevent sessionStorage bloat
+    const MAX_CACHED_CITIES = 3;
+    const allEntries = Object.entries(details).map(([cityName, detail]) => ({
+      cityName,
+      cachedAt: meta[cityName]?.cachedAt || 0,
+      detail,
+      revision: meta[cityName]?.revision || getCityRevision(detail),
+    }));
+    const topEntries = allEntries
+      .sort((a, b) => b.cachedAt - a.cachedAt)
+      .slice(0, MAX_CACHED_CITIES);
     const entries = Object.fromEntries(
-      Object.entries(details).map(([cityName, detail]) => [
-        cityName,
-        {
-          cachedAt: meta[cityName]?.cachedAt || Date.now(),
-          detail,
-          revision: meta[cityName]?.revision || getCityRevision(detail),
-        },
-      ]),
+      topEntries.map((e) => [e.cityName, { cachedAt: e.cachedAt, detail: e.detail, revision: e.revision }]),
     );
     window.sessionStorage.setItem(
       CACHE_KEY,

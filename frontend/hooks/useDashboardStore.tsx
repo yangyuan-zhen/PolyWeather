@@ -73,6 +73,12 @@ interface DashboardStoreValue extends DashboardState {
 }
 
 const DashboardStoreContext = createContext<DashboardStoreValue | null>(null);
+const CityDetailsContext = createContext<{
+  cityDetailsByName: Record<string, CityDetail>;
+  cityDetailMetaByName: Record<string, { cachedAt: number; revision: string }>;
+  citySummariesByName: Record<string, CitySummary>;
+  loadingState: LoadingState;
+} | null>(null);
 
 function getInitialLoadingState(): LoadingState {
   return {
@@ -1520,9 +1526,16 @@ export function DashboardStoreProvider({
     ],
   );
 
+  const cityDetailsValue = useMemo(
+    () => ({ cityDetailsByName, cityDetailMetaByName, citySummariesByName, loadingState }),
+    [cityDetailsByName, cityDetailMetaByName, citySummariesByName, loadingState],
+  );
+
   return (
     <DashboardStoreContext.Provider value={value}>
-      {children}
+      <CityDetailsContext.Provider value={cityDetailsValue}>
+        {children}
+      </CityDetailsContext.Provider>
     </DashboardStoreContext.Provider>
   );
 }
@@ -1532,6 +1545,16 @@ export function useDashboardStore() {
   if (!context) {
     throw new Error(
       "useDashboardStore must be used within DashboardStoreProvider",
+    );
+  }
+  return context;
+}
+
+export function useCityDetails() {
+  const context = useContext(CityDetailsContext);
+  if (!context) {
+    throw new Error(
+      "useCityDetails must be used within DashboardStoreProvider",
     );
   }
   return context;

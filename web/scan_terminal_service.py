@@ -88,8 +88,8 @@ def _env_int(
 
 
 SCAN_TERMINAL_PAYLOAD_TTL_SEC = max(
-    5,
-    int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "30")),
+    10,
+    int(os.getenv("POLYWEATHER_SCAN_TERMINAL_PAYLOAD_TTL_SEC", "120")),
 )
 SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     8,
