@@ -48,7 +48,7 @@
 }
 
 .root :global(.scan-upgrade-announcement-copy span) {
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 11px;
   font-weight: 800;
   text-transform: uppercase;
@@ -56,13 +56,13 @@
 }
 
 .root :global(.scan-upgrade-announcement-copy strong) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 18px;
   font-weight: 900;
 }
 
 .root :global(.scan-upgrade-announcement-copy p) {
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1.55;
 }

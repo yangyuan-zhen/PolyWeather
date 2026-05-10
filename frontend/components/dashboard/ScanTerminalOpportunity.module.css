@@ -71,7 +71,7 @@
   font-size: 12px;
   font-weight: 700;
   background: rgba(0, 224, 164, 0.12);
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.rank-amber .scan-rank-circle) {
@@ -81,7 +81,7 @@
 
 .root :global(.rank-purple .scan-rank-circle) {
   background: rgba(123, 97, 255, 0.12);
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.rank-neutral .scan-rank-circle) {
@@ -168,7 +168,7 @@
 
 .root :global(.scan-status-badge.tone-green) {
   background: rgba(0, 224, 164, 0.12);
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.scan-status-badge.tone-amber) {
@@ -178,7 +178,7 @@
 
 .root :global(.scan-status-badge.tone-purple) {
   background: rgba(123, 97, 255, 0.12);
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.scan-status-badge.tone-neutral) {
@@ -233,7 +233,7 @@
 .root :global(.scan-action-text) {
   font-size: 12px;
   font-weight: 600;
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
   white-space: nowrap;
 }
 
@@ -245,7 +245,7 @@
 }
 
 .root :global(.scan-edge-value.positive) {
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.scan-edge-value.neutral) {
@@ -447,7 +447,7 @@
 }
 
 .root :global(.scan-opportunity-item.ai-veto .scan-opportunity-action) {
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
 }
 
 .root :global(.scan-opportunity-branch) {
@@ -702,7 +702,7 @@
 
 .root :global(.scan-v4-analysis strong) {
   display: block;
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
   font-weight: 900;
   letter-spacing: 0.02em;
@@ -892,11 +892,11 @@
   align-content: center;
   gap: 12px;
   text-align: center;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
 }
 
 .root :global(.scan-opportunity-overview.empty strong) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 22px;
 }
 
@@ -926,7 +926,7 @@
 }
 
 .root :global(.scan-opportunity-hero span) {
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 12px;
   font-weight: 900;
 }
@@ -934,7 +934,7 @@
 .root :global(.scan-opportunity-hero strong) {
   display: block;
   margin-top: 4px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 26px;
   line-height: 1.15;
 }
@@ -942,7 +942,7 @@
 .root :global(.scan-opportunity-hero p) {
   max-width: 680px;
   margin: 9px 0 0;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -959,12 +959,12 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 14px;
   background: rgba(13, 17, 23, 0.52);
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   padding: 12px;
 }
 
 .root :global(.scan-opportunity-summary b) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 18px;
 }
 
@@ -990,13 +990,13 @@
 }
 
 .root :global(.scan-opportunity-lane-head strong) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 17px;
 }
 
 .root :global(.scan-opportunity-lane-head p) {
   margin: 3px 0 0;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 12px;
 }
 
@@ -1060,7 +1060,7 @@
 .root :global(.scan-opportunity-decision-head span),
 .root :global(.scan-opportunity-decision-primary span),
 .root :global(.scan-opportunity-decision-foot small) {
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 800;
 }
@@ -1068,7 +1068,7 @@
 .root :global(.scan-opportunity-decision-head strong) {
   display: block;
   margin-top: 3px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 18px;
 }
 
@@ -1108,7 +1108,7 @@
 }
 
 .root :global(.scan-opportunity-decision-primary b) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 14px;
 }
 

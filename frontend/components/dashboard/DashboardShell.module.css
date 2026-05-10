@@ -87,7 +87,7 @@
   color: rgba(203, 213, 225, 0.82);
   text-decoration: none;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 500;
   transition: var(--transition);
   position: relative;
 }
@@ -223,7 +223,7 @@
   align-items: center;
   gap: 2px;
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
   cursor: pointer;
   transition: var(--transition);
 }
@@ -262,7 +262,7 @@
   gap: 6px;
   text-decoration: none;
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   transition: var(--transition);
 }
 
@@ -280,14 +280,6 @@
 .root :global(.header-utility-btn.more) {
   padding: 0;
   width: 32px;
-}
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ── City List Sidebar ── */
@@ -545,11 +537,11 @@
 }
 
 .root :global(.city-item .city-deviation-cold) {
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.city-item .city-deviation-hot) {
-  color: #f59e0b;
+  color: var(--color-signal-warning);
 }
 
 .root :global(.city-item .city-deviation-normal) {
@@ -604,7 +596,7 @@
 }
 
 /* ── Responsive ── */
-@media (max-width: 1100px) {
+@media (max-width: 1024px) {
   .root {
     --panel-width: 460px;
   }
@@ -707,7 +699,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .root :global(.header) {
     flex-direction: column;
     align-items: stretch;

@@ -542,6 +542,7 @@ export function AiPinnedCityCard({
         collapsed && !isCompactCard && "collapsed",
         removing && "removing",
       )}
+      tabIndex={-1}
       data-ai-status={decisionState.aiStatus}
       data-evidence-quality={decisionState.evidenceQuality}
       data-market-status={decisionState.marketStatus}

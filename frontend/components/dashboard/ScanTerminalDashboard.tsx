@@ -18,28 +18,7 @@ import {
   useState,
 } from "react";
 import styles from "./Dashboard.module.css";
-import dashboardHomeStyles from "./DashboardHomeIntelligence.module.css";
-import dashboardMapStyles from "./DashboardMap.module.css";
-import dashboardModalGuideStyles from "./DashboardModalGuide.module.css";
-import dashboardShellStyles from "./DashboardShell.module.css";
-import detailChromeStyles from "./DetailPanelChrome.module.css";
-import detailContentStyles from "./DetailPanelContent.module.css";
-import detailSectionsStyles from "./DetailPanelSections.module.css";
-import futureForecastModalStyles from "./FutureForecastModal.module.css";
-import historyModalStyles from "./HistoryModal.module.css";
-import modalChromeStyles from "./ModalChrome.module.css";
-import scanTerminalCalendarStyles from "./ScanTerminalCalendar.module.css";
-import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
-import scanTerminalLightThemeStyles from "./ScanTerminalLightTheme.module.css";
-import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
-import scanTerminalStyles from "./ScanTerminal.module.css";
-import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
-import scanTerminalDetailStyles from "./ScanTerminalDetail.module.css";
-import scanTerminalFiltersStyles from "./ScanTerminalFilters.module.css";
-import scanTerminalListStyles from "./ScanTerminalList.module.css";
-import scanTerminalShellStyles from "./ScanTerminalShell.module.css";
-import scanTerminalStateStyles from "./ScanTerminalState.module.css";
-import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
+import { scanRootClass } from "./scan-root-styles";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
@@ -133,28 +112,7 @@ function ScanTerminalScreen() {
   const lastMapSelectedCityRef = useRef<string>("");
   const scanTerminalRootClassName = clsx(
     styles.root,
-    dashboardHomeStyles.root,
-    dashboardMapStyles.root,
-    dashboardShellStyles.root,
-    dashboardModalGuideStyles.root,
-    scanTerminalStyles.root,
-    scanTerminalShellStyles.root,
-    scanTerminalFiltersStyles.root,
-    scanTerminalListStyles.root,
-    scanTerminalBoardStyles.root,
-    scanTerminalDetailStyles.root,
-    scanTerminalStateStyles.root,
-    scanTerminalOpportunityStyles.root,
-    scanTerminalCardStyles.root,
-    scanTerminalCalendarStyles.root,
-    scanTerminalMobileStyles.root,
-    scanTerminalLightThemeStyles.root,
-    detailChromeStyles.root,
-    detailContentStyles.root,
-    detailSectionsStyles.root,
-    modalChromeStyles.root,
-    futureForecastModalStyles.root,
-    historyModalStyles.root,
+    scanRootClass,
     themeMode === "light" && "light",
   );
 
@@ -441,13 +399,16 @@ function ScanTerminalScreen() {
       >
         <main className="scan-data-grid">
           <div className="scan-topbar">
-            <div className="scan-topbar-title">
-              <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
+            <div className="scan-topbar-brand">
+              <div className="scan-topbar-logo" aria-hidden="true" />
+              <div className="scan-topbar-title">
+                <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
               <span>
                 {isEn
                   ? "Start from the map, then open city cards to verify weather evidence"
                   : "从地图选城市，再打开决策卡验证天气证据"}
               </span>
+            </div>
             </div>
             <div className="scan-topbar-actions">
               <button
@@ -525,9 +486,11 @@ function ScanTerminalScreen() {
 
           <section className="scan-list-section">
             <div className="scan-list-header">
-              <div className="scan-list-tabs">
+              <div className="scan-list-tabs" role="tablist" aria-label={isEn ? "Content view" : "内容视图"}>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={resolvedView === "map"}
                   className={resolvedView === "map" ? "active" : ""}
                   onClick={() => {
                     lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
@@ -538,6 +501,8 @@ function ScanTerminalScreen() {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={resolvedView === "analysis"}
                   className={resolvedView === "analysis" ? "active" : ""}
                   onClick={() => {
                     setActiveView("analysis");
@@ -547,6 +512,8 @@ function ScanTerminalScreen() {
                 </button>
                 <button
                   type="button"
+                  role="tab"
+                  aria-selected={resolvedView === "calendar"}
                   className={resolvedView === "calendar" ? "active" : ""}
                   title={!isPro ? (isEn ? "Pro forecast calendar required" : "日历预测需 Pro") : undefined}
                   onClick={() => {

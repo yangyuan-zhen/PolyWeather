@@ -383,7 +383,7 @@
   border: 1px solid rgba(34, 211, 238, 0.18);
   border-radius: 999px;
   background: rgba(8, 145, 178, 0.1);
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.12em;
@@ -418,7 +418,7 @@
 .root :global(.home-card-meta-row) {
   color: rgba(148, 163, 184, 0.88);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 
 .root :global(.home-card-titlebar p) {
@@ -476,7 +476,7 @@
 
 .root :global(.home-weather-label) {
   margin-bottom: 8px;
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 10px;
   font-weight: 900;
   letter-spacing: 0.14em;
@@ -567,7 +567,7 @@
   width: 4px;
   height: 13px;
   border-radius: 999px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   transform: rotate(18deg);
 }
 
@@ -760,9 +760,9 @@
 
 .root :global(.home-deb-card span),
 .root :global(.home-card-section h3) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .root :global(.home-deb-card small),
@@ -785,7 +785,7 @@
   color: #f87171;
   font-size: 12px;
   font-style: normal;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .root :global(.home-market-metrics svg) {
@@ -882,7 +882,7 @@
 }
 
 .root :global(.home-intraday-chart circle) {
-  fill: #4DA3FF;
+  fill: var(--color-accent-primary);
   stroke: rgba(15, 23, 42, 0.92);
   stroke-width: 1.6;
   filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.28));
@@ -1007,7 +1007,7 @@
   gap: 9px;
   color: rgba(226, 232, 240, 0.95);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .root :global(.home-probability-row div),
@@ -1077,7 +1077,7 @@
 .root :global(.home-market-header span) {
   color: rgba(148, 163, 184, 0.88);
   font-size: 11px;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .root :global(.home-market-ticket) {
@@ -1109,7 +1109,7 @@
 }
 
 .root :global(.home-market-prices .yes) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   background: rgba(8, 145, 178, 0.2);
 }
 
@@ -1142,7 +1142,7 @@
   margin-top: 10px;
   color: #fde68a;
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
   text-decoration: none;
 }
 
@@ -1244,7 +1244,7 @@
 .root :global(.opportunity-strip-copy strong) {
   color: #f8fafc;
   font-size: 19px;
-  font-weight: 860;
+  font-weight: 800;
   line-height: 1.25;
   letter-spacing: -0.02em;
 }
@@ -1279,7 +1279,7 @@
 .root :global(.opportunity-tape-pill span) {
   color: rgba(148, 163, 184, 0.82);
   font-size: 10px;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
@@ -1287,12 +1287,12 @@
 .root :global(.opportunity-tape-pill strong) {
   color: #f8fafc;
   font-size: 16px;
-  font-weight: 860;
+  font-weight: 800;
   line-height: 1;
 }
 
 .root :global(.opportunity-tape-pill.accent-cyan strong) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
 }
 
 .root :global(.opportunity-tape-pill.accent-green strong) {
@@ -1383,7 +1383,7 @@
 }
 
 .root :global(.opportunity-hero-kicker) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -1401,7 +1401,7 @@
   overflow: hidden;
   color: #f8fafc;
   font-size: 28px;
-  font-weight: 880;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.04em;
   text-overflow: ellipsis;
@@ -1411,7 +1411,7 @@
 .root :global(.opportunity-hero-date) {
   color: rgba(186, 230, 253, 0.76);
   font-size: 12px;
-  font-weight: 720;
+  font-weight: 700;
 }
 
 .root :global(.opportunity-hero-copy p) {
@@ -1439,13 +1439,13 @@
   background: rgba(7, 13, 25, 0.58);
   color: rgba(226, 232, 240, 0.92);
   font-size: 11px;
-  font-weight: 820;
+  font-weight: 800;
   white-space: nowrap;
 }
 
 .root :global(.opportunity-hero-tag.engine) {
   border-color: rgba(34, 211, 238, 0.24);
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
 }
 
 .root :global(.opportunity-hero-tag.signal-yes) {
@@ -1499,7 +1499,7 @@
 .root :global(.opportunity-hero-edgeblock span) {
   color: rgba(148, 163, 184, 0.8);
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1539,7 +1539,7 @@
 .root :global(.opportunity-hero-metric span) {
   color: rgba(148, 163, 184, 0.8);
   font-size: 10px;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1548,7 +1548,7 @@
   overflow: hidden;
   color: #f8fafc;
   font-size: 20px;
-  font-weight: 860;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
   text-overflow: ellipsis;
@@ -1575,14 +1575,14 @@
 
 .root :global(.opportunity-book-side span) {
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .root :global(.opportunity-book-side strong) {
   font-size: 26px;
-  font-weight: 880;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.03em;
 }
@@ -1624,7 +1624,7 @@
 .root :global(.opportunity-hero-sparkline-wrap span) {
   color: rgba(148, 163, 184, 0.8);
   font-size: 10px;
-  font-weight: 760;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1680,7 +1680,7 @@
 .root :global(.opportunity-side-tile-head span) {
   color: rgba(241, 245, 249, 0.92);
   font-size: 13px;
-  font-weight: 790;
+  font-weight: 700;
 }
 
 .root :global(.opportunity-side-tile-body) {
@@ -1700,7 +1700,7 @@
   overflow: hidden;
   color: #f8fafc;
   font-size: 24px;
-  font-weight: 880;
+  font-weight: 800;
   line-height: 1;
   letter-spacing: -0.04em;
   text-overflow: ellipsis;
@@ -1710,7 +1710,7 @@
 .root :global(.opportunity-side-stat span) {
   color: rgba(148, 163, 184, 0.82);
   font-size: 10px;
-  font-weight: 680;
+  font-weight: 600;
 }
 
 .root :global(.opportunity-side-stat b.accent-red) {
@@ -1762,7 +1762,7 @@
 .root :global(.opportunity-empty-copy strong) {
   color: rgba(241, 245, 249, 0.94);
   font-size: 15px;
-  font-weight: 840;
+  font-weight: 800;
 }
 
 .root :global(.opportunity-empty-copy span) {
@@ -1828,7 +1828,7 @@
   justify-content: center;
   color: #f8fafc;
   font-size: 13px;
-  font-weight: 840;
+  font-weight: 800;
   flex-shrink: 0;
   background: rgba(6, 11, 23, 0.46);
 }
@@ -1870,7 +1870,7 @@
   overflow: hidden;
   color: #f8fafc;
   font-size: 15px;
-  font-weight: 860;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2188,7 +2188,7 @@
   }
 }
 
-@media (max-width: 1240px) {
+@media (max-width: 1280px) {
   .root :global(.opportunity-strip-topline) {
     flex-direction: column;
   }
@@ -2215,7 +2215,7 @@
   }
 }
 
-@media (max-width: 1020px) {
+@media (max-width: 1024px) {
   .root :global(.map) {
     left: 18px;
     bottom: 188px;
@@ -2234,7 +2234,7 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .root :global(.map) {
     inset: var(--header-height) 0 0;
     border-radius: 0;

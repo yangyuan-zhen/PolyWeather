@@ -1,6 +1,15 @@
 /* Scan terminal shell, topbar, upgrade announcement, and shared action buttons.
    Extracted from ScanTerminal.module.css to keep terminal layout CSS maintainable. */
 
+/* ── Button Hierarchy ──
+   Primary:   .scan-primary-button   — filled gradient, main CTA
+   Secondary: .scan-ai-button         — tinted background, alternative action
+   Ghost:     .scan-theme-button      — no border/background, icon-only
+   Chrome:    .scan-account-button    — bordered icon, navigation
+   Chrome:    .scan-locale-switch     — segmented control
+   Chrome:    .scan-ghost-button      — bordered + bg, utility action
+────────────────────────────────────────────── */
+
 .root :global(.scan-topbar) {
   display: flex;
   align-items: center;
@@ -8,6 +17,32 @@
   gap: 12px;
   padding: 6px 0 18px;
   border-bottom: 1px solid rgba(118, 146, 188, 0.1);
+}
+
+.root :global(.scan-topbar-brand) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.root :global(.scan-topbar-logo) {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--color-accent-primary), #22C55E);
+  box-shadow: 0 4px 12px rgba(77, 163, 255, 0.28);
+  position: relative;
+  overflow: hidden;
+}
+
+.root :global(.scan-topbar-logo::after) {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), transparent 60%);
 }
 
 .root :global(.scan-topbar-title) {
@@ -135,7 +170,7 @@
   background: rgba(77, 163, 255, 0.1);
   color: #d7e5f7;
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
   padding: 7px 10px;
 }
 
@@ -168,7 +203,7 @@
   padding: 11px 16px;
   border: 1px solid rgba(77, 163, 255, 0.42);
   border-radius: 12px;
-  background: linear-gradient(180deg, #4DA3FF, #3B82F6);
+  background: linear-gradient(180deg, var(--color-accent-primary), #3B82F6);
   color: #FFFFFF;
   font-size: 14px;
   font-weight: 900;
@@ -212,7 +247,7 @@
 }
 
 .root :global(.scan-cta-ghost) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   border-color: rgba(23, 217, 139, 0.3);
   background: rgba(23, 217, 139, 0.12);
 }

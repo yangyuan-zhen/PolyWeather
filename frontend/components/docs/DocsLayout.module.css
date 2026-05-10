@@ -160,7 +160,7 @@
 .sectionTitle {
   margin: 0 0 16px;
   font-size: 1.65rem;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .paragraph {
@@ -283,7 +283,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .docsHeader {
     align-items: flex-start;
     flex-direction: column;

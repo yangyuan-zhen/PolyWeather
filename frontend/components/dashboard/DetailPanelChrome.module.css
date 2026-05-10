@@ -91,7 +91,7 @@
 
 .root :global(.panel-action-button-primary) {
   color: #FFFFFF;
-  background: linear-gradient(135deg, #4DA3FF, #3B82F6);
+  background: linear-gradient(135deg, var(--color-accent-primary), #3B82F6);
   border-color: rgba(77, 163, 255, 0.34);
 }
 

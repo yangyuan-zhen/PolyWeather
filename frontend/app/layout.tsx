@@ -36,7 +36,12 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="min-h-screen font-sans antialiased">{children}</body>
+      <body className="min-h-screen font-sans antialiased">
+        <a href="#main-content" className="skip-to-content">
+          Skip to content
+        </a>
+        <main id="main-content">{children}</main>
+      </body>
     </html>
   );
 }

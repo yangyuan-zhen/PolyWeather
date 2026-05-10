@@ -31,17 +31,17 @@
 }
 
 .root :global(.scan-forecast-kicker) {
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .root :global(.scan-forecast-city-title strong) {
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 24px;
-  font-weight: 950;
+  font-weight: 800;
   letter-spacing: 0;
 }
 
@@ -57,9 +57,9 @@
   border: 1px solid rgba(159, 178, 199, 0.14);
   border-radius: 9px;
   background: rgba(22, 33, 58, 0.56);
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.2;
 }
 
@@ -68,28 +68,28 @@
   justify-items: end;
   gap: 5px;
   min-width: 0;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   text-align: right;
 }
 
 .root :global(.scan-forecast-city-read small) {
-  color: #6B7A90;
+  color: var(--color-text-muted);
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 800;
   text-transform: uppercase;
 }
 
 .root :global(.scan-forecast-city-read > b:not(.scan-phase-badge)) {
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 30px;
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1;
 }
 
 .root :global(.scan-forecast-city-read span) {
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 12px;
-  font-weight: 850;
+  font-weight: 800;
 }
 
 .root :global(.scan-forecast-row) {
@@ -137,21 +137,21 @@
 .root :global(.scan-forecast-bucket small),
 .root :global(.scan-forecast-signals small),
 .root :global(.scan-ai-temperature-line small) {
-  color: #6B7A90;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.02em;
 }
 
 .root :global(.scan-forecast-bucket strong) {
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 800;
   line-height: 1.22;
 }
 
 .root :global(.scan-forecast-bucket small) {
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   line-height: 1.45;
 }
 
@@ -176,7 +176,7 @@
 .root :global(.scan-forecast-signals b) {
   display: -webkit-box;
   overflow: hidden;
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 12px;
   font-weight: 900;
   line-height: 1.25;
@@ -196,9 +196,9 @@
   border: 1px solid rgba(96, 165, 250, 0.28);
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.1);
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -231,20 +231,20 @@
   gap: 10px;
   align-items: baseline;
   padding: 0 16px 14px;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
 }
 
 .root :global(.scan-forecast-ai-line b) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .root :global(.scan-forecast-ai-line small) {
   min-width: 0;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  font-weight: 750;
+  font-weight: 700;
   line-height: 1.5;
 }
 
@@ -272,26 +272,26 @@
 
 .root :global(.scan-ai-analysis-head strong),
 .root :global(.scan-ai-brief-grid strong) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .root :global(.scan-ai-analysis-head p) {
   margin: 0;
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 20px;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.3;
 }
 
 .root :global(.scan-ai-analysis-head small) {
   max-width: 880px;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 14px;
-  font-weight: 760;
+  font-weight: 700;
   line-height: 1.55;
 }
 
@@ -305,9 +305,9 @@
   border: 1px solid rgba(96, 165, 250, 0.28);
   border-radius: 999px;
   background: rgba(59, 130, 246, 0.1);
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -328,9 +328,9 @@
 
 .root :global(.scan-ai-temperature-line b) {
   overflow: hidden;
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 17px;
-  font-weight: 950;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -352,7 +352,7 @@
 }
 
 .root :global(.scan-ai-evidence-line small) {
-  color: #6B7A90;
+  color: var(--color-text-muted);
   font-size: 11px;
   font-weight: 900;
 }
@@ -360,7 +360,7 @@
 .root :global(.scan-ai-evidence-line b) {
   display: -webkit-box;
   overflow: hidden;
-  color: #E6EDF3;
+  color: var(--color-text-primary);
   font-size: 13px;
   font-weight: 900;
   line-height: 1.3;
@@ -379,7 +379,7 @@
   overflow: hidden;
   border: 1px solid rgba(77, 163, 255, 0.35);
   border-radius: 18px;
-  background: #111a2e;
+  background: var(--color-bg-raised);
   box-shadow: 0 18px 48px rgba(0, 0, 0, 0.24);
   opacity: 1;
   transform: translateX(0);
@@ -414,14 +414,14 @@
 }
 
 .root :global(.scan-ai-city-kicker) {
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 12px;
   font-weight: 800;
 }
 
 .root :global(.scan-ai-city-hero h3) {
   margin: 4px 0 8px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 22px;
   line-height: 1.15;
 }
@@ -498,9 +498,9 @@
   align-items: center;
   gap: 4px 6px;
   margin-top: 6px;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 700;
 }
 
 .root :global(.scan-ai-city-freshness strong) {
@@ -529,7 +529,7 @@
 }
 
 .root :global(.scan-ai-city-freshness em) {
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-style: normal;
 }
 
@@ -583,7 +583,7 @@
 }
 
 .root :global(.scan-ai-city-metrics small) {
-  color: #6b7a90;
+  color: var(--color-text-muted);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;
@@ -591,7 +591,7 @@
 }
 
 .root :global(.scan-ai-city-metrics b) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 20px;
   font-weight: 900;
   line-height: 1.1;
@@ -699,7 +699,7 @@
   align-items: center;
   border: 1px solid rgba(77, 163, 255, 0.18);
   border-radius: 16px;
-  background: #16213a;
+  background: var(--color-bg-overlay);
   padding: 18px;
 }
 
@@ -720,7 +720,7 @@
 }
 
 .root :global(.scan-ai-decision-band span) {
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 12px;
   font-weight: 900;
 }
@@ -728,14 +728,14 @@
 .root :global(.scan-ai-decision-band strong) {
   display: block;
   margin-top: 5px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 24px;
   line-height: 1.2;
 }
 
 .root :global(.scan-ai-decision-band p) {
   margin: 8px 0 0;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   line-height: 1.55;
 }
 
@@ -745,7 +745,7 @@
   border: 1px solid rgba(77, 163, 255, 0.24);
   border-radius: 12px;
   background: rgba(77, 163, 255, 0.1);
-  color: #d8e7f8 !important;
+  color: var(--color-text-primary);
   font-weight: 900;
   padding: 9px 11px;
 }
@@ -779,14 +779,14 @@
 }
 
 .root :global(.scan-ai-market-decision span) {
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 900;
 }
 
 .root :global(.scan-ai-market-decision strong) {
   margin-top: 3px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 15px;
 }
 
@@ -806,14 +806,14 @@
   gap: 3px;
   border-radius: 10px;
   background: rgba(17, 26, 46, 0.82);
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 11px;
   font-weight: 800;
   padding: 8px;
 }
 
 .root :global(.scan-ai-market-decision-stats b) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 13px;
 }
 
@@ -840,14 +840,14 @@
   border: 1px solid rgba(159, 178, 199, 0.14);
   border-radius: 12px;
   background: rgba(11, 18, 32, 0.5);
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   padding: 12px;
 }
 
 .root :global(.scan-ai-decision-metrics b) {
   display: block;
   margin-top: 4px;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 15px;
 }
 
@@ -869,7 +869,7 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 13px;
   font-weight: 900;
   margin-bottom: 12px;
@@ -908,7 +908,7 @@
 
 .root :global(.scan-ai-city-section p) {
   margin: 0 0 10px;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1006,14 +1006,10 @@
   animation: pulse-pending 2s ease-in-out infinite;
 }
 
-@keyframes pulse-pending {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.6; }
-}
 
 .root :global(.scan-ai-weather-summary) {
-  color: #e6edf3;
-  font-weight: 850;
+  color: var(--color-text-primary);
+  font-weight: 800;
 }
 
 .root :global(.scan-ai-weather-bullets) {
@@ -1021,21 +1017,21 @@
   gap: 8px;
   margin: 10px 0 0;
   padding-left: 18px;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
   font-weight: 700;
   line-height: 1.6;
 }
 
 .root :global(.scan-ai-weather-bullets li::marker) {
-  color: #4da3ff;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.scan-ai-raw-metar) {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid rgba(77, 163, 255, 0.12);
-  color: #6b7a90;
+  color: var(--color-text-muted);
   font-family:
     ui-monospace,
     SFMono-Regular,
@@ -1073,7 +1069,7 @@
   display: flex;
   gap: 14px;
   margin-top: 10px;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 800;
 }
@@ -1147,14 +1143,14 @@
 }
 
 .root :global(.scan-ai-market-bucket strong) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 15px;
 }
 
 .root :global(.scan-ai-market-bucket span),
 .root :global(.scan-ai-city-muted),
 .root :global(.scan-ai-city-loading) {
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1180,9 +1176,9 @@
 .root :global(.scan-ai-brief-grid li) {
   position: relative;
   padding-left: 16px;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 700;
   line-height: 1.48;
 }
 
@@ -1193,7 +1189,7 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   box-shadow: 0 0 10px rgba(77, 163, 255, 0.34);
   content: "";
 }
@@ -1212,7 +1208,7 @@
 
 .root :global(.scan-ai-airport-read p) {
   margin: 0;
-  color: #9FB2C7;
+  color: var(--color-text-secondary);
   font-size: 12px;
   font-weight: 800;
   line-height: 1.5;

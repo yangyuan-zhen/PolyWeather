@@ -1,5 +1,6 @@
-/* Scan terminal empty, loading, and skeleton signal states. */
+/* Scan terminal empty, loading, error, and skeleton signal states. */
 
+/* ── Empty state ── */
 .root :global(.scan-empty-state) {
   flex: 1;
   display: flex;
@@ -8,6 +9,20 @@
   align-items: center;
   padding: 48px 32px;
   text-align: center;
+  gap: 12px;
+}
+
+.root :global(.scan-empty-icon) {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(77, 163, 255, 0.1);
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  display: grid;
+  place-items: center;
+  color: var(--color-accent-secondary);
+  font-size: 20px;
+  margin-bottom: 4px;
 }
 
 .root :global(.scan-empty-title) {
@@ -17,10 +32,69 @@
 }
 
 .root :global(.scan-empty-copy) {
-  margin-top: 10px;
+  max-width: 360px;
   font-size: 14px;
   color: #8fa4c3;
   line-height: 1.6;
+}
+
+/* ── Error state ── */
+.root :global(.scan-error-state) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 48px 32px;
+  text-align: center;
+  gap: 12px;
+}
+
+.root :global(.scan-error-icon) {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  display: grid;
+  place-items: center;
+  color: #FCA5A5;
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.root :global(.scan-error-title) {
+  font-size: 20px;
+  font-weight: 800;
+  color: #e8f2ff;
+}
+
+.root :global(.scan-error-copy) {
+  max-width: 360px;
+  font-size: 14px;
+  color: #8fa4c3;
+  line-height: 1.6;
+}
+
+.root :global(.scan-retry-button) {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 10px 16px;
+  border: 1px solid rgba(77, 163, 255, 0.3);
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.12);
+  color: #9ecbff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.root :global(.scan-retry-button:hover) {
+  background: rgba(77, 163, 255, 0.18);
+  border-color: rgba(111, 183, 255, 0.48);
 }
 
 .root :global(.scan-loading-state) {
@@ -101,7 +175,7 @@
 }
 
 .root :global(.scan-loading-node.market) {
-  background: linear-gradient(135deg, #38bdf8, #4da3ff);
+  background: linear-gradient(135deg, #38bdf8, var(--color-accent-primary));
   box-shadow: 0 0 24px rgba(56, 189, 248, 0.26);
 }
 
@@ -141,7 +215,7 @@
 }
 
 .root :global(.scan-loading-copy-block strong) {
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 18px;
   font-weight: 900;
   letter-spacing: -0.02em;
@@ -149,9 +223,9 @@
 
 .root :global(.scan-loading-copy-block span) {
   max-width: 320px;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.55;
 }
 
@@ -168,7 +242,7 @@
   width: 7px;
   min-height: 8px;
   border-radius: 999px 999px 4px 4px;
-  background: linear-gradient(180deg, #7dd3fc, #4da3ff 52%, #1be392);
+  background: linear-gradient(180deg, #7dd3fc, var(--color-accent-primary) 52%, #1be392);
   opacity: 0.42;
   transform-origin: center bottom;
   animation: scan-loading-bars 1.35s ease-in-out infinite;

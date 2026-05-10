@@ -4,26 +4,26 @@
 
 .root {
   /* ── Palette (bridged from globals.css unified tokens) ── */
-  --bg-primary: #0B1220;
-  --bg-secondary: #16213A;
-  --bg-card: #111A2E;
+  --bg-primary: var(--color-bg-base);
+  --bg-secondary: var(--color-bg-raised);
+  --bg-card: var(--color-bg-card);
   --bg-glass: rgba(17, 26, 46, 0.82);
-  --border-glass: rgba(159, 178, 199, 0.16);
-  --border-subtle: rgba(159, 178, 199, 0.08);
+  --border-glass: var(--color-border-default);
+  --border-subtle: var(--color-border-subtle);
 
   /* Text */
   --text-primary: var(--color-text-primary);
   --text-secondary: var(--color-text-secondary);
   --text-muted: var(--color-text-muted);
 
-  /* Accents — Fintech 3-Color Model */
-  --accent-cyan: #4DA3FF;
-  --accent-blue: #4DA3FF;
+  /* Accent Colors */
+  --accent-cyan: var(--color-accent-primary);
+  --accent-blue: var(--color-accent-secondary);
   --accent-green: #22C55E;
   --accent-orange: #F59E0B;
   --accent-red: #EF4444;
   --accent-yellow: #F59E0B;
-  --accent-purple: #4DA3FF;
+  --accent-purple: var(--color-accent-tertiary);
 
   /* Risk colors */
   --risk-high: var(--color-risk-high);

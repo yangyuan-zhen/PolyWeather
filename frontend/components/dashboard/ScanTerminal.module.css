@@ -73,7 +73,7 @@
 
 .root :global(.scan-mode-tab.active) {
   background: rgba(0, 224, 164, 0.08);
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
   font-weight: 600;
 }
 
@@ -84,7 +84,7 @@
   top: 25%;
   height: 50%;
   width: 3px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   border-radius: 0 2px 2px 0;
 }
 
@@ -125,7 +125,7 @@
   appearance: none;
   width: 14px;
   height: 14px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid var(--bg-secondary);
@@ -146,7 +146,7 @@
 
 .root :global(.scan-toggle.active) {
   background: rgba(0, 224, 164, 0.3);
-  border-color: #4DA3FF;
+  border-color: var(--color-accent-primary);
 }
 
 .root :global(.scan-toggle-knob) {
@@ -162,7 +162,7 @@
 
 .root :global(.scan-toggle.active .scan-toggle-knob) {
   left: 18px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
 }
 
 /* Select */
@@ -179,7 +179,7 @@
 }
 
 .root :global(.scan-select:focus) {
-  border-color: #4DA3FF;
+  border-color: var(--color-accent-primary);
 }
 
 /* Scan CTA */
@@ -192,7 +192,7 @@
   padding: 12px 16px;
   border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #4DA3FF, #00c48f);
+  background: linear-gradient(135deg, var(--color-accent-primary), #00c48f);
   color: #030711;
   font-size: 14px;
   font-weight: 700;
@@ -271,7 +271,7 @@
 }
 
 .root :global(.scan-view-tab.active) {
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
   font-weight: 600;
 }
 
@@ -282,7 +282,7 @@
   left: 0;
   right: 0;
   height: 2px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   border-radius: 4px;
   opacity: 0.8;
   transition: all 0.3s ease;
@@ -392,7 +392,7 @@
 }
 
 .root :global(.scan-condition-value.accent-green) {
-  color: #4DA3FF;
+  color: #22C55E;
 }
 
 .root :global(.scan-condition-value.accent-red) {
@@ -417,7 +417,7 @@
 }
 
 .root :global(.scan-trade-card.yes) {
-  border-top: 2px solid #4DA3FF;
+  border-top: 2px solid var(--color-accent-primary);
 }
 
 .root :global(.scan-trade-card.no) {
@@ -441,7 +441,7 @@
 }
 
 .root :global(.scan-trade-card-edge.positive) {
-  color: #4DA3FF;
+  color: var(--color-accent-primary);
 }
 
 .root :global(.scan-trade-card-edge.negative) {
@@ -494,7 +494,7 @@
 }
 
 .root :global(.scan-confidence-dot.filled) {
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
 }
 
 .root :global(.scan-confidence-dot.filled.amber) {

@@ -1,7 +1,7 @@
 .root :global(.scan-select) {
   border: none;
   border-radius: 8px;
-  background: linear-gradient(135deg, #4DA3FF, #00b383);
+  background: linear-gradient(135deg, var(--color-accent-primary), #00b383);
   color: #000;
   font-weight: 700;
   cursor: pointer;
@@ -88,12 +88,6 @@
 .root :global(.future-refresh-btn.spinning svg) {
   animation: spin 1s linear infinite;
   color: var(--accent-cyan);
-}
-
-@keyframes spin {
-  100% {
-    transform: rotate(360deg);
-  }
 }
 
 .root :global(.modal-close) {

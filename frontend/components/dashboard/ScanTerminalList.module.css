@@ -205,7 +205,7 @@
 
 .root :global(.scan-v4-decision p b) {
   color: #ecfeff;
-  font-weight: 950;
+  font-weight: 800;
 }
 
 .root :global(.scan-v4-metar-summary) {
@@ -263,9 +263,9 @@
 .root :global(.scan-v4-heading strong),
 .root :global(.scan-v4-current b),
 .root :global(.scan-v4-brief-grid strong) {
-  color: #6FB7FF;
+  color: var(--color-accent-secondary);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   letter-spacing: 0.02em;
 }
 
@@ -289,7 +289,7 @@
   background: rgba(20, 184, 166, 0.12);
   color: #7dfbe7;
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   white-space: nowrap;
 }
 
@@ -316,7 +316,7 @@
 .root :global(.scan-v4-current span) {
   color: #c8d8ec;
   font-size: 13px;
-  font-weight: 850;
+  font-weight: 800;
   line-height: 1.5;
 }
 
@@ -362,7 +362,7 @@
   width: 5px;
   height: 5px;
   border-radius: 999px;
-  background: #4DA3FF;
+  background: var(--color-accent-primary);
   box-shadow: 0 0 10px rgba(45, 212, 191, 0.45);
 }
 
@@ -387,7 +387,7 @@
   background: rgba(10, 30, 58, 0.52);
   color: #8fbdff;
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 800;
   cursor: pointer;
   list-style: none;
 }
@@ -425,7 +425,7 @@
   scroll-padding-top: 64px;
   border: 1px solid rgba(77, 163, 255, 0.16);
   border-radius: 18px;
-  background: #0b1220;
+  background: var(--color-bg-base);
   padding: 14px;
 }
 
@@ -454,7 +454,7 @@
 
 .root :global(.scan-ai-workspace-head span) {
   display: block;
-  color: #4da3ff;
+  color: var(--color-accent-primary);
   font-size: 12px;
   font-weight: 800;
   letter-spacing: 0;
@@ -462,7 +462,7 @@
 
 .root :global(.scan-ai-workspace-head strong) {
   display: block;
-  color: #e6edf3;
+  color: var(--color-text-primary);
   font-size: 20px;
   line-height: 1.2;
   margin-top: 4px;
@@ -471,7 +471,7 @@
 .root :global(.scan-ai-workspace-head p) {
   max-width: 560px;
   margin: 0;
-  color: #9fb2c7;
+  color: var(--color-text-secondary);
   font-size: 13px;
   line-height: 1.55;
   text-align: right;

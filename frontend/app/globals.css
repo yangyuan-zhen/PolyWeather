@@ -18,12 +18,12 @@
     /* ── Text Scale ── */
     --color-text-primary: #E6EDF3;
     --color-text-secondary: #9FB2C7;
-    --color-text-muted: #6B7A90;
-    --color-text-disabled: #6B7A90;
+    --color-text-muted: #7D8FA3;
+    --color-text-disabled: #7D8FA3;
 
-    /* ── Accent Colors (Fintech 3-Color) ── */
+    /* ── Accent Colors ── */
     --color-accent-primary: #4DA3FF;
-    --color-accent-secondary: #4DA3FF;
+    --color-accent-secondary: #6FB7FF;
     --color-accent-tertiary: #93C5FD;
 
     /* ── Signal / Semantic Colors ── */
@@ -52,7 +52,7 @@
     /* ── Typography ── */
     --font-data:
       "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --font-display: "Geist", "Inter", -apple-system, sans-serif;
+    --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --font-mono: "JetBrains Mono", "Fira Code", "SF Mono", monospace;
 
     /* ── Spacing (4px grid) ── */
@@ -91,7 +91,7 @@
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
 
-    /* ── Legacy Compatibility (shadcn/ui HSL tokens) ── */
+    /* ── shadcn/ui Tokens (used by Tailwind @apply border-border) ── */
     --background: 223 53% 4%;
     --foreground: 210 40% 98%;
     --card: 223 46% 8%;
@@ -105,8 +105,70 @@
     --border: 221 38% 22%;
   }
 
+  /* ── Light Theme Token Overrides ── */
+  html.light,
+  html[data-theme="light"] {
+    --color-bg-base: #F7F9FC;
+    --color-bg-raised: #EEF2F7;
+    --color-bg-overlay: #FFFFFF;
+    --color-bg-card: rgba(255, 255, 255, 0.92);
+    --color-bg-input: rgba(238, 242, 247, 0.88);
+
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #334155;
+    --color-text-muted: #475569;
+    --color-text-disabled: #94A3B8;
+
+    --color-accent-primary: #2563EB;
+    --color-accent-secondary: #3B82F6;
+    --color-accent-tertiary: #60A5FA;
+
+    --color-border-default: rgba(148, 163, 184, 0.24);
+    --color-border-hover: rgba(37, 99, 235, 0.38);
+    --color-border-subtle: rgba(148, 163, 184, 0.12);
+
+    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-elevation-2: 0 8px 24px rgba(40, 70, 110, 0.12);
+    --shadow-elevation-3: 0 20px 60px rgba(40, 70, 110, 0.15);
+    --shadow-glow-accent: 0 0 20px rgba(37, 99, 235, 0.14);
+    --shadow-glow-secondary: 0 0 20px rgba(96, 165, 250, 0.12);
+
+    --glass-blur-1: blur(10px);
+    --glass-blur-2: blur(16px);
+    --glass-blur-3: blur(24px);
+    --glass-opacity-1: 0.86;
+    --glass-opacity-2: 0.92;
+    --glass-opacity-3: 0.96;
+  }
+
   * {
     @apply border-border;
+  }
+
+  /* ── Skip-to-content link ── */
+  .skip-to-content {
+    position: absolute;
+    top: -100%;
+    left: 8px;
+    z-index: 9999;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    background: var(--color-accent-primary);
+    color: #fff;
+    font-weight: 700;
+    text-decoration: none;
+    transition: top 0.18s ease;
+  }
+
+  .skip-to-content:focus {
+    top: 8px;
+  }
+
+  /* ── Global focus-visible ring (keyboard navigation) ── */
+  :focus-visible {
+    outline: 2px solid var(--color-accent-primary);
+    outline-offset: 2px;
+    border-radius: 2px;
   }
 
   body {
@@ -218,6 +280,28 @@
       opacity: 1;
       transform: translateY(0);
     }
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes pulse-pending {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.6; }
+  }
+}
+
+/* ── Reduced motion: disable all animations and transitions ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

@@ -157,7 +157,7 @@
     0 0 22px rgba(251, 113, 133, 0.18);
 }
 .root :global(.marker-bubble.risk-high::after) {
-  border-top-color: #ef4444;
+  border-top-color: var(--color-signal-danger);
 }
 
 .root :global(.marker-bubble.risk-medium) {
@@ -168,7 +168,7 @@
     0 0 22px rgba(245, 158, 11, 0.16);
 }
 .root :global(.marker-bubble.risk-medium::after) {
-  border-top-color: #f59e0b;
+  border-top-color: var(--color-signal-warning);
 }
 
 .root :global(.marker-bubble.risk-low) {
@@ -179,7 +179,7 @@
     0 0 22px rgba(74, 222, 128, 0.14);
 }
 .root :global(.marker-bubble.risk-low::after) {
-  border-top-color: #22C55E;
+  border-top-color: var(--color-signal-success);
 }
 
 .root :global(.marker-name) {
@@ -380,7 +380,7 @@
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: radial-gradient(circle, #6FB7FF 0%, #0891b2 100%);
+  background: radial-gradient(circle, var(--color-accent-secondary) 0%, #0891b2 100%);
   transform: translate(-50%, -50%);
   box-shadow:
     0 0 12px rgba(34, 211, 238, 0.65),
@@ -544,18 +544,10 @@
   border: 2px solid rgba(34, 211, 238, 0.1);
   border-top-color: var(--accent-cyan);
   border-radius: 50%;
-  animation: loading-spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation: spin 0.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
   box-shadow: 0 0 15px rgba(34, 211, 238, 0.1);
 }
 
-@keyframes loading-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
 
 @keyframes city-loading-pulse {
   0% {
@@ -767,7 +759,7 @@
 }
 
 .root :global(.nearby-time.is-stale) {
-  color: #fbbf24;
+  color: var(--color-signal-warning);
 }
 
 .root :global(.nearby-wind) {

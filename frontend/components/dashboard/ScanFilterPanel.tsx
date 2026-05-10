@@ -81,7 +81,7 @@ export function ScanFilterPanel({
           <span>{isEn ? "Scan Mode" : "扫描模式"}</span>
           <Info size={14} />
         </div>
-        <div className="scan-mode-tabs">
+        <div className="scan-mode-tabs" role="tablist" aria-label={isEn ? "Scan mode" : "扫描模式"}>
           {SCAN_MODES.map((mode) => {
             const Icon = mode.icon;
             const isActive = value.scan_mode === mode.key;
@@ -89,6 +89,8 @@ export function ScanFilterPanel({
               <button
                 key={mode.key}
                 type="button"
+                role="tab"
+                aria-selected={isActive}
                 className={`scan-mode-tab ${isActive ? "active" : ""}`}
                 onClick={() => updateFilter("scan_mode", mode.key)}
               >
