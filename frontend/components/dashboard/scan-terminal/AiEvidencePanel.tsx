@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type {
   AiCityForecastPayload,
   AiCityForecastState,
@@ -11,6 +12,18 @@ function confidenceBadge(confidence: string | null, isEn: boolean) {
   if (c === "high") return { label: isEn ? "High" : "高", tone: "high" };
   if (c === "medium") return { label: isEn ? "Medium" : "中", tone: "medium" };
   return { label: isEn ? "Low" : "低", tone: "low" };
+}
+
+function useTransitionMarker(status: string, hasContent: boolean) {
+  const [showUpdated, setShowUpdated] = useState(false);
+  useEffect(() => {
+    if (status === "ready" && hasContent) {
+      setShowUpdated(true);
+      const id = setTimeout(() => setShowUpdated(false), 4000);
+      return () => clearTimeout(id);
+    }
+  }, [status, hasContent]);
+  return showUpdated;
 }
 
 export function AiEvidencePanel({
@@ -61,6 +74,8 @@ export function AiEvidencePanel({
     aiRangeLow != null && aiRangeHigh != null
       ? `${formatTemperatureValue(aiRangeLow, tempSymbol, { digits: 0 })} ~ ${formatTemperatureValue(aiRangeHigh, tempSymbol, { digits: 0 })}`
       : null;
+
+  const showUpdatedBadge = useTransitionMarker(aiForecast.status, Boolean(aiCityForecast));
 
   return (
     <section className="scan-ai-city-section scan-ai-city-ai-read">
@@ -143,6 +158,11 @@ export function AiEvidencePanel({
             </>
           ) : aiForecast.status === "ready" && aiCityForecast ? (
             <>
+              {showUpdatedBadge ? (
+                <span className="scan-ai-updated-badge">
+                  {isEn ? "✓ Updated" : "✓ 已更新"}
+                </span>
+              ) : null}
               <p className="scan-ai-weather-summary">
                 {aiRuleEvidenceMode ? aiRuleEvidenceText : aiReadCompleteText}
               </p>
