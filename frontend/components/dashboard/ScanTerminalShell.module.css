@@ -19,32 +19,6 @@
   border-bottom: 1px solid rgba(118, 146, 188, 0.1);
 }
 
-.root :global(.scan-topbar-brand) {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.root :global(.scan-topbar-logo) {
-  width: 28px;
-  height: 28px;
-  flex-shrink: 0;
-  border-radius: 8px;
-  background: linear-gradient(135deg, var(--color-accent-primary), #22C55E);
-  box-shadow: 0 4px 12px rgba(77, 163, 255, 0.28);
-  position: relative;
-  overflow: hidden;
-}
-
-.root :global(.scan-topbar-logo::after) {
-  content: "";
-  position: absolute;
-  inset: 3px;
-  border-radius: 6px;
-  background:
-    radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.6), transparent 60%);
-}
-
 .root :global(.scan-topbar-title) {
   display: flex;
   flex-direction: column;

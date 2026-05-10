@@ -399,16 +399,13 @@ function ScanTerminalScreen() {
       >
         <main className="scan-data-grid">
           <div className="scan-topbar">
-            <div className="scan-topbar-brand">
-              <div className="scan-topbar-logo" aria-hidden="true" />
-              <div className="scan-topbar-title">
+            <div className="scan-topbar-title">
                 <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
               <span>
                 {isEn
                   ? "Start from the map, then open city cards to verify weather evidence"
                   : "从地图选城市，再打开决策卡验证天气证据"}
               </span>
-            </div>
             </div>
             <div className="scan-topbar-actions">
               <button

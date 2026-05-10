@@ -7,11 +7,6 @@
   color: #0F172A;
 }
 
-.root :global(.scan-terminal.light .scan-topbar-logo) {
-  background: linear-gradient(135deg, #2563EB, #059669);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
-}
-
 .root :global(.scan-terminal.light .scan-filter-panel),
 .root :global(.scan-terminal.light .scan-data-grid),
 .root :global(.scan-terminal.light .scan-detail-panel),
