@@ -182,8 +182,14 @@ class AmosStationSourceMixin:
     ) -> Optional[Dict[str, Any]]:
         """Fetch AMOS runway-level observations for Seoul or Busan.
 
-        Returns a dict with keys: temp_c, dew_c, pressure_hpa, wind_kt,
-        wind_dir, visibility_m, raw_metar, raw_taf, runway_data, source.
+        Temperature priority:
+        1. METAR temperature (official aerodrome sensor, authoritative)
+        2. Median of runway sensor temperatures (fallback; individual runway
+           sensors may differ by 0.5-1.0°C due to location/altitude on the airfield)
+
+        Returns a dict with: temp, temp_c, dew, dew_c, pressure_hpa, wind_kt,
+        temp_source ("metar" or "runway_median"), runway_temps (list of per-runway
+        (temp, dew) tuples), raw_metar, raw_taf, runway_data, source.
         """
         started = time.perf_counter()
         city_key = str(city or "").strip().lower()
@@ -207,19 +213,43 @@ class AmosStationSourceMixin:
             taf_line = taf_match.group(0) if taf_match else ""
             taf_line = re.sub(r"\s+", " ", taf_line).strip()
 
-            temp_c, dew_c = _amos_extract_metar_temperature(metar_line)
+            # METAR is the authoritative aerodrome observation
+            metar_temp_c, metar_dew_c = _amos_extract_metar_temperature(metar_line)
             pressure_hpa = _amos_extract_metar_qnh(metar_line)
             wind_kt = _amos_extract_metar_wind(metar_line)
 
+            # Runway-level temperatures from individual sensor pairs
             runway_data = _amos_parse_runway_table(html)
+            runway_temps = runway_data.get("temperatures") or []
+            runway_pressures = runway_data.get("pressures_hpa") or []
 
-            # Get temperature from runway data if METAR parsing failed
-            if temp_c is None and runway_data.get("temperatures"):
-                temp_c = runway_data["temperatures"][0][0]
-            if dew_c is None and runway_data.get("temperatures"):
-                dew_c = runway_data["temperatures"][0][1]
-            if pressure_hpa is None and runway_data.get("pressures_hpa"):
-                pressure_hpa = runway_data["pressures_hpa"][0]
+            # Primary: METAR (official aerodrome sensor)
+            # Fallback: median of runway sensors (if METAR unavailable)
+            # Runway sensors may differ by 0.5-1.0°C from METAR due to
+            # different locations/altitudes on the airfield
+            temp_c: Optional[float] = metar_temp_c
+            dew_c: Optional[float] = metar_dew_c
+            temp_source = "metar"
+
+            if temp_c is None and runway_temps:
+                runway_temps_only = [t[0] for t in runway_temps if t[0] is not None and -50 < float(t[0]) < 60]
+                if runway_temps_only:
+                    sorted_t = sorted(runway_temps_only)
+                    mid = len(sorted_t) // 2
+                    temp_c = float(sorted_t[mid]) if len(sorted_t) % 2 else float((sorted_t[mid-1] + sorted_t[mid]) / 2)
+                    temp_source = "runway_median"
+
+            if dew_c is None and runway_temps:
+                runway_dews = [t[1] for t in runway_temps if t[1] is not None and -50 < float(t[1]) < 60]
+                if runway_dews:
+                    sorted_d = sorted(runway_dews)
+                    mid = len(sorted_d) // 2
+                    dew_c = float(sorted_d[mid]) if len(sorted_d) % 2 else float((sorted_d[mid-1] + sorted_d[mid]) / 2)
+
+            if pressure_hpa is None and runway_pressures:
+                sorted_p = sorted(runway_pressures)
+                mid = len(sorted_p) // 2
+                pressure_hpa = float(sorted_p[mid]) if len(sorted_p) % 2 else float((sorted_p[mid-1] + sorted_p[mid]) / 2)
 
             temp = round(temp_c * 9 / 5 + 32, 1) if use_fahrenheit and temp_c is not None else temp_c
             dew = round(dew_c * 9 / 5 + 32, 1) if use_fahrenheit and dew_c is not None else dew_c
@@ -231,6 +261,8 @@ class AmosStationSourceMixin:
                 "dew_c": dew_c,
                 "pressure_hpa": pressure_hpa,
                 "wind_kt": wind_kt,
+                "temp_source": temp_source,
+                "runway_temps": runway_temps,
                 "source": "amos",
                 "source_label": f"AMOS {airport_meta['label_en']} ({icao})",
                 "source_code": "amos",
