@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { SubscriptionHelpClient } from "./SubscriptionHelpClient";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "PolyWeather | Subscription Help",
   description: "PolyWeather Pro subscription, points discount, and payment guide.",
