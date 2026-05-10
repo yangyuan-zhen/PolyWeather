@@ -10,7 +10,6 @@ from src.data_collection.open_meteo_cache import OpenMeteoCacheMixin
 from src.data_collection.settlement_sources import SettlementSourceMixin
 from src.data_collection.metar_sources import MetarSourceMixin
 from src.data_collection.mgm_sources import MgmSourceMixin
-from src.data_collection.kma_station_sources import KmaStationSourceMixin
 from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.russia_station_sources import RussiaStationSourceMixin
 from src.data_collection.nmc_sources import NmcSourceMixin
@@ -18,7 +17,7 @@ from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, KmaStationSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin):
     """
     Multi-source weather data collector
 
@@ -28,7 +27,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - AMOS (Korean runway-level airport sensors — RKSI, RKPK)
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
-    - KMA / JMA / NMC / HKO / CWA (country official networks)
+    - JMA / NMC / HKO / CWA (country official networks)
     - Polymarket (weather derivative markets)
     """
 
@@ -209,11 +208,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self._jma_cache: Dict[str, Dict] = {}
         self._jma_cache_lock = threading.Lock()
-        self.kma_cache_ttl_sec = int(
-            os.getenv("KMA_STATION_CACHE_TTL_SEC", "300")
-        )
-        self._kma_cache: Dict[str, Dict] = {}
-        self._kma_cache_lock = threading.Lock()
         self.ru_station_cache_ttl_sec = int(
             os.getenv("RU_STATION_CACHE_TTL_SEC", "300")
         )
@@ -740,8 +734,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         normalized = str(city or "").strip().lower()
         with self._jma_cache_lock:
             self._jma_cache.pop(f"{normalized}:{use_fahrenheit}", None)
-        with self._kma_cache_lock:
-            self._kma_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._nmc_cache_lock:
             self._nmc_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._ru_station_cache_lock:
@@ -879,21 +871,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = official_rows
         results["nearby_source"] = "jma"
-
-    def _attach_korea_official_nearby(
-        self, results: Dict, city_lower: str, use_fahrenheit: bool
-    ) -> None:
-        if city_lower not in {"busan", "seoul"}:
-            return
-        official_rows = self.fetch_kma_official_nearby(
-            city_lower, use_fahrenheit=use_fahrenheit
-        )
-        if not official_rows:
-            return
-        results["kma_official_nearby"] = official_rows
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = official_rows
-        results["nearby_source"] = "kma"
 
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1037,7 +1014,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
@@ -1080,7 +1056,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
-                    self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
