@@ -30,10 +30,6 @@ AMOS_AIRPORT_CODES: Dict[str, Dict[str, str]] = {
     },
 }
 
-AMOS_STATION_IDS: Dict[str, str] = {
-    "RKSI": "471080",  # Incheon
-    "RKPK": "471530",  # Gimhae (Busan)
-}
 
 
 def _amos_safe_float(value: str | None) -> Optional[float]:
@@ -136,72 +132,32 @@ class AmosStationSourceMixin:
     amos_cache_ttl_sec: int = 300  # 5 minutes
 
     def _amos_get_page(self, icao: str) -> Optional[str]:
-        """Fetch the AMOS page for a given ICAO code.
+        """Fetch the AMOS page.
 
-        The AMOS site uses JavaScript airport switching. We try multiple
-        approaches: GET with parameters, POST with form data, and cookie replay.
+        The AMOS site (global.amo.go.kr) always loads Incheon (RKSI) by default.
+        Airport switching is done via JavaScript — not via URL parameters or POST.
+        This means RKPK (Busan/Gimhae) cannot be fetched reliably from this endpoint.
+        For non-RKSI airports, we fall back to standard METAR sources.
         """
         started = time.perf_counter()
-        station_id = AMOS_STATION_IDS.get(icao, "")
-        airport_label_ko = {
-            "RKSI": "인천",
-            "RKPK": "김해",
-        }.get(icao, "")
-
-        fetch_impl = None
-        if hasattr(self, "session") and hasattr(self.session, "get"):
-            def _get(url: str) -> str:
-                resp = self.session.get(url, timeout=float(getattr(self, "timeout", 4.0)))
-                resp.raise_for_status()
-                return resp.text
-
-            def _post(url: str, data: dict) -> str:
-                resp = self.session.post(url, data=data, timeout=float(getattr(self, "timeout", 4.0)))
-                resp.raise_for_status()
-                return resp.text
-            fetch_impl = (_get, _post)
-        else:
-            getter = getattr(self, "_http_get_text", None)
-            if not callable(getter):
-                return None
-            def _get(url: str) -> str:
-                return str(getter(url))
-            def _post(url: str, data: dict) -> str:
-                return str(getter(url))
-            fetch_impl = (_get, _post)
-
-        http_get, http_post = fetch_impl
+        if icao != "RKSI":
+            logger.debug("AMOS page only supports RKSI (Incheon), not {}", icao)
+            return None
 
         try:
-            # Strategy 1: GET first to establish session, then POST to switch
-            _ = http_get(AMOS_BASE_URL)
-            for form_data in [
-                {"icao": icao, "stn": station_id, "airport": airport_label_ko},
-                {"stnId": station_id},
-                {"code": icao},
-                {"selectAirport": icao},
-            ]:
-                try:
-                    text = http_post(AMOS_BASE_URL, form_data)
-                    if text and (icao in text.upper() or airport_label_ko in text):
-                        record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
-                        return text
-                except Exception:
-                    continue
+            getter = getattr(self, "_http_get_text", None)
+            if callable(getter):
+                text = str(getter(AMOS_BASE_URL))
+            elif hasattr(self, "session"):
+                resp = self.session.get(AMOS_BASE_URL, timeout=float(getattr(self, "timeout", 4.0)))
+                resp.raise_for_status()
+                text = resp.text
+            else:
+                return None
 
-            # Strategy 2: GET with query parameters
-            for url in [
-                f"{AMOS_BASE_URL}?icao={icao}",
-                f"{AMOS_BASE_URL}?stn={station_id}",
-            ]:
-                try:
-                    text = http_get(url)
-                    if text and (icao in text.upper() or airport_label_ko in text):
-                        record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
-                        return text
-                except Exception:
-                    continue
-
+            if text and "RKSI" in text.upper():
+                record_source_call("amos", "page", "success", (time.perf_counter() - started) * 1000.0)
+                return text
             return None
         except Exception as exc:
             logger.debug("AMOS page fetch failed icao={}: {}", icao, exc)
