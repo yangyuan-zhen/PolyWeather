@@ -28,11 +28,13 @@ AMOS_AIRPORT_QUERY_KEYS = (
 AMOS_AIRPORT_CODES: Dict[str, Dict[str, str]] = {
     "seoul": {
         "icao": "RKSI",
+        "stn_id": "113",
         "label_ko": "인천공항",
         "label_en": "Incheon Intl",
     },
     "busan": {
         "icao": "RKPK",
+        "stn_id": "153",
         "label_ko": "김해공항",
         "label_en": "Gimhae Intl",
     },
@@ -92,6 +94,119 @@ def _amos_to_lines(text: str) -> list[str]:
     return [re.sub(r"\s+", " ", line).strip() for line in normalized.splitlines() if line.strip()]
 
 
+def _amos_is_runway_token(value: str) -> bool:
+    text = str(value or "").strip()
+    return bool(
+        re.match(r"^\d{2}[LRC]?$", text, re.I)
+        or re.match(r"^[NS]\s+[LR]$", text, re.I)
+    )
+
+
+def _amos_parse_cell_table(lines: list[str]) -> Optional[dict[str, Any]]:
+    """Parse the actual AMOS HTML table after it has been flattened to cells."""
+    runway_rows: list[dict[str, Any]] = []
+    i = 0
+    while i < len(lines):
+        token = lines[i].strip()
+        if (
+            _amos_is_runway_token(token)
+            and i + 3 < len(lines)
+            and lines[i + 1].upper() == "AVG"
+            and lines[i + 2].upper() == "MIN"
+            and lines[i + 3].upper() == "MAX"
+        ):
+            row: dict[str, Any] = {"runway": token.upper()}
+            i += 4
+            while i < len(lines):
+                label = lines[i].strip()
+                upper = label.upper()
+                if (
+                    _amos_is_runway_token(label)
+                    and i + 3 < len(lines)
+                    and lines[i + 1].upper() == "AVG"
+                    and lines[i + 2].upper() == "MIN"
+                    and lines[i + 3].upper() == "MAX"
+                ):
+                    break
+                if upper == "WD" and i + 3 < len(lines):
+                    wd = [_amos_safe_float(lines[i + j]) for j in range(1, 4)]
+                    if all(v is not None for v in wd):
+                        row["wind_direction"] = (int(wd[0]), int(wd[1]), int(wd[2]))
+                    i += 4
+                    continue
+                if upper == "WS" and i + 3 < len(lines):
+                    ws = [_amos_safe_float(lines[i + j]) for j in range(1, 4)]
+                    if all(v is not None for v in ws):
+                        row["wind_speed"] = (float(ws[0]), float(ws[1]), float(ws[2]))
+                    i += 4
+                    continue
+                if upper == "MOR" and i + 1 < len(lines):
+                    mor = _amos_safe_float(lines[i + 1])
+                    if mor is not None and "visibility_mor" not in row:
+                        row["visibility_mor"] = int(mor)
+                    i += 2
+                    continue
+                if upper == "RVR" and i + 1 < len(lines):
+                    rvr = _amos_safe_float(str(lines[i + 1]).lstrip("P"))
+                    if rvr is not None and "rvr" not in row:
+                        row["rvr"] = int(rvr)
+                    i += 2
+                    continue
+                if upper.startswith("TEMP") and i + 1 < len(lines):
+                    row["temp"] = _amos_safe_float(lines[i + 1])
+                    i += 2
+                    continue
+                if upper.startswith("DEW") and i + 1 < len(lines):
+                    row["dew"] = _amos_safe_float(lines[i + 1])
+                    i += 2
+                    continue
+                if upper == "QNH (HPA)" and i + 1 < len(lines):
+                    row["pressure_hpa"] = _amos_safe_float(lines[i + 1])
+                    i += 2
+                    continue
+                i += 1
+            runway_rows.append(row)
+            continue
+        i += 1
+
+    if len(runway_rows) < 2:
+        return None
+
+    runway_pairs: list[tuple[str, str]] = []
+    temperatures: list[tuple[Optional[float], Optional[float]]] = []
+    pressures_hpa: list[Optional[float]] = []
+    wind_directions: list[Optional[tuple[int, int, int]]] = []
+    wind_speeds: list[Optional[tuple[float, float, float]]] = []
+    visibility_mor: list[Optional[int]] = []
+    rvr_values: list[Optional[int]] = []
+
+    for idx in range(0, len(runway_rows) - 1, 2):
+        first = runway_rows[idx]
+        second = runway_rows[idx + 1]
+        runway_pairs.append((str(first["runway"]), str(second["runway"])))
+        temp = first.get("temp")
+        dew = first.get("dew")
+        if temp is None and second.get("temp") is not None:
+            temp = second.get("temp")
+            dew = second.get("dew")
+        temperatures.append((temp, dew))
+        pressures_hpa.append(first.get("pressure_hpa") or second.get("pressure_hpa"))
+        wind_directions.append(first.get("wind_direction") or second.get("wind_direction"))
+        wind_speeds.append(first.get("wind_speed") or second.get("wind_speed"))
+        visibility_mor.append(first.get("visibility_mor") or second.get("visibility_mor"))
+        rvr_values.append(first.get("rvr") or second.get("rvr"))
+
+    return {
+        "runway_pairs": runway_pairs,
+        "temperatures": temperatures,
+        "pressures_hpa": pressures_hpa,
+        "wind_directions": wind_directions,
+        "wind_speeds": wind_speeds,
+        "visibility_mor": visibility_mor,
+        "rvr": rvr_values,
+    }
+
+
 def _amos_parse_runway_table(text: str) -> dict[str, Any]:
     """Parse the runway-level data from AMOS page HTML text.
 
@@ -106,6 +221,10 @@ def _amos_parse_runway_table(text: str) -> dict[str, Any]:
       PRECIP 0 QNH 1015.8
     """
     lines = _amos_to_lines(text)
+    cell_table = _amos_parse_cell_table(lines)
+    if cell_table and cell_table.get("runway_pairs"):
+        return cell_table
+
     normalized_text = "\n".join(lines)
 
     runway_pairs: list[tuple[str, str]] = []
@@ -226,17 +345,39 @@ class AmosStationSourceMixin:
         """
         started = time.perf_counter()
         icao = str(icao or "").strip().upper()
-        urls = [AMOS_BASE_URL]
-        if icao != "RKSI":
+        stn_id = next(
+            (
+                meta.get("stn_id")
+                for meta in AMOS_AIRPORT_CODES.values()
+                if meta.get("icao") == icao
+            ),
+            None,
+        )
+        urls = [(AMOS_BASE_URL, None)]
+        if stn_id:
+            urls = [(AMOS_BASE_URL, {"stnId": stn_id})]
+        if icao != "RKSI" and not stn_id:
             urls = [f"{AMOS_BASE_URL}?{key}={icao}" for key in AMOS_AIRPORT_QUERY_KEYS]
 
         try:
-            for url in urls:
+            for url_item in urls:
                 getter = getattr(self, "_http_get_text", None)
-                if callable(getter):
+                post_data = None
+                if isinstance(url_item, tuple):
+                    url, post_data = url_item
+                else:
+                    url = url_item
+                if post_data is None and callable(getter):
                     text = str(getter(url))
                 elif hasattr(self, "session"):
-                    resp = self.session.get(url, timeout=float(getattr(self, "timeout", 4.0)))
+                    if post_data is not None:
+                        resp = self.session.post(
+                            url,
+                            data=post_data,
+                            timeout=float(getattr(self, "timeout", 4.0)),
+                        )
+                    else:
+                        resp = self.session.get(url, timeout=float(getattr(self, "timeout", 4.0)))
                     resp.raise_for_status()
                     text = resp.text
                 else:
@@ -299,7 +440,11 @@ class AmosStationSourceMixin:
             # Runway-level temperatures from individual sensor pairs
             runway_data = _amos_parse_runway_table(html)
             runway_temps = runway_data.get("temperatures") or []
-            runway_pressures = runway_data.get("pressures_hpa") or []
+            runway_pressures = [
+                float(p)
+                for p in (runway_data.get("pressures_hpa") or [])
+                if p is not None
+            ]
 
             # Primary: METAR (official aerodrome sensor)
             # Fallback: median of runway sensors (if METAR unavailable)

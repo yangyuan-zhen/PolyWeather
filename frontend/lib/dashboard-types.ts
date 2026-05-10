@@ -922,7 +922,7 @@ export interface AmosData {
   pressure_hpa?: number | null;
   wind_kt?: number | null;
   temp_source?: string | null;
-  runway_temps?: Array<[number, number]> | null;
+  runway_temps?: Array<[number | null, number | null]> | null;
   source?: string | null;
   source_label?: string | null;
   icao?: string | null;
@@ -931,12 +931,12 @@ export interface AmosData {
   raw_taf?: string | null;
   runway_obs?: {
     runway_pairs?: Array<[string, string]> | null;
-    temperatures?: Array<[number, number]> | null;
-    pressures_hpa?: number[] | null;
-    wind_directions?: Array<[number, number, number]> | null;
-    wind_speeds?: Array<[number, number, number]> | null;
-    visibility_mor?: number[] | null;
-    rvr?: number[] | null;
+    temperatures?: Array<[number | null, number | null]> | null;
+    pressures_hpa?: Array<number | null> | null;
+    wind_directions?: Array<[number, number, number] | null> | null;
+    wind_speeds?: Array<[number, number, number] | null> | null;
+    visibility_mor?: Array<number | null> | null;
+    rvr?: Array<number | null> | null;
   } | null;
   observation_source?: string | null;
   observation_source_zh?: string | null;
@@ -1043,4 +1043,3 @@ export interface DashboardState {
   historyState: HistoryState;
   proAccess: ProAccessState;
 }
-

@@ -62,3 +62,73 @@ def test_amos_get_page_rejects_ignored_query_returning_default_rksi():
             """
 
     assert FakeCollector()._amos_get_page("RKPK") is None
+
+
+def test_amos_parser_handles_flattened_html_cells_and_busan_runway_labels():
+    text = """
+    N L
+    AVG
+    MIN
+    MAX
+    WD
+    210
+    190
+    220
+    WS
+    4.4
+    3.6
+    5.2
+    MOR
+    10000
+    RVR
+    P2000
+    N R
+    AVG
+    MIN
+    MAX
+    WD
+    210
+    200
+    220
+    WS
+    4.0
+    2.9
+    5.4
+    S R
+    AVG
+    MIN
+    MAX
+    WD
+    190
+    180
+    210
+    WS
+    4.8
+    4.0
+    5.8
+    S L
+    AVG
+    MIN
+    MAX
+    WD
+    180
+    170
+    190
+    WS
+    4.8
+    3.5
+    5.8
+    TEMP(℃)
+    15.4
+    DEW (℃)
+    9.0
+    QNH (hPa)
+    1018.2
+    """
+
+    parsed = _amos_parse_runway_table(text)
+
+    assert parsed["runway_pairs"] == [("N L", "N R"), ("S R", "S L")]
+    assert parsed["temperatures"] == [(None, None), (15.4, 9.0)]
+    assert parsed["pressures_hpa"] == [None, 1018.2]
+    assert parsed["wind_speeds"] == [(4.4, 3.6, 5.2), (4.8, 4.0, 5.8)]
