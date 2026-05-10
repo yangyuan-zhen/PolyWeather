@@ -760,3 +760,75 @@ def default_calibration_payload(
             "reason": reason,
         },
     }
+
+
+def check_calibration_drift(records: list[dict[str, Any]], calibration_path: str | None = None) -> dict[str, Any]:
+    """Compare recent CRPS against calibration baseline to detect drift.
+
+    Returns a dict with keys: drifted (bool), current_crps (float),
+    baseline_crps (float), delta_pct (float), sample_count (int), warning (str|None).
+    A positive delta_pct means the model is performing worse than baseline.
+    """
+    import json
+    import os
+
+    if len(records) < 5:
+        return {"drifted": False, "sample_count": len(records), "warning": "Insufficient samples"}
+
+    path = calibration_path or DEFAULT_CALIBRATION_FILE
+    baseline_crps = None
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            json.load(fh)  # calibration file
+        eval_path = os.path.join(
+            os.path.dirname(path) if os.path.dirname(path) else os.path.join(os.path.dirname(DEFAULT_CALIBRATION_FILE)),
+            "evaluation_report.json",
+        )
+        with open(eval_path, "r", encoding="utf-8") as fh:
+            report = json.load(fh)
+        baseline_crps = float(report.get("metrics", {}).get("selected_mean_crps") or 0) or None
+    except Exception:
+        pass
+
+    current_crps_values: list[float] = []
+    for r in records:
+        actual = float(r.get("actual_high") or r.get("observed") or 0)
+        mu = float(r.get("deb_prediction") or r.get("mu") or 0)
+        sigma = float(r.get("sigma") or r.get("ensemble_std") or 2.0)
+        if actual and mu and sigma > 0:
+            current_crps_values.append(_gaussian_crps(actual, mu, sigma))
+
+    if not current_crps_values:
+        return {"drifted": False, "sample_count": 0, "warning": "No valid records for CRPS"}
+
+    current_crps = round(sum(current_crps_values) / len(current_crps_values), 6)
+
+    if baseline_crps is None or baseline_crps <= 0:
+        return {
+            "drifted": False,
+            "current_crps": current_crps,
+            "baseline_crps": baseline_crps,
+            "sample_count": len(records),
+            "warning": "No baseline available",
+        }
+
+    delta_pct = round((current_crps - baseline_crps) / baseline_crps * 100, 1)
+    DRIFT_THRESHOLD_PCT = 15.0  # warn if CRPS degraded by >15%
+
+    if delta_pct > DRIFT_THRESHOLD_PCT:
+        return {
+            "drifted": True,
+            "current_crps": current_crps,
+            "baseline_crps": baseline_crps,
+            "delta_pct": delta_pct,
+            "sample_count": len(records),
+            "warning": f"CRPS degraded {delta_pct}% vs baseline; consider re-running fit_calibration()",
+        }
+
+    return {
+        "drifted": False,
+        "current_crps": current_crps,
+        "baseline_crps": baseline_crps,
+        "delta_pct": delta_pct,
+        "sample_count": len(records),
+    }

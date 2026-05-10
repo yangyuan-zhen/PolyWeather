@@ -68,7 +68,7 @@ async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Prom
   try {
     response = await fetchBackendApi(url, {
       headers,
-      cache: "no-store",
+      cache: "default",
       signal: controller?.signal,
     });
   } catch (error) {
@@ -238,7 +238,7 @@ export const dashboardClient = {
     void fetch(`/api/system/priority-warm?${params.toString()}`, {
       method: "POST",
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      cache: "default",
       keepalive: true,
     }).catch(() => {});
   },
@@ -418,7 +418,7 @@ export const dashboardClient = {
     }).then((headers) => fetchBackendApi("/api/scan/terminal/ai", {
       method: "POST",
       headers,
-      cache: "no-store",
+      cache: "default",
       body: JSON.stringify({
         filters: payload.filters,
         snapshot_id: snapshotId || null,

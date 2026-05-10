@@ -2069,9 +2069,8 @@ def _analyze(
             local_date=local_date_str,
             peak_status=peak_status,
         )
-        if lgbm_val is not None:
-            # LGBM is kept as an independent reference, not fed back into DEB
-            # to avoid circular dependency (DEB → LGBM training → DEB)
+        # LGBM is kept as an independent reference (lgbm.prediction),
+        # not fed back into DEB to avoid circular dependency
 
     deviation_monitor = _build_deviation_monitor(
         current_temp=cur_temp,

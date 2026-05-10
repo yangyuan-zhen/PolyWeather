@@ -30,6 +30,7 @@ from src.utils.metrics import (
 )
 from src.analysis.probability_calibration import (
     DEFAULT_CALIBRATION_FILE,
+    check_calibration_drift,
     resolve_probability_engine_mode,
 )
 from src.analysis.probability_rollout import build_rollout_report
@@ -132,6 +133,40 @@ async def _metrics_middleware(request: Request, call_next):
         status=status_code,
     )
     return response
+
+
+@app.middleware("http")
+async def _etag_middleware(request: Request, call_next):
+    """Add ETag to GET /api/* responses; return 304 on If-None-Match hit."""
+    response = await call_next(request)
+
+    if request.method != "GET" or response.status_code != 200:
+        return response
+
+    path = request.url.path
+    if not path.startswith("/api/") or path.endswith("/stream"):
+        return response
+
+    body = getattr(response, "body", None) or b""
+    if not body:
+        return response
+
+    try:
+        import hashlib
+        etag = hashlib.md5(body).hexdigest()
+    except Exception:
+        return response
+
+    etag_value = f'"{etag}"'
+    if_none_match = request.headers.get("If-None-Match", "")
+    if if_none_match == etag_value:
+        from fastapi.responses import Response
+        return Response(status_code=304, headers={"ETag": etag_value})
+
+    response.headers["ETag"] = etag_value
+    response.headers["Cache-Control"] = "private, max-age=30"
+    return response
+
 _PROBABILITY_SHADOW_REPORT = os.path.join(
     _PROJECT_ROOT,
     "artifacts",
@@ -453,11 +488,34 @@ def _probability_summary() -> Dict[str, Any]:
         _PROBABILITY_EVALUATION_REPORT,
         _PROBABILITY_SHADOW_REPORT,
     )
+    drift = {"drifted": False, "sample_count": 0, "warning": "not checked"}
+    try:
+        import sqlite3
+        conn = sqlite3.connect(_account_db.db_path)
+        rows = conn.execute(
+            "SELECT city, target_date, actual_high, deb_prediction, extra_json FROM daily_records_store ORDER BY target_date DESC LIMIT 200"
+        ).fetchall()
+        conn.close()
+        records: list[dict[str, Any]] = []
+        for row in rows:
+            rec = {"city": row[0], "target_date": row[1], "actual_high": row[2], "deb_prediction": row[3]}
+            try:
+                extra = json.loads(row[4] or "{}") if row[4] else {}
+                rec["mu"] = extra.get("mu")
+                rec["sigma"] = extra.get("sigma")
+            except Exception:
+                pass
+            records.append(rec)
+        if records:
+            drift = check_calibration_drift(records)
+    except Exception:
+        pass
     return {
         "engine_mode": resolve_probability_engine_mode(),
         "calibration_file": os.getenv("POLYWEATHER_PROBABILITY_CALIBRATION_FILE")
         or DEFAULT_CALIBRATION_FILE,
         "rollout": rollout,
+        "drift": drift,
     }
 
 
