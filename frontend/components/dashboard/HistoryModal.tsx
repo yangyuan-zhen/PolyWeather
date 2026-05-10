@@ -92,7 +92,17 @@ export function HistoryModal() {
           </div>
         </div>
       ) : !isPro ? (
-        <ProFeaturePaywall feature="history" onClose={store.closeHistory} />
+        <>
+          <div className="modal-content" style={{ padding: "24px 28px 0", textAlign: "center" }}>
+            <h3 style={{ fontSize: 18, fontWeight: 800, color: "var(--color-text-primary)", margin: "0 0 8px" }}>
+              {t("history.previewTitle")}
+            </h3>
+            <p style={{ fontSize: 13, color: "var(--color-text-secondary)", lineHeight: 1.6, margin: 0 }}>
+              {t("history.previewDesc")}
+            </p>
+          </div>
+          <ProFeaturePaywall feature="history" onClose={store.closeHistory} />
+        </>
       ) : (
         <div className="modal-content history-modal">
           <div className="modal-header">

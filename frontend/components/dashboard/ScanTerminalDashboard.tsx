@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import {
   LogIn,
+  MessageCircle,
   Moon,
   RefreshCw,
   Sun,
@@ -31,6 +32,7 @@ import type {
 } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
+import { WelcomeOverlay } from "@/components/dashboard/scan-terminal/WelcomeOverlay";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
   findRowForCity,
@@ -451,6 +453,16 @@ function ScanTerminalScreen() {
                   <UserRound size={15} />
                 </Link>
               ) : null}
+              <a
+                href="https://t.me/+nMG7SjziUKYyZmM1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="scan-account-button"
+                aria-label={isEn ? "Feedback" : "反馈"}
+                title={isEn ? "Join Telegram for feedback" : "加入 Telegram 反馈"}
+              >
+                <MessageCircle size={15} />
+              </a>
             </div>
           </div>
 
@@ -575,6 +587,7 @@ function ScanTerminalScreen() {
 
         <CityDetailPanel variant="rail" />
       </div>
+      <WelcomeOverlay locale={locale} onDismiss={() => {}} />
       <FutureForecastModal />
       {showScanPaywall ? (
         <div
