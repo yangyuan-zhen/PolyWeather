@@ -34,6 +34,7 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const [loading, setLoading] = useState(false);
   const [errorText, setErrorText] = useState("");
   const [infoText, setInfoText] = useState("");
+  const [resetSent, setResetSent] = useState(false);
 
   const supabaseReady = hasSupabasePublicEnv();
   const isEn = locale === "en-US";
@@ -74,7 +75,44 @@ export function LoginClient({ nextPath }: LoginClientProps) {
     trialPromo: isEn
       ? "New users unlock a free 3-day Pro trial after sign-up."
       : "新用户注册后可免费体验 3 天 Pro。",
+    reset: isEn ? "Forgot password?" : "忘记密码？",
+    resetSent: isEn
+      ? "Reset link sent. Check your inbox."
+      : "重置链接已发送，请检查收件箱。",
+    resetPlaceholder: isEn ? "Enter your email to reset" : "输入邮箱以重置密码",
+    resendVerify: isEn
+      ? "Didn't receive the verification email? Sign up again with the same email to resend."
+      : "没收到验证邮件？用同一邮箱重新注册即可重发。",
+    loginFailedHint: isEn
+      ? "If you just signed up, please verify your email first. Check your inbox or spam folder."
+      : "如果刚注册，请先点击邮箱中的验证链接。检查收件箱或垃圾邮件。",
   } as const;
+
+  const onResetPassword = async () => {
+    setErrorText("");
+    setInfoText("");
+    if (!email.trim()) {
+      setErrorText(copy.resetPlaceholder);
+      return;
+    }
+    if (!supabaseReady) {
+      setErrorText(copy.supabaseMissing);
+      return;
+    }
+    setLoading(true);
+    try {
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
+      if (error) {
+        setErrorText(error.message);
+        return;
+      }
+      setResetSent(true);
+      setInfoText(copy.resetSent);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!supabaseReady) return;
@@ -270,6 +308,19 @@ export function LoginClient({ nextPath }: LoginClientProps) {
             />
           </div>
 
+          {isLogin && !resetSent ? (
+            <div className="mt-2 text-right">
+              <button
+                type="button"
+                onClick={() => void onResetPassword()}
+                disabled={loading}
+                className="text-xs text-slate-500 underline-offset-2 transition-all hover:text-blue-400 hover:underline disabled:opacity-50"
+              >
+                {copy.reset}
+              </button>
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={loading}
@@ -282,6 +333,12 @@ export function LoginClient({ nextPath }: LoginClientProps) {
 
         {errorText ? <p className="mt-4 text-sm text-rose-300">{errorText}</p> : null}
         {infoText ? <p className="mt-4 text-sm text-emerald-300">{infoText}</p> : null}
+        {errorText && isLogin && errorText.includes("Invalid login") ? (
+          <p className="mt-1 text-xs text-slate-500">{copy.loginFailedHint}</p>
+        ) : null}
+        {infoText === copy.signupCheckEmail ? (
+          <p className="mt-1 text-xs text-slate-500">{copy.resendVerify}</p>
+        ) : null}
 
         <div className="mt-8 text-center">
           <p className="text-xs text-slate-500">

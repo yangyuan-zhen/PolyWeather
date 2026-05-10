@@ -210,3 +210,24 @@
   font-size: 13px;
   line-height: 1.7;
 }
+
+.root :global(.panel-loading-hint) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgba(77, 163, 255, 0.06);
+  border: 1px solid rgba(77, 163, 255, 0.1);
+  color: var(--color-accent-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.root :global(.panel-loading-hint.timed-out) {
+  background: rgba(245, 158, 11, 0.06);
+  border-color: rgba(245, 158, 11, 0.16);
+  color: var(--color-signal-warning);
+  font-size: 12px;
+}

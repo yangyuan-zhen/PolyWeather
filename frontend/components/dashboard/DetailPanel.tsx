@@ -277,6 +277,15 @@ export function DetailPanel({
               </span>
             </div>
           )}
+          {panelSyncTimedOut && (
+            <div className="panel-loading-hint timed-out" role="alert">
+              <span>
+                {locale === "en-US"
+                  ? "Sync is taking longer than expected. Data shown may be incomplete."
+                  : "同步时间较长，当前展示的数据可能不完整。"}
+              </span>
+            </div>
+          )}
           <div className="panel-meta">
             <span className={clsx("risk-badge", panelRiskLevel)}>
               {getRiskBadgeLabel(panelRiskLevel, locale)}

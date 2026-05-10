@@ -353,12 +353,25 @@ function ScanTerminalScreen() {
       <div className={scanTerminalRootClassName}>
         <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
           <main className="scan-data-grid">
+            <div className="scan-topbar">
+              <div className="scan-topbar-title">
+                <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
+                <span>
+                  {isEn
+                    ? "Start from the map, then open city cards to verify weather evidence"
+                    : "从地图选城市，再打开决策卡验证天气证据"}
+                </span>
+              </div>
+              <div className="scan-topbar-actions">
+                <span className="scan-topbar-time">{userLocalTime}</span>
+              </div>
+            </div>
             <div className="scan-loading-state">
               <LoadingSignal
                 title={isEn ? "Preparing decision workspace" : "正在准备决策工作台"}
                 description={
                   isEn
-                    ? "Checking access, city context and today’s tradable weather windows."
+                    ? "Checking access, city context and today's tradable weather windows."
                     : "正在检查权限、城市上下文和今日可交易天气窗口。"
                 }
               />
@@ -461,6 +474,17 @@ function ScanTerminalScreen() {
               <li>{isEn ? "HKO observatory AI read" : "香港天文台观测 AI 解读"}</li>
               <li>{isEn ? "Smoother scrolling experience" : "滚动体验优化"}</li>
             </ul>
+            <button
+              type="button"
+              className="scan-announcement-dismiss"
+              aria-label={isEn ? "Dismiss" : "关闭"}
+              onClick={() => {
+                localStorage.setItem("polyweather_v156_announcement_seen_at", String(Date.now() + 90 * 24 * 60 * 60 * 1000));
+                setShowAnnouncement(false);
+              }}
+            >
+              ✕
+            </button>
           </section>
           ) : null}
 
@@ -534,6 +558,14 @@ function ScanTerminalScreen() {
                   {isEn ? "Scan failed" : "扫描失败"}
                 </div>
                 <div className="scan-empty-copy">{staleReason}</div>
+                <button
+                  type="button"
+                  className="scan-retry-button"
+                  onClick={() => refreshScanTerminalManually()}
+                >
+                  <RefreshCw size={13} />
+                  {isEn ? "Retry" : "重试"}
+                </button>
               </div>
             ) : (
               renderMainView()

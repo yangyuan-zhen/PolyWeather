@@ -148,6 +148,32 @@
   padding: 7px 10px;
 }
 
+.root :global(.scan-announcement-dismiss) {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.root :global(.scan-announcement-dismiss:hover) {
+  background: rgba(148, 163, 184, 0.22);
+  color: #e2e8f0;
+}
+
+.root :global(.scan-upgrade-announcement) {
+  position: relative;
+}
+
 .root :global(.scan-ghost-button),
 .root :global(.scan-cta-ghost),
 .root :global(.scan-theme-button),
