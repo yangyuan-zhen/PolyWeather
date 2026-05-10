@@ -508,6 +508,12 @@ def _probability_summary() -> Dict[str, Any]:
             records.append(rec)
         if records:
             drift = check_calibration_drift(records)
+            if drift.get("drifted"):
+                logger.warning(
+                    "Calibration drift detected: {} — {}",
+                    drift.get("warning") or "CRPS degraded",
+                    f"delta={drift.get('delta_pct')}% samples={drift.get('sample_count')}",
+                )
     except Exception:
         pass
     return {
