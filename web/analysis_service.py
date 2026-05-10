@@ -1819,6 +1819,10 @@ def _analyze(
             )
         except Exception:
             obs_time_str = str(obs_t)[:16]
+    if not obs_time_str and current_source == "amos":
+        amos_obs_time = amos_data.get("observation_time")
+        if amos_obs_time:
+            obs_time_str = _format_observation_time_local(amos_obs_time, int(utc_offset or 0))
     if not obs_time_str and current_source == "nmc":
         nmc_fallback = _fetch_nmc_current_fallback(city, use_fahrenheit=is_f)
         obs_time_str = _format_observation_time_local(
@@ -2458,15 +2462,15 @@ def _analyze(
             "report_time": metar.get("report_time") if metar else None,
             "receipt_time": metar.get("receipt_time") if metar else None,
             "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
-            "wind_speed_kt": _sf(live_mc.get("wind_speed_kt")),
+            "wind_speed_kt": _sf(amos_data.get("wind_kt")) if current_source == "amos" else _sf(live_mc.get("wind_speed_kt")),
             "wind_dir": _sf(live_mc.get("wind_dir")),
             "humidity": _sf(live_mc.get("humidity")),
             "cloud_desc": metar.get("cloud_desc") if metar else None,
             "visibility_mi": _sf(live_mc.get("visibility_mi")),
             "wx_desc": live_mc.get("wx_desc"),
-            "raw_metar": live_mc.get("raw_metar"),
-            "source_label": "METAR",
-            "stale_for_today": bool(metar) and not metar_current_is_today,
+            "raw_metar": amos_data.get("raw_metar") if current_source == "amos" else live_mc.get("raw_metar"),
+            "source_label": "AMOS" if current_source == "amos" else "METAR",
+            "stale_for_today": False if current_source == "amos" else (bool(metar) and not metar_current_is_today),
             "last_observation_local_date": metar.get("observation_local_date") if metar else None,
             "current_local_date": local_date_str,
         },
