@@ -88,6 +88,7 @@ def _build_terminal_row(
         "trading_region": market_region["key"],
         "trading_region_label": market_region["label_en"],
         "trading_region_label_zh": market_region["label_zh"],
+        "trading_region_sort": market_region.get("sort_order", 0),
         "tz_offset_seconds": tz_offset,
         "selected_date": selected_date or None,
         "local_date": data.get("local_date"),

@@ -51,22 +51,22 @@ def normalize_scan_terminal_filters(
     }
 
 
-def market_region_from_tz_offset(tz_offset_seconds: Any) -> Dict[str, str]:
-    tz_offset = safe_int(tz_offset_seconds, 0)
-    if tz_offset <= -7200:
-        return {
-            "key": "americas",
-            "label_en": "Americas",
-            "label_zh": "美洲",
-        }
-    if tz_offset >= 14400:
-        return {
-            "key": "asia_pacific",
-            "label_en": "Asia-Pacific",
-            "label_zh": "亚太",
-        }
-    return {
-        "key": "europe_africa",
-        "label_en": "Europe / Africa",
-        "label_zh": "欧洲 / 非洲",
-    }
+def market_region_from_tz_offset(tz_offset_seconds: Any) -> Dict[str, object]:
+    """Map UTC offset to geographic region with an east-to-west sort order.
+
+    Sort order follows the sun: 1=East Asia → 7=North America.
+    """
+    tz_hours = safe_int(tz_offset_seconds, 0) / 3600.0
+    if tz_hours >= 8:
+        return {"key": "east_asia", "label_en": "East Asia", "label_zh": "东亚", "sort_order": 1}
+    if tz_hours >= 7:
+        return {"key": "southeast_asia", "label_en": "Southeast Asia", "label_zh": "东南亚", "sort_order": 2}
+    if tz_hours >= 5:
+        return {"key": "central_asia", "label_en": "Central / South Asia", "label_zh": "中亚 / 南亚", "sort_order": 3}
+    if tz_hours >= 3:
+        return {"key": "west_asia", "label_en": "West Asia", "label_zh": "西亚", "sort_order": 4}
+    if tz_hours >= 0:
+        return {"key": "europe_africa", "label_en": "Europe / Africa", "label_zh": "欧洲 / 非洲", "sort_order": 5}
+    if tz_hours >= -5:
+        return {"key": "south_america", "label_en": "South America", "label_zh": "南美洲", "sort_order": 6}
+    return {"key": "north_america", "label_en": "North America", "label_zh": "北美洲", "sort_order": 7}

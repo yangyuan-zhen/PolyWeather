@@ -151,6 +151,10 @@ export function getPhaseUrgency(row: ScanOpportunityRow) {
 export function sortRowsByUserTime(rows: ScanOpportunityRow[]) {
   const focus = getMarketFocus(rows);
   return [...rows].sort((left, right) => {
+    const rl = Number(left.trading_region_sort) || 0;
+    const rr = Number(right.trading_region_sort) || 0;
+    if (rl !== rr) return rl - rr;
+
     if (focus) {
       const leftFocusRank = getRowMarketRegion(left) === focus.key ? 0 : 1;
       const rightFocusRank = getRowMarketRegion(right) === focus.key ? 0 : 1;

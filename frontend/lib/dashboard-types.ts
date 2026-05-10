@@ -451,6 +451,7 @@ export interface ScanOpportunityRow {
   trading_region?: string | null;
   trading_region_label?: string | null;
   trading_region_label_zh?: string | null;
+  trading_region_sort?: number | null;
   tz_offset_seconds?: number | null;
   selected_date?: string | null;
   local_date?: string | null;

@@ -16,7 +16,6 @@ import historyModalStyles from "./HistoryModal.module.css";
 import modalChromeStyles from "./ModalChrome.module.css";
 import scanTerminalStyles from "./ScanTerminal.module.css";
 import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
-import scanTerminalCalendarStyles from "./ScanTerminalCalendar.module.css";
 import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
 import scanTerminalDetailStyles from "./ScanTerminalDetail.module.css";
 import scanTerminalFiltersStyles from "./ScanTerminalFilters.module.css";
@@ -41,7 +40,6 @@ export const scanRootClass = clsx(
   scanTerminalStateStyles.root,
   scanTerminalOpportunityStyles.root,
   scanTerminalCardStyles.root,
-  scanTerminalCalendarStyles.root,
   scanTerminalMobileStyles.root,
   scanTerminalLightThemeStyles.root,
   detailChromeStyles.root,

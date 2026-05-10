@@ -30,7 +30,6 @@ import type {
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
-import { CalendarView } from "@/components/dashboard/scan-terminal/CalendarView";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
@@ -46,7 +45,7 @@ import {
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 
-type ContentView = "analysis" | "map" | "calendar";
+type ContentView = "analysis" | "map";
 
 const CityDetailPanel = dynamic(
   () =>
@@ -235,12 +234,6 @@ function ScanTerminalScreen() {
     store.selectedDetail,
   ]);
 
-  useEffect(() => {
-    if (!store.proAccess.loading && !isPro && activeView === "calendar") {
-      setActiveView("map");
-    }
-  }, [activeView, isPro, store.proAccess.loading]);
-
   const resolvedView: ContentView = activeView;
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
   const activeDetailRow =
@@ -350,16 +343,6 @@ function ScanTerminalScreen() {
             </div>
           </div>
         </div>
-      );
-    }
-    if (resolvedView === "calendar") {
-      return (
-        <CalendarView
-          rows={timeSortedRows}
-          locale={locale}
-          selectedRowId={selectedRowId}
-          onSelectRow={handleSelectRow}
-        />
       );
     }
     return null;
@@ -507,22 +490,6 @@ function ScanTerminalScreen() {
                 >
                   {isEn ? "Decision Cards" : "城市决策卡"}
                 </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "calendar"}
-                  className={resolvedView === "calendar" ? "active" : ""}
-                  title={!isPro ? (isEn ? "Pro forecast calendar required" : "日历预测需 Pro") : undefined}
-                  onClick={() => {
-                    if (!isPro) {
-                      openScanPaywall();
-                      return;
-                    }
-                    setActiveView("calendar");
-                  }}
-                >
-                  {isEn ? "Calendar View" : "日历视图"}
-                </button>
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
@@ -550,8 +517,8 @@ function ScanTerminalScreen() {
                     disabled={scanLoading}
                     title={
                       isEn
-                        ? "Force refresh decision cards and calendar"
-                        : "强制刷新决策卡和日历视图"
+                        ? "Force refresh decision cards"
+                        : "强制刷新决策卡"
                     }
                   >
                     <RefreshCw size={14} className={scanLoading ? "spin" : undefined} />
