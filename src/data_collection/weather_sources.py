@@ -15,17 +15,21 @@ from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.russia_station_sources import RussiaStationSourceMixin
 from src.data_collection.nmc_sources import NmcSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
+from src.data_collection.amos_station_sources import AmosStationSourceMixin
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, KmaStationSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, KmaStationSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin):
     """
     Multi-source weather data collector
 
     Supports:
-    - OpenWeatherMap (free, fast updates)
-    - Weather Underground (Polymarket settlement source)
-    - Visual Crossing (rich historical data)
-    - NOAA Aviation Weather (METAR - airport observations)
+    - Open-Meteo (global forecast + multi-model ensemble)
+    - METAR/TAF (aviation weather observations)
+    - AMOS (Korean runway-level airport sensors — RKSI, RKPK)
+    - NWS (US National Weather Service)
+    - MGM (Turkish Meteorological Service)
+    - KMA / JMA / NMC / HKO / CWA (country official networks)
+    - Polymarket (weather derivative markets)
     """
 
     from src.data_collection.city_registry import CITY_REGISTRY
@@ -891,6 +895,21 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             results["mgm_nearby"] = official_rows
         results["nearby_source"] = "kma"
 
+    def _attach_korean_amos_data(
+        self, results: Dict, city_lower: str, use_fahrenheit: bool
+    ) -> None:
+        """Fetch AMOS runway-level observations for Seoul and Busan."""
+        if city_lower not in ("seoul", "busan"):
+            return
+        try:
+            amos_data = self.fetch_amos_official_current(
+                city_lower, use_fahrenheit=use_fahrenheit
+            )
+            if amos_data:
+                results["amos"] = amos_data
+        except Exception as exc:
+            logger.debug("AMOS attach failed city={}: {}", city_lower, exc)
+
     def _attach_russia_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1019,6 +1038,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
@@ -1061,6 +1081,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_korea_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
