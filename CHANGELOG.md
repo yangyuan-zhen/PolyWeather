@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.6.0 - 2026-05-10
+
+- 全面修复前端 UI 设计审查 15 项问题：消除工程债务、统一 token 体系、提升可维护性
+- CSS 架构：消除 !important 滥用（134→49，仅保留 Leaflet/图表所必需项）、浅色主题重构为 `html.light` 选择器体系
+- 统一断点体系：18→10（480/640/768/960/1024/1200/1280/1360/1440/1680），对齐 Tailwind 标准
+- CSS 变量迁移：10 个文件中数百处硬编码颜色（#4DA3FF/#E6EDF3/#9FB2C7/#6B7A90）替换为 token 变量
+- 字体系统修复：13 个文件中所有非标准 font-weight（760/850/860/880/950）映射为 Inter 支持值
+- 移除未加载的 Geist 字体声明、提升文字对比度 #6B7A90→#7D8FA3
+- 修复 accent-green 类错误渲染为蓝色、accent-primary 与 accent-secondary 相同值问题
+- 创建 scan-root-styles.ts 桶文件，将 22 个 CSS Module 导入合并为 1 个
+- 添加全局 :focus-visible 轮廓环、跳过链接、Tab ARIA 属性
+- 添加统一的 empty/error/retry 状态组件、prefers-reduced-motion 支持
+- 去重 @keyframes：spin 4→1、loading-spin 2→0、pulse-pending 移至全局
+- 添加 CSS 渐变品牌 Logo、按钮层级文档化
+- 移除 dead code（1,697 行）：public/static/style.css + public/legacy/index.html
+- Dashboard.module.css 本地变量桥接至全局 token
+- 清理冗余文档：移除 FRONTEND_REDESIGN_REPORT.md、TECH_DEBT.md 重复文件、AGENTS.md
+- 参考：docs/frontend-ui-design-review.md 完整修复记录
+
 ## 1.5.5 - 2026-04-27
 
 - Dashboard 新增 v1.5.5 升级公告，提示所有会员已额外延长 7 天，并集中说明 DeepSeek 机场报文解读、日历行动视图、本地时间峰值窗口和 AI 证据护栏

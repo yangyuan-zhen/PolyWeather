@@ -48,6 +48,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - `/ops` now exposes cache bucket counts, summary cache hit / miss rate, and prewarm runtime heartbeat.
 - Intraday commentary can optionally use `Groq` as a bilingual rewrite layer, while rule-based commentary remains the fallback.
 - Vercel frontend guidance now includes cost controls for analytics, eager fetches, and edge-side scanner blocking.
+- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (68→6 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/frontend-ui-design-review.md` for the full audit trail.
 
 ## License & Commercial Boundary
 

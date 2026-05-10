@@ -106,7 +106,7 @@ curl http://127.0.0.1:8000/metrics
 | `src/database/` | SQLite-based runtime state, DB manager, daily/truth/training feature repositories |
 | `web/` | FastAPI app, routes (~65K), analysis service (~130K), scan terminal service (~56K), AI scan modules |
 | `frontend/app/` | Next.js App Router pages (dashboard, account, auth, docs, ops, probabilities, scan) |
-| `frontend/components/dashboard/` | Dashboard UI components (map, sidebar, detail panel, modals, charts, scan terminal) |
+| `frontend/components/dashboard/` | Dashboard UI components (map, sidebar, detail panel, modals, charts, scan terminal). `scan-root-styles.ts` is the CSS Module barrel, combining 22 module roots into one pre-composed className |
 | `frontend/lib/` | Shared client logic: types, API client, chart utils, i18n, dashboard utils |
 | `frontend/hooks/` | React hooks: dashboard store (global state), Leaflet map, chart helper |
 | `scripts/` | Operational scripts: probability calibration training, backfills, payment reconciliation, prewarm worker |
@@ -136,6 +136,9 @@ This repo uses the **Lore Commit Protocol** — structured decision records with
 
 - Never use Unicode escape sequences (`\uXXXX`) in source code; write characters directly in UTF-8 encoding.
 - When modifying UI components, update both **dark-mode and light-mode CSS files** in the same edit batch.
+- **CSS Variables First**: Prefer `var(--color-*)` / `var(--color-signal-*)` tokens over hardcoded hex values. The token system is defined in `globals.css` with light-theme overrides under `html.light`.
+- **Avoid `!important`**: Only use it for Leaflet map overrides (inline style conflict) and chart canvas sizing. For light-theme overrides, use `html.light .root` prefix for higher specificity.
+- **New CSS Modules**: Add the module root class to `scan-root-styles.ts` barrel file instead of importing it separately in `ScanTerminalDashboard.tsx`.
 
 ## Quality Gates (MANDATORY)
 
@@ -144,6 +147,7 @@ Before marking any task as complete, you MUST:
 1. **Type check** — Run `npx tsc --noEmit` (frontend) or `python -m ruff check .` (backend) on modified files
 2. **No Unicode escapes** — Verify that NO `\uXXXX` sequences were introduced; if found, revert and fix
 3. **Dual-theme CSS** — For any UI change, confirm BOTH the dark CSS module AND `ScanTerminalLightTheme.module.css` were updated
-4. **Show the diff** — Output `git diff --stat` and test results before declaring success
+4. **No new hardcoded palette colors** — Use `var(--color-*)` token references instead of `#4DA3FF` / `#E6EDF3` / `#9FB2C7` / `#6B7A90` hex values
+5. **Show the diff** — Output `git diff --stat` and test results before declaring success
 
 If any gate fails, fix it BEFORE reporting success.
