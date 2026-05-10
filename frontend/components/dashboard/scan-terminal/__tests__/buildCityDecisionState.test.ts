@@ -42,7 +42,7 @@ export function runTests() {
   assert.equal(breakout.urgency, "now");
   assert.equal(breakout.recommendation, "watch");
   assert.match(breakout.primaryReason, /实测已突破模型上沿/);
-  assert.doesNotMatch(breakout.primaryReason, /等待确认|等待下一报文/);
+  assert.match(breakout.primaryReason, /建议关注偏高温/);
   assert.ok(breakout.badges.some((badge) => badge.label === "实测突破"));
 
   const marketUnavailable = buildCityDecisionState({
