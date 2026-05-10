@@ -1225,3 +1225,67 @@
   font-weight: 800;
   line-height: 1.5;
 }
+
+/* ── AMOS runway observation panel ── */
+.root :global(.scan-amos-runway-panel) {
+  margin-top: 14px;
+  border: 1px solid rgba(77, 163, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(11, 18, 32, 0.24);
+  padding: 14px;
+}
+
+.root :global(.scan-amos-source-tag) {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(77, 163, 255, 0.12);
+  color: var(--color-accent-secondary);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.root :global(.scan-amos-runway-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.root :global(.scan-amos-runway-card) {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(77, 163, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(11, 18, 32, 0.38);
+}
+
+.root :global(.scan-amos-runway-label) {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-accent-secondary);
+  letter-spacing: 0.02em;
+}
+
+.root :global(.scan-amos-runway-temp) {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-primary);
+  line-height: 1.15;
+}
+
+.root :global(.scan-amos-runway-temp small) {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.root :global(.scan-amos-runway-detail) {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}

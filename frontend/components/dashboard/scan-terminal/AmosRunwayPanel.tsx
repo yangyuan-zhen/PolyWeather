@@ -1,0 +1,86 @@
+"use client";
+
+import type { AmosData } from "@/lib/dashboard-types";
+
+function runwayTempClass(temp: number | null | undefined): string {
+  if (temp == null || !Number.isFinite(temp)) return "";
+  if (temp >= 40) return "temp-extreme-hot";
+  if (temp <= -5) return "temp-extreme-cold";
+  return "";
+}
+
+export function AmosRunwayPanel({
+  amos,
+  isEn,
+  tempSymbol,
+}: {
+  amos: AmosData;
+  isEn: boolean;
+  tempSymbol: string;
+}) {
+  const runwayPairs = amos.runway_obs?.runway_pairs;
+  const runwayTemps = amos.runway_obs?.temperatures ?? amos.runway_temps;
+  const runwayWinds = amos.runway_obs?.wind_speeds;
+  const runwayVis = amos.runway_obs?.visibility_mor;
+  const runwayRvr = amos.runway_obs?.rvr;
+
+  if (!runwayPairs || !runwayTemps || runwayPairs.length === 0) return null;
+
+  const pairs = runwayPairs.slice(0, runwayTemps.length);
+
+  return (
+    <div className="scan-amos-runway-panel">
+      <div className="scan-ai-city-section-title">
+        {isEn ? "Runway Observations" : "跑道实测"} · {amos.station_label || amos.icao || ""}
+        <span className="scan-amos-source-tag">
+          {amos.temp_source === "metar"
+            ? isEn ? "Official METAR" : "官方 METAR"
+            : isEn ? "Runway median" : "跑道中位数"}
+        </span>
+      </div>
+      <div className="scan-amos-runway-grid">
+        {pairs.map(([rwyA, rwyB], idx) => {
+          const temps = runwayTemps[idx];
+          const wind = runwayWinds?.[idx];
+          const vis = runwayVis?.[idx];
+          const rvr = runwayRvr?.[idx];
+          return (
+            <div key={`${rwyA}/${rwyB}`} className="scan-amos-runway-card">
+              <div className="scan-amos-runway-label">
+                {rwyA}/{rwyB}
+              </div>
+              {temps ? (
+                <div className={`scan-amos-runway-temp ${runwayTempClass(temps[0])}`}>
+                  {temps[0].toFixed(1)}{tempSymbol}
+                  {temps[1] != null ? (
+                    <small>
+                      {isEn ? " Dew " : " 露点 "}
+                      {temps[1].toFixed(1)}{tempSymbol}
+                    </small>
+                  ) : null}
+                </div>
+              ) : null}
+              {vis != null && vis > 0 ? (
+                <div className="scan-amos-runway-detail">
+                  {isEn ? "Vis " : "能见度 "}
+                  {vis >= 10000 ? (isEn ? "≥10km" : "≥10公里") : `${vis}m`}
+                </div>
+              ) : null}
+              {rvr != null && rvr > 0 ? (
+                <div className="scan-amos-runway-detail">
+                  RVR {rvr >= 2000 ? "≥2000m" : `${rvr}m`}
+                </div>
+              ) : null}
+              {wind ? (
+                <div className="scan-amos-runway-detail">
+                  {wind[0].toFixed(1)}kt
+                  {wind[1] != null ? ` (${wind[1].toFixed(1)}–${wind[2].toFixed(1)})` : ""}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

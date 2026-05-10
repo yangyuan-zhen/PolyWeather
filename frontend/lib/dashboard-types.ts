@@ -910,6 +910,36 @@ export interface CityDetail {
   source_forecasts?: SourceForecasts;
   market_scan?: MarketScan;
   intraday_meteorology?: IntradayMeteorology;
+  amos?: AmosData | null;
+}
+
+export interface AmosData {
+  temp?: number | null;
+  temp_c?: number | null;
+  dew?: number | null;
+  dew_c?: number | null;
+  pressure_hpa?: number | null;
+  wind_kt?: number | null;
+  temp_source?: string | null;
+  runway_temps?: Array<[number, number]> | null;
+  source?: string | null;
+  source_label?: string | null;
+  icao?: string | null;
+  station_label?: string | null;
+  raw_metar?: string | null;
+  raw_taf?: string | null;
+  runway_obs?: {
+    runway_pairs?: Array<[string, string]> | null;
+    temperatures?: Array<[number, number]> | null;
+    pressures_hpa?: number[] | null;
+    wind_directions?: Array<[number, number, number]> | null;
+    wind_speeds?: Array<[number, number, number]> | null;
+    visibility_mor?: number[] | null;
+    rvr?: number[] | null;
+  } | null;
+  observation_source?: string | null;
+  observation_source_zh?: string | null;
+  observation_time?: string | null;
 }
 
 export interface HistoryPoint {

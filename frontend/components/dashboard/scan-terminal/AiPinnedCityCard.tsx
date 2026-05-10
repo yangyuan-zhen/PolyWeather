@@ -5,6 +5,7 @@ import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
+import { AmosRunwayPanel } from "@/components/dashboard/scan-terminal/AmosRunwayPanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
 import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
@@ -649,6 +650,14 @@ export function AiPinnedCityCard({
                   tempSymbol={tempSymbol}
                 />
               </div>
+
+              {detail?.amos ? (
+                <AmosRunwayPanel
+                  amos={detail.amos}
+                  isEn={isEn}
+                  tempSymbol={tempSymbol}
+                />
+              ) : null}
 
               <ModelEvidencePanel detail={detail} isEn={isEn} />
             </div>

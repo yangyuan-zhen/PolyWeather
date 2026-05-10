@@ -982,3 +982,31 @@ html.light .root :global(.scan-terminal.light .scan-retry-button) {
 html.light .root :global(.scan-terminal.light .scan-retry-button:hover) {
   background: rgba(37, 99, 235, 0.14);
 }
+
+/* ── AMOS runway panel light overrides ── */
+html.light .root :global(.scan-terminal.light .scan-amos-runway-panel) {
+  background: rgba(37, 99, 235, 0.03);
+  border-color: rgba(37, 99, 235, 0.12);
+}
+
+html.light .root :global(.scan-terminal.light .scan-amos-runway-card) {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.08);
+}
+
+html.light .root :global(.scan-terminal.light .scan-amos-runway-label) {
+  color: #2563EB;
+}
+
+html.light .root :global(.scan-terminal.light .scan-amos-runway-temp) {
+  color: #0F172A;
+}
+
+html.light .root :global(.scan-terminal.light .scan-amos-source-tag) {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563EB;
+}
+
+html.light .root :global(.scan-terminal.light .scan-amos-runway-detail) {
+  color: #64748B;
+}
