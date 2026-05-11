@@ -10,7 +10,7 @@ from src.bot.command_guard import CommandGuard
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.services.deb_command_service import DebCommandService
-from src.bot.settings import DEB_QUERY_COST
+from src.bot.settings import DEB_DAILY_FREE_LIMIT, DEB_QUERY_COST
 
 def _is_deb_command(message: Any) -> bool:
     command = extract_command_name(
@@ -75,6 +75,9 @@ class DebCommandHandler:
                 )
                 return
 
+            if not self.guard.check_daily_query_limit(message, "deb", DEB_DAILY_FREE_LIMIT):
+                trace.set_status("blocked", "daily_query_limit")
+                return
             if not self.guard.ensure_access_and_points(message, DEB_QUERY_COST, "/deb"):
                 trace.set_status("blocked", "guard_rejected")
                 return

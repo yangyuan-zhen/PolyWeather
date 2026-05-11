@@ -286,6 +286,10 @@ class DBManager:
             self._ensure_column(conn, "users", "weekly_points_week", "TEXT")
             self._ensure_column(conn, "users", "supabase_user_id", "TEXT")
             self._ensure_column(conn, "users", "supabase_email", "TEXT")
+            self._ensure_column(conn, "users", "welcome_bonus_claimed", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "users", "daily_city_queries", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "users", "daily_deb_queries", "INTEGER DEFAULT 0")
+            self._ensure_column(conn, "users", "daily_queries_date", "TEXT")
             # Migrate legacy one-to-one binding column into mapping table.
             conn.execute(
                 """
@@ -785,6 +789,16 @@ class DBManager:
             (int(telegram_id), wk, pts, datetime.now().isoformat()),
         )
 
+    @staticmethod
+    def _read_bonus_config(env_key: str, fallback: int) -> int:
+        raw = os.getenv(env_key)
+        if raw is None or raw.strip() == "":
+            return fallback
+        try:
+            return max(0, int(raw))
+        except Exception:
+            return fallback
+
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
         existing = {
             row[1]
@@ -1253,7 +1267,8 @@ class DBManager:
             )
             cursor = conn.execute(
                 """
-                SELECT points, daily_points, daily_points_date, weekly_points, weekly_points_week, last_message_at
+                SELECT points, daily_points, daily_points_date, weekly_points, weekly_points_week, last_message_at,
+                       message_count, welcome_bonus_claimed
                 FROM users WHERE telegram_id = ?
                 """,
                 (telegram_id,),
@@ -1334,6 +1349,7 @@ class DBManager:
             remaining = max(0, daily_cap - daily_points)
             points_added = min(max(0, points_to_add), remaining)
             if points_added <= 0:
+                conn.commit()
                 return {
                     "awarded": False,
                     "reason": "daily_cap",
@@ -1341,23 +1357,38 @@ class DBManager:
                     "weekly_points": weekly_points,
                 }
 
+            welcome_bonus = 0
+            first_message_bonus = 0
+
+            is_first_message_of_day = daily_points == 0
+            is_new_user = int(row["message_count"] or 0) == 0 and not int(row["welcome_bonus_claimed"] or 0)
+
+            if is_new_user:
+                welcome_bonus = self._read_bonus_config("POLYWEATHER_BOT_WELCOME_BONUS", 20)
+            if is_first_message_of_day:
+                first_message_bonus = self._read_bonus_config("POLYWEATHER_BOT_FIRST_MESSAGE_BONUS", 2)
+
+            total_added = points_added + welcome_bonus + first_message_bonus
+
             conn.execute("""
-                UPDATE users 
+                UPDATE users
                 SET message_count = message_count + 1,
                     points = points + ?,
                     daily_points = ?,
                     daily_points_date = ?,
                     weekly_points = ?,
                     weekly_points_week = ?,
-                    last_message_at = ?
+                    last_message_at = ?,
+                    welcome_bonus_claimed = MAX(welcome_bonus_claimed, ?)
                 WHERE telegram_id = ?
             """, (
-                points_added,
-                daily_points + points_added,
+                total_added,
+                daily_points + total_added,
                 today_str,
-                weekly_points + points_added,
+                weekly_points + total_added,
                 week_key,
                 now.isoformat(),
+                1 if welcome_bonus > 0 else 0,
                 telegram_id,
             ))
             conn.execute(
@@ -1372,17 +1403,55 @@ class DBManager:
                 conn,
                 telegram_id=telegram_id,
                 week_key=week_key,
-                points=weekly_points + points_added,
+                points=weekly_points + total_added,
             )
             conn.commit()
             return {
                 "awarded": True,
                 "reason": "ok",
                 "points_added": points_added,
-                "daily_points": daily_points + points_added,
-                "weekly_points": weekly_points + points_added,
+                "welcome_bonus": welcome_bonus,
+                "first_message_bonus": first_message_bonus,
+                "total_added": total_added,
+                "daily_points": daily_points + total_added,
+                "weekly_points": weekly_points + total_added,
                 "weekly_week": week_key,
             }
+
+    def track_query_usage(self, telegram_id: int, query_type: str) -> Dict[str, Any]:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        column = "daily_city_queries" if query_type == "city" else "daily_deb_queries"
+        limit = (
+            self._read_bonus_config("POLYWEATHER_BOT_CITY_DAILY_FREE_LIMIT", 10)
+            if query_type == "city"
+            else self._read_bonus_config("POLYWEATHER_BOT_DEB_DAILY_FREE_LIMIT", 10)
+        )
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                f"SELECT {column}, daily_queries_date FROM users WHERE telegram_id = ?",
+                (telegram_id,),
+            ).fetchone()
+            if not row:
+                return {"allowed": False, "reason": "user_missing", "used": 0, "limit": limit}
+
+            date = row["daily_queries_date"] or ""
+            used = int(row[column] or 0) if date == today_str else 0
+
+            if used >= limit:
+                return {"allowed": False, "reason": "daily_limit", "used": used, "limit": limit}
+
+            new_used = used + 1
+            conn.execute(
+                f"""
+                UPDATE users
+                SET {column} = ?, daily_queries_date = ?
+                WHERE telegram_id = ?
+                """,
+                (new_used, today_str, telegram_id),
+            )
+            conn.commit()
+            return {"allowed": True, "used": new_used, "limit": limit}
 
     def spend_points(self, telegram_id: int, amount: int) -> Dict[str, Any]:
         if amount <= 0:
@@ -1623,6 +1692,36 @@ class DBManager:
                 (wk, wk, top_n),
             ).fetchall()
             return [dict(row) for row in rows]
+
+    def get_weekly_participation_candidates(self, week_key: str, exclude_ids: set):
+        wk = self._safe_week_key(week_key)
+        if not wk:
+            return []
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT *
+                FROM (
+                    SELECT
+                        u.telegram_id,
+                        u.username,
+                        COALESCE(a.points,
+                            CASE
+                                WHEN u.weekly_points_week = ? THEN COALESCE(u.weekly_points, 0)
+                                ELSE 0
+                            END
+                        ) AS weekly_points
+                    FROM users u
+                    LEFT JOIN weekly_points_archive a
+                        ON a.telegram_id = u.telegram_id
+                        AND a.week_key = ?
+                ) ranked
+                WHERE weekly_points > 0
+                """,
+                (wk, wk),
+            ).fetchall()
+            return [dict(row) for row in rows if int(row["telegram_id"] or 0) not in exclude_ids]
 
     def is_weekly_reward_settled(self, week_key: str) -> bool:
         wk = self._safe_week_key(week_key)

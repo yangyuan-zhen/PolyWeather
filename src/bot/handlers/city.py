@@ -10,7 +10,7 @@ from src.bot.command_guard import CommandGuard
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.services.city_command_service import CityCommandService
-from src.bot.settings import CITY_QUERY_COST
+from src.bot.settings import CITY_DAILY_FREE_LIMIT, CITY_QUERY_COST
 
 def _is_city_command(message: Any) -> bool:
     command = extract_command_name(
@@ -77,6 +77,9 @@ class CityCommandHandler:
                 return
 
             city_name = str(resolved.city_name)
+            if not self.guard.check_daily_query_limit(message, "city", CITY_DAILY_FREE_LIMIT):
+                trace.set_status("blocked", "daily_query_limit")
+                return
             if not self.guard.ensure_access_and_points(message, CITY_QUERY_COST, "/city"):
                 trace.set_status("blocked", "guard_rejected")
                 return

@@ -2602,7 +2602,7 @@ export function AccountCenter() {
                     Top 1
                   </span>
                   <span className="text-xs font-bold text-yellow-500">
-                    +500 积分 & 7天Pro
+                    +200 积分 & 7天Pro
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
@@ -2613,7 +2613,7 @@ export function AccountCenter() {
                     Top 2-3
                   </span>
                   <span className="text-xs font-bold text-slate-300">
-                    +300 积分 & 3天Pro
+                    +100 积分 & 3天Pro
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 bg-white/5 rounded-xl border border-white/5">
@@ -2624,7 +2624,7 @@ export function AccountCenter() {
                     Top 4-10
                   </span>
                   <span className="text-xs font-bold text-orange-400">
-                    +150 积分
+                    +50 积分
                   </span>
                 </div>
               </div>
@@ -2632,7 +2632,7 @@ export function AccountCenter() {
             <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
               <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500 leading-normal italic">
-                积分规则：群内有效发言（自动防刷检测）。每周一零点结算并重置周积分榜。
+                积分规则：群内有效发言（自动防刷检测）+ 每日首条发言额外奖励。每周一零点结算周榜，所有活跃用户均享参与奖。
               </p>
             </div>
           </div>

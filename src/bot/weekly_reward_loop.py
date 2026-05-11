@@ -14,6 +14,11 @@ except Exception:  # pragma: no cover - Python < 3.9 fallback
 import requests
 from loguru import logger
 
+from src.bot.settings import (
+    WEEKLY_ACTIVE_BONUS,
+    WEEKLY_ACTIVE_THRESHOLD,
+    WEEKLY_PARTICIPATION_BONUS,
+)
 from src.database.db_manager import DBManager
 from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
@@ -69,11 +74,11 @@ def _compute_target_week_key(
 
 def _reward_rule_for_rank(rank: int) -> Optional[Tuple[int, int]]:
     if rank == 1:
-        return 500, 7
+        return 200, 7
     if rank in (2, 3):
-        return 300, 3
+        return 100, 3
     if 4 <= rank <= 10:
-        return 150, 0
+        return 50, 0
     return None
 
 
@@ -170,10 +175,12 @@ def _render_settle_report(
     week_key: str,
     winners: List[Dict[str, Any]],
     skipped: int,
+    participation_count: int = 0,
+    active_count: int = 0,
 ) -> str:
     lines = [f"🏆 <b>PolyWeather 周榜奖励已结算 ({week_key})</b>", "────────────────────"]
     if not winners:
-        lines.append("本周无有效活跃用户，未发放奖励。")
+        lines.append("本周无上榜用户。")
     else:
         medals = {1: "🥇", 2: "🥈", 3: "🥉"}
         for row in winners:
@@ -186,6 +193,11 @@ def _render_settle_report(
             lines.append(f"{medal} {name}: +{points_bonus} 积分{pro_text}")
     if skipped > 0:
         lines.append(f"（重复发放保护已生效，跳过 {skipped} 条）")
+    if participation_count > 0 or active_count > 0:
+        lines.append("────────────────────")
+        lines.append(f"🎁 参与奖 +{WEEKLY_PARTICIPATION_BONUS} 积分: {participation_count} 人")
+        if active_count > 0:
+            lines.append(f"🔥 活跃奖 +{WEEKLY_ACTIVE_BONUS} 积分 (周积分≥{WEEKLY_ACTIVE_THRESHOLD}): {active_count} 人")
     return "\n".join(lines)
 
 
@@ -302,8 +314,39 @@ def _runner(bot: Any) -> None:
                 "winner_count": len(winners),
                 "skipped_count": skipped,
                 "winners": winners,
+                "participation_count": 0,
+                "active_count": 0,
                 "settled_at": datetime.now(timezone.utc).isoformat(),
             }
+
+            winner_ids = {int(w.get("telegram_id") or 0) for w in winners}
+            participants = db.get_weekly_participation_candidates(week_key, winner_ids)
+            participation_count = 0
+            active_count = 0
+            for p in participants:
+                tid = int(p.get("telegram_id") or 0)
+                if tid <= 0:
+                    continue
+                weekly_pts = int(p.get("weekly_points") or 0)
+                is_active = weekly_pts >= WEEKLY_ACTIVE_THRESHOLD
+                bonus = WEEKLY_PARTICIPATION_BONUS + (WEEKLY_ACTIVE_BONUS if is_active else 0)
+                if bonus <= 0:
+                    continue
+                applied = db.apply_weekly_reward_payout(
+                    week_key=week_key,
+                    telegram_id=tid,
+                    rank=0,
+                    username=str(p.get("username") or f"user_{tid}"),
+                    points_bonus=bonus,
+                    pro_days=0,
+                )
+                if applied:
+                    participation_count += 1
+                    if is_active:
+                        active_count += 1
+
+            summary["participation_count"] = participation_count
+            summary["active_count"] = active_count
             db.mark_weekly_reward_settled(
                 week_key=week_key,
                 winners_count=len(winners),
@@ -316,7 +359,13 @@ def _runner(bot: Any) -> None:
                 skipped,
             )
             if announce and chat_ids:
-                message = _render_settle_report(week_key=week_key, winners=winners, skipped=skipped)
+                message = _render_settle_report(
+                    week_key=week_key,
+                    winners=winners,
+                    skipped=skipped,
+                    participation_count=participation_count,
+                    active_count=active_count,
+                )
                 for chat_id in chat_ids:
                     try:
                         bot.send_message(

@@ -7,7 +7,9 @@ from typing import Any, Dict, Optional, Tuple
 from loguru import logger
 
 from src.bot.settings import (
+    CITY_DAILY_FREE_LIMIT,
     CITY_QUERY_COST,
+    DEB_DAILY_FREE_LIMIT,
     DEB_QUERY_COST,
     MESSAGE_COOLDOWN_SEC,
     MESSAGE_DAILY_CAP,
@@ -176,8 +178,8 @@ class BotIOLayer:
         return (
             "🚀 <b>PolyWeather 天气查询机器人</b>\n\n"
             "可用指令:\n"
-            f"/city [城市名] 或 /pwcity [城市名] - 查询城市天气预测与实测 (消耗 {CITY_QUERY_COST} 积分)\n"
-            f"/deb [城市名] 或 /pwdeb [城市名] - 查看 DEB 融合预测准确率 (消耗 {DEB_QUERY_COST} 积分)\n"
+            f"/city [城市名] 或 /pwcity [城市名] - 查询城市天气预测与实测 (免费, 每日 {CITY_DAILY_FREE_LIMIT} 次)\n"
+            f"/deb [城市名] 或 /pwdeb [城市名] - 查看 DEB 融合预测准确率 (免费, 每日 {DEB_DAILY_FREE_LIMIT} 次)\n"
             "/markets - 私聊机器人查看当前市场监控摘要\n"
             "/top - 查看积分排行榜\n"
             "/id - 获取当前聊天的 Chat ID\n\n"
@@ -189,8 +191,9 @@ class BotIOLayer:
             "📌 <i>私有频道用于接收自动推送；手动查看市场概览请私聊机器人发送 <code>/markets</code>。</i>\n\n"
             "🔐 <i>/city 与 /deb 仅限官方群成员使用。</i>\n\n"
             "示例: <code>/city 伦敦</code> 或 <code>/pwcity 伦敦</code>\n"
-            f"💡 <i>提示: 每日签到(有效发言满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
-            f"每日上限 {MESSAGE_DAILY_CAP} 分。</i>"
+            f"💡 <i>提示: 群内有效发言(满 {MESSAGE_MIN_LENGTH} 字)获得 <b>{MESSAGE_POINTS}</b> 积分，"
+            f"每日上限 {MESSAGE_DAILY_CAP} 分。"
+            f"首次发言额外奖励 <b>20</b> 积分，每日首条消息 +<b>2</b> 积分。</i>"
         )
 
     def build_points_rank_text(self, user: Any) -> str:
@@ -225,6 +228,10 @@ class BotIOLayer:
                 f"{weekly_rank}/{ranked_count}" if weekly_rank and ranked_count > 0 else "未上榜"
             )
 
+            daily_queries_date = str(user_info.get("daily_queries_date") or "")
+            city_used = int(user_info.get("daily_city_queries") or 0) if daily_queries_date == today_str else 0
+            deb_used = int(user_info.get("daily_deb_queries") or 0) if daily_queries_date == today_str else 0
+
             rank_text += "────────────────────\n"
             rank_text += (
                 "👤 <b>我的状态：</b>\n"
@@ -233,7 +240,7 @@ class BotIOLayer:
                 f"┣ 本周排名: <code>{weekly_rank_text}</code>\n"
                 f"┣ 本周发言积分: <code>{weekly_points}</code>\n"
                 f"┣ 今日发言积分: <code>{daily_points}/{MESSAGE_DAILY_CAP}</code>\n"
-                f"┗ /city 消耗: <code>{CITY_QUERY_COST}</code> | /deb 消耗: <code>{DEB_QUERY_COST}</code>"
+                f"┗ /city 免费 ({city_used}/{CITY_DAILY_FREE_LIMIT}) | /deb 免费 ({deb_used}/{DEB_DAILY_FREE_LIMIT})"
             )
         return rank_text
 

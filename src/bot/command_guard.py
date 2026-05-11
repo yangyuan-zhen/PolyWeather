@@ -79,6 +79,24 @@ class CommandGuard:
         self._reply_group_required(message)
         return False
 
+    def check_daily_query_limit(self, message: Any, query_type: str, limit: int) -> bool:
+        user = message.from_user
+        result = self.io_layer.db.track_query_usage(user.id, query_type)
+        if result.get("allowed"):
+            return True
+        if result.get("reason") == "user_missing":
+            self.io_layer.bot.reply_to(message, "⚠️ 用户未注册，请先在群内发言。")
+            return False
+        if result.get("reason") == "daily_limit":
+            used = int(result.get("used") or 0)
+            self.io_layer.send_query_message(
+                message,
+                f"❌ 今日 <b>/{query_type}</b> 免费次数已用完 ({used}/{limit})\n请明天再来，或通过群内发言赚取积分。",
+                parse_mode="HTML",
+            )
+            return False
+        return True
+
     def ensure_access_and_points(self, message: Any, cost: int, command_label: str) -> bool:
         if not self.ensure_group_member(message, command_label):
             return False
