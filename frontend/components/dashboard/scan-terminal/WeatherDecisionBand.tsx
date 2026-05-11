@@ -40,10 +40,6 @@ export function WeatherDecisionBand({
           <b>{decisionView.targetRange}</b>
         </span>
         <span>
-          {isEn ? "Confidence" : "信心"}
-          <b>{decisionView.confidence}</b>
-        </span>
-        <span>
           {isEn ? "Path delta" : "路径偏差"} <b>{paceDeltaText}</b>
         </span>
         <span>
