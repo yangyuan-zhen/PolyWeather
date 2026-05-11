@@ -99,7 +99,7 @@ Web API 会把这部分元数据挂到：
 - RDPS
 - HRDPS
 
-亚洲城市更依赖本地观测增强层，例如 JMA、KMA、NMC、HKO、CWA、METAR、TAF。
+亚洲城市更依赖本地观测增强层，例如 JMA、AMOS（首尔/釜山）、NMC、HKO、CWA、METAR、TAF。
 
 ## 4. DEB 家族去重
 

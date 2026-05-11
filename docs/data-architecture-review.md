@@ -13,7 +13,7 @@
 Open-Meteo (预报+多模型) ─┐
 METAR/TAF (航空气象)     ─┤
 NWS (美国) / MGM (土耳其) ─┤
-JMA/KMA/NMC/HKO/CWA     ─┤
+JMA/AMOS/NMC/HKO/CWA    ─┤
 Wunderground / NOAA      ─┤
 Polymarket Gamma/CLOB    ─┤
                               ├─ WeatherDataCollector            ├─ dashboard-client.ts
@@ -45,7 +45,7 @@ Polymarket Gamma/CLOB    ─┤
 | NWS | 国家预报 | 美国 | 按请求 |
 | MGM | 国家官方 | 土耳其 | 300s |
 | ECMWF/GFS/ICON/GEM/JMA | 多模型 NWP | 全球 | 300s |
-| HKO/CWA/NOAA/KMA/NMC | 结算观测 | 特定国家 | 300s |
+| HKO/CWA/NOAA/AMOS/NMC | 结算观测 | 特定国家 | 60s (AMOS) / 300s |
 | Wunderground | 个人气象站 | 全球备用 | 按请求 |
 | Polymarket Gamma | 市场发现 | 所有温度市场 | 60s |
 | Polymarket CLOB | 订单簿 | 匹配市场 | 30s |
