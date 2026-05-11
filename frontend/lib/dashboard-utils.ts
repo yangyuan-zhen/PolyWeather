@@ -209,6 +209,10 @@ export function pickMapNearbyStations(detail: CityDetail) {
     .trim()
     .toLowerCase();
 
+  if (city === "seoul" || city === "busan") {
+    return [];
+  }
+
   if (city === "ankara") {
     return pickAnkaraNearbyStations(stations);
   }
