@@ -653,7 +653,7 @@ class DBManager:
             numerator = int(summary[numerator_key]["unique_actors"] or 0)
             if denominator <= 0:
                 return None
-            return round((numerator / denominator) * 100, 1)
+            return round(numerator / denominator, 3)
 
         return {
             "window_days": safe_days,
