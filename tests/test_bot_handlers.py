@@ -18,7 +18,10 @@ def _message(text: str):
 
 def test_city_handler_missing_city_shows_usage():
     bot = SimpleNamespace()
-    guard = SimpleNamespace(ensure_access_and_points=Mock(return_value=True))
+    guard = SimpleNamespace(
+        check_daily_query_limit=Mock(return_value=True),
+        ensure_access_and_points=Mock(return_value=True),
+    )
     city_service = SimpleNamespace(resolve_city=Mock(), build_report=Mock())
     io_layer = SimpleNamespace(send_query_message=Mock())
     handler = CityCommandHandler(
@@ -37,7 +40,10 @@ def test_city_handler_missing_city_shows_usage():
 
 def test_city_handler_happy_path_pushes_progress_and_report():
     bot = SimpleNamespace()
-    guard = SimpleNamespace(ensure_access_and_points=Mock(return_value=True))
+    guard = SimpleNamespace(
+        check_daily_query_limit=Mock(return_value=True),
+        ensure_access_and_points=Mock(return_value=True),
+    )
     city_service = SimpleNamespace(
         resolve_city=Mock(
             return_value=CityResolveResult(
@@ -68,7 +74,10 @@ def test_city_handler_happy_path_pushes_progress_and_report():
 
 def test_deb_handler_history_missing_returns_hint():
     bot = SimpleNamespace()
-    guard = SimpleNamespace(ensure_access_and_points=Mock(return_value=True))
+    guard = SimpleNamespace(
+        check_daily_query_limit=Mock(return_value=True),
+        ensure_access_and_points=Mock(return_value=True),
+    )
     deb_service = SimpleNamespace(
         resolve_city=Mock(return_value="ankara"),
         has_history=Mock(return_value=False),
