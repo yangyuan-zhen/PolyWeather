@@ -150,23 +150,6 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
       showLine: false,
     });
 
-    const ci = chartData.currentIndex;
-    if (ci != null && ci >= 0 && ci < (chartData.times?.length || 0)) {
-      datasets.push({
-        backgroundColor: "rgba(77, 163, 255, 0.5)",
-        borderColor: "rgba(77, 163, 255, 0.5)",
-        borderDash: [3, 4],
-        borderWidth: 1.2,
-        data: [
-          { x: ci, y: chartData.max },
-          { x: ci, y: chartData.min },
-        ],
-        label: "Now",
-        pointRadius: 0,
-        showLine: true,
-      });
-    }
-
     return {
       data: {
         datasets,
