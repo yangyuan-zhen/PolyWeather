@@ -21,10 +21,12 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-04-27)
+## Product Status (2026-05-11)
 
 - Subscription live: `Pro Monthly 5 USDC`.
-- Points redemption live: `500 points = 1 USDC`, max `3 USDC` off.
+- Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
+- `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, max `3 USDC`).
+- Weekly leaderboard rewards restructured: smaller point bonuses for winners (200/100/50), all active users receive participation rewards.
 - Onchain checkout live: Polygon contract checkout (USDC / USDC.e).
 - Auto-reconciliation live: event listener + periodic confirm loop.
 - Ops dashboard live: `/ops` for memberships, leaderboard, manual point grants, and payment incident triage.
@@ -42,7 +44,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
-- Official nearby-network layer now covers `MGM` (Turkey), `CMA/NMC` (Mainland China), `JMA AMeDAS` (Japan), `KMA` (Korea), `HKO` (Hong Kong), and `CWA` (Taiwan).
+- Official nearby-network layer now covers `MGM` (Turkey), `CMA/NMC` (Mainland China), `JMA AMeDAS` (Japan), `AMOS` (Korea, runway-level, Seoul/Busan), `HKO` (Hong Kong), and `CWA` (Taiwan).
 - Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
 - Dashboard prewarm is now supported through a dedicated worker / cron path, with runtime status exposed in `/api/system/status` and `/ops`.
 - `/ops` now exposes cache bucket counts, summary cache hit / miss rate, and prewarm runtime heartbeat.
@@ -62,7 +64,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 ## Core Capabilities
 
-- Aggregates observations and forecasts for 52 monitored cities.
+- Aggregates observations and forecasts for 51 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
 - Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution), with `LGBM` metadata surfaced when the calibrated engine is active.
 - Maps weather view to Polymarket quotes for mispricing scan.
@@ -71,7 +73,7 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
-- Adds official nearby-network enhancement layers for China, Japan, Korea, Hong Kong, Taiwan, and Turkey without replacing airport settlement anchors.
+- Adds official nearby-network and runway-level enhancement layers for China, Japan, Korea (AMOS runway sensors for Seoul/Busan), Hong Kong, Taiwan, and Turkey without replacing airport settlement anchors.
 - Adds optional dashboard prewarm worker so hot cities can be refreshed before user clicks.
 
 ## Reference Architecture
@@ -89,7 +91,7 @@ flowchart LR
     WX --> MGM["MGM (Turkey station network)"]
     WX --> OM["Open-Meteo"]
     WX --> JMA["JMA AMeDAS (Japan)"]
-    WX --> KMA["KMA (Korea)"]
+    WX --> AMOS["AMOS runway sensors (Korea)"]
     WX --> HKO["HKO / CWA / NOAA / Official settlement sources"]
 
     API --> ANA["DEB + Trend + Probability + Market Scan"]
@@ -99,7 +101,7 @@ flowchart LR
     API --> PREWARM["Dashboard Prewarm API / Worker"]
 ```
 
-## Monitored Cities (52)
+## Monitored Cities (51)
 
 - Europe / Middle East / Africa: Ankara, Istanbul, Moscow, London, Paris, Munich, Milan, Warsaw, Madrid, Tel Aviv, Amsterdam, Helsinki, Lagos, Cape Town, Jeddah
 - APAC: Seoul, Busan, Hong Kong, Lau Fau Shan, Taipei, Shanghai, Beijing, Qingdao, Wuhan, Chengdu, Chongqing, Shenzhen, Guangzhou, Singapore, Tokyo, Kuala Lumpur, Jakarta, Manila, Wellington
@@ -241,5 +243,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## Version
 
-- Version: `v1.5.4`
-- Last Updated: `2026-04-19`
+- Version: `v1.6.0`
+- Last Updated: `2026-05-11`

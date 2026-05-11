@@ -14,10 +14,12 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-04-27）
+## 当前产品状态（2026-05-11）
 
 - 已上线订阅制：`Pro 月付 5 USDC`。
-- 已上线积分抵扣：`500 积分 = 1 USDC`，最多抵扣 `3 USDC`。
+- 已上线积分体系：群内发言赚分 + 首次发言欢迎奖励 (+20) + 每日首条消息奖励 (+2) + 每周全员参与奖。
+- `/city` 与 `/deb` 已改为免费（每日各 10 次）；积分可用于支付抵扣（`500 分 = 1 USDC`，最多抵 `3 USDC`）。
+- 周榜奖励已改造：降低赢家积分加成 (200/100/50)，所有周活跃用户均享参与奖。
 - 已上线链上支付：Polygon 合约支付（USDC / USDC.e）。
 - 已上线自动补单：事件监听 + 周期确认双链路。
 - 已上线支付运行态与审计接口：`/api/payments/runtime`。
@@ -30,7 +32,7 @@
   - `MGM`（土耳其）
   - `CMA/NMC`（中国内地）
   - `JMA AMeDAS`（日本）
-  - `KMA`（韩国）
+  - `AMOS`（韩国，跑道级传感器，首尔/釜山）
   - `HKO`（香港）
   - `CWA`（台湾）
 - 东京现已接入羽田 `JMA AMeDAS` 10 分钟温度作为官方增强层。
@@ -59,14 +61,14 @@
 
 ## 核心能力
 
-- 聚合 52 个监控城市的实测与预报数据。
+- 聚合 51 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
 - 输出结算导向校准概率分布（`mu` + 温度桶），并在 LGBM 生效时展示校准引擎元数据。
 - 将模型观点映射到 Polymarket 行情，做错价扫描。
 - 地图城市决策卡把 AI 机场报文解读、最高温中枢、完整市场温度桶和模型-市场差放在同一张卡中展示。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
 - 支付链路具备事件重放、SQLite 审计事件与 RPC 容灾能力。
-- 官方增强层支持按国家 provider 统一接入，但不替代机场主站、METAR 或明确官方结算站。
+- 官方增强层与跑道级传感器支持按国家 provider 统一接入（含韩国 AMOS 首尔/釜山跑道实测），不替代机场主站、METAR 或明确官方结算站。
 - 支持后台预热热点城市，降低用户点击城市后的冷启动成本。
 
 ## 参考架构
@@ -82,7 +84,7 @@ flowchart LR
     WX --> METAR["Aviation Weather（METAR）"]
     WX --> MGM["MGM（土耳其站网）"]
     WX --> JMA["JMA AMeDAS（日本）"]
-    WX --> KMA["KMA（韩国）"]
+    WX --> AMOS["AMOS 跑道传感器（韩国）"]
     WX --> OM["Open-Meteo"]
     WX --> HKO["HKO / CWA / NOAA 等官方结算源"]
 
@@ -95,7 +97,7 @@ flowchart LR
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
-## 监控城市（52）
+## 监控城市（51）
 
 - 欧洲/中东/非洲：Ankara、Istanbul、Moscow、London、Paris、Munich、Milan、Warsaw、Madrid、Tel Aviv、Amsterdam、Helsinki、Lagos、Cape Town、Jeddah
 - 亚太：Seoul、Busan、Hong Kong、Lau Fau Shan、Taipei、Shanghai、Beijing、Wuhan、Chengdu、Chongqing、Shenzhen、Guangzhou、Singapore、Tokyo、Kuala Lumpur、Jakarta、Manila、Wellington
@@ -258,5 +260,5 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 
 ## 当前版本
 
-- 版本：`v1.5.4`
-- 文档最后更新：`2026-04-19`
+- 版本：`v1.6.0`
+- 文档最后更新：`2026-05-11`
