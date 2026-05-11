@@ -333,8 +333,6 @@ def _amos_parse_runway_table(text: str) -> dict[str, Any]:
 class AmosStationSourceMixin:
     """Mixin that adds AMOS runway-level data fetching to WeatherDataCollector."""
 
-    amos_cache_ttl_sec: int = 300  # 5 minutes
-
     def _amos_get_page(self, icao: str) -> Optional[str]:
         """Fetch the AMOS page.
 

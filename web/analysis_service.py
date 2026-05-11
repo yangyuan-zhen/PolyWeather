@@ -18,6 +18,7 @@ from web.core import (
     _cache,
     CACHE_TTL,
     CACHE_TTL_ANKARA,
+    CACHE_TTL_KOREAN_AMOS,
     CITIES,
     CITY_RISK_PROFILES,
     SETTLEMENT_SOURCE_LABELS,
@@ -177,8 +178,16 @@ def get_analysis_cache_stats() -> Dict[str, Any]:
     return stats
 
 
+KOREAN_AMOS_CITIES = {"seoul", "busan"}
+
+
 def _analysis_ttl_for_city(city: str) -> int:
-    return CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
+    city_lower = city.lower()
+    if city_lower in TURKISH_MGM_CITIES:
+        return CACHE_TTL_ANKARA
+    if city_lower in KOREAN_AMOS_CITIES:
+        return CACHE_TTL_KOREAN_AMOS
+    return CACHE_TTL
 
 
 def _analysis_cache_key(city: str, detail_mode: str = "full") -> str:
@@ -1617,7 +1626,7 @@ def _analyze(
 ) -> Dict[str, Any]:
     """Fetch, analyse, and return structured weather data for one city."""
     # Check cache
-    ttl = CACHE_TTL_ANKARA if city.lower() in TURKISH_MGM_CITIES else CACHE_TTL
+    ttl = _analysis_ttl_for_city(city)
     normalized_detail_mode_raw = str(detail_mode or "full").strip().lower()
     if normalized_detail_mode_raw == "panel":
         normalized_detail_mode = "panel"

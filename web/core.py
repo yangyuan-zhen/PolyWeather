@@ -86,6 +86,7 @@ SETTLEMENT_SOURCE_LABELS: Dict[str, str] = {
 _cache: Dict[str, Dict] = {}
 CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60
+CACHE_TTL_KOREAN_AMOS = 60
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _PROBABILITY_EVALUATION_REPORT = os.path.join(
     _PROJECT_ROOT,
