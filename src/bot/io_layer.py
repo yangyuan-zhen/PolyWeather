@@ -8,9 +8,7 @@ from loguru import logger
 
 from src.bot.settings import (
     CITY_DAILY_FREE_LIMIT,
-    CITY_QUERY_COST,
     DEB_DAILY_FREE_LIMIT,
-    DEB_QUERY_COST,
     MESSAGE_COOLDOWN_SEC,
     MESSAGE_DAILY_CAP,
     MESSAGE_MIN_LENGTH,
