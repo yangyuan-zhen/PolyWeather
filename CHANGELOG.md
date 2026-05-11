@@ -54,7 +54,7 @@
 - 右侧详情面板识别稀疏 detail / 单日 forecast 中间态，并显示同步占位卡，避免用户把未补齐数据误认为完整结果
 - 概率区改为“校准模型概率”：有 LGBM 时展示 LGBM 校准概率；模型共识与市场价格降级为辅助参考
 - 模型层补齐 DWD ICON、ECMWF AIFS、ECCC GEM/GDPS/RDPS/HRDPS 等开放模型说明，并明确 AIFS 不称作“AI 预报”
-- 新增 / 补齐 Manila、Karachi、Masroor Air Base 等城市说明；机场市场以 METAR / 机场主站为结算锚点，Wunderground 仅作为历史页面或参考入口
+- 新增 / 补齐 Manila、Karachi 等城市说明；机场市场以 METAR / 机场主站为结算锚点，Wunderground 仅作为历史页面或参考入口
 - 历史对账、模型栈、LGBM、监控、前端 README 与网页 `/docs` 文档同步更新到当前产品口径
 
 ## 1.5.3 - 2026-04-10

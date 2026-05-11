@@ -161,13 +161,6 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
-  "masroor air base": [
-    {
-      label: "OPMR METAR",
-      href: "https://aviationweather.gov/data/metar/?id=OPMR&decoded=1&taf=1",
-      kind: "metar",
-    },
-  ],
   istanbul: [
     {
       label: "MGM",

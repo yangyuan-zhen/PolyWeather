@@ -418,7 +418,7 @@ export function getTemperatureChartData(
   const minPlausibleObservationTemp = (() => {
     const name = String(detail.name || "").trim().toLowerCase();
     const icao = String(detail.risk?.icao || "").trim().toUpperCase();
-    if (name === "karachi" || name === "masroor air base" || icao === "OPKC" || icao === "OPMR") {
+    if (name === "karachi" || icao === "OPKC") {
       return detail.temp_symbol === "°F" ? 41 : 5;
     }
     return null;

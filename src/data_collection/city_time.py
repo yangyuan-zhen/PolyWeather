@@ -41,7 +41,6 @@ CITY_TIME_ZONES = {
     "lucknow": "Asia/Kolkata",
     "madrid": "Europe/Madrid",
     "manila": "Asia/Manila",
-    "masroor air base": "Asia/Karachi",
     "mexico city": "America/Mexico_City",
     "miami": "America/New_York",
     "milan": "Europe/Rome",

@@ -99,7 +99,6 @@ const CITY_REGION_FALLBACK: Record<string, MarketRegionKey> = {
   jakarta: "asia_pacific",
   manila: "asia_pacific",
   karachi: "asia_pacific",
-  "masroor air base": "asia_pacific",
   tokyo: "asia_pacific",
   wellington: "asia_pacific",
   lucknow: "asia_pacific",
