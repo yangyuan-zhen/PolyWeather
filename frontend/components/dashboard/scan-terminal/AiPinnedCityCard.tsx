@@ -655,12 +655,14 @@ export function AiPinnedCityCard({
                 />
               </div>
 
-              <AmosRunwayPanel
-                amos={detail?.amos}
-                isEn={isEn}
-                tempSymbol={tempSymbol}
-                airportCurrent={detail?.airport_current ?? null}
-              />
+              {(detail?.name === "seoul" || detail?.name === "busan") ? (
+                <AmosRunwayPanel
+                  amos={detail?.amos}
+                  isEn={isEn}
+                  tempSymbol={tempSymbol}
+                  airportCurrent={detail?.airport_current ?? null}
+                />
+              ) : null}
 
               <ModelEvidencePanel detail={detail} isEn={isEn} />
             </div>
