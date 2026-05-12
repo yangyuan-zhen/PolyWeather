@@ -752,9 +752,9 @@ def _build_airport_status_message(
     if not airport_row:
         airport_row = mgm_nearby[0] if mgm_nearby else {}
     station_temp = airport_row.get("temp") if airport_row else None
+    current = city_weather.get("current") or {}
     # Fallback to city current temp if airport station not found
     if station_temp is None:
-        current = city_weather.get("current") or {}
         station_temp = current.get("temp")
 
     lines = [header, ""]
@@ -763,8 +763,14 @@ def _build_airport_status_message(
             lines.append(f"{r1}/{r2} {t:.1f}°C")
     elif station_temp is not None:
         lines.append(f"{station_temp:.1f}°C")
+    # Today's observed high
+    max_so_far = current.get("max_so_far")
+    max_temp_time = current.get("max_temp_time")
+    if max_so_far is not None:
+        time_str = f" ({max_temp_time})" if max_temp_time else ""
+        lines.append(f"日内最高 {max_so_far:.1f}°C{time_str}")
     if deb_pred is not None:
-        lines.append(f"DEB 最高 {deb_pred:.1f}°C")
+        lines.append(f"DEB 预测 {deb_pred:.1f}°C")
     return "\n".join(lines)
 
 
