@@ -690,8 +690,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB"}
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -723,6 +723,26 @@ def _save_airport_state(state: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+def _fetch_arome_temp() -> Optional[float]:
+    """Fetch latest AROME France HD 15-min temperature for LFPB from Open-Meteo."""
+    try:
+        import requests
+        url = (
+            "https://api.open-meteo.com/v1/forecast?"
+            "latitude=48.9673&longitude=2.4277"
+            "&models=meteofrance_arome_france_hd"
+            "&minutely_15=temperature_2m"
+            "&timezone=Europe/Paris"
+            "&forecast_minutely_15=2"
+        )
+        resp = requests.get(url, timeout=8)
+        data = resp.json()
+        temps = (data.get("minutely_15") or {}).get("temperature_2m") or []
+        return float(temps[-1]) if temps else None
+    except Exception:
+        return None
+
+
 def _build_airport_status_message(
     city: str,
     city_weather: Dict[str, Any],
@@ -731,7 +751,7 @@ def _build_airport_status_message(
 ) -> str:
     _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
-                   "istanbul": "Airport"}
+                   "istanbul": "Airport", "paris": "Le Bourget"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
@@ -792,6 +812,7 @@ _AIRPORT_PUSH_INTERVAL = {
     "helsinki": 600,   # FMI 10-min
     "amsterdam": 600,  # KNMI 10-min
     "istanbul": 600,   # MGM ~10-min
+    "paris": 900,      # AROME HD 15-min model
 }
 _DEB_PROXIMITY_THRESHOLD_C = 3.0
 
@@ -827,6 +848,12 @@ def _run_high_freq_airport_cycle(
 
             current = city_weather.get("current") or {}
             current_temp = current.get("temp")
+            # Paris: use AROME 15-min model temp instead of METAR
+            if city == "paris":
+                arome_temp = _fetch_arome_temp()
+                if arome_temp is not None:
+                    current_temp = arome_temp
+                    city_weather.setdefault("current", {})["temp"] = arome_temp
             if current_temp is None or deb_pred is None:
                 continue
 
@@ -834,8 +861,8 @@ def _run_high_freq_airport_cycle(
             proximity = deb_pred - current_temp
             in_window = proximity <= _DEB_PROXIMITY_THRESHOLD_C
 
-            # Stop if past peak: current below daily max in recent hour and declining
-            if in_window:
+            # Stop if past peak (skip for Paris: no obs_log for AROME model data)
+            if in_window and city != "paris":
                 try:
                     from src.database.db_manager import DBManager
                     icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")

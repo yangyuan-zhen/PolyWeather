@@ -11,6 +11,7 @@
 | 伊斯坦布尔 | 伊斯坦布尔机场 | 17058 | MGM (`servis.mgm.gov.tr`) | 5-15 分钟 | 机场站点实时温度 | 免费 |
 | 赫尔辛基 | Vantaa | EFHK | FMI (`opendata.fmi.fi`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 阿姆斯特丹 | Schiphol | EHAM | KNMI (`dataplatform.knmi.nl`) | 10 分钟 | 机场站点实时温度 | 免费（需注册） |
+| 巴黎 | Le Bourget | LFPB | AROME HD (`api.open-meteo.com`) | 15 分钟 | 模型预报（非实测） | 免费 |
 
 ## 推送机制
 
@@ -43,7 +44,6 @@ Seoul / Incheon 16:03
 
 | 城市 | 原因 |
 |------|------|
-| 巴黎/Le Bourget | Météo-France 注册认证失败 |
 | 马德里/Barajas | AEMET 注册页面失效 |
 | 伦敦/Heathrow | Met Office 仅 1 小时更新 |
 | 慕尼黑 | DWD 延迟 ~1 小时 |
