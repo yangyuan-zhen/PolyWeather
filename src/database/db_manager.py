@@ -1861,7 +1861,7 @@ class DBManager:
                  temp_c, wind_kt, pressure_hpa, str(obs_time)),
             )
             conn.execute(
-                "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-2 hours')"
+                "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-24 hours')"
             )
             conn.commit()
 

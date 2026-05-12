@@ -763,12 +763,38 @@ def _build_airport_status_message(
         lines.append(f"当前实测：{station_temp:.1f}°C")
     if deb_pred is not None:
         lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
-    max_so_far = current.get("max_so_far")
-    max_temp_time = current.get("max_temp_time")
+    max_so_far, max_temp_time = _get_airport_daily_high(city)
     if max_so_far is not None:
         time_str = f"（{max_temp_time}）" if max_temp_time else ""
         lines.append(f"今日实测最高：{max_so_far:.1f}°C{time_str}")
     return "\n".join(lines)
+
+
+def _get_airport_daily_high(city: str):
+    """Get today's observed high from airport_obs_log for this city."""
+    icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    if not icao:
+        return None, None
+    try:
+        from src.database.db_manager import DBManager
+        db = DBManager()
+        obs = db.get_airport_obs_recent(icao, minutes=1440)  # last 24h
+        if not obs:
+            return None, None
+        best = max(obs, key=lambda r: r.get("temp_c") or -999)
+        temp_c = best.get("temp_c")
+        obs_time = best.get("obs_time") or ""
+        if temp_c is None:
+            return None, None
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(str(obs_time))
+            time_str = dt.strftime("%H:%M")
+        except Exception:
+            time_str = str(obs_time)[:5] if obs_time else ""
+        return round(float(temp_c), 1), time_str
+    except Exception:
+        return None, None
 
 
 # Per-city push interval matching native data refresh rate (seconds)
