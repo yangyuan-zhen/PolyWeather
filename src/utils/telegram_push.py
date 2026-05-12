@@ -755,6 +755,7 @@ def _build_airport_rapid_change_message(
     city: str,
     rule: Dict[str, Any],
     deb_pred: Optional[float],
+    local_time: str = "",
 ) -> str:
     airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa"}.get(city, city.title())
     runway_pairs = rule.get("runway_pairs") or []
@@ -766,7 +767,8 @@ def _build_airport_rapid_change_message(
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             lines.append(f"{r1}/{r2} {t:.1f}°C")
     else:
-        lines.append(f"当前 {last:.1f}°C")
+        time_suffix = f" ({local_time})" if local_time else ""
+        lines.append(f"当前 {last:.1f}°C{time_suffix}")
     if deb_pred is not None:
         lines.append(f"DEB 预测最高 {deb_pred:.1f}°C")
     return "\n".join(lines)
@@ -826,7 +828,8 @@ def _run_high_freq_airport_cycle(
             rule["runway_pairs"] = runway_data.get("runway_pairs") or []
             rule["runway_temps"] = runway_data.get("temperatures") or []
             rule["wind_kt"] = latest_obs.get("wind_kt")
-            message = _build_airport_rapid_change_message(city, rule, deb_pred)
+            local_time = city_weather.get("local_time") or ""
+            message = _build_airport_rapid_change_message(city, rule, deb_pred, local_time)
 
             sent = False
             for chat_id in chat_ids:
