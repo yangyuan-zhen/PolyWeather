@@ -732,22 +732,24 @@ def _build_airport_status_message(
     deb_pred: Optional[float],
     local_time: str = "",
 ) -> str:
-    label = _AIRPORT_CITY_LABEL.get(city, city.title())
+    en_name = city.title()
+    label = _AIRPORT_CITY_LABEL.get(city, en_name)
+    time_suffix = f" {local_time}" if local_time else ""
+    header = f"{en_name} {label}{time_suffix}"
+
     amos = city_weather.get("amos") or {}
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
-    # Non-AMOS cities: get temp from airport station (stored in mgm_nearby), not METAR
     mgm_nearby = city_weather.get("mgm_nearby") or []
     station_temp = mgm_nearby[0].get("temp") if mgm_nearby else None
 
-    lines = [label, ""]
+    lines = [header, ""]
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             lines.append(f"{r1}/{r2} {t:.1f}°C")
     elif station_temp is not None:
-        time_suffix = f" ({local_time})" if local_time else ""
-        lines.append(f"{station_temp:.1f}°C{time_suffix}")
+        lines.append(f"{station_temp:.1f}°C")
     if deb_pred is not None:
         lines.append(f"DEB 最高 {deb_pred:.1f}°C")
     return "\n".join(lines)
