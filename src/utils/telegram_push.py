@@ -873,9 +873,30 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 pass
 
-            current = city_weather.get("current") or {}
-            current_temp = current.get("temp")
-            # Paris: use AROME 15-min model temp instead of METAR
+            # Extract airport-level temperature (same logic as message builder)
+            amos = city_weather.get("amos") or {}
+            mgm_nearby = city_weather.get("mgm_nearby") or []
+            airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+            airport_row = None
+            for row in mgm_nearby:
+                if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
+                    airport_row = row
+                    break
+            if not airport_row:
+                airport_row = mgm_nearby[0] if mgm_nearby else {}
+            station_temp = airport_row.get("temp") if airport_row else None
+
+            # Use AMOS runway temp or station temp
+            runway_temps = (amos.get("runway_obs") or {}).get("temperatures") or []
+            if runway_temps:
+                valid_temps = [t for (t, _d) in runway_temps if t is not None]
+                if valid_temps:
+                    station_temp = max(valid_temps)
+
+            current_temp = station_temp
+            if current_temp is None:
+                current_temp = (city_weather.get("current") or {}).get("temp")
+            # Paris: AROME model
             if city == "paris":
                 arome_temp = _fetch_arome_temp()
                 if arome_temp is not None:
@@ -888,7 +909,7 @@ def _run_high_freq_airport_cycle(
             proximity = deb_pred - current_temp
             in_window = proximity <= _DEB_PROXIMITY_THRESHOLD_C
 
-            # Stop if past peak (skip for Paris: no obs_log for AROME model data)
+            # Stop if past peak
             if in_window and city != "paris":
                 try:
                     from src.database.db_manager import DBManager
