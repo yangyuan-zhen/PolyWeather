@@ -742,7 +742,16 @@ def _build_airport_status_message(
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     mgm_nearby = city_weather.get("mgm_nearby") or []
-    station_temp = mgm_nearby[0].get("temp") if mgm_nearby else None
+    # Find the specific airport station, not just any nearby station
+    airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    airport_row = None
+    for row in mgm_nearby:
+        if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
+            airport_row = row
+            break
+    if not airport_row:
+        airport_row = mgm_nearby[0] if mgm_nearby else {}
+    station_temp = airport_row.get("temp") if airport_row else None
 
     lines = [header, ""]
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
