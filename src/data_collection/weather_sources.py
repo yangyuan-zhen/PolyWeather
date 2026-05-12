@@ -805,6 +805,19 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not mgm_data:
             return
         results["mgm"] = mgm_data
+        # Log airport obs for high-freq monitoring (Ankara 17128)
+        try:
+            mgm_current = mgm_data.get("current") or {}
+            DBManager().append_airport_obs(
+                icao=str(istno),
+                city=city_lower,
+                temp_c=mgm_current.get("temp"),
+                wind_kt=mgm_current.get("wind_speed_kt"),
+                pressure_hpa=mgm_current.get("pressure"),
+                obs_time=mgm_data.get("obs_time") or datetime.now().isoformat(),
+            )
+        except Exception:
+            logger.exception("airport_obs_log append failed for mgm city={}", city_lower)
         if include_nearby:
             results["nearby_source"] = "mgm"
             nearby = self.fetch_mgm_nearby_stations(province, root_ist_no=istno)

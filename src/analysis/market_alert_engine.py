@@ -813,7 +813,7 @@ def _build_advice_cn(
     return "，".join(parts) + "。"
 
 
-_AIRPORT_ICAO_MAP = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT"}
+_AIRPORT_ICAO_MAP = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128"}
 
 
 def _calc_airport_rapid_temp_change(

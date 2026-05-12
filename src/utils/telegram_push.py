@@ -690,12 +690,11 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128"}
 HIGH_FREQ_PUSH_INTERVAL_SEC = 600
 HIGH_FREQ_MOMENTUM_THRESHOLD_C = 0.5
 HIGH_FREQ_COOLDOWN_SEC = 7200
-AIRPORT_SNAPSHOT_INTERVAL_SEC = 1800
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -758,7 +757,7 @@ def _build_airport_rapid_change_message(
     deb_pred: Optional[float],
 ) -> str:
     city_display = city.title()
-    airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田"}.get(city, city_display)
+    airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa"}.get(city, city_display)
     emoji = "🔥" if rule.get("direction") == "up" else "❄️"
     first = rule.get("first_temp", 0)
     last = rule.get("last_temp", 0)
@@ -781,42 +780,6 @@ def _build_airport_rapid_change_message(
     return "\n".join(lines)
 
 
-def _build_airport_snapshot_message(snapshots: list[dict[str, Any]], local_time: str = "") -> str:
-    flag = {"seoul": "🇰🇷", "busan": "🇰🇷", "tokyo": "🇯🇵"}
-    name = {"seoul": "首尔/仁川 RKSI", "busan": "釜山/金海 RKPK", "tokyo": "东京/羽田 RJTT"}
-
-    lines = [f"🛫 机场实况 {local_time}"]
-    for s in snapshots:
-        city = s.get("city", "")
-        temp = s.get("temp_c")
-        deb = s.get("deb_prediction")
-        runway_pairs = s.get("runway_pairs") or []
-        runway_temps = s.get("runway_temps") or []
-        lines.append("")
-        header = f"{flag.get(city, '')} {name.get(city, city)}"
-
-        # Show individual runway pair temps for Seoul/Busan
-        if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
-            runway_lines = []
-            for (r1, r2), (t, d) in zip(runway_pairs, runway_temps):
-                dew_str = f" / 露点 {d:.1f}°C" if d is not None else ""
-                runway_lines.append(f"{r1}/{r2}: {t:.1f}°C{dew_str}")
-            line = header + "\n" + "\n".join(runway_lines)
-        elif temp is not None:
-            line = header + f"\n当前 {temp:.1f}°C"
-        else:
-            line = header
-
-        if deb is not None:
-            line += f"\nDEB 预测最高 {deb:.1f}°C"
-        if s.get("wind_kt") is not None:
-            line += f"  |  风 {s['wind_kt']:.0f}kt"
-        if s.get("pressure_hpa") is not None:
-            line += f"  |  QNH {s['pressure_hpa']:.1f} hPa"
-        lines.append(line)
-    return "\n".join(lines)
-
-
 def _run_high_freq_airport_cycle(
     bot: Any,
     config: Dict[str, Any],
@@ -826,9 +789,6 @@ def _run_high_freq_airport_cycle(
     state_dirty = False
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
-
-    snapshots: list[dict[str, Any]] = []
-    snapshot_due = now_ts - int(state.get("last_snapshot_ts") or 0) >= AIRPORT_SNAPSHOT_INTERVAL_SEC
 
     for city in sorted(HIGH_FREQ_AIRPORT_CITIES):
         try:
@@ -844,7 +804,6 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 latest_obs = {}
 
-            # Fetch city_weather once and extract DEB
             city_weather: Dict[str, Any] = {}
             deb_pred: Optional[float] = None
             try:
@@ -856,50 +815,12 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 pass
 
-            # Extract airport-level data from city_weather for snapshot
-            amos = city_weather.get("amos") or {}
-            runway_data = (amos.get("runway_obs") or {}) if amos else {}
-            runway_pairs = runway_data.get("runway_pairs") or []
-            runway_temps = runway_data.get("temperatures") or []
-            # Tokyo JMA data lives in mgm_nearby (set by _attach_japan_official_nearby)
-            mgm_nearby = city_weather.get("mgm_nearby") or []
-            nearby_row = mgm_nearby[0] if mgm_nearby else {}
-            current_temp = (
-                amos.get("temp_c")
-                or nearby_row.get("temp")
-                or latest_obs.get("temp_c")
-                or (city_weather.get("current") or {}).get("temp")
-            )
-            wind_kt = amos.get("wind_kt") or latest_obs.get("wind_kt")
-            pressure_hpa = amos.get("pressure_hpa") or latest_obs.get("pressure_hpa")
-
             # Check high-locked
             if _check_high_locked(city):
-                if snapshot_due:
-                    snapshots.append({
-                        "city": city,
-                        "temp_c": current_temp,
-                        "wind_kt": wind_kt,
-                        "pressure_hpa": pressure_hpa,
-                        "deb_prediction": deb_pred,
-                        "runway_pairs": runway_pairs,
-                        "runway_temps": runway_temps,
-                    })
                 continue
 
             from src.analysis.market_alert_engine import _calc_airport_rapid_temp_change
             rule = _calc_airport_rapid_temp_change(city_weather, "°C")
-
-            if snapshot_due:
-                snapshots.append({
-                    "city": city,
-                    "temp_c": current_temp,
-                    "wind_kt": wind_kt,
-                    "pressure_hpa": pressure_hpa,
-                    "deb_prediction": deb_pred,
-                    "runway_pairs": runway_pairs,
-                    "runway_temps": runway_temps,
-                })
 
             if not rule.get("triggered"):
                 continue
@@ -925,24 +846,6 @@ def _run_high_freq_airport_cycle(
 
         except Exception:
             logger.exception("high freq airport cycle failed for city={}", city)
-
-    if snapshot_due and snapshots:
-        from datetime import timedelta
-        kst_hour = (datetime.utcnow() + timedelta(hours=9)).hour
-        if 8 <= kst_hour < 20:
-            kst_now = datetime.utcnow() + timedelta(hours=9)
-            local_time = kst_now.strftime("%H:%M KST")
-            snap_message = _build_airport_snapshot_message(snapshots, local_time)
-            for chat_id in chat_ids:
-                try:
-                    bot.send_message(chat_id, snap_message)
-                except Exception as exc:
-                    logger.warning("airport snapshot push failed chat_id={}: {}", chat_id, exc)
-            logger.info("airport snapshot pushed cities={}", len(snapshots))
-        else:
-            logger.info("airport snapshot skipped: outside 08:00-20:00 window (KST hour={})", kst_hour)
-        state["last_snapshot_ts"] = now_ts
-        state_dirty = True
 
     return state_dirty
 
