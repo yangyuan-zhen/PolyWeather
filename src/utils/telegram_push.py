@@ -913,7 +913,8 @@ def _run_high_freq_airport_cycle(
         from datetime import timedelta
         kst_hour = (datetime.utcnow() + timedelta(hours=9)).hour
         if 8 <= kst_hour < 20:
-            local_time = datetime.now().strftime("%H:%M CST")
+            kst_now = datetime.utcnow() + timedelta(hours=9)
+            local_time = kst_now.strftime("%H:%M KST")
             snap_message = _build_airport_snapshot_message(snapshots, local_time)
             for chat_id in chat_ids:
                 try:
