@@ -120,3 +120,13 @@
   background: #dbeafe;
   filter: saturate(0.95) brightness(1.12);
 }
+
+/* ── Mobile: allow vertical scrolling ── */
+@media (max-width: 768px) {
+  .root {
+    overflow: auto;
+    height: auto;
+    min-height: 100vh;
+    width: 100%;
+  }
+}
