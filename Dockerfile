@@ -10,8 +10,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_ROOT_USER_ACTION=ignore \
     TZ=UTC
 
-# 安装系统依赖 (如果有必要的包可以取消注释)
-# RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+# 安装系统依赖 (netCDF4 需要 HDF5 + 编译工具)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc libhdf5-dev libnetcdf-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 # 复制 requirements 文件
 COPY requirements.txt .

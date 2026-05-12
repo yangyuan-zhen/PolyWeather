@@ -3,6 +3,7 @@ httpx
 loguru
 pyTelegramBotAPI
 python-dotenv
+netCDF4
 pytz
 numpy
 lightgbm
