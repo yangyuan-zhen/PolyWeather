@@ -757,13 +757,16 @@ def _build_airport_rapid_change_message(
     deb_pred: Optional[float],
 ) -> str:
     airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa"}.get(city, city.title())
+    runway_pairs = rule.get("runway_pairs") or []
+    runway_temps = rule.get("runway_temps") or []
     last = rule.get("last_temp", 0)
 
-    lines = [
-        f"🚨 {airport_label} 温度急变",
-        "",
-        f"当前 {last:.1f}°C",
-    ]
+    lines = [f"🚨 {airport_label} 温度急变", ""]
+    if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+        for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
+            lines.append(f"{r1}/{r2} {t:.1f}°C")
+    else:
+        lines.append(f"当前 {last:.1f}°C")
     if deb_pred is not None:
         lines.append(f"DEB 预测最高 {deb_pred:.1f}°C")
     return "\n".join(lines)
@@ -817,6 +820,11 @@ def _run_high_freq_airport_cycle(
             if last_city_ts and now_ts - last_city_ts < HIGH_FREQ_COOLDOWN_SEC:
                 continue
 
+            # Extract runway temps for AMOS cities
+            amos = city_weather.get("amos") or {}
+            runway_data = (amos.get("runway_obs") or {}) if amos else {}
+            rule["runway_pairs"] = runway_data.get("runway_pairs") or []
+            rule["runway_temps"] = runway_data.get("temperatures") or []
             rule["wind_kt"] = latest_obs.get("wind_kt")
             message = _build_airport_rapid_change_message(city, rule, deb_pred)
 
