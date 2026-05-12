@@ -704,12 +704,6 @@ _AIRPORT_PUSH_STATE_PATH = os.path.join(
 
 
 def _load_airport_state() -> Dict[str, Any]:
-    try:
-        from src.database.runtime_state import STATE_STORAGE_SQLITE, get_state_storage_mode
-        if get_state_storage_mode() == STATE_STORAGE_SQLITE:
-            return _telegram_state_repo.load_state()
-    except Exception:
-        pass
     path = _AIRPORT_PUSH_STATE_PATH
     if not os.path.exists(path):
         return {"last_by_city": {}}
@@ -725,13 +719,6 @@ def _load_airport_state() -> Dict[str, Any]:
 
 
 def _save_airport_state(state: Dict[str, Any]) -> None:
-    try:
-        from src.database.runtime_state import STATE_STORAGE_SQLITE, get_state_storage_mode
-        if get_state_storage_mode() == STATE_STORAGE_SQLITE:
-            _telegram_state_repo.save_state(state)
-            return
-    except Exception:
-        pass
     path = _AIRPORT_PUSH_STATE_PATH
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
