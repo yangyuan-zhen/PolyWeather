@@ -801,7 +801,7 @@ def _build_airport_status_message(
         label = "AROME预报" if city == "paris" else "当前实测"
         lines.append(f"{label}：{station_temp:.1f}°C")
         # Show settlement (rounded-down) temp for HKO floor-rounding cities
-        if city in ("hong kong", "lau fau shan") and station_temp is not None:
+        if city == "hong kong" and station_temp is not None:
             from src.analysis.settlement_rounding import apply_city_settlement
             settled = apply_city_settlement(city, station_temp)
             if settled is not None:
@@ -841,7 +841,59 @@ _AIRPORT_PUSH_INTERVAL = {
     "lau fau shan": 60,  # HKO 1-min
     "taipei": 600,       # CWA ~10-min
 }
-_DEB_PROXIMITY_THRESHOLD_C = 3.0
+# Per-city temperature window threshold (°C below DEB predicted high)
+# Continental airports: wider window (temp rises steadily over land)
+# Maritime airports: narrower (sea breeze moderates temp)
+# Strong sea breeze: tightest (marine air suppresses peak)
+_AIRPORT_HEAT_THRESHOLD = {
+    "seoul": 3.0, "ankara": 3.0, "istanbul": 3.0, "paris": 3.0,
+    "busan": 2.0, "tokyo": 2.0, "amsterdam": 2.0, "helsinki": 2.0,
+    "hong kong": 1.5, "lau fau shan": 1.5, "taipei": 1.5,
+}
+
+
+def _in_peak_time_window(city_weather: Dict[str, Any]) -> bool:
+    """Check if current local time is within the expected peak temperature window."""
+    peak = city_weather.get("peak") or {}
+    first_h = peak.get("first_h")
+    last_h = peak.get("last_h")
+    local_time = city_weather.get("local_time") or ""
+    if first_h is None or not local_time:
+        return False
+    try:
+        current_h, current_m = int(local_time[:2]), int(local_time[3:5])
+        current_minutes = current_h * 60 + current_m
+        # Window: first_h - 2h to last_h + 1.5h
+        start_min = max(0, (first_h - 2) * 60)
+        end_min = min(24 * 60 - 1, int((last_h + 1.5) * 60))
+        return start_min <= current_minutes <= end_min
+    except Exception:
+        return False
+
+
+def _check_rising_trend(icao: str) -> bool:
+    """Check if temperature has been rising over the last 30-60 minutes."""
+    try:
+        from src.database.db_manager import DBManager
+        db = DBManager()
+        obs = db.get_airport_obs_recent(icao, minutes=60)
+        if not obs:
+            return False
+        temps = [r.get("temp_c") for r in obs if r.get("temp_c") is not None]
+        if len(temps) < 4:
+            return False
+        # Check: last 3 readings are increasing
+        recent = temps[-3:]
+        if recent[2] > recent[1] > recent[0]:
+            return True
+        # Or: current > 30 min ago
+        if len(temps) >= 4:
+            mid = len(temps) // 2
+            if temps[-1] > temps[mid]:
+                return True
+        return False
+    except Exception:
+        return False
 
 
 def _run_high_freq_airport_cycle(
@@ -873,7 +925,7 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 pass
 
-            # Extract airport-level temperature (same logic as message builder)
+            # Extract airport-level temperature
             amos = city_weather.get("amos") or {}
             mgm_nearby = city_weather.get("mgm_nearby") or []
             airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
@@ -886,7 +938,6 @@ def _run_high_freq_airport_cycle(
                 airport_row = mgm_nearby[0] if mgm_nearby else {}
             station_temp = airport_row.get("temp") if airport_row else None
 
-            # Use AMOS runway temp or station temp
             runway_temps = (amos.get("runway_obs") or {}).get("temperatures") or []
             if runway_temps:
                 valid_temps = [t for (t, _d) in runway_temps if t is not None]
@@ -896,7 +947,6 @@ def _run_high_freq_airport_cycle(
             current_temp = station_temp
             if current_temp is None:
                 current_temp = (city_weather.get("current") or {}).get("temp")
-            # Paris: AROME model
             if city == "paris":
                 arome_temp = _fetch_arome_temp()
                 if arome_temp is not None:
@@ -905,29 +955,13 @@ def _run_high_freq_airport_cycle(
             if current_temp is None or deb_pred is None:
                 continue
 
-            # Push only when approaching DEB predicted high
-            proximity = deb_pred - current_temp
-            in_window = proximity <= _DEB_PROXIMITY_THRESHOLD_C
+            # ── Three-condition heat window ──
+            threshold = _AIRPORT_HEAT_THRESHOLD.get(city, 3.0)
+            time_ok = _in_peak_time_window(city_weather)
+            temp_ok = (deb_pred - current_temp) <= threshold
+            trend_ok = _check_rising_trend(airport_icao) if city != "paris" else True
 
-            # Stop if past peak
-            if in_window and city != "paris":
-                try:
-                    from src.database.db_manager import DBManager
-                    icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
-                    db = DBManager()
-                    obs = db.get_airport_obs_recent(icao, minutes=60)
-                    if obs:
-                        temps = [r.get("temp_c") for r in obs if r.get("temp_c") is not None]
-                        if len(temps) >= 6:
-                            peak = max(temps)
-                            peak_idx = temps.index(peak)
-                            if peak_idx < len(temps) - 2:
-                                post = temps[peak_idx:]
-                                if all(post[i] <= post[i - 1] + 0.1 for i in range(1, len(post))):
-                                    if current_temp < peak - 0.5:
-                                        in_window = False
-                except Exception:
-                    pass
+            in_window = time_ok and temp_ok and trend_ok
 
             if not in_window:
                 if last_city.get("active"):
@@ -949,7 +983,7 @@ def _run_high_freq_airport_cycle(
             if sent:
                 last_by_city[city] = {"ts": now_ts, "active": True}
                 state_dirty = True
-                logger.info("airport status pushed city={} temp={} proximity={:.1f}", city, current_temp, proximity)
+                logger.info("airport status pushed city={} temp={} deb={} thresh={}", city, current_temp, deb_pred, threshold)
 
         except Exception:
             logger.exception("airport cycle failed for city={}", city)
