@@ -690,8 +690,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS"}
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -751,7 +751,8 @@ def _build_airport_status_message(
 ) -> str:
     _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
-                   "istanbul": "Airport", "paris": "Le Bourget"}
+                   "istanbul": "Airport", "paris": "Le Bourget",
+                   "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
@@ -816,7 +817,9 @@ _AIRPORT_PUSH_INTERVAL = {
     "helsinki": 600,   # FMI 10-min
     "amsterdam": 600,  # KNMI 10-min
     "istanbul": 600,   # MGM ~10-min
-    "paris": 900,      # AROME HD 15-min model
+    "paris": 900,        # AROME HD 15-min model
+    "hong kong": 60,     # HKO 1-min
+    "lau fau shan": 60,  # HKO 1-min
 }
 _DEB_PROXIMITY_THRESHOLD_C = 3.0
 
