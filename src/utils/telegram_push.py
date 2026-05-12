@@ -752,7 +752,7 @@ def _build_airport_status_message(
     return "\n".join(lines)
 
 
-_AIRPORT_PUSH_INTERVAL_SEC = 600
+_AIRPORT_PUSH_INTERVAL_SEC = 120
 _AIRPORT_PUSH_HOUR_START = 8
 _AIRPORT_PUSH_HOUR_END = 20
 
@@ -827,7 +827,7 @@ def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optio
         logger.warning("airport high-freq push loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
-    interval_sec = max(60, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", _AIRPORT_PUSH_INTERVAL_SEC))
+    interval_sec = max(30, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", _AIRPORT_PUSH_INTERVAL_SEC))
 
     def _runner() -> None:
         state = _load_airport_state()

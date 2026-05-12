@@ -186,7 +186,7 @@ class StartupCoordinator:
     def _start_airport_high_freq_loop(self) -> LoopStatus:
         enabled = _env_bool("TELEGRAM_AIRPORT_PUSH_ENABLED", True)
         chat_ids = get_telegram_chat_ids_from_env()
-        interval = max(60, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", 600))
+        interval = max(30, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", 120))
         details = {
             "mode": "airport-periodic",
             "interval_sec": interval,
