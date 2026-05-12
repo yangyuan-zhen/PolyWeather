@@ -874,10 +874,12 @@ def _run_high_freq_airport_cycle(
             runway_data = (amos.get("runway_obs") or {}) if amos else {}
             runway_pairs = runway_data.get("runway_pairs") or []
             runway_temps = runway_data.get("temperatures") or []
-            jma_nearby = (city_weather.get("jma_official_nearby") or [None])[0] or {}
+            # Tokyo JMA data lives in mgm_nearby (set by _attach_japan_official_nearby)
+            mgm_nearby = city_weather.get("mgm_nearby") or []
+            nearby_row = mgm_nearby[0] if mgm_nearby else {}
             current_temp = (
                 amos.get("temp_c")
-                or jma_nearby.get("temp")
+                or nearby_row.get("temp")
                 or latest_obs.get("temp_c")
                 or (city_weather.get("current") or {}).get("temp")
             )
