@@ -776,10 +776,13 @@ def _build_airport_status_message(
         station_temp = current.get("temp")
 
     lines = [header, ""]
+    runway_shown = False
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
-            lines.append(f"{r1}/{r2} {t:.1f}°C")
-    elif station_temp is not None:
+            if t is not None:
+                lines.append(f"{r1}/{r2} {t:.1f}°C")
+                runway_shown = True
+    if not runway_shown and station_temp is not None:
         label = "AROME预报" if city == "paris" else "当前实测"
         lines.append(f"{label}：{station_temp:.1f}°C")
     if deb_pred is not None:
