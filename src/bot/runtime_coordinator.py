@@ -192,7 +192,7 @@ class StartupCoordinator:
             "interval_sec": interval,
             "cities": ["seoul", "busan", "tokyo", "ankara"],
             "chat_targets": len(chat_ids),
-            "daytime_only": "08:00-20:00 local",
+            "window": "DEB proximity ≤3°C",
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(

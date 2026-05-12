@@ -753,8 +753,7 @@ def _build_airport_status_message(
 
 
 _AIRPORT_PUSH_INTERVAL_SEC = 120
-_AIRPORT_PUSH_HOUR_START = 8
-_AIRPORT_PUSH_HOUR_END = 20
+_DEB_PROXIMITY_THRESHOLD_C = 3.0
 
 
 def _run_high_freq_airport_cycle(
@@ -763,8 +762,6 @@ def _run_high_freq_airport_cycle(
     chat_ids: List[str],
     state: Dict[str, Any],
 ) -> bool:
-    from datetime import timedelta
-
     state_dirty = False
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
@@ -787,11 +784,39 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 pass
 
-            # Time gate: skip outside local daytime
-            tz_offsets = {"seoul": 9, "busan": 9, "tokyo": 9, "ankara": 3}
-            offset = tz_offsets.get(city, 0)
-            local_hour = (datetime.utcnow() + timedelta(hours=offset)).hour
-            if not (_AIRPORT_PUSH_HOUR_START <= local_hour < _AIRPORT_PUSH_HOUR_END):
+            current = city_weather.get("current") or {}
+            current_temp = current.get("temp")
+            if current_temp is None or deb_pred is None:
+                continue
+
+            # Push only when approaching DEB predicted high
+            proximity = deb_pred - current_temp
+            in_window = proximity <= _DEB_PROXIMITY_THRESHOLD_C
+
+            # Stop if past peak: current below daily max in recent hour and declining
+            if in_window:
+                try:
+                    from src.database.db_manager import DBManager
+                    icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+                    db = DBManager()
+                    obs = db.get_airport_obs_recent(icao, minutes=60)
+                    if obs:
+                        temps = [r.get("temp_c") for r in obs if r.get("temp_c") is not None]
+                        if len(temps) >= 6:
+                            peak = max(temps)
+                            peak_idx = temps.index(peak)
+                            if peak_idx < len(temps) - 2:
+                                post = temps[peak_idx:]
+                                if all(post[i] <= post[i - 1] + 0.1 for i in range(1, len(post))):
+                                    if current_temp < peak - 0.5:
+                                        in_window = False
+                except Exception:
+                    pass
+
+            if not in_window:
+                if last_city.get("active"):
+                    last_by_city[city] = {"ts": now_ts, "active": False}
+                    state_dirty = True
                 continue
 
             local_time = city_weather.get("local_time") or ""
@@ -806,10 +831,9 @@ def _run_high_freq_airport_cycle(
                     logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
 
             if sent:
-                last_by_city[city] = {"ts": now_ts}
+                last_by_city[city] = {"ts": now_ts, "active": True}
                 state_dirty = True
-                logger.info("airport status pushed city={} temp={}", city,
-                            (city_weather.get("current") or {}).get("temp"))
+                logger.info("airport status pushed city={} temp={} proximity={:.1f}", city, current_temp, proximity)
 
         except Exception:
             logger.exception("airport cycle failed for city={}", city)
