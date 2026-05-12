@@ -84,6 +84,7 @@ class StartupCoordinator:
     def start_all(self) -> RuntimeStatus:
         loops = [
             self._start_trade_alert_loop(),
+            self._start_airport_high_freq_loop(),
             self._start_dashboard_prewarm_loop(),
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
@@ -177,6 +178,30 @@ class StartupCoordinator:
             details=details,
             validation_error=validation_error,
             starter=lambda: import_module("src.utils.telegram_push").start_trade_alert_push_loop(
+                self.bot,
+                self.config,
+            ),
+        )
+
+    def _start_airport_high_freq_loop(self) -> LoopStatus:
+        enabled = _env_bool("TELEGRAM_AIRPORT_PUSH_ENABLED", True)
+        chat_ids = get_telegram_chat_ids_from_env()
+        interval = max(60, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", 600))
+        details = {
+            "mode": "airport-high-freq",
+            "interval_sec": interval,
+            "cities": ["seoul", "busan", "tokyo"],
+            "chat_targets": len(chat_ids),
+            "cooldown_sec": _env_int("TELEGRAM_AIRPORT_COOLDOWN_SEC", 7200),
+        }
+        validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
+        return self._start_with_validation(
+            key="airport_high_freq_push",
+            label="机场高频推送",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module("src.utils.telegram_push").start_high_freq_airport_push_loop(
                 self.bot,
                 self.config,
             ),

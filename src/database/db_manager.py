@@ -280,6 +280,21 @@ class DBManager:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_supabase_bindings_telegram_id ON supabase_bindings(telegram_id)"
             )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS airport_obs_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    icao TEXT NOT NULL,
+                    city TEXT NOT NULL,
+                    temp_c REAL,
+                    wind_kt REAL,
+                    pressure_hpa REAL,
+                    obs_time TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_airport_obs_log_icao_time ON airport_obs_log(icao, created_at DESC)"
+            )
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
             self._ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
@@ -1825,3 +1840,43 @@ class DBManager:
             )
             conn.commit()
             return True
+
+    def append_airport_obs(
+        self,
+        *,
+        icao: str,
+        city: str,
+        temp_c: Optional[float] = None,
+        wind_kt: Optional[float] = None,
+        pressure_hpa: Optional[float] = None,
+        obs_time: str,
+    ) -> None:
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO airport_obs_log (icao, city, temp_c, wind_kt, pressure_hpa, obs_time)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (str(icao).strip().upper(), str(city).strip().lower(),
+                 temp_c, wind_kt, pressure_hpa, str(obs_time)),
+            )
+            conn.execute(
+                "DELETE FROM airport_obs_log WHERE created_at < datetime('now', '-2 hours')"
+            )
+            conn.commit()
+
+    def get_airport_obs_recent(
+        self, icao: str, minutes: int = 30
+    ) -> list[dict[str, Any]]:
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT icao, city, temp_c, wind_kt, pressure_hpa, obs_time, created_at
+                FROM airport_obs_log
+                WHERE icao = ? AND created_at >= datetime('now', ? || ' minutes')
+                ORDER BY created_at ASC
+                """,
+                (str(icao).strip().upper(), str(-int(minutes))),
+            ).fetchall()
+            return [dict(r) for r in rows]

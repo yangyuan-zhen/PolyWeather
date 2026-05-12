@@ -686,3 +686,287 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
     )
     thread.start()
     return thread
+
+
+# ── high-freq airport push loop ──
+
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT"}
+HIGH_FREQ_PUSH_INTERVAL_SEC = 600
+HIGH_FREQ_MOMENTUM_THRESHOLD_C = 0.5
+HIGH_FREQ_COOLDOWN_SEC = 7200
+AIRPORT_SNAPSHOT_INTERVAL_SEC = 1800
+
+_AIRPORT_PUSH_STATE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "airport_push_state.json",
+)
+
+
+def _load_airport_state() -> Dict[str, Any]:
+    try:
+        from src.database.runtime_state import STATE_STORAGE_SQLITE, get_state_storage_mode
+        if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+            return _telegram_state_repo.load_state()
+    except Exception:
+        pass
+    path = _AIRPORT_PUSH_STATE_PATH
+    if not os.path.exists(path):
+        return {"last_by_city": {}}
+    try:
+        with open(path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, dict):
+            data.setdefault("last_by_city", {})
+            return data
+    except Exception:
+        pass
+    return {"last_by_city": {}}
+
+
+def _save_airport_state(state: Dict[str, Any]) -> None:
+    try:
+        from src.database.runtime_state import STATE_STORAGE_SQLITE, get_state_storage_mode
+        if get_state_storage_mode() == STATE_STORAGE_SQLITE:
+            _telegram_state_repo.save_state(state)
+            return
+    except Exception:
+        pass
+    path = _AIRPORT_PUSH_STATE_PATH
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = f"{path}.tmp"
+    with open(tmp, "w", encoding="utf-8") as fh:
+        json.dump(state, fh, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
+def _check_high_locked(city: str) -> bool:
+    icao = HIGH_FREQ_AIRPORT_ICAO.get(city)
+    if not icao:
+        return False
+    try:
+        from src.database.db_manager import DBManager
+        db = DBManager()
+        obs = db.get_airport_obs_recent(icao, minutes=120)
+    except Exception:
+        return False
+    if len(obs) < 6:
+        return False
+    temps = [r.get("temp_c") for r in obs if r.get("temp_c") is not None]
+    if len(temps) < 6:
+        return False
+    peak_idx = temps.index(max(temps))
+    if peak_idx >= len(temps) - 2:
+        return False
+    post_peak = temps[peak_idx:]
+    for i in range(1, len(post_peak)):
+        if post_peak[i] > post_peak[i - 1] + 0.05:
+            return False
+    return True
+
+
+def _build_airport_rapid_change_message(
+    city: str,
+    rule: Dict[str, Any],
+    deb_pred: Optional[float],
+) -> str:
+    city_display = city.title()
+    airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田"}.get(city, city_display)
+    emoji = "🔥" if rule.get("direction") == "up" else "❄️"
+    first = rule.get("first_temp", 0)
+    last = rule.get("last_temp", 0)
+    delta = rule.get("delta_temp", 0)
+    delta_min = rule.get("delta_min", 0)
+    sign = "+" if delta >= 0 else ""
+
+    lines = [
+        f"🚨 {airport_label} 温度急变 {emoji}",
+        "",
+        f"跑道温度 {first:.1f}°C → {last:.1f}°C ({sign}{delta:.1f}°C / {delta_min:.0f}min)",
+    ]
+    wind_kt = rule.get("wind_kt")
+    if wind_kt is not None:
+        lines.append(f"风 {wind_kt:.0f}kt")
+    if deb_pred is not None:
+        gap = last - deb_pred
+        gap_sign = "+" if gap >= 0 else ""
+        lines.append(f"DEB 预测今日最高 {deb_pred:.1f}°C  |  差距 {gap_sign}{gap:.1f}°C")
+    return "\n".join(lines)
+
+
+def _build_airport_snapshot_message(snapshots: list[dict[str, Any]], local_time: str = "") -> str:
+    flag = {"seoul": "🇰🇷", "busan": "🇰🇷", "tokyo": "🇯🇵"}
+    name = {"seoul": "首尔/仁川 RKSI", "busan": "釜山/金海 RKPK", "tokyo": "东京/羽田 RJTT"}
+
+    lines = [f"🛫 机场实况 {local_time}"]
+    for s in snapshots:
+        city = s.get("city", "")
+        temp = s.get("temp_c")
+        deb = s.get("deb_prediction")
+        lines.append("")
+        header = f"{flag.get(city, '')} {name.get(city, city)}"
+        parts = []
+        if temp is not None:
+            parts.append(f"当前 {temp:.1f}°C")
+        if deb is not None:
+            parts.append(f"DEB 预测最高 {deb:.1f}°C")
+        line = header
+        if parts:
+            line += "\n" + "  ·  ".join(parts)
+        if s.get("wind_kt") is not None:
+            line += f"  |  风 {s['wind_kt']:.0f}kt"
+        if s.get("pressure_hpa") is not None:
+            line += f"  |  QNH {s['pressure_hpa']:.1f} hPa"
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _run_high_freq_airport_cycle(
+    bot: Any,
+    config: Dict[str, Any],
+    chat_ids: List[str],
+    state: Dict[str, Any],
+) -> bool:
+    state_dirty = False
+    now_ts = int(time.time())
+    last_by_city = state.setdefault("last_by_city", {})
+
+    snapshots: list[dict[str, Any]] = []
+    snapshot_due = now_ts - int(state.get("last_snapshot_ts") or 0) >= AIRPORT_SNAPSHOT_INTERVAL_SEC
+
+    for city in sorted(HIGH_FREQ_AIRPORT_CITIES):
+        try:
+            icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+            last_city = last_by_city.get(city) or {}
+            last_city_ts = int(last_city.get("ts") or 0)
+
+            try:
+                from src.database.db_manager import DBManager
+                db = DBManager()
+                recent_obs = db.get_airport_obs_recent(icao, minutes=20)
+                latest_obs = recent_obs[-1] if recent_obs else {}
+            except Exception:
+                latest_obs = {}
+
+            # Fetch city_weather once and extract DEB
+            city_weather: Dict[str, Any] = {}
+            deb_pred: Optional[float] = None
+            try:
+                from web.app import _analyze
+                city_weather = _analyze(city)
+                deb_raw = (city_weather.get("deb") or {}).get("prediction")
+                if deb_raw is not None:
+                    deb_pred = float(deb_raw)
+            except Exception:
+                pass
+
+            # Check high-locked
+            if _check_high_locked(city):
+                if snapshot_due:
+                    snapshots.append({
+                        "city": city,
+                        "temp_c": latest_obs.get("temp_c"),
+                        "wind_kt": latest_obs.get("wind_kt"),
+                        "pressure_hpa": latest_obs.get("pressure_hpa"),
+                        "deb_prediction": deb_pred,
+                    })
+                continue
+
+            from src.analysis.market_alert_engine import _calc_airport_rapid_temp_change
+            rule = _calc_airport_rapid_temp_change(city_weather, "°C")
+
+            if snapshot_due:
+                snapshots.append({
+                    "city": city,
+                    "temp_c": latest_obs.get("temp_c"),
+                    "wind_kt": latest_obs.get("wind_kt"),
+                    "pressure_hpa": latest_obs.get("pressure_hpa"),
+                    "deb_prediction": deb_pred,
+                })
+
+            if not rule.get("triggered"):
+                continue
+
+            if last_city_ts and now_ts - last_city_ts < HIGH_FREQ_COOLDOWN_SEC:
+                continue
+
+            rule["wind_kt"] = latest_obs.get("wind_kt")
+            message = _build_airport_rapid_change_message(city, rule, deb_pred)
+
+            sent = False
+            for chat_id in chat_ids:
+                try:
+                    bot.send_message(chat_id, message)
+                    sent = True
+                except Exception as exc:
+                    logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
+
+            if sent:
+                last_by_city[city] = {"ts": now_ts, "trigger": "rapid_temp_change"}
+                state_dirty = True
+                logger.info("airport rapid change pushed city={} delta_temp={:.1f}", city, rule.get("delta_temp", 0))
+
+        except Exception:
+            logger.exception("high freq airport cycle failed for city={}", city)
+
+    if snapshot_due and snapshots:
+        from datetime import timedelta
+        kst_hour = (datetime.utcnow() + timedelta(hours=9)).hour
+        if 8 <= kst_hour < 20:
+            local_time = datetime.now().strftime("%H:%M CST")
+            snap_message = _build_airport_snapshot_message(snapshots, local_time)
+            for chat_id in chat_ids:
+                try:
+                    bot.send_message(chat_id, snap_message)
+                except Exception as exc:
+                    logger.warning("airport snapshot push failed chat_id={}: {}", chat_id, exc)
+            logger.info("airport snapshot pushed cities={}", len(snapshots))
+        else:
+            logger.info("airport snapshot skipped: outside 08:00-20:00 window (KST hour={})", kst_hour)
+        state["last_snapshot_ts"] = now_ts
+        state_dirty = True
+
+    return state_dirty
+
+
+def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[threading.Thread]:
+    enabled = _env_bool("TELEGRAM_AIRPORT_PUSH_ENABLED", True)
+    chat_ids = get_telegram_chat_ids_from_env()
+    if not enabled:
+        logger.info("airport high-freq push loop disabled")
+        return None
+    if not chat_ids:
+        logger.warning("airport high-freq push loop skipped: TELEGRAM_CHAT_IDS is not set")
+        return None
+
+    interval_sec = max(60, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", HIGH_FREQ_PUSH_INTERVAL_SEC))
+
+    def _runner() -> None:
+        state = _load_airport_state()
+        logger.info(
+            "airport high-freq push loop started cities={} interval={}s chat_targets={}",
+            len(HIGH_FREQ_AIRPORT_CITIES), interval_sec, len(chat_ids),
+        )
+        while True:
+            cycle_started = time.time()
+            state = _load_airport_state()
+            if _run_high_freq_airport_cycle(
+                bot=bot,
+                config=config,
+                chat_ids=chat_ids,
+                state=state,
+            ):
+                _save_airport_state(state)
+
+            elapsed = time.time() - cycle_started
+            sleep_sec = max(5, interval_sec - int(elapsed))
+            time.sleep(sleep_sec)
+
+    thread = threading.Thread(
+        target=_runner,
+        name="airport-high-freq-pusher",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("airport high-freq push loop thread started")
+    return thread

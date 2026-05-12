@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from src.analysis.settlement_rounding import apply_city_settlement
+from src.database.db_manager import DBManager
 
 
 def _sf(v: Any) -> Optional[float]:
@@ -812,6 +813,83 @@ def _build_advice_cn(
     return "，".join(parts) + "。"
 
 
+_AIRPORT_ICAO_MAP = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT"}
+
+
+def _calc_airport_rapid_temp_change(
+    city_weather: Dict[str, Any], temp_symbol: str
+) -> Dict[str, Any]:
+    city = (city_weather.get("name") or "").lower()
+    if city not in _AIRPORT_ICAO_MAP:
+        return {
+            "type": "airport_rapid_temp_change",
+            "triggered": False,
+            "reason": "not_airport_city",
+        }
+
+    icao = _AIRPORT_ICAO_MAP[city]
+    try:
+        db = DBManager()
+        obs = db.get_airport_obs_recent(icao, minutes=20)
+    except Exception:
+        return {
+            "type": "airport_rapid_temp_change",
+            "triggered": False,
+            "reason": "db_read_error",
+        }
+
+    if len(obs) < 3:
+        return {
+            "type": "airport_rapid_temp_change",
+            "triggered": False,
+            "reason": f"insufficient_obs ({len(obs)}<3)",
+        }
+
+    first = obs[0]
+    last = obs[-1]
+    first_temp = first.get("temp_c")
+    last_temp = last.get("temp_c")
+    if first_temp is None or last_temp is None:
+        return {
+            "type": "airport_rapid_temp_change",
+            "triggered": False,
+            "reason": "missing_temp",
+        }
+
+    try:
+        t1 = datetime.fromisoformat(str(first.get("created_at") or ""))
+        t2 = datetime.fromisoformat(str(last.get("created_at") or ""))
+        delta_min = (t2 - t1).total_seconds() / 60.0
+    except Exception:
+        delta_min = len(obs) * 1.5
+
+    if delta_min <= 0:
+        return {
+            "type": "airport_rapid_temp_change",
+            "triggered": False,
+            "reason": "zero_time_delta",
+        }
+
+    delta_temp = last_temp - first_temp
+    slope_per_10min = delta_temp / delta_min * 10.0
+    threshold = _to_unit_delta(0.5, temp_symbol)
+    triggered = abs(slope_per_10min) > threshold
+
+    return {
+        "type": "airport_rapid_temp_change",
+        "triggered": triggered,
+        "direction": "up" if slope_per_10min > 0 else "down",
+        "first_temp": round(first_temp, 2),
+        "last_temp": round(last_temp, 2),
+        "delta_temp": round(delta_temp, 2),
+        "delta_min": round(delta_min, 1),
+        "slope_per_10min": round(slope_per_10min, 2),
+        "threshold": round(threshold, 2),
+        "sample_count": len(obs),
+        "icao": icao,
+    }
+
+
 def _build_telegram_messages(
     city_weather: Dict[str, Any],
     rules: Dict[str, Dict[str, Any]],
@@ -1179,6 +1257,7 @@ def build_trading_alerts(
         "momentum_spike": _calc_momentum_alert(city_weather, temp_symbol),
         "forecast_breakthrough": _calc_forecast_breakthrough_alert(city_weather, temp_symbol),
         "advection": _calc_advection_alert(city_weather, temp_symbol),
+        "airport_rapid_temp_change": _calc_airport_rapid_temp_change(city_weather, temp_symbol),
     }
 
     triggered = [

@@ -15,6 +15,7 @@ from src.data_collection.russia_station_sources import RussiaStationSourceMixin
 from src.data_collection.nmc_sources import NmcSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
+from src.database.db_manager import DBManager
 
 
 class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin):
@@ -865,6 +866,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = official_rows
         results["nearby_source"] = "jma"
+        try:
+            row = official_rows[0] if official_rows else {}
+            icao = str(row.get("icao") or row.get("istNo") or "RJTT")
+            DBManager().append_airport_obs(
+                icao=icao,
+                city=city_lower,
+                temp_c=row.get("temp"),
+                obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
+            )
+        except Exception:
+            logger.exception("airport_obs_log append failed for jma city={}", city_lower)
 
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -882,6 +894,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                             city_lower, amos_data.get("temp_c"), amos_data.get("temp_source"),
                             len(amos_data.get("runway_obs", {}).get("runway_pairs", []) or []))
                 results["amos"] = amos_data
+                try:
+                    DBManager().append_airport_obs(
+                        icao=amos_data.get("icao") or "",
+                        city=city_lower,
+                        temp_c=amos_data.get("temp_c"),
+                        wind_kt=amos_data.get("wind_kt"),
+                        pressure_hpa=amos_data.get("pressure_hpa"),
+                        obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
+                    )
+                except Exception:
+                    logger.exception("airport_obs_log append failed for amos city={}", city_lower)
             else:
                 logger.warning("AMOS: no data returned for city={}", city_lower)
         except Exception as exc:
