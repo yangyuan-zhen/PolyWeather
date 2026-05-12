@@ -756,27 +756,16 @@ def _build_airport_rapid_change_message(
     rule: Dict[str, Any],
     deb_pred: Optional[float],
 ) -> str:
-    city_display = city.title()
-    airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa"}.get(city, city_display)
-    emoji = "🔥" if rule.get("direction") == "up" else "❄️"
-    first = rule.get("first_temp", 0)
+    airport_label = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa"}.get(city, city.title())
     last = rule.get("last_temp", 0)
-    delta = rule.get("delta_temp", 0)
-    delta_min = rule.get("delta_min", 0)
-    sign = "+" if delta >= 0 else ""
 
     lines = [
-        f"🚨 {airport_label} 温度急变 {emoji}",
+        f"🚨 {airport_label} 温度急变",
         "",
-        f"跑道温度 {first:.1f}°C → {last:.1f}°C ({sign}{delta:.1f}°C / {delta_min:.0f}min)",
+        f"当前 {last:.1f}°C",
     ]
-    wind_kt = rule.get("wind_kt")
-    if wind_kt is not None:
-        lines.append(f"风 {wind_kt:.0f}kt")
     if deb_pred is not None:
-        gap = last - deb_pred
-        gap_sign = "+" if gap >= 0 else ""
-        lines.append(f"DEB 预测今日最高 {deb_pred:.1f}°C  |  差距 {gap_sign}{gap:.1f}°C")
+        lines.append(f"DEB 预测最高 {deb_pred:.1f}°C")
     return "\n".join(lines)
 
 
