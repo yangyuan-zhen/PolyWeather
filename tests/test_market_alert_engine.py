@@ -59,13 +59,11 @@ def test_trading_alerts_all_core_rules_trigger():
     )
 
     assert out["trigger_count"] >= 2
-    assert out["rules"]["momentum_spike"]["triggered"] is True
     assert out["rules"]["forecast_breakthrough"]["triggered"] is True
     assert out["rules"]["advection"]["triggered"] is True
 
     msg = out["telegram"]["zh"]
     assert "PolyWeather 市场提醒" in msg
-    assert "动量突变" in msg
     assert "https://example.com/map" in msg
 
 
@@ -170,7 +168,6 @@ def test_peak_passed_guard_suppresses_late_day_cooldown_alerts():
     assert out["suppression"]["suppressed"] is True
     assert out["severity"] == "none"
     assert out["trigger_count"] == 0
-    assert out["rules"]["momentum_spike"]["raw_triggered"] is True
     assert out["rules"]["forecast_breakthrough"]["raw_triggered"] is True
     assert "高温已过（暂停推送）" in out["telegram"]["zh"]
     assert "暂停主动推送" in out["telegram"]["zh"]

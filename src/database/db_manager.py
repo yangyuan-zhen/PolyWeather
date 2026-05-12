@@ -1867,7 +1867,7 @@ class DBManager:
 
     def get_airport_obs_recent(
         self, icao: str, minutes: int = 30
-    ) -> list[dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
