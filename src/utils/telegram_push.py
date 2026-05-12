@@ -723,26 +723,25 @@ def _save_airport_state(state: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-_AIRPORT_CITY_LABEL = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa", "helsinki": "赫尔辛基/Vantaa", "amsterdam": "阿姆斯特丹/Schiphol", "istanbul": "伊斯坦布尔/机场"}
-
-
 def _build_airport_status_message(
     city: str,
     city_weather: Dict[str, Any],
     deb_pred: Optional[float],
     local_time: str = "",
 ) -> str:
+    _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
+                   "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
+                   "istanbul": "Airport"}
     en_name = city.title()
-    label = _AIRPORT_CITY_LABEL.get(city, en_name)
+    ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
-    header = f"{en_name} {label}{time_suffix}"
+    header = f"{en_name} / {ap_name}{time_suffix}" if ap_name else f"{en_name}{time_suffix}"
 
     amos = city_weather.get("amos") or {}
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     mgm_nearby = city_weather.get("mgm_nearby") or []
-    # Find the specific airport station, not just any nearby station
     airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     airport_row = None
     for row in mgm_nearby:
@@ -753,7 +752,6 @@ def _build_airport_status_message(
         airport_row = mgm_nearby[0] if mgm_nearby else {}
     station_temp = airport_row.get("temp") if airport_row else None
     current = city_weather.get("current") or {}
-    # Fallback to city current temp if airport station not found
     if station_temp is None:
         station_temp = current.get("temp")
 
@@ -762,15 +760,14 @@ def _build_airport_status_message(
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             lines.append(f"{r1}/{r2} {t:.1f}°C")
     elif station_temp is not None:
-        lines.append(f"{station_temp:.1f}°C")
-    # Today's observed high
+        lines.append(f"当前实测：{station_temp:.1f}°C")
+    if deb_pred is not None:
+        lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
     max_so_far = current.get("max_so_far")
     max_temp_time = current.get("max_temp_time")
     if max_so_far is not None:
-        time_str = f" ({max_temp_time})" if max_temp_time else ""
-        lines.append(f"日内最高 {max_so_far:.1f}°C{time_str}")
-    if deb_pred is not None:
-        lines.append(f"DEB 预测 {deb_pred:.1f}°C")
+        time_str = f"（{max_temp_time}）" if max_temp_time else ""
+        lines.append(f"今日实测最高：{max_so_far:.1f}°C{time_str}")
     return "\n".join(lines)
 
 
