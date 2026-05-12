@@ -780,7 +780,8 @@ def _build_airport_status_message(
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             lines.append(f"{r1}/{r2} {t:.1f}°C")
     elif station_temp is not None:
-        lines.append(f"当前实测：{station_temp:.1f}°C")
+        label = "AROME预报" if city == "paris" else "当前实测"
+        lines.append(f"{label}：{station_temp:.1f}°C")
     if deb_pred is not None:
         lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
