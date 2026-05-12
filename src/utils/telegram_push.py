@@ -803,16 +803,25 @@ def _build_airport_snapshot_message(snapshots: list[dict[str, Any]], local_time:
         city = s.get("city", "")
         temp = s.get("temp_c")
         deb = s.get("deb_prediction")
+        runway_pairs = s.get("runway_pairs") or []
+        runway_temps = s.get("runway_temps") or []
         lines.append("")
         header = f"{flag.get(city, '')} {name.get(city, city)}"
-        parts = []
-        if temp is not None:
-            parts.append(f"当前 {temp:.1f}°C")
+
+        # Show individual runway pair temps for Seoul/Busan
+        if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+            runway_lines = []
+            for (r1, r2), (t, d) in zip(runway_pairs, runway_temps):
+                dew_str = f" / 露点 {d:.1f}°C" if d is not None else ""
+                runway_lines.append(f"{r1}/{r2}: {t:.1f}°C{dew_str}")
+            line = header + "\n" + "\n".join(runway_lines)
+        elif temp is not None:
+            line = header + f"\n当前 {temp:.1f}°C"
+        else:
+            line = header
+
         if deb is not None:
-            parts.append(f"DEB 预测最高 {deb:.1f}°C")
-        line = header
-        if parts:
-            line += "\n" + "  ·  ".join(parts)
+            line += f"\nDEB 预测最高 {deb:.1f}°C"
         if s.get("wind_kt") is not None:
             line += f"  |  风 {s['wind_kt']:.0f}kt"
         if s.get("pressure_hpa") is not None:
@@ -860,15 +869,32 @@ def _run_high_freq_airport_cycle(
             except Exception:
                 pass
 
+            # Extract airport-level data from city_weather for snapshot
+            amos = city_weather.get("amos") or {}
+            runway_data = (amos.get("runway_obs") or {}) if amos else {}
+            runway_pairs = runway_data.get("runway_pairs") or []
+            runway_temps = runway_data.get("temperatures") or []
+            jma_nearby = (city_weather.get("jma_official_nearby") or [None])[0] or {}
+            current_temp = (
+                amos.get("temp_c")
+                or jma_nearby.get("temp")
+                or latest_obs.get("temp_c")
+                or (city_weather.get("current") or {}).get("temp")
+            )
+            wind_kt = amos.get("wind_kt") or latest_obs.get("wind_kt")
+            pressure_hpa = amos.get("pressure_hpa") or latest_obs.get("pressure_hpa")
+
             # Check high-locked
             if _check_high_locked(city):
                 if snapshot_due:
                     snapshots.append({
                         "city": city,
-                        "temp_c": latest_obs.get("temp_c"),
-                        "wind_kt": latest_obs.get("wind_kt"),
-                        "pressure_hpa": latest_obs.get("pressure_hpa"),
+                        "temp_c": current_temp,
+                        "wind_kt": wind_kt,
+                        "pressure_hpa": pressure_hpa,
                         "deb_prediction": deb_pred,
+                        "runway_pairs": runway_pairs,
+                        "runway_temps": runway_temps,
                     })
                 continue
 
@@ -878,10 +904,12 @@ def _run_high_freq_airport_cycle(
             if snapshot_due:
                 snapshots.append({
                     "city": city,
-                    "temp_c": latest_obs.get("temp_c"),
-                    "wind_kt": latest_obs.get("wind_kt"),
-                    "pressure_hpa": latest_obs.get("pressure_hpa"),
+                    "temp_c": current_temp,
+                    "wind_kt": wind_kt,
+                    "pressure_hpa": pressure_hpa,
                     "deb_prediction": deb_pred,
+                    "runway_pairs": runway_pairs,
+                    "runway_temps": runway_temps,
                 })
 
             if not rule.get("triggered"):
