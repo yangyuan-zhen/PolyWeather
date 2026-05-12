@@ -1254,7 +1254,6 @@ def build_trading_alerts(
 
     rules: Dict[str, Dict[str, Any]] = {
         "ankara_center_deb_hit": _calc_ankara_center_deb_alert(city_weather, temp_symbol),
-        "momentum_spike": _calc_momentum_alert(city_weather, temp_symbol),
         "forecast_breakthrough": _calc_forecast_breakthrough_alert(city_weather, temp_symbol),
         "advection": _calc_advection_alert(city_weather, temp_symbol),
         "airport_rapid_temp_change": _calc_airport_rapid_temp_change(city_weather, temp_symbol),
