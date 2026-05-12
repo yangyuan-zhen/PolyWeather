@@ -776,7 +776,20 @@ def _build_airport_status_message(
     if station_temp is None:
         station_temp = current.get("temp")
 
-    lines = [header, ""]
+    # Determine current max temp for new-high check
+    latest_temp = station_temp
+    if runway_temps:
+        valid = [t for (t, _d) in runway_temps if t is not None]
+        if valid:
+            latest_temp = max(valid)
+
+    # Check if breaking today's high
+    max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
+    new_high = (latest_temp is not None and max_so_far is not None
+                and latest_temp - max_so_far >= 0.3)
+
+    flag = " \U0001f536新" if new_high else ""
+    lines = [header + flag, ""]
     runway_shown = False
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
@@ -788,7 +801,6 @@ def _build_airport_status_message(
         lines.append(f"{label}：{station_temp:.1f}°C")
     if deb_pred is not None:
         lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
-    max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
     if max_so_far is not None:
         time_str = f"（{max_temp_time}）" if max_temp_time else ""
         lines.append(f"今日实测最高：{max_so_far:.1f}°C{time_str}")
@@ -810,8 +822,8 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
 
 # Per-city push interval matching native data refresh rate (seconds)
 _AIRPORT_PUSH_INTERVAL = {
-    "seoul": 60,       # AMOS 1-min
-    "busan": 60,       # AMOS 1-min
+    "seoul": 600,      # AMOS 1-min → 10min push
+    "busan": 600,      # AMOS 1-min → 10min push
     "tokyo": 600,      # JMA 10-min
     "ankara": 600,     # MGM ~10-min
     "helsinki": 600,   # FMI 10-min
