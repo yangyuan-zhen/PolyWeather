@@ -188,11 +188,11 @@ class StartupCoordinator:
         chat_ids = get_telegram_chat_ids_from_env()
         interval = max(60, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", 600))
         details = {
-            "mode": "airport-high-freq",
+            "mode": "airport-periodic",
             "interval_sec": interval,
-            "cities": ["seoul", "busan", "tokyo"],
+            "cities": ["seoul", "busan", "tokyo", "ankara"],
             "chat_targets": len(chat_ids),
-            "cooldown_sec": _env_int("TELEGRAM_AIRPORT_COOLDOWN_SEC", 7200),
+            "daytime_only": "08:00-20:00 local",
         }
         validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
         return self._start_with_validation(
