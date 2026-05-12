@@ -15,10 +15,11 @@ from src.data_collection.russia_station_sources import RussiaStationSourceMixin
 from src.data_collection.nmc_sources import NmcSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
+from src.data_collection.fmi_sources import FmiSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin):
     """
     Multi-source weather data collector
 
@@ -221,6 +222,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self._settlement_cache: Dict[str, Dict] = {}
         self._settlement_cache_lock = threading.Lock()
+        self.fmi_cache_ttl_sec = int(
+            os.getenv("FMI_CACHE_TTL_SEC", "120")
+        )
+        self._fmi_cache: Dict[str, Dict] = {}
+        self._fmi_cache_lock = threading.Lock()
         self.cwa_open_data_auth = (
             os.getenv("CWA_OPEN_DATA_AUTH")
             or os.getenv("CWA_OPEN_DATA_API_KEY")
@@ -729,6 +735,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         normalized = str(city or "").strip().lower()
         with self._jma_cache_lock:
             self._jma_cache.pop(f"{normalized}:{use_fahrenheit}", None)
+        with self._fmi_cache_lock:
+            self._fmi_cache.pop(f"fmi:{normalized}:{use_fahrenheit}", None)
         with self._nmc_cache_lock:
             self._nmc_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._ru_station_cache_lock:
@@ -891,6 +899,32 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         except Exception:
             logger.exception("airport_obs_log append failed for jma city={}", city_lower)
 
+    def _attach_fmi_official_nearby(
+        self, results: Dict, city_lower: str, use_fahrenheit: bool
+    ) -> None:
+        if city_lower != "helsinki":
+            return
+        rows = self.fetch_fmi_official_nearby(
+            city_lower, use_fahrenheit=use_fahrenheit
+        )
+        if not rows:
+            return
+        results["fmi_official_nearby"] = rows
+        if "mgm_nearby" not in results:
+            results["mgm_nearby"] = rows
+        results["nearby_source"] = "fmi"
+        try:
+            row = rows[0] if rows else {}
+            icao = str(row.get("icao") or "EFHK")
+            DBManager().append_airport_obs(
+                icao=icao,
+                city=city_lower,
+                temp_c=row.get("temp"),
+                obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
+            )
+        except Exception:
+            logger.exception("airport_obs_log append failed for fmi city={}", city_lower)
+
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1051,6 +1085,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
@@ -1093,6 +1128,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
