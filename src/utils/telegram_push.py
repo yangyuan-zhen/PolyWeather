@@ -752,7 +752,15 @@ def _build_airport_status_message(
     return "\n".join(lines)
 
 
-_AIRPORT_PUSH_INTERVAL_SEC = 120
+# Per-city push interval matching native data refresh rate (seconds)
+_AIRPORT_PUSH_INTERVAL = {
+    "seoul": 60,       # AMOS 1-min
+    "busan": 60,       # AMOS 1-min
+    "tokyo": 600,      # JMA 10-min
+    "ankara": 600,     # MGM ~10-min
+    "helsinki": 600,   # FMI 10-min
+    "amsterdam": 600,  # KNMI 10-min
+}
 _DEB_PROXIMITY_THRESHOLD_C = 3.0
 
 
@@ -770,7 +778,8 @@ def _run_high_freq_airport_cycle(
         try:
             last_city = last_by_city.get(city) or {}
             last_city_ts = int(last_city.get("ts") or 0)
-            if now_ts - last_city_ts < _AIRPORT_PUSH_INTERVAL_SEC:
+            city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
+            if now_ts - last_city_ts < city_interval:
                 continue
 
             city_weather: Dict[str, Any] = {}
@@ -851,7 +860,7 @@ def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optio
         logger.warning("airport high-freq push loop skipped: TELEGRAM_CHAT_IDS is not set")
         return None
 
-    interval_sec = max(30, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", _AIRPORT_PUSH_INTERVAL_SEC))
+    interval_sec = max(30, _env_int("TELEGRAM_AIRPORT_PUSH_INTERVAL_SEC", 60))
 
     def _runner() -> None:
         state = _load_airport_state()
