@@ -690,8 +690,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920"}
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -752,7 +752,8 @@ def _build_airport_status_message(
     _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
-                   "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan"}
+                   "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
+                   "taipei": "Songshan"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
@@ -799,6 +800,12 @@ def _build_airport_status_message(
     if not runway_shown and station_temp is not None:
         label = "AROME预报" if city == "paris" else "当前实测"
         lines.append(f"{label}：{station_temp:.1f}°C")
+        # Show settlement (rounded-down) temp for HKO floor-rounding cities
+        if city in ("hong kong", "lau fau shan") and station_temp is not None:
+            from src.analysis.settlement_rounding import apply_city_settlement
+            settled = apply_city_settlement(city, station_temp)
+            if settled is not None:
+                lines.append(f"结算温度：{settled}°C")
     if deb_pred is not None:
         lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
     if max_so_far is not None:
@@ -832,6 +839,7 @@ _AIRPORT_PUSH_INTERVAL = {
     "paris": 900,        # AROME HD 15-min model
     "hong kong": 60,     # HKO 1-min
     "lau fau shan": 60,  # HKO 1-min
+    "taipei": 600,       # CWA ~10-min
 }
 _DEB_PROXIMITY_THRESHOLD_C = 3.0
 

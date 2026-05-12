@@ -365,6 +365,18 @@ class SettlementSourceMixin:
                 "unit": "celsius",
             }
             self._set_settlement_cache(cache_key, payload)
+            # Write to airport obs log for high-freq monitoring
+            try:
+                from src.database.db_manager import DBManager
+                DBManager().append_airport_obs(
+                    icao="466920",
+                    city="taipei",
+                    temp_c=payload["current"]["temp"],
+                    wind_kt=payload["current"].get("wind_speed_kt"),
+                    obs_time=str(obs_time_raw or "").strip() or datetime.now().isoformat(),
+                )
+            except Exception:
+                logger.exception("airport_obs_log append failed for cwa")
             return payload
         except Exception as exc:
             logger.warning(f"CWA settlement fetch failed: {exc}")
