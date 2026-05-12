@@ -863,9 +863,9 @@ def _in_peak_time_window(city_weather: Dict[str, Any]) -> bool:
     try:
         current_h, current_m = int(local_time[:2]), int(local_time[3:5])
         current_minutes = current_h * 60 + current_m
-        # Window: first_h - 2h to last_h + 1.5h
-        start_min = max(0, (first_h - 2) * 60)
-        end_min = min(24 * 60 - 1, int((last_h + 1.5) * 60))
+        # Window: first_h - 4h to last_h + 2h
+        start_min = max(0, (first_h - 4) * 60)
+        end_min = min(24 * 60 - 1, (last_h + 2) * 60)
         return start_min <= current_minutes <= end_min
     except Exception:
         return False
