@@ -752,6 +752,10 @@ def _build_airport_status_message(
     if not airport_row:
         airport_row = mgm_nearby[0] if mgm_nearby else {}
     station_temp = airport_row.get("temp") if airport_row else None
+    # Fallback to city current temp if airport station not found
+    if station_temp is None:
+        current = city_weather.get("current") or {}
+        station_temp = current.get("temp")
 
     lines = [header, ""]
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
