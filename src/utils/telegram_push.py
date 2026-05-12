@@ -690,8 +690,8 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058"}
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -723,7 +723,7 @@ def _save_airport_state(state: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
-_AIRPORT_CITY_LABEL = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa", "helsinki": "赫尔辛基/Vantaa", "amsterdam": "阿姆斯特丹/Schiphol"}
+_AIRPORT_CITY_LABEL = {"seoul": "首尔/仁川", "busan": "釜山/金海", "tokyo": "东京/羽田", "ankara": "安卡拉/Esenboğa", "helsinki": "赫尔辛基/Vantaa", "amsterdam": "阿姆斯特丹/Schiphol", "istanbul": "伊斯坦布尔/机场"}
 
 
 def _build_airport_status_message(
@@ -772,6 +772,7 @@ _AIRPORT_PUSH_INTERVAL = {
     "ankara": 600,     # MGM ~10-min
     "helsinki": 600,   # FMI 10-min
     "amsterdam": 600,  # KNMI 10-min
+    "istanbul": 600,   # MGM ~10-min
 }
 _DEB_PROXIMITY_THRESHOLD_C = 3.0
 

@@ -190,7 +190,7 @@ class StartupCoordinator:
         details = {
             "mode": "airport-periodic",
             "interval_sec": interval,
-            "cities": ["seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam"],
+            "cities": ["seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul"],
             "chat_targets": len(chat_ids),
             "window": "DEB proximity ≤3°C",
         }
