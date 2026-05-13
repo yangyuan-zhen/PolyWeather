@@ -883,6 +883,19 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                         )
             except Exception:
                 logger.exception("airport_obs_log append failed for metar cluster city={}", city_lower)
+            # 更新日最高
+            try:
+                today = datetime.now().strftime("%Y-%m-%d")
+                for row in cluster_data:
+                    icao = row.get("icao")
+                    temp_c = row.get("temp_c") if "temp_c" in row else row.get("temp")
+                    if icao and temp_c is not None:
+                        DBManager().upsert_daily_max(
+                            icao=icao, temp_c=temp_c, obs_date=today,
+                            obs_time=str(row.get("obs_time") or ""),
+                        )
+            except Exception:
+                pass
 
     def _attach_china_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -931,6 +944,15 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         except Exception:
             logger.exception("airport_obs_log append failed for jma city={}", city_lower)
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            if icao and row.get("temp") is not None:
+                DBManager().upsert_daily_max(
+                    icao=icao, temp_c=row.get("temp"), obs_date=today,
+                    obs_time=str(row.get("obs_time") or ""),
+                )
+        except Exception:
+            pass
 
     def _attach_knmi_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -956,6 +978,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         except Exception:
             logger.exception("airport_obs_log append failed for knmi city={}", city_lower)
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            icao_kn = str(rows[0].get("icao") or "EHAM") if rows else ""
+            temp_kn = rows[0].get("temp") if rows else None
+            if icao_kn and temp_kn is not None:
+                DBManager().upsert_daily_max(
+                    icao=icao_kn, temp_c=temp_kn, obs_date=today,
+                    obs_time=str(rows[0].get("obs_time") or ""),
+                )
+        except Exception:
+            pass
 
     def _attach_fmi_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -982,6 +1015,15 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         except Exception:
             logger.exception("airport_obs_log append failed for fmi city={}", city_lower)
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            if icao and row.get("temp") is not None:
+                DBManager().upsert_daily_max(
+                    icao=icao, temp_c=row.get("temp"), obs_date=today,
+                    obs_time=str(row.get("obs_time") or ""),
+                )
+        except Exception:
+            pass
 
     def _attach_hko_obs_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1007,6 +1049,17 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             )
         except Exception:
             logger.exception("airport_obs_log append failed for hko_obs city={}", city_lower)
+        try:
+            today = datetime.now().strftime("%Y-%m-%d")
+            icao_hk = str(rows[0].get("icao") or "HKO") if rows else ""
+            temp_hk = rows[0].get("temp") if rows else None
+            if icao_hk and temp_hk is not None:
+                DBManager().upsert_daily_max(
+                    icao=icao_hk, temp_c=temp_hk, obs_date=today,
+                    obs_time=str(rows[0].get("obs_time") or ""),
+                )
+        except Exception:
+            pass
 
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1047,6 +1100,18 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                             )
                 except Exception:
                     logger.exception("airport_obs_log append failed for amos city={}", city_lower)
+                # 更新日最高
+                try:
+                    today = datetime.now().strftime("%Y-%m-%d")
+                    icao = amos_data.get("icao") or ""
+                    temp_c = amos_data.get("temp_c")
+                    if icao and temp_c is not None:
+                        DBManager().upsert_daily_max(
+                            icao=icao, temp_c=temp_c, obs_date=today,
+                            obs_time=amos_data.get("observation_time") or "",
+                        )
+                except Exception:
+                    pass
             else:
                 logger.warning("AMOS: no data returned for city={}", city_lower)
         except Exception as exc:

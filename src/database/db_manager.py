@@ -295,6 +295,15 @@ class DBManager:
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_airport_obs_log_icao_time ON airport_obs_log(icao, created_at DESC)"
             )
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS city_daily_max (
+                    icao TEXT PRIMARY KEY,
+                    max_temp REAL NOT NULL,
+                    obs_date TEXT NOT NULL,
+                    max_time TEXT,
+                    updated_at TEXT NOT NULL
+                )
+            """)
             self._ensure_column(conn, "users", "daily_points", "INTEGER DEFAULT 0")
             self._ensure_column(conn, "users", "daily_points_date", "TEXT")
             self._ensure_column(conn, "users", "weekly_points", "INTEGER DEFAULT 0")
@@ -1880,3 +1889,26 @@ class DBManager:
                 (str(icao).strip().upper(), str(-int(minutes))),
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def upsert_daily_max(
+        self, *, icao: str, temp_c: float, obs_date: str,
+        max_time: Optional[str] = None, obs_time: str = "",
+    ) -> None:
+        """Only update if temp_c exceeds stored max for the same date."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT max_temp, obs_date FROM city_daily_max WHERE icao = ?",
+                (str(icao).strip().upper(),),
+            ).fetchone()
+            if row and row[1] == obs_date:
+                if temp_c <= (row[0] or -999.0):
+                    return  # not a new high
+            # new day or new high: upsert
+            conn.execute(
+                """INSERT OR REPLACE INTO city_daily_max
+                   (icao, max_temp, obs_date, max_time, updated_at)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (str(icao).strip().upper(), temp_c, obs_date,
+                 max_time or "", obs_time or datetime.now().isoformat()),
+            )
+            conn.commit()

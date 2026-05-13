@@ -199,6 +199,7 @@ body {
 
 /* ── obs age ── */
 .obs-age { font-size: 13px; color: #5a6170; }
+.max-time { font-size: 12px; color: #4a5160; margin-left: 2px; }
 
 /* ── HTMX indicator ── */
 .htmx-indicator {

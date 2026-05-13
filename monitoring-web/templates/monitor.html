@@ -44,6 +44,21 @@
 
   <div class="card-meta">
     <div class="meta-row">
+      <span class="label">High</span>
+      {% match c.today_max %}
+      {% when Some with (m) %}
+      <span class="value">{{ "{:.1}"|format(m) }}°C</span>
+      {% match c.max_time %}
+      {% when Some with (mt) %}
+      <span class="value max-time">{{ mt }}</span>
+      {% when None %}
+      {% endmatch %}
+      {% when None %}
+      <span class="value na">--</span>
+      {% endmatch %}
+      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+    </div>
+    <div class="meta-row">
       <span class="label">Obs</span>
       {% match c.obs_age_min %}
       {% when Some with (m) %}

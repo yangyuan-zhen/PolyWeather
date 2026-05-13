@@ -377,6 +377,17 @@ class SettlementSourceMixin:
                 )
             except Exception:
                 logger.exception("airport_obs_log append failed for cwa")
+            try:
+                from src.database.db_manager import DBManager
+                today = datetime.now().strftime("%Y-%m-%d")
+                tc = payload["current"]["temp"]
+                if tc is not None:
+                    DBManager().upsert_daily_max(
+                        icao="466920", temp_c=tc, obs_date=today,
+                        obs_time=str(obs_time_raw or "").strip(),
+                    )
+            except Exception:
+                pass
             return payload
         except Exception as exc:
             logger.warning(f"CWA settlement fetch failed: {exc}")
