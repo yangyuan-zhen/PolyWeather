@@ -25,6 +25,37 @@ pub fn get_daily_max(db_path: &str, city_key: &str) -> Option<(f64, Option<Strin
     .ok()
 }
 
+/// Get runway-level observations for Seoul/Busan (stored as ICAO_RWY_N).
+pub fn get_runway_temps(db_path: &str, icao: &str) -> Vec<(String, f64)> {
+    let conn = match Connection::open(db_path) {
+        Ok(c) => c,
+        Err(_) => return vec![],
+    };
+    let pattern = format!("{}_RWY_%", icao.to_uppercase());
+    let mut stmt = match conn.prepare(
+        "SELECT icao, temp_c FROM airport_obs_log \
+         WHERE icao LIKE ?1 AND created_at > datetime('now', '-120 minutes') \
+         ORDER BY icao, created_at DESC"
+    ) {
+        Ok(s) => s,
+        Err(_) => return vec![],
+    };
+    let mut results: Vec<(String, f64)> = vec![];
+    let rows = stmt.query_map(rusqlite::params![pattern], |row| {
+        Ok((row.get::<_, String>(0)?, row.get::<_, f64>(1)?))
+    });
+    if let Ok(iter) = rows {
+        let mut seen = std::collections::HashSet::new();
+        for r in iter.filter_map(|r| r.ok()) {
+            // Take only the first (most recent) per unique icao
+            if seen.insert(r.0.clone()) {
+                results.push(r);
+            }
+        }
+    }
+    results
+}
+
 /// Get recent temperature observations for an ICAO station.
 pub fn get_recent_obs(db_path: &str, icao: &str, minutes: i32, limit: usize) -> Vec<ObsRow> {
     let conn = match Connection::open(db_path) {

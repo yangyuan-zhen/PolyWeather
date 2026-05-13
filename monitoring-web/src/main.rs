@@ -32,12 +32,6 @@ const CITIES: &[(&str, &str, &str, &str, &str, i32, f64, &str, usize)] = &[
     ("taipei", "台北", "Taipei", "466920", "Songshan", 8, 1.5, "TST", 0),
 ];
 
-// 跑道标签（与 AMOS scrape 返回的一致）
-const RUNWAY_LABELS: &[&[&str]] = &[
-    &["18L/36R", "18R/36L"],  // seoul
-    &["18L/36R", "18R/36L"],  // busan
-];
-
 // ── app state ──
 struct AppState {
     db_path: String,
@@ -83,7 +77,7 @@ fn parse_obs_time(raw: &str) -> Option<chrono::DateTime<Utc>> {
 
 // ── data loading ──
 
-fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, tz, thresh, tz_abbr, rw_count): &(&str, &str, &str, &str, &str, i32, f64, &str, usize)) -> CitySnapshot {
+fn load_city_snapshot(db_path: &str, _idx: usize, (key, _zh, en, icao, airport, tz, thresh, tz_abbr, rw_count): &(&str, &str, &str, &str, &str, i32, f64, &str, usize)) -> CitySnapshot {
     let now_utc = Utc::now();
     let offset = chrono::FixedOffset::east_opt(*tz * 3600).unwrap();
 
@@ -139,18 +133,20 @@ fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, t
         _ => false,
     };
 
-    // Runway data: query each runway ICAO
-    let mut runway_pairs: Vec<(String, f64)> = vec![];
-    if *rw_count > 0 && idx < RUNWAY_LABELS.len() {
-        for i in 0..*rw_count {
-            let rw_icao = format!("{}_RWY_{}", icao, i);
-            let rw_obs = db::get_recent_obs(db_path, &rw_icao, 120, 1);
-            if let Some(rw_temp) = rw_obs.first().and_then(|o| o.temp_c) {
-                let label = RUNWAY_LABELS[idx].get(i).unwrap_or(&"?").to_string();
-                runway_pairs.push((label, rw_temp));
-            }
-        }
-    }
+    // Runway data: query all ICAO_RWY_* for this airport
+    let runway_pairs: Vec<(String, f64)> = if *rw_count > 0 {
+        db::get_runway_temps(db_path, icao)
+            .into_iter()
+            .map(|(rw_icao, temp)| {
+                let label = rw_icao.strip_prefix(&format!("{}_RWY_", icao.to_uppercase()))
+                    .map(|n| format!("RWY {}", n))
+                    .unwrap_or_else(|| rw_icao);
+                (label, temp)
+            })
+            .collect()
+    } else {
+        vec![]
+    };
 
     CitySnapshot {
         name: key.to_string(),
