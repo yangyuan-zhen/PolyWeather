@@ -17,19 +17,19 @@ use tower_http::services::ServeDir;
 use tracing_subscriber;
 
 // ── city config ──
-// (city_key, display_name, icao, airport_en, utc_offset_hours, threshold, tz_abbr)
-const CITIES: &[(&str, &str, &str, &str, i32, f64, &str)] = &[
-    ("seoul", "首尔", "RKSI", "Incheon", 9, 3.0, "KST"),
-    ("busan", "釜山", "RKPK", "Gimhae", 9, 2.0, "KST"),
-    ("tokyo", "东京", "44166", "Haneda", 9, 2.0, "JST"),
-    ("ankara", "安卡拉", "17128", "Esenboğa", 3, 3.0, "TRT"),
-    ("helsinki", "赫尔辛基", "EFHK", "Vantaa", 3, 2.0, "EEST"),
-    ("amsterdam","阿姆斯特丹","EHAM","Schiphol",2,2.0,"CEST"),
-    ("istanbul","伊斯坦布尔","17058","Airport",3,3.0,"TRT"),
-    ("paris", "巴黎", "LFPB", "Le Bourget", 2, 3.0, "CEST"),
-    ("hong kong","香港","HKO","Observatory",8,1.5,"HKT"),
-    ("lau fau shan","流浮山","LFS","Lau Fau Shan",8,1.5,"HKT"),
-    ("taipei", "台北", "466920", "Songshan", 8, 1.5, "TST"),
+// (key, zh_name, en_name, icao, airport_en, utc_offset_hours, threshold, tz_abbr)
+const CITIES: &[(&str, &str, &str, &str, &str, i32, f64, &str)] = &[
+    ("seoul", "首尔", "Seoul", "RKSI", "Incheon", 9, 3.0, "KST"),
+    ("busan", "釜山", "Busan", "RKPK", "Gimhae", 9, 2.0, "KST"),
+    ("tokyo", "东京", "Tokyo", "44166", "Haneda", 9, 2.0, "JST"),
+    ("ankara", "安卡拉", "Ankara", "17128", "Esenboğa", 3, 3.0, "TRT"),
+    ("helsinki", "赫尔辛基", "Helsinki", "EFHK", "Vantaa", 3, 2.0, "EEST"),
+    ("amsterdam","阿姆斯特丹","Amsterdam","EHAM","Schiphol",2,2.0,"CEST"),
+    ("istanbul","伊斯坦布尔","Istanbul","17058","Airport",3,3.0,"TRT"),
+    ("paris", "巴黎", "Paris", "LFPB", "Le Bourget", 2, 3.0, "CEST"),
+    ("hong kong","香港","Hong Kong","HKO","Observatory",8,1.5,"HKT"),
+    ("lau fau shan","流浮山","Lau Fau Shan","LFS","Lau Fau Shan",8,1.5,"HKT"),
+    ("taipei", "台北", "Taipei", "466920", "Songshan", 8, 1.5, "TST"),
 ];
 
 // ── app state ──
@@ -49,7 +49,7 @@ struct MonitorTemplate {
 
 // ── data loading ──
 
-fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh, tz_abbr): &(&str, &str, &str, &str, i32, f64, &str)) -> CitySnapshot {
+fn load_city_snapshot(db_path: &str, (key, _zh, en, icao, airport, tz, thresh, tz_abbr): &(&str, &str, &str, &str, &str, i32, f64, &str)) -> CitySnapshot {
     let now_utc = Utc::now();
     let local = now_utc + chrono::Duration::hours(*tz as i64);
     let local_time = format!("{} {}", local.format("%H:%M"), tz_abbr);
@@ -84,13 +84,9 @@ fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh, t
         _ => false,
     };
 
-    // For AMOS cities, we'd need runway data from a different DB table.
-    // Simplified: no runway pairs for now; can be added later.
-    let runway_pairs: Vec<(String, f64)> = vec![];
-
     CitySnapshot {
         name: key.to_string(),
-        display_name: display.to_string(),
+        en_name: en.to_string(),
         airport: airport.to_string(),
         icao: icao.to_string(),
         local_time,
@@ -99,7 +95,7 @@ fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh, t
         max_time: None,
         trend,
         new_high,
-        runway_pairs,
+        runway_pairs: vec![],
         gap: None,
         threshold: *thresh,
         time_ok: false,
@@ -139,8 +135,6 @@ async fn api_data(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     };
     Html(tmpl.render().unwrap_or_else(|e| format!("Template error: {e}")))
 }
-
-// ── main ──
 
 #[tokio::main]
 async fn main() {

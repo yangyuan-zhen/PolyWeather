@@ -4,31 +4,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>市场监控 — PolyWeather</title>
+<title>Market Monitor — PolyWeather</title>
 <link rel="stylesheet" href="/static/style.css">
 <meta http-equiv="refresh" content="120">
 </head>
 <body>
 <div class="page">
 <header class="header">
-  <h1>🔥 市场监控</h1>
-  <span class="updated" id="update-time">更新中…</span>
+  <h1>🔥 Market Monitor</h1>
+  <div class="header-right">
+    <button id="notify-toggle" class="notify-btn" onclick="toggleNotify()" title="新高提醒">
+      <span id="notify-icon">🔔</span>
+    </button>
+    <span class="updated" id="update-time">更新中…</span>
+  </div>
 </header>
 {% endif %}
 
 <div id="card-grid" class="card-grid"
      hx-get="/api/data" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
-<span id="update-time" class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
+<span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
   {{ generated_at }}</span>
 {% for c in cities %}
-<div class="card{% if c.new_high %} new-high-card{% endif %}">
+<div class="card{% if c.new_high %} new-high-card{% endif %}" data-new-high="{{ c.new_high }}">
   <div class="card-top">
-    <span class="city-name">{{ c.display_name }}</span>
+    <span class="city-name">{{ c.en_name }}</span>
     <span class="airport">/ {{ c.airport }}</span>
     <span class="local-time">{{ c.local_time }}</span>
-    {% if c.new_high %}
-    <span class="badge new-high">◆新高</span>
-    {% endif %}
   </div>
 
   <div class="card-temp">
@@ -42,7 +44,7 @@
 
   <div class="card-meta">
     <div class="meta-row">
-      <span class="label">今日最高</span>
+      <span class="label">Today High</span>
       {% match c.today_max %}
       {% when Some with (m) %}
       <span class="value">{{ "{:.1}"|format(m) }}°C</span>
@@ -52,10 +54,10 @@
       <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
     </div>
     <div class="meta-row">
-      <span class="label">观测</span>
+      <span class="label">Obs</span>
       {% match c.obs_age_min %}
       {% when Some with (m) %}
-      <span class="value obs-age">{{ m }} 分钟前</span>
+      <span class="value obs-age">{{ m }} min ago</span>
       {% when None %}
       <span class="value na">--</span>
       {% endmatch %}
@@ -65,12 +67,63 @@
 {% endfor %}
 </div>
 
-<div id="spinner" class="htmx-indicator">刷新中…</div>
+<div id="spinner" class="htmx-indicator">Refreshing…</div>
 
 {% if full_page %}
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <script>
-// flash updated cards whose temp changed
+// ── Notification ──
+var NOTIFY_ENABLED = localStorage.getItem('monitor_notify') !== 'off';
+var NOTIFIED_HIGHS = JSON.parse(localStorage.getItem('monitor_notified_highs') || '{}');
+
+function toggleNotify() {
+  NOTIFY_ENABLED = !NOTIFY_ENABLED;
+  localStorage.setItem('monitor_notify', NOTIFY_ENABLED ? 'on' : 'off');
+  updateNotifyIcon();
+  if (NOTIFY_ENABLED && Notification.permission === 'default') {
+    Notification.requestPermission();
+  }
+}
+
+function updateNotifyIcon() {
+  var icon = document.getElementById('notify-icon');
+  var btn = document.getElementById('notify-toggle');
+  if (NOTIFY_ENABLED) {
+    icon.textContent = '🔔';
+    btn.classList.remove('muted');
+  } else {
+    icon.textContent = '🔕';
+    btn.classList.add('muted');
+  }
+}
+
+function fireNotification(city, enName, temp, todayMax) {
+  if (!NOTIFY_ENABLED) return;
+  if (Notification.permission !== 'granted') return;
+
+  var key = enName + '|' + temp;
+  var today = new Date().toDateString();
+
+  // Reset notified list on new day
+  if (NOTIFIED_HIGHS._day !== today) {
+    NOTIFIED_HIGHS = { _day: today };
+  }
+  if (NOTIFIED_HIGHS[key]) return; // already notified
+
+  NOTIFIED_HIGHS[key] = true;
+  localStorage.setItem('monitor_notified_highs', JSON.stringify(NOTIFIED_HIGHS));
+
+  new Notification('🔴 New High — ' + enName, {
+    body: temp + '°C (was ' + todayMax + '°C)\n' + enName + ' / ' + city,
+    icon: '/static/favicon.png',
+    tag: key,
+    requireInteraction: true,
+  });
+}
+
+updateNotifyIcon();
+
+// ── Flash on temp change + notifications ──
 (function(){
   let prev = {};
   document.body.addEventListener('htmx:afterSwap', function(evt){
@@ -80,13 +133,22 @@
       var tv = card.querySelector('.temp-value').textContent;
       var old = prev[name];
       prev[name] = tv;
+
+      // Flash if changed
       if(old && old !== tv && tv !== '--'){
         card.style.transition = 'none';
-        card.style.boxShadow = '0 0 12px rgba(52,211,153,0.35)';
+        card.style.boxShadow = '0 0 14px rgba(52,211,153,0.40)';
         requestAnimationFrame(function(){
           card.style.transition = 'box-shadow 2s ease-out';
           card.style.boxShadow = '';
         });
+      }
+
+      // Notification for new high
+      if(card.dataset.newHigh === 'true'){
+        var maxEl = card.querySelector('.meta-row .value');
+        var maxVal = maxEl ? maxEl.textContent.replace('°C','') : '';
+        fireNotification(name, name, tv, maxVal);
       }
     });
   });

@@ -3,7 +3,7 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 pub struct CitySnapshot {
     pub name: String,
-    pub display_name: String,
+    pub en_name: String,
     pub airport: String,
     pub icao: String,
     pub local_time: String,

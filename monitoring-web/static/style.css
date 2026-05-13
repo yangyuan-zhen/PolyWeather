@@ -28,6 +28,22 @@ body {
   color: #e8eaed;
   letter-spacing: 0.02em;
 }
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.notify-btn {
+  background: none;
+  border: 1px solid #2a2e40;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.notify-btn:hover { border-color: #4a5160; }
+.notify-btn.muted { opacity: 0.4; }
 
 /* ── grid ── */
 .card-grid {
