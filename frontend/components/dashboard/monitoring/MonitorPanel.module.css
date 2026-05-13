@@ -1,0 +1,364 @@
+/* ══════════════════════════════════════════════════════════════
+   MONITOR PANEL — Market Monitor board
+   All colours reference design tokens so dark/light theme works.
+   ══════════════════════════════════════════════════════════════ */
+
+.root :global(.monitor-panel) {
+  background: var(--color-bg-base);
+  height: 100%;
+  overflow: auto;
+  padding: 20px 24px;
+  color: var(--color-text-primary);
+}
+
+/* ── Header ── */
+.root :global(.monitor-header) {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 24px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.root :global(.monitor-title) {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.root :global(.monitor-controls) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.root :global(.monitor-loading-indicator) {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.root :global(.monitor-loading-dot) {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-accent-primary);
+  animation: monitorPulse 1.2s ease-in-out infinite;
+}
+
+.root :global(.monitor-notify-btn) {
+  background: none;
+  border: 1px solid var(--color-border-default);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  color: inherit;
+}
+
+.root :global(.monitor-notify-btn:hover) {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-raised);
+}
+
+.root :global(.monitor-notify-btn.muted) {
+  opacity: 0.4;
+}
+
+.root :global(.monitor-time) {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Grid ── */
+.root :global(.monitor-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+/* ── Skeleton card ── */
+.root :global(.monitor-skeleton-card) {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  padding: 20px 24px;
+  min-height: 148px;
+  animation: monitorShimmer 1.6s ease-in-out infinite;
+}
+
+.root :global(.monitor-skeleton-line) {
+  background: var(--color-border-default);
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+/* ── City card ── */
+.root :global(.monitor-card) {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border-default);
+  border-radius: 12px;
+  padding: 20px 24px;
+  transition: border-color var(--transition-base);
+}
+
+.root :global(.monitor-card.new-high) {
+  border-color: rgba(124, 58, 237, 0.3);
+}
+
+/* ── Card header ── */
+.root :global(.monitor-card-head) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 15px;
+  flex-wrap: wrap;
+}
+
+.root :global(.monitor-city-name) {
+  color: var(--color-text-primary);
+  font-weight: 700;
+}
+
+.root :global(.monitor-airport-name) {
+  color: var(--color-text-secondary);
+}
+
+.root :global(.monitor-obs-time) {
+  margin-left: auto;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.root :global(.monitor-new-high-badge) {
+  font-size: 12px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(124, 58, 237, 0.18);
+  color: #a78bfa;
+  font-weight: 600;
+}
+
+/* ── Temperature display ── */
+.root :global(.monitor-temp-display) {
+  margin: 8px 0 10px;
+  line-height: 1.15;
+}
+
+.root :global(.monitor-temp-value) {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--color-text-primary);
+}
+
+.root :global(.monitor-temp-value.new-high) {
+  color: #c084fc;
+}
+
+.root :global(.monitor-temp-value.warm) {
+  color: var(--color-signal-warning);
+}
+
+.root :global(.monitor-temp-unit) {
+  font-size: 20px;
+  color: var(--color-text-muted);
+  margin-left: 3px;
+}
+
+.root :global(.monitor-temp-missing) {
+  font-size: 30px;
+  color: var(--color-border-default);
+}
+
+/* ── Stats row ── */
+.root :global(.monitor-stats) {
+  font-size: 14px;
+}
+
+.root :global(.monitor-high-row) {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.root :global(.monitor-stat-label) {
+  color: var(--color-text-muted);
+}
+
+.root :global(.monitor-high-value) {
+  color: var(--color-text-secondary);
+}
+
+.root :global(.monitor-high-time) {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.root :global(.monitor-stat-missing) {
+  color: var(--color-border-default);
+}
+
+.root :global(.monitor-trend) {
+  margin-left: auto;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.root :global(.monitor-trend.rising) {
+  color: var(--color-signal-success);
+}
+
+.root :global(.monitor-trend.falling) {
+  color: var(--color-accent-primary);
+}
+
+.root :global(.monitor-trend.flat) {
+  color: var(--color-text-muted);
+}
+
+.root :global(.monitor-obs-row) {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.root :global(.monitor-obs-age) {
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+/* ── Runway sub-section ── */
+.root :global(.monitor-divider) {
+  height: 1px;
+  background: var(--color-border-subtle);
+  margin: 10px 0 8px;
+}
+
+.root :global(.monitor-rw-row) {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.root :global(.monitor-rw-label) {
+  color: var(--color-text-muted);
+}
+
+.root :global(.monitor-rw-temp) {
+  color: var(--color-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES
+   Scoped to .scan-terminal.light so the panel responds to the
+   terminal's built-in theme toggle (not html.light).
+   ══════════════════════════════════════════════════════════════ */
+
+.root :global(.scan-terminal.light .monitor-panel) {
+  background: #F7F9FC;
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-header) {
+  border-bottom-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-title) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-time),
+.root :global(.scan-terminal.light .monitor-stat-label),
+.root :global(.scan-terminal.light .monitor-obs-time),
+.root :global(.scan-terminal.light .monitor-obs-age),
+.root :global(.scan-terminal.light .monitor-rw-label),
+.root :global(.scan-terminal.light .monitor-high-time),
+.root :global(.scan-terminal.light .monitor-loading-indicator) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .monitor-card) {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-card.new-high) {
+  border-color: rgba(124, 58, 237, 0.24);
+}
+
+.root :global(.scan-terminal.light .monitor-skeleton-card) {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-skeleton-line) {
+  background: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-city-name) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-airport-name),
+.root :global(.scan-terminal.light .monitor-high-value),
+.root :global(.scan-terminal.light .monitor-rw-temp) {
+  color: #334155;
+}
+
+.root :global(.scan-terminal.light .monitor-temp-value) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-temp-unit),
+.root :global(.scan-terminal.light .monitor-temp-missing),
+.root :global(.scan-terminal.light .monitor-stat-missing) {
+  color: #94A3B8;
+}
+
+.root :global(.scan-terminal.light .monitor-divider) {
+  background: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-notify-btn) {
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #334155;
+}
+
+.root :global(.scan-terminal.light .monitor-notify-btn:hover) {
+  border-color: rgba(37, 99, 235, 0.38);
+  background: #EEF2F7;
+}
+
+.root :global(.scan-terminal.light .monitor-trend.rising) {
+  color: #16a34a;
+}
+
+.root :global(.scan-terminal.light .monitor-trend.falling) {
+  color: #2563EB;
+}
+
+/* ── Animations ── */
+@keyframes monitorPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes monitorShimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}

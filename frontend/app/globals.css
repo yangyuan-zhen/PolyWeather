@@ -90,6 +90,27 @@
     --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
     --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
+    --transition: var(--transition-base);
+
+    /* ── Legacy Variable Aliases (bridge for older CSS modules) ── */
+    /* These map old shorthand names → current design token names.  */
+    --accent-cyan:    var(--color-accent-primary);
+    --accent-blue:    var(--color-accent-secondary);
+    --accent-green:   var(--color-signal-success);
+    --bg-primary:     var(--color-bg-base);
+    --bg-secondary:   var(--color-bg-raised);
+    --bg-card:        var(--color-bg-card);
+    --bg-glass:       var(--color-bg-card);
+    --border-glass:   var(--color-border-default);
+    --border-subtle:  var(--color-border-subtle);
+    --text-primary:   var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted:     var(--color-text-muted);
+    --risk-high:      var(--color-risk-high);
+    --risk-medium:    var(--color-risk-medium);
+    --risk-low:       var(--color-risk-low);
+    --shadow-lg:      var(--shadow-elevation-2);
+    --glass-blur:     10px;
 
     /* ── shadcn/ui Tokens (used by Tailwind @apply border-border) ── */
     --background: 223 53% 4%;
@@ -139,6 +160,20 @@
     --glass-opacity-1: 0.86;
     --glass-opacity-2: 0.92;
     --glass-opacity-3: 0.96;
+
+    /* ── Legacy alias overrides for light theme ── */
+    --accent-cyan:    var(--color-accent-primary);
+    --accent-blue:    var(--color-accent-secondary);
+    --bg-primary:     var(--color-bg-base);
+    --bg-secondary:   var(--color-bg-raised);
+    --bg-card:        var(--color-bg-card);
+    --bg-glass:       var(--color-bg-card);
+    --border-glass:   var(--color-border-default);
+    --border-subtle:  var(--color-border-subtle);
+    --text-primary:   var(--color-text-primary);
+    --text-secondary: var(--color-text-secondary);
+    --text-muted:     var(--color-text-muted);
+    --shadow-lg:      var(--shadow-elevation-2);
   }
 
   * {

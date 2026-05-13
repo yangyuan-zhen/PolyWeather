@@ -25,6 +25,7 @@ import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
 import scanTerminalShellStyles from "./ScanTerminalShell.module.css";
 import scanTerminalStateStyles from "./ScanTerminalState.module.css";
+import monitorPanelStyles from "./monitoring/MonitorPanel.module.css";
 
 export const scanRootClass = clsx(
   dashboardHomeStyles.root,
@@ -48,4 +49,5 @@ export const scanRootClass = clsx(
   modalChromeStyles.root,
   futureForecastModalStyles.root,
   historyModalStyles.root,
+  monitorPanelStyles.root,
 );
