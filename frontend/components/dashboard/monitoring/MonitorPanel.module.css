@@ -43,13 +43,34 @@
   color: var(--color-text-muted);
 }
 
+.root :global(.monitor-load-progress) {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.root :global(.monitor-syncing-badge) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--color-accent-primary);
+  background: rgba(77, 163, 255, 0.08);
+  border: 1px solid rgba(77, 163, 255, 0.18);
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 .root :global(.monitor-loading-dot) {
   display: inline-block;
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--color-accent-primary);
   animation: monitorPulse 1.2s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 .root :global(.monitor-notify-btn) {
@@ -240,7 +261,200 @@
   font-size: 13px;
 }
 
-/* ── Runway sub-section ── */
+/* ── Freshness legend ── */
+.root :global(.monitor-legend) {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+  margin-top: -12px;
+}
+
+.root :global(.monitor-legend-item) {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── Freshness dot ── */
+.root :global(.monitor-freshness-dot) {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  cursor: help;
+}
+
+.root :global(.monitor-freshness-dot.fresh) {
+  background: var(--color-signal-success);
+  box-shadow: 0 0 5px rgba(34, 197, 94, 0.5);
+}
+
+.root :global(.monitor-freshness-dot.aging) {
+  background: var(--color-signal-warning);
+  box-shadow: 0 0 5px rgba(245, 158, 11, 0.4);
+}
+
+.root :global(.monitor-freshness-dot.stale) {
+  background: var(--color-signal-danger);
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.4);
+}
+
+.root :global(.monitor-freshness-dot.unknown) {
+  background: var(--color-text-muted);
+  opacity: 0.5;
+}
+
+/* ── Obs-age with freshness colour ── */
+.root :global(.monitor-obs-age) {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.root :global(.monitor-obs-age.fresh) { color: var(--color-signal-success); }
+.root :global(.monitor-obs-age.aging) { color: var(--color-signal-warning); }
+.root :global(.monitor-obs-age.stale) { color: var(--color-signal-danger); }
+.root :global(.monitor-obs-age.unknown) { color: var(--color-text-muted); }
+
+/* ── Refresh progress bar (top edge of card while fetching) ── */
+.root :global(.monitor-refresh-bar) {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-accent-primary) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: monitorSweep 1.4s linear infinite;
+}
+
+/* ── Card refreshing state ── */
+.root :global(.monitor-card.refreshing) {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Slight dim on stale cards so fresh ones stand out */
+.root :global(.monitor-card:not(.refreshing)) {
+  position: relative;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES
+   ══════════════════════════════════════════════════════════════ */
+
+.root :global(.scan-terminal.light .monitor-panel) {
+  background: #F7F9FC;
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-header) {
+  border-bottom-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-title) {
+  color: #0F172A;
+}
+
+.root :global(.scan-terminal.light .monitor-legend-item) {
+  color: #64748B;
+}
+
+.root :global(.scan-terminal.light .monitor-time),
+.root :global(.scan-terminal.light .monitor-stat-label),
+.root :global(.scan-terminal.light .monitor-obs-time),
+.root :global(.scan-terminal.light .monitor-rw-label),
+.root :global(.scan-terminal.light .monitor-high-time),
+.root :global(.scan-terminal.light .monitor-load-progress) {
+  color: #475569;
+}
+
+.root :global(.scan-terminal.light .monitor-card) {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-card.new-high) {
+  border-color: rgba(124, 58, 237, 0.24);
+}
+
+.root :global(.scan-terminal.light .monitor-skeleton-card) {
+  background: #FFFFFF;
+  border-color: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-skeleton-line) {
+  background: #E2E8F0;
+}
+
+.root :global(.scan-terminal.light .monitor-city-name) { color: #0F172A; }
+
+.root :global(.scan-terminal.light .monitor-airport-name),
+.root :global(.scan-terminal.light .monitor-high-value),
+.root :global(.scan-terminal.light .monitor-rw-temp) {
+  color: #334155;
+}
+
+.root :global(.scan-terminal.light .monitor-temp-value) { color: #0F172A; }
+
+.root :global(.scan-terminal.light .monitor-temp-unit),
+.root :global(.scan-terminal.light .monitor-temp-missing),
+.root :global(.scan-terminal.light .monitor-stat-missing) {
+  color: #94A3B8;
+}
+
+.root :global(.scan-terminal.light .monitor-divider) { background: #E2E8F0; }
+
+.root :global(.scan-terminal.light .monitor-notify-btn) {
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #334155;
+}
+
+.root :global(.scan-terminal.light .monitor-notify-btn:hover) {
+  border-color: rgba(37, 99, 235, 0.38);
+  background: #EEF2F7;
+}
+
+.root :global(.scan-terminal.light .monitor-trend.rising) { color: #16a34a; }
+.root :global(.scan-terminal.light .monitor-trend.falling) { color: #2563EB; }
+
+.root :global(.scan-terminal.light .monitor-syncing-badge) {
+  color: #2563EB;
+  background: #EFF6FF;
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+/* obs-age colours stay semantic in light mode */
+.root :global(.scan-terminal.light .monitor-obs-age.fresh) { color: #16a34a; }
+.root :global(.scan-terminal.light .monitor-obs-age.aging) { color: #d97706; }
+.root :global(.scan-terminal.light .monitor-obs-age.stale) { color: #dc2626; }
+.root :global(.scan-terminal.light .monitor-obs-age.unknown) { color: #64748b; }
+
+/* ── Animations ── */
+@keyframes monitorPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+@keyframes monitorShimmer {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes monitorSweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 .root :global(.monitor-divider) {
   height: 1px;
   background: var(--color-border-subtle);
