@@ -852,11 +852,20 @@ _AIRPORT_HEAT_THRESHOLD = {
 }
 
 
-def _in_peak_time_window(city_weather: Dict[str, Any]) -> bool:
+# 部分城市 Open-Meteo 算出的 peak 窗口偏窄，用 fallback 拓宽
+# （例如沿海城市受海风影响，高温窗口被压缩）
+_AIRPORT_PEAK_FALLBACK = {
+    "busan": (12, 16),
+}
+
+def _in_peak_time_window(city: str, city_weather: Dict[str, Any]) -> bool:
     """Check if current local time is within the expected peak temperature window."""
     peak = city_weather.get("peak") or {}
     first_h = peak.get("first_h")
     last_h = peak.get("last_h")
+    fallback = _AIRPORT_PEAK_FALLBACK.get(city)
+    if fallback and ((first_h is None) or (last_h is not None and last_h - first_h < 3)):
+        first_h, last_h = fallback
     local_time = city_weather.get("local_time") or ""
     if first_h is None or not local_time:
         return False
@@ -964,7 +973,7 @@ def _run_high_freq_airport_cycle(
 
             # ── Three-condition heat window ──
             threshold = _AIRPORT_HEAT_THRESHOLD.get(city, 3.0)
-            time_ok = _in_peak_time_window(city_weather)
+            time_ok = _in_peak_time_window(city, city_weather)
             temp_ok = (deb_pred - current_temp) <= threshold
             trend_ok = _check_rising_trend(airport_icao) if city != "paris" else True
 
