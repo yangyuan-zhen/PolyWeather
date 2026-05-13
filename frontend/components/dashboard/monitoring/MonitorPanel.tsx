@@ -88,11 +88,26 @@ function trendSymbol(tr: "rising" | "falling" | "flat") {
  * Resolve today's observed high temperature.
  * Aligned with Telegram bot (_get_airport_daily_high):
  * only airport_current.max_so_far — no fallback.
+ *
+ * Exception — HKO cities (Hong Kong / Lau Fau Shan):
+ * The HKO observatory IS the settlement station, so current.max_so_far
+ * is equivalent to the airport obs. Use it as a fallback when
+ * airport_current.max_so_far is absent.
  */
-function resolveMaxSoFar(detail: CityDetail | undefined): number | null {
+function resolveMaxSoFar(
+  detail: CityDetail | undefined,
+  key?: string,
+): number | null {
   const v = detail?.airport_current?.max_so_far ?? null;
-  if (v == null) return null;
-  return Math.round(v * 10) / 10;
+  if (v != null) return Math.round(v * 10) / 10;
+
+  // HKO fallback: current.max_so_far is authoritative for HKO stations
+  if (key === "hong kong" || key === "lau fau shan") {
+    const hko = detail?.current?.max_so_far ?? null;
+    if (hko != null) return Math.round(hko * 10) / 10;
+  }
+
+  return null;
 }
 
 /* ── Airport names ───────────────────────────────────────────── */
@@ -124,6 +139,17 @@ const AIRPORT_NAMES: Record<string, { en: string; zh: string }> = {
 function airportLabel(key: string, isEn: boolean) {
   const e = AIRPORT_NAMES[key];
   return e ? (isEn ? e.en : e.zh) : "";
+}
+
+/**
+ * Cities whose observation data comes from HKO ground stations,
+ * NOT ICAO airport METAR. Display "天文台观测 / HKO Obs" for these.
+ */
+const HKO_OBS_CITIES = new Set<MonitorKey>(["hong kong", "lau fau shan"]);
+
+function obsSourceLabel(key: MonitorKey, isEn: boolean): string {
+  if (HKO_OBS_CITIES.has(key)) return isEn ? "HKO Obs" : "天文台观测";
+  return isEn ? "Airport METAR" : "机场报文";
 }
 
 /* ── Skeleton Card ───────────────────────────────────────────── */
@@ -283,7 +309,7 @@ export default function MonitorPanel({
     for (const { key, detail } of sorted) {
       const ac  = detail?.airport_current;
       const cur = ac?.temp ?? detail?.current?.temp ?? null;
-      const max = resolveMaxSoFar(detail);   // same best-source logic as card display
+      const max = resolveMaxSoFar(detail, key);   // HKO cities fall back to current.max_so_far
       if (cur != null && max != null && cur >= max + 0.3) {
         // Key: city + rounded temp, so we only beep once per 0.1°C step
         const id = `${key}|${(Math.round(cur * 10) / 10).toFixed(1)}`;
@@ -361,8 +387,8 @@ export default function MonitorPanel({
 
           const ac = detail.airport_current;
           const cur = ac?.temp ?? detail.current?.temp ?? null;
-          const max = resolveMaxSoFar(detail);           // best-source today's high
-          const mtt = ac?.max_temp_time ?? null;
+          const max = resolveMaxSoFar(detail, key);          // HKO cities fall back to current.max_so_far
+          const mtt = ac?.max_temp_time ?? detail.current?.max_temp_time ?? null;
           const obs = ac?.obs_time ?? detail.local_time ?? "";
           const age = ac?.obs_age_min ?? null;
           const freshness = freshnessLevel(age);
@@ -425,7 +451,7 @@ export default function MonitorPanel({
               {/* Stats */}
               <div className="monitor-stats">
                 <div className="monitor-high-row">
-                  <span className="monitor-stat-label">{t("High", "高温", lang)}</span>
+                  <span className="monitor-stat-label">{t("Today's High", "今日实测高温", lang)}</span>
                   {max != null ? (
                     <>
                       <span className="monitor-high-value">{max.toFixed(1)}{tempSymbol}</span>
@@ -438,7 +464,7 @@ export default function MonitorPanel({
                 </div>
                 <div className="monitor-obs-row">
                   <span className="monitor-stat-label">
-                    {t("Airport METAR", "机场报文", lang)}
+                    {obsSourceLabel(key, isEn)}
                   </span>
                   <span className={`monitor-obs-age ${freshness}`}>
                     {age != null ? (
