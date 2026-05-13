@@ -71,6 +71,17 @@
             <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
           </div>
         </div>
+        {% if !c.runway_pairs.is_empty() %}
+        <div class="card-runway">
+          <div class="runway-divider"></div>
+          {% for (label, temp) in c.runway_pairs %}
+          <div class="runway-row">
+            <span class="runway-label">{{ label }}</span>
+            <span class="runway-temp">{{ "{:.1}"|format(temp) }}°C</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% endif %}
       </div>
       {% endfor %}
     </div>
