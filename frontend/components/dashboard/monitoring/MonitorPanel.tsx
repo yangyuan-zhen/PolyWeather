@@ -43,6 +43,34 @@ function freshnessDotTitle(level: Freshness, ageMin: number | null | undefined, 
          level === "stale" ? `数据陈旧 · ${age}` : "更新时间未知";
 }
 
+/* ── Audio alert (Web Audio API, no external file needed) ────── */
+function playNewHighBeep(): void {
+  try {
+    const ctx = new AudioContext();
+    // Two-tone rising beep: signals a new temperature high
+    const tones = [
+      { freq: 880,  start: 0,    dur: 0.12, peak: 0.40 },
+      { freq: 1100, start: 0.15, dur: 0.18, peak: 0.55 },
+    ];
+    for (const { freq, start, dur, peak } of tones) {
+      const osc = ctx.createOscillator();
+      const g   = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      osc.connect(g);
+      g.connect(ctx.destination);
+      g.gain.setValueAtTime(0,    ctx.currentTime + start);
+      g.gain.linearRampToValueAtTime(peak,  ctx.currentTime + start + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+      osc.start(ctx.currentTime + start);
+      osc.stop(ctx.currentTime + start + dur + 0.01);
+    }
+    setTimeout(() => ctx.close(), 600);
+  } catch {
+    // AudioContext may be blocked before a user gesture — silently ignore
+  }
+}
+
 function trendClass(detail: CityDetail | undefined): "rising" | "falling" | "flat" {
   if (!detail?.airport_current) return "flat";
   const ac = detail.airport_current;
@@ -230,33 +258,29 @@ export default function MonitorPanel() {
     }
   };
 
-  /* Browser notifications for new highs */
+  /* Audio alert when current temp exceeds today's observed high by ≥ 0.3 °C */
   useEffect(() => {
-    if (!notify || typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    if (!notify) return;
     const today = new Date().toDateString();
-    let notified: Record<string, unknown> = {};
-    try { notified = JSON.parse(localStorage.getItem("monitor_notified_highs") || "{}"); } catch {}
-    if (notified._day !== today) notified = { _day: today };
+    let alerted: Record<string, unknown> = {};
+    try { alerted = JSON.parse(localStorage.getItem("monitor_alerted_highs") || "{}"); } catch {}
+    if (alerted._day !== today) alerted = { _day: today };
 
     for (const { key, detail } of sorted) {
-      const ac = detail?.airport_current;
+      const ac  = detail?.airport_current;
       const cur = ac?.temp ?? detail?.current?.temp ?? null;
       const max = ac?.max_so_far ?? null;
       if (cur != null && max != null && cur >= max + 0.3) {
-        const id = `${key}|${cur}`;
-        if (!notified[id]) {
-          notified[id] = true;
-          localStorage.setItem("monitor_notified_highs", JSON.stringify(notified));
-          const name = detail?.display_name || key;
-          new Notification(isEn ? `🔴 New High — ${name}` : `🔴 新高 — ${name}`, {
-            body: isEn ? `${cur}°C · New daily high.` : `${cur}°C · 今日新高。`,
-            tag: id,
-            requireInteraction: true,
-          });
+        // Key: city + rounded temp, so we only beep once per 0.1°C step
+        const id = `${key}|${(Math.round(cur * 10) / 10).toFixed(1)}`;
+        if (!alerted[id]) {
+          alerted[id] = true;
+          localStorage.setItem("monitor_alerted_highs", JSON.stringify(alerted));
+          playNewHighBeep();
         }
       }
     }
-  }, [sorted, notify, isEn]);
+  }, [sorted, notify]);
 
   /* ── Render ── */
   return (
@@ -286,8 +310,8 @@ export default function MonitorPanel() {
             className={`monitor-notify-btn${notify ? "" : " muted"}`}
             onClick={toggleNotify}
             title={notify
-              ? t("Disable alerts", "关闭提醒", lang)
-              : t("Enable alerts", "开启提醒", lang)}
+              ? t("Disable new-high alert", "关闭新高提醒", lang)
+              : t("Enable new-high alert", "开启新高提醒", lang)}
           >
             {notify ? "🔔" : "🔕"}
           </button>
