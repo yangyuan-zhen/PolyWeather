@@ -1614,3 +1614,178 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   LIGHT-MODE OVERRIDES — future-v2 decision card components
+   These classes use dark hardcoded backgrounds (rgba(2,6,23,…))
+   which are correct for dark theme but must be overridden in light.
+   ══════════════════════════════════════════════════════════════ */
+
+html.light .root :global(.future-v2-meteorology-brief) {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.72), rgba(255, 255, 255, 0.92));
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+html.light .root :global(.future-v2-anchor-source) {
+  background: #dbeafe;
+  border-color: rgba(59, 130, 246, 0.32);
+  color: #1d4ed8;
+}
+
+html.light .root :global(.future-v2-meteorology-copy h3) {
+  color: #0f172a;
+}
+
+html.light .root :global(.future-v2-meteorology-meta span) {
+  background: #eef2f7;
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #334155;
+}
+
+html.light .root :global(.future-v2-decision-anchor) {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.18);
+}
+
+html.light .root :global(.future-v2-decision-anchor strong) {
+  color: #0f172a;
+}
+
+html.light .root :global(.future-v2-decision-anchor small) {
+  color: #2563eb;
+}
+
+html.light .root :global(.future-v2-decision-grid div) {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.16);
+}
+
+html.light .root :global(.future-v2-decision-grid strong) {
+  color: #0369a1;
+}
+
+html.light .root :global(.future-v2-meteorology-paths div) {
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.16);
+}
+
+html.light .root :global(.future-v2-meteorology-paths span) {
+  color: #475569;
+}
+
+html.light .root :global(.future-v2-meteorology-paths strong) {
+  color: #0369a1;
+}
+
+html.light .root :global(.future-v2-hero-temp) {
+  color: #0f172a;
+  text-shadow: none;
+}
+
+html.light .root :global(.future-v2-hero-divider) {
+  background: rgba(15, 23, 42, 0.14);
+}
+
+html.light .root :global(.future-v2-hero-obs) {
+  color: #334155;
+}
+
+html.light .root :global(.future-v2-card) {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: rgba(125, 171, 214, 0.28);
+}
+
+html.light .root :global(.future-v2-focus-card) {
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.4) 0%, rgba(255, 255, 255, 0.72) 100%);
+}
+
+html.light .root :global(.future-v2-support-card) {
+  background: linear-gradient(180deg, rgba(226, 232, 240, 0.4) 0%, rgba(255, 255, 255, 0.72) 100%);
+}
+
+html.light .root :global(.future-v2-hero-card) {
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.5) 0%, rgba(255, 255, 255, 0.72) 100%);
+}
+
+html.light .root :global(.future-v2-pace-card) {
+  background: linear-gradient(180deg, rgba(239, 246, 255, 0.72) 0%, rgba(255, 255, 255, 0.72) 100%);
+}
+
+html.light .root :global(.future-v2-mini-item) {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+html.light .root :global(.future-v2-mini-item strong) {
+  color: #0f172a;
+}
+
+html.light .root :global(.future-v2-pace-signal-card) {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
+html.light .root :global(.future-v2-pace-delta.neutral) {
+  color: #475569;
+}
+
+html.light .root :global(.future-v2-daylight) {
+  background: linear-gradient(180deg, rgba(254, 243, 199, 0.5) 0%, rgba(255, 255, 255, 0.4) 100%);
+  border-color: rgba(245, 158, 11, 0.24);
+}
+
+html.light .root :global(.future-v2-daylight-bar) {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.9) 0%,
+    rgba(186, 230, 253, 0.5) 15%,
+    rgba(253, 224, 71, 0.45) 50%,
+    rgba(186, 230, 253, 0.4) 85%,
+    rgba(226, 232, 240, 0.9) 100%
+  );
+}
+
+html.light .root :global(.future-v2-daylight-head strong) {
+  color: #b45309;
+}
+
+html.light .root :global(.future-v2-signal-meter) {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+html.light .root :global(.future-v2-signal-tag) {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #475569;
+}
+
+html.light .root :global(.intraday-scene-shell) {
+  background: linear-gradient(180deg, rgba(219, 234, 254, 0.3) 0%, rgba(255, 255, 255, 0.5) 100%);
+  border-color: rgba(37, 99, 235, 0.16);
+}
+
+html.light .root :global(.intraday-scene-legend) {
+  background: rgba(248, 250, 252, 0.82);
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+/* ── Sync strip / refresh lock chip ── */
+html.light .root :global(.future-v2-sync-chip) {
+  background: rgba(240, 253, 250, 0.82);
+  border-color: rgba(16, 185, 129, 0.22);
+}
+
+html.light .root :global(.future-v2-sync-strip-compact .future-v2-sync-chip) {
+  background: rgba(255, 255, 255, 0.72);
+}
+
+html.light .root :global(.future-v2-refresh-lock) {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(14, 165, 233, 0.28);
+  box-shadow: 0 8px 24px rgba(40, 70, 110, 0.12);
+}
+
+html.light .root :global(.future-v2-refresh-lock strong) {
+  color: #0f172a;
+}
+
