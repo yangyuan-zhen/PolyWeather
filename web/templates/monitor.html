@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Market Monitor — PolyWeather</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh}
+.page{max-width:1500px;margin:0 auto;padding:24px 28px}
+.header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;padding-bottom:14px;border-bottom:1px solid #1e2130}
+.header h1{font-size:24px;font-weight:600;color:#e8eaed}
+.header-right{display:flex;align-items:center;gap:12px}
+.notify-btn{background:none;border:1px solid #2a2e40;border-radius:6px;padding:3px 8px;font-size:16px;cursor:pointer;transition:border-color .2s}
+.notify-btn:hover{border-color:#4a5160}
+.notify-btn.muted{opacity:.4}
+.updated{font-size:13px;color:#5a6170}
+.card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+@media(max-width:1100px){.card-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:600px){.card-grid{grid-template-columns:1fr}}
+.card{background:#161822;border:1px solid #1e2130;border-radius:12px;padding:22px 26px;transition:border-color .3s,box-shadow .3s;position:relative}
+.card:hover{border-color:#2a2e40}
+.card.new-high-card{border-color:rgba(124,58,237,.3)}
+.card-top{display:flex;align-items:center;gap:8px;margin-bottom:14px;font-size:15px;flex-wrap:wrap}
+.city-name{color:#e0e3e8;font-weight:700}
+.airport{color:#6a7180;font-weight:400}
+.local-time{margin-left:auto;color:#4a5160;font-variant-numeric:tabular-nums;font-size:14px}
+.badge{font-size:12px;padding:2px 7px;border-radius:4px;font-weight:600}
+.badge.new-high{background:rgba(124,58,237,.18);color:#a78bfa}
+.card-temp{margin:8px 0 10px;font-weight:700;line-height:1.15}
+.temp-value{font-size:52px;color:#e8eaed;letter-spacing:-.03em}
+.temp-value.na{color:#3a4050;font-size:32px}
+.temp-value.warm{color:#f59e0b}
+.temp-value.new-high-val{color:#c084fc}
+.temp-unit{font-size:22px;color:#5a6170;margin-left:3px}
+.card-meta{display:flex;flex-direction:column;gap:5px;margin-bottom:2px}
+.meta-row{display:flex;align-items:baseline;gap:8px;font-size:14px}
+.meta-row .label{color:#4a5160}
+.meta-row .value{color:#9aa0b0;font-variant-numeric:tabular-nums}
+.meta-row .value.na{color:#3a4050}
+.meta-row .trend{margin-left:auto}
+.trend{font-size:18px;font-weight:700}
+.trend.rising{color:#34d399}
+.trend.falling{color:#60a5fa}
+.trend.flat{color:#5a6170}
+.max-time{font-size:12px;color:#4a5160;margin-left:2px}
+.obs-age{font-size:13px;color:#5a6170}
+.card-runway{margin-top:12px}
+.runway-divider{height:1px;background:#1e2130;margin-bottom:8px}
+.runway-row{display:flex;justify-content:space-between;font-size:13px;margin-bottom:2px}
+.runway-label{color:#4a5160}
+.runway-temp{color:#7a8290;font-variant-numeric:tabular-nums}
+.htmx-indicator{text-align:center;padding:14px;font-size:14px;color:#3a4050;display:none}
+.htmx-request .htmx-indicator,.htmx-request.htmx-indicator{display:block}
+</style>
+<meta http-equiv="refresh" content="120">
+</head>
+<body>
+<div class="page">
+<header class="header">
+  <h1>🔥 Market Monitor</h1>
+  <div class="header-right">
+    <button id="notify-toggle" class="notify-btn" onclick="toggleNotify()" title="新高提醒">
+      <span id="notify-icon">🔔</span>
+    </button>
+    <span class="updated">{{ generated_at }}</span>
+  </div>
+</header>
+
+{% if full_page or not full_page %}
+<div id="card-grid" class="card-grid"
+     hx-get="/monitor/cards" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
+{% endif %}
+<span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">{{ generated_at }}</span>
+{% for c in cities %}
+<div class="card{% if c.new_high %} new-high-card{% endif %}" data-new-high="{{ c.new_high | lower }}">
+  <div class="card-top">
+    <span class="city-name">{{ c.en_name }}</span>
+    <span class="airport">/ {{ c.airport }}</span>
+    <span class="local-time">{{ c.obs_time_str or c.local_time }}</span>
+    {% if c.new_high %}
+    <span class="badge new-high">◆新高</span>
+    {% endif %}
+  </div>
+
+  <div class="card-temp">
+    {% if c.current_temp is not none %}
+    <span class="temp-value{% if c.current_temp >= 30 %} warm{% endif %}{% if c.new_high %} new-high-val{% endif %}">{{ "%.1f"|format(c.current_temp) }}</span><span class="temp-unit">°C</span>
+    {% else %}
+    <span class="temp-value na">--</span>
+    {% endif %}
+  </div>
+
+  <div class="card-meta">
+    <div class="meta-row">
+      <span class="label">High</span>
+      {% if c.max_so_far is not none %}
+      <span class="value">{{ "%.1f"|format(c.max_so_far) }}°C</span>
+      {% if c.max_temp_time %}
+      <span class="max-time">{{ c.max_temp_time }}</span>
+      {% endif %}
+      {% else %}
+      <span class="value na">--</span>
+      {% endif %}
+      <span class="trend {{ c.trend_css }}">{{ c.trend_sym }}</span>
+    </div>
+    <div class="meta-row">
+      <span class="label">Obs</span>
+      {% if c.obs_age_min is not none %}
+      <span class="obs-age">{{ c.obs_age_min }} min ago</span>
+      {% else %}
+      <span class="value na">--</span>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if c.runway_pairs %}
+  <div class="card-runway">
+    <div class="runway-divider"></div>
+    {% for rw in c.runway_pairs %}
+    <div class="runway-row">
+      <span class="runway-label">{{ rw.label }}</span>
+      <span class="runway-temp">{{ "%.1f"|format(rw.temp) }}°C</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<div id="spinner" class="htmx-indicator">Refreshing…</div>
+</div>
+
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script>
+var NOTIFY_ENABLED = localStorage.getItem('monitor_notify') !== 'off';
+var NOTIFIED_HIGHS = JSON.parse(localStorage.getItem('monitor_notified_highs') || '{}');
+function toggleNotify(){
+  NOTIFY_ENABLED = !NOTIFY_ENABLED;
+  localStorage.setItem('monitor_notify', NOTIFY_ENABLED ? 'on' : 'off');
+  updateNotifyIcon();
+  if(NOTIFY_ENABLED && Notification.permission === 'default') Notification.requestPermission();
+}
+function updateNotifyIcon(){
+  var icon = document.getElementById('notify-icon');
+  var btn = document.getElementById('notify-toggle');
+  if(NOTIFY_ENABLED){ icon.textContent = '🔔'; btn.classList.remove('muted'); }
+  else{ icon.textContent = '🔕'; btn.classList.add('muted'); }
+}
+function fireNotification(enName, temp){
+  if(!NOTIFY_ENABLED || Notification.permission !== 'granted') return;
+  var key = enName + '|' + temp;
+  var today = new Date().toDateString();
+  if(NOTIFIED_HIGHS._day !== today) NOTIFIED_HIGHS = {_day: today};
+  if(NOTIFIED_HIGHS[key]) return;
+  NOTIFIED_HIGHS[key] = true;
+  localStorage.setItem('monitor_notified_highs', JSON.stringify(NOTIFIED_HIGHS));
+  new Notification('🔴 New High — ' + enName, {
+    body: temp + '°C\nNew daily high.',
+    tag: key, requireInteraction: true
+  });
+}
+updateNotifyIcon();
+(function(){
+  let prev = {};
+  document.body.addEventListener('htmx:afterSwap', function(evt){
+    if(evt.detail.target.id !== 'card-grid') return;
+    document.querySelectorAll('.card').forEach(function(card){
+      var name = card.querySelector('.city-name').textContent;
+      var tv = card.querySelector('.temp-value').textContent;
+      var old = prev[name]; prev[name] = tv;
+      if(old && old !== tv && tv !== '--'){
+        card.style.transition = 'none';
+        card.style.boxShadow = '0 0 14px rgba(52,211,153,0.40)';
+        requestAnimationFrame(function(){
+          card.style.transition = 'box-shadow 2s ease-out';
+          card.style.boxShadow = '';
+        });
+      }
+      if(card.dataset.newHigh === 'true') fireNotification(name, tv);
+    });
+  });
+})();
+</script>
+</body>
+</html>

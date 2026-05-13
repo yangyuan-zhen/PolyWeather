@@ -22,8 +22,10 @@ from web.analysis_service import (  # noqa: E402
 )
 from web.core import app  # noqa: E402
 from web.routes import router  # noqa: E402
+from web.monitor_routes import router as monitor_router  # noqa: E402
 
 app.include_router(router)
+app.include_router(monitor_router)
 
 __all__ = [
     "app",
