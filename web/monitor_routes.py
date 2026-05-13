@@ -149,9 +149,16 @@ def _load_all_cities() -> List[Dict[str, Any]]:
 @router.get("/m", response_class=HTMLResponse)
 async def monitor_page(request: Request):
     cities = _load_all_cities()
+    # Debug: render without airport_current dicts
+    simple = [{"en_name": c["en_name"], "airport": c["airport"],
+               "current_temp": c["current_temp"], "new_high": c["new_high"],
+               "trend_sym": c["trend_sym"], "trend_css": c["trend_css"],
+               "obs_age_min": c["obs_age_min"], "local_time": c["local_time"],
+               "obs_time_str": c["obs_time_str"],
+               "max_so_far": c["max_so_far"], "max_temp_time": c["max_temp_time"]} for c in cities]
     return templates.TemplateResponse("monitor.html", {
         "request": request,
-        "cities": cities,
+        "cities": simple,
         "full_page": True,
         "generated_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
     })
@@ -159,9 +166,15 @@ async def monitor_page(request: Request):
 @router.get("/m/cards", response_class=HTMLResponse)
 async def monitor_cards(request: Request):
     cities = _load_all_cities()
+    simple = [{"en_name": c["en_name"], "airport": c["airport"],
+               "current_temp": c["current_temp"], "new_high": c["new_high"],
+               "trend_sym": c["trend_sym"], "trend_css": c["trend_css"],
+               "obs_age_min": c["obs_age_min"], "local_time": c["local_time"],
+               "obs_time_str": c["obs_time_str"],
+               "max_so_far": c["max_so_far"], "max_temp_time": c["max_temp_time"]} for c in cities]
     return templates.TemplateResponse("monitor.html", {
         "request": request,
-        "cities": cities,
+        "cities": simple,
         "full_page": False,
         "generated_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
     })
