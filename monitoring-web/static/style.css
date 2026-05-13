@@ -8,49 +8,43 @@ body {
 }
 
 .page {
-  max-width: 1400px;
+  max-width: 1500px;
   margin: 0 auto;
-  padding: 20px 24px;
+  padding: 24px 28px;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 24px;
-  padding-bottom: 12px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
   border-bottom: 1px solid #1e2130;
 }
 
 .header h1 {
-  font-size: 22px;
+  font-size: 24px;
   font-weight: 600;
   color: #e8eaed;
   letter-spacing: 0.02em;
 }
 
-.updated {
-  font-size: 13px;
-  color: #5a6170;
-}
-
 /* ── grid ── */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
 }
 
-@media (max-width: 1280px) { .card-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (max-width: 900px)  { .card-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px)  { .card-grid { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .card-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 600px)  { .card-grid { grid-template-columns: 1fr; } }
 
 /* ── card ── */
 .card {
   background: #161822;
   border: 1px solid #1e2130;
-  border-radius: 10px;
-  padding: 16px 18px;
+  border-radius: 12px;
+  padding: 22px 26px;
   transition: border-color 0.3s, box-shadow 0.3s;
   position: relative;
 }
@@ -63,30 +57,32 @@ body {
 .card-top {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 10px;
-  font-size: 13px;
+  gap: 8px;
+  margin-bottom: 14px;
+  font-size: 15px;
   flex-wrap: wrap;
 }
 
 .city-name {
   color: #e0e3e8;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .airport {
   color: #6a7180;
+  font-weight: 400;
 }
 
 .local-time {
   margin-left: auto;
   color: #4a5160;
   font-variant-numeric: tabular-nums;
+  font-size: 14px;
 }
 
 .badge {
-  font-size: 11px;
-  padding: 1px 6px;
+  font-size: 12px;
+  padding: 2px 7px;
   border-radius: 4px;
   font-weight: 600;
 }
@@ -96,25 +92,25 @@ body {
   color: #a78bfa;
 }
 .new-high-card {
-  border-color: rgba(124, 58, 237, 0.25);
+  border-color: rgba(124, 58, 237, 0.30);
 }
 
 /* ── temp ── */
 .card-temp {
-  margin: 4px 0 6px;
+  margin: 8px 0 10px;
   font-weight: 700;
-  line-height: 1.1;
+  line-height: 1.15;
 }
 
 .temp-value {
-  font-size: 40px;
+  font-size: 52px;
   color: #e8eaed;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .temp-value.na {
   color: #3a4050;
-  font-size: 28px;
+  font-size: 32px;
 }
 .temp-value.warm {
   color: #f59e0b;
@@ -124,24 +120,24 @@ body {
 }
 
 .temp-unit {
-  font-size: 18px;
+  font-size: 22px;
   color: #5a6170;
-  margin-left: 2px;
+  margin-left: 3px;
 }
 
 /* ── meta ── */
 .card-meta {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  margin-bottom: 4px;
+  gap: 5px;
+  margin-bottom: 2px;
 }
 
 .meta-row {
   display: flex;
   align-items: baseline;
-  gap: 6px;
-  font-size: 13px;
+  gap: 8px;
+  font-size: 14px;
 }
 
 .meta-row .label {
@@ -161,38 +157,38 @@ body {
 }
 
 /* ── trend ── */
-.trend { font-size: 15px; font-weight: 600; }
+.trend { font-size: 18px; font-weight: 700; }
 .trend.rising { color: #34d399; }
 .trend.falling { color: #60a5fa; }
 .trend.flat { color: #5a6170; }
 
 /* ── runway ── */
-.card-runway { margin-top: 8px; }
+.card-runway { margin-top: 12px; }
 
 .runway-divider {
   height: 1px;
   background: #1e2130;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 
 .runway-row {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 1px;
+  font-size: 13px;
+  margin-bottom: 2px;
 }
 
 .runway-label { color: #4a5160; }
 .runway-temp { color: #7a8290; font-variant-numeric: tabular-nums; }
 
 /* ── obs age ── */
-.obs-age { font-size: 12px; color: #5a6170; }
+.obs-age { font-size: 13px; color: #5a6170; }
 
 /* ── HTMX indicator ── */
 .htmx-indicator {
   text-align: center;
-  padding: 12px;
-  font-size: 13px;
+  padding: 14px;
+  font-size: 14px;
   color: #3a4050;
   display: none;
 }
