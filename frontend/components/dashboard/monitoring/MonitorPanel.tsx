@@ -195,6 +195,12 @@ export default function MonitorPanel({
   const cancelledRef = useRef(false);
   const globalFetchingRef = useRef(false);
 
+  /* Flash state: tracks cities whose temperature just changed */
+  const [flashingKeys, setFlashingKeys] = useState<ReadonlySet<string>>(new Set());
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
+  const prevTempsRef = useRef<Partial<Record<MonitorKey, number>>>({});
+  const flashTimersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
   useEffect(() => {
     setTime(new Date().toLocaleTimeString());
     const timer = setInterval(() => setTime(new Date().toLocaleTimeString()), 30_000);
@@ -205,6 +211,30 @@ export default function MonitorPanel({
     if (typeof window === "undefined") return false;
     return localStorage.getItem("monitor_notify") !== "off";
   });
+
+  /* Detect temperature changes → trigger per-city flash + update lastRefreshed */
+  useEffect(() => {
+    const changed: MonitorKey[] = [];
+    for (const key of MONITOR_KEYS) {
+      const detail = details[key];
+      const cur = detail?.airport_current?.temp ?? detail?.current?.temp ?? null;
+      const prev = prevTempsRef.current[key];
+      if (cur != null && prev != null && cur !== prev) changed.push(key);
+      if (cur != null) prevTempsRef.current[key] = cur;
+    }
+    if (changed.length === 0) return;
+
+    setLastRefreshed(
+      new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    );
+    setFlashingKeys((prev) => new Set([...prev, ...changed]));
+    for (const key of changed) {
+      clearTimeout(flashTimersRef.current[key]);
+      flashTimersRef.current[key] = setTimeout(() => {
+        setFlashingKeys((prev) => { const n = new Set(prev); n.delete(key); return n; });
+      }, 900);
+    }
+  }, [details]);
 
   /* Per-city fetch with loading-key tracking */
   const fetchCity = useCallback(
@@ -251,6 +281,9 @@ export default function MonitorPanel({
       await Promise.allSettled(workers);
 
       globalFetchingRef.current = false;
+      setLastRefreshed(
+        new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      );
     },
     [fetchCity],
   );
@@ -355,6 +388,11 @@ export default function MonitorPanel({
           >
             {notify ? "🔔" : "🔕"}
           </button>
+          {lastRefreshed && (
+            <span className="monitor-last-refreshed" title={isEn ? "Last data refresh" : "上次数据刷新"}>
+              {isEn ? `↻ ${lastRefreshed}` : `↻ ${lastRefreshed}`}
+            </span>
+          )}
           <span className="monitor-time">{time}</span>
         </div>
       </div>
@@ -398,7 +436,7 @@ export default function MonitorPanel({
           const tr = trendClass(detail);
           const rwPairs = detail.amos?.runway_obs?.runway_pairs ?? [];
           const rwTemps = detail.amos?.runway_obs?.temperatures ?? [];
-
+          const isFlashing = flashingKeys.has(key);
 
           return (
             <div
@@ -419,7 +457,7 @@ export default function MonitorPanel({
               {isRefreshing && <div className="monitor-refresh-bar" />}
 
               {/* Card header */}
-              <div className="monitor-card-head">
+              <div className={`monitor-card-head${isFlashing ? " flashed" : ""}`}>
                 <span className="monitor-city-name">{detail.display_name || key}</span>
                 <span className="monitor-airport-name">/ {airportLabel(key, isEn)}</span>
                 <FreshnessDot
@@ -438,7 +476,7 @@ export default function MonitorPanel({
               <div className="monitor-temp-display">
                 {cur != null ? (
                   <>
-                    <span className={`monitor-temp-value${newHigh ? " new-high" : warm ? " warm" : ""}`}>
+                    <span className={`monitor-temp-value${newHigh ? " new-high" : warm ? " warm" : ""}${isFlashing ? " flashed" : ""}`}>
                       {cur.toFixed(1)}
                     </span>
                     <span className="monitor-temp-unit">{tempSymbol}</span>

@@ -579,7 +579,6 @@
   color: #2563EB;
 }
 
-/* ── Animations ── */
 @keyframes monitorPulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
@@ -588,4 +587,35 @@
 @keyframes monitorShimmer {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 1; }
+}
+
+/* ── Value-change flash (green pulse on new temperature) ── */
+@keyframes monitorTempFlash {
+  0%   { color: inherit; text-shadow: none; }
+  25%  { color: #4ade80; text-shadow: 0 0 12px rgba(74, 222, 128, 0.55); }
+  100% { color: inherit; text-shadow: none; }
+}
+
+@keyframes monitorHeadFlash {
+  0%   { background: transparent; }
+  25%  { background: rgba(74, 222, 128, 0.10); }
+  100% { background: transparent; }
+}
+
+.root :global(.monitor-temp-value.flashed) {
+  animation: monitorTempFlash 0.9s ease-out;
+}
+
+.root :global(.monitor-card-head.flashed) {
+  animation: monitorHeadFlash 0.9s ease-out;
+  border-radius: 6px;
+}
+
+/* ── Last-refreshed timestamp ── */
+.root :global(.monitor-last-refreshed) {
+  font-size: 12px;
+  color: var(--color-accent-primary, #4da3ff);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+  letter-spacing: 0.01em;
 }
