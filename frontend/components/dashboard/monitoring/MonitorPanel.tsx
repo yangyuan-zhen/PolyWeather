@@ -73,9 +73,8 @@ function playNewHighBeep(): void {
 
 function trendClass(detail: CityDetail | undefined): "rising" | "falling" | "flat" {
   if (!detail?.airport_current) return "flat";
-  const ac = detail.airport_current;
-  const cur = ac.temp ?? detail.current?.temp ?? null;
-  const max = ac.max_so_far ?? null;
+  const cur = detail.airport_current.temp ?? detail.current?.temp ?? null;
+  const max = resolveMaxSoFar(detail);
   if (cur != null && max != null && cur >= max + 0.3) return "rising";
   if (cur != null && max != null && cur < max - 1.0) return "falling";
   return "flat";
@@ -83,6 +82,43 @@ function trendClass(detail: CityDetail | undefined): "rising" | "falling" | "fla
 
 function trendSymbol(tr: "rising" | "falling" | "flat") {
   return tr === "rising" ? "↑" : tr === "falling" ? "↓" : "→";
+}
+
+/**
+ * Resolve today's observed high temperature from airport METAR sources only.
+ *
+ * Priority (all METAR / airport station sources):
+ *  1. airport_current.max_so_far      — backend rolling max (most authoritative)
+ *  2. max(airport_primary_today_obs)  — client-derived from airport primary station's today series
+ *  3. max(metar_today_obs)            — client-derived from METAR today obs series
+ *
+ * The settlement station (current.max_so_far) is intentionally excluded —
+ * it may be a different microclimate and is not the airport METAR reading.
+ */
+function resolveMaxSoFar(detail: CityDetail | undefined): number | null {
+  // ① Backend rolling max from airport METAR — primary and most reliable
+  const backendMax = detail?.airport_current?.max_so_far ?? null;
+  if (backendMax != null) return backendMax;
+
+  // ② Client-derived max from airport primary station's today obs series
+  const primaryObs = detail?.airport_primary_today_obs ?? [];
+  if (primaryObs.length) {
+    const temps = primaryObs
+      .map((o) => o.temp)
+      .filter((t): t is number => t != null);
+    if (temps.length) return Math.max(...temps);
+  }
+
+  // ③ Client-derived max from METAR today obs series
+  const metarObs = detail?.metar_today_obs ?? [];
+  if (metarObs.length) {
+    const temps = metarObs
+      .map((o) => o.temp)
+      .filter((t): t is number => t != null);
+    if (temps.length) return Math.max(...temps);
+  }
+
+  return null;
 }
 
 /* ── Airport names ───────────────────────────────────────────── */
@@ -269,7 +305,7 @@ export default function MonitorPanel() {
     for (const { key, detail } of sorted) {
       const ac  = detail?.airport_current;
       const cur = ac?.temp ?? detail?.current?.temp ?? null;
-      const max = ac?.max_so_far ?? null;
+      const max = resolveMaxSoFar(detail);   // same best-source logic as card display
       if (cur != null && max != null && cur >= max + 0.3) {
         // Key: city + rounded temp, so we only beep once per 0.1°C step
         const id = `${key}|${(Math.round(cur * 10) / 10).toFixed(1)}`;
@@ -347,7 +383,7 @@ export default function MonitorPanel() {
 
           const ac = detail.airport_current;
           const cur = ac?.temp ?? detail.current?.temp ?? null;
-          const max = ac?.max_so_far ?? null;
+          const max = resolveMaxSoFar(detail);           // best-source today's high
           const mtt = ac?.max_temp_time ?? null;
           const obs = ac?.obs_time ?? detail.local_time ?? "";
           const age = ac?.obs_age_min ?? null;
@@ -357,6 +393,7 @@ export default function MonitorPanel() {
           const tr = trendClass(detail);
           const rwPairs = detail.amos?.runway_obs?.runway_pairs ?? [];
           const rwTemps = detail.amos?.runway_obs?.temperatures ?? [];
+
 
           return (
             <div
@@ -415,10 +452,16 @@ export default function MonitorPanel() {
                   <span className={`monitor-trend ${tr}`}>{trendSymbol(tr)}</span>
                 </div>
                 <div className="monitor-obs-row">
-                  <span className="monitor-stat-label">{t("Obs", "观测", lang)}</span>
+                  <span className="monitor-stat-label">
+                    {t("Airport METAR", "机场报文", lang)}
+                  </span>
                   <span className={`monitor-obs-age ${freshness}`}>
                     {age != null
-                      ? (isEn ? `${age} min ago` : `${age} 分钟前`)
+                      ? (isEn
+                          ? `${age} min ago`
+                          : age < 60
+                            ? `${age} 分钟未更新`
+                            : `${Math.round(age / 60)} 小时未更新`)
                       : <span className="monitor-stat-missing">--</span>}
                   </span>
                 </div>
