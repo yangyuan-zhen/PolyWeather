@@ -7,6 +7,8 @@ import type { CityDetail } from "@/lib/dashboard-types";
 const MONITOR_KEYS = [
   "seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
   "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
+  "new york", "los angeles", "chicago", "denver", "atlanta",
+  "miami", "san francisco", "houston", "dallas", "austin", "seattle",
 ] as const;
 
 type MonitorCity = {
@@ -121,6 +123,10 @@ export default function MonitorPanel() {
       istanbul: "Airport", paris: "Le Bourget",
       "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
       taipei: "Songshan",
+      "new york": "LaGuardia", "los angeles": "LAX", chicago: "O'Hare",
+      denver: "Buckley", atlanta: "Hartsfield", miami: "MIA",
+      "san francisco": "SFO", houston: "Hobby", dallas: "Love Field",
+      austin: "Bergstrom", seattle: "SeaTac",
     };
     return m[key] || "";
   };
