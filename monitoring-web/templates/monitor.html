@@ -17,7 +17,7 @@
 {% endif %}
 
 <div id="card-grid" class="card-grid"
-     hx-get="/api/data" hx-trigger="every 60s" hx-swap="outerHTML" hx-indicator="#spinner">
+     hx-get="/api/data" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
 {% for c in cities %}
 <div class="card">
   <div class="card-top">
