@@ -1,164 +1,167 @@
 {% if full_page %}
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Market Monitor — PolyWeather</title>
-<link rel="stylesheet" href="/static/style.css">
-<meta http-equiv="refresh" content="120">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Market Monitor — PolyWeather</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <meta http-equiv="refresh" content="120">
 </head>
+
 <body>
-<div class="page">
-<header class="header">
-  <h1>🔥 Market Monitor</h1>
-  <div class="header-right">
-    <button id="notify-toggle" class="notify-btn" onclick="toggleNotify()" title="新高提醒">
-      <span id="notify-icon">🔔</span>
-    </button>
-    <span class="updated" id="update-time">更新中…</span>
-  </div>
-</header>
-{% endif %}
+  <div class="page">
+    <header class="header">
+      <h1>🔥 Market Monitor</h1>
+      <div class="header-right">
+        <button id="notify-toggle" class="notify-btn" onclick="toggleNotify()" title="新高提醒">
+          <span id="notify-icon">🔔</span>
+        </button>
+      </div>
+    </header>
+    {% endif %}
 
-<div id="card-grid" class="card-grid"
-     hx-get="/api/data" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
-<span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
-  {{ generated_at }}</span>
-{% for c in cities %}
-<div class="card{% if c.new_high %} new-high-card{% endif %}" data-new-high="{{ c.new_high }}">
-  <div class="card-top">
-    <span class="city-name">{{ c.en_name }}</span>
-    <span class="airport">/ {{ c.airport }}</span>
-    <span class="local-time">{{ c.local_time }}</span>
-  </div>
+    <div id="card-grid" class="card-grid" hx-get="/api/data" hx-trigger="every 30s" hx-swap="outerHTML"
+      hx-indicator="#spinner">
+      <span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
+        {{ generated_at }}</span>
+      {% for c in cities %}
+      <div class="card{% if c.new_high %} new-high-card{% endif %}" data-new-high="{{ c.new_high }}">
+        <div class="card-top">
+          <span class="city-name">{{ c.en_name }}</span>
+          <span class="airport">/ {{ c.airport }}</span>
+          <span class="local-time">{{ c.local_time }}</span>
+        </div>
 
-  <div class="card-temp">
-    {% match c.current_temp %}
-    {% when Some with (t) %}
-    <span class="temp-value{% if c.temp_warm %} warm{% endif %}{% if c.new_high %} new-high-val{% endif %}">{{ "{:.1}"|format(t) }}</span><span class="temp-unit">°C</span>
-    {% when None %}
-    <span class="temp-value na">--</span>
-    {% endmatch %}
-  </div>
+        <div class="card-temp">
+          {% match c.current_temp %}
+          {% when Some with (t) %}
+          <span class="temp-value{% if c.temp_warm %} warm{% endif %}{% if c.new_high %} new-high-val{% endif %}">{{
+            "{:.1}"|format(t) }}</span><span class="temp-unit">°C</span>
+          {% when None %}
+          <span class="temp-value na">--</span>
+          {% endmatch %}
+        </div>
 
-  <div class="card-meta">
-    <div class="meta-row">
-      <span class="label">High</span>
-      {% match c.today_max %}
-      {% when Some with (m) %}
-      <span class="value">{{ "{:.1}"|format(m) }}°C</span>
-      {% match c.max_time %}
-      {% when Some with (mt) %}
-      <span class="value max-time">{{ mt }}</span>
-      {% when None %}
-      {% endmatch %}
-      {% when None %}
-      <span class="value na">--</span>
-      {% endmatch %}
-      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+        <div class="card-meta">
+          <div class="meta-row">
+            <span class="label">High</span>
+            {% match c.today_max %}
+            {% when Some with (m) %}
+            <span class="value">{{ "{:.1}"|format(m) }}°C</span>
+            {% match c.max_time %}
+            {% when Some with (mt) %}
+            <span class="value max-time">{{ mt }}</span>
+            {% when None %}
+            {% endmatch %}
+            {% when None %}
+            <span class="value na">--</span>
+            {% endmatch %}
+            <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+          </div>
+          <div class="meta-row">
+            <span class="label">Obs</span>
+            {% match c.obs_age_min %}
+            {% when Some with (m) %}
+            <span class="value obs-age">{{ m }} min ago</span>
+            {% when None %}
+            <span class="value na">--</span>
+            {% endmatch %}
+            <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
     </div>
-    <div class="meta-row">
-      <span class="label">Obs</span>
-      {% match c.obs_age_min %}
-      {% when Some with (m) %}
-      <span class="value obs-age">{{ m }} min ago</span>
-      {% when None %}
-      <span class="value na">--</span>
-      {% endmatch %}
-      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
-    </div>
-  </div>
-</div>
-{% endfor %}
-</div>
 
-<div id="spinner" class="htmx-indicator">Refreshing…</div>
+    <div id="spinner" class="htmx-indicator">Refreshing…</div>
 
-{% if full_page %}
-<script src="https://unpkg.com/htmx.org@2.0.4"></script>
-<script>
-// ── Notification ──
-var NOTIFY_ENABLED = localStorage.getItem('monitor_notify') !== 'off';
-var NOTIFIED_HIGHS = JSON.parse(localStorage.getItem('monitor_notified_highs') || '{}');
+    {% if full_page %}
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script>
+      // ── Notification ──
+      var NOTIFY_ENABLED = localStorage.getItem('monitor_notify') !== 'off';
+      var NOTIFIED_HIGHS = JSON.parse(localStorage.getItem('monitor_notified_highs') || '{}');
 
-function toggleNotify() {
-  NOTIFY_ENABLED = !NOTIFY_ENABLED;
-  localStorage.setItem('monitor_notify', NOTIFY_ENABLED ? 'on' : 'off');
-  updateNotifyIcon();
-  if (NOTIFY_ENABLED && Notification.permission === 'default') {
-    Notification.requestPermission();
-  }
-}
+      function toggleNotify() {
+        NOTIFY_ENABLED = !NOTIFY_ENABLED;
+        localStorage.setItem('monitor_notify', NOTIFY_ENABLED ? 'on' : 'off');
+        updateNotifyIcon();
+        if (NOTIFY_ENABLED && Notification.permission === 'default') {
+          Notification.requestPermission();
+        }
+      }
 
-function updateNotifyIcon() {
-  var icon = document.getElementById('notify-icon');
-  var btn = document.getElementById('notify-toggle');
-  if (NOTIFY_ENABLED) {
-    icon.textContent = '🔔';
-    btn.classList.remove('muted');
-  } else {
-    icon.textContent = '🔕';
-    btn.classList.add('muted');
-  }
-}
+      function updateNotifyIcon() {
+        var icon = document.getElementById('notify-icon');
+        var btn = document.getElementById('notify-toggle');
+        if (NOTIFY_ENABLED) {
+          icon.textContent = '🔔';
+          btn.classList.remove('muted');
+        } else {
+          icon.textContent = '🔕';
+          btn.classList.add('muted');
+        }
+      }
 
-function fireNotification(enName, temp) {
-  if (!NOTIFY_ENABLED) return;
-  if (Notification.permission !== 'granted') return;
+      function fireNotification(enName, temp) {
+        if (!NOTIFY_ENABLED) return;
+        if (Notification.permission !== 'granted') return;
 
-  var key = enName + '|' + temp;
-  var today = new Date().toDateString();
+        var key = enName + '|' + temp;
+        var today = new Date().toDateString();
 
-  // Reset notified list on new day
-  if (NOTIFIED_HIGHS._day !== today) {
-    NOTIFIED_HIGHS = { _day: today };
-  }
-  if (NOTIFIED_HIGHS[key]) return; // already notified
+        // Reset notified list on new day
+        if (NOTIFIED_HIGHS._day !== today) {
+          NOTIFIED_HIGHS = { _day: today };
+        }
+        if (NOTIFIED_HIGHS[key]) return; // already notified
 
-  NOTIFIED_HIGHS[key] = true;
-  localStorage.setItem('monitor_notified_highs', JSON.stringify(NOTIFIED_HIGHS));
+        NOTIFIED_HIGHS[key] = true;
+        localStorage.setItem('monitor_notified_highs', JSON.stringify(NOTIFIED_HIGHS));
 
-  new Notification('🔴 New High — ' + enName, {
-    body: temp + '°C\nNew daily high.',
-    icon: '/static/favicon.png',
-    tag: key,
-    requireInteraction: true,
-  });
-}
-
-updateNotifyIcon();
-
-// ── Flash on temp change + notifications ──
-(function(){
-  let prev = {};
-  document.body.addEventListener('htmx:afterSwap', function(evt){
-    if(evt.detail.target.id !== 'card-grid') return;
-    document.querySelectorAll('.card').forEach(function(card){
-      var name = card.querySelector('.city-name').textContent;
-      var tv = card.querySelector('.temp-value').textContent;
-      var old = prev[name];
-      prev[name] = tv;
-
-      // Flash if changed
-      if(old && old !== tv && tv !== '--'){
-        card.style.transition = 'none';
-        card.style.boxShadow = '0 0 14px rgba(52,211,153,0.40)';
-        requestAnimationFrame(function(){
-          card.style.transition = 'box-shadow 2s ease-out';
-          card.style.boxShadow = '';
+        new Notification('🔴 New High — ' + enName, {
+          body: temp + '°C\nNew daily high.',
+          icon: '/static/favicon.png',
+          tag: key,
+          requireInteraction: true,
         });
       }
 
-      // Notification for new high
-      if(card.dataset.newHigh === 'true'){
-        fireNotification(name, tv);
-      }
-    });
-  });
-})();
-</script>
-</div>
+      updateNotifyIcon();
+
+      // ── Flash on temp change + notifications ──
+      (function () {
+        let prev = {};
+        document.body.addEventListener('htmx:afterSwap', function (evt) {
+          if (evt.detail.target.id !== 'card-grid') return;
+          document.querySelectorAll('.card').forEach(function (card) {
+            var name = card.querySelector('.city-name').textContent;
+            var tv = card.querySelector('.temp-value').textContent;
+            var old = prev[name];
+            prev[name] = tv;
+
+            // Flash if changed
+            if (old && old !== tv && tv !== '--') {
+              card.style.transition = 'none';
+              card.style.boxShadow = '0 0 14px rgba(52,211,153,0.40)';
+              requestAnimationFrame(function () {
+                card.style.transition = 'box-shadow 2s ease-out';
+                card.style.boxShadow = '';
+              });
+            }
+
+            // Notification for new high
+            if (card.dataset.newHigh === 'true') {
+              fireNotification(name, tv);
+            }
+          });
+        });
+      })();
+    </script>
+  </div>
 </body>
+
 </html>
 {% endif %}
