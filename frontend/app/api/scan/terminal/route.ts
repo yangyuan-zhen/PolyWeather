@@ -7,13 +7,13 @@ import {
   buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
+import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
   process.env.POLYWEATHER_SCAN_TERMINAL_PROXY_TIMEOUT_MS || "28000",
 );
 
-export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 export async function GET(req: NextRequest) {
@@ -50,10 +50,12 @@ export async function GET(req: NextRequest) {
   const timeoutId = setTimeout(() => controller.abort(), SCAN_TERMINAL_PROXY_TIMEOUT_MS);
 
   try {
-    auth = await buildBackendRequestHeaders(req);
+    auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const res = await fetch(url, {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 10 },
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -62,11 +64,11 @@ export async function GET(req: NextRequest) {
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
-    const response = NextResponse.json(data, {
-      headers: {
-        "Cache-Control": "no-store",
-      },
-    });
+    const response = buildCachedJsonResponse(
+      req,
+      data,
+      "public, max-age=0, s-maxage=10, stale-while-revalidate=30",
+    );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     const timedOut = controller.signal.aborted;

@@ -20,23 +20,6 @@ const SUPABASE_AUTH_REQUIRED = readEnvBool(
   SUPABASE_AUTH_ENABLED,
 );
 
-function isStaticAsset(pathname: string) {
-  return (
-    pathname.startsWith("/_next/") ||
-    pathname.startsWith("/favicon") ||
-    pathname === "/apple-touch-icon.png" ||
-    pathname === "/manifest.webmanifest" ||
-    pathname === "/site.webmanifest" ||
-    pathname.startsWith("/android-chrome-") ||
-    pathname.startsWith("/robots.txt") ||
-    pathname.startsWith("/sitemap.xml") ||
-    pathname.startsWith("/icons/") ||
-    pathname.startsWith("/images/") ||
-    pathname.startsWith("/scenery/") ||
-    pathname.startsWith("/static/")
-  );
-}
-
 function isPublicPage(pathname: string) {
   return (
     pathname === "/" ||
@@ -78,7 +61,7 @@ function handleLegacyTokenGate(request: NextRequest) {
   }
 
   const { pathname, searchParams } = request.nextUrl;
-  if (isStaticAsset(pathname) || isPublicPage(pathname) || isPublicApi(pathname)) {
+  if (isPublicPage(pathname) || isPublicApi(pathname)) {
     return NextResponse.next();
   }
 
@@ -178,10 +161,6 @@ async function handleSupabaseOptionalSession(request: NextRequest) {
 }
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-  if (isStaticAsset(pathname)) {
-    return NextResponse.next();
-  }
   const requestHost =
     request.headers.get("x-forwarded-host") ||
     request.headers.get("host") ||
@@ -203,5 +182,15 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image).*)"],
+  matcher: [
+    "/account/:path*",
+    "/ops/:path*",
+    "/api/auth/:path*",
+    "/api/ops/:path*",
+    "/api/payments/:path*",
+    "/api/system/:path*",
+    "/api/history/:path*",
+    "/api/city/:path*/detail:path*",
+    "/api/scan/terminal/ai:path*",
+  ],
 };

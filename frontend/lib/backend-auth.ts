@@ -41,17 +41,21 @@ export async function buildBackendRequestHeaders(
   const incomingAuth = extractBearerToken(request.headers.get("authorization"));
   const includeSupabaseIdentity = options?.includeSupabaseIdentity !== false;
   if (hasSupabaseServerEnv() && includeSupabaseIdentity) {
-    const passthroughResponse = new NextResponse(null, { status: 200 });
-    const supabase = createSupabaseRouteClient(request, passthroughResponse);
+    const supabase = createSupabaseRouteClient(request, new NextResponse(null, { status: 200 }));
     const {
       data: { session },
     } = await supabase.auth.getSession();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+    let user = session?.user ?? null;
+    if (session) {
+      const {
+        data: { user: validated },
+      } = await supabase.auth.getUser();
+      user = validated ?? session.user;
+    }
 
-    const forwardedUserId = String(user?.id || session?.user?.id || "").trim();
-    const forwardedEmail = String(user?.email || session?.user?.email || "").trim();
+    const passthroughResponse = new NextResponse(null, { status: 200 });
+    const forwardedUserId = String(user?.id || "").trim();
+    const forwardedEmail = String(user?.email || "").trim();
     if (forwardedUserId) {
       headers.set(FORWARDED_SUPABASE_USER_ID_HEADER, forwardedUserId);
     }

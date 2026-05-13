@@ -7,6 +7,7 @@ import {
   buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
+import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -42,10 +43,12 @@ export async function GET(
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/detail?${searchParams.toString()}`;
 
   try {
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const res = await fetch(url, {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 15 },
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -53,7 +56,11 @@ export async function GET(
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
-    const response = NextResponse.json(data);
+    const response = buildCachedJsonResponse(
+      req,
+      data,
+      "public, max-age=0, s-maxage=15, stale-while-revalidate=45",
+    );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     const response = buildProxyExceptionResponse(error, {

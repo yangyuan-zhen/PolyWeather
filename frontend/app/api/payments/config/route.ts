@@ -7,6 +7,7 @@ import {
   buildProxyExceptionResponse,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
+import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
     const auth = await buildBackendRequestHeaders(req);
     const res = await fetch(`${API_BASE}/api/payments/config`, {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 300 },
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -31,9 +32,11 @@ export async function GET(req: NextRequest) {
       return applyAuthResponseCookies(response, auth.response);
     }
     const data = await res.json();
-    const response = NextResponse.json(data, {
-      headers: { "Cache-Control": "no-store" },
-    });
+    const response = buildCachedJsonResponse(
+      req,
+      data,
+      "public, max-age=0, s-maxage=300, stale-while-revalidate=900",
+    );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {
     return buildProxyExceptionResponse(error, {

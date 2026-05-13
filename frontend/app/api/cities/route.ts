@@ -10,7 +10,6 @@ import {
 import { buildCachedJsonResponse } from "@/lib/http-cache";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
-export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   if (!API_BASE) {
@@ -27,7 +26,7 @@ export async function GET(req: NextRequest) {
     });
     const res = await fetch(`${API_BASE}/api/cities`, {
       headers: auth.headers,
-      cache: "no-store",
+      next: { revalidate: 60 },
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -38,7 +37,7 @@ export async function GET(req: NextRequest) {
     const response = buildCachedJsonResponse(
       req,
       data,
-      "no-store, max-age=0",
+      "public, max-age=0, s-maxage=60, stale-while-revalidate=300",
     );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {

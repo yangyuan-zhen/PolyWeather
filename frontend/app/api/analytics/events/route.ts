@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const auth = await buildBackendRequestHeaders(req);
+    const auth = await buildBackendRequestHeaders(req, {
+      includeSupabaseIdentity: false,
+    });
     const headers = new Headers(auth.headers);
     headers.set("Content-Type", "application/json");
     const res = await fetch(`${API_BASE}/api/analytics/events`, {

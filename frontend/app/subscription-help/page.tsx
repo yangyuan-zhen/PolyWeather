@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { SubscriptionHelpClient } from "./SubscriptionHelpClient";
-
-export const dynamic = "force-dynamic";
+import { I18nProvider } from "@/hooks/useI18n";
 
 export const metadata: Metadata = {
   title: "PolyWeather | Subscription Help",
@@ -9,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function SubscriptionHelpPage() {
-  return <SubscriptionHelpClient />;
+  return (
+    <I18nProvider>
+      <SubscriptionHelpClient />
+    </I18nProvider>
+  );
 }
