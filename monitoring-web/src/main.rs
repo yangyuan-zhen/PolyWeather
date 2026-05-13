@@ -57,13 +57,28 @@ struct MonitorTemplate {
 
 fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, tz, thresh, tz_abbr, rw_count): &(&str, &str, &str, &str, &str, i32, f64, &str, usize)) -> CitySnapshot {
     let now_utc = Utc::now();
-    let local = now_utc + chrono::Duration::hours(*tz as i64);
-    let local_time = format!("{} {}", local.format("%H:%M"), tz_abbr);
+    let offset = chrono::FixedOffset::east_opt(*tz * 3600).unwrap();
 
     // Recent obs for temp + trend
     let obs = db::get_recent_obs(db_path, icao, 120, 12);
     let temps: Vec<f64> = obs.iter().filter_map(|o| o.temp_c).collect();
     let current_temp = temps.first().copied();
+
+    // Observation time from the most recent record
+    let local_time = obs.first().and_then(|o| {
+        o.created_at.as_ref().and_then(|ts| {
+            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S").ok()
+        })
+    })
+    .map(|dt| {
+        let obs_utc = dt.and_utc();
+        let local = obs_utc.with_timezone(&offset);
+        format!("{} {}", local.format("%H:%M"), tz_abbr)
+    })
+    .unwrap_or_else(|| {
+        let local = now_utc + chrono::Duration::hours(*tz as i64);
+        format!("{} {}", local.format("%H:%M"), tz_abbr)
+    });
 
     // Age of most recent observation
     let obs_age_min = obs.first().and_then(|o| {
