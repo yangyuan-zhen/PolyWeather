@@ -32,37 +32,49 @@ _CITIES: List[Dict[str, Any]] = [
 # ── helpers ──
 
 def _sf(v: Any) -> Optional[float]:
-    if v is None: return None
-    try: return round(float(v), 1)
-    except: return None
+    if v is None:
+        return None
+    try:
+        return round(float(v), 1)
+    except (ValueError, TypeError):
+        return None
 
 def _trend_info(icao: str) -> tuple:
     try:
         from src.utils.telegram_push import _check_rising_trend
-        if _check_rising_trend(icao): return ("↑", "rising")
-    except: pass
+        if _check_rising_trend(icao):
+            return ("↑", "rising")
+    except Exception:
+        pass
     try:
         from src.database.db_manager import DBManager
         obs = DBManager().get_airport_obs_recent(icao, minutes=60)
         temps = [r.get("temp_c") for r in obs if r.get("temp_c") is not None]
-        if len(temps) >= 4 and temps[-1] < temps[len(temps)//2]:
+        if len(temps) >= 4 and temps[-1] < temps[len(temps) // 2]:
             return ("↓", "falling")
-    except: pass
+    except Exception:
+        pass
     return ("→", "flat")
 
 def _obs_age(obs_time_str: Optional[str]) -> Optional[int]:
-    if not obs_time_str: return None
+    if not obs_time_str:
+        return None
     try:
         for fmt in ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d %H:%M:%S"):
             try:
-                dt = datetime.strptime(str(obs_time_str)[:26], fmt).replace(tzinfo=timezone.utc)
-                return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
-            except: continue
+                dt = datetime.strptime(str(obs_time_str)[:26], fmt)
+                dt = dt.replace(tzinfo=timezone.utc)
+                age = (datetime.now(timezone.utc) - dt).total_seconds()
+                return max(0, int(age // 60))
+            except (ValueError, TypeError):
+                continue
         ts = float(obs_time_str)
         if ts > 1_000_000_000:
             dt = datetime.fromtimestamp(ts, tz=timezone.utc)
-            return max(0, int((datetime.now(timezone.utc) - dt).total_seconds() // 60))
-    except: pass
+            age = (datetime.now(timezone.utc) - dt).total_seconds()
+            return max(0, int(age // 60))
+    except (ValueError, TypeError, OSError):
+        pass
     return None
 
 def _build_cards() -> tuple:
