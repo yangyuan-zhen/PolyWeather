@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 WorkingDirectory=/root/PolyWeather/monitoring-web
-Environment=POLYWEATHER_DB_PATH=/root/PolyWeather/data/polyweather.db
+Environment=POLYWEATHER_DB_PATH=/var/lib/polyweather/polyweather.db
 Environment=MONITOR_LISTEN_ADDR=0.0.0.0:3001
 ExecStart=/root/PolyWeather/monitoring-web/target/release/market-monitor
 Restart=always
