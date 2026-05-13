@@ -602,7 +602,22 @@ function ScanTerminalScreen() {
               renderMainView()
             )}
             {resolvedView === "monitor" && (
-              <MonitorPanel />
+              isPro ? (
+                <MonitorPanel
+                  onCityClick={(cityName) => {
+                    const matchedRow = findRowForCity(timeSortedRows, cityName);
+                    if (matchedRow) {
+                      setSelectedRowId(matchedRow.id);
+                      store.preloadCityFromRow(matchedRow);
+                    }
+                    addAiPinnedCity(cityName);
+                    setActiveView("analysis");
+                    void store.selectCity(cityName);
+                  }}
+                />
+              ) : (
+                <ProFeaturePaywall feature="monitor" />
+              )
             )}
           </section>
         </main>

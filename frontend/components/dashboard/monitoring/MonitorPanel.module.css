@@ -135,6 +135,19 @@
   border-color: rgba(124, 58, 237, 0.3);
 }
 
+.root :global(.monitor-card.clickable) {
+  cursor: pointer;
+}
+.root :global(.monitor-card.clickable:hover) {
+  border-color: var(--color-accent, #7c3aed);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+}
+.root :global(.monitor-card.clickable:focus-visible) {
+  outline: 2px solid var(--color-accent, #7c3aed);
+  outline-offset: 2px;
+}
+
 /* ── Card header ── */
 .root :global(.monitor-card-head) {
   display: flex;

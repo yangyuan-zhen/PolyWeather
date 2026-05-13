@@ -85,40 +85,14 @@ function trendSymbol(tr: "rising" | "falling" | "flat") {
 }
 
 /**
- * Resolve today's observed high temperature from airport METAR sources only.
- *
- * Priority (all METAR / airport station sources):
- *  1. airport_current.max_so_far      — backend rolling max (most authoritative)
- *  2. max(airport_primary_today_obs)  — client-derived from airport primary station's today series
- *  3. max(metar_today_obs)            — client-derived from METAR today obs series
- *
- * The settlement station (current.max_so_far) is intentionally excluded —
- * it may be a different microclimate and is not the airport METAR reading.
+ * Resolve today's observed high temperature.
+ * Aligned with Telegram bot (_get_airport_daily_high):
+ * only airport_current.max_so_far — no fallback.
  */
 function resolveMaxSoFar(detail: CityDetail | undefined): number | null {
-  // ① Backend rolling max from airport METAR — primary and most reliable
-  const backendMax = detail?.airport_current?.max_so_far ?? null;
-  if (backendMax != null) return backendMax;
-
-  // ② Client-derived max from airport primary station's today obs series
-  const primaryObs = detail?.airport_primary_today_obs ?? [];
-  if (primaryObs.length) {
-    const temps = primaryObs
-      .map((o) => o.temp)
-      .filter((t): t is number => t != null);
-    if (temps.length) return Math.max(...temps);
-  }
-
-  // ③ Client-derived max from METAR today obs series
-  const metarObs = detail?.metar_today_obs ?? [];
-  if (metarObs.length) {
-    const temps = metarObs
-      .map((o) => o.temp)
-      .filter((t): t is number => t != null);
-    if (temps.length) return Math.max(...temps);
-  }
-
-  return null;
+  const v = detail?.airport_current?.max_so_far ?? null;
+  if (v == null) return null;
+  return Math.round(v * 10) / 10;
 }
 
 /* ── Airport names ───────────────────────────────────────────── */
@@ -176,7 +150,11 @@ function FreshnessDot({ level, title }: { level: Freshness; title: string }) {
 }
 
 /* ── Main component ──────────────────────────────────────────── */
-export default function MonitorPanel() {
+export default function MonitorPanel({
+  onCityClick,
+}: {
+  onCityClick?: (cityName: string) => void;
+}) {
   const store = useDashboardStore();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
@@ -388,6 +366,7 @@ export default function MonitorPanel() {
           const obs = ac?.obs_time ?? detail.local_time ?? "";
           const age = ac?.obs_age_min ?? null;
           const freshness = freshnessLevel(age);
+          const tempSymbol = detail.temp_symbol || "°C";  // °F for US cities
           const newHigh = cur != null && max != null && cur >= max + 0.3;
           const warm = !newHigh && cur != null && cur >= 30;
           const tr = trendClass(detail);
@@ -402,7 +381,13 @@ export default function MonitorPanel() {
                 "monitor-card",
                 newHigh ? "new-high" : "",
                 isRefreshing ? "refreshing" : "",
+                onCityClick ? "clickable" : "",
               ].filter(Boolean).join(" ")}
+              role={onCityClick ? "button" : undefined}
+              tabIndex={onCityClick ? 0 : undefined}
+              onClick={onCityClick ? () => onCityClick(key) : undefined}
+              onKeyDown={onCityClick ? (e) => { if (e.key === "Enter" || e.key === " ") onCityClick(key); } : undefined}
+              title={onCityClick ? (isEn ? `Open ${detail.display_name || key} decision card` : `打开 ${detail.display_name || key} 决策卡`) : undefined}
             >
               {/* Refresh progress bar */}
               {isRefreshing && <div className="monitor-refresh-bar" />}
@@ -430,7 +415,7 @@ export default function MonitorPanel() {
                     <span className={`monitor-temp-value${newHigh ? " new-high" : warm ? " warm" : ""}`}>
                       {cur.toFixed(1)}
                     </span>
-                    <span className="monitor-temp-unit">°C</span>
+                    <span className="monitor-temp-unit">{tempSymbol}</span>
                   </>
                 ) : (
                   <span className="monitor-temp-missing">--</span>
@@ -443,7 +428,7 @@ export default function MonitorPanel() {
                   <span className="monitor-stat-label">{t("High", "高温", lang)}</span>
                   {max != null ? (
                     <>
-                      <span className="monitor-high-value">{max.toFixed(1)}°C</span>
+                      <span className="monitor-high-value">{max.toFixed(1)}{tempSymbol}</span>
                       {mtt && <span className="monitor-high-time">{mtt}</span>}
                     </>
                   ) : (
@@ -456,13 +441,15 @@ export default function MonitorPanel() {
                     {t("Airport METAR", "机场报文", lang)}
                   </span>
                   <span className={`monitor-obs-age ${freshness}`}>
-                    {age != null
-                      ? (isEn
-                          ? `${age} min ago`
-                          : age < 60
-                            ? `${age} 分钟未更新`
-                            : `${Math.round(age / 60)} 小时未更新`)
-                      : <span className="monitor-stat-missing">--</span>}
+                    {age != null ? (
+                      age < 60
+                        ? (isEn ? `${age} min ago` : `${age} 分钟未更新`)
+                        : (isEn
+                            ? `⚠ last ${obs || "?"}`
+                            : `⚠ 最后报文 ${obs || "--"}`)
+                    ) : (
+                      <span className="monitor-stat-missing">--</span>
+                    )}
                   </span>
                 </div>
               </div>
