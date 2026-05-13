@@ -69,7 +69,7 @@ body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFo
 
 {% if full_page or not full_page %}
 <div id="card-grid" class="card-grid"
-     hx-get="/monitor/cards" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
+     hx-get="/m/cards" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
 {% endif %}
 <span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">{{ generated_at }}</span>
 {% for c in cities %}

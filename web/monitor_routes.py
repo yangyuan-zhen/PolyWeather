@@ -146,7 +146,7 @@ def _load_all_cities() -> List[Dict[str, Any]]:
 
 # ── routes ──
 
-@router.get("/monitor", response_class=HTMLResponse)
+@router.get("/m", response_class=HTMLResponse)
 async def monitor_page(request: Request):
     cities = _load_all_cities()
     return templates.TemplateResponse("monitor.html", {
@@ -156,7 +156,7 @@ async def monitor_page(request: Request):
         "generated_at": datetime.now(timezone.utc).strftime("%H:%M:%S UTC"),
     })
 
-@router.get("/monitor/cards", response_class=HTMLResponse)
+@router.get("/m/cards", response_class=HTMLResponse)
 async def monitor_cards(request: Request):
     cities = _load_all_cities()
     return templates.TemplateResponse("monitor.html", {
