@@ -1,0 +1,79 @@
+{% if full_page %}
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>市场监控 — PolyWeather</title>
+<link rel="stylesheet" href="/static/style.css">
+<meta http-equiv="refresh" content="120">
+</head>
+<body>
+<div class="page">
+<header class="header">
+  <h1>🔥 市场监控</h1>
+  <span class="updated">更新 {{ generated_at }}</span>
+</header>
+{% endif %}
+
+<div id="card-grid" class="card-grid"
+     hx-get="/api/data" hx-trigger="every 60s" hx-swap="outerHTML" hx-indicator="#spinner">
+{% for c in cities %}
+<div class="card">
+  <div class="card-top">
+    <span class="city-name">{{ c.display_name }}</span>
+    <span class="airport">/ {{ c.airport }}</span>
+    <span class="local-time">{{ c.local_time }}</span>
+    {% if c.new_high %}
+    <span class="badge new-high">◆新高</span>
+    {% endif %}
+  </div>
+
+  <div class="card-temp">
+    {% match c.current_temp %}
+    {% when Some with (t) %}
+    <span class="temp-value">{{ "{:.1}"|format(t) }}</span><span class="temp-unit">°C</span>
+    {% when None %}
+    <span class="temp-value na">--</span>
+    {% endmatch %}
+  </div>
+
+  <div class="card-meta">
+    <div class="meta-row">
+      <span class="label">今日最高</span>
+      {% match c.today_max %}
+      {% when Some with (m) %}
+      <span class="value">{{ "{:.1}"|format(m) }}°C</span>
+      {% when None %}
+      <span class="value na">--</span>
+      {% endmatch %}
+    </div>
+    <div class="meta-row">
+      <span class="label">趋势</span>
+      <span class="value trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+    </div>
+  </div>
+
+  {% if !c.runway_pairs.is_empty() %}
+  <div class="card-runway">
+    <div class="runway-divider"></div>
+    {% for (pair, temp) in c.runway_pairs %}
+    <div class="runway-row">
+      <span class="runway-label">{{ pair }}</span>
+      <span class="runway-temp">{{ "{:.1}"|format(temp) }}°C</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<div id="spinner" class="htmx-indicator">刷新中…</div>
+
+{% if full_page %}
+<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+</div>
+</body>
+</html>
+{% endif %}
