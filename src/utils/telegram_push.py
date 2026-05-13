@@ -1016,8 +1016,10 @@ def _run_high_freq_airport_cycle(
                     state_dirty = True
                 continue
 
-            local_time = city_weather.get("local_time") or ""
-            message = _build_airport_status_message(city, city_weather, deb_pred, local_time)
+            # 用观测数据时间而非当前本地时间
+            airport_cur = city_weather.get("airport_current") or {}
+            obs_local = airport_cur.get("obs_time") or city_weather.get("local_time") or ""
+            message = _build_airport_status_message(city, city_weather, deb_pred, obs_local)
 
             sent = False
             for chat_id in chat_ids:
