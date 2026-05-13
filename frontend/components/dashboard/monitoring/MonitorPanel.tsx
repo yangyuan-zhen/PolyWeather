@@ -50,7 +50,7 @@ export default function MonitorPanel() {
 
   useEffect(() => {
     fetchData();
-    const t = setInterval(fetchData, 30_000);
+    const t = setInterval(fetchData, 60_000);
     return () => clearInterval(t);
   }, [fetchData]);
 
