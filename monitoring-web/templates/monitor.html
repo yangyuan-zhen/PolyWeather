@@ -44,16 +44,6 @@
 
   <div class="card-meta">
     <div class="meta-row">
-      <span class="label">Today High</span>
-      {% match c.today_max %}
-      {% when Some with (m) %}
-      <span class="value">{{ "{:.1}"|format(m) }}°C</span>
-      {% when None %}
-      <span class="value na">--</span>
-      {% endmatch %}
-      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
-    </div>
-    <div class="meta-row">
       <span class="label">Obs</span>
       {% match c.obs_age_min %}
       {% when Some with (m) %}
@@ -61,6 +51,7 @@
       {% when None %}
       <span class="value na">--</span>
       {% endmatch %}
+      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
     </div>
   </div>
 </div>
@@ -97,7 +88,7 @@ function updateNotifyIcon() {
   }
 }
 
-function fireNotification(city, enName, temp, todayMax) {
+function fireNotification(enName, temp) {
   if (!NOTIFY_ENABLED) return;
   if (Notification.permission !== 'granted') return;
 
@@ -114,7 +105,7 @@ function fireNotification(city, enName, temp, todayMax) {
   localStorage.setItem('monitor_notified_highs', JSON.stringify(NOTIFIED_HIGHS));
 
   new Notification('🔴 New High — ' + enName, {
-    body: temp + '°C (was ' + todayMax + '°C)\n' + enName + ' / ' + city,
+    body: temp + '°C\nNew daily high.',
     icon: '/static/favicon.png',
     tag: key,
     requireInteraction: true,
@@ -146,9 +137,7 @@ updateNotifyIcon();
 
       // Notification for new high
       if(card.dataset.newHigh === 'true'){
-        var maxEl = card.querySelector('.meta-row .value');
-        var maxVal = maxEl ? maxEl.textContent.replace('°C','') : '';
-        fireNotification(name, name, tv, maxVal);
+        fireNotification(name, tv);
       }
     });
   });

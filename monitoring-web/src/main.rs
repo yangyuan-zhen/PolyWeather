@@ -127,11 +127,18 @@ fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, t
 }
 
 fn load_all_cities(db_path: &str) -> Vec<CitySnapshot> {
-    CITIES
+    let mut cities: Vec<CitySnapshot> = CITIES
         .iter()
         .enumerate()
         .map(|(i, c)| load_city_snapshot(db_path, i, c))
-        .collect()
+        .collect();
+    // 按当前温度从高到低排序，无数据的排最后
+    cities.sort_by(|a, b| {
+        b.current_temp
+            .partial_cmp(&a.current_temp)
+            .unwrap_or(std::cmp::Ordering::Less)
+    });
+    cities
 }
 
 // ── routes ──
