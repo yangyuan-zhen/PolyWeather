@@ -17,19 +17,25 @@ use tower_http::services::ServeDir;
 use tracing_subscriber;
 
 // ── city config ──
-// (key, zh_name, en_name, icao, airport_en, utc_offset_hours, threshold, tz_abbr)
-const CITIES: &[(&str, &str, &str, &str, &str, i32, f64, &str)] = &[
-    ("seoul", "首尔", "Seoul", "RKSI", "Incheon", 9, 3.0, "KST"),
-    ("busan", "釜山", "Busan", "RKPK", "Gimhae", 9, 2.0, "KST"),
-    ("tokyo", "东京", "Tokyo", "44166", "Haneda", 9, 2.0, "JST"),
-    ("ankara", "安卡拉", "Ankara", "17128", "Esenboğa", 3, 3.0, "TRT"),
-    ("helsinki", "赫尔辛基", "Helsinki", "EFHK", "Vantaa", 3, 2.0, "EEST"),
-    ("amsterdam","阿姆斯特丹","Amsterdam","EHAM","Schiphol",2,2.0,"CEST"),
-    ("istanbul","伊斯坦布尔","Istanbul","17058","Airport",3,3.0,"TRT"),
-    ("paris", "巴黎", "Paris", "LFPB", "Le Bourget", 2, 3.0, "CEST"),
-    ("hong kong","香港","Hong Kong","HKO","Observatory",8,1.5,"HKT"),
-    ("lau fau shan","流浮山","Lau Fau Shan","LFS","Lau Fau Shan",8,1.5,"HKT"),
-    ("taipei", "台北", "Taipei", "466920", "Songshan", 8, 1.5, "TST"),
+// (key, zh_name, en_name, icao, airport_en, utc_offset_hours, threshold, tz_abbr, runway_count)
+const CITIES: &[(&str, &str, &str, &str, &str, i32, f64, &str, usize)] = &[
+    ("seoul", "首尔", "Seoul", "RKSI", "Incheon", 9, 3.0, "KST", 2),
+    ("busan", "釜山", "Busan", "RKPK", "Gimhae", 9, 2.0, "KST", 2),
+    ("tokyo", "东京", "Tokyo", "44166", "Haneda", 9, 2.0, "JST", 0),
+    ("ankara", "安卡拉", "Ankara", "17128", "Esenboğa", 3, 3.0, "TRT", 0),
+    ("helsinki", "赫尔辛基", "Helsinki", "EFHK", "Vantaa", 3, 2.0, "EEST", 0),
+    ("amsterdam","阿姆斯特丹","Amsterdam","EHAM","Schiphol",2,2.0,"CEST", 0),
+    ("istanbul","伊斯坦布尔","Istanbul","17058","Airport",3,3.0,"TRT", 0),
+    ("paris", "巴黎", "Paris", "LFPB", "Le Bourget", 2, 3.0, "CEST", 0),
+    ("hong kong","香港","Hong Kong","HKO","Observatory",8,1.5,"HKT", 0),
+    ("lau fau shan","流浮山","Lau Fau Shan","LFS","Lau Fau Shan",8,1.5,"HKT", 0),
+    ("taipei", "台北", "Taipei", "466920", "Songshan", 8, 1.5, "TST", 0),
+];
+
+// 跑道标签（与 AMOS scrape 返回的一致）
+const RUNWAY_LABELS: &[&[&str]] = &[
+    &["18L/36R", "18R/36L"],  // seoul
+    &["18L/36R", "18R/36L"],  // busan
 ];
 
 // ── app state ──
@@ -49,7 +55,7 @@ struct MonitorTemplate {
 
 // ── data loading ──
 
-fn load_city_snapshot(db_path: &str, (key, _zh, en, icao, airport, tz, thresh, tz_abbr): &(&str, &str, &str, &str, &str, i32, f64, &str)) -> CitySnapshot {
+fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, tz, thresh, tz_abbr, rw_count): &(&str, &str, &str, &str, &str, i32, f64, &str, usize)) -> CitySnapshot {
     let now_utc = Utc::now();
     let local = now_utc + chrono::Duration::hours(*tz as i64);
     let local_time = format!("{} {}", local.format("%H:%M"), tz_abbr);
@@ -84,6 +90,19 @@ fn load_city_snapshot(db_path: &str, (key, _zh, en, icao, airport, tz, thresh, t
         _ => false,
     };
 
+    // Runway data: query each runway ICAO
+    let mut runway_pairs: Vec<(String, f64)> = vec![];
+    if *rw_count > 0 && idx < RUNWAY_LABELS.len() {
+        for i in 0..*rw_count {
+            let rw_icao = format!("{}_RWY_{}", icao, i);
+            let rw_obs = db::get_recent_obs(db_path, &rw_icao, 120, 1);
+            if let Some(rw_temp) = rw_obs.first().and_then(|o| o.temp_c) {
+                let label = RUNWAY_LABELS[idx].get(i).unwrap_or(&"?").to_string();
+                runway_pairs.push((label, rw_temp));
+            }
+        }
+    }
+
     CitySnapshot {
         name: key.to_string(),
         en_name: en.to_string(),
@@ -95,7 +114,7 @@ fn load_city_snapshot(db_path: &str, (key, _zh, en, icao, airport, tz, thresh, t
         max_time: None,
         trend,
         new_high,
-        runway_pairs: vec![],
+        runway_pairs,
         gap: None,
         threshold: *thresh,
         time_ok: false,
@@ -110,7 +129,8 @@ fn load_city_snapshot(db_path: &str, (key, _zh, en, icao, airport, tz, thresh, t
 fn load_all_cities(db_path: &str) -> Vec<CitySnapshot> {
     CITIES
         .iter()
-        .map(|c| load_city_snapshot(db_path, c))
+        .enumerate()
+        .map(|(i, c)| load_city_snapshot(db_path, i, c))
         .collect()
 }
 

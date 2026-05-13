@@ -1033,6 +1033,18 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                         pressure_hpa=amos_data.get("pressure_hpa"),
                         obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
                     )
+                    # 也存每条跑道的数据，用 RKSI_RWY_0 / RKSI_RWY_1 做 icao
+                    runway_obs = amos_data.get("runway_obs") or {}
+                    rw_pairs = runway_obs.get("runway_pairs") or []
+                    rw_temps = runway_obs.get("temperatures") or []
+                    for i, (pair, (t, _d)) in enumerate(zip(rw_pairs, rw_temps)):
+                        if t is not None and i < 4:
+                            DBManager().append_airport_obs(
+                                icao=f"{amos_data.get('icao', '')}_RWY_{i}",
+                                city=city_lower,
+                                temp_c=t,
+                                obs_time=amos_data.get("observation_time") or datetime.now().isoformat(),
+                            )
                 except Exception:
                     logger.exception("airport_obs_log append failed for amos city={}", city_lower)
             else:
