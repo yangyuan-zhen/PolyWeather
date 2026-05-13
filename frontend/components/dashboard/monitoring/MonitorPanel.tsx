@@ -44,22 +44,21 @@ export default function MonitorPanel() {
     return localStorage.getItem("monitor_notify") !== "off";
   });
 
-  // Trigger loading for monitoring cities not yet in store
+  // 1 min force-refresh all 11 monitoring cities
   useEffect(() => {
-    const missing = MONITOR_KEYS.filter((k) => !details[k]);
-    if (missing.length === 0) return;
     let cancelled = false;
-    async function load() {
-      for (const k of missing) {
+    async function refreshAll() {
+      for (const k of MONITOR_KEYS) {
         if (cancelled) break;
         try {
-          await store.ensureCityDetail(k, false, "panel");
+          await store.ensureCityDetail(k, true, "panel");
         } catch {}
       }
     }
-    load();
-    return () => { cancelled = true; };
-  }, [store.ensureCityDetail, Object.keys(details).length > 0]);
+    refreshAll();
+    const t = setInterval(refreshAll, 60_000);
+    return () => { cancelled = true; clearInterval(t); };
+  }, [store.ensureCityDetail]);
 
   const cities: MonitorCity[] = useMemo(() => {
     return MONITOR_KEYS.map((k) => ({ key: k, detail: details[k] }));
