@@ -117,8 +117,8 @@ body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFo
     <div class="runway-divider"></div>
     {% for rw in c.runway_pairs %}
     <div class="runway-row">
-      <span class="runway-label">{{ rw["label"] }}</span>
-      <span class="runway-temp">{{ "%.1f"|format(rw["temp"]) }}°C</span>
+      <span class="runway-label">{{ rw[0] }}</span>
+      <span class="runway-temp">{{ "%.1f"|format(rw[1]) }}°C</span>
     </div>
     {% endfor %}
   </div>

@@ -88,7 +88,7 @@ def _obs_age(obs_time_str: Optional[str]) -> Optional[int]:
         pass
     return None
 
-def _runway_pairs(city_weather: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _runway_pairs(city_weather: Dict[str, Any]) -> list:
     """Extract runway pairs from AMOS data."""
     amos = city_weather.get("amos") or {}
     rw_obs = (amos.get("runway_obs") or {}) if amos else {}
@@ -97,7 +97,7 @@ def _runway_pairs(city_weather: Dict[str, Any]) -> List[Dict[str, Any]]:
     result = []
     for (r1, r2), (t, _d) in zip(pairs, temps):
         if t is not None:
-            result.append({"label": f"{r1}/{r2}", "temp": round(float(t), 1)})
+            result.append((f"{r1}/{r2}", round(float(t), 1)))
     return result
 
 def _build_city_card(city: str, city_weather: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
