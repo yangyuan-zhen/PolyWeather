@@ -1,16 +1,24 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { useDashboardStore } from "@/hooks/useDashboardStore";
 import type { CityDetail } from "@/lib/dashboard-types";
 
 const MONITOR_KEYS = [
   "seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
   "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
-  "shanghai", "beijing", "chengdu", "chongqing", "wuhan", "guangzhou", "qingdao",
   "new york", "los angeles", "chicago", "denver", "atlanta",
   "miami", "san francisco", "houston", "dallas", "austin", "seattle",
 ] as const;
+
+/** Max concurrent city-detail requests while loading the monitor panel. */
+const MONITOR_FETCH_CONCURRENCY = 6;
+
+/** Minimum elapsed time (ms) before triggering another auto-refresh cycle. */
+const MONITOR_REFRESH_INTERVAL_MS = 60_000;
+
+/** How long (ms) fresh data is considered valid — avoids re-fetch on tab switch. */
+const MONITOR_FRESHNESS_TTL_MS = 45_000;
 
 type MonitorCity = {
   key: string;
@@ -31,10 +39,58 @@ function trendIcon(detail: CityDetail | undefined): { s: string; c: string } {
   return { s: "→", c: "flat" };
 }
 
+/**
+ * Run an array of async tasks with capped concurrency.
+ * Resolves when every task has settled (success or error).
+ */
+async function runConcurrent<T>(
+  tasks: Array<() => Promise<T>>,
+  concurrency: number,
+  cancelled: () => boolean,
+): Promise<void> {
+  const queue = [...tasks];
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      if (cancelled()) return;
+      const task = queue.shift();
+      if (!task) break;
+      try {
+        await task();
+      } catch {
+        // Ignore individual city failures; the panel shows "--" gracefully.
+      }
+    }
+  });
+  await Promise.allSettled(workers);
+}
+
+// Module-level timestamp — survives tab switches so we don't re-fetch stale data.
+let lastRefreshCompletedAt = 0;
+
+function SkeletonCard() {
+  return (
+    <div style={{
+      background: "#161822", border: "1px solid #1e2130",
+      borderRadius: 12, padding: "20px 24px", minHeight: 148,
+    }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 14, alignItems: "center" }}>
+        <div style={{ height: 14, width: "45%", background: "#1e2534", borderRadius: 4 }} />
+        <div style={{ height: 12, width: "25%", background: "#1a1f2b", borderRadius: 4 }} />
+      </div>
+      <div style={{ height: 52, width: "55%", background: "#1e2534", borderRadius: 6, marginBottom: 16 }} />
+      <div style={{ height: 12, width: "70%", background: "#1a1f2b", borderRadius: 4, marginBottom: 8 }} />
+      <div style={{ height: 12, width: "40%", background: "#1a1f2b", borderRadius: 4 }} />
+    </div>
+  );
+}
+
 export default function MonitorPanel() {
   const store = useDashboardStore();
   const details = store.cityDetailsByName;
   const [time, setTime] = useState("");
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
+  const cancelledRef = useRef(false);
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     setTime(new Date().toLocaleTimeString());
@@ -47,27 +103,59 @@ export default function MonitorPanel() {
     return localStorage.getItem("monitor_notify") !== "off";
   });
 
-  // 1 min force-refresh all 11 monitoring cities
-  useEffect(() => {
-    let cancelled = false;
-    async function refreshAll() {
-      for (const k of MONITOR_KEYS) {
-        if (cancelled) break;
-        try {
-          await store.ensureCityDetail(k, true, "panel");
-        } catch {}
+  /** Fetch all MONITOR_KEYS cities concurrently in batches. */
+  const refreshAll = useCallback(
+    async (force: boolean) => {
+      if (fetchingRef.current) return;
+
+      // Skip if data is still fresh (e.g. after a tab switch).
+      if (
+        !force &&
+        lastRefreshCompletedAt > 0 &&
+        Date.now() - lastRefreshCompletedAt < MONITOR_FRESHNESS_TTL_MS
+      ) {
+        setInitialLoadDone(true);
+        return;
       }
-    }
-    refreshAll();
-    const t = setInterval(refreshAll, 60_000);
-    return () => { cancelled = true; clearInterval(t); };
-  }, [store.ensureCityDetail]);
+
+      fetchingRef.current = true;
+
+      const tasks = MONITOR_KEYS.map((k) => () =>
+        store.ensureCityDetail(k, force, "panel"),
+      );
+
+      await runConcurrent(tasks, MONITOR_FETCH_CONCURRENCY, () => cancelledRef.current);
+
+      if (!cancelledRef.current) {
+        lastRefreshCompletedAt = Date.now();
+        setInitialLoadDone(true);
+      }
+
+      fetchingRef.current = false;
+    },
+    [store.ensureCityDetail],
+  );
+
+  // Initial load (non-force, honours freshness TTL) + periodic auto-refresh.
+  useEffect(() => {
+    cancelledRef.current = false;
+    void refreshAll(false);
+
+    const t = setInterval(() => {
+      if (!document.hidden) void refreshAll(true);
+    }, MONITOR_REFRESH_INTERVAL_MS);
+
+    return () => {
+      cancelledRef.current = true;
+      clearInterval(t);
+    };
+  }, [refreshAll]);
 
   const cities: MonitorCity[] = useMemo(() => {
     return MONITOR_KEYS.map((k) => ({ key: k, detail: details[k] }));
   }, [details]);
 
-  // Sort by temp descending
+  // Sort by current temp descending.
   const sorted = useMemo(() => {
     return [...cities].sort((a, b) => {
       const ta = a.detail?.airport_current?.temp ?? a.detail?.current?.temp ?? null;
@@ -88,7 +176,7 @@ export default function MonitorPanel() {
     }
   };
 
-  // Check for new highs and fire notifications
+  // Check for new highs and fire browser notifications.
   useEffect(() => {
     if (!notify || typeof Notification === "undefined" || Notification.permission !== "granted") return;
     for (const c of sorted) {
@@ -128,9 +216,6 @@ export default function MonitorPanel() {
       denver: "Buckley", atlanta: "Hartsfield", miami: "MIA",
       "san francisco": "SFO", houston: "Hobby", dallas: "Love Field",
       austin: "Bergstrom", seattle: "SeaTac",
-      shanghai: "Pudong", beijing: "Capital",
-      chengdu: "Shuangliu", chongqing: "Jiangbei",
-      wuhan: "Tianhe", guangzhou: "Baiyun", qingdao: "Liuting",
     };
     return m[key] || "";
   };
@@ -143,6 +228,15 @@ export default function MonitorPanel() {
       }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, color: "#e8eaed" }}>🔥 市场监控</h2>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          {!initialLoadDone && (
+            <span style={{ fontSize: 12, color: "#5a6170", display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{
+                display: "inline-block", width: 8, height: 8, borderRadius: "50%",
+                background: "#3b82f6", animation: "monitor-pulse 1.2s ease-in-out infinite",
+              }} />
+              加载中…
+            </span>
+          )}
           <button
             onClick={toggleNotify}
             style={{
@@ -156,99 +250,113 @@ export default function MonitorPanel() {
         </div>
       </div>
 
+      <style>{`
+        @keyframes monitor-pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.3; }
+        }
+        @keyframes monitor-shimmer {
+          0% { opacity: 0.5; }
+          50% { opacity: 1; }
+          100% { opacity: 0.5; }
+        }
+      `}</style>
+
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
         gap: 14,
       }}>
-        {sorted.map((c) => {
-          const ac = c.detail?.airport_current;
-          const cur = ac?.temp ?? c.detail?.current?.temp ?? null;
-          const max = ac?.max_so_far ?? null;
-          const mtt = ac?.max_temp_time ?? null;
-          const obs = ac?.obs_time ?? c.detail?.local_time ?? "";
-          const age = ac?.obs_age_min ?? null;
-          const newHigh = cur != null && max != null && cur >= max + 0.3;
-          const warm = cur != null && cur >= 30;
-          const tr = trendIcon(c.detail);
-          const rw = c.detail?.amos?.runway_obs;
-          const rwPairs = rw?.runway_pairs || [];
-          const rwTemps = rw?.temperatures || [];
+        {!initialLoadDone
+          ? MONITOR_KEYS.map((k) => <SkeletonCard key={k} />)
+          : sorted.map((c) => {
+              const ac = c.detail?.airport_current;
+              const cur = ac?.temp ?? c.detail?.current?.temp ?? null;
+              const max = ac?.max_so_far ?? null;
+              const mtt = ac?.max_temp_time ?? null;
+              const obs = ac?.obs_time ?? c.detail?.local_time ?? "";
+              const age = ac?.obs_age_min ?? null;
+              const newHigh = cur != null && max != null && cur >= max + 0.3;
+              const warm = cur != null && cur >= 30;
+              const tr = trendIcon(c.detail);
+              const rw = c.detail?.amos?.runway_obs;
+              const rwPairs = rw?.runway_pairs || [];
+              const rwTemps = rw?.temperatures || [];
 
-          return (
-            <div key={c.key} style={{
-              background: "#161822", border: `1px solid ${newHigh ? "rgba(124,58,237,0.3)" : "#1e2130"}`,
-              borderRadius: 12, padding: "20px 24px",
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 15, flexWrap: "wrap" }}>
-                <span style={{ color: "#e0e3e8", fontWeight: 700 }}>{c.detail?.display_name || c.key}</span>
-                <span style={{ color: "#6a7180" }}>/ {airportName(c.key)}</span>
-                <span style={{ marginLeft: "auto", color: "#4a5160", fontSize: 14 }}>{obs}</span>
-                {newHigh && (
-                  <span style={{ fontSize: 12, padding: "1px 6px", borderRadius: 4,
-                    background: "rgba(124,58,237,.18)", color: "#a78bfa", fontWeight: 600 }}>
-                    ◆新高
-                  </span>
-                )}
-              </div>
+              return (
+                <div key={c.key} style={{
+                  background: "#161822", border: `1px solid ${newHigh ? "rgba(124,58,237,0.3)" : "#1e2130"}`,
+                  borderRadius: 12, padding: "20px 24px",
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 15, flexWrap: "wrap" }}>
+                    <span style={{ color: "#e0e3e8", fontWeight: 700 }}>{c.detail?.display_name || c.key}</span>
+                    <span style={{ color: "#6a7180" }}>/ {airportName(c.key)}</span>
+                    <span style={{ marginLeft: "auto", color: "#4a5160", fontSize: 14 }}>{obs}</span>
+                    {newHigh && (
+                      <span style={{ fontSize: 12, padding: "1px 6px", borderRadius: 4,
+                        background: "rgba(124,58,237,.18)", color: "#a78bfa", fontWeight: 600 }}>
+                        ◆新高
+                      </span>
+                    )}
+                  </div>
 
-              <div style={{ margin: "8px 0 10px", lineHeight: 1.15 }}>
-                {cur != null ? (
-                  <>
-                    <span style={{ fontSize: 48, fontWeight: 700, letterSpacing: "-.03em",
-                      color: newHigh ? "#c084fc" : warm ? "#f59e0b" : "#e8eaed" }}>
-                      {cur.toFixed(1)}
-                    </span>
-                    <span style={{ fontSize: 20, color: "#5a6170", marginLeft: 3 }}>°C</span>
-                  </>
-                ) : (
-                  <span style={{ fontSize: 30, color: "#3a4050" }}>--</span>
-                )}
-              </div>
+                  <div style={{ margin: "8px 0 10px", lineHeight: 1.15 }}>
+                    {cur != null ? (
+                      <>
+                        <span style={{ fontSize: 48, fontWeight: 700, letterSpacing: "-.03em",
+                          color: newHigh ? "#c084fc" : warm ? "#f59e0b" : "#e8eaed" }}>
+                          {cur.toFixed(1)}
+                        </span>
+                        <span style={{ fontSize: 20, color: "#5a6170", marginLeft: 3 }}>°C</span>
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 30, color: "#3a4050" }}>--</span>
+                    )}
+                  </div>
 
-              <div style={{ fontSize: 14 }}>
-                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-                  <span style={{ color: "#4a5160" }}>High</span>
-                  {max != null ? (
-                    <>
-                      <span style={{ color: "#9aa0b0" }}>{max.toFixed(1)}°C</span>
-                      {mtt && <span style={{ fontSize: 12, color: "#4a5160", marginLeft: 2 }}>{mtt}</span>}
-                    </>
-                  ) : (
-                    <span style={{ color: "#3a4050" }}>--</span>
+                  <div style={{ fontSize: 14 }}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span style={{ color: "#4a5160" }}>High</span>
+                      {max != null ? (
+                        <>
+                          <span style={{ color: "#9aa0b0" }}>{max.toFixed(1)}°C</span>
+                          {mtt && <span style={{ fontSize: 12, color: "#4a5160", marginLeft: 2 }}>{mtt}</span>}
+                        </>
+                      ) : (
+                        <span style={{ color: "#3a4050" }}>--</span>
+                      )}
+                      <span style={{ marginLeft: "auto", fontSize: 18, fontWeight: 700,
+                        color: tr.c === "rising" ? "#34d399" : tr.c === "falling" ? "#60a5fa" : "#5a6170" }}>
+                        {tr.s}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                      <span style={{ color: "#4a5160" }}>Obs</span>
+                      {age != null ? (
+                        <span style={{ color: "#5a6170", fontSize: 13 }}>{age} min ago</span>
+                      ) : (
+                        <span style={{ color: "#3a4050" }}>--</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {rwPairs.length > 0 && rwTemps.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <div style={{ height: 1, background: "#1e2130", marginBottom: 8 }} />
+                      {rwPairs.map((p, i) => {
+                        const t = rwTemps[i]?.[0];
+                        if (t == null) return null;
+                        return (
+                          <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 2 }}>
+                            <span style={{ color: "#4a5160" }}>{p[0]}/{p[1]}</span>
+                            <span style={{ color: "#7a8290" }}>{t.toFixed(1)}°C</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
-                  <span style={{ marginLeft: "auto", fontSize: 18, fontWeight: 700,
-                    color: tr.c === "rising" ? "#34d399" : tr.c === "falling" ? "#60a5fa" : "#5a6170" }}>
-                    {tr.s}
-                  </span>
                 </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                  <span style={{ color: "#4a5160" }}>Obs</span>
-                  {age != null ? (
-                    <span style={{ color: "#5a6170", fontSize: 13 }}>{age} min ago</span>
-                  ) : (
-                    <span style={{ color: "#3a4050" }}>--</span>
-                  )}
-                </div>
-              </div>
-
-              {rwPairs.length > 0 && rwTemps.length > 0 && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ height: 1, background: "#1e2130", marginBottom: 8 }} />
-                  {rwPairs.map((p, i) => {
-                    const t = rwTemps[i]?.[0];
-                    if (t == null) return null;
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 2 }}>
-                        <span style={{ color: "#4a5160" }}>{p[0]}/{p[1]}</span>
-                        <span style={{ color: "#7a8290" }}>{t.toFixed(1)}°C</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+              );
+            })}
       </div>
     </div>
   );
