@@ -856,7 +856,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if (
             city_lower not in self.CITY_METAR_CLUSTERS
             or "mgm_nearby" in results
-            or settlement_source in {"hko"}
+            or settlement_source in {"hko", "cwa"}
         ):
             return
         cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
