@@ -258,7 +258,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
   ],
-  aurora: [
+  denver: [
     {
       label: "NWS Denver/Boulder",
       href: "https://www.weather.gov/bou/",

@@ -15,7 +15,7 @@ CITY_TIME_ZONES = {
     "amsterdam": "Europe/Amsterdam",
     "ankara": "Europe/Istanbul",
     "atlanta": "America/New_York",
-    "aurora": "America/Denver",
+    "denver": "America/Denver",
     "austin": "America/Chicago",
     "beijing": "Asia/Shanghai",
     "buenos aires": "America/Argentina/Buenos_Aires",

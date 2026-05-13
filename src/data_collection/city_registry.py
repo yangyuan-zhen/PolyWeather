@@ -383,7 +383,7 @@ CITY_REGISTRY = {
         "distance_km": 20.0,
         "warning": "海湾冷空气和平流雾常压制机场升温，SFO 与市区体感差异可快速放大。",
     },
-    "aurora": {
+    "denver": {
         "name": "Denver",
         "display_name": "Denver",
         "lat": 39.7017,
@@ -825,7 +825,7 @@ ALIASES = {
     "nyc": "new york", "ny": "new york", "chi": "chicago", 
     "la": "los angeles", "lax": "los angeles", "losangeles": "los angeles",
     "sf": "san francisco", "sfo": "san francisco", "sanfrancisco": "san francisco",
-    "aur": "aurora", "denver": "aurora", "buckley": "aurora", "kbkf": "aurora",
+    "aur": "denver", "denver": "denver", "buckley": "denver", "kbkf": "denver", "aurora": "denver",
     "aus": "austin", "kaus": "austin",
     "hou": "houston", "khou": "houston", "hobby": "houston",
     "cdmx": "mexico city", "mexicocity": "mexico city", "mmmx": "mexico city",
@@ -862,8 +862,8 @@ ALIASES = {
     "纽约": "new york",
     "洛杉矶": "los angeles",
     "旧金山": "san francisco",
-    "奥罗拉": "aurora",
-    "丹佛": "aurora",
+    "奥罗拉": "denver",
+    "丹佛": "denver",
     "奥斯汀": "austin",
     "休斯顿": "houston",
     "墨西哥城": "mexico city",

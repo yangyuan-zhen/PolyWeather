@@ -3,7 +3,7 @@ import httpx
 import re
 import threading
 import time
-from typing import Optional, Dict, List
+from typing import Any, Optional, Dict, List
 from datetime import datetime, timedelta
 from loguru import logger
 from src.data_collection.open_meteo_cache import OpenMeteoCacheMixin
@@ -18,10 +18,11 @@ from src.data_collection.amos_station_sources import AmosStationSourceMixin
 from src.data_collection.fmi_sources import FmiSourceMixin
 from src.data_collection.knmi_sources import KnmiSourceMixin
 from src.data_collection.hko_obs_sources import HkoObsSourceMixin
+from src.data_collection.madis_sources import MadisSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin):
     """
     Multi-source weather data collector
 
@@ -49,7 +50,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "new york": ["KLGA", "KJFK", "KEWR", "KTEB", "KHPN"],
         "los angeles": ["KLAX", "KBUR", "KLGB", "KSNA", "KVNY"],
         "san francisco": ["KSFO", "KOAK", "KSJC", "KHAF"],
-        "aurora": ["KBKF", "KDEN", "KAPA", "KBJC"],
+        "denver": ["KBKF", "KDEN", "KAPA", "KBJC"],
         "austin": ["KAUS", "KEDC", "KSAT"],
         "houston": ["KHOU", "KIAH", "KSGR", "KCXO"],
         "mexico city": ["MMMX", "MMSM", "MMTO"],
@@ -107,7 +108,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "new york's central park",
         "portland",
         "denver",
-        "aurora",
         "austin",
         "san diego",
         "detroit",
@@ -238,6 +238,12 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             os.getenv("HKO_OBS_CACHE_TTL_SEC", "60")
         )
         self._hko_obs_cache: Dict[str, Dict] = {}
+        self.madis_cache_ttl_sec = int(
+            os.getenv("MADIS_CACHE_TTL_SEC", "300")  # 5 min match update rate
+        )
+        self._madis_cache: Optional[List[Dict[str, Any]]] = None
+        self._madis_cache_ts: float = 0.0
+        self._madis_cache_lock = threading.Lock()
         self._hko_obs_cache_lock = threading.Lock()
         self.cwa_open_data_auth = (
             os.getenv("CWA_OPEN_DATA_AUTH")
@@ -1052,6 +1058,47 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         except Exception as exc:
             logger.warning("AMOS attach failed city={}: {}", city_lower, exc)
 
+    def _attach_madis_hfmetar_data(
+        self, results: Dict, city_lower: str
+    ) -> None:
+        """Fetch MADIS HFMETAR data and attach matching US station observations."""
+        # Only run for US cities (ICAO starts with K)
+        city_meta = self.CITY_REGISTRY.get(city_lower) or {}
+        icao = str(city_meta.get("icao") or "").strip().upper()
+        if not icao.startswith("K"):
+            return
+
+        now_ts = time.time()
+        with self._madis_cache_lock:
+            if (self._madis_cache is not None
+                    and now_ts - self._madis_cache_ts < self.madis_cache_ttl_sec):
+                obs_list = self._madis_cache
+            else:
+                obs_list = self.fetch_madis_hfmetar()
+                self._madis_cache = obs_list
+                self._madis_cache_ts = now_ts
+
+        if not obs_list:
+            return
+
+        # Find this city's station in the MADIS results
+        for obs in obs_list:
+            if obs["icao"] == icao:
+                try:
+                    DBManager().append_airport_obs(
+                        icao=icao,
+                        city=city_lower,
+                        temp_c=obs["temp_c"],
+                        wind_kt=obs.get("wind_kt"),
+                        pressure_hpa=obs.get("pressure_hpa"),
+                        obs_time=obs["obs_time"] or datetime.now().isoformat(),
+                    )
+                except Exception:
+                    logger.exception(
+                        "airport_obs_log append failed for madis city={}", city_lower
+                    )
+                break
+
     def _attach_russia_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1177,6 +1224,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_nearby=include_nearby,
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
+                self._attach_madis_hfmetar_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
@@ -1222,6 +1270,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_nearby=include_nearby,
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
+                self._attach_madis_hfmetar_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)

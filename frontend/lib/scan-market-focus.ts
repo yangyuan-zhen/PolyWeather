@@ -60,7 +60,6 @@ const CITY_REGION_FALLBACK: Record<string, MarketRegionKey> = {
   toronto: "americas",
   "los angeles": "americas",
   "san francisco": "americas",
-  aurora: "americas",
   denver: "americas",
   austin: "americas",
   houston: "americas",
