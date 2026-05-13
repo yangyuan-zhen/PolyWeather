@@ -21,7 +21,7 @@
 <span id="update-time" class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
   {{ generated_at }}</span>
 {% for c in cities %}
-<div class="card">
+<div class="card{% if c.new_high %} new-high-card{% endif %}">
   <div class="card-top">
     <span class="city-name">{{ c.display_name }}</span>
     <span class="airport">/ {{ c.airport }}</span>
@@ -34,7 +34,7 @@
   <div class="card-temp">
     {% match c.current_temp %}
     {% when Some with (t) %}
-    <span class="temp-value">{{ "{:.1}"|format(t) }}</span><span class="temp-unit">°C</span>
+    <span class="temp-value{% if c.temp_warm %} warm{% endif %}{% if c.new_high %} new-high-val{% endif %}">{{ "{:.1}"|format(t) }}</span><span class="temp-unit">°C</span>
     {% when None %}
     <span class="temp-value na">--</span>
     {% endmatch %}
@@ -49,10 +49,7 @@
       {% when None %}
       <span class="value na">--</span>
       {% endmatch %}
-    </div>
-    <div class="meta-row">
-      <span class="label">趋势</span>
-      <span class="value trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
+      <span class="trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
     </div>
     <div class="meta-row">
       <span class="label">观测</span>
@@ -64,18 +61,6 @@
       {% endmatch %}
     </div>
   </div>
-
-  {% if !c.runway_pairs.is_empty() %}
-  <div class="card-runway">
-    <div class="runway-divider"></div>
-    {% for (pair, temp) in c.runway_pairs %}
-    <div class="runway-row">
-      <span class="runway-label">{{ pair }}</span>
-      <span class="runway-temp">{{ "{:.1}"|format(temp) }}°C</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
 </div>
 {% endfor %}
 </div>

@@ -95,6 +95,9 @@ body {
   background: rgba(124, 58, 237, 0.18);
   color: #a78bfa;
 }
+.new-high-card {
+  border-color: rgba(124, 58, 237, 0.25);
+}
 
 /* ── temp ── */
 .card-temp {
@@ -113,6 +116,12 @@ body {
   color: #3a4050;
   font-size: 28px;
 }
+.temp-value.warm {
+  color: #f59e0b;
+}
+.temp-value.new-high-val {
+  color: #c084fc;
+}
 
 .temp-unit {
   font-size: 18px;
@@ -130,7 +139,8 @@ body {
 
 .meta-row {
   display: flex;
-  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
   font-size: 13px;
 }
 
@@ -145,6 +155,9 @@ body {
 
 .meta-row .value.na {
   color: #3a4050;
+}
+.meta-row .trend {
+  margin-left: auto;
 }
 
 /* ── trend ── */

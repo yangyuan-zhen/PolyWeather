@@ -17,19 +17,19 @@ use tower_http::services::ServeDir;
 use tracing_subscriber;
 
 // ── city config ──
-// (city_key, display_name, icao, airport_en, utc_offset_hours, threshold)
-const CITIES: &[(&str, &str, &str, &str, i32, f64)] = &[
-    ("seoul", "首尔", "RKSI", "Incheon", 9, 3.0),
-    ("busan", "釜山", "RKPK", "Gimhae", 9, 2.0),
-    ("tokyo", "东京", "44166", "Haneda", 9, 2.0),
-    ("ankara", "安卡拉", "17128", "Esenboğa", 3, 3.0),
-    ("helsinki", "赫尔辛基", "EFHK", "Vantaa", 3, 2.0),
-    ("amsterdam","阿姆斯特丹","EHAM","Schiphol",2,2.0),
-    ("istanbul","伊斯坦布尔","17058","Airport",3,3.0),
-    ("paris", "巴黎", "LFPB", "Le Bourget", 2, 3.0),
-    ("hong kong","香港","HKO","Observatory",8,1.5),
-    ("lau fau shan","流浮山","LFS","Lau Fau Shan",8,1.5),
-    ("taipei", "台北", "466920", "Songshan", 8, 1.5),
+// (city_key, display_name, icao, airport_en, utc_offset_hours, threshold, tz_abbr)
+const CITIES: &[(&str, &str, &str, &str, i32, f64, &str)] = &[
+    ("seoul", "首尔", "RKSI", "Incheon", 9, 3.0, "KST"),
+    ("busan", "釜山", "RKPK", "Gimhae", 9, 2.0, "KST"),
+    ("tokyo", "东京", "44166", "Haneda", 9, 2.0, "JST"),
+    ("ankara", "安卡拉", "17128", "Esenboğa", 3, 3.0, "TRT"),
+    ("helsinki", "赫尔辛基", "EFHK", "Vantaa", 3, 2.0, "EEST"),
+    ("amsterdam","阿姆斯特丹","EHAM","Schiphol",2,2.0,"CEST"),
+    ("istanbul","伊斯坦布尔","17058","Airport",3,3.0,"TRT"),
+    ("paris", "巴黎", "LFPB", "Le Bourget", 2, 3.0, "CEST"),
+    ("hong kong","香港","HKO","Observatory",8,1.5,"HKT"),
+    ("lau fau shan","流浮山","LFS","Lau Fau Shan",8,1.5,"HKT"),
+    ("taipei", "台北", "466920", "Songshan", 8, 1.5, "TST"),
 ];
 
 // ── app state ──
@@ -49,10 +49,10 @@ struct MonitorTemplate {
 
 // ── data loading ──
 
-fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh): &(&str, &str, &str, &str, i32, f64)) -> CitySnapshot {
+fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh, tz_abbr): &(&str, &str, &str, &str, i32, f64, &str)) -> CitySnapshot {
     let now_utc = Utc::now();
     let local = now_utc + chrono::Duration::hours(*tz as i64);
-    let local_time = local.format("%H:%M").to_string();
+    let local_time = format!("{} {}", local.format("%H:%M"), tz_abbr);
 
     // Recent obs for temp + trend
     let obs = db::get_recent_obs(db_path, icao, 120, 12);
@@ -107,6 +107,7 @@ fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh): 
         trend_ok: false,
         in_window: false,
         obs_age_min,
+        temp_warm: current_temp.map_or(false, |t| t >= 30.0),
     }
 }
 
