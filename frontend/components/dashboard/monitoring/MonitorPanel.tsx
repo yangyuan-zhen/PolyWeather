@@ -41,7 +41,7 @@ export default function MonitorPanel() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/m?json=1");
+      const res = await fetch("/api/m");
       const data = await res.json();
       setCities(data);
       setTime(new Date().toLocaleTimeString());
