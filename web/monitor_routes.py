@@ -118,6 +118,16 @@ def _build_cards() -> list:
     return cards
 
 
+_cache = None
+_cache_ts = 0
+
+
 @router.get("/m/json")
 async def monitor_json():
-    return _build_cards()
+    global _cache, _cache_ts
+    now = __import__("time").time()
+    if _cache is not None and now - _cache_ts < 30:
+        return _cache
+    _cache = _build_cards()
+    _cache_ts = now
+    return _cache

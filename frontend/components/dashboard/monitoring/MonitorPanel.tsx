@@ -33,7 +33,7 @@ function parseRunway(html: string): RunwayPair[] {
 }
 
 export default function MonitorPanel() {
-  const [cities, setCities] = useState<CitySnapshot[]>([]);
+  const [cities, setCities] = useState<CitySnapshot[] | null>(null);
   const [time, setTime] = useState("");
   const [notify, setNotify] = useState(
     () => typeof window !== "undefined" && localStorage.getItem("monitor_notify") !== "off"
@@ -87,6 +87,11 @@ export default function MonitorPanel() {
       </div>
 
       {/* Card Grid */}
+      {cities === null ? (
+        <div style={{ color: "#5a6170", textAlign: "center", padding: 60, fontSize: 15 }}>
+          Loading…
+        </div>
+      ) : (
       <div style={{
         display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))",
         gap: 14,
@@ -173,6 +178,7 @@ export default function MonitorPanel() {
           );
         })}
       </div>
+      )}
     </div>
   );
 }
