@@ -29,7 +29,7 @@ const CITIES: &[(&str, &str, &str, &str, i32, f64, &str)] = &[
     ("paris", "巴黎", "LFPB", "Le Bourget", 2, 3.0, "CEST"),
     ("hong kong","香港","HKO","Observatory",8,1.5,"HKT"),
     ("lau fau shan","流浮山","LFS","Lau Fau Shan",8,1.5,"HKT"),
-    ("taipei", "台北", "466920", "Songshan", 8, 1.5, "TST"),
+    ("taipei", "台北", "RCSS", "Songshan", 8, 1.5, "TST"),
 ];
 
 // ── app state ──
