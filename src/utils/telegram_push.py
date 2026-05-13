@@ -837,8 +837,8 @@ _AIRPORT_PUSH_INTERVAL = {
     "amsterdam": 600,  # KNMI 10-min
     "istanbul": 600,   # MGM ~10-min
     "paris": 900,        # AROME HD 15-min model
-    "hong kong": 600,    # HKO 10-min
-    "lau fau shan": 600, # HKO 10-min
+    "hong kong": 60,     # HKO 10-min → 60s轮询，obs_time去重
+    "lau fau shan": 60,  # HKO 10-min → 60s轮询，obs_time去重
     "taipei": 600,       # CWA ~10-min
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
