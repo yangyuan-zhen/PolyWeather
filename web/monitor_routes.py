@@ -254,3 +254,15 @@ async def monitor_page(request: Request):
 async def monitor_cards(request: Request):
     cards, gts = _build_cards()
     return HTMLResponse(_render(cards, gts))
+
+@router.get("/m/json")
+async def monitor_json(request: Request):
+    cards, gts = _build_cards()
+    return [{
+        "en_name": c["en_name"], "airport": c["airport"],
+        "obs_time": c["time"], "current_temp": c["ct"],
+        "max_so_far": c["msf"], "max_temp_time": c["mtt"],
+        "trend_sym": c["tsym"], "trend_css": c["tcss"],
+        "obs_age_min": c["age"], "new_high": c["new_high"],
+        "temp_warm": c["warm"], "runway_pairs": c["rw_html"],
+    } for c in cards]

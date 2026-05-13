@@ -8,9 +8,13 @@ export async function GET(req: NextRequest) {
     return new NextResponse("API not configured", { status: 500 });
   }
   const isCards = req.nextUrl.searchParams.get("cards") === "1";
-  const path = isCards ? "/m/cards" : "/m";
+  const asJson = req.nextUrl.searchParams.get("json") === "1";
+  const path = asJson ? "/m/json" : isCards ? "/m/cards" : "/m";
   const auth = await buildBackendRequestHeaders(req, { includeSupabaseIdentity: false });
   const res = await fetch(`${API_BASE}${path}`, { headers: auth.headers });
+  if (asJson) {
+    return NextResponse.json(await res.json());
+  }
   const html = await res.text();
   return new NextResponse(html, {
     status: res.status,

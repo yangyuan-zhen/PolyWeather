@@ -46,6 +46,7 @@ import {
   useScanTerminalTheme,
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
+import MonitorPanel from "@/components/dashboard/monitoring/MonitorPanel";
 
 type ContentView = "analysis" | "map" | "monitor";
 
@@ -597,13 +598,9 @@ function ScanTerminalScreen() {
             ) : (
               renderMainView()
             )}
-            <div style={{ display: resolvedView === "monitor" ? "block" : "none", background: "#0f1117", flex: 1, minHeight: 0 }}>
-              <iframe
-                src="/api/m"
-                style={{ width: "100%", height: "100%", border: "none" }}
-                title="市场监控"
-              />
-            </div>
+            {resolvedView === "monitor" && (
+              <MonitorPanel />
+            )}
           </section>
         </main>
 
