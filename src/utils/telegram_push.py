@@ -691,7 +691,7 @@ def start_trade_alert_push_loop(bot: Any, config: Dict[str, Any]) -> Optional[th
 # ── high-freq airport push loop ──
 
 HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "RJTT", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920"}
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -837,8 +837,8 @@ _AIRPORT_PUSH_INTERVAL = {
     "amsterdam": 600,  # KNMI 10-min
     "istanbul": 600,   # MGM ~10-min
     "paris": 900,        # AROME HD 15-min model
-    "hong kong": 60,     # HKO 1-min
-    "lau fau shan": 60,  # HKO 1-min
+    "hong kong": 600,    # HKO 10-min
+    "lau fau shan": 600, # HKO 10-min
     "taipei": 600,       # CWA ~10-min
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
@@ -910,6 +910,7 @@ def _run_high_freq_airport_cycle(
         try:
             last_city = last_by_city.get(city) or {}
             last_city_ts = int(last_city.get("ts") or 0)
+            last_obs_time = str(last_city.get("obs_time") or "")
             city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
             if now_ts - last_city_ts < city_interval:
                 continue
@@ -937,12 +938,14 @@ def _run_high_freq_airport_cycle(
             if not airport_row:
                 airport_row = mgm_nearby[0] if mgm_nearby else {}
             station_temp = airport_row.get("temp") if airport_row else None
+            current_obs_time = str(airport_row.get("obs_time") or "")
 
             runway_temps = (amos.get("runway_obs") or {}).get("temperatures") or []
             if runway_temps:
                 valid_temps = [t for (t, _d) in runway_temps if t is not None]
                 if valid_temps:
                     station_temp = max(valid_temps)
+                # 跑道数据没有独立的 obs_time，保持 current_obs_time
 
             current_temp = station_temp
             if current_temp is None:
@@ -955,6 +958,10 @@ def _run_high_freq_airport_cycle(
             if current_temp is None or deb_pred is None:
                 continue
 
+            # 基于原始观测数据时间的去重：同一条观测不重复推送
+            if current_obs_time and last_obs_time and current_obs_time == last_obs_time:
+                continue
+
             # ── Three-condition heat window ──
             threshold = _AIRPORT_HEAT_THRESHOLD.get(city, 3.0)
             time_ok = _in_peak_time_window(city_weather)
@@ -965,7 +972,7 @@ def _run_high_freq_airport_cycle(
 
             if not in_window:
                 if last_city.get("active"):
-                    last_by_city[city] = {"ts": now_ts, "active": False}
+                    last_by_city[city] = {"ts": now_ts, "active": False, "obs_time": current_obs_time}
                     state_dirty = True
                 continue
 
@@ -981,9 +988,9 @@ def _run_high_freq_airport_cycle(
                     logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
 
             if sent:
-                last_by_city[city] = {"ts": now_ts, "active": True}
+                last_by_city[city] = {"ts": now_ts, "active": True, "obs_time": current_obs_time}
                 state_dirty = True
-                logger.info("airport status pushed city={} temp={} deb={} thresh={}", city, current_temp, deb_pred, threshold)
+                logger.info("airport status pushed city={} temp={} deb={} thresh={} obs_time={}", city, current_temp, deb_pred, threshold, current_obs_time)
 
         except Exception:
             logger.exception("airport cycle failed for city={}", city)

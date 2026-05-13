@@ -866,6 +866,23 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if cluster_data:
             results["mgm_nearby"] = cluster_data
             results["nearby_source"] = "metar_cluster"
+            # 写入 airport_obs_log，供高频推送的趋势检测使用
+            try:
+                from src.database.db_manager import DBManager
+                db = DBManager()
+                for row in cluster_data:
+                    icao = row.get("icao")
+                    temp_c = row.get("temp_c") if "temp_c" in row else row.get("temp")
+                    if icao and temp_c is not None:
+                        db.append_airport_obs(
+                            icao=str(icao),
+                            city=city_lower,
+                            temp_c=temp_c,
+                            wind_kt=row.get("wind_speed_kt"),
+                            obs_time=str(row.get("obs_time") or datetime.now().isoformat()),
+                        )
+            except Exception:
+                logger.exception("airport_obs_log append failed for metar cluster city={}", city_lower)
 
     def _attach_china_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool

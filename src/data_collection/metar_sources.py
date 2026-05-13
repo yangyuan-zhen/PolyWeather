@@ -453,6 +453,7 @@ class MetarSourceMixin:
                             "lat": lat,
                             "lon": lon,
                             "temp": round(display_temp, 1),
+                            "temp_c": temp_c,
                             "istNo": icao,
                             "icao": icao,
                             "wind_dir": obs.get("wdir"),
