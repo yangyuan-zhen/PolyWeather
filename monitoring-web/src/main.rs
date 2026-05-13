@@ -53,6 +53,34 @@ struct MonitorTemplate {
     generated_at: String,
 }
 
+// ── obs_time parsing ──
+
+fn parse_obs_time(raw: &str) -> Option<chrono::DateTime<Utc>> {
+    let s = raw.trim();
+    // ISO with timezone: "2026-05-13T14:30:00+08:00" or "2026-05-13T14:30:00Z"
+    if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(s) {
+        return Some(dt.into());
+    }
+    // ISO naive: "2026-05-13T14:30:00"
+    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S") {
+        return Some(dt.and_utc());
+    }
+    // ISO with microseconds: "2026-05-13T14:30:00.123456"
+    if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(s, "%Y-%m-%dT%H:%M:%S%.f") {
+        return Some(dt.and_utc());
+    }
+    // Epoch seconds (METAR cluster)
+    if let Ok(secs) = s.parse::<f64>() {
+        if (1_000_000_000.0..3_000_000_000.0).contains(&secs) {
+            return chrono::DateTime::from_timestamp(secs as i64, 0);
+        }
+        if (100_000.0..1_000_000_000.0).contains(&secs) {
+            return chrono::DateTime::from_timestamp(secs as i64, 0);
+        }
+    }
+    None
+}
+
 // ── data loading ──
 
 fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, tz, thresh, tz_abbr, rw_count): &(&str, &str, &str, &str, &str, i32, f64, &str, usize)) -> CitySnapshot {
@@ -64,14 +92,20 @@ fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, t
     let temps: Vec<f64> = obs.iter().filter_map(|o| o.temp_c).collect();
     let current_temp = temps.first().copied();
 
-    // Observation time from the most recent record
+    // Observation time from the most recent record's obs_time field
     let local_time = obs.first().and_then(|o| {
-        o.created_at.as_ref().and_then(|ts| {
-            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S").ok()
+        o.obs_time.as_ref().and_then(|raw| parse_obs_time(raw))
+    })
+    .or_else(|| {
+        // Fallback: parse created_at
+        obs.first().and_then(|o| {
+            o.created_at.as_ref().and_then(|ts| {
+                chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S").ok()
+                    .map(|dt| dt.and_utc())
+            })
         })
     })
-    .map(|dt| {
-        let obs_utc = dt.and_utc();
+    .map(|obs_utc| {
         let local = obs_utc.with_timezone(&offset);
         format!("{} {}", local.format("%H:%M"), tz_abbr)
     })
