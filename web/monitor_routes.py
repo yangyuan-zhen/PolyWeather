@@ -115,7 +115,7 @@ def _build_cards() -> tuple:
             logger.exception("monitor: failed city {}", cfg["key"])
 
     cards.sort(key=lambda c: (c["ct"] is not None, c["ct"] or -999), reverse=True)
-    return cards, datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
+    return cards, datetime.now(timezone.utc).isoformat()
 
 def _render(cards, gts):
     """Build card grid HTML."""
@@ -157,7 +157,7 @@ def _render(cards, gts):
 
     return f'''<div id="card-grid" class="card-grid"
      hx-get="/m/cards" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
-<span style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px;font-size:13px;color:#5a6170">{gts}</span>
+<span style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px;font-size:13px;color:#5a6170">{gts[11:19] if len(gts) > 19 else gts}</span>
 {chr(10).join(cards_html)}
 </div>
 <div id="spinner" class="htmx-indicator">Refreshing…</div>'''
@@ -226,7 +226,7 @@ body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFo
     <button id="notify-toggle" class="nbtn" onclick="toggleNotify()" title="新高提醒">
       <span id="notify-icon">🔔</span>
     </button>
-    <span class="updated" id="update-time">%s</span>
+    <span class="updated" id="update-time"></span>
   </div>
 </header>
 %s
@@ -239,7 +239,7 @@ function toggleNotify(){NF=!NF;localStorage.setItem('monitor_notify',NF?'on':'of
 function U(){var i=document.getElementById('notify-icon');var b=document.getElementById('notify-toggle');if(NF){i.textContent='🔔';b.classList.remove('muted')}else{i.textContent='🔕';b.classList.add('muted')}}
 function N(en,t){if(!NF||Notification.permission!=='granted')return;var k=en+'|'+t;var d=new Date().toDateString();if(NH._day!==d)NH={_day:d};if(NH[k])return;NH[k]=true;localStorage.setItem('monitor_notified_highs',JSON.stringify(NH));new Notification('🔴 New High — '+en,{body:t+'°C\\nNew daily high.',tag:k,requireInteraction:true})}
 U();
-(function(){let p={};document.body.addEventListener('htmx:afterSwap',function(e){if(e.detail.target.id!=='card-grid')return;document.querySelectorAll('.card').forEach(function(c){var n=c.querySelector('.city-name').textContent;var v=c.querySelector('.temp-value').textContent;var o=p[n];p[n]=v;if(o&&o!==v&&v!=='--'){c.style.transition='none';c.style.boxShadow='0 0 14px rgba(52,211,153,0.40)';requestAnimationFrame(function(){c.style.transition='box-shadow 2s ease-out';c.style.boxShadow=''})}if(c.dataset.newHigh==='true')N(n,v)})})})();
+(function(){let p={};document.body.addEventListener('htmx:afterSwap',function(e){if(e.detail.target.id!=='card-grid')return;document.querySelectorAll('.card').forEach(function(c){var n=c.querySelector('.city-name').textContent;var v=c.querySelector('.temp-value').textContent;var o=p[n];p[n]=v;if(o&&o!==v&&v!=='--'){c.style.transition='none';c.style.boxShadow='0 0 14px rgba(52,211,153,0.40)';requestAnimationFrame(function(){c.style.transition='box-shadow 2s ease-out';c.style.boxShadow=''})}if(c.dataset.newHigh==='true')N(n,v)})});var el=document.getElementById('update-time');if(el)el.textContent=new Date().toLocaleTimeString();})();
 </script>
 </body>
 </html>"""
@@ -248,7 +248,7 @@ U();
 @router.get("/m", response_class=HTMLResponse)
 async def monitor_page(request: Request):
     cards, gts = _build_cards()
-    return HTMLResponse(PAGE_HTML % (gts, _render(cards, gts)))
+    return HTMLResponse(PAGE_HTML % _render(cards, gts))
 
 @router.get("/m/cards", response_class=HTMLResponse)
 async def monitor_cards(request: Request):
