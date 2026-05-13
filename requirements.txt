@@ -10,4 +10,5 @@ lightgbm
 web3
 fastapi
 uvicorn
+jinja2
 websockets
