@@ -67,10 +67,8 @@ body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFo
   </div>
 </header>
 
-{% if full_page or not full_page %}
 <div id="card-grid" class="card-grid"
      hx-get="/m/cards" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
-{% endif %}
 <span class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">{{ generated_at }}</span>
 {% for c in cities %}
 <div class="card{% if c.new_high %} new-high-card{% endif %}" data-new-high="{{ c.new_high | lower }}">
@@ -119,8 +117,8 @@ body{background:#0f1117;color:#c8cdd4;font-family:-apple-system,BlinkMacSystemFo
     <div class="runway-divider"></div>
     {% for rw in c.runway_pairs %}
     <div class="runway-row">
-      <span class="runway-label">{{ rw.label }}</span>
-      <span class="runway-temp">{{ "%.1f"|format(rw.temp) }}°C</span>
+      <span class="runway-label">{{ rw["label"] }}</span>
+      <span class="runway-temp">{{ "%.1f"|format(rw["temp"]) }}°C</span>
     </div>
     {% endfor %}
   </div>

@@ -97,7 +97,7 @@ def _runway_pairs(city_weather: Dict[str, Any]) -> List[Dict[str, Any]]:
     result = []
     for (r1, r2), (t, _d) in zip(pairs, temps):
         if t is not None:
-            result.append({"label": f"{r1}/{r2}", "temp": round(t, 1)})
+            result.append({"label": f"{r1}/{r2}", "temp": round(float(t), 1)})
     return result
 
 def _build_city_card(city: str, city_weather: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
