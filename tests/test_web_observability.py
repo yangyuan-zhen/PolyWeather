@@ -578,11 +578,11 @@ def test_cities_endpoint_uses_denver_display_name_for_aurora_market():
     response = client.get("/api/cities")
     assert response.status_code == 200
     payload = response.json()
-    aurora = next(item for item in payload["cities"] if item["name"] == "aurora")
-    assert aurora["display_name"] == "Denver"
-    assert aurora["network_provider"] == "global_metar"
-    assert aurora["deb_recent_tier"] in {"high", "medium", "low", "other"}
-    assert "deb_recent_sample_count" in aurora
+    denver = next(item for item in payload["cities"] if item["name"] == "denver")
+    assert denver["display_name"] == "Denver"
+    assert denver["network_provider"] == "global_metar"
+    assert denver["deb_recent_tier"] in {"high", "medium", "low", "other"}
+    assert "deb_recent_sample_count" in denver
 
 
 def test_cities_endpoint_includes_new_wunderground_cities():
