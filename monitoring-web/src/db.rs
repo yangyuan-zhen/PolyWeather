@@ -5,6 +5,7 @@ pub struct ObsRow {
     pub temp_c: Option<f64>,
     #[allow(dead_code)]
     pub obs_time: Option<String>,
+    pub created_at: Option<String>,
 }
 
 /// Get recent temperature observations for an ICAO station.
@@ -14,7 +15,7 @@ pub fn get_recent_obs(db_path: &str, icao: &str, minutes: i32, limit: usize) -> 
         Err(_) => return vec![],
     };
     let sql = format!(
-        "SELECT temp_c, obs_time FROM airport_obs_log \
+        "SELECT temp_c, obs_time, created_at FROM airport_obs_log \
          WHERE icao = ?1 AND created_at > datetime('now', '{} minutes') \
          ORDER BY created_at DESC LIMIT ?2",
         -minutes
@@ -28,6 +29,7 @@ pub fn get_recent_obs(db_path: &str, icao: &str, minutes: i32, limit: usize) -> 
             Ok(ObsRow {
                 temp_c: row.get(0)?,
                 obs_time: row.get(1)?,
+                created_at: row.get(2)?,
             })
         })
         .ok()

@@ -12,12 +12,14 @@
 <div class="page">
 <header class="header">
   <h1>🔥 市场监控</h1>
-  <span class="updated">更新 {{ generated_at }}</span>
+  <span class="updated" id="update-time">更新中…</span>
 </header>
 {% endif %}
 
 <div id="card-grid" class="card-grid"
      hx-get="/api/data" hx-trigger="every 30s" hx-swap="outerHTML" hx-indicator="#spinner">
+<span id="update-time" class="updated" style="display:block;grid-column:1/-1;text-align:right;margin-bottom:2px">
+  {{ generated_at }}</span>
 {% for c in cities %}
 <div class="card">
   <div class="card-top">
@@ -52,6 +54,15 @@
       <span class="label">趋势</span>
       <span class="value trend {{ c.trend.css_class() }}">{{ c.trend.symbol() }}</span>
     </div>
+    <div class="meta-row">
+      <span class="label">观测</span>
+      {% match c.obs_age_min %}
+      {% when Some with (m) %}
+      <span class="value obs-age">{{ m }} 分钟前</span>
+      {% when None %}
+      <span class="value na">--</span>
+      {% endmatch %}
+    </div>
   </div>
 
   {% if !c.runway_pairs.is_empty() %}
@@ -73,6 +84,29 @@
 
 {% if full_page %}
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+<script>
+// flash updated cards whose temp changed
+(function(){
+  let prev = {};
+  document.body.addEventListener('htmx:afterSwap', function(evt){
+    if(evt.detail.target.id !== 'card-grid') return;
+    document.querySelectorAll('.card').forEach(function(card){
+      var name = card.querySelector('.city-name').textContent;
+      var tv = card.querySelector('.temp-value').textContent;
+      var old = prev[name];
+      prev[name] = tv;
+      if(old && old !== tv && tv !== '--'){
+        card.style.transition = 'none';
+        card.style.boxShadow = '0 0 12px rgba(52,211,153,0.35)';
+        requestAnimationFrame(function(){
+          card.style.transition = 'box-shadow 2s ease-out';
+          card.style.boxShadow = '';
+        });
+      }
+    });
+  });
+})();
+</script>
 </div>
 </body>
 </html>

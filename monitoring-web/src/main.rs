@@ -59,6 +59,18 @@ fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh): 
     let temps: Vec<f64> = obs.iter().filter_map(|o| o.temp_c).collect();
     let current_temp = temps.first().copied();
 
+    // Age of most recent observation
+    let obs_age_min = obs.first().and_then(|o| {
+        o.created_at.as_ref().and_then(|ts| {
+            chrono::NaiveDateTime::parse_from_str(ts, "%Y-%m-%d %H:%M:%S")
+                .ok()
+                .map(|dt| {
+                    let obs_utc = dt.and_utc();
+                    (now_utc - obs_utc).num_minutes().max(0)
+                })
+        })
+    });
+
     // Trend from last 6 points
     let trend_data: Vec<f64> = temps.iter().take(6).copied().collect();
     let trend = trend::calc_trend(&trend_data);
@@ -94,6 +106,7 @@ fn load_city_snapshot(db_path: &str, (key, display, icao, airport, tz, thresh): 
         temp_ok: false,
         trend_ok: false,
         in_window: false,
+        obs_age_min,
     }
 }
 

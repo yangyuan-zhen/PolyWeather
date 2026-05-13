@@ -19,6 +19,7 @@ pub struct CitySnapshot {
     pub temp_ok: bool,
     pub trend_ok: bool,
     pub in_window: bool,
+    pub obs_age_min: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
