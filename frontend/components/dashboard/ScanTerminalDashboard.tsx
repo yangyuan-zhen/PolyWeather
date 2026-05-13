@@ -47,7 +47,7 @@ import {
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 
-type ContentView = "analysis" | "map";
+type ContentView = "analysis" | "map" | "monitor";
 
 const CityDetailPanel = dynamic(
   () =>
@@ -334,6 +334,17 @@ function ScanTerminalScreen() {
         />
       );
     }
+    if (resolvedView === "monitor") {
+      return (
+        <div className="scan-map-view" style={{ background: "#0f1117" }}>
+          <iframe
+            src="/api/m"
+            style={{ width: "100%", height: "100%", border: "none" }}
+            title="Market Monitor"
+          />
+        </div>
+      );
+    }
     if (!isPro) {
       return (
         <div className="scan-table-shell empty">
@@ -528,6 +539,15 @@ function ScanTerminalScreen() {
                   }}
                 >
                   {isEn ? "Decision Cards" : "城市决策卡"}
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={resolvedView === "monitor"}
+                  className={resolvedView === "monitor" ? "active" : ""}
+                  onClick={() => setActiveView("monitor")}
+                >
+                  🔥 Monitor
                 </button>
               </div>
               <div className="scan-list-status">
