@@ -81,8 +81,8 @@ fn load_city_snapshot(db_path: &str, idx: usize, (key, _zh, en, icao, airport, t
     let trend_data: Vec<f64> = temps.iter().take(6).copied().collect();
     let trend = trend::calc_trend(&trend_data);
 
-    // Today's max: from city_daily_max table (maintained by Python collector)
-    let (today_max, max_time) = db::get_daily_max(db_path, icao)
+    // Today's max: from intraday_path_snapshots_store (实时更新)
+    let (today_max, max_time) = db::get_daily_max(db_path, key)
         .map(|(t, mt)| (Some(t), mt))
         .unwrap_or((None, None));
     let new_high = match (current_temp, today_max) {

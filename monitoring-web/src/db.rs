@@ -8,14 +8,18 @@ pub struct ObsRow {
     pub created_at: Option<String>,
 }
 
-/// Get today's daily max temperature for an ICAO station.
-pub fn get_daily_max(db_path: &str, icao: &str) -> Option<(f64, Option<String>)> {
+/// Get today's running max temperature from intraday snapshots.
+pub fn get_daily_max(db_path: &str, city_key: &str) -> Option<(f64, Option<String>)> {
     let conn = Connection::open(db_path).ok()?;
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
     let mut stmt = conn
-        .prepare("SELECT max_temp, max_time FROM city_daily_max WHERE icao = ?1 AND obs_date = ?2")
+        .prepare(
+            "SELECT max_so_far, snapshot_time FROM intraday_path_snapshots_store \
+             WHERE city = ?1 AND target_date = ?2 \
+             ORDER BY id DESC LIMIT 1"
+        )
         .ok()?;
-    stmt.query_row(rusqlite::params![icao.to_uppercase(), today], |row| {
+    stmt.query_row(rusqlite::params![city_key, today], |row| {
         Ok((row.get(0)?, row.get(1)?))
     })
     .ok()
