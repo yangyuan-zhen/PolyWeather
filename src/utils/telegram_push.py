@@ -968,7 +968,38 @@ def _run_high_freq_airport_cycle(
                 continue
 
             # 基于原始观测数据时间的去重：同一条观测不重复推送
-            if current_obs_time and last_obs_time and current_obs_time == last_obs_time:
+            # HK/LFS 数据在 x7 分发布，API 可能有 3-5s 延迟，
+            # obs_time 未变但距上次推送已超 9min → 等 4s 重拉一次
+            _CITIES_WITH_DELAYED_API = {"hong kong", "lau fau shan"}
+            if (current_obs_time and last_obs_time and current_obs_time == last_obs_time
+                    and city in _CITIES_WITH_DELAYED_API
+                    and now_ts - last_city_ts > 540):
+                time.sleep(4)
+                try:
+                    city_weather = _analyze(city)
+                    deb_raw2 = (city_weather.get("deb") or {}).get("prediction")
+                    if deb_raw2 is not None:
+                        deb_pred = float(deb_raw2)
+                    mgm_nearby2 = city_weather.get("mgm_nearby") or []
+                    row2 = None
+                    for r in mgm_nearby2:
+                        if str(r.get("istNo") or "") == airport_icao or str(r.get("icao") or "") == airport_icao:
+                            row2 = r
+                            break
+                    if not row2 and mgm_nearby2:
+                        row2 = mgm_nearby2[0]
+                    retry_obs = str(row2.get("obs_time") or "") if row2 else ""
+                    if retry_obs and retry_obs != last_obs_time:
+                        current_obs_time = retry_obs
+                        station_temp = row2.get("temp") if row2 else None
+                        current_temp = station_temp or (city_weather.get("current") or {}).get("temp")
+                        if current_temp is None or deb_pred is None:
+                            continue
+                    else:
+                        continue
+                except Exception:
+                    continue
+            elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
                 continue
 
             # ── Three-condition heat window ──
