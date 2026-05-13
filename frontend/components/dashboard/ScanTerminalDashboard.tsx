@@ -335,15 +335,7 @@ function ScanTerminalScreen() {
       );
     }
     if (resolvedView === "monitor") {
-      return (
-        <div className="scan-map-view" style={{ background: "#0f1117" }}>
-          <iframe
-            src="/api/m"
-            style={{ width: "100%", height: "100%", border: "none" }}
-            title="Market Monitor"
-          />
-        </div>
-      );
+      return null; // iframe 在下方始终挂载，通过 display 切换
     }
     if (!isPro) {
       return (
@@ -547,7 +539,7 @@ function ScanTerminalScreen() {
                   className={resolvedView === "monitor" ? "active" : ""}
                   onClick={() => setActiveView("monitor")}
                 >
-                  🔥 Monitor
+                  🔥 {isEn ? "Monitor" : "市场监控"}
                 </button>
               </div>
               <div className="scan-list-status">
@@ -605,6 +597,13 @@ function ScanTerminalScreen() {
             ) : (
               renderMainView()
             )}
+            <div style={{ display: resolvedView === "monitor" ? "block" : "none", background: "#0f1117", flex: 1, minHeight: 0 }}>
+              <iframe
+                src="/api/m"
+                style={{ width: "100%", height: "100%", border: "none" }}
+                title="市场监控"
+              />
+            </div>
           </section>
         </main>
 
