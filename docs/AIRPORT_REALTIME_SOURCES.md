@@ -12,6 +12,23 @@
 | 赫尔辛基 | Vantaa | EFHK | FMI (`opendata.fmi.fi`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 阿姆斯特丹 | Schiphol | EHAM | KNMI (`dataplatform.knmi.nl`) | 10 分钟 | 机场站点实时温度 | 免费（需注册） |
 | 巴黎 | Le Bourget | LFPB | AROME HD (`api.open-meteo.com`) | 15 分钟 | 模型预报（非实测） | 免费 |
+| 纽约 | LaGuardia | KLGA | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 洛杉矶 | LAX | KLAX | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 芝加哥 | O'Hare | KORD | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 丹佛 | Buckley | KBKF | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 亚特兰大 | Hartsfield | KATL | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 迈阿密 | MIA | KMIA | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 旧金山 | SFO | KSFO | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 休斯顿 | Hobby | KHOU | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 达拉斯 | Love Field | KDAL | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 奥斯汀 | Bergstrom | KAUS | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+| 西雅图 | SeaTac | KSEA | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+
+> **NOAA MADIS HFMETAR**: 美国 11 个城市的机场高频实时数据通过 NOAA MADIS 公共档案获取。
+> 数据源为 NetCDF 格式（`madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/`），
+> 每 5 分钟全量更新一次，温度保留一位小数。匿名公开访问，无需 API 密钥。
+> 后端通过 `weather_sources.py` 拉取并注入 `airport_primary`，前端市场监控通过
+> `resolveMonitorTemperature` 优先读取 `airport_primary.temp` 获得小数精度温度。
 
 ## 推送机制
 

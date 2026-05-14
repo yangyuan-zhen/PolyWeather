@@ -476,7 +476,10 @@ export default function MonitorPanel({
           }
 
           const ac = detail.airport_current;
-          const cur = resolveMonitorTemperature(detail).value;
+          const tempInfo = resolveMonitorTemperature(detail);
+          const cur = tempInfo.value;
+          const curSource = tempInfo.source;
+          const isRunwayTemp = curSource === "amos_runway_median" || curSource === "amos_runway";
           const max = resolveMaxSoFar(detail, key);          // HKO cities fall back to current.max_so_far
           const mtt = ac?.max_temp_time ?? detail.current?.max_temp_time ?? null;
           const freshnessInfo = getObservationFreshness(detail);
@@ -533,12 +536,16 @@ export default function MonitorPanel({
                 <span className="monitor-obs-time">{obs}</span>
               </div>
 
-              {/* Temperature */}
+              {/* Temperature — runway cities skip the large value (runway surface ≠ air temp) */}
               <div className="monitor-temp-display">
-                {cur != null ? (
+                {isRunwayTemp ? (
+                  <span className="monitor-temp-runway">
+                    {t("Runway Temp", "跑道温度", lang)}
+                  </span>
+                ) : cur != null ? (
                   <>
                     <span className={`monitor-temp-value${newHigh ? " new-high" : warm ? " warm" : ""}${isFlashing ? " flashed" : ""}`}>
-                      {cur.toFixed(1)}
+                      {Number.isInteger(cur) ? cur.toFixed(0) : cur.toFixed(1)}
                     </span>
                     <span className="monitor-temp-unit">{tempSymbol}</span>
                   </>
@@ -553,7 +560,7 @@ export default function MonitorPanel({
                   <span className="monitor-stat-label">{t("Today's High", "今日实测高温", lang)}</span>
                   {max != null ? (
                     <>
-                      <span className="monitor-high-value">{max.toFixed(1)}{tempSymbol}</span>
+                      <span className="monitor-high-value">{Number.isInteger(max) ? max.toFixed(0) : max.toFixed(1)}{tempSymbol}</span>
                       {mtt && <span className="monitor-high-time">{mtt}</span>}
                     </>
                   ) : (

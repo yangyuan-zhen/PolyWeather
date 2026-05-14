@@ -4,6 +4,7 @@ export type MonitorTemperatureSource =
   | "amos_runway_median"
   | "amos_runway"
   | "amos"
+  | "airport_primary"
   | "airport_current"
   | "current"
   | "missing";
@@ -53,6 +54,9 @@ export function resolveMonitorTemperature(
   if (amosTemp != null && detail?.amos?.temp_source === "runway_median") {
     return { source: "amos", value: amosTemp };
   }
+
+  const airportPrimary = finiteNumber(detail?.airport_primary?.temp);
+  if (airportPrimary != null) return { source: "airport_primary", value: airportPrimary };
 
   const airport = finiteNumber(detail?.airport_current?.temp);
   if (airport != null) return { source: "airport_current", value: airport };

@@ -1084,6 +1084,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         # Find this city's station in the MADIS results
         for obs in obs_list:
             if obs["icao"] == icao:
+                # Inject into results so it flows through to airport_primary
+                results["madis_hfmetar_current"] = obs
                 try:
                     DBManager().append_airport_obs(
                         icao=icao,

@@ -242,6 +242,37 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
     meta = _city_meta(city)
     metar = raw.get("metar") or {}
     current = metar.get("current") or {}
+
+    # High-frequency realtime sources take priority over plain METAR.
+    madis = raw.get("madis_hfmetar_current") or {}
+    if madis.get("temp_c") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or madis.get("icao"),
+            station_label=meta.get("airport_name") or meta.get("icao"),
+            temp=madis["temp_c"],
+            obs_time=madis.get("obs_time") or metar.get("observation_time"),
+            source_code="madis_hfmetar",
+            source_label="NOAA MADIS",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(madis.get("wind_kt")) or _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
     return _normalize_station_row(
         station_code=meta.get("icao") or metar.get("icao"),
         station_label=meta.get("airport_name") or metar.get("station_name") or metar.get("icao"),

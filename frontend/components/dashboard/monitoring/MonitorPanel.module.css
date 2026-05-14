@@ -215,6 +215,13 @@
   color: var(--color-border-default);
 }
 
+.root :global(.monitor-temp-runway) {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.02em;
+}
+
 /* ── Stats row ── */
 .root :global(.monitor-stats) {
   font-size: 14px;
@@ -421,6 +428,7 @@
 
 .root :global(.scan-terminal.light .monitor-temp-unit),
 .root :global(.scan-terminal.light .monitor-temp-missing),
+.root :global(.scan-terminal.light .monitor-temp-runway),
 .root :global(.scan-terminal.light .monitor-stat-missing) {
   color: #94A3B8;
 }
@@ -553,6 +561,7 @@
 
 .root :global(.scan-terminal.light .monitor-temp-unit),
 .root :global(.scan-terminal.light .monitor-temp-missing),
+.root :global(.scan-terminal.light .monitor-temp-runway),
 .root :global(.scan-terminal.light .monitor-stat-missing) {
   color: #94A3B8;
 }
