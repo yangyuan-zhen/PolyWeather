@@ -111,7 +111,7 @@
   border-radius: 999px;
   border: 2px solid rgba(34, 211, 238, 0.22);
   border-top-color: rgba(34, 211, 238, 0.92);
-  animation: :global(spin) 0.8s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 .root :global(.panel-meta) {
@@ -1058,3 +1058,5 @@
   }
 }
 
+
+@keyframes spin { to { transform: rotate(360deg); } }

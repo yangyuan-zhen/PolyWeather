@@ -95,7 +95,7 @@
 }
 
 .root :global(.scan-status-chip .spin) {
-  animation: :global(spin) 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 .root :global(.scan-table-shell) {
@@ -518,3 +518,5 @@
   overflow: visible;
 }
 
+
+@keyframes spin { to { transform: rotate(360deg); } }

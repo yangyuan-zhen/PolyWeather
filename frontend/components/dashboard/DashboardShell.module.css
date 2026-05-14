@@ -209,7 +209,7 @@
   color: var(--accent-cyan);
 }
 .root :global(.refresh-btn.spinning) {
-  animation: :global(spin) 1s linear infinite;
+  animation: spin 1s linear infinite;
 }
 
 .root :global(.locale-switch) {
@@ -817,3 +817,5 @@
     flex-direction: column;
   }
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }

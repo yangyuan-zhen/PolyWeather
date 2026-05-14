@@ -86,7 +86,7 @@
 }
 
 .root :global(.future-refresh-btn.spinning svg) {
-  animation: :global(spin) 1s linear infinite;
+  animation: spin 1s linear infinite;
   color: var(--accent-cyan);
 }
 
@@ -295,3 +295,5 @@
   font-size: 11px;
   color: var(--text-muted);
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }

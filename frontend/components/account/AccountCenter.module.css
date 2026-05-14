@@ -358,7 +358,7 @@
 }
 
 .spin {
-  animation: :global(spin) 0.9s linear infinite;
+  animation: spin 0.9s linear infinite;
 }
 
 @media (max-width: 960px) {
@@ -483,3 +483,5 @@
   }
 }
 
+
+@keyframes spin { to { transform: rotate(360deg); } }
