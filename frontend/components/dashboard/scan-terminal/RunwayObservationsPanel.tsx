@@ -84,11 +84,6 @@ function RunwayCityCard({
               </span>
             </div>
           ))}
-          {detail?.amos?.raw_metar ? (
-            <div className="scan-amos-runway-detail">
-              METAR {detail.amos.raw_metar.replace(/^METAR\s+/i, "")}
-            </div>
-          ) : null}
         </>
       ) : (
         <div className="scan-empty-state compact">
