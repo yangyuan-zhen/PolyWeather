@@ -1,9 +1,20 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useCityDetails, useDashboardActions } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
-import type { CityDetail } from "@/lib/dashboard-types";
+import type { CityDetail, ObservationFreshness } from "@/lib/dashboard-types";
+import {
+  getMonitorFreshnessLevel,
+  getObservationFreshness,
+  shouldRefreshMonitorCity,
+  type MonitorFreshnessLevel,
+} from "@/lib/source-freshness";
+import {
+  getMonitorRefreshRequest,
+  MONITOR_REFRESH_INTERVAL_MS,
+  type MonitorRefreshTrigger,
+} from "./monitor-refresh-policy";
 
 /* ── Constants ───────────────────────────────────────────────── */
 const MONITOR_KEYS = [
@@ -14,33 +25,42 @@ const MONITOR_KEYS = [
 ] as const;
 
 type MonitorKey = (typeof MONITOR_KEYS)[number];
+type MonitorRefreshRequest = ReturnType<typeof getMonitorRefreshRequest>;
 
 const CONCURRENCY = 6;
-const REFRESH_INTERVAL_MS = 60_000;
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 type Lang = { isEn: boolean };
 function t(en: string, zh: string, { isEn }: Lang) { return isEn ? en : zh; }
 
-type Freshness = "fresh" | "aging" | "stale" | "unknown";
+type Freshness = MonitorFreshnessLevel;
 
-function freshnessLevel(ageMin: number | null | undefined): Freshness {
-  if (ageMin == null) return "unknown";
-  if (ageMin < 20) return "fresh";
-  if (ageMin < 45) return "aging";
-  return "stale";
-}
-
-function freshnessDotTitle(level: Freshness, ageMin: number | null | undefined, isEn: boolean): string {
+function freshnessDotTitle(
+  level: Freshness,
+  ageMin: number | null | undefined,
+  isEn: boolean,
+  freshness?: ObservationFreshness | null,
+): string {
   const age = ageMin != null ? (isEn ? `${ageMin} min ago` : `${ageMin} 分钟前`) : "--";
+  const source = freshness?.source_label ? `${freshness.source_label} · ` : "";
+  const cadence =
+    freshness?.native_update_interval_sec != null
+      ? Math.round(freshness.native_update_interval_sec / 60)
+      : null;
+  const cadenceText =
+    cadence != null
+      ? isEn
+        ? ` · native cadence ${cadence} min`
+        : ` · 源端约 ${cadence} 分钟更新`
+      : "";
   if (isEn) {
-    return level === "fresh" ? `Fresh · ${age}` :
-           level === "aging" ? `Aging · ${age}` :
-           level === "stale" ? `Stale · ${age}` : "Unknown age";
+    return level === "fresh" ? `${source}Fresh · ${age}${cadenceText}` :
+           level === "aging" ? `${source}Waiting / aging · ${age}${cadenceText}` :
+           level === "stale" ? `${source}Stale · ${age}${cadenceText}` : `${source}Unknown age${cadenceText}`;
   }
-  return level === "fresh" ? `数据新鲜 · ${age}` :
-         level === "aging" ? `数据变旧 · ${age}` :
-         level === "stale" ? `数据陈旧 · ${age}` : "更新时间未知";
+  return level === "fresh" ? `${source}数据新鲜 · ${age}${cadenceText}` :
+         level === "aging" ? `${source}等待源端更新 / 数据变旧 · ${age}${cadenceText}` :
+         level === "stale" ? `${source}数据陈旧 · ${age}${cadenceText}` : `${source}更新时间未知${cadenceText}`;
 }
 
 /* ── Audio alert (Web Audio API, no external file needed) ────── */
@@ -147,7 +167,13 @@ function airportLabel(key: string, isEn: boolean) {
  */
 const HKO_OBS_CITIES = new Set<MonitorKey>(["hong kong", "lau fau shan"]);
 
-function obsSourceLabel(key: MonitorKey, isEn: boolean): string {
+function obsSourceLabel(
+  key: MonitorKey,
+  isEn: boolean,
+  freshness?: ObservationFreshness | null,
+): string {
+  const sourceLabel = String(freshness?.source_label || "").trim();
+  if (sourceLabel) return sourceLabel;
   if (HKO_OBS_CITIES.has(key)) return isEn ? "HKO Obs" : "天文台观测";
   return isEn ? "Airport METAR" : "机场报文";
 }
@@ -181,14 +207,19 @@ export default function MonitorPanel({
 }: {
   onCityClick?: (cityName: string) => void;
 }) {
-  const store = useDashboardStore();
+  const { ensureCityDetail } = useDashboardActions();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
   const lang: Lang = { isEn };
 
-  const details = store.cityDetailsByName;
+  const { cityDetailsByName: details } = useCityDetails();
   const detailsRef = useRef(details);
   detailsRef.current = details;
+  const ensureCityDetailRef = useRef(ensureCityDetail);
+
+  useEffect(() => {
+    ensureCityDetailRef.current = ensureCityDetail;
+  }, [ensureCityDetail]);
 
   const [time, setTime] = useState("");
   const [fetchingKeys, setFetchingKeys] = useState<ReadonlySet<string>>(new Set());
@@ -238,10 +269,10 @@ export default function MonitorPanel({
 
   /* Per-city fetch with loading-key tracking */
   const fetchCity = useCallback(
-    async (key: MonitorKey, force: boolean) => {
+    async (key: MonitorKey, request: MonitorRefreshRequest) => {
       setFetchingKeys((prev) => new Set([...prev, key]));
       try {
-        await store.ensureCityDetail(key, force, "panel");
+        await ensureCityDetailRef.current(key, request.force, request.depth);
       } catch {
         /* individual city errors are shown as "--" in the card */
       } finally {
@@ -252,30 +283,52 @@ export default function MonitorPanel({
         });
       }
     },
-    [store.ensureCityDetail],
+    [],
   );
 
   /* Refresh all cities, sorted by staleness (most stale first). */
   const refreshAll = useCallback(
-    async (force: boolean) => {
+    async (trigger: MonitorRefreshTrigger) => {
       if (globalFetchingRef.current) return;
       globalFetchingRef.current = true;
+      const request = getMonitorRefreshRequest(trigger);
 
-      /* Sort keys: cities with no data first, then by obs_age_min descending */
-      const sorted = [...MONITOR_KEYS].sort((a, b) => {
+      const now = new Date();
+      /* Sort keys: cities with no data first, then by source-aware freshness/staleness. */
+      const dueKeys = [...MONITOR_KEYS].filter((key) =>
+        shouldRefreshMonitorCity({
+          detail: detailsRef.current[key],
+          now,
+          trigger,
+        }),
+      );
+
+      const sorted = dueKeys.sort((a, b) => {
         const d = detailsRef.current;
-        const ageA = d[a]?.airport_current?.obs_age_min ?? Infinity;
-        const ageB = d[b]?.airport_current?.obs_age_min ?? Infinity;
+        const freshA = getObservationFreshness(d[a]);
+        const freshB = getObservationFreshness(d[b]);
+        const ageA =
+          freshA?.age_sec != null
+            ? freshA.age_sec / 60
+            : d[a]?.airport_current?.obs_age_min ?? Infinity;
+        const ageB =
+          freshB?.age_sec != null
+            ? freshB.age_sec / 60
+            : d[b]?.airport_current?.obs_age_min ?? Infinity;
         return ageB - ageA; // stale first
       });
 
       const queue = sorted as MonitorKey[];
+      if (queue.length === 0) {
+        globalFetchingRef.current = false;
+        return;
+      }
       const workers = Array.from({ length: CONCURRENCY }, async () => {
         while (queue.length > 0) {
           if (cancelledRef.current) return;
           const key = queue.shift();
           if (!key) break;
-          await fetchCity(key, force);
+          await fetchCity(key, request);
         }
       });
       await Promise.allSettled(workers);
@@ -290,10 +343,10 @@ export default function MonitorPanel({
 
   useEffect(() => {
     cancelledRef.current = false;
-    void refreshAll(false);
+    void refreshAll("initial");
     const timer = setInterval(() => {
-      if (!document.hidden) void refreshAll(true);
-    }, REFRESH_INTERVAL_MS);
+      if (!document.hidden) void refreshAll("interval");
+    }, MONITOR_REFRESH_INTERVAL_MS);
     return () => {
       cancelledRef.current = true;
       clearInterval(timer);
@@ -427,9 +480,17 @@ export default function MonitorPanel({
           const cur = ac?.temp ?? detail.current?.temp ?? null;
           const max = resolveMaxSoFar(detail, key);          // HKO cities fall back to current.max_so_far
           const mtt = ac?.max_temp_time ?? detail.current?.max_temp_time ?? null;
-          const obs = ac?.obs_time ?? detail.local_time ?? "";
-          const age = ac?.obs_age_min ?? null;
-          const freshness = freshnessLevel(age);
+          const freshnessInfo = getObservationFreshness(detail);
+          const obs =
+            ac?.obs_time ??
+            freshnessInfo?.observed_at_local ??
+            detail.current?.obs_time ??
+            detail.local_time ??
+            "";
+          const age =
+            ac?.obs_age_min ??
+            (freshnessInfo?.age_sec != null ? Math.round(freshnessInfo.age_sec / 60) : null);
+          const freshness = getMonitorFreshnessLevel(freshnessInfo, age);
           const tempSymbol = detail.temp_symbol || "°C";  // °F for US cities
           const newHigh = cur != null && max != null && cur >= max + 0.3;
           const warm = !newHigh && cur != null && cur >= 30;
@@ -462,7 +523,7 @@ export default function MonitorPanel({
                 <span className="monitor-airport-name">/ {airportLabel(key, isEn)}</span>
                 <FreshnessDot
                   level={freshness}
-                  title={freshnessDotTitle(freshness, age, isEn)}
+                  title={freshnessDotTitle(freshness, age, isEn, freshnessInfo)}
                 />
                 {newHigh && (
                   <span className="monitor-new-high-badge">
@@ -502,7 +563,7 @@ export default function MonitorPanel({
                 </div>
                 <div className="monitor-obs-row">
                   <span className="monitor-stat-label">
-                    {obsSourceLabel(key, isEn)}
+                    {obsSourceLabel(key, isEn, freshnessInfo)}
                   </span>
                   <span className={`monitor-obs-age ${freshness}`}>
                     {age != null ? (

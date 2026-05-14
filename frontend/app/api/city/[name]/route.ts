@@ -8,6 +8,7 @@ import {
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { buildCityDetailProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -129,6 +130,7 @@ export async function GET(
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
   const depth = req.nextUrl.searchParams.get("depth") ?? "panel";
+  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}?force_refresh=${forceRefresh}&depth=${encodeURIComponent(depth)}`;
 
   try {
@@ -137,21 +139,27 @@ export async function GET(
     });
     const res = await fetch(url, {
       headers: auth.headers,
-      next: { revalidate: 15 },
+      ...(cachePolicy.fetchMode === "no-store"
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 15 } }),
     });
     if (!res.ok) {
       const raw = await res.text();
       const summaryUrl = `${API_BASE}/api/city/${encodeURIComponent(name)}/summary?force_refresh=${forceRefresh}`;
       const summaryRes = await fetch(summaryUrl, {
         headers: auth.headers,
-        next: { revalidate: 10 },
+        ...(cachePolicy.fetchMode === "no-store"
+          ? { cache: "no-store" as const }
+          : { next: { revalidate: 10 } }),
       });
       if (summaryRes.ok) {
         const summaryData = await summaryRes.json();
         const response = buildCachedJsonResponse(
           req,
           buildFallbackCityDetail(name, depth, summaryData),
-          "public, max-age=0, s-maxage=10, stale-while-revalidate=30",
+          cachePolicy.fetchMode === "no-store"
+            ? cachePolicy.responseCacheControl
+            : "public, max-age=0, s-maxage=10, stale-while-revalidate=30",
         );
         response.headers.set("X-PolyWeather-Fallback", "summary");
         return applyAuthResponseCookies(response, auth.response);
@@ -164,7 +172,7 @@ export async function GET(
     const response = buildCachedJsonResponse(
       req,
       data,
-      "public, max-age=0, s-maxage=15, stale-while-revalidate=45",
+      cachePolicy.responseCacheControl,
     );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {

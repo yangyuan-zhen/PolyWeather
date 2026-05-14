@@ -21,6 +21,33 @@
 - 仅当当前温度距 DEB 预测最高 ≤3°C 时推送
 - 确认过峰值后自动停止
 
+## 前端市场监控 freshness 契约
+
+后端城市详情接口会在 `current.freshness` / `airport_current.freshness` 返回源感知更新时间信息，前端市场监控不再用统一的 `obs_age_min` 判断所有城市。
+
+关键字段：
+
+```json
+{
+  "source_code": "amos",
+  "source_label": "AMOS",
+  "observed_at": "2026-05-14T11:59:10+00:00",
+  "observed_at_local": "20:59",
+  "native_update_interval_sec": 60,
+  "expected_next_update_at": "2026-05-14T12:00:10+00:00",
+  "freshness_status": "fresh",
+  "freshness_reason": "within_native_fresh_window",
+  "age_sec": 50
+}
+```
+
+前端刷新规则：
+
+- 首次进入市场监控：强制刷新全部城市，绕过 30 分钟前端缓存。
+- 定时轮询：仍以 60s tick 检查，但只刷新已到 `expected_next_update_at`、`delayed`、`stale` 或缺失的城市。
+- BFF 代理：`force_refresh=true` 时使用 `no-store`，避免 Next fetch revalidate 缓存吞掉强刷。
+- 展示：卡片 tooltip 显示源端名称、原生更新间隔和当前 freshness 状态。
+
 ## 消息模板
 
 ```

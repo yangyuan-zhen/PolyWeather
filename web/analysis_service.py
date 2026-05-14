@@ -150,6 +150,185 @@ def _metar_is_current_local_day(
     return local_dt.strftime("%Y-%m-%d") == local_date
 
 
+_OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
+    "amos": {
+        "label": "AMOS",
+        "native_update_interval_sec": 60,
+        "fresh_window_sec": 180,
+        "expected_grace_sec": 180,
+        "stale_after_sec": 900,
+    },
+    "jma": {
+        "label": "JMA",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "fmi": {
+        "label": "FMI",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "knmi": {
+        "label": "KNMI",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "hko": {
+        "label": "HKO",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "cwa": {
+        "label": "CWA",
+        "native_update_interval_sec": 600,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 600,
+        "stale_after_sec": 2700,
+    },
+    "mgm": {
+        "label": "MGM",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 900,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "metar": {
+        "label": "METAR",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "noaa": {
+        "label": "NOAA",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "wunderground": {
+        "label": "METAR",
+        "native_update_interval_sec": 900,
+        "fresh_window_sec": 600,
+        "expected_grace_sec": 900,
+        "stale_after_sec": 3600,
+    },
+    "nmc": {
+        "label": "NMC",
+        "native_update_interval_sec": 3600,
+        "fresh_window_sec": 3600,
+        "expected_grace_sec": 1800,
+        "stale_after_sec": 7200,
+    },
+}
+
+
+def _canonical_observation_source_code(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if not raw:
+        return "metar"
+    if "amos" in raw:
+        return "amos"
+    if "jma" in raw:
+        return "jma"
+    if "fmi" in raw:
+        return "fmi"
+    if "knmi" in raw:
+        return "knmi"
+    if "hko" in raw:
+        return "hko"
+    if "cwa" in raw:
+        return "cwa"
+    if "mgm" in raw:
+        return "mgm"
+    if "noaa" in raw:
+        return "noaa"
+    if "nmc" in raw:
+        return "nmc"
+    if "wunderground" in raw or raw == "wu":
+        return "wunderground"
+    return raw
+
+
+def _observation_age_min(value: Any, now_utc: Optional[datetime] = None) -> Optional[int]:
+    obs_dt = _parse_utc_datetime(value)
+    if obs_dt is None:
+        return None
+    now = now_utc or datetime.now(timezone.utc)
+    return max(0, int((now - obs_dt).total_seconds() / 60))
+
+
+def _optional_str(value: Any) -> Optional[str]:
+    raw = str(value or "").strip()
+    return raw or None
+
+
+def _build_observation_freshness(
+    *,
+    source_code: Any,
+    source_label: Any = None,
+    observed_at: Any = None,
+    observed_at_local: Any = None,
+    ingested_at: Any = None,
+    age_min: Optional[int] = None,
+    now_utc: Optional[datetime] = None,
+) -> Dict[str, Any]:
+    code = _canonical_observation_source_code(source_code or source_label)
+    profile = _OBSERVATION_SOURCE_PROFILES.get(code) or _OBSERVATION_SOURCE_PROFILES["metar"]
+    now = now_utc or datetime.now(timezone.utc)
+    obs_dt = _parse_utc_datetime(observed_at)
+    age_sec = None
+    if age_min is not None:
+        try:
+            age_sec = max(0, int(age_min) * 60)
+        except Exception:
+            age_sec = None
+    if age_sec is None and obs_dt is not None:
+        age_sec = max(0, int((now - obs_dt).total_seconds()))
+
+    if age_sec is None:
+        status = "unknown"
+        reason = "observation_time_missing"
+    elif age_sec <= int(profile["fresh_window_sec"]):
+        status = "fresh"
+        reason = "within_native_fresh_window"
+    elif age_sec <= int(profile["native_update_interval_sec"]) + int(profile["expected_grace_sec"]):
+        status = "expected_wait"
+        reason = "within_source_expected_cadence"
+    elif age_sec <= int(profile["stale_after_sec"]):
+        status = "delayed"
+        reason = "past_expected_cadence"
+    else:
+        status = "stale"
+        reason = "past_stale_threshold"
+
+    expected_next = (
+        obs_dt + timedelta(seconds=int(profile["native_update_interval_sec"]))
+        if obs_dt is not None
+        else None
+    )
+    return {
+        "source_code": code,
+        "source_label": str(source_label or profile["label"]),
+        "observed_at": obs_dt.isoformat() if obs_dt is not None else _optional_str(observed_at),
+        "observed_at_local": _optional_str(observed_at_local),
+        "ingested_at": _optional_str(ingested_at),
+        "native_update_interval_sec": int(profile["native_update_interval_sec"]),
+        "expected_next_update_at": expected_next.isoformat() if expected_next is not None else None,
+        "freshness_status": status,
+        "freshness_reason": reason,
+        "age_sec": age_sec,
+    }
+
+
 def _record_analysis_cache_event(*, city: str, hit: bool, force_refresh: bool) -> None:
     now = datetime.now(timezone.utc).isoformat()
     with _ANALYSIS_CACHE_STATS_LOCK:
@@ -1842,6 +2021,48 @@ def _analyze(
             int(utc_offset or 0),
         )
 
+    current_obs_raw = obs_t
+    if current_source == "amos":
+        current_obs_raw = amos_data.get("observation_time")
+    elif current_source == "nmc":
+        current_obs_raw = (
+            nmc_fallback.get("publish_time")
+            or nmc_fallback.get("timestamp")
+            if isinstance(nmc_fallback, dict)
+            else None
+        )
+    current_age_min = metar_age_min
+    if current_obs_raw:
+        current_age_min = _observation_age_min(current_obs_raw, now_utc) or current_age_min
+    current_freshness = _build_observation_freshness(
+        source_code=current_source,
+        source_label=current_source_label,
+        observed_at=current_obs_raw,
+        observed_at_local=obs_time_str,
+        ingested_at=primary_current.get("receipt_time") or primary_current.get("report_time"),
+        age_min=current_age_min,
+        now_utc=now_utc,
+    )
+
+    airport_source_code = "amos" if current_source == "amos" else "metar"
+    airport_source_label = "AMOS" if current_source == "amos" else "METAR"
+    airport_obs_raw = amos_data.get("observation_time") if current_source == "amos" else (metar.get("observation_time") if metar else None)
+    airport_age_min = _observation_age_min(airport_obs_raw, now_utc) if airport_obs_raw else metar_age_min
+    if airport_age_min is None:
+        airport_age_min = metar_age_min
+    airport_temp = _sf(amos_data.get("temp_c")) if current_source == "amos" else _sf(live_mc.get("temp"))
+    if airport_temp is not None and not _is_plausible_city_temp(city, airport_temp, sym):
+        airport_temp = None
+    airport_freshness = _build_observation_freshness(
+        source_code=airport_source_code,
+        source_label=airport_source_label,
+        observed_at=airport_obs_raw,
+        observed_at_local=obs_time_str,
+        ingested_at=metar.get("receipt_time") if metar else None,
+        age_min=airport_age_min,
+        now_utc=now_utc,
+    )
+
     airport_primary_current = dict(network_snapshot.get("airport_primary_current") or {})
     if (
         airport_primary_current.get("source_code") == "metar"
@@ -2443,12 +2664,14 @@ def _analyze(
             "max_temp_time": max_temp_time,
             "raw_max_so_far": raw_settlement_max,
             "wu_settlement": wu_settle,
+            "source_code": current_source,
             "settlement_source": current_source,
             "settlement_source_label": current_source_label,
             "station_code": current_station_code,
             "station_name": current_station_name,
             "obs_time": obs_time_str,
             "obs_age_min": None if use_settlement_current else metar_age_min,
+            "freshness": current_freshness,
             "observation_status": "live" if cur_temp is not None else "missing",
             "report_time": primary_current.get("report_time"),
             "receipt_time": primary_current.get("receipt_time"),
@@ -2466,11 +2689,11 @@ def _analyze(
             "raw_metar": amos_data.get("raw_metar") if current_source == "amos" else primary_current.get("raw_metar"),
         },
         "airport_current": {
-            "temp": _sf(live_mc.get("temp")),
+            "temp": airport_temp,
             "obs_time": obs_time_str,
             "max_so_far": airport_max_so_far,
             "max_temp_time": airport_max_temp_time,
-            "obs_age_min": metar_age_min,
+            "obs_age_min": airport_age_min,
             "report_time": metar.get("report_time") if metar else None,
             "receipt_time": metar.get("receipt_time") if metar else None,
             "obs_time_epoch": metar.get("obs_time_epoch") if metar else None,
@@ -2481,7 +2704,9 @@ def _analyze(
             "visibility_mi": _sf(live_mc.get("visibility_mi")),
             "wx_desc": live_mc.get("wx_desc"),
             "raw_metar": amos_data.get("raw_metar") if current_source == "amos" else live_mc.get("raw_metar"),
-            "source_label": "AMOS" if current_source == "amos" else "METAR",
+            "source_code": airport_source_code,
+            "source_label": airport_source_label,
+            "freshness": airport_freshness,
             "stale_for_today": False if current_source == "amos" else (bool(metar) and not metar_current_is_today),
             "last_observation_local_date": metar.get("observation_local_date") if metar else None,
             "current_local_date": local_date_str,

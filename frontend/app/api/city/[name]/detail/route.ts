@@ -8,6 +8,7 @@ import {
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { buildCityDetailProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -25,6 +26,7 @@ export async function GET(
 
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
+  const cachePolicy = buildCityDetailProxyCachePolicy(forceRefresh, 15);
   const depth = req.nextUrl.searchParams.get("depth");
   const marketSlug = req.nextUrl.searchParams.get("market_slug");
   const targetDate = req.nextUrl.searchParams.get("target_date");
@@ -48,7 +50,9 @@ export async function GET(
     });
     const res = await fetch(url, {
       headers: auth.headers,
-      next: { revalidate: 15 },
+      ...(cachePolicy.fetchMode === "no-store"
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 15 } }),
     });
     if (!res.ok) {
       const raw = await res.text();
@@ -59,7 +63,7 @@ export async function GET(
     const response = buildCachedJsonResponse(
       req,
       data,
-      "public, max-age=0, s-maxage=15, stale-while-revalidate=45",
+      cachePolicy.responseCacheControl,
     );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {

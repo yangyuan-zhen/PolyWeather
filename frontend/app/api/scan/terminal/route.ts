@@ -8,6 +8,7 @@ import {
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const SCAN_TERMINAL_PROXY_TIMEOUT_MS = Number(
@@ -25,6 +26,7 @@ export async function GET(req: NextRequest) {
   }
 
   const params = new URLSearchParams();
+  const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
   for (const key of [
     "scan_mode",
     "min_price",
@@ -42,6 +44,7 @@ export async function GET(req: NextRequest) {
       params.set(key, value);
     }
   }
+  const cachePolicy = buildForceRefreshProxyCachePolicy(forceRefresh, 10);
 
   const url = `${API_BASE}/api/scan/terminal?${params.toString()}`;
 
@@ -55,7 +58,9 @@ export async function GET(req: NextRequest) {
     });
     const res = await fetch(url, {
       headers: auth.headers,
-      next: { revalidate: 10 },
+      ...(cachePolicy.fetchMode === "no-store"
+        ? { cache: "no-store" as const }
+        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 10 } }),
       signal: controller.signal,
     });
     if (!res.ok) {
@@ -67,7 +72,7 @@ export async function GET(req: NextRequest) {
     const response = buildCachedJsonResponse(
       req,
       data,
-      "public, max-age=0, s-maxage=10, stale-while-revalidate=30",
+      cachePolicy.responseCacheControl,
     );
     return applyAuthResponseCookies(response, auth.response);
   } catch (error) {

@@ -13,6 +13,7 @@ import {
   buildBrowserBackendHeaders,
   fetchBackendApi,
 } from "@/lib/backend-api";
+import { formatHttpErrorMessage } from "@/lib/http-error";
 
 const CACHE_KEY = "polyWeather_v1";
 const CACHE_TTL_MS = 30 * 60 * 1000;
@@ -54,7 +55,10 @@ function normalizeDetailDepth(depth?: "panel" | "market" | "nearby" | "full") {
   return "panel";
 }
 
-async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Promise<T> {
+async function fetchJson<T>(
+  url: string,
+  options?: { cache?: RequestCache; timeoutMs?: number },
+): Promise<T> {
   const timeoutMs = options?.timeoutMs;
   const controller = timeoutMs ? new AbortController() : null;
   const timeoutId = controller
@@ -68,7 +72,7 @@ async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Prom
   try {
     response = await fetchBackendApi(url, {
       headers,
-      cache: "default",
+      cache: options?.cache ?? "default",
       signal: controller?.signal,
     });
   } catch (error) {
@@ -83,7 +87,10 @@ async function fetchJson<T>(url: string, options?: { timeoutMs?: number }): Prom
   }
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+    const body = await response.text().catch(() => "");
+    throw new Error(
+      formatHttpErrorMessage(response.status, response.statusText, body),
+    );
   }
 
   return response.json() as Promise<T>;
@@ -253,6 +260,7 @@ export const dashboardClient = {
 
     const request = fetchJson<CitySummary>(
       `/api/city/${normalizeCityName(cityName)}/summary?force_refresh=${force}`,
+      force ? { cache: "no-store" } : undefined,
     ).finally(() => {
       pendingCitySummaryRequests.delete(requestKey);
     });
@@ -292,7 +300,7 @@ export const dashboardClient = {
     });
     return fetchJson<CityDetail>(
       `/api/city/${normalizeCityName(cityName)}?${params.toString()}`,
-      { timeoutMs: CITY_DETAIL_CLIENT_TIMEOUT_MS },
+      { cache: "no-store", timeoutMs: CITY_DETAIL_CLIENT_TIMEOUT_MS },
     );
   },
 
@@ -340,6 +348,7 @@ export const dashboardClient = {
     const request = (async () => {
       const payload = await fetchJson<MarketScanPayload>(
         `/api/city/${normalizeCityName(cityName)}/market-scan?${params.toString()}`,
+        force ? { cache: "no-store" } : undefined,
       );
       if (!force && options?.marketSlug && isStaleMarketSlugResponse(payload)) {
         const fallbackParams = new URLSearchParams({
@@ -389,7 +398,10 @@ export const dashboardClient = {
     }
     const request = fetchJson<ScanTerminalResponse>(
       `/api/scan/terminal?${params.toString()}`,
-      { timeoutMs: SCAN_TERMINAL_CLIENT_TIMEOUT_MS },
+      {
+        cache: force ? "no-store" : "default",
+        timeoutMs: SCAN_TERMINAL_CLIENT_TIMEOUT_MS,
+      },
     ).finally(() => {
       pendingScanTerminalRequests.delete(requestKey);
     });
@@ -426,7 +438,10 @@ export const dashboardClient = {
     }))
       .then(async (response) => {
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+          const body = await response.text().catch(() => "");
+          throw new Error(
+            formatHttpErrorMessage(response.status, response.statusText, body),
+          );
         }
         return response.json() as Promise<ScanTerminalResponse>;
       })

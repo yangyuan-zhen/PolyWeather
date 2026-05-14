@@ -74,6 +74,10 @@ interface DashboardStoreValue extends DashboardState {
 }
 
 const DashboardStoreContext = createContext<DashboardStoreValue | null>(null);
+const DashboardActionsContext = createContext<Pick<
+  DashboardStoreValue,
+  "ensureCityDetail"
+> | null>(null);
 const CityDetailsContext = createContext<{
   cityDetailsByName: Record<string, CityDetail>;
   cityDetailMetaByName: Record<string, { cachedAt: number; revision: string }>;
@@ -1550,12 +1554,24 @@ export function DashboardStoreProvider({
     () => ({ cityDetailsByName, cityDetailMetaByName, citySummariesByName, loadingState }),
     [cityDetailsByName, cityDetailMetaByName, citySummariesByName, loadingState],
   );
+  const latestEnsureCityDetailRef = useRef(ensureCityDetail);
+  useEffect(() => {
+    latestEnsureCityDetailRef.current = ensureCityDetail;
+  }, [ensureCityDetail]);
+  const dashboardActionsValue = useMemo<Pick<DashboardStoreValue, "ensureCityDetail">>(
+    () => ({
+      ensureCityDetail: (...args) => latestEnsureCityDetailRef.current(...args),
+    }),
+    [],
+  );
 
   return (
     <DashboardStoreContext.Provider value={value}>
-      <CityDetailsContext.Provider value={cityDetailsValue}>
-        {children}
-      </CityDetailsContext.Provider>
+      <DashboardActionsContext.Provider value={dashboardActionsValue}>
+        <CityDetailsContext.Provider value={cityDetailsValue}>
+          {children}
+        </CityDetailsContext.Provider>
+      </DashboardActionsContext.Provider>
     </DashboardStoreContext.Provider>
   );
 }
@@ -1575,6 +1591,16 @@ export function useCityDetails() {
   if (!context) {
     throw new Error(
       "useCityDetails must be used within DashboardStoreProvider",
+    );
+  }
+  return context;
+}
+
+export function useDashboardActions() {
+  const context = useContext(DashboardActionsContext);
+  if (!context) {
+    throw new Error(
+      "useDashboardActions must be used within DashboardStoreProvider",
     );
   }
   return context;

@@ -53,6 +53,27 @@ export interface CloudLayer {
   base: number | null;
 }
 
+export interface ObservationFreshness {
+  source_code?: string | null;
+  source_label?: string | null;
+  observed_at?: string | null;
+  observed_at_local?: string | null;
+  ingested_at?: string | null;
+  native_update_interval_sec?: number | null;
+  expected_next_update_at?: string | null;
+  freshness_status?:
+    | "fresh"
+    | "expected_wait"
+    | "delayed"
+    | "stale"
+    | "offline"
+    | "unknown"
+    | string
+    | null;
+  freshness_reason?: string | null;
+  age_sec?: number | null;
+}
+
 export interface CurrentConditions {
   temp: number | null;
   max_so_far: number | null;
@@ -76,6 +97,8 @@ export interface CurrentConditions {
   report_time?: string | null;
   receipt_time?: string | null;
   obs_time_epoch?: number | null;
+  source_code?: string | null;
+  freshness?: ObservationFreshness | null;
   dewpoint?: number | null;
 }
 
@@ -95,6 +118,7 @@ export interface AirportCurrentConditions {
   visibility_mi?: number | null;
   wx_desc?: string | null;
   raw_metar?: string | null;
+  source_code?: string | null;
   source_label?: string | null;
   station_code?: string | null;
   station_label?: string | null;
@@ -105,6 +129,7 @@ export interface AirportCurrentConditions {
   pressure_hpa?: number | null;
   last_observation_local_date?: string | null;
   current_local_date?: string | null;
+  freshness?: ObservationFreshness | null;
 }
 
 export interface NearbyStation {
