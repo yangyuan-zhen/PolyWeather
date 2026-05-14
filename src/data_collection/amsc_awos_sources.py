@@ -190,7 +190,8 @@ class AmscAwosSourceMixin:
         return headers
 
     def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
-        response = httpx.get(url, headers=headers, timeout=getattr(self, "timeout", 10.0))
+        verify = os.getenv("POLYWEATHER_AMSC_SSL_VERIFY", "true").strip().lower() not in {"0", "false", "no"}
+        response = httpx.get(url, headers=headers, timeout=getattr(self, "timeout", 10.0), verify=verify)
         response.raise_for_status()
         try:
             return response.json()
