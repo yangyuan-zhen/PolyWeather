@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useCityDetails, useDashboardActions } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import type { CityDetail } from "@/lib/dashboard-types";
@@ -117,9 +117,21 @@ export function RunwayObservationsPanel() {
     [ensureCityDetail],
   );
 
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   useEffect(() => {
     void loadAll();
-  }, [loadAll]);
+    intervalRef.current = setInterval(() => {
+      void Promise.allSettled(
+        CHINA_RUNWAY_CITIES.map((city) =>
+          ensureCityDetail(city.key, true, "panel"),
+        ),
+      );
+    }, 60_000);
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [loadAll, ensureCityDetail]);
 
   const cards = useMemo(
     () =>
