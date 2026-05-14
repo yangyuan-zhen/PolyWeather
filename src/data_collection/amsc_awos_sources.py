@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import json
 import os
+import ssl
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 from urllib.parse import quote
+from urllib.request import Request, urlopen
 
-import httpx
 from loguru import logger
 
 from src.utils.metrics import record_source_call
@@ -191,11 +192,14 @@ class AmscAwosSourceMixin:
         return headers
 
     def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
-        with httpx.Client(verify=False, trust_env=False) as client:
-            response = client.get(url, headers=headers, timeout=getattr(self, "timeout", 10.0))
-        response.raise_for_status()
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        req = Request(url, headers=headers or {})
+        with urlopen(req, timeout=getattr(self, "timeout", 10.0), context=ctx) as resp:
+            raw = resp.read().decode("utf-8", errors="replace")
         try:
-            return response.json()
+            return json.loads(raw)
         except json.JSONDecodeError:
             return None
 
