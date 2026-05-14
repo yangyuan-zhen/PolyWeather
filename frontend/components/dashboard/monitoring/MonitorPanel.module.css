@@ -628,3 +628,93 @@
   opacity: 0.85;
   letter-spacing: 0.01em;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE — max-width 768px
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .root :global(.monitor-panel) {
+    padding: 12px 16px;
+  }
+
+  .root :global(.monitor-title) {
+    font-size: 17px;
+  }
+
+  .root :global(.monitor-grid) {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .root :global(.monitor-card) {
+    padding: 14px 16px;
+    border-radius: 10px;
+  }
+
+  .root :global(.monitor-card-head) {
+    font-size: 14px;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .root :global(.monitor-obs-time) {
+    font-size: 12px;
+  }
+
+  .root :global(.monitor-high-row) {
+    font-size: 14px;
+  }
+
+  .root :global(.monitor-high-value) {
+    font-size: 20px;
+  }
+
+  .root :global(.monitor-stat-label) {
+    font-size: 12px;
+  }
+
+  .root :global(.monitor-stats) {
+    gap: 8px;
+  }
+
+  .root :global(.monitor-rw-row) {
+    font-size: 12px;
+  }
+
+  .root :global(.monitor-divider) {
+    margin: 8px 0 6px;
+  }
+
+  .root :global(.scan-amos-runway-detail) {
+    font-size: 11px;
+  }
+}
+
+@media (max-width: 480px) {
+  .root :global(.monitor-card) {
+    padding: 10px 12px;
+    border-radius: 8px;
+  }
+
+  .root :global(.monitor-card-head) {
+    font-size: 13px;
+    margin-bottom: 8px;
+  }
+
+  .root :global(.monitor-high-value) {
+    font-size: 18px;
+  }
+
+  .root :global(.monitor-rw-row) {
+    font-size: 11px;
+  }
+
+  .root :global(.monitor-city-name) {
+    font-size: 14px;
+  }
+
+  .root :global(.monitor-obs-time) {
+    font-size: 11px;
+    margin-left: 0;
+  }
+}
