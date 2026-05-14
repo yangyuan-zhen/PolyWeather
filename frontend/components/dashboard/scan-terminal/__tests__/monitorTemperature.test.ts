@@ -54,6 +54,23 @@ export function runTests() {
   assert.equal(seoulTemp.value, 25);
   assert.equal(seoulTemp.source, "amos_runway_median");
 
+  const beijing = detail({
+    display_name: "Beijing",
+    name: "beijing",
+    amos: {
+      runway_obs: {
+        runway_pairs: [["18R", "36L"], ["18L", "36R"]],
+        temperatures: [[20.8, null], [21.0, null]],
+      },
+      source: "amsc_awos",
+      temp_c: 21,
+      temp_source: "runway_max",
+    },
+  });
+  const beijingTemp = resolveMonitorTemperature(beijing);
+  assert.equal(beijingTemp.value, 21);
+  assert.equal(beijingTemp.source, "amsc_awos_runway_max");
+
   const metarOnly = detail({
     airport_current: { obs_time: "15:00", temp: 30 },
     current: { temp: 29 } as CityDetail["current"],

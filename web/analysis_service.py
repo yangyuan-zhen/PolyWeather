@@ -159,6 +159,13 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 180,
         "stale_after_sec": 900,
     },
+    "amsc_awos": {
+        "label": "AMSC AWOS",
+        "native_update_interval_sec": 60,
+        "fresh_window_sec": 180,
+        "expected_grace_sec": 180,
+        "stale_after_sec": 900,
+    },
     "jma": {
         "label": "JMA",
         "native_update_interval_sec": 600,
@@ -1869,8 +1876,10 @@ def _analyze(
         now_utc=now_utc,
     )
 
-    airport_source_code = "amos" if current_source == "amos" else "metar"
-    airport_source_label = "AMOS" if current_source == "amos" else "METAR"
+    airport_source_code = amos_data.get("source") if current_source == "amos" else "metar"
+    airport_source_code = airport_source_code or ("amos" if current_source == "amos" else "metar")
+    airport_source_label = amos_data.get("source_label") if current_source == "amos" else "METAR"
+    airport_source_label = airport_source_label or ("AMOS" if current_source == "amos" else "METAR")
     airport_obs_raw = amos_data.get("observation_time") if current_source == "amos" else (metar.get("observation_time") if metar else None)
     airport_age_min = _observation_age_min(airport_obs_raw, now_utc) if airport_obs_raw else metar_age_min
     if airport_age_min is None:

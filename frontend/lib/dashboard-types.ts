@@ -958,6 +958,12 @@ export interface AmosData {
   runway_obs?: {
     runway_pairs?: Array<[string, string]> | null;
     temperatures?: Array<[number | null, number | null]> | null;
+    point_temperatures?: Array<{
+      runway?: string | null;
+      tdz_temp?: number | null;
+      mid_temp?: number | null;
+      end_temp?: number | null;
+    }> | null;
     pressures_hpa?: Array<number | null> | null;
     wind_directions?: Array<[number, number, number] | null> | null;
     wind_speeds?: Array<[number, number, number] | null> | null;
@@ -967,6 +973,7 @@ export interface AmosData {
   observation_source?: string | null;
   observation_source_zh?: string | null;
   observation_time?: string | null;
+  observation_time_local?: string | null;
 }
 
 export interface HistoryPoint {

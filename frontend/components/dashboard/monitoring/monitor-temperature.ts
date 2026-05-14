@@ -1,6 +1,8 @@
 import type { CityDetail } from "@/lib/dashboard-types";
 
 export type MonitorTemperatureSource =
+  | "amsc_awos_runway_max"
+  | "amsc_awos_runway"
   | "amos_runway_median"
   | "amos_runway"
   | "amos"
@@ -36,6 +38,13 @@ export function getAmosRunwayTemperature(detail?: CityDetail | null) {
   const values = runwayTemps
     .map((pair) => finiteNumber(pair?.[0]))
     .filter((value): value is number => value != null);
+  if (detail?.amos?.source === "amsc_awos") {
+    if (!values.length) return null;
+    return {
+      source: values.length > 1 ? "amsc_awos_runway_max" : "amsc_awos_runway",
+      value: Math.max(...values),
+    } satisfies MonitorTemperature;
+  }
   const value = median(values);
   if (value == null) return null;
   return {

@@ -95,7 +95,12 @@ function playNewHighBeep(): void {
 function trendClass(detail: CityDetail | undefined, key?: string): "rising" | "falling" | "flat" {
   const { source } = resolveMonitorTemperature(detail);
   // Runway surface temp vs air temp comparison is meaningless
-  if (source === "amos_runway_median" || source === "amos_runway") return "flat";
+  if (
+    source === "amos_runway_median" ||
+    source === "amos_runway" ||
+    source === "amsc_awos_runway_max" ||
+    source === "amsc_awos_runway"
+  ) return "flat";
   const cur = resolveMonitorTemperature(detail).value;
   const max = resolveMaxSoFar(detail, key);
   if (cur != null && max != null && cur >= max + 0.3) return "rising";
@@ -177,6 +182,9 @@ function airportLabel(key: string, isEn: boolean) {
 const HKO_OBS_CITIES = new Set<MonitorKey>(["hong kong", "lau fau shan"]);
 
 const SOURCE_LABELS: Record<string, { en: string; zh: string }> = {
+  amsc_awos_runway_max: { en: "AMSC AWOS Runway", zh: "AMSC AWOS 跑道观测" },
+  amsc_awos_runway: { en: "AMSC AWOS Runway", zh: "AMSC AWOS 跑道观测" },
+  amsc_awos: { en: "AMSC AWOS", zh: "AMSC AWOS" },
   amos_runway_median: { en: "AMOS Runway", zh: "AMOS 跑道温度" },
   amos_runway: { en: "AMOS Runway", zh: "AMOS 跑道温度" },
   amos: { en: "AMOS", zh: "AMOS" },
@@ -512,7 +520,11 @@ export default function MonitorPanel({
           const tempInfo = resolveMonitorTemperature(detail);
           const cur = tempInfo.value;
           const curSource = tempInfo.source;
-          const isRunwayTemp = curSource === "amos_runway_median" || curSource === "amos_runway";
+          const isRunwayTemp =
+            curSource === "amos_runway_median" ||
+            curSource === "amos_runway" ||
+            curSource === "amsc_awos_runway_max" ||
+            curSource === "amsc_awos_runway";
           const max = resolveMaxSoFar(detail, key);          // HKO cities fall back to current.max_so_far
           const mtt = ac?.max_temp_time ?? detail.current?.max_temp_time ?? null;
           const freshnessInfo = getObservationFreshness(detail);

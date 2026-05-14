@@ -15,6 +15,7 @@ from src.data_collection.russia_station_sources import RussiaStationSourceMixin
 from src.data_collection.nmc_sources import NmcSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
+from src.data_collection.amsc_awos_sources import AmscAwosSourceMixin
 from src.data_collection.fmi_sources import FmiSourceMixin
 from src.data_collection.knmi_sources import KnmiSourceMixin
 from src.data_collection.hko_obs_sources import HkoObsSourceMixin
@@ -23,7 +24,7 @@ from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin):
     """
     Multi-source weather data collector
 
@@ -31,6 +32,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - Open-Meteo (global forecast + multi-model ensemble)
     - METAR/TAF (aviation weather observations)
     - AMOS (Korean runway-level airport sensors — RKSI, RKPK)
+    - AMSC AWOS (China mainland runway-point airport sensors)
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
     - JMA / NMC / HKO / CWA (country official networks)
@@ -1094,6 +1096,52 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         except Exception as exc:
             logger.warning("AMOS attach failed city={}: {}", city_lower, exc)
 
+    def _attach_china_amsc_awos_data(
+        self, results: Dict, city_lower: str, use_fahrenheit: bool
+    ) -> None:
+        """Fetch AMSC AWOS runway-point air temperature for selected China cities."""
+        try:
+            amsc_data = self.fetch_amsc_awos_current(
+                city_lower, use_fahrenheit=use_fahrenheit
+            )
+            if not amsc_data:
+                return
+            logger.info(
+                "AMSC AWOS: got data for city={} temp_c={} runway_pairs={}",
+                city_lower,
+                amsc_data.get("temp_c"),
+                len(amsc_data.get("runway_obs", {}).get("runway_pairs", []) or []),
+            )
+            # Reuse the existing `amos` detail shape consumed by dashboard runway panels.
+            results["amos"] = amsc_data
+            try:
+                DBManager().append_airport_obs(
+                    icao=amsc_data.get("icao") or "",
+                    city=city_lower,
+                    temp_c=amsc_data.get("temp_c"),
+                    wind_kt=amsc_data.get("wind_kt"),
+                    pressure_hpa=amsc_data.get("pressure_hpa"),
+                    obs_time=amsc_data.get("observation_time") or datetime.now().isoformat(),
+                )
+                runway_obs = amsc_data.get("runway_obs") or {}
+                rw_pairs = runway_obs.get("runway_pairs") or []
+                rw_temps = runway_obs.get("temperatures") or []
+                for i, (pair, temp_pair) in enumerate(zip(rw_pairs, rw_temps)):
+                    t = temp_pair[0] if temp_pair else None
+                    if t is not None and i < 6:
+                        pair_label = "/".join(pair) if isinstance(pair, (list, tuple)) else str(pair)
+                        DBManager().append_airport_obs(
+                            icao=f"{amsc_data.get('icao', '')}_RWY_{i}",
+                            city=city_lower,
+                            temp_c=t,
+                            obs_time=amsc_data.get("observation_time") or datetime.now().isoformat(),
+                        )
+                        logger.debug("AMSC AWOS stored runway row city={} runway={} temp={}", city_lower, pair_label, t)
+            except Exception:
+                logger.exception("airport_obs_log append failed for amsc_awos city={}", city_lower)
+        except Exception as exc:
+            logger.warning("AMSC AWOS attach failed city={}: {}", city_lower, exc)
+
     def _attach_madis_hfmetar_data(
         self, results: Dict, city_lower: str
     ) -> None:
@@ -1286,6 +1334,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_nearby=include_nearby,
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
+                self._attach_china_amsc_awos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower)
                 self._attach_singapore_mss_data(results, city_lower)
                 if include_nearby:
@@ -1334,6 +1383,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     include_nearby=include_nearby,
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
+                self._attach_china_amsc_awos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower)
                 self._attach_singapore_mss_data(results, city_lower)
                 if include_nearby:

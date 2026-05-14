@@ -275,13 +275,14 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
 
     amos = raw.get("amos") or {}
     if amos.get("temp_c") is not None:
+        is_amsc = amos.get("source") == "amsc_awos"
         return _normalize_station_row(
             station_code=amos.get("icao") or meta.get("icao"),
             station_label=amos.get("station_label") or meta.get("airport_name") or meta.get("icao"),
             temp=amos["temp_c"],
-            obs_time=amos.get("obs_time") or metar.get("observation_time"),
-            source_code="amos",
-            source_label="AMOS",
+            obs_time=amos.get("obs_time") or amos.get("observation_time") or metar.get("observation_time"),
+            source_code="amsc_awos" if is_amsc else "amos",
+            source_label="AMSC AWOS" if is_amsc else "AMOS",
             is_official=True,
             is_airport_station=True,
             is_settlement_anchor=False,
