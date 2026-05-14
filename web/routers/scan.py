@@ -6,6 +6,7 @@ from web.services.scan_api import (
     get_scan_city_ai_forecast_payload,
     get_scan_city_ai_stream_response,
     get_scan_terminal_ai_payload,
+    get_scan_terminal_overview_payload,
     get_scan_terminal_payload,
 )
 
@@ -54,3 +55,8 @@ async def scan_terminal_ai_city(request: Request):
 @router.post("/api/scan/terminal/ai-city/stream")
 async def scan_terminal_ai_city_stream(request: Request):
     return await get_scan_city_ai_stream_response(request)
+
+
+@router.post("/api/scan/terminal/overview")
+async def scan_terminal_overview(request: Request):
+    return await get_scan_terminal_overview_payload(request)

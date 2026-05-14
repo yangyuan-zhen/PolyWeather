@@ -333,6 +333,34 @@ def _build_city_ai_fallback(
         "range_low": range_low,
         "range_high": range_high,
     }
+    taf_data = ai_input.get("taf") if isinstance(ai_input.get("taf"), dict) else {}
+    if partial_ai.get("taf_read_zh") or partial_ai.get("taf_read_en"):
+        taf_zh = str(partial_ai.get("taf_read_zh") or partial_ai.get("taf_read_en") or "").strip()
+        taf_en = str(partial_ai.get("taf_read_en") or partial_ai.get("taf_read_zh") or "").strip()
+    elif taf_data.get("raw_taf"):
+        taf_zh = f"TAF 可用，需人工判读：{str(taf_data.get('raw_taf', ''))[:120]}"
+        taf_en = f"TAF available, manual read: {str(taf_data.get('raw_taf', ''))[:120]}"
+    else:
+        taf_zh = "无可用 TAF"
+        taf_en = "No TAF available"
+
+    prob_data = ai_input.get("probability") if isinstance(ai_input.get("probability"), dict) else {}
+    if partial_ai.get("probability_read_zh") or partial_ai.get("probability_read_en"):
+        prob_zh = str(partial_ai.get("probability_read_zh") or partial_ai.get("probability_read_en") or "").strip()
+        prob_en = str(partial_ai.get("probability_read_en") or partial_ai.get("probability_read_zh") or "").strip()
+    elif prob_data.get("top_buckets"):
+        top = prob_data["top_buckets"][0] if isinstance(prob_data["top_buckets"], list) else {}
+        if isinstance(top, dict) and top.get("label"):
+            skew_text = f"，分布{'偏右' if prob_data.get('skew') == 'right' else '偏左' if prob_data.get('skew') == 'left' else '对称'}" if prob_data.get("skew") else ""
+            prob_zh = f"最高概率桶 {top.get('label', '')}（{top.get('prob', '?')}%）{skew_text}"
+            prob_en = f"Peak bucket {top.get('label', '')} ({top.get('prob', '?')}%){skew_text.replace('偏右', ', right-skewed').replace('偏左', ', left-skewed').replace('对称', ', symmetric')}"
+        else:
+            prob_zh = "概率分布数据可用但格式异常"
+            prob_en = "Probability data available but malformed"
+    else:
+        prob_zh = "概率分布暂未生成"
+        prob_en = "Probability distribution not yet generated"
+
     return {
         "predicted_max": partial_ai.get("predicted_max", predicted),
         "range_low": partial_ai.get("range_low", range_low),
@@ -343,6 +371,10 @@ def _build_city_ai_fallback(
         "final_judgment_en": final_en,
         "metar_read_zh": metar_zh,
         "metar_read_en": metar_en,
+        "taf_read_zh": taf_zh,
+        "taf_read_en": taf_en,
+        "probability_read_zh": prob_zh,
+        "probability_read_en": prob_en,
         "reasoning_zh": reasoning_zh,
         "reasoning_en": reasoning_en,
         "risks_zh": risks_zh,

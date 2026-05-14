@@ -68,12 +68,14 @@ def build_city_ai_request_json(
         "locale": normalized_locale,
         "task": (
             "Return strict JSON with: predicted_max, range_low, range_high, unit, confidence, "
-            "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, "
+            "final_judgment_zh, final_judgment_en, metar_read_zh, metar_read_en, taf_read_zh, taf_read_en, probability_read_zh, probability_read_en, "
             "reasoning_zh, reasoning_en, risks_zh, risks_en, model_cluster_note_zh, model_cluster_note_en. "
             "Fill every *_zh field in Simplified Chinese and every *_en field in English in the same response. "
             "Use this exact JSON object shape; do not return an array, markdown, or prose outside JSON. "
             "Keep final_judgment one short decision sentence. metar_read must explain the latest observation source "
             "with report/observation time, temperature, wind direction/speed, cloud/weather/visibility/dewpoint if available. "
+            "taf_read must interpret TAF for today's peak window impact (BECMG/TEMPO timing, wind shifts). If no TAF, write '无可用 TAF'/'No TAF available'. "
+            "probability_read must describe the probability distribution shape in 1 sentence (peak bucket, skew). "
             "For wind, explicitly say whether the current wind tends to warm, cool, or be neutral for today's high, "
             "and why in local city/station context. If mentioning cold/warm advection, name the wind direction or "
             "direction shift responsible. If mentioning TAF risk, include the concrete TAF time window or say no "
@@ -203,12 +205,11 @@ def build_city_ai_stream_request(
     context = _observation_prompt_context(ai_input)
     is_airport_metar = context["is_airport_metar"]
     role_label = "机场 METAR 解读与最高温预测员" if is_airport_metar else "官方观测站解读与最高温预测员"
-    read_label = context["read_label_zh"]
     source_instruction = context["instruction_zh"]
     system_prompt = (
         f"你是 PolyWeather 的{role_label}。"
         "只返回一个紧凑 JSON object，不要 Markdown。"
-        f"必须基于最新观测/报文独立判断该城市今日最高温，输出 metar_read_zh、metar_read_en、predicted_max、range_low、range_high、unit、confidence、final_judgment_zh、final_judgment_en、reasoning_zh、reasoning_en 字段，便于前端快速显示{read_label}和最高温预测；"
+        f"必须基于最新观测/报文独立判断该城市今日最高温，输出 metar_read_zh、metar_read_en、taf_read_zh、taf_read_en、probability_read_zh、probability_read_en、predicted_max、range_low、range_high、unit、confidence、final_judgment_zh、final_judgment_en、reasoning_zh、reasoning_en 字段；"
         "模型一致性和风险清单由后端规则补齐，不要生成这些字段。"
         f"预测方法：先看 model_cluster.sources 中各模型（含 DEB）的集中区间作为基线；"
         "然后重点阅读 metar_context 和 current 中的观测信号——温度趋势、风向风速、湿度、云量、能见度——"
@@ -219,6 +220,8 @@ def build_city_ai_stream_request(
         "如果 observation_anchor.is_airport_metar 为 false，不得使用 METAR、TAF、机场报文等称谓。"
         "predicted_max 是你的独立预测值（float），range_low/range_high 是预测区间，unit 为温度单位，confidence 为 low/medium/high。"
         "final_judgment 用一句话给出今日最高温结论。reasoning 必须解释你相对于模型集群基线做了哪种修正及原因。"
+        "taf_read_zh/en: 如果 city_snapshot.taf 有有效内容，用 1-2 句解读机场预报中对今日峰值窗口有影响的变化（BECMG/TEMPO 时间窗、风向切换、云量变化）；如果无 TAF 或 TAF 不含今日白天有效时段，写「无可用 TAF」/「No TAF available」。"
+        "probability_read_zh/en: 如果 city_snapshot.probability 有分布数据，用 1 句描述概率分布形态——最高概率桶落在哪、分布偏左/偏右/对称。"
         "所有 *_zh 字段写简体中文，所有 *_en 字段写英文，不得留空。"
         "不要写交易建议、BUY/SELL、Kelly 或套利。"
     )
@@ -236,10 +239,12 @@ def build_city_ai_stream_request(
                     {
                         "locale": normalized_locale,
                         "task": (
-                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, predicted_max, range_low, range_high, unit, confidence, final_judgment_zh, final_judgment_en, reasoning_zh, reasoning_en. "
+                            "Return JSON keys in this exact order: metar_read_zh, metar_read_en, taf_read_zh, taf_read_en, probability_read_zh, probability_read_en, predicted_max, range_low, range_high, unit, confidence, final_judgment_zh, final_judgment_en, reasoning_zh, reasoning_en. "
                             "predicted_max must be your independent float prediction, based on model cluster baseline adjusted by the latest METAR/observation signals. "
                             "Do not copy DEB directly \u2014 use the full model spread + your own reading of wind, cloud, temperature trend from the bulletin. "
                             "reasoning must explain what adjustment you made relative to the model cluster and why. "
+                            "taf_read must interpret TAF for peak window impact if available. "
+                            "probability_read must describe the probability distribution shape in 1 sentence. "
                             "Do not return risks or model_cluster_note. Keep it compact. "
                             "Return exactly one JSON object and no markdown."
                         ),

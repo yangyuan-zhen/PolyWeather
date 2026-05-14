@@ -8,6 +8,7 @@ from fastapi import HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 
+from web.services.market_overview_api import build_market_overview_payload
 import web.routes as legacy_routes
 
 
@@ -108,4 +109,22 @@ async def get_scan_city_ai_stream_response(request: Request) -> StreamingRespons
             "Cache-Control": "no-store",
             "X-Accel-Buffering": "no",
         },
+    )
+
+
+async def get_scan_terminal_overview_payload(request: Request) -> Dict[str, Any]:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    rows = body.get("rows") if isinstance(body.get("rows"), list) else []
+    locale = str(body.get("locale") or "zh-CN").strip()
+    force_refresh = str(body.get("force_refresh") or "false").strip().lower() in {"1", "true", "yes"}
+    return await run_in_threadpool(
+        build_market_overview_payload,
+        rows,
+        locale=locale,
+        force_refresh=force_refresh,
     )

@@ -327,34 +327,30 @@ def test_city_ai_fallback_treats_stale_metar_as_background_not_anchor():
 
 
 def test_city_ai_cache_key_changes_when_observation_fingerprint_changes():
+    """METAR 原文不变 → 缓存 key 不变（命中）；METAR 原文变了 → key 变化（miss）。"""
     base_input = {
-        "schema_version": "single_city_forecast_v2",
         "city": "Manila",
         "local_date": "2026-04-28",
-        "deb": {"prediction": 34.0},
         "observation_anchor": {
             "source": "METAR",
             "is_airport_metar": True,
             "station_code": "RPLL",
         },
         "airport_current": {
-            "station_code": "RPLL",
-            "temp": 34.0,
-            "report_time": "03:00Z",
-            "receipt_time": "2026-04-28T03:02:00Z",
+            "obs_time": "03:00Z",
             "raw_metar": "RPLL 280300Z 34004KT CAVOK 34/24 Q1009",
         },
         "metar_context": {
             "stale_for_today": False,
             "last_observation_time": "03:00Z",
         },
-        "metar_today_obs": [{"time": "03:00Z", "temp": 34.0}],
     }
     changed_input = {
         **base_input,
         "airport_current": {
             **base_input["airport_current"],
-            "receipt_time": "2026-04-28T03:30:00Z",
+            "raw_metar": "RPLL 280330Z 36006KT 9999 FEW020 33/25 Q1010",
+            "obs_time": "03:30Z",
         },
     }
 
@@ -385,9 +381,10 @@ def test_city_ai_stream_request_only_asks_provider_for_observation_read():
 
     user_payload = request_payload["messages"][1]["content"]
     assert request_payload["stream"] is True
-    assert request_payload["max_tokens"] <= 900
+    assert request_payload["max_tokens"] <= 1200
     assert request_payload["max_tokens"] < scan_terminal_service.SCAN_AI_MAX_TOKENS
-    assert '"required_json_keys": ["metar_read_zh", "metar_read_en", "predicted_max", "range_low", "range_high", "unit", "confidence", "final_judgment_zh", "final_judgment_en", "reasoning_zh", "reasoning_en"]' in user_payload
+    assert "taf_read_zh" in user_payload
+    assert "probability_read_zh" in user_payload
     assert "predicted_max" in user_payload
     assert "final_judgment" in user_payload
 

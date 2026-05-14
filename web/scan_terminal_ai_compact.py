@@ -421,3 +421,46 @@ def build_scan_ai_prompt(payload: Dict[str, Any], *, max_rows: int) -> Dict[str,
             "sent_contracts": sent_contracts,
         },
     }
+
+
+def _compact_probability_context(probabilities: Any, deb: Any, unit: str) -> dict:
+    if not isinstance(probabilities, dict):
+        return {}
+    dist = probabilities.get("distribution")
+    if not isinstance(dist, list) or not dist:
+        return {}
+    top_buckets = sorted(
+        [b for b in dist if isinstance(b, dict) and b.get("probability")],
+        key=lambda b: float(b.get("probability", 0)),
+        reverse=True,
+    )[:3]
+    compact = {
+        "top_buckets": [
+            {
+                "label": b.get("label", ""),
+                "prob": round(float(b.get("probability", 0)) * 100),
+            }
+            for b in top_buckets
+        ],
+    }
+    mu = probabilities.get("mu")
+    if mu is not None:
+        compact["mu"] = mu
+    spread = (
+        round(float(probabilities.get("calibrated_sigma") or 0), 1)
+        or round(float(probabilities.get("raw_sigma") or 0), 1)
+        or None
+    )
+    if spread is not None:
+        compact["sigma"] = spread
+    deb_val = deb.get("prediction") if isinstance(deb, dict) else None
+    if deb_val is not None and mu is not None:
+        if deb_val > mu:
+            compact["skew"] = "right"
+        elif deb_val < mu:
+            compact["skew"] = "left"
+        else:
+            compact["skew"] = "centered"
+    if unit:
+        compact["unit"] = unit
+    return compact
