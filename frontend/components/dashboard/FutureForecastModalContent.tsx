@@ -21,25 +21,15 @@ import type {
   ProAccessState,
 } from "@/lib/dashboard-types";
 import { FutureForecastForwardView } from "./FutureForecastForwardView";
-import {
-  FutureModelForecastPanel,
-  FutureProbabilityPanel,
-  FutureTemperaturePathChart,
-} from "./FutureForecastModalPanels";
 import { FutureForecastTodayDecisionBrief } from "./FutureForecastTodayDecisionBrief";
-import { FutureForecastTodayEvidenceGrid } from "./FutureForecastTodayEvidenceGrid";
+import { FutureForecastTodayLayout } from "./FutureForecastTodayLayout";
 import { FutureForecastModalHeader } from "./FutureForecastModalHeader";
 import {
   FutureRefreshLock,
   FutureSyncStatusStrip,
   type FutureSyncStatusItem,
 } from "./FutureForecastModalStatus";
-import {
-  FutureAnchorStatusCard,
-  FuturePaceCard,
-  FuturePaceLoadingCard,
-  type FuturePaceSignalItem,
-} from "./FutureForecastTodayCards";
+import { type FuturePaceSignalItem } from "./FutureForecastTodayCards";
 import {
   TODAY_MARKET_SCAN_AUTO_REFRESH_MS,
   clamp,
@@ -966,121 +956,32 @@ export function FutureForecastModalContent({
               </div>
             )}
             {isToday ? (
-              <div className="future-v2-layout">
-                <aside className="future-v2-left">
-                  <FutureAnchorStatusCard
-                    locale={locale}
-                    currentTempText={currentTempText}
-                    weatherSummary={weatherSummary}
-                    obsTime={detail.current?.obs_time}
-                    daylightProgress={daylightProgress}
-                    sunrise={detail.forecast?.sunrise}
-                    sunset={detail.forecast?.sunset}
-                    topObservedTemp={topObservedTemp}
-                    tempSymbol={detail.temp_symbol}
-                    gapToBaseBucket={gapToBaseBucket}
-                    pathStatus={pathStatus}
-                  />
-
-                  {showDeferredTodaySections && paceView ? (
-                    <FuturePaceCard
-                      locale={locale}
-                      paceView={paceView}
-                      tempSymbol={detail.temp_symbol}
-                      signalItems={paceSignalItems}
-                    />
-                  ) : isToday ? (
-                    <FuturePaceLoadingCard locale={locale} />
-                  ) : null}
-                </aside>
-
-                <main className="future-v2-right">
-                  <section className="future-modal-section future-v2-main-chart">
-                    <div className="modal-section-heading">
-                      <div className="modal-section-kicker">
-                        {locale === "en-US" ? "Primary view" : "主视图"}
-                      </div>
-                      <h3>
-                        {locale === "en-US"
-                          ? "Today's temperature path (anchor obs + models)"
-                          : "今日气温路径（锚点观测 + 模型）"}
-                      </h3>
-                    </div>
-                    <FutureTemperaturePathChart dateStr={dateStr} forceToday={isToday} />
-                    <div className="future-v2-chart-thresholds">
-                      <span>
-                        {locale === "en-US" ? "Base" : "基准"} ·{" "}
-                        {baseCaseBucket || "--"}
-                      </span>
-                      <span>
-                        {locale === "en-US" ? "Upside" : "上修"} ·{" "}
-                        {intradayMeteorology.upside_bucket || "--"}
-                      </span>
-                      <span>
-                        {locale === "en-US" ? "Invalidates at" : "失效观察"} ·{" "}
-                        {nextObservationTime}
-                      </span>
-                    </div>
-                  </section>
-
-                  <FutureForecastTodayEvidenceGrid
-                    airportMetarAnchor={airportMetarAnchor}
-                    confirmationRules={confirmationRules}
-                    invalidationRules={invalidationRules}
-                    locale={locale}
-                    meteorologySignals={meteorologySignals}
-                    modelSummary={modelSummary}
-                  />
-
-                  <div className="future-modal-grid">
-                    <section className="future-modal-section">
-                      <div className="modal-section-heading">
-                        <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Probability read" : "概率判断"}
-                        </div>
-                        <h3>{probabilityTitle}</h3>
-                      </div>
-                      <div
-                        className="future-text-block"
-                        style={{ marginBottom: "12px" }}
-                      >
-                        {probabilitySummary}
-                      </div>
-                      <div style={{ position: "relative", minHeight: "120px" }}>
-                        <FutureProbabilityPanel
-                          detail={detail}
-                          targetDate={dateStr}
-                          marketScan={activeMarketScan}
-                          hideTitle
-                        />
-                      </div>
-                    </section>
-                    <section className="future-modal-section">
-                      <div className="modal-section-heading">
-                        <div className="modal-section-kicker">
-                          {locale === "en-US" ? "Model layer" : "模型层"}
-                        </div>
-                        <h3>
-                          {locale === "en-US"
-                            ? "Model Range & Spread"
-                            : "模型区间与分歧"}
-                        </h3>
-                      </div>
-                      <div
-                        className="future-text-block"
-                        style={{ marginBottom: "12px" }}
-                      >
-                        {modelSummary}
-                      </div>
-                      <FutureModelForecastPanel
-                        detail={detail}
-                        targetDate={dateStr}
-                        hideTitle
-                      />
-                    </section>
-                  </div>
-                </main>
-              </div>
+              <FutureForecastTodayLayout
+                locale={locale}
+                isToday={isToday}
+                dateStr={dateStr}
+                detail={detail}
+                currentTempText={currentTempText}
+                weatherSummary={weatherSummary}
+                daylightProgress={daylightProgress}
+                topObservedTemp={topObservedTemp}
+                gapToBaseBucket={gapToBaseBucket}
+                pathStatus={pathStatus}
+                showDeferredTodaySections={showDeferredTodaySections}
+                paceView={paceView}
+                paceSignalItems={paceSignalItems}
+                baseCaseBucket={baseCaseBucket}
+                upsideBucket={intradayMeteorology.upside_bucket}
+                nextObservationTime={nextObservationTime}
+                airportMetarAnchor={airportMetarAnchor}
+                confirmationRules={confirmationRules}
+                invalidationRules={invalidationRules}
+                meteorologySignals={meteorologySignals}
+                modelSummary={modelSummary}
+                probabilityTitle={probabilityTitle}
+                probabilitySummary={probabilitySummary}
+                activeMarketScan={activeMarketScan}
+              />
             ) : (
               <FutureForecastForwardView
                 dateStr={dateStr}
