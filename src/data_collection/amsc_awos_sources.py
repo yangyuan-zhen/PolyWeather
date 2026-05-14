@@ -186,7 +186,7 @@ class AmscAwosSourceMixin:
         if cookie:
             headers["Cookie"] = cookie
         elif session_id:
-            headers["Cookie"] = f"sessionId={session_id}"
+            headers["sessionId"] = session_id
         return headers
 
     def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
