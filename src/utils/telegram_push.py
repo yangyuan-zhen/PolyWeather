@@ -518,8 +518,19 @@ def _save_airport_state(state: Dict[str, Any]) -> None:
     os.replace(tmp, path)
 
 
+_AROME_CACHE: Dict[str, Any] = {}
+_AROME_CACHE_TTL_SEC = 600  # AROME HD updates every 15 min; cache 10 min
+
 def _fetch_arome_temp() -> Optional[float]:
-    """Fetch latest AROME France HD 15-min temperature for LFPB from Open-Meteo."""
+    """Fetch latest AROME France HD 15-min temperature for LFPB from Open-Meteo.
+
+    Cached for 10 minutes since the model only updates every 15 minutes.
+    """
+    now = time.time()
+    cached = _AROME_CACHE.get("value")
+    cached_at = _AROME_CACHE.get("ts", 0)
+    if cached is not None and (now - cached_at) < _AROME_CACHE_TTL_SEC:
+        return cached
     try:
         import requests
         url = (
@@ -533,9 +544,12 @@ def _fetch_arome_temp() -> Optional[float]:
         resp = requests.get(url, timeout=8)
         data = resp.json()
         temps = (data.get("minutely_15") or {}).get("temperature_2m") or []
-        return float(temps[-1]) if temps else None
+        result = float(temps[-1]) if temps else None
+        _AROME_CACHE["value"] = result
+        _AROME_CACHE["ts"] = now
+        return result
     except Exception:
-        return None
+        return _AROME_CACHE.get("value")
 
 
 def _build_airport_status_message(
@@ -622,19 +636,19 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
     return max_so_far, max_time
 
 
-# Per-city push interval matching native data refresh rate (seconds)
+# Per-city push interval — unified to 60s, obs_time dedup prevents spam
 _AIRPORT_PUSH_INTERVAL = {
-    "seoul": 600,      # AMOS 1-min → 10min push
-    "busan": 600,      # AMOS 1-min → 10min push
-    "tokyo": 600,      # JMA 10-min
-    "ankara": 600,     # MGM ~10-min
-    "helsinki": 600,   # FMI 10-min
-    "amsterdam": 600,  # KNMI 10-min
-    "istanbul": 600,   # MGM ~10-min
-    "paris": 900,        # AROME HD 15-min model
-    "hong kong": 60,     # HKO 10-min → 60s轮询，obs_time去重
-    "lau fau shan": 60,  # HKO 10-min → 60s轮询，obs_time去重
-    "taipei": 600,       # CWA ~10-min
+    "seoul": 60,
+    "busan": 60,
+    "tokyo": 60,
+    "ankara": 60,
+    "helsinki": 60,
+    "amsterdam": 60,
+    "istanbul": 60,
+    "paris": 60,
+    "hong kong": 60,
+    "lau fau shan": 60,
+    "taipei": 60,
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
 # Continental airports: wider window (temp rises steadily over land)
@@ -749,7 +763,9 @@ def _run_high_freq_airport_cycle(
                 valid_temps = [t for (t, _d) in runway_temps if t is not None]
                 if valid_temps:
                     station_temp = max(valid_temps)
-                # 跑道数据没有独立的 obs_time，保持 current_obs_time
+                amos_obs_time = amos.get("observation_time") or ""
+                if amos_obs_time:
+                    current_obs_time = amos_obs_time
 
             current_temp = station_temp
             if current_temp is None:
@@ -759,6 +775,8 @@ def _run_high_freq_airport_cycle(
                 if arome_temp is not None:
                     current_temp = arome_temp
                     city_weather.setdefault("current", {})["temp"] = arome_temp
+                    if not current_obs_time:
+                        current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             if current_temp is None or deb_pred is None:
                 continue
 

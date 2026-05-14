@@ -1018,6 +1018,38 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         except Exception:
             logger.exception("airport_obs_log append failed for hko_obs city={}", city_lower)
 
+    def _attach_cwa_settlement_nearby(
+        self, results: Dict, city_lower: str, use_fahrenheit: bool
+    ) -> None:
+        if city_lower != "taipei":
+            return
+        sc = results.get("settlement_current") or {}
+        if not sc:
+            return
+        current = sc.get("current") or {}
+        temp = current.get("temp")
+        if temp is None:
+            return
+        row = {
+            "station_code": sc.get("station_code") or "466920",
+            "station_label": sc.get("station_name") or "Taipei CWA",
+            "temp": temp,
+            "obs_time": sc.get("observation_time") or "",
+            "source_code": "cwa",
+            "source_label": "CWA",
+            "icao": "RCSS",
+            "is_official": True,
+            "is_airport_station": True,
+            "is_settlement_anchor": False,
+            "max_so_far": current.get("max_temp_so_far"),
+            "max_temp_time": current.get("max_temp_time"),
+            "humidity": current.get("humidity"),
+            "wind_speed_kt": current.get("wind_speed_kt"),
+            "wind_dir": current.get("wind_dir"),
+        }
+        results["mgm_nearby"] = [row]
+        results["nearby_source"] = "cwa"
+
     def _attach_korean_amos_data(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1262,6 +1294,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_cwa_settlement_nearby(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
@@ -1309,6 +1342,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     self._attach_fmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_knmi_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_hko_obs_official_nearby(results, city_lower, use_fahrenheit)
+                    self._attach_cwa_settlement_nearby(results, city_lower, use_fahrenheit)
                     self._attach_russia_official_nearby(results, city_lower, use_fahrenheit)
                     if city_lower == "warsaw":
                         self._attach_warsaw_official_nearby(results, use_fahrenheit)
