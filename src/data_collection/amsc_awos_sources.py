@@ -191,7 +191,7 @@ class AmscAwosSourceMixin:
         return headers
 
     def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
-        with httpx.Client(verify=False) as client:
+        with httpx.Client(verify=False, trust_env=False) as client:
             response = client.get(url, headers=headers, timeout=getattr(self, "timeout", 10.0))
         response.raise_for_status()
         try:
