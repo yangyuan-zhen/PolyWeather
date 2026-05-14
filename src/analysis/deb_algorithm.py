@@ -978,10 +978,14 @@ def update_daily_record(
         save_history(history_file, data)
 
 
-def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
+def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, decay_factor=0.85):
     """
     计算动态权重融合 (Dynamic Ensemble Blending, DEB)
-    根据过去 N 天各模型的 Mean Absolute Error (MAE) 计算倒数权重
+
+    根据过去 N 天各模型的加权 MAE（时间衰减）计算倒数权重。
+    - 时间衰减：越近的天误差权重越大 (decay_factor^days_ago)
+    - decay_factor=0.85 时，1天前权重 0.85，3天前 0.61，7天前 0.32
+
     返回: blended_high (融合预报值), weights_info (权重展示字符串)
     """
     project_root = os.path.dirname(
@@ -1001,7 +1005,6 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
     dedup_note = "家族去重" if raw_forecast_count > len(current_forecasts) else ""
 
     if city_name not in data or not data[city_name]:
-        # 没有历史数据，返回简单的平均/中位数
         valid_vals = [v for v in current_forecasts.values() if v is not None]
         if not valid_vals:
             return None, "暂无模型数据"
@@ -1011,17 +1014,12 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
             note = f"{note} | {dedup_note}"
         return round(avg, 1), note
 
-    # 获取过去 lookback_days 天的有 actual_high 的记录
     city_data = data[city_name]
     sorted_dates = sorted(city_data.keys(), reverse=True)
 
-    # 我们只用真正结清（或者有比较准确最高温）的历史来算误差
-    # 这边简化：凡是有 actual_high 的都算进去
-    errors = {model: [] for model in current_forecasts.keys()}
-
+    errors: dict = {model: [] for model in current_forecasts.keys()}
     days_used = 0
     for date_str in sorted_dates:
-        # 跳过今天，今天还没出最终结果
         if date_str == datetime.now().strftime("%Y-%m-%d"):
             continue
 
@@ -1032,6 +1030,8 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
         if actual is None:
             continue
 
+        decay_weight = decay_factor ** days_used
+
         for model in current_forecasts.keys():
             if model in past_forecasts and past_forecasts[model] is not None:
                 try:
@@ -1039,13 +1039,12 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
                     av = float(actual)
                 except (TypeError, ValueError):
                     continue
-                errors[model].append(abs(pv - av))
+                errors[model].append((abs(pv - av), decay_weight))
 
         days_used += 1
         if days_used >= lookback_days:
             break
 
-    # 如果有效历史天数 < 2 天，还是使用等权
     if days_used < 2:
         valid_vals = [v for v in current_forecasts.values() if v is not None]
         if not valid_vals:
@@ -1056,13 +1055,16 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7):
             note = f"{note} | {dedup_note}"
         return round(avg, 1), note
 
-    # 计算 MAE
+    # 计算加权 MAE（时间衰减）
     maes = {}
-    for model, err_list in errors.items():
-        if err_list:
-            maes[model] = sum(err_list) / len(err_list)
+    for model, err_weighted in errors.items():
+        if err_weighted:
+            total_weight = sum(w for _e, w in err_weighted)
+            if total_weight > 0:
+                maes[model] = sum(e * w for e, w in err_weighted) / total_weight
+            else:
+                maes[model] = sum(e for e, _w in err_weighted) / len(err_weighted)
         else:
-            # 如果某个新模型没有历史数据，给它一个平均误差
             maes[model] = 2.0
 
     # 计算权重（用 MAE 的倒数，误差越小权重越大；加 0.1 防止除以0）

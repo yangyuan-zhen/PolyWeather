@@ -2683,6 +2683,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     jobs = {
         "settlement_current": lambda: _weather.fetch_settlement_current(city) or {},
         "open_meteo": lambda: _weather.fetch_from_open_meteo(lat, lon, use_fahrenheit=is_f) or {},
+        "multi_model": lambda: _weather.fetch_multi_model(lat, lon, city=city, use_fahrenheit=is_f) or {},
     }
     if _weather._supports_aviationweather(city):  # type: ignore[attr-defined]
         jobs["metar"] = lambda: _weather.fetch_metar(
@@ -2710,6 +2711,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     settlement_current = fetched.get("settlement_current") or {}
     open_meteo = fetched.get("open_meteo") or {}
+    mm = fetched.get("multi_model") or {}
     utc_offset = open_meteo.get("utc_offset")
     if utc_offset is None:
         utc_offset = default_utc_offset
@@ -2848,6 +2850,9 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     current_forecasts: Dict[str, float] = {}
     if om_today is not None:
         current_forecasts["Open-Meteo"] = om_today
+    for m, v in mm.get("forecasts", {}).items():
+        if v is not None and not _is_excluded_model_name(m):
+            current_forecasts[m] = _sf(v)
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
     if mgm_high is not None:

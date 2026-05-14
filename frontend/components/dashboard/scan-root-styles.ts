@@ -1,5 +1,5 @@
 /* Barrel: pre-combined scan-terminal root class name.
-   Consolidates 22 CSS Modules that are always co-imported into
+   Consolidates 20 CSS Modules that are always co-imported into
    a single className, keeping ScanTerminalDashboard.tsx lean. */
 
 import clsx from "clsx";
@@ -18,7 +18,6 @@ import scanTerminalBoardStyles from "./ScanTerminalBoard.module.css";
 import scanTerminalCardStyles from "./ScanTerminalCard.module.css";
 import scanTerminalDetailStyles from "./ScanTerminalDetail.module.css";
 import scanTerminalFiltersStyles from "./ScanTerminalFilters.module.css";
-import scanTerminalLightThemeStyles from "./ScanTerminalLightTheme.module.css";
 import scanTerminalListStyles from "./ScanTerminalList.module.css";
 import scanTerminalMobileStyles from "./ScanTerminalMobile.module.css";
 import scanTerminalOpportunityStyles from "./ScanTerminalOpportunity.module.css";
@@ -41,7 +40,6 @@ export const scanRootClass = clsx(
   scanTerminalOpportunityStyles.root,
   scanTerminalCardStyles.root,
   scanTerminalMobileStyles.root,
-  scanTerminalLightThemeStyles.root,
   detailChromeStyles.root,
   detailContentStyles.root,
   detailSectionsStyles.root,

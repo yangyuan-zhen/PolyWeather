@@ -45,6 +45,7 @@ import {
   useScanTerminalTheme,
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
+import { useRelativeTime } from "@/hooks/useRelativeTime";
 const MonitorPanel = dynamic(
   () => import("@/components/dashboard/monitoring/MonitorPanel"),
   { ssr: false },
@@ -113,6 +114,20 @@ function ScanTerminalScreen() {
   const userLocalTime = useUserLocalClock();
   const { setThemeMode, themeMode } = useScanTerminalTheme();
   const lastMapSelectedCityRef = useRef<string>("");
+  const lastFetchedAtRef = useRef<number>(0);
+  const serverAgeText = useRelativeTime(terminalData?.generated_at ?? null);
+  const localAgeText = useRelativeTime(
+    lastFetchedAtRef.current
+      ? new Date(lastFetchedAtRef.current).toISOString()
+      : null,
+  );
+
+  useEffect(() => {
+    if (terminalData?.generated_at) {
+      lastFetchedAtRef.current = Date.now();
+    }
+  }, [terminalData?.generated_at]);
+
   const scanTerminalRootClassName = clsx(
     styles.root,
     scanRootClass,
@@ -446,20 +461,13 @@ function ScanTerminalScreen() {
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
-                  <span className="scan-status-chip live">
-                    {isEn ? "Updated" : "已更新"}{" "}
-                    {new Date(terminalData.generated_at).toLocaleTimeString(
-                      isEn ? "en-US" : "zh-CN",
-                      {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      },
-                    )}
+                  <span className={clsx("scan-status-chip", terminalData?.stale ? "stale" : "live")}>
+                    {isEn ? "Updated" : "已更新"} {serverAgeText || ""}
                   </span>
                 ) : null}
-                {terminalData?.stale ? (
+                {terminalData?.stale && localAgeText ? (
                   <span className="scan-status-chip stale">
-                    {isEn ? "Delayed snapshot" : "延迟快照"}
+                    {isEn ? "Local fetch " : "本地下发 "}{localAgeText}
                   </span>
                 ) : null}
                 {isPro ? (

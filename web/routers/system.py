@@ -5,6 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Request
 from fastapi.responses import PlainTextResponse
 
+from web.services.dashboard_init_api import build_dashboard_init_payload
 from web.services.system_api import (
     get_health_payload,
     get_prometheus_metrics_response,
@@ -61,3 +62,8 @@ async def system_priority_warm(
 @router.get("/metrics", response_class=PlainTextResponse)
 async def metrics():
     return get_prometheus_metrics_response()
+
+
+@router.get("/api/dashboard/init")
+async def dashboard_init(request: Request):
+    return await build_dashboard_init_payload(request)

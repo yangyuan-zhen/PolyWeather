@@ -12,6 +12,7 @@ import {
   useProAccess,
 } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
+import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { trackAppEvent } from "@/lib/app-analytics";
 import { getTodayPolymarketUrl } from "@/lib/polymarket-market-links";
@@ -60,6 +61,19 @@ export function DetailPanel({
   const isPro = proAccess.subscriptionActive;
   const isAuthenticated = proAccess.authenticated;
   const panelRef = useRef<HTMLElement | null>(null);
+  const lastDetailFetchedAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (detail?.name) {
+      lastDetailFetchedAtRef.current = Date.now();
+    }
+  }, [detail?.name]);
+
+  const detailAgeText = useRelativeTime(
+    lastDetailFetchedAtRef.current
+      ? new Date(lastDetailFetchedAtRef.current).toISOString()
+      : null,
+  );
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
     Boolean(modal.futureModalDate) || history.historyState.isOpen;
@@ -298,6 +312,19 @@ export function DetailPanel({
             <span className={clsx("risk-badge", panelRiskLevel)}>
               {getRiskBadgeLabel(panelRiskLevel, locale)}
             </span>
+            {detailAgeText ? (
+              <span
+                className="panel-meta-chip panel-meta-chip-muted"
+                title={
+                  locale === "en-US"
+                    ? "Time since last data refresh"
+                    : "上次数据更新时间"
+                }
+              >
+                {locale === "en-US" ? "Updated " : "更新于 "}
+                {detailAgeText}
+              </span>
+            ) : null}
             <span className="panel-meta-chip panel-meta-chip-strong">
               {heroSettlementLabel}
             </span>

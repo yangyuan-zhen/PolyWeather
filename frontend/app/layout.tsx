@@ -1,5 +1,21 @@
 import type { Metadata } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
+import { RegisterSW } from "@/components/dashboard/RegisterSW";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains-mono",
+  weight: ["400", "500", "600", "700"],
+});
 
 export const metadata: Metadata = {
   title: "PolyWeather | Weather Intelligence",
@@ -23,25 +39,19 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-CN" className="dark">
+    <html
+      lang="zh-CN"
+      className={`${inter.variable} ${jetbrainsMono.variable} dark`}
+    >
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin=""
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
       </head>
       <body className="min-h-screen font-sans antialiased">
         <a href="#main-content" className="skip-to-content">
           Skip to content
         </a>
         <main id="main-content">{children}</main>
+        <RegisterSW />
       </body>
     </html>
   );

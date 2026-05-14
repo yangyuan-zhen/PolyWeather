@@ -1,11 +1,15 @@
 "use client";
 
-import { CSSProperties, useEffect, useRef, useState } from "react";
-import * as THREE from "three";
+import { CSSProperties, useEffect, useMemo, useState } from "react";
 import { useDashboardSelection } from "@/hooks/useDashboardStore";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { getWeatherAuraProfile } from "@/lib/weather-aura";
-import styles from "./Dashboard.module.css";
+
+/* ──────────────────────────────────────────────────────────────
+   Pure-CSS weather-aura particle layer
+   Replaces the former Three.js WebGL implementation with
+   CSS @keyframes animations — no canvas, no WebGL.
+   ────────────────────────────────────────────────────────────── */
 
 function hexToRgba(hex: string, alpha: number) {
   const sanitized = hex.replace("#", "");
@@ -23,453 +27,390 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/* ── Injection-safe style IDs ── */
+
+const AURA_STYLE_ID = "poly-aura-keyframes";
+
+/* ── CSS @keyframes (injected once via <style>) ── */
+
+const PARTICLE_KEYFRAMES = `
+@keyframes aura-float {
+  0%   { transform: translate(0, 0); opacity: 0; }
+  10%  { opacity: var(--p-op, 0.5); }
+  50%  { transform: translate(var(--p-dx, 40px), var(--p-dy, -15px)); }
+  90%  { opacity: var(--p-op, 0.5); }
+  100% { transform: translate(calc(var(--p-dx, 40px) * 1.4), var(--p-dy, 5px)); opacity: 0; }
+}
+
+@keyframes aura-rain {
+  0%   { transform: translateY(-30px); opacity: 0; }
+  5%   { opacity: 0.75; }
+  100% { transform: translateY(calc(100vh + 30px)); opacity: 0; }
+}
+
+@keyframes aura-snow {
+  0%   { transform: translate(0, -20px); opacity: 0; }
+  15%  { opacity: 0.9; }
+  50%  { transform: translate(var(--s-sway, 25px), 50vh); }
+  100% { transform: translate(calc(var(--s-sway, 25px) * -1.2), calc(100vh + 20px)); opacity: 0; }
+}
+
+@keyframes aura-fog {
+  0%   { transform: translateX(-30px); opacity: 0; }
+  20%  { opacity: var(--f-op, 0.12); }
+  80%  { opacity: var(--f-op, 0.12); }
+  100% { transform: translateX(calc(100vw + 30px)); opacity: 0; }
+}
+
+@keyframes aura-cloud {
+  0%   { transform: translateX(-50px); opacity: 0; }
+  20%  { opacity: var(--c-op, 0.1); }
+  80%  { opacity: var(--c-op, 0.1); }
+  100% { transform: translateX(calc(100vw + 50px)); opacity: 0; }
+}
+
+@keyframes aura-storm-flash {
+  0%, 100% { opacity: 0; }
+  3%  { opacity: 0.18; }
+  6%  { opacity: 0; }
+  25% { opacity: 0; }
+  28% { opacity: 0.12; }
+  31% { opacity: 0; }
+}
+
+.aura-particle {
+  position: absolute;
+  pointer-events: none;
+  will-change: transform, opacity;
+  border-radius: 50%;
+}
+`;
+
+/* ── Particle config type ── */
+
+interface Particle {
+  id: number;
+  keyframe: string;
+  style: CSSProperties;
+}
+
+/* ── Particle generators ── */
+
+function genFloatParticles(
+  count: number,
+  color: string,
+  baseOpacity: number,
+  sizeMin: number,
+  sizeMax: number,
+  idOffset: number,
+  intensity: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const size = sizeMin + Math.random() * (sizeMax - sizeMin);
+    const op = baseOpacity * (0.35 + Math.random() * 0.65);
+    const dx = (15 + Math.random() * 50) * (intensity * 0.75);
+    const dy = (-4 - Math.random() * 14) * intensity;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-float",
+      style: {
+        left: `${Math.random() * 100}%`,
+        top: `${Math.random() * 100}%`,
+        width: size,
+        height: size,
+        background: color,
+        boxShadow: `0 0 ${size * 3}px ${color}`,
+        "--p-op": op,
+        "--p-dx": `${dx}px`,
+        "--p-dy": `${dy}px`,
+        animationDuration: `${10 + Math.random() * 14}s`,
+        animationDelay: `${Math.random() * 8}s`,
+        animationTimingFunction: "ease-in-out",
+        animationIterationCount: "infinite",
+        animationName: "aura-float",
+        opacity: 0,
+      } as unknown as CSSProperties,
+    });
+  }
+  return out;
+}
+
+function genRainParticles(
+  count: number,
+  idOffset: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const h = 8 + Math.random() * 10;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-rain",
+      style: {
+        left: `${Math.random() * 100}%`,
+        top: `${-5 - Math.random() * 10}%`,
+        width: 1.5,
+        height: h,
+        borderRadius: "1px",
+        background: "linear-gradient(180deg, transparent, rgba(111, 183, 255, 0.85))",
+        opacity: 0.5 + Math.random() * 0.4,
+        animationDuration: `${0.5 + Math.random() * 0.5}s`,
+        animationDelay: `${Math.random() * 2}s`,
+        animationTimingFunction: "linear",
+        animationIterationCount: "infinite",
+        animationName: "aura-rain",
+      } as CSSProperties,
+    });
+  }
+  return out;
+}
+
+function genSnowParticles(
+  count: number,
+  idOffset: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const size = 2.5 + Math.random() * 4.5;
+    const sway = 12 + Math.random() * 28;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-snow",
+      style: {
+        left: `${Math.random() * 100}%`,
+        top: `${-10 - Math.random() * 15}%`,
+        width: size,
+        height: size,
+        background: "rgba(248, 250, 252, 0.92)",
+        boxShadow: `0 0 ${size * 2}px rgba(248, 250, 252, 0.35)`,
+        "--s-sway": `${sway}px`,
+        opacity: 0.6 + Math.random() * 0.35,
+        animationDuration: `${4.5 + Math.random() * 7}s`,
+        animationDelay: `${Math.random() * 5}s`,
+        animationTimingFunction: "ease-in-out",
+        animationIterationCount: "infinite",
+        animationName: "aura-snow",
+      } as unknown as CSSProperties,
+    });
+  }
+  return out;
+}
+
+function genFogParticles(
+  count: number,
+  intensity: number,
+  idOffset: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const w = 40 + Math.random() * 70;
+    const h = 18 + Math.random() * 32;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-fog",
+      style: {
+        left: `${-5 - Math.random() * 10}%`,
+        top: `${5 + Math.random() * 75}%`,
+        width: w,
+        height: h,
+        background: `radial-gradient(circle, rgba(203, 213, 225, 0.12), transparent 70%)`,
+        filter: `blur(${8 + Math.random() * 10}px)`,
+        borderRadius: "50%",
+        "--f-op": (0.08 + Math.random() * 0.08) * intensity,
+        animationDuration: `${18 + Math.random() * 18}s`,
+        animationDelay: `${Math.random() * 12}s`,
+        animationTimingFunction: "linear",
+        animationIterationCount: "infinite",
+        animationName: "aura-fog",
+        opacity: 0,
+      } as unknown as CSSProperties,
+    });
+  }
+  return out;
+}
+
+function genCloudParticles(
+  count: number,
+  idOffset: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const w = 60 + Math.random() * 90;
+    const h = 22 + Math.random() * 38;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-cloud",
+      style: {
+        left: `${-10 - Math.random() * 15}%`,
+        top: `${5 + Math.random() * 45}%`,
+        width: w,
+        height: h,
+        background: `radial-gradient(circle, rgba(219, 234, 254, 0.08), transparent 70%)`,
+        filter: `blur(${14 + Math.random() * 12}px)`,
+        borderRadius: "50%",
+        "--c-op": 0.06 + Math.random() * 0.06,
+        animationDuration: `${28 + Math.random() * 22}s`,
+        animationDelay: `${Math.random() * 14}s`,
+        animationTimingFunction: "linear",
+        animationIterationCount: "infinite",
+        animationName: "aura-cloud",
+        opacity: 0,
+      } as unknown as CSSProperties,
+    });
+  }
+  return out;
+}
+
+function genWindParticles(
+  count: number,
+  color: string,
+  idOffset: number,
+): Particle[] {
+  const out: Particle[] = [];
+  for (let i = 0; i < count; i++) {
+    const size = 1.5 + Math.random() * 2.5;
+    out.push({
+      id: idOffset + i,
+      keyframe: "aura-float",
+      style: {
+        left: `${-5 - Math.random() * 8}%`,
+        top: `${Math.random() * 100}%`,
+        width: size,
+        height: size,
+        background: color,
+        boxShadow: `0 0 ${size * 2}px ${color}`,
+        "--p-op": 0.35 + Math.random() * 0.3,
+        "--p-dx": `${120 + Math.random() * 180}px`,
+        "--p-dy": `${-2 + Math.random() * 4}px`,
+        animationDuration: `${2.5 + Math.random() * 3.5}s`,
+        animationDelay: `${Math.random() * 3}s`,
+        animationTimingFunction: "linear",
+        animationIterationCount: "infinite",
+        animationName: "aura-float",
+        opacity: 0,
+      } as unknown as CSSProperties,
+    });
+  }
+  return out;
+}
+
+/* ── Component ── */
+
 export function WeatherAuraLayer() {
   const { cities, selectedDetail } = useDashboardSelection();
   const prefersReducedMotion = usePrefersReducedMotion();
   const [isDesktop, setIsDesktop] = useState(false);
-  const containerRef = useRef<HTMLDivElement | null>(null);
 
   const aura = getWeatherAuraProfile(selectedDetail, cities);
 
+  /* Inject keyframes once */
   useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia("(min-width: 1024px)");
-    const apply = () => {
-      setIsDesktop(mediaQuery.matches);
-    };
-
-    apply();
-    mediaQuery.addEventListener("change", apply);
+    if (document.getElementById(AURA_STYLE_ID)) return;
+    const el = document.createElement("style");
+    el.id = AURA_STYLE_ID;
+    el.textContent = PARTICLE_KEYFRAMES;
+    document.head.appendChild(el);
     return () => {
-      mediaQuery.removeEventListener("change", apply);
+      const existing = document.getElementById(AURA_STYLE_ID);
+      if (existing) existing.remove();
     };
   }, []);
 
+  /* Desktop media query */
   useEffect(() => {
-    const host = containerRef.current;
-    if (!host || !isDesktop || prefersReducedMotion) {
-      return;
-    }
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
-    const renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      powerPreference: "low-power",
-    });
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  /* Build particles */
+  const particles = useMemo(() => {
+    if (!isDesktop || prefersReducedMotion) return [];
+    const list: Particle[] = [];
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
-    camera.position.z = 2;
-
-    const clock = new THREE.Clock();
-    const cleanupMaterials = new Set<THREE.Material>();
-    const particleGroups: Array<{
-      kind: "flow" | "rain" | "snow" | "fog" | "cloud";
-      geometry: THREE.BufferGeometry;
-      positions: Float32Array;
-      baseY: Float32Array;
-      drift: Float32Array;
-      phase: Float32Array;
-      material: THREE.Material;
-      mesh: THREE.Object3D;
-    }> = [];
-    const effectLights: THREE.Light[] = [];
-    const flashOverlay = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.2, 2.2),
-      new THREE.MeshBasicMaterial({
-        color: new THREE.Color("#e0f2fe"),
-        transparent: true,
-        opacity: 0,
-        blending: THREE.AdditiveBlending,
-      }),
+    /* Primary float layer */
+    list.push(
+      ...genFloatParticles(30, aura.primary, aura.particleOpacity * 0.9, 2, 4, 0, aura.intensity),
     );
-    flashOverlay.position.z = -0.3;
-    scene.add(flashOverlay);
-    cleanupMaterials.add(flashOverlay.material as THREE.Material);
+    /* Secondary float layer */
+    list.push(
+      ...genFloatParticles(
+        20,
+        aura.secondary,
+        aura.particleOpacity * 0.6,
+        3,
+        6,
+        100,
+        aura.intensity * 0.8,
+      ),
+    );
 
-    function createParticleField(
-      count: number,
-      pointSize: number,
-      opacity: number,
-      depthShift: number,
-    ) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(count * 3);
-      const colors = new Float32Array(count * 3);
-      const baseY = new Float32Array(count);
-      const drift = new Float32Array(count);
-      const phase = new Float32Array(count);
-      const primaryColor = new THREE.Color(aura.primary);
-      const secondaryColor = new THREE.Color(aura.secondary);
-      const tertiaryColor = new THREE.Color(aura.tertiary);
-
-      for (let index = 0; index < count; index += 1) {
-        const offset = index * 3;
-        const x = Math.random() * 2.6 - 1.3;
-        const y = Math.random() * 1.8 - 0.9;
-        const z = (Math.random() * 0.8 - 0.4) + depthShift;
-        positions[offset] = x;
-        positions[offset + 1] = y;
-        positions[offset + 2] = z;
-        baseY[index] = y;
-        drift[index] = (0.00045 + Math.random() * 0.0012) * aura.drift;
-        phase[index] = Math.random() * Math.PI * 2;
-
-        const mixedColor = primaryColor
-          .clone()
-          .lerp(secondaryColor, Math.random() * 0.65)
-          .lerp(tertiaryColor, Math.random() * 0.4);
-        colors[offset] = mixedColor.r;
-        colors[offset + 1] = mixedColor.g;
-        colors[offset + 2] = mixedColor.b;
+    switch (aura.effect) {
+      case "rain": {
+        list.push(...genRainParticles(25, 200));
+        break;
       }
-
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-
-      const material = new THREE.PointsMaterial({
-        size: pointSize,
-        transparent: true,
-        opacity,
-        vertexColors: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        sizeAttenuation: true,
-      });
-
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-      cleanupMaterials.add(material);
-      particleGroups.push({
-        geometry,
-        positions,
-        baseY,
-        drift,
-        phase,
-        kind: "flow",
-        material,
-        mesh: points,
-      });
-    }
-
-    function createRainField(count: number) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(count * 3);
-      const baseY = new Float32Array(count);
-      const drift = new Float32Array(count);
-      const phase = new Float32Array(count);
-
-      for (let index = 0; index < count; index += 1) {
-        const offset = index * 3;
-        positions[offset] = Math.random() * 2.8 - 1.4;
-        positions[offset + 1] = Math.random() * 2.2 - 1.1;
-        positions[offset + 2] = Math.random() * 0.4 - 0.2;
-        baseY[index] = positions[offset + 1];
-        drift[index] = (0.018 + Math.random() * 0.016) * aura.effectIntensity;
-        phase[index] = 0.004 + Math.random() * 0.004;
+      case "storm": {
+        list.push(...genRainParticles(35, 200));
+        break;
       }
-
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const material = new THREE.PointsMaterial({
-        size: 0.018,
-        color: new THREE.Color("#7dd3fc"),
-        transparent: true,
-        opacity: 0.72,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-      cleanupMaterials.add(material);
-      particleGroups.push({
-        geometry,
-        positions,
-        baseY,
-        drift,
-        phase,
-        kind: "rain",
-        material,
-        mesh: points,
-      });
-    }
-
-    function createSnowField(count: number) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(count * 3);
-      const baseY = new Float32Array(count);
-      const drift = new Float32Array(count);
-      const phase = new Float32Array(count);
-
-      for (let index = 0; index < count; index += 1) {
-        const offset = index * 3;
-        positions[offset] = Math.random() * 2.8 - 1.4;
-        positions[offset + 1] = Math.random() * 2.1 - 1.05;
-        positions[offset + 2] = Math.random() * 0.35 - 0.18;
-        baseY[index] = positions[offset + 1];
-        drift[index] = (0.0045 + Math.random() * 0.0045) * aura.effectIntensity;
-        phase[index] = Math.random() * Math.PI * 2;
+      case "snow": {
+        list.push(...genSnowParticles(25, 200));
+        break;
       }
-
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const material = new THREE.PointsMaterial({
-        size: 0.024,
-        color: new THREE.Color("#f8fafc"),
-        transparent: true,
-        opacity: 0.85,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-      cleanupMaterials.add(material);
-      particleGroups.push({
-        geometry,
-        positions,
-        baseY,
-        drift,
-        phase,
-        kind: "snow",
-        material,
-        mesh: points,
-      });
-    }
-
-    function createFogField(count: number) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(count * 3);
-      const baseY = new Float32Array(count);
-      const drift = new Float32Array(count);
-      const phase = new Float32Array(count);
-
-      for (let index = 0; index < count; index += 1) {
-        const offset = index * 3;
-        positions[offset] = Math.random() * 2.6 - 1.3;
-        positions[offset + 1] = Math.random() * 0.9 - 0.45;
-        positions[offset + 2] = Math.random() * 0.45 - 0.2;
-        baseY[index] = positions[offset + 1];
-        drift[index] = (0.0014 + Math.random() * 0.001) * aura.effectIntensity;
-        phase[index] = Math.random() * Math.PI * 2;
+      case "fog": {
+        list.push(...genFogParticles(15, aura.effectIntensity, 200));
+        break;
       }
-
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const material = new THREE.PointsMaterial({
-        size: 0.12,
-        color: new THREE.Color("#cbd5e1"),
-        transparent: true,
-        opacity: 0.18,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-      cleanupMaterials.add(material);
-      particleGroups.push({
-        geometry,
-        positions,
-        baseY,
-        drift,
-        phase,
-        kind: "fog",
-        material,
-        mesh: points,
-      });
-    }
-
-    function createCloudField(count: number) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = new Float32Array(count * 3);
-      const baseY = new Float32Array(count);
-      const drift = new Float32Array(count);
-      const phase = new Float32Array(count);
-
-      for (let index = 0; index < count; index += 1) {
-        const offset = index * 3;
-        positions[offset] = Math.random() * 2.7 - 1.35;
-        positions[offset + 1] = Math.random() * 0.75 + 0.1;
-        positions[offset + 2] = Math.random() * 0.3 - 0.15;
-        baseY[index] = positions[offset + 1];
-        drift[index] = (0.0012 + Math.random() * 0.0009) * aura.effectIntensity;
-        phase[index] = Math.random() * Math.PI * 2;
+      case "cloud": {
+        list.push(...genCloudParticles(12, 200));
+        break;
       }
-
-      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-      const material = new THREE.PointsMaterial({
-        size: 0.1,
-        color: new THREE.Color("#dbeafe"),
-        transparent: true,
-        opacity: 0.13,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const points = new THREE.Points(geometry, material);
-      scene.add(points);
-      cleanupMaterials.add(material);
-      particleGroups.push({
-        geometry,
-        positions,
-        baseY,
-        drift,
-        phase,
-        kind: "cloud",
-        material,
-        mesh: points,
-      });
+      case "wind": {
+        list.push(...genWindParticles(30, aura.primary, 200));
+        break;
+      }
     }
 
-    createParticleField(90, 0.018, aura.particleOpacity * 0.9, -0.1);
-    createParticleField(60, 0.026, aura.particleOpacity * 0.65, 0.08);
-
-    if (aura.effect === "rain" || aura.effect === "storm") {
-      createRainField(aura.effect === "storm" ? 240 : 170);
-    } else if (aura.effect === "snow") {
-      createSnowField(150);
-    } else if (aura.effect === "fog") {
-      createFogField(90);
-    } else if (aura.effect === "cloud" || aura.effect === "wind") {
-      createCloudField(aura.effect === "wind" ? 80 : 54);
-    }
-
+    /* Storm flash overlay */
     if (aura.effect === "storm") {
-      const flashLight = new THREE.PointLight(0xdbeafe, 0, 6, 2);
-      flashLight.position.set(0.2, 0.9, 1.1);
-      scene.add(flashLight);
-      effectLights.push(flashLight);
+      list.push({
+        id: 999,
+        keyframe: "aura-storm-flash",
+        style: {
+          position: "absolute" as const,
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          borderRadius: 0,
+          background:
+            "radial-gradient(ellipse at 50% 30%, rgba(219, 234, 254, 0.25), transparent 60%)",
+          animationDuration: "4s",
+          animationTimingFunction: "step-end",
+          animationIterationCount: "infinite",
+          animationName: "aura-storm-flash",
+          opacity: 0,
+        } as CSSProperties,
+      });
     }
 
-    const resize = () => {
-      const width = host.clientWidth || window.innerWidth;
-      const height = host.clientHeight || window.innerHeight;
-      renderer.setSize(width, height, false);
-    };
-
-    resize();
-    host.appendChild(renderer.domElement);
-
-    let frameId = 0;
-    let lastFrameAt = 0;
-
-    const renderFrame = (timestamp: number) => {
-      frameId = window.requestAnimationFrame(renderFrame);
-      if (timestamp - lastFrameAt < 40) {
-        return;
-      }
-      lastFrameAt = timestamp;
-
-      const elapsed = clock.getElapsedTime();
-      for (const field of particleGroups) {
-        for (let index = 0; index < field.baseY.length; index += 1) {
-          const offset = index * 3;
-          if (field.kind === "flow") {
-            let nextX = field.positions[offset] + field.drift[index];
-            if (nextX > 1.35) {
-              nextX = -1.35;
-              field.baseY[index] = Math.random() * 1.8 - 0.9;
-            }
-            field.positions[offset] = nextX;
-            field.positions[offset + 1] =
-              field.baseY[index] +
-              Math.sin(elapsed * 0.45 + field.phase[index] + nextX * 2.4) *
-                0.06 *
-                aura.intensity;
-          } else if (field.kind === "rain") {
-            let nextY = field.positions[offset + 1] - field.drift[index];
-            let nextX = field.positions[offset] + field.phase[index] * aura.drift;
-            if (nextY < -1.12 || nextX > 1.45) {
-              nextY = 1.15 + Math.random() * 0.25;
-              nextX = Math.random() * 2.9 - 1.45;
-            }
-            field.positions[offset] = nextX;
-            field.positions[offset + 1] = nextY;
-          } else if (field.kind === "snow") {
-            let nextY = field.positions[offset + 1] - field.drift[index];
-            let nextX =
-              field.positions[offset] +
-              Math.sin(elapsed * 0.9 + field.phase[index]) * 0.0024 * aura.effectIntensity;
-            if (nextY < -1.1) {
-              nextY = 1.12 + Math.random() * 0.2;
-              nextX = Math.random() * 2.8 - 1.4;
-            }
-            field.positions[offset] = nextX;
-            field.positions[offset + 1] = nextY;
-          } else if (field.kind === "fog" || field.kind === "cloud") {
-            let nextX = field.positions[offset] + field.drift[index];
-            if (nextX > 1.38) {
-              nextX = -1.38;
-              field.baseY[index] =
-                field.kind === "cloud"
-                  ? Math.random() * 0.75 + 0.1
-                  : Math.random() * 0.9 - 0.45;
-            }
-            field.positions[offset] = nextX;
-            field.positions[offset + 1] =
-              field.baseY[index] +
-              Math.sin(elapsed * 0.3 + field.phase[index]) *
-                (field.kind === "cloud" ? 0.03 : 0.05);
-          }
-        }
-
-        field.geometry.attributes.position.needsUpdate = true;
-      }
-
-      if (effectLights.length > 0) {
-        const flashPulse = Math.max(0, Math.sin(elapsed * 2.1) - 0.78) * 20;
-        for (const light of effectLights) {
-          if (light instanceof THREE.PointLight) {
-            light.intensity = flashPulse;
-          }
-        }
-        (flashOverlay.material as THREE.MeshBasicMaterial).opacity = Math.min(
-          0.18,
-          flashPulse / 120,
-        );
-      } else {
-        (flashOverlay.material as THREE.MeshBasicMaterial).opacity = 0;
-      }
-
-      renderer.render(scene, camera);
-    };
-
-    frameId = window.requestAnimationFrame(renderFrame);
-    window.addEventListener("resize", resize);
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-      window.removeEventListener("resize", resize);
-      for (const child of [...scene.children]) {
-        scene.remove(child);
-      }
-      for (const field of particleGroups) {
-        field.geometry.dispose();
-      }
-      cleanupMaterials.forEach((material) => material.dispose());
-      renderer.dispose();
-      if (renderer.domElement.parentNode === host) {
-        host.removeChild(renderer.domElement);
-      }
-    };
-  }, [
-    aura.drift,
-    aura.intensity,
-    aura.particleOpacity,
-    aura.primary,
-    aura.secondary,
-    aura.tertiary,
-    aura.effect,
-    aura.effectIntensity,
-    isDesktop,
-    prefersReducedMotion,
-  ]);
+    return list;
+  }, [aura, isDesktop, prefersReducedMotion]);
 
   if (!isDesktop) {
     return null;
   }
 
-  const overlayStyle = {
+  const overlayStyle: CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    zIndex: 2,
+    pointerEvents: "none",
+    opacity: 0.96,
+    overflow: "hidden",
     backgroundImage: [
       `radial-gradient(circle at 18% 22%, ${hexToRgba(aura.primary, 0.18 * aura.intensity)}, transparent 32%)`,
       `radial-gradient(circle at 78% 20%, ${hexToRgba(aura.secondary, 0.14 * aura.intensity)}, transparent 34%)`,
@@ -484,17 +425,27 @@ export function WeatherAuraLayer() {
               ? `linear-gradient(180deg, ${hexToRgba("#dbeafe", 0.04 * aura.effectIntensity)}, transparent 40%)`
               : "none",
     ].join(", "),
-  } as CSSProperties;
+  };
+
+  const scrimStyle: CSSProperties = {
+    position: "absolute",
+    inset: 0,
+    backgroundImage: [
+      "linear-gradient(180deg, rgba(3, 8, 19, 0.64) 0%, rgba(5, 10, 20, 0.16) 24%, rgba(4, 8, 18, 0.1) 54%, rgba(3, 6, 14, 0.42) 100%)",
+      "radial-gradient(circle at 50% 60%, rgba(0, 224, 164, 0.08) 0%, rgba(123, 97, 255, 0) 48%)",
+    ].join(", "),
+  };
 
   return (
     <div
-      ref={containerRef}
       aria-hidden="true"
-      className={styles.weatherAura}
       data-reduced-motion={prefersReducedMotion ? "true" : "false"}
       style={overlayStyle}
     >
-      <div className={styles.weatherAuraScrim} />
+      {particles.map((p) => (
+        <div key={p.id} className="aura-particle" style={p.style} />
+      ))}
+      <div style={scrimStyle} />
     </div>
   );
 }
