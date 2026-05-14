@@ -192,10 +192,12 @@ class AmscAwosSourceMixin:
         return headers
 
     def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
+        import sys as _sys
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         req = Request(url, headers=headers or {})
+        print(f"[AMSC_DEBUG] _http_get_json called url={url[:60]}", file=_sys.stderr, flush=True)
         with urlopen(req, timeout=getattr(self, "timeout", 10.0), context=ctx) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         try:
