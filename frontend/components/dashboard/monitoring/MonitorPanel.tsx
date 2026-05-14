@@ -92,9 +92,12 @@ function playNewHighBeep(): void {
   }
 }
 
-function trendClass(detail: CityDetail | undefined): "rising" | "falling" | "flat" {
+function trendClass(detail: CityDetail | undefined, key?: string): "rising" | "falling" | "flat" {
+  const { source } = resolveMonitorTemperature(detail);
+  // Runway surface temp vs air temp comparison is meaningless
+  if (source === "amos_runway_median" || source === "amos_runway") return "flat";
   const cur = resolveMonitorTemperature(detail).value;
-  const max = resolveMaxSoFar(detail);
+  const max = resolveMaxSoFar(detail, key);
   if (cur != null && max != null && cur >= max + 0.3) return "rising";
   if (cur != null && max != null && cur < max - 1.0) return "falling";
   return "flat";
@@ -106,25 +109,31 @@ function trendSymbol(tr: "rising" | "falling" | "flat") {
 
 /**
  * Resolve today's observed high temperature.
- * Aligned with Telegram bot (_get_airport_daily_high):
- * only airport_current.max_so_far — no fallback.
  *
- * Exception — HKO cities (Hong Kong / Lau Fau Shan):
- * The HKO observatory IS the settlement station, so current.max_so_far
- * is equivalent to the airport obs. Use it as a fallback when
- * airport_current.max_so_far is absent.
+ * HKO cities (Hong Kong / Lau Fau Shan):
+ *   current.max_so_far from HKO observatory IS the settlement anchor.
+ *   airport_current (METAR) is secondary — prefer HKO first.
+ *
+ * All other cities:
+ *   airport_current.max_so_far is the authoritative settlement reference.
  */
 function resolveMaxSoFar(
   detail: CityDetail | undefined,
   key?: string,
 ): number | null {
-  const v = detail?.airport_current?.max_so_far ?? null;
-  if (v != null) return Math.round(v * 10) / 10;
-
-  // HKO fallback: current.max_so_far is authoritative for HKO stations
+  // HKO: settlement station takes priority over airport METAR
   if (key === "hong kong" || key === "lau fau shan") {
     const hko = detail?.current?.max_so_far ?? null;
     if (hko != null) return Math.round(hko * 10) / 10;
+  }
+
+  const v = detail?.airport_current?.max_so_far ?? null;
+  if (v != null) return Math.round(v * 10) / 10;
+
+  // Non-HKO fallback to current.max_so_far
+  if (key !== "hong kong" && key !== "lau fau shan") {
+    const cur = detail?.current?.max_so_far ?? null;
+    if (cur != null) return Math.round(cur * 10) / 10;
   }
 
   return null;
@@ -415,8 +424,10 @@ export default function MonitorPanel({
     if (alerted._day !== today) alerted = { _day: today };
 
     for (const { key, detail } of sorted) {
-      const cur = resolveMonitorTemperature(detail).value;
-      const max = resolveMaxSoFar(detail, key);   // HKO cities fall back to current.max_so_far
+      const { source, value: cur } = resolveMonitorTemperature(detail);
+      // Skip runway cities: runway surface temp ≠ air temp
+      if (source === "amos_runway_median" || source === "amos_runway") continue;
+      const max = resolveMaxSoFar(detail, key);
       if (cur != null && max != null && cur >= max + 0.3) {
         // Key: city + rounded temp, so we only beep once per 0.1°C step
         const id = `${key}|${(Math.round(cur * 10) / 10).toFixed(1)}`;
@@ -517,9 +528,10 @@ export default function MonitorPanel({
               : ac?.obs_age_min ?? null;
           const freshness = getMonitorFreshnessLevel(freshnessInfo, age);
           const tempSymbol = detail.temp_symbol || "°C";  // °F for US cities
-          const newHigh = cur != null && max != null && cur >= max + 0.3;
-          const warm = !newHigh && cur != null && cur >= 30;
-          const tr = trendClass(detail);
+          // Runway surface temp vs air temp comparison is meaningless
+          const newHigh = !isRunwayTemp && cur != null && max != null && cur >= max + 0.3;
+          const warm = !newHigh && !isRunwayTemp && cur != null && cur >= 30;
+          const tr = trendClass(detail, key);
           const rwPairs = detail.amos?.runway_obs?.runway_pairs ?? [];
           const rwTemps = detail.amos?.runway_obs?.temperatures ?? [];
           const isFlashing = flashingKeys.has(key);
