@@ -2,7 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useMemo } from "react";
-import { useDashboardStore, useHistoryData } from "@/hooks/useDashboardStore";
+import {
+  useDashboardHistory,
+  useDashboardSelection,
+  useHistoryData,
+  useProAccess,
+} from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { getHistorySummary } from "@/lib/dashboard-utils";
@@ -19,28 +24,32 @@ const HistoryChart = dynamic(
 );
 
 export function HistoryModal() {
-  const store = useDashboardStore();
+  const history = useDashboardHistory();
+  const selection = useDashboardSelection();
+  const { proAccess } = useProAccess();
   const { t, locale } = useI18n();
   const { data, error, isLoading, isOpen, isRecordsLoading, meta } = useHistoryData();
-  const isPro = store.proAccess.subscriptionActive;
-  const isProLoading = store.proAccess.loading;
+  const selectedDetail = selection.selectedDetail;
+  const selectedCity = selection.selectedCity;
+  const isPro = proAccess.subscriptionActive;
+  const isProLoading = proAccess.loading;
   const isNoaaSettlement =
-    store.selectedDetail?.current?.settlement_source === "noaa" ||
-    store.selectedDetail?.current?.settlement_source_label === "NOAA";
+    selectedDetail?.current?.settlement_source === "noaa" ||
+    selectedDetail?.current?.settlement_source_label === "NOAA";
   const noaaStationCode = String(
-    store.selectedDetail?.current?.station_code ||
-      store.selectedDetail?.risk?.icao ||
+    selectedDetail?.current?.station_code ||
+      selectedDetail?.risk?.icao ||
       "NOAA",
   )
     .trim()
     .toUpperCase();
   const noaaStationName =
-    String(store.selectedDetail?.current?.station_name || "").trim() ||
-    String(store.selectedDetail?.risk?.airport || "").trim() ||
+    String(selectedDetail?.current?.station_name || "").trim() ||
+    String(selectedDetail?.risk?.airport || "").trim() ||
     noaaStationCode;
   const summary = useMemo(
-    () => getHistorySummary(data, store.selectedDetail?.local_date),
-    [data, store.selectedDetail?.local_date],
+    () => getHistorySummary(data, selectedDetail?.local_date),
+    [data, selectedDetail?.local_date],
   );
   const settledPeakRows = useMemo(
     () =>
@@ -78,7 +87,7 @@ export function HistoryModal() {
       aria-labelledby="history-modal-title"
       onClick={(event) => {
         if (event.target === event.currentTarget) {
-          store.closeHistory();
+          history.closeHistory();
         }
       }}
     >
@@ -101,7 +110,7 @@ export function HistoryModal() {
               {t("history.previewDesc")}
             </p>
           </div>
-          <ProFeaturePaywall feature="history" onClose={store.closeHistory} />
+          <ProFeaturePaywall feature="history" onClose={history.closeHistory} />
         </>
       ) : (
         <div className="modal-content history-modal">
@@ -110,11 +119,11 @@ export function HistoryModal() {
               <div className="modal-overline">
                 <span>{locale === "en-US" ? "Audit workspace" : "对账工作台"}</span>
                 <span className="modal-overline-sep">•</span>
-                <span>{store.selectedCity?.toUpperCase() || ""}</span>
+                <span>{selectedCity?.toUpperCase() || ""}</span>
               </div>
               <h2 id="history-modal-title">
                 {t("history.title", {
-                  city: store.selectedCity?.toUpperCase() || "",
+                  city: selectedCity?.toUpperCase() || "",
                 })}
               </h2>
               <div className="modal-subtitle">
@@ -144,7 +153,7 @@ export function HistoryModal() {
               type="button"
               className="modal-close"
               aria-label={t("history.closeAria")}
-              onClick={store.closeHistory}
+              onClick={history.closeHistory}
             >
               ×
             </button>
@@ -153,8 +162,8 @@ export function HistoryModal() {
             {isNoaaSettlement && (
               <div className="modal-callout modal-callout-info">
                 {t("lang") === "en-US"
-                  ? `${store.selectedDetail?.display_name || store.selectedCity || "This city"} historical actuals are aligned to NOAA ${noaaStationCode} (${noaaStationName}) settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized.`
-                  : `${store.selectedDetail?.display_name || store.selectedCity || "该城市"}历史对账已按 NOAA ${noaaStationCode}（${noaaStationName}）结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。`}
+                  ? `${selectedDetail?.display_name || selectedCity || "This city"} historical actuals are aligned to NOAA ${noaaStationCode} (${noaaStationName}) settlement rules: use the highest rounded whole-degree Celsius reading after the date is finalized.`
+                  : `${selectedDetail?.display_name || selectedCity || "该城市"}历史对账已按 NOAA ${noaaStationCode}（${noaaStationName}）结算口径对齐：采用该日最终完成质控后的最高整度摄氏值。`}
               </div>
             )}
             {isLoading ? (
@@ -292,17 +301,17 @@ export function HistoryModal() {
                               {locale === "en-US" ? "Actual" : "最终实测"}{" "}
                               <strong>
                                 {row.actual}
-                                {store.selectedDetail?.temp_symbol || "°C"}
+                                {selectedDetail?.temp_symbol || "°C"}
                               </strong>
                             </span>
                             <span>
                               DEB{" "}
                               <strong>
                                 {row.model_reference?.deb?.value ?? row.deb ?? "--"}
-                                {store.selectedDetail?.temp_symbol || "°C"}
+                                {selectedDetail?.temp_symbol || "°C"}
                               </strong>
                               {row.model_reference?.deb?.error != null
-                                ? ` / ${locale === "en-US" ? "err" : "误差"} ${row.model_reference.deb.error}${store.selectedDetail?.temp_symbol || "°C"}`
+                                ? ` / ${locale === "en-US" ? "err" : "误差"} ${row.model_reference.deb.error}${selectedDetail?.temp_symbol || "°C"}`
                                 : ""}
                             </span>
                           </div>
@@ -317,11 +326,11 @@ export function HistoryModal() {
                                 </span>
                                 <span>
                                   {model.value}
-                                  {store.selectedDetail?.temp_symbol || "°C"}
+                                  {selectedDetail?.temp_symbol || "°C"}
                                 </span>
                                 <span className="history-model-error">
                                   {model.error != null
-                                    ? `${locale === "en-US" ? "err" : "误差"} ${model.error}${store.selectedDetail?.temp_symbol || "°C"}`
+                                    ? `${locale === "en-US" ? "err" : "误差"} ${model.error}${selectedDetail?.temp_symbol || "°C"}`
                                     : locale === "en-US"
                                       ? "pending"
                                       : "待结算"}
@@ -364,7 +373,7 @@ export function HistoryModal() {
                           {locale === "en-US" ? "Peak ref" : "峰值参考"}:{" "}
                           <span style={{ color: "var(--text-primary)" }}>
                             {row.actual}
-                            {store.selectedDetail?.temp_symbol || "°C"} @{" "}
+                            {selectedDetail?.temp_symbol || "°C"} @{" "}
                             {row.actual_peak_time}
                           </span>
                         </div>
@@ -372,7 +381,7 @@ export function HistoryModal() {
                           {locale === "en-US" ? "DEB@-12h" : "峰值前12小时 DEB"}:{" "}
                           <span style={{ color: "var(--text-primary)" }}>
                             {row.deb_at_peak_minus_12h}
-                            {store.selectedDetail?.temp_symbol || "°C"} @{" "}
+                            {selectedDetail?.temp_symbol || "°C"} @{" "}
                             {row.deb_at_peak_minus_12h_time}
                           </span>
                         </div>
@@ -380,7 +389,7 @@ export function HistoryModal() {
                           {locale === "en-US" ? "Actual" : "最终实测"}:{" "}
                           <span style={{ color: "var(--text-primary)" }}>
                             {row.actual}
-                            {store.selectedDetail?.temp_symbol || "°C"}
+                            {selectedDetail?.temp_symbol || "°C"}
                           </span>
                         </div>
                         <div>
@@ -394,7 +403,7 @@ export function HistoryModal() {
                             }}
                           >
                             {row.deb_at_peak_minus_12h_error != null
-                              ? `${row.deb_at_peak_minus_12h_error > 0 ? "+" : ""}${row.deb_at_peak_minus_12h_error}${store.selectedDetail?.temp_symbol || "°C"}`
+                              ? `${row.deb_at_peak_minus_12h_error > 0 ? "+" : ""}${row.deb_at_peak_minus_12h_error}${selectedDetail?.temp_symbol || "°C"}`
                               : "--"}
                           </span>
                         </div>
@@ -412,3 +421,4 @@ export function HistoryModal() {
     </div>
   );
 }
+

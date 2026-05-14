@@ -1,13 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  applyAuthResponseCookies,
-  buildBackendRequestHeaders,
-} from "@/lib/backend-auth";
-import {
-  buildProxyExceptionResponse,
-  buildUpstreamErrorResponse,
-} from "@/lib/api-proxy";
-import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { proxyBackendJsonGet } from "@/lib/api-proxy";
 import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
@@ -48,42 +40,20 @@ export async function GET(req: NextRequest) {
 
   const url = `${API_BASE}/api/scan/terminal?${params.toString()}`;
 
-  let auth: Awaited<ReturnType<typeof buildBackendRequestHeaders>> | null = null;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), SCAN_TERMINAL_PROXY_TIMEOUT_MS);
 
   try {
-    auth = await buildBackendRequestHeaders(req, {
-      includeSupabaseIdentity: false,
-    });
-    const res = await fetch(url, {
-      headers: auth.headers,
-      ...(cachePolicy.fetchMode === "no-store"
-        ? { cache: "no-store" as const }
-        : { next: { revalidate: cachePolicy.revalidateSeconds ?? 10 } }),
+    return await proxyBackendJsonGet(req, {
+      cacheControl: cachePolicy.responseCacheControl,
+      fetchCache:
+        cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+      publicMessage: "Failed to fetch scan terminal data",
+      revalidateSeconds: cachePolicy.revalidateSeconds,
       signal: controller.signal,
+      timeoutPublicMessage: "Scan terminal request timed out",
+      url,
     });
-    if (!res.ok) {
-      const raw = await res.text();
-      const response = buildUpstreamErrorResponse(res.status, raw);
-      return applyAuthResponseCookies(response, auth.response);
-    }
-    const data = await res.json();
-    const response = buildCachedJsonResponse(
-      req,
-      data,
-      cachePolicy.responseCacheControl,
-    );
-    return applyAuthResponseCookies(response, auth.response);
-  } catch (error) {
-    const timedOut = controller.signal.aborted;
-    const response = buildProxyExceptionResponse(error, {
-      publicMessage: timedOut
-        ? "Scan terminal request timed out"
-        : "Failed to fetch scan terminal data",
-      status: timedOut ? 504 : 500,
-    });
-    return auth ? applyAuthResponseCookies(response, auth.response) : response;
   } finally {
     clearTimeout(timeoutId);
   }

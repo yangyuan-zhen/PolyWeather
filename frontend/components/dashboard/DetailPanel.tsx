@@ -5,7 +5,12 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ForecastTable } from "@/components/dashboard/PanelSections";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import {
+  useDashboardHistory,
+  useDashboardModal,
+  useDashboardStore,
+  useProAccess,
+} from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { getOfficialSourceLinks } from "@/lib/dashboard-official-sources";
 import { trackAppEvent } from "@/lib/app-analytics";
@@ -31,6 +36,9 @@ export function DetailPanel({
   variant?: "overlay" | "rail";
 } = {}) {
   const store = useDashboardStore();
+  const modal = useDashboardModal();
+  const history = useDashboardHistory();
+  const { proAccess } = useProAccess();
   const { locale, t } = useI18n();
   const router = useRouter();
   const isRail = variant === "rail";
@@ -49,12 +57,12 @@ export function DetailPanel({
         : null,
     [store.citySummariesByName, store.selectedCity],
   );
-  const isPro = store.proAccess.subscriptionActive;
-  const isAuthenticated = store.proAccess.authenticated;
+  const isPro = proAccess.subscriptionActive;
+  const isAuthenticated = proAccess.authenticated;
   const panelRef = useRef<HTMLElement | null>(null);
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
-    Boolean(store.futureModalDate) || store.historyState.isOpen;
+    Boolean(modal.futureModalDate) || history.historyState.isOpen;
   const isVisible = isRail
     ? Boolean(store.selectedCity) && !isOverlayOpen
     : store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
@@ -131,10 +139,10 @@ export function DetailPanel({
 
     if (isPro) {
       if (feature === "today") {
-        void store.openTodayModal();
+        void modal.openTodayModal();
         return;
       }
-      void store.openHistory();
+      void history.openHistory();
       return;
     }
 
@@ -144,10 +152,10 @@ export function DetailPanel({
     }
 
     if (feature === "today") {
-      void store.openTodayModal();
+      void modal.openTodayModal();
       return;
     }
-    void store.openHistory();
+    void history.openHistory();
   };
 
   useEffect(() => {

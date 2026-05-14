@@ -73,10 +73,46 @@ interface DashboardStoreValue extends DashboardState {
   setForecastDate: (dateStr: string | null) => void;
 }
 
+type DashboardModalContextValue = Pick<
+  DashboardStoreValue,
+  | "closeFutureModal"
+  | "forecastModalMode"
+  | "futureModalDate"
+  | "loadingState"
+  | "openFutureModal"
+  | "openTodayModal"
+  | "selectedForecastDate"
+  | "setForecastDate"
+>;
+type DashboardHistoryContextValue = Pick<
+  DashboardStoreValue,
+  "closeHistory" | "historyState" | "openHistory"
+>;
+type DashboardProAccessContextValue = Pick<
+  DashboardStoreValue,
+  "proAccess" | "refreshProAccess"
+>;
+
 const DashboardStoreContext = createContext<DashboardStoreValue | null>(null);
 const DashboardActionsContext = createContext<Pick<
   DashboardStoreValue,
   "ensureCityDetail"
+> | null>(null);
+const DashboardModalContext =
+  createContext<DashboardModalContextValue | null>(null);
+const DashboardHistoryContext =
+  createContext<DashboardHistoryContextValue | null>(null);
+const DashboardProAccessContext =
+  createContext<DashboardProAccessContextValue | null>(null);
+const DashboardSelectionContext = createContext<Pick<
+  DashboardStoreValue,
+  | "cities"
+  | "forecastModalMode"
+  | "futureModalDate"
+  | "isPanelOpen"
+  | "selectedCity"
+  | "selectedDetail"
+  | "selectedForecastDate"
 > | null>(null);
 const CityDetailsContext = createContext<{
   cityDetailsByName: Record<string, CityDetail>;
@@ -1370,19 +1406,146 @@ export function DashboardStoreProvider({
     }
   };
 
+  const closeFutureModal = () => {
+    modalOpenSeqRef.current += 1;
+    setFutureModalDate(null);
+    setForecastModalMode(null);
+  };
+
+  const closeHistory = () =>
+    setHistoryState((current) => ({ ...current, isOpen: false }));
+
+  const openFutureModal = async (dateStr: string, forceRefresh = false) => {
+    mapStopMotionRef.current();
+    if (!selectedCity || !proAccess.subscriptionActive) return;
+    const cityName = selectedCity;
+    const modalSeq = (modalOpenSeqRef.current += 1);
+    const isLatestModalRequest = () =>
+      modalOpenSeqRef.current === modalSeq &&
+      selectedCityRef.current === cityName;
+    let cachedDetail = findCachedCityDetail(cityDetailsByName, selectedCity);
+    if (!cachedDetail) {
+      setCityDetailLoading(true);
+      try {
+        cachedDetail = await ensureCityDetail(cityName, false, "panel");
+      } finally {
+        if (isLatestModalRequest()) {
+          setCityDetailLoading(false);
+        }
+      }
+    }
+    if (!isLatestModalRequest()) return;
+    const hasFullCachedDetail =
+      detailSatisfiesDepth(cachedDetail, "full") &&
+      !hasSparseDetailCoverage(cachedDetail, dateStr);
+    const todayDate =
+      cachedDetail?.local_date ||
+      cachedDetail?.forecast?.daily?.[0]?.date ||
+      null;
+    const modalMode: ForecastModalMode =
+      todayDate && dateStr === todayDate ? "today" : "future";
+
+    setSelectedForecastDate(dateStr);
+    setFutureModalDate(dateStr);
+    setForecastModalMode(modalMode);
+    if (!hasFullCachedDetail || forceRefresh) {
+      setLoadingState((current) => ({
+        ...current,
+        futureDeep: true,
+      }));
+      void ensureCityDetail(cityName, true, "full")
+        .catch(() => {})
+        .finally(() => {
+          if (!isLatestModalRequest()) return;
+          setLoadingState((current) => ({
+            ...current,
+            futureDeep: false,
+          }));
+        });
+    }
+  };
+
+  const openTodayModal = async (forceRefresh?: boolean) => {
+    const activeCity = selectedCityRef.current || selectedCity;
+    if (!activeCity) {
+      return;
+    }
+
+    mapStopMotionRef.current();
+    const cityName = activeCity;
+    const modalSeq = (modalOpenSeqRef.current += 1);
+    const isLatestModalRequest = () =>
+      modalOpenSeqRef.current === modalSeq &&
+      selectedCityRef.current === cityName;
+    let cachedDetail = findCachedCityDetail(cityDetailsByName, cityName);
+    if (!cachedDetail) {
+      setCityDetailLoading(true);
+      try {
+        cachedDetail = await ensureCityDetail(cityName, false, "panel");
+      } finally {
+        if (isLatestModalRequest()) {
+          setCityDetailLoading(false);
+        }
+      }
+    }
+    if (!isLatestModalRequest()) return;
+    const hasFullCachedDetail =
+      detailSatisfiesDepth(cachedDetail, "full") &&
+      !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
+    const targetDate =
+      cachedDetail?.local_date ||
+      cachedDetail?.forecast?.daily?.[0]?.date ||
+      null;
+    if (targetDate) {
+      setSelectedForecastDate(targetDate);
+      setFutureModalDate(targetDate);
+      setForecastModalMode("today");
+    }
+    if (!proAccess.subscriptionActive) return;
+    const needsDetailRefresh =
+      forceRefresh ||
+      !detailSatisfiesDepth(cachedDetail, "full") ||
+      hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
+
+    setLoadingState((current) => ({
+      ...current,
+      futureDeep: needsDetailRefresh,
+    }));
+    void ensureCityDetail(cityName, needsDetailRefresh, "full")
+      .then((detail) => {
+        if (!isLatestModalRequest()) return;
+        setSelectedForecastDate(detail.local_date);
+        setFutureModalDate(detail.local_date);
+        setForecastModalMode("today");
+      })
+      .catch(() => {
+        if (!isLatestModalRequest()) return;
+        if (cachedDetail?.local_date) {
+          setSelectedForecastDate(cachedDetail.local_date);
+          setFutureModalDate(cachedDetail.local_date);
+          setForecastModalMode("today");
+        }
+      })
+      .finally(() => {
+        if (!isLatestModalRequest()) return;
+        setLoadingState((current) => ({
+          ...current,
+          futureDeep: false,
+        }));
+      });
+  };
+
+  const setForecastDate = (dateStr: string | null) =>
+    setSelectedForecastDate(dateStr);
+
   const value = useMemo<DashboardStoreValue>(
     () => ({
       cities,
       cityDetailsByName,
       citySummariesByName,
       clearCityFocus,
-      closeFutureModal: () => {
-        modalOpenSeqRef.current += 1;
-        setFutureModalDate(null);
-        setForecastModalMode(null);
-      },
-      closeHistory: () =>
-        setHistoryState((current) => ({ ...current, isOpen: false })),
+      closeFutureModal,
+      closeHistory,
       closePanel: () => {
         setIsPanelOpen(false);
       },
@@ -1397,129 +1560,9 @@ export function DashboardStoreProvider({
       preloadCityFromRow,
       loadingState,
       proAccess,
-      openFutureModal: async (dateStr: string, forceRefresh = false) => {
-        mapStopMotionRef.current();
-        if (!selectedCity || !proAccess.subscriptionActive) return;
-        const cityName = selectedCity;
-        const modalSeq = (modalOpenSeqRef.current += 1);
-        const isLatestModalRequest = () =>
-          modalOpenSeqRef.current === modalSeq &&
-          selectedCityRef.current === cityName;
-        let cachedDetail = findCachedCityDetail(cityDetailsByName, selectedCity);
-        if (!cachedDetail) {
-          setCityDetailLoading(true);
-          try {
-            cachedDetail = await ensureCityDetail(cityName, false, "panel");
-          } finally {
-            if (isLatestModalRequest()) {
-              setCityDetailLoading(false);
-            }
-          }
-        }
-        if (!isLatestModalRequest()) return;
-        const hasFullCachedDetail =
-          detailSatisfiesDepth(cachedDetail, "full") &&
-          !hasSparseDetailCoverage(cachedDetail, dateStr);
-        const todayDate =
-          cachedDetail?.local_date ||
-          cachedDetail?.forecast?.daily?.[0]?.date ||
-          null;
-        const modalMode: ForecastModalMode =
-          todayDate && dateStr === todayDate ? "today" : "future";
-
-        setSelectedForecastDate(dateStr);
-        setFutureModalDate(dateStr);
-        setForecastModalMode(modalMode);
-        if (!hasFullCachedDetail || forceRefresh) {
-          setLoadingState((current) => ({
-            ...current,
-            futureDeep: true,
-          }));
-          void ensureCityDetail(cityName, true, "full")
-            .catch(() => {})
-            .finally(() => {
-              if (!isLatestModalRequest()) return;
-              setLoadingState((current) => ({
-                ...current,
-                futureDeep: false,
-              }));
-            });
-        }
-      },
+      openFutureModal,
       openHistory,
-      openTodayModal: async (forceRefresh?: boolean) => {
-        const activeCity = selectedCityRef.current || selectedCity;
-        if (!activeCity) {
-          return;
-        }
-
-        mapStopMotionRef.current();
-        const cityName = activeCity;
-        const modalSeq = (modalOpenSeqRef.current += 1);
-        const isLatestModalRequest = () =>
-          modalOpenSeqRef.current === modalSeq &&
-          selectedCityRef.current === cityName;
-        let cachedDetail = findCachedCityDetail(cityDetailsByName, cityName);
-        if (!cachedDetail) {
-          setCityDetailLoading(true);
-          try {
-            cachedDetail = await ensureCityDetail(cityName, false, "panel");
-          } finally {
-            if (isLatestModalRequest()) {
-              setCityDetailLoading(false);
-            }
-          }
-        }
-        if (!isLatestModalRequest()) return;
-        const hasFullCachedDetail =
-          detailSatisfiesDepth(cachedDetail, "full") &&
-          !hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
-        const targetDate =
-          cachedDetail?.local_date ||
-          cachedDetail?.forecast?.daily?.[0]?.date ||
-          null;
-        if (targetDate) {
-          setSelectedForecastDate(targetDate);
-          setFutureModalDate(targetDate);
-          setForecastModalMode("today");
-        }
-        if (!proAccess.subscriptionActive) return;
-        const needsDetailRefresh =
-          forceRefresh ||
-          !detailSatisfiesDepth(cachedDetail, "full") ||
-          hasSparseDetailCoverage(cachedDetail, cachedDetail?.local_date);
-
-        setLoadingState((current) => ({
-          ...current,
-          futureDeep: needsDetailRefresh,
-        }));
-        void ensureCityDetail(
-          cityName,
-          needsDetailRefresh,
-          "full",
-        )
-          .then((detail) => {
-            if (!isLatestModalRequest()) return;
-            setSelectedForecastDate(detail.local_date);
-            setFutureModalDate(detail.local_date);
-            setForecastModalMode("today");
-          })
-          .catch(() => {
-            if (!isLatestModalRequest()) return;
-            if (cachedDetail?.local_date) {
-              setSelectedForecastDate(cachedDetail.local_date);
-              setFutureModalDate(cachedDetail.local_date);
-              setForecastModalMode("today");
-            }
-          })
-          .finally(() => {
-            if (!isLatestModalRequest()) return;
-            setLoadingState((current) => ({
-              ...current,
-              futureDeep: false,
-            }));
-          });
-      },
+      openTodayModal,
       registerMapStopMotion: (stopMotion: () => void) => {
         mapStopMotionRef.current = stopMotion;
       },
@@ -1531,8 +1574,7 @@ export function DashboardStoreProvider({
       selectedForecastDate,
       selectCity,
       setMapInteractionActive: setIsMapInteracting,
-      setForecastDate: (dateStr: string | null) =>
-        setSelectedForecastDate(dateStr),
+      setForecastDate,
     }),
     [
       cities,
@@ -1564,13 +1606,80 @@ export function DashboardStoreProvider({
     }),
     [],
   );
+  const dashboardSelectionValue = useMemo<
+    NonNullable<React.ContextType<typeof DashboardSelectionContext>>
+  >(
+    () => ({
+      cities,
+      forecastModalMode,
+      futureModalDate,
+      isPanelOpen,
+      selectedCity,
+      selectedDetail,
+      selectedForecastDate,
+    }),
+    [
+      cities,
+      forecastModalMode,
+      futureModalDate,
+      isPanelOpen,
+      selectedCity,
+      selectedDetail,
+      selectedForecastDate,
+    ],
+  );
+  const dashboardModalValue = useMemo<DashboardModalContextValue>(
+    () => ({
+      closeFutureModal,
+      forecastModalMode,
+      futureModalDate,
+      loadingState,
+      openFutureModal,
+      openTodayModal,
+      selectedForecastDate,
+      setForecastDate,
+    }),
+    [
+      closeFutureModal,
+      forecastModalMode,
+      futureModalDate,
+      loadingState,
+      openFutureModal,
+      openTodayModal,
+      selectedForecastDate,
+      setForecastDate,
+    ],
+  );
+  const dashboardHistoryValue = useMemo<DashboardHistoryContextValue>(
+    () => ({
+      closeHistory,
+      historyState,
+      openHistory,
+    }),
+    [closeHistory, historyState, openHistory],
+  );
+  const dashboardProAccessValue = useMemo<DashboardProAccessContextValue>(
+    () => ({
+      proAccess,
+      refreshProAccess,
+    }),
+    [proAccess, refreshProAccess],
+  );
 
   return (
     <DashboardStoreContext.Provider value={value}>
       <DashboardActionsContext.Provider value={dashboardActionsValue}>
-        <CityDetailsContext.Provider value={cityDetailsValue}>
-          {children}
-        </CityDetailsContext.Provider>
+        <DashboardProAccessContext.Provider value={dashboardProAccessValue}>
+          <DashboardModalContext.Provider value={dashboardModalValue}>
+            <DashboardHistoryContext.Provider value={dashboardHistoryValue}>
+              <DashboardSelectionContext.Provider value={dashboardSelectionValue}>
+                <CityDetailsContext.Provider value={cityDetailsValue}>
+                  {children}
+                </CityDetailsContext.Provider>
+              </DashboardSelectionContext.Provider>
+            </DashboardHistoryContext.Provider>
+          </DashboardModalContext.Provider>
+        </DashboardProAccessContext.Provider>
       </DashboardActionsContext.Provider>
     </DashboardStoreContext.Provider>
   );
@@ -1606,30 +1715,70 @@ export function useDashboardActions() {
   return context;
 }
 
+export function useDashboardModal() {
+  const context = useContext(DashboardModalContext);
+  if (!context) {
+    throw new Error(
+      "useDashboardModal must be used within DashboardStoreProvider",
+    );
+  }
+  return context;
+}
+
+export function useDashboardHistory() {
+  const context = useContext(DashboardHistoryContext);
+  if (!context) {
+    throw new Error(
+      "useDashboardHistory must be used within DashboardStoreProvider",
+    );
+  }
+  return context;
+}
+
+export function useProAccess() {
+  const context = useContext(DashboardProAccessContext);
+  if (!context) {
+    throw new Error("useProAccess must be used within DashboardStoreProvider");
+  }
+  return context;
+}
+
+export function useDashboardSelection() {
+  const context = useContext(DashboardSelectionContext);
+  if (!context) {
+    throw new Error(
+      "useDashboardSelection must be used within DashboardStoreProvider",
+    );
+  }
+  return context;
+}
+
 export function useCityData(name?: string | null) {
-  const store = useDashboardStore();
-  const key = name || store.selectedCity;
+  const selection = useDashboardSelection();
+  const details = useCityDetails();
+  const key = name || selection.selectedCity;
   return {
-    data: key ? findCachedCityDetail(store.cityDetailsByName, key) : null,
+    data: key ? findCachedCityDetail(details.cityDetailsByName, key) : null,
     isLoading:
-      store.loadingState.cityDetail &&
+      details.loadingState.cityDetail &&
       Boolean(key) &&
-      store.selectedCity === key,
+      selection.selectedCity === key,
   };
 }
 
 export function useHistoryData(name?: string | null) {
-  const store = useDashboardStore();
-  const key = name || store.selectedCity;
+  const history = useDashboardHistory();
+  const selection = useDashboardSelection();
+  const key = name || selection.selectedCity;
   return {
     data: key
-      ? store.historyState.dataByCity[key] || ([] as HistoryPoint[])
+      ? history.historyState.dataByCity[key] || ([] as HistoryPoint[])
       : [],
-    error: store.historyState.error,
-    isLoading: store.historyState.loading,
-    isOpen: store.historyState.isOpen,
-    isRecordsLoading: store.historyState.recordsLoading,
-    meta: key ? store.historyState.metaByCity[key] || null : null,
+    error: history.historyState.error,
+    isLoading: history.historyState.loading,
+    isOpen: history.historyState.isOpen,
+    isRecordsLoading: history.historyState.recordsLoading,
+    meta: key ? history.historyState.metaByCity[key] || null : null,
   };
 }
 

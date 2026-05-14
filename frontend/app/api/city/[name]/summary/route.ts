@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  applyAuthResponseCookies,
-  buildBackendRequestHeaders,
-} from "@/lib/backend-auth";
-import {
-  buildProxyExceptionResponse,
-  buildUpstreamErrorResponse,
-} from "@/lib/api-proxy";
-import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { proxyBackendJsonGet } from "@/lib/api-proxy";
+import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -25,50 +18,15 @@ export async function GET(
 
   const { name } = await context.params;
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
-  const bypassCache = forceRefresh === "true";
+  const cachePolicy = buildForceRefreshProxyCachePolicy(forceRefresh, 20);
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/summary?force_refresh=${forceRefresh}`;
 
-  try {
-    const auth = await buildBackendRequestHeaders(req, {
-      includeSupabaseIdentity: false,
-    });
-    const fetchOptions =
-      bypassCache
-        ? {
-            headers: auth.headers,
-            cache: "no-store" as const,
-          }
-        : {
-            headers: auth.headers,
-            next: { revalidate: 20 },
-          };
-    const res = await fetch(url, {
-      ...fetchOptions,
-    });
-    if (!res.ok) {
-      const raw = await res.text();
-      const response = buildUpstreamErrorResponse(res.status, raw);
-      return applyAuthResponseCookies(response, auth.response);
-    }
-    const data = await res.json();
-    if (bypassCache) {
-      const response = NextResponse.json(data, {
-        headers: {
-          "Cache-Control": "no-store",
-        },
-      });
-      return applyAuthResponseCookies(response, auth.response);
-    }
-    const response = buildCachedJsonResponse(
-      req,
-      data,
-      "public, max-age=0, s-maxage=20, stale-while-revalidate=60",
-    );
-    return applyAuthResponseCookies(response, auth.response);
-  } catch (error) {
-    const response = buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to fetch city summary",
-    });
-    return response;
-  }
+  return proxyBackendJsonGet(req, {
+    cacheControl: cachePolicy.responseCacheControl,
+    fetchCache:
+      cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+    publicMessage: "Failed to fetch city summary",
+    revalidateSeconds: cachePolicy.revalidateSeconds,
+    url,
+  });
 }

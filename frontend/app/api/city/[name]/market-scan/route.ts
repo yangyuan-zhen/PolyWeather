@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-  applyAuthResponseCookies,
-  buildBackendRequestHeaders,
-} from "@/lib/backend-auth";
-import {
-  buildProxyExceptionResponse,
-  buildUpstreamErrorResponse,
-} from "@/lib/api-proxy";
-import { buildCachedJsonResponse } from "@/lib/http-cache";
+import { proxyBackendJsonGet } from "@/lib/api-proxy";
+import { buildForceRefreshProxyCachePolicy } from "@/lib/proxy-cache-policy";
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 
@@ -27,6 +20,7 @@ export async function GET(
   const params = new URLSearchParams();
   const forceRefresh = req.nextUrl.searchParams.get("force_refresh") ?? "false";
   params.set("force_refresh", forceRefresh);
+  const cachePolicy = buildForceRefreshProxyCachePolicy(forceRefresh, 20);
 
   const targetDate = req.nextUrl.searchParams.get("target_date");
   if (targetDate) {
@@ -45,34 +39,15 @@ export async function GET(
 
   const url = `${API_BASE}/api/city/${encodeURIComponent(name)}/market-scan?${params.toString()}`;
 
-  try {
-    const auth = await buildBackendRequestHeaders(req, {
-      includeSupabaseIdentity: false,
-    });
-    const res = await fetch(url, {
-      headers: auth.headers,
-      next: { revalidate: 20 },
-    });
-    if (!res.ok) {
-      const raw = await res.text();
-      const response = buildUpstreamErrorResponse(res.status, raw, {
-        detailLimit: 800,
-        error: "Backend city market scan failed",
-      });
-      return applyAuthResponseCookies(response, auth.response);
-    }
-    const data = await res.json();
-    const response = buildCachedJsonResponse(
-      req,
-      data,
-      "public, max-age=0, s-maxage=20, stale-while-revalidate=60",
-    );
-    return applyAuthResponseCookies(response, auth.response);
-  } catch (error) {
-    const response = buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to fetch city market scan",
-      status: 502,
-    });
-    return response;
-  }
+  return proxyBackendJsonGet(req, {
+    cacheControl: cachePolicy.responseCacheControl,
+    detailLimit: 800,
+    error: "Backend city market scan failed",
+    fetchCache:
+      cachePolicy.fetchMode === "no-store" ? "no-store" : undefined,
+    publicMessage: "Failed to fetch city market scan",
+    revalidateSeconds: cachePolicy.revalidateSeconds,
+    statusOnException: 502,
+    url,
+  });
 }

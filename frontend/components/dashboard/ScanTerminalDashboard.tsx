@@ -2,15 +2,7 @@
 
 import clsx from "clsx";
 import dynamic from "next/dynamic";
-import Link from "next/link";
-import {
-  LogIn,
-  MessageCircle,
-  Moon,
-  RefreshCw,
-  Sun,
-  UserRound,
-} from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -24,6 +16,7 @@ import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
   useDashboardStore,
+  useProAccess,
 } from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import type {
@@ -31,8 +24,14 @@ import type {
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
-import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import { WelcomeOverlay } from "@/components/dashboard/scan-terminal/WelcomeOverlay";
+import {
+  ScanPaywallModal,
+  ScanTerminalLoadingScreen,
+  ScanTerminalTopBar,
+  ScanUpgradeAnnouncement,
+  type ScanTerminalContentView,
+} from "@/components/dashboard/scan-terminal/ScanTerminalShellParts";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
   findRowForCity,
@@ -50,8 +49,6 @@ const MonitorPanel = dynamic(
   () => import("@/components/dashboard/monitoring/MonitorPanel"),
   { ssr: false },
 );
-
-type ContentView = "analysis" | "map" | "monitor";
 
 const CityDetailPanel = dynamic(
   () =>
@@ -79,10 +76,11 @@ const MapCanvas = dynamic(
 
 function ScanTerminalScreen() {
   const store = useDashboardStore();
+  const { proAccess } = useProAccess();
   const { locale, toggleLocale } = useI18n();
   const isEn = locale === "en-US";
-  const isPro = store.proAccess.subscriptionActive;
-  const accountHref = store.proAccess.authenticated
+  const isPro = proAccess.subscriptionActive;
+  const accountHref = proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
   const {
@@ -92,10 +90,10 @@ function ScanTerminalScreen() {
     terminalData,
   } = useScanTerminalQuery({
     isPro,
-    proAccessLoading: store.proAccess.loading,
+    proAccessLoading: proAccess.loading,
   });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<ContentView>("map");
+  const [activeView, setActiveView] = useState<ScanTerminalContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [showAnnouncement, setShowAnnouncement] = useState(false);
@@ -240,7 +238,7 @@ function ScanTerminalScreen() {
     store.selectedDetail,
   ]);
 
-  const resolvedView: ContentView = activeView;
+  const resolvedView: ScanTerminalContentView = activeView;
   const mapFocusedCity = mapSelectedCityName || store.selectedCity;
   const activeDetailRow =
     resolvedView === "map" && mapFocusedCity
@@ -360,39 +358,17 @@ function ScanTerminalScreen() {
     return null;
   };
 
-  if (store.proAccess.loading) {
+  if (proAccess.loading) {
     return (
-      <div className={scanTerminalRootClassName}>
-        <div className={clsx("scan-terminal", themeMode === "light" && "light")}>
-          <main className="scan-data-grid">
-            <div className="scan-topbar">
-              <div className="scan-topbar-title">
-                <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
-                <span>
-                  {isEn
-                    ? "Start from the map, then open city cards to verify weather evidence"
-                    : "从地图选城市，再打开决策卡验证天气证据"}
-                </span>
-              </div>
-              <div className="scan-topbar-actions">
-                <span className="scan-topbar-time">{userLocalTime}</span>
-              </div>
-            </div>
-            <div className="scan-loading-state">
-              <LoadingSignal
-                title={isEn ? "Preparing decision workspace" : "正在准备决策工作台"}
-                description={
-                  isEn
-                    ? "Checking access, city context and today's tradable weather windows."
-                    : "正在检查权限、城市上下文和今日可交易天气窗口。"
-                }
-              />
-            </div>
-          </main>
-        </div>
-      </div>
+      <ScanTerminalLoadingScreen
+        isEn={isEn}
+        rootClassName={scanTerminalRootClassName}
+        themeMode={themeMode}
+        userLocalTime={userLocalTime}
+      />
     );
   }
+
 
   return (
     <div className={scanTerminalRootClassName}>
@@ -406,108 +382,30 @@ function ScanTerminalScreen() {
         )}
       >
         <main className="scan-data-grid">
-          <div className="scan-topbar">
-            <div className="scan-topbar-title">
-                <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
-              <span>
-                {isEn
-                  ? "Start from the map, then open city cards to verify weather evidence"
-                  : "从地图选城市，再打开决策卡验证天气证据"}
-              </span>
-            </div>
-            <div className="scan-topbar-actions">
-              <button
-                type="button"
-                className="scan-locale-switch"
-                aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
-                title={isEn ? "Switch to Chinese" : "切换到英文"}
-                onClick={toggleLocale}
-              >
-                <span className={clsx(locale === "zh-CN" && "active")}>中文</span>
-                <span className={clsx(locale === "en-US" && "active")}>EN</span>
-              </button>
-              <span className="scan-topbar-time">
-                {userLocalTime}
-              </span>
-              {isPro ? null : store.proAccess.authenticated ? (
-                <button
-                  type="button"
-                  className="scan-primary-button"
-                  onClick={openScanPaywall}
-                >
-                  <UserRound size={14} />
-                  {isEn ? "Upgrade Pro" : "升级 Pro"}
-                </button>
-              ) : (
-                <Link href={accountHref} className="scan-primary-button">
-                  <LogIn size={14} />
-                  {isEn ? "Sign in" : "登录"}
-                </Link>
-              )}
-              <button
-                type="button"
-                className="scan-theme-button"
-                aria-label={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
-                title={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
-                onClick={() => setThemeMode((current) => (current === "light" ? "dark" : "light"))}
-              >
-                {themeMode === "light" ? <Moon size={15} /> : <Sun size={15} />}
-              </button>
-              {store.proAccess.authenticated ? (
-                <Link
-                  href={accountHref}
-                  className="scan-account-button"
-                  aria-label={isEn ? "Account" : "账户"}
-                  title={isEn ? "Account" : "账户"}
-                >
-                  <UserRound size={15} />
-                </Link>
-              ) : null}
-              <a
-                href="https://t.me/+nMG7SjziUKYyZmM1"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="scan-account-button"
-                aria-label={isEn ? "Feedback" : "反馈"}
-                title={isEn ? "Join Telegram for feedback" : "加入 Telegram 反馈"}
-              >
-                <MessageCircle size={15} />
-              </a>
-            </div>
-          </div>
+          <ScanTerminalTopBar
+            accountHref={accountHref}
+            isAuthenticated={proAccess.authenticated}
+            isEn={isEn}
+            isPro={isPro}
+            locale={locale}
+            onOpenScanPaywall={openScanPaywall}
+            setThemeMode={setThemeMode}
+            themeMode={themeMode}
+            toggleLocale={toggleLocale}
+            userLocalTime={userLocalTime}
+          />
 
           {showAnnouncement ? (
-          <section className="scan-upgrade-announcement" aria-label={isEn ? "Upgrade announcement" : "升级公告"}>
-            <div className="scan-upgrade-announcement-copy">
-              <span>{isEn ? "v1.5.6 upgrade" : "v1.5.6 升级公告"}</span>
-              <strong>
-                {isEn ? "Scan terminal is upgraded to v1.5.6" : "决策终端已升级到 v1.5.6"}
-              </strong>
-              <p>
-                {isEn
-                  ? "City decision cards have been redesigned with a compact hero layout and consistent DEB data source. Sticky headers are removed for smoother scrolling."
-                  : "城市决策卡 hero 布局重新设计，三指标并列对比更直观；DEB 数据源统一不再出现不一致；去除顶部固定效果滚动更流畅。"}
-              </p>
-            </div>
-            <ul>
-              <li>{isEn ? "Redesigned decision card hero" : "重设计城市决策卡 hero 布局"}</li>
-              <li>{isEn ? "Unified DEB data source" : "统一 DEB 数据源"}</li>
-              <li>{isEn ? "Light theme coverage" : "亮色主题补全覆盖"}</li>
-              <li>{isEn ? "HKO observatory AI read" : "香港天文台观测 AI 解读"}</li>
-              <li>{isEn ? "Smoother scrolling experience" : "滚动体验优化"}</li>
-            </ul>
-            <button
-              type="button"
-              className="scan-announcement-dismiss"
-              aria-label={isEn ? "Dismiss" : "关闭"}
-              onClick={() => {
-                localStorage.setItem("polyweather_v156_announcement_seen_at", String(Date.now() + 90 * 24 * 60 * 60 * 1000));
+            <ScanUpgradeAnnouncement
+              isEn={isEn}
+              onDismiss={() => {
+                localStorage.setItem(
+                  "polyweather_v156_announcement_seen_at",
+                  String(Date.now() + 90 * 24 * 60 * 60 * 1000),
+                );
                 setShowAnnouncement(false);
               }}
-            >
-              ✕
-            </button>
-          </section>
+            />
           ) : null}
 
           <section className="scan-list-section">
@@ -627,22 +525,10 @@ function ScanTerminalScreen() {
       <WelcomeOverlay locale={locale} onDismiss={() => {}} />
       <FutureForecastModal />
       {showScanPaywall ? (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={isEn ? "Unlock market scan" : "解锁市场扫描"}
-          onClick={(event) => {
-            if (event.target === event.currentTarget) {
-              setShowScanPaywall(false);
-            }
-          }}
-        >
-          <ProFeaturePaywall
-            feature="scan"
-            onClose={() => setShowScanPaywall(false)}
-          />
-        </div>
+        <ScanPaywallModal
+          isEn={isEn}
+          onClose={() => setShowScanPaywall(false)}
+        />
       ) : null}
     </div>
   );
@@ -657,3 +543,4 @@ export function ScanTerminalDashboard() {
     </I18nProvider>
   );
 }
+

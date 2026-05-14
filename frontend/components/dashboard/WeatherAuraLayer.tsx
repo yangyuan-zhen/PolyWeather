@@ -2,7 +2,7 @@
 
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useDashboardSelection } from "@/hooks/useDashboardStore";
 import { usePrefersReducedMotion } from "@/hooks/usePrefersReducedMotion";
 import { getWeatherAuraProfile } from "@/lib/weather-aura";
 import styles from "./Dashboard.module.css";
@@ -24,12 +24,12 @@ function hexToRgba(hex: string, alpha: number) {
 }
 
 export function WeatherAuraLayer() {
-  const store = useDashboardStore();
+  const { cities, selectedDetail } = useDashboardSelection();
   const prefersReducedMotion = usePrefersReducedMotion();
   const [isDesktop, setIsDesktop] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
-  const aura = getWeatherAuraProfile(store.selectedDetail, store.cities);
+  const aura = getWeatherAuraProfile(selectedDetail, cities);
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) {

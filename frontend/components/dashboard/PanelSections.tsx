@@ -12,7 +12,11 @@ import type { ChartConfiguration } from "chart.js";
 import clsx from "clsx";
 import { startTransition, useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
-import { useCityData, useDashboardStore } from "@/hooks/useDashboardStore";
+import {
+  useCityData,
+  useCityDetails,
+  useDashboardModal,
+} from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { CityDetail } from "@/lib/dashboard-types";
 import { getTemperatureChartData } from "@/lib/chart-utils";
@@ -291,7 +295,8 @@ export { ProbabilityDistribution } from "./ProbabilityDistribution";
 export { ModelForecast } from "./ModelForecast";
 
 export function ForecastTable() {
-  const store = useDashboardStore();
+  const modal = useDashboardModal();
+  const { loadingState } = useCityDetails();
   const { data } = useCityData();
   const { locale, t } = useI18n();
   const daily = useMemo(() => {
@@ -310,7 +315,7 @@ export function ForecastTable() {
   if (!data) return null;
   const isSparseDaily = daily.length <= 1;
   const isForecastCompleting =
-    store.loadingState.cityDetail &&
+    loadingState.cityDetail &&
     (data.detail_depth !== "full" || isSparseDaily);
   const resolveForecastTemp = (
     date: string,
@@ -344,11 +349,11 @@ export function ForecastTable() {
                 : index === 0;
               const isSelected =
                 (isToday &&
-                  store.forecastModalMode === "today" &&
-                  Boolean(store.futureModalDate)) ||
-                (store.forecastModalMode !== "today" &&
-                  store.futureModalDate === day.date) ||
-                store.selectedForecastDate === day.date;
+                  modal.forecastModalMode === "today" &&
+                  Boolean(modal.futureModalDate)) ||
+                (modal.forecastModalMode !== "today" &&
+                  modal.futureModalDate === day.date) ||
+                modal.selectedForecastDate === day.date;
               return (
                 <button
                   key={day.date}
@@ -361,10 +366,10 @@ export function ForecastTable() {
                   onClick={() => {
                     startTransition(() => {
                       if (isToday) {
-                        store.openTodayModal();
+                        modal.openTodayModal();
                         return;
                       }
-                      store.openFutureModal(day.date);
+                      modal.openFutureModal(day.date);
                     });
                   }}
                 >

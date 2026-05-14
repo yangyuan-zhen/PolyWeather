@@ -14,7 +14,7 @@ import {
   Sun,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useDashboardStore, useProAccess } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 
 function parseExpiryInfo(raw?: string | null) {
@@ -39,10 +39,11 @@ export function HeaderBar({
   refreshSpinning?: boolean;
 }) {
   const store = useDashboardStore();
+  const { proAccess } = useProAccess();
   const { locale, t, toggleLocale } = useI18n();
   const pathname = usePathname();
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-  const isAuthenticated = store.proAccess.authenticated;
+  const isAuthenticated = proAccess.authenticated;
   const docsHref = "/docs/intro";
   const docsActive = pathname?.startsWith("/docs");
   const navItems = [
@@ -66,29 +67,29 @@ export function HeaderBar({
   const accountAria = isAuthenticated
     ? t("header.accountAria")
     : t("header.signInAria");
-  const effectiveExpiry = store.proAccess.subscriptionActive
-    ? store.proAccess.subscriptionTotalExpiresAt ||
-      store.proAccess.subscriptionExpiresAt
-    : store.proAccess.subscriptionExpiresAt;
+  const effectiveExpiry = proAccess.subscriptionActive
+    ? proAccess.subscriptionTotalExpiresAt ||
+      proAccess.subscriptionExpiresAt
+    : proAccess.subscriptionExpiresAt;
   const expiryInfo = parseExpiryInfo(effectiveExpiry);
   const hasQueuedExtension = Boolean(
-    store.proAccess.subscriptionActive &&
-      store.proAccess.subscriptionQueuedDays > 0,
+    proAccess.subscriptionActive &&
+      proAccess.subscriptionQueuedDays > 0,
   );
   const isTrialPlan = /trial/i.test(
-    String(store.proAccess.subscriptionPlanCode || ""),
+    String(proAccess.subscriptionPlanCode || ""),
   );
   const showRenewReminder =
     isAuthenticated &&
-    !store.proAccess.loading &&
+    !proAccess.loading &&
     !hasQueuedExtension &&
-    ((store.proAccess.subscriptionActive &&
+    ((proAccess.subscriptionActive &&
       expiryInfo &&
       expiryInfo.daysLeft <= 3) ||
-      (!store.proAccess.subscriptionActive && Boolean(expiryInfo)));
+      (!proAccess.subscriptionActive && Boolean(expiryInfo)));
   const renewReminderLabel = !showRenewReminder
     ? ""
-    : !store.proAccess.subscriptionActive
+    : !proAccess.subscriptionActive
       ? isTrialPlan
         ? locale === "en-US"
           ? "Trial ended"
@@ -222,7 +223,7 @@ export function HeaderBar({
             href="/account"
             className={clsx(
               "account-renew-badge",
-              !store.proAccess.subscriptionActive && "expired",
+              !proAccess.subscriptionActive && "expired",
             )}
             title={renewReminderLabel}
             aria-label={renewReminderLabel}
@@ -234,3 +235,4 @@ export function HeaderBar({
     </header>
   );
 }
+

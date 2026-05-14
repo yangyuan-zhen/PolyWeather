@@ -3,6 +3,7 @@ import {
   buildObservationFreshness,
   getMonitorFreshnessLevel,
   getMonitorRefreshCadenceMs,
+  getObservationFreshness,
   getObservationSourceProfile,
   shouldRefreshMonitorCity,
 } from "@/lib/source-freshness";
@@ -89,4 +90,23 @@ export function runTests() {
 
   assert.equal(getMonitorRefreshCadenceMs(["amos", "metar"]), 60_000);
   assert.equal(getMonitorRefreshCadenceMs(["metar"]), 300_000);
+
+  const amosDetail = detail({
+    airport_current: {
+      obs_age_min: 30,
+      obs_time: "11:30",
+      source_label: "METAR",
+      temp: 26,
+    },
+    amos: {
+      observation_time: "2026-05-14T11:59:00Z",
+      runway_obs: {
+        runway_pairs: [["18L", "36R"]],
+        temperatures: [[25.2, 18.1]],
+      },
+      source: "amos",
+      temp_source: "metar",
+    },
+  });
+  assert.equal(getObservationFreshness(amosDetail)?.source_code, "amos");
 }

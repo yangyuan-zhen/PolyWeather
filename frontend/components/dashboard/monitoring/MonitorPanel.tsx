@@ -15,6 +15,7 @@ import {
   MONITOR_REFRESH_INTERVAL_MS,
   type MonitorRefreshTrigger,
 } from "./monitor-refresh-policy";
+import { resolveMonitorTemperature } from "./monitor-temperature";
 
 /* ── Constants ───────────────────────────────────────────────── */
 const MONITOR_KEYS = [
@@ -92,8 +93,7 @@ function playNewHighBeep(): void {
 }
 
 function trendClass(detail: CityDetail | undefined): "rising" | "falling" | "flat" {
-  if (!detail?.airport_current) return "flat";
-  const cur = detail.airport_current.temp ?? detail.current?.temp ?? null;
+  const cur = resolveMonitorTemperature(detail).value;
   const max = resolveMaxSoFar(detail);
   if (cur != null && max != null && cur >= max + 0.3) return "rising";
   if (cur != null && max != null && cur < max - 1.0) return "falling";
@@ -248,7 +248,7 @@ export default function MonitorPanel({
     const changed: MonitorKey[] = [];
     for (const key of MONITOR_KEYS) {
       const detail = details[key];
-      const cur = detail?.airport_current?.temp ?? detail?.current?.temp ?? null;
+      const cur = resolveMonitorTemperature(detail).value;
       const prev = prevTempsRef.current[key];
       if (cur != null && prev != null && cur !== prev) changed.push(key);
       if (cur != null) prevTempsRef.current[key] = cur;
@@ -358,8 +358,8 @@ export default function MonitorPanel({
     return [...MONITOR_KEYS]
       .map((k) => ({ key: k, detail: details[k] }))
       .sort((a, b) => {
-        const ta = a.detail?.airport_current?.temp ?? a.detail?.current?.temp ?? null;
-        const tb = b.detail?.airport_current?.temp ?? b.detail?.current?.temp ?? null;
+        const ta = resolveMonitorTemperature(a.detail).value;
+        const tb = resolveMonitorTemperature(b.detail).value;
         if (ta == null && tb == null) return 0;
         if (ta == null) return 1;
         if (tb == null) return -1;
@@ -393,8 +393,7 @@ export default function MonitorPanel({
     if (alerted._day !== today) alerted = { _day: today };
 
     for (const { key, detail } of sorted) {
-      const ac  = detail?.airport_current;
-      const cur = ac?.temp ?? detail?.current?.temp ?? null;
+      const cur = resolveMonitorTemperature(detail).value;
       const max = resolveMaxSoFar(detail, key);   // HKO cities fall back to current.max_so_far
       if (cur != null && max != null && cur >= max + 0.3) {
         // Key: city + rounded temp, so we only beep once per 0.1°C step
@@ -477,19 +476,20 @@ export default function MonitorPanel({
           }
 
           const ac = detail.airport_current;
-          const cur = ac?.temp ?? detail.current?.temp ?? null;
+          const cur = resolveMonitorTemperature(detail).value;
           const max = resolveMaxSoFar(detail, key);          // HKO cities fall back to current.max_so_far
           const mtt = ac?.max_temp_time ?? detail.current?.max_temp_time ?? null;
           const freshnessInfo = getObservationFreshness(detail);
           const obs =
-            ac?.obs_time ??
             freshnessInfo?.observed_at_local ??
+            ac?.obs_time ??
             detail.current?.obs_time ??
             detail.local_time ??
             "";
           const age =
-            ac?.obs_age_min ??
-            (freshnessInfo?.age_sec != null ? Math.round(freshnessInfo.age_sec / 60) : null);
+            freshnessInfo?.age_sec != null
+              ? Math.round(freshnessInfo.age_sec / 60)
+              : ac?.obs_age_min ?? null;
           const freshness = getMonitorFreshnessLevel(freshnessInfo, age);
           const tempSymbol = detail.temp_symbol || "°C";  // °F for US cities
           const newHigh = cur != null && max != null && cur >= max + 0.3;

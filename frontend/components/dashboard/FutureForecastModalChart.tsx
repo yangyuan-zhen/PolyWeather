@@ -3,7 +3,7 @@
 import type { ChartConfiguration } from "chart.js";
 import { useMemo } from "react";
 import { useChart } from "@/hooks/useChart";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useDashboardSelection } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import { getTemperatureChartData } from "@/lib/chart-utils";
 import { getFutureModalView } from "@/lib/dashboard-utils";
@@ -16,9 +16,8 @@ export function DailyTemperatureChart({
   dateStr: string;
   forceToday?: boolean;
 }) {
-  const store = useDashboardStore();
+  const { selectedDetail: detail } = useDashboardSelection();
   const { locale, t } = useI18n();
-  const detail = store.selectedDetail;
   const view = detail ? getFutureModalView(detail, dateStr, locale) : null;
   const isToday =
     forceToday || (detail ? dateStr === detail.local_date : false);

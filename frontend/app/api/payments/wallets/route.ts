@@ -5,6 +5,7 @@ import {
 } from "@/lib/backend-auth";
 import {
   buildProxyExceptionResponse,
+  proxyBackendJsonGet,
   buildUpstreamErrorResponse,
 } from "@/lib/api-proxy";
 
@@ -17,29 +18,15 @@ export async function GET(req: NextRequest) {
       { status: 500 },
     );
   }
-  try {
-    const auth = await buildBackendRequestHeaders(req);
-    const res = await fetch(`${API_BASE}/api/payments/wallets`, {
-      headers: auth.headers,
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const raw = await res.text();
-      const response = buildUpstreamErrorResponse(res.status, raw, {
-        detailLimit: 350,
-      });
-      return applyAuthResponseCookies(response, auth.response);
-    }
-    const data = await res.json();
-    const response = NextResponse.json(data, {
-      headers: { "Cache-Control": "no-store" },
-    });
-    return applyAuthResponseCookies(response, auth.response);
-  } catch (error) {
-    return buildProxyExceptionResponse(error, {
-      publicMessage: "Failed to fetch wallets",
-    });
-  }
+  return proxyBackendJsonGet(req, {
+    cacheControl: "no-store",
+    conditionalResponse: false,
+    detailLimit: 350,
+    fetchCache: "no-store",
+    includeSupabaseIdentity: true,
+    publicMessage: "Failed to fetch wallets",
+    url: `${API_BASE}/api/payments/wallets`,
+  });
 }
 
 export async function DELETE(req: NextRequest) {

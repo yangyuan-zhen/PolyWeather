@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/hooks/useI18n";
-import { useDashboardStore } from "@/hooks/useDashboardStore";
+import { useProAccess } from "@/hooks/useDashboardStore";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 import { trackAppEvent } from "@/lib/app-analytics";
 
@@ -24,7 +24,7 @@ export function ProFeaturePaywall({
 }: ProFeaturePaywallProps) {
   const router = useRouter();
   const { locale } = useI18n();
-  const { proAccess } = useDashboardStore();
+  const { proAccess } = useProAccess();
   const [usePoints, setUsePoints] = useState(true);
 
   const isEn = locale === "en-US";

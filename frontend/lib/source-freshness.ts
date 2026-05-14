@@ -204,6 +204,17 @@ export function buildObservationFreshness({
 
 export function getObservationFreshness(detail?: CityDetail | null) {
   if (!detail) return null;
+  const hasAmosRunway =
+    (detail.amos?.runway_obs?.temperatures?.length || 0) > 0 ||
+    (detail.amos?.runway_temps?.length || 0) > 0;
+  if (hasAmosRunway || detail.amos?.source === "amos") {
+    return buildObservationFreshness({
+      observedAt: detail.amos?.observation_time || null,
+      observedAtLocal: detail.airport_current?.obs_time || detail.current?.obs_time || null,
+      sourceCode: "amos",
+      sourceLabel: detail.amos?.source_label || "AMOS",
+    });
+  }
   const currentSource = canonicalSourceCode(
     detail.current?.source_code ||
       detail.current?.settlement_source ||
