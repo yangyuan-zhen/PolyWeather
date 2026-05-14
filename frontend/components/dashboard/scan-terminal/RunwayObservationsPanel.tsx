@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useCityDetails, useDashboardActions } from "@/hooks/useDashboardStore";
 import { useI18n } from "@/hooks/useI18n";
 import type { CityDetail } from "@/lib/dashboard-types";
@@ -115,26 +114,19 @@ export function RunwayObservationsPanel() {
   const isEn = locale === "en-US";
   const { cityDetailsByName } = useCityDetails();
   const { ensureCityDetail } = useDashboardActions();
-  const [refreshing, setRefreshing] = useState(false);
-
   const loadAll = useCallback(
-    async (force: boolean) => {
-      setRefreshing(true);
-      try {
-        await Promise.allSettled(
-          CHINA_RUNWAY_CITIES.map((city) =>
-            ensureCityDetail(city.key, force, "panel"),
-          ),
-        );
-      } finally {
-        setRefreshing(false);
-      }
+    async () => {
+      await Promise.allSettled(
+        CHINA_RUNWAY_CITIES.map((city) =>
+          ensureCityDetail(city.key, false, "panel"),
+        ),
+      );
     },
     [ensureCityDetail],
   );
 
   useEffect(() => {
-    void loadAll(false);
+    void loadAll();
   }, [loadAll]);
 
   const cards = useMemo(
@@ -149,20 +141,9 @@ export function RunwayObservationsPanel() {
   return (
     <div className="monitor-panel runway-observations-panel">
       <div className="monitor-toolbar">
-        <div>
-          <div className="monitor-title">
-            {isEn ? "Runway Observations" : "跑道观测"}
-          </div>
+        <div className="monitor-title">
+          {isEn ? "Runway Observations" : "跑道观测"}
         </div>
-        <button
-          type="button"
-          className="monitor-refresh-button"
-          disabled={refreshing}
-          onClick={() => void loadAll(true)}
-        >
-          <RefreshCw size={14} className={refreshing ? "spin" : undefined} />
-          {isEn ? "Refresh" : "刷新"}
-        </button>
       </div>
 
       <div className="monitor-grid">
