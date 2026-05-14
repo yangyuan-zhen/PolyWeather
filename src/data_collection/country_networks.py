@@ -273,6 +273,152 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
             },
         )
 
+    mgm = raw.get("mgm") or {}
+    mgm_current = mgm.get("current") or {}
+    if mgm_current.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or str(mgm.get("istNo") or ""),
+            station_label=meta.get("airport_name") or mgm.get("station_label") or meta.get("icao"),
+            temp=_safe_float(mgm_current["temp"]),
+            obs_time=mgm.get("obs_time") or metar.get("observation_time"),
+            source_code="mgm",
+            source_label="MGM",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    jma = raw.get("jma_current") or {}
+    if jma.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or str(jma.get("icao") or "RJTT"),
+            station_label=meta.get("airport_name") or jma.get("station_label") or meta.get("icao"),
+            temp=_safe_float(jma["temp"]),
+            obs_time=str(jma.get("obs_time") or metar.get("observation_time") or ""),
+            source_code="jma_amedas",
+            source_label="JMA AMeDAS",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    fmi = raw.get("fmi_current") or {}
+    if fmi.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or str(fmi.get("icao") or "EFHK"),
+            station_label=meta.get("airport_name") or fmi.get("station_label") or meta.get("icao"),
+            temp=_safe_float(fmi["temp"]),
+            obs_time=str(fmi.get("obs_time") or metar.get("observation_time") or ""),
+            source_code="fmi",
+            source_label="FMI",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    knmi = raw.get("knmi_current") or {}
+    if knmi.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or str(knmi.get("icao") or "EHAM"),
+            station_label=meta.get("airport_name") or knmi.get("station_label") or meta.get("icao"),
+            temp=_safe_float(knmi["temp"]),
+            obs_time=str(knmi.get("obs_time") or metar.get("observation_time") or ""),
+            source_code="knmi",
+            source_label="KNMI",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    sg_mss = raw.get("singapore_mss_current") or {}
+    if sg_mss.get("temp_c") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or "WSSS",
+            station_label=meta.get("airport_name") or "Changi Airport",
+            temp=sg_mss["temp_c"],
+            obs_time=sg_mss.get("obs_time") or metar.get("observation_time"),
+            source_code="sg_mss",
+            source_label="Singapore MSS",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
     return _normalize_station_row(
         station_code=meta.get("icao") or metar.get("icao"),
         station_label=meta.get("airport_name") or metar.get("station_name") or metar.get("icao"),

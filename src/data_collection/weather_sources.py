@@ -19,10 +19,11 @@ from src.data_collection.fmi_sources import FmiSourceMixin
 from src.data_collection.knmi_sources import KnmiSourceMixin
 from src.data_collection.hko_obs_sources import HkoObsSourceMixin
 from src.data_collection.madis_sources import MadisSourceMixin
+from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin):
     """
     Multi-source weather data collector
 
@@ -923,6 +924,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not official_rows:
             return
         results["jma_official_nearby"] = official_rows
+        results["jma_current"] = official_rows[0]  # primary station for airport_primary
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = official_rows
         results["nearby_source"] = "jma"
@@ -949,6 +951,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not rows:
             return
         results["knmi_official_nearby"] = rows
+        results["knmi_current"] = rows[0]  # primary station for airport_primary
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = rows
         results["nearby_source"] = "knmi"
@@ -974,6 +977,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if not rows:
             return
         results["fmi_official_nearby"] = rows
+        results["fmi_current"] = rows[0]  # primary station for airport_primary
         if "mgm_nearby" not in results:
             results["mgm_nearby"] = rows
         results["nearby_source"] = "fmi"
@@ -1101,6 +1105,30 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     )
                 break
 
+    def _attach_singapore_mss_data(
+        self, results: Dict, city_lower: str
+    ) -> None:
+        """Fetch Singapore MSS 1-min temperature and inject into results."""
+        if city_lower != "singapore":
+            return
+
+        obs = self.fetch_singapore_mss_current()
+        if not obs:
+            return
+
+        results["singapore_mss_current"] = obs
+        try:
+            DBManager().append_airport_obs(
+                icao="WSSS",
+                city=city_lower,
+                temp_c=obs["temp_c"],
+                obs_time=obs["obs_time"] or datetime.now().isoformat(),
+            )
+        except Exception:
+            logger.exception(
+                "airport_obs_log append failed for singapore_mss city={}", city_lower
+            )
+
     def _attach_russia_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
@@ -1227,6 +1255,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower)
+                self._attach_singapore_mss_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
@@ -1273,6 +1302,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
                 self._attach_korean_amos_data(results, city_lower, use_fahrenheit)
                 self._attach_madis_hfmetar_data(results, city_lower)
+                self._attach_singapore_mss_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)

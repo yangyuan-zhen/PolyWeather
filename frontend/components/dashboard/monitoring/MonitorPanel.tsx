@@ -167,13 +167,35 @@ function airportLabel(key: string, isEn: boolean) {
  */
 const HKO_OBS_CITIES = new Set<MonitorKey>(["hong kong", "lau fau shan"]);
 
-function obsSourceLabel(
+const SOURCE_LABELS: Record<string, { en: string; zh: string }> = {
+  amos_runway_median: { en: "AMOS Runway", zh: "AMOS 跑道温度" },
+  amos_runway: { en: "AMOS Runway", zh: "AMOS 跑道温度" },
+  amos: { en: "AMOS", zh: "AMOS" },
+  madis_hfmetar: { en: "NOAA MADIS", zh: "NOAA MADIS" },
+  mgm: { en: "MGM", zh: "MGM" },
+  jma_amedas: { en: "JMA AMeDAS", zh: "JMA AMeDAS" },
+  fmi: { en: "FMI", zh: "FMI" },
+  knmi: { en: "KNMI", zh: "KNMI" },
+  sg_mss: { en: "Singapore MSS", zh: "新加坡 MSS" },
+  airport_current: { en: "Airport METAR", zh: "机场报文" },
+  current: { en: "Obs", zh: "观测" },
+};
+
+function resolveSourceLabel(
+  detail: CityDetail | undefined,
   key: MonitorKey,
   isEn: boolean,
-  freshness?: ObservationFreshness | null,
 ): string {
-  const sourceLabel = String(freshness?.source_label || "").trim();
-  if (sourceLabel) return sourceLabel;
+  // Use airport_primary source label from high-freq pipeline
+  const apSource = detail?.airport_primary?.source_code;
+  if (apSource && SOURCE_LABELS[apSource]) {
+    return isEn ? SOURCE_LABELS[apSource].en : SOURCE_LABELS[apSource].zh;
+  }
+  // Use temperature resolution source
+  const { source } = resolveMonitorTemperature(detail);
+  if (source && SOURCE_LABELS[source]) {
+    return isEn ? SOURCE_LABELS[source].en : SOURCE_LABELS[source].zh;
+  }
   if (HKO_OBS_CITIES.has(key)) return isEn ? "HKO Obs" : "天文台观测";
   return isEn ? "Airport METAR" : "机场报文";
 }
@@ -570,7 +592,7 @@ export default function MonitorPanel({
                 </div>
                 <div className="monitor-obs-row">
                   <span className="monitor-stat-label">
-                    {obsSourceLabel(key, isEn, freshnessInfo)}
+                    {resolveSourceLabel(detail, key, isEn)}
                   </span>
                   <span className={`monitor-obs-age ${freshness}`}>
                     {age != null ? (

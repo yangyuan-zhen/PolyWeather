@@ -12,6 +12,7 @@
 | 赫尔辛基 | Vantaa | EFHK | FMI (`opendata.fmi.fi`) | 10 分钟 | 机场站点实时温度 | 免费 |
 | 阿姆斯特丹 | Schiphol | EHAM | KNMI (`dataplatform.knmi.nl`) | 10 分钟 | 机场站点实时温度 | 免费（需注册） |
 | 巴黎 | Le Bourget | LFPB | AROME HD (`api.open-meteo.com`) | 15 分钟 | 模型预报（非实测） | 免费 |
+| 新加坡 | Changi | WSSS | Singapore MSS (`api.data.gov.sg`) | 1 分钟 | 机场站点实时温度 (S24 站) | 免费 |
 | 纽约 | LaGuardia | KLGA | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
 | 洛杉矶 | LAX | KLAX | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
 | 芝加哥 | O'Hare | KORD | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
@@ -23,6 +24,11 @@
 | 达拉斯 | Love Field | KDAL | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
 | 奥斯汀 | Bergstrom | KAUS | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
 | 西雅图 | SeaTac | KSEA | NOAA MADIS HFMETAR | 5 分钟 | 机场站点实时温度 | 免费 |
+
+> **Singapore MSS**: 新加坡气象局（MSS）通过 data.gov.sg 开放数据平台提供全国 15 个站点
+> 的干球温度（1 分钟均值），更新频率 ~1 分钟。选取 S24 Upper Changi Road North 站
+> 作为樟宜机场 (WSSS) 的实时温度锚点。数据公开免费，无需 API 密钥。
+> 后端通过 `singapore_mss_sources.py` 拉取并注入 `airport_primary`。
 
 > **NOAA MADIS HFMETAR**: 美国 11 个城市的机场高频实时数据通过 NOAA MADIS 公共档案获取。
 > 数据源为 NetCDF 格式（`madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/`），
