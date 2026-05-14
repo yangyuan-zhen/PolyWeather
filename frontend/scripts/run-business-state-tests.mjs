@@ -84,7 +84,7 @@ function collectTests(dir) {
   });
 }
 
-const testsRoot = path.join(projectRoot, "components", "dashboard", "scan-terminal", "__tests__");
+const testsRoot = path.join(projectRoot, "components");
 const testFiles = fs.existsSync(testsRoot) ? collectTests(testsRoot).sort() : [];
 
 if (!testFiles.length) {

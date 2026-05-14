@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import {
@@ -48,17 +47,7 @@ import {
 } from "@/lib/payment-host";
 import { trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
-
-const UnlockProOverlay = dynamic(
-  () =>
-    import("@/components/subscription/UnlockProOverlay").then(
-      (module) => module.UnlockProOverlay,
-    ),
-  {
-    ssr: false,
-    loading: () => null,
-  },
-);
+import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
 // --- Types ---
 
