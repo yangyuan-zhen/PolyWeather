@@ -62,14 +62,6 @@ function RunwayCityCard({
               : "--"}
           </span>
         </div>
-        <div className="monitor-obs-row">
-          <span className="monitor-stat-label">
-            {isEn ? "Runway-point air temperature" : "跑道观测点气温"}
-          </span>
-          <span className="monitor-obs-age fresh">
-            {isEn ? "not pavement temp" : "非道面温度"}
-          </span>
-        </div>
       </div>
 
       {hasAmsc ? (
