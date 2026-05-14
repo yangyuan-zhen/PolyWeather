@@ -164,7 +164,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   istanbul: [
     {
       label: "MGM",
-      href: "https://www.mgm.gov.tr/",
+      href: "https://www.mgm.gov.tr/?il=Istanbul&ilce=Istanbul%20Havalimani",
       kind: "agency",
     },
     {
@@ -329,7 +329,7 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
   ankara: [
     {
       label: "MGM",
-      href: "https://www.mgm.gov.tr/",
+      href: "https://www.mgm.gov.tr/?il=Ankara&ilce=Esenboga",
       kind: "agency",
     },
     {
