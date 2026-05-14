@@ -191,13 +191,11 @@ class AmscAwosSourceMixin:
             headers["app"] = "AMS"
         return headers
 
-    def _http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
-        import sys as _sys
+    def _amsc_http_get_json(self, url: str, *, headers: Optional[Dict[str, str]] = None) -> Optional[Dict[str, Any]]:
         ctx = ssl.create_default_context()
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         req = Request(url, headers=headers or {})
-        print(f"[AMSC_DEBUG] _http_get_json called url={url[:60]}", file=_sys.stderr, flush=True)
         with urlopen(req, timeout=getattr(self, "timeout", 10.0), context=ctx) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         try:
@@ -220,7 +218,7 @@ class AmscAwosSourceMixin:
         url = f"{AMSC_AWOS_BASE_URL}?cccc={quote(icao)}"
         started = time.perf_counter()
         try:
-            payload = self._http_get_json(url, headers=self._amsc_headers())
+            payload = self._amsc_http_get_json(url, headers=self._amsc_headers())
             result = _amsc_parse_wind_plate_payload(
                 payload or {},
                 city_key=normalized_city,
