@@ -42,7 +42,8 @@ function RunwayCityCard({
   const rows = getRunwayRows(detail);
   const tempSymbol = detail?.temp_symbol || "°C";
   const range = detail?.amos?.runway_temp_range;
-  const obsLocal = detail?.amos?.observation_time_local || detail?.amos?.observation_time;
+  const obsLocal =
+    detail?.amos?.observation_time_local || detail?.amos?.observation_time;
   const hasAmsc = sourceIsAmsc(detail) && rows.length > 0;
 
   return (
@@ -57,7 +58,9 @@ function RunwayCityCard({
         <div className="monitor-high-row">
           <span className="monitor-stat-label">AMSC AWOS</span>
           <span className="monitor-high-value">
-            {range ? `${range[0].toFixed(1)}–${range[1].toFixed(1)}${tempSymbol}` : "--"}
+            {range
+              ? `${range[0].toFixed(1)}–${range[1].toFixed(1)}${tempSymbol}`
+              : "--"}
           </span>
         </div>
         <div className="monitor-obs-row">
@@ -78,10 +81,15 @@ function RunwayCityCard({
             <span className="monitor-rw-temp">TDZ / MID / END</span>
           </div>
           {rows.map((row) => (
-            <div key={row.runway || `${row.tdz_temp}-${row.end_temp}`} className="monitor-rw-row">
+            <div
+              key={row.runway || `${row.tdz_temp}-${row.end_temp}`}
+              className="monitor-rw-row"
+            >
               <span className="monitor-rw-label">{row.runway || "--"}</span>
               <span className="monitor-rw-temp">
-                {formatTemp(row.tdz_temp, tempSymbol)} / {formatTemp(row.mid_temp, tempSymbol)} / {formatTemp(row.end_temp, tempSymbol)}
+                {formatTemp(row.tdz_temp, tempSymbol)} /{" "}
+                {formatTemp(row.mid_temp, tempSymbol)} /{" "}
+                {formatTemp(row.end_temp, tempSymbol)}
               </span>
             </div>
           ))}
@@ -93,7 +101,9 @@ function RunwayCityCard({
         </>
       ) : (
         <div className="scan-empty-state compact">
-          {isEn ? "No AMSC runway observation loaded yet." : "暂无 AMSC 跑道观测。"}
+          {isEn
+            ? "No AMSC runway observation loaded yet."
+            : "暂无 AMSC 跑道观测。"}
         </div>
       )}
     </article>
@@ -142,11 +152,6 @@ export function RunwayObservationsPanel() {
         <div>
           <div className="monitor-title">
             {isEn ? "Runway Observations" : "跑道观测"}
-          </div>
-          <div className="monitor-subtitle">
-            {isEn
-              ? "AMSC AWOS · China mainland airports · TDZ/MID/END air temperature"
-              : "AMSC AWOS · 国内机场 · TDZ/MID/END 跑道观测点气温"}
           </div>
         </div>
         <button
