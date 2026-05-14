@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { fetchBackendApi, buildBrowserBackendHeaders } from "@/lib/backend-api";
 import styles from "./MarketOverviewBanner.module.css";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 
@@ -34,9 +35,12 @@ export function MarketOverviewBanner({
     setLoading(true);
     setError(false);
     try {
-      const resp = await fetch("/api/scan/terminal/overview", {
+      const headers = await buildBrowserBackendHeaders({
+        "Content-Type": "application/json",
+      });
+      const resp = await fetchBackendApi("/api/scan/terminal/overview", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           rows: rows.slice(0, 40).map((row) => ({
             city: row.city ?? row.display_name ?? "",
