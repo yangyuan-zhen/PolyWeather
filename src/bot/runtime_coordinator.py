@@ -83,7 +83,6 @@ class StartupCoordinator:
 
     def start_all(self) -> RuntimeStatus:
         loops = [
-            self._start_trade_alert_loop(),
             self._start_airport_high_freq_loop(),
             self._start_dashboard_prewarm_loop(),
             self._start_polygon_wallet_loop(),
@@ -150,37 +149,6 @@ class StartupCoordinator:
             started=started,
             reason=reason,
             details=details,
-        )
-
-    def _start_trade_alert_loop(self) -> LoopStatus:
-        enabled = _env_bool("TELEGRAM_ALERT_PUSH_ENABLED", True)
-        chat_ids = get_telegram_chat_ids_from_env()
-        interval = max(60, _env_int("TELEGRAM_ALERT_PUSH_INTERVAL_SEC", 1800))
-        cities_count = _parse_csv_count(os.getenv("TELEGRAM_ALERT_CITIES"))
-        details = {
-            "mode": "critical-alerts",
-            "interval_sec": interval,
-            "cities_count": cities_count,
-            "chat_targets": len(chat_ids),
-            "alert_cooldown_sec": max(
-                60,
-                _env_int("TELEGRAM_ALERT_PUSH_COOLDOWN_SEC", 21600),
-            ),
-            "min_trigger_count": max(1, _env_int("TELEGRAM_ALERT_MIN_TRIGGER_COUNT", 3)),
-            "min_severity": str(os.getenv("TELEGRAM_ALERT_MIN_SEVERITY") or "high").strip().lower(),
-            "daily_signal_cap": "none",
-        }
-        validation_error = None if chat_ids else "missing_TELEGRAM_CHAT_IDS"
-        return self._start_with_validation(
-            key="trade_alert_push",
-            label="市场监控推送",
-            configured_enabled=enabled,
-            details=details,
-            validation_error=validation_error,
-            starter=lambda: import_module("src.utils.telegram_push").start_trade_alert_push_loop(
-                self.bot,
-                self.config,
-            ),
         )
 
     def _start_airport_high_freq_loop(self) -> LoopStatus:
@@ -269,10 +237,9 @@ class StartupCoordinator:
             label="Polymarket 钱包异动监听（已停用）",
             configured_enabled=False,
             started=False,
-            reason="retired_replaced_by_market_monitor",
+            reason="retired",
             details={
-                "replacement": "trade_alert_push",
-                "note": "wallet activity watcher retired in favor of market monitor digests and critical alerts",
+                "note": "wallet activity watcher retired",
             },
         )
 
