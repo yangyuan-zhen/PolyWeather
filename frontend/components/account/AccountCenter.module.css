@@ -358,7 +358,7 @@
 }
 
 .spin {
-  animation: spin 0.9s linear infinite;
+  animation: :global(spin) 0.9s linear infinite;
 }
 
 @media (max-width: 960px) {

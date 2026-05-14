@@ -95,7 +95,7 @@
 }
 
 .root :global(.scan-status-chip .spin) {
-  animation: spin 1s linear infinite;
+  animation: :global(spin) 1s linear infinite;
 }
 
 .root :global(.scan-table-shell) {

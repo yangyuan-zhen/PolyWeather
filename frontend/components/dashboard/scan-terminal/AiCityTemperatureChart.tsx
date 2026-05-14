@@ -1,5 +1,5 @@
 import type { ChartConfiguration } from "chart.js";
-import { useMemo, useRef } from "react";
+import { memo, useMemo, useRef } from "react";
 import { BarChart3 } from "lucide-react";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { useChart } from "@/hooks/useChart";
@@ -61,7 +61,7 @@ function buildTemperatureChartSignature(detail: CityDetail) {
   ].join("::");
 }
 
-export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
+export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   const { locale } = useI18n();
   const sectionRef = useRef<HTMLElement | null>(null);
   const cityKey = `${detail.name || detail.display_name || ""}:${detail.local_date || ""}`;
@@ -71,7 +71,8 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
   );
   const computedChartData = useMemo(
     () => getTemperatureChartData(detail, locale),
-    [chartSignature, detail, locale],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [chartSignature, locale],
   );
   const lastChartDataRef = useRef<{
     cityKey: string;
@@ -235,5 +236,5 @@ export function AiCityTemperatureChart({ detail }: { detail: CityDetail }) {
       ) : null}
     </section>
   );
-}
+});
 

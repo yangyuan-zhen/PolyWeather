@@ -209,7 +209,7 @@
   color: var(--accent-cyan);
 }
 .root :global(.refresh-btn.spinning) {
-  animation: spin 1s linear infinite;
+  animation: :global(spin) 1s linear infinite;
 }
 
 .root :global(.locale-switch) {

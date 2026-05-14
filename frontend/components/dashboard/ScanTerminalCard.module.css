@@ -648,7 +648,7 @@
 }
 
 .root :global(.scan-ai-city-icon-button .spin) {
-  animation: spin 1s linear infinite;
+  animation: :global(spin) 1s linear infinite;
 }
 
 .root :global(.scan-ai-city-collapse) {

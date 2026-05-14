@@ -280,5 +280,5 @@
 }
 
 .root :global(.scan-ghost-button .spin) {
-  animation: spin 1s linear infinite;
+  animation: :global(spin) 1s linear infinite;
 }
