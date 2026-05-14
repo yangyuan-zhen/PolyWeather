@@ -80,7 +80,7 @@ def test_fetch_amsc_official_current_uses_domestic_city_whitelist():
     class FakeCollector(AmscAwosSourceMixin):
         timeout = 1.0
 
-        def _http_get_json(self, url, *, headers=None):
+        def _amsc_http_get_json(self, url, *, headers=None):
             assert "getWindPlate?cccc=ZBAA" in url
             return ZBAA_SAMPLE
 
