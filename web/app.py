@@ -20,10 +20,9 @@ from web.analysis_service import (  # noqa: E402
     _build_city_detail_payload,
     _build_city_summary_payload,
 )
-from web.core import app  # noqa: E402
-from web.routes import router  # noqa: E402
+from web.app_factory import create_app  # noqa: E402
 
-app.include_router(router)
+app = create_app()
 
 __all__ = [
     "app",

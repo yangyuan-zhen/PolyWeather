@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import hashlib
-import json
-import os
 import re
 import time as _time
 import threading
@@ -10,7 +7,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
 
-import httpx
 from fastapi import HTTPException
 from loguru import logger
 
@@ -23,7 +19,6 @@ from web.core import (
     CITY_RISK_PROFILES,
     SETTLEMENT_SOURCE_LABELS,
     _is_excluded_model_name,
-    _market_layer,
     _sf,
     _weather,
 )
@@ -35,6 +30,19 @@ from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from src.models.lgbm_daily_high import predict_lgbm_daily_high
+from web.services.groq_commentary import (
+    build_groq_commentary_context as _groq_context_builder,
+    clean_commentary_text as _groq_clean_text,
+    groq_commentary_enabled as _groq_enabled,
+    maybe_enrich_dynamic_commentary_with_groq as _groq_enrich,
+    normalize_groq_commentary_payload as _groq_normalize_payload,
+    request_groq_commentary as _groq_request,
+)
+from web.services.city_payloads import (
+    build_city_detail_payload as _city_payload_detail,
+    build_city_market_scan_payload as _city_payload_market_scan,
+    build_city_summary_payload as _city_payload_summary,
+)
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
@@ -49,13 +57,6 @@ _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
 }
 _SUMMARY_CACHE_LOCK = threading.Lock()
 _SUMMARY_CACHE: Dict[str, Dict[str, Any]] = {}
-_GROQ_COMMENTARY_CACHE_LOCK = threading.Lock()
-_GROQ_COMMENTARY_CACHE: Dict[str, Dict[str, Any]] = {}
-_GROQ_COMMENTARY_CACHE_TTL_SEC = int(
-    os.getenv("POLYWEATHER_GROQ_COMMENTARY_CACHE_TTL_SEC", "1800")
-)
-
-
 def _dedupe_forecast_daily(rows: Any) -> list[Dict[str, Any]]:
     if not isinstance(rows, list):
         return []
@@ -424,206 +425,30 @@ def _set_cached_summary(city: str, payload: Dict[str, Any]) -> None:
 
 
 def _groq_commentary_enabled() -> bool:
-    enabled = str(
-        os.getenv("POLYWEATHER_GROQ_COMMENTARY_ENABLED", "false")
-    ).strip().lower()
-    api_key = str(os.getenv("GROQ_API_KEY") or "").strip()
-    return enabled in {"1", "true", "yes", "on"} and bool(api_key)
+    return _groq_enabled()
 
 
 def _clean_commentary_text(value: Any, *, limit: int = 240) -> str:
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    text = re.sub(r"\s+", " ", text)
-    return text[:limit].strip()
+    return _groq_clean_text(value, limit=limit)
 
 
 def _build_groq_commentary_context(result: Dict[str, Any]) -> Dict[str, Any]:
-    dynamic = result.get("dynamic_commentary") or {}
-    vertical = result.get("vertical_profile_signal") or {}
-    taf_signal = ((result.get("taf") or {}).get("signal") or {}) if isinstance(result.get("taf"), dict) else {}
-    network = result.get("network_lead_signal") or {}
-    peak = result.get("peak") or {}
-    current = result.get("current") or {}
-    airport_primary = result.get("airport_primary") or {}
-    notes = dynamic.get("notes") if isinstance(dynamic.get("notes"), list) else []
-    compact_notes = [_clean_commentary_text(item, limit=180) for item in notes]
-    compact_notes = [item for item in compact_notes if item][:4]
-    return {
-        "city": result.get("display_name") or result.get("name"),
-        "local_date": result.get("local_date"),
-        "local_time": result.get("local_time"),
-        "temp_symbol": result.get("temp_symbol"),
-        "current_temp": current.get("temp"),
-        "day_high_so_far": current.get("max_so_far"),
-        "airport_anchor_temp": airport_primary.get("temp"),
-        "airport_vs_network_delta": result.get("airport_vs_network_delta"),
-        "peak_hours": peak.get("hours") or [],
-        "peak_status": peak.get("status"),
-        "network_lead_status": network.get("status"),
-        "network_lead_note": _clean_commentary_text(network.get("note"), limit=180),
-        "rules_summary": _clean_commentary_text(dynamic.get("summary"), limit=260),
-        "rules_notes": compact_notes,
-        "upper_air_summary_zh": _clean_commentary_text(vertical.get("summary_zh"), limit=260),
-        "upper_air_summary_en": _clean_commentary_text(vertical.get("summary_en"), limit=260),
-        "taf_summary_zh": _clean_commentary_text(taf_signal.get("summary_zh"), limit=220),
-        "taf_summary_en": _clean_commentary_text(taf_signal.get("summary_en"), limit=220),
-        "taf_peak_window": _clean_commentary_text(taf_signal.get("peak_window"), limit=80),
-    }
+    return _groq_context_builder(result)
 
 
 def _normalize_groq_commentary_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    def _headline(value: Any, fallback: str) -> str:
-        text = _clean_commentary_text(value, limit=90)
-        return text or fallback
-
-    def _bullets(value: Any) -> list[str]:
-        items = value if isinstance(value, list) else []
-        cleaned = [_clean_commentary_text(item, limit=120) for item in items]
-        cleaned = [item for item in cleaned if item]
-        return cleaned[:3]
-
-    zh_headline = _headline(payload.get("headline_zh"), "结构信号以现有规则结论为主。")
-    en_headline = _headline(payload.get("headline_en"), "Structural read stays anchored to the existing rule-based signal.")
-    zh_bullets = _bullets(payload.get("bullets_zh"))
-    en_bullets = _bullets(payload.get("bullets_en"))
-    while len(zh_bullets) < 3:
-        zh_bullets.append("继续结合当前节奏、边界风险和峰值窗口判断。")
-    while len(en_bullets) < 3:
-        en_bullets.append("Keep the read anchored to pace, boundary risk, and the peak window.")
-    return {
-        "headline_zh": zh_headline,
-        "headline_en": en_headline,
-        "bullets_zh": zh_bullets[:3],
-        "bullets_en": en_bullets[:3],
-        "source": "groq",
-    }
+    return _groq_normalize_payload(payload)
 
 
 def _request_groq_commentary(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    api_key = str(os.getenv("GROQ_API_KEY") or "").strip()
-    if not api_key:
-        return None
-    model = str(os.getenv("POLYWEATHER_GROQ_COMMENTARY_MODEL") or "openai/gpt-oss-20b").strip()
-    timeout_sec = float(os.getenv("POLYWEATHER_GROQ_COMMENTARY_TIMEOUT_SEC", "8"))
-    payload = {
-        "model": model,
-        "temperature": 0.2,
-        "max_tokens": 400,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You rewrite weather-market structure commentary. "
-                    "Never invent facts. Use only the provided context. "
-                    "Return concise bilingual output for a dashboard: "
-                    "one headline and exactly three bullets in Chinese, and the same in English. "
-                    "Keep every bullet actionable and short."
-                ),
-            },
-            {
-                "role": "user",
-                "content": json.dumps(context, ensure_ascii=False),
-            },
-        ],
-        "response_format": {
-            "type": "json_schema",
-            "json_schema": {
-                "name": "polyweather_structure_commentary",
-                "strict": True,
-                "schema": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "properties": {
-                        "headline_zh": {"type": "string"},
-                        "bullets_zh": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "minItems": 3,
-                            "maxItems": 3,
-                        },
-                        "headline_en": {"type": "string"},
-                        "bullets_en": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "minItems": 3,
-                            "maxItems": 3,
-                        },
-                    },
-                    "required": [
-                        "headline_zh",
-                        "bullets_zh",
-                        "headline_en",
-                        "bullets_en",
-                    ],
-                },
-            },
-        },
-    }
-    with httpx.Client(timeout=timeout_sec) as client:
-        response = client.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-        response.raise_for_status()
-        body = response.json()
-    content = (
-        (((body.get("choices") or [{}])[0]).get("message") or {}).get("content")
-        if isinstance(body, dict)
-        else None
-    )
-    if not content:
-        return None
-    try:
-        return _normalize_groq_commentary_payload(json.loads(str(content)))
-    except Exception:
-        logger.warning("Groq commentary returned non-JSON payload")
-        return None
+    return _groq_request(context)
 
 
 def _maybe_enrich_dynamic_commentary_with_groq(
     city: str,
     result: Dict[str, Any],
 ) -> Dict[str, Any]:
-    dynamic = result.get("dynamic_commentary") or {}
-    if not _groq_commentary_enabled():
-        return dynamic
-    if dynamic.get("headline_zh") and dynamic.get("bullets_zh"):
-        return dynamic
-
-    context = _build_groq_commentary_context(result)
-    if not context.get("rules_summary") and not context.get("rules_notes"):
-        return dynamic
-
-    cache_key = hashlib.sha256(
-        json.dumps({"city": city, "context": context}, sort_keys=True, ensure_ascii=False).encode("utf-8")
-    ).hexdigest()
-    now = _time.time()
-    with _GROQ_COMMENTARY_CACHE_LOCK:
-        cached = _GROQ_COMMENTARY_CACHE.get(cache_key)
-        if cached and now - float(cached.get("t") or 0) < _GROQ_COMMENTARY_CACHE_TTL_SEC:
-            merged = dict(dynamic)
-            merged.update(cached.get("payload") or {})
-            return merged
-
-    try:
-        enriched = _request_groq_commentary(context)
-    except Exception as exc:
-        logger.warning("Groq commentary skipped for {}: {}", city, exc)
-        return dynamic
-    if not enriched:
-        return dynamic
-
-    with _GROQ_COMMENTARY_CACHE_LOCK:
-        _GROQ_COMMENTARY_CACHE[cache_key] = {"t": now, "payload": enriched}
-    merged = dict(dynamic)
-    merged.update(enriched)
-    return merged
+    return _groq_enrich(city, result)
 
 
 def _interpolate_hourly_value(
@@ -3118,27 +2943,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
 
 def _build_city_summary_payload(data: Dict[str, Any]) -> Dict[str, Any]:
-    return {
-        "name": data.get("name"),
-        "display_name": data.get("display_name"),
-        "icao": data.get("risk", {}).get("icao"),
-        "utc_offset_seconds": data.get("utc_offset_seconds"),
-        "local_time": data.get("local_time"),
-        "temp_symbol": data.get("temp_symbol"),
-        "current": {
-            "temp": data.get("current", {}).get("temp"),
-            "obs_time": data.get("current", {}).get("obs_time"),
-            "settlement_source": data.get("current", {}).get("settlement_source"),
-            "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
-        },
-        "deb": {"prediction": data.get("deb", {}).get("prediction")},
-        "deviation_monitor": data.get("deviation_monitor") or {},
-        "risk": {
-            "level": data.get("risk", {}).get("level"),
-            "warning": data.get("risk", {}).get("warning"),
-        },
-        "updated_at": data.get("updated_at"),
-    }
+    return _city_payload_summary(data)
 
 
 def _build_city_market_scan_payload(
@@ -3148,137 +2953,13 @@ def _build_city_market_scan_payload(
     lite: bool = False,
     scan_filters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    city = str(data.get("name") or "").strip().lower()
-    local_date = str(data.get("local_date") or "").strip()
-    requested_date = str(target_date or "").strip()
-    selected_date = requested_date or local_date
-
-    multi_model_daily = data.get("multi_model_daily") or {}
-    selected_daily = (
-        multi_model_daily.get(selected_date)
-        if isinstance(multi_model_daily, dict)
-        else None
-    )
-    if not isinstance(selected_daily, dict):
-        selected_daily = {}
-        selected_date = local_date
-
-    distribution = selected_daily.get("probabilities")
-    if not isinstance(distribution, list) or not distribution:
-        distribution = data.get("probabilities", {}).get("distribution", []) or []
-    distribution_all = selected_daily.get("probabilities_all")
-    if not isinstance(distribution_all, list) or not distribution_all:
-        distribution_all = data.get("probabilities", {}).get("distribution_all", []) or []
-    if not distribution_all:
-        distribution_all = distribution
-
-    model_map = selected_daily.get("models") or data.get("multi_model") or {}
-    if not isinstance(model_map, dict):
-        model_map = {}
-
-    anchor_temp = None
-    anchor_model = None
-    for model_name, raw_value in model_map.items():
-        value = _sf(raw_value)
-        if value is None:
-            continue
-        if anchor_temp is None or value > anchor_temp:
-            anchor_temp = value
-            anchor_model = str(model_name or "").strip() or None
-
-    anchor_temp_c = anchor_temp
-    temp_symbol = str(data.get("temp_symbol") or "")
-    if anchor_temp_c is not None and "F" in temp_symbol.upper():
-        anchor_temp_c = (anchor_temp_c - 32.0) * 5.0 / 9.0
-    anchor_settlement = apply_city_settlement(city, anchor_temp_c) if anchor_temp_c is not None else None
-
-    primary_bucket = None
-    if isinstance(distribution, list) and distribution:
-        ranked_buckets = []
-        temp_symbol_upper = str(temp_symbol or "").upper()
-        max_primary_bucket_delta = 16.0 if "F" in temp_symbol_upper else 8.0
-        for idx, row in enumerate(distribution_all):
-            if not isinstance(row, dict):
-                continue
-            bucket_value = _sf(
-                row.get("temp")
-                if row.get("temp") is not None
-                else row.get("value")
-                if row.get("value") is not None
-                else row.get("lower")
-            )
-            if (
-                anchor_temp is not None
-                and bucket_value is not None
-                and abs(float(bucket_value) - float(anchor_temp)) > max_primary_bucket_delta
-            ):
-                continue
-            bucket_prob = _sf(row.get("probability"))
-            prob_rank = bucket_prob if bucket_prob is not None else -1.0
-            ranked_buckets.append((-prob_rank, idx, row))
-        if ranked_buckets:
-            ranked_buckets.sort(key=lambda x: (x[0], x[1]))
-            primary_bucket = ranked_buckets[0][2]
-        elif anchor_temp is None:
-            primary_bucket = distribution[0]
-
-    model_probability = None
-    if isinstance(primary_bucket, dict) and primary_bucket.get("probability") is not None:
-        try:
-            raw_probability = float(primary_bucket.get("probability"))
-            model_probability = raw_probability / 100.0 if raw_probability > 1.0 else raw_probability
-        except Exception:
-            model_probability = None
-
-    fallback_sparkline = [
-        p.get("probability", 0)
-        for p in distribution_all[:8]
-        if isinstance(p, dict)
-    ]
-    current = data.get("current") or {}
-    selected_deb = selected_daily.get("deb") if isinstance(selected_daily.get("deb"), dict) else {}
-    current_deb = data.get("deb") if isinstance(data.get("deb"), dict) else {}
-    scan_context = {
-        "local_date": data.get("local_date"),
-        "local_time": data.get("local_time"),
-        "peak": data.get("peak") or {},
-        "current_max_so_far": current.get("max_so_far"),
-        "current_temp": current.get("temp"),
-        "trend": data.get("trend") or {},
-        "network_lead_signal": data.get("network_lead_signal") or {},
-        "models": model_map,
-        "deb_prediction": selected_deb.get("prediction") or current_deb.get("prediction"),
-    }
-    market_scan = _market_layer.build_market_scan(
-        city=data.get("name"),
-        target_date=selected_date or data.get("local_date"),
-        temperature_bucket=primary_bucket if isinstance(primary_bucket, dict) else None,
-        model_probability=model_probability,
-        probability_distribution=distribution_all,
-        temp_symbol=temp_symbol,
-        fallback_sparkline=fallback_sparkline,
-        forced_market_slug=market_slug,
-        include_related_buckets=not lite,
+    return _city_payload_market_scan(
+        data,
+        market_slug=market_slug,
+        target_date=target_date,
+        lite=lite,
         scan_filters=scan_filters,
-        scan_context=scan_context,
     )
-    if isinstance(market_scan, dict):
-        market_scan["anchor_model"] = anchor_model
-        market_scan["anchor_high"] = anchor_temp
-        market_scan["anchor_settlement"] = anchor_settlement
-        market_scan["open_meteo_settlement"] = anchor_settlement
-        probabilities = data.get("probabilities") or {}
-        market_scan["probability_engine"] = str(
-            probabilities.get("engine") or "legacy"
-        ).strip() or "legacy"
-        market_scan["probability_calibration_mode"] = str(
-            probabilities.get("calibration_mode") or "legacy"
-        ).strip() or "legacy"
-    return {
-        "market_scan": market_scan,
-        "selected_date": selected_date or data.get("local_date"),
-        "fetched_at": data.get("updated_at"),
-    }
 
 
 def _build_city_detail_payload(
@@ -3286,96 +2967,12 @@ def _build_city_detail_payload(
     market_slug: Optional[str] = None,
     target_date: Optional[str] = None,
 ) -> Dict[str, Any]:
-    market_payload = _build_city_market_scan_payload(
+    return _city_payload_detail(
         data,
         market_slug=market_slug,
         target_date=target_date,
     )
-    market_scan = market_payload.get("market_scan")
-    return {
-        "city": data.get("name"),
-        "fetched_at": data.get("updated_at"),
-        "overview": {
-            "name": data.get("name"),
-            "display_name": data.get("display_name"),
-            "icao": data.get("risk", {}).get("icao"),
-            "airport": data.get("risk", {}).get("airport"),
-            "lat": data.get("lat"),
-            "lon": data.get("lon"),
-            "local_time": data.get("local_time"),
-            "local_date": data.get("local_date"),
-            "temp_symbol": data.get("temp_symbol"),
-            "current_temp": data.get("current", {}).get("temp"),
-            "settlement_source": data.get("current", {}).get("settlement_source"),
-            "settlement_source_label": data.get("current", {}).get("settlement_source_label"),
-            "settlement_station": data.get("settlement_station") or {},
-            "deb_prediction": data.get("deb", {}).get("prediction"),
-            "risk_level": data.get("risk", {}).get("level"),
-            "risk_warning": data.get("risk", {}).get("warning"),
-            "updated_at": data.get("updated_at"),
-        },
-        "official": {
-            "available": bool(data.get("current", {}).get("temp") is not None),
-            "metar": {
-                "observation_time": data.get("airport_current", {}).get("obs_time"),
-                "obs_age_min": data.get("airport_current", {}).get("obs_age_min"),
-                "report_time": data.get("airport_current", {}).get("report_time"),
-                "receipt_time": data.get("airport_current", {}).get("receipt_time"),
-                "raw_metar": data.get("airport_current", {}).get("raw_metar"),
-                "current": data.get("airport_current") or {},
-            },
-            "taf": data.get("taf") or {},
-            "weather_gov": {},
-            "mgm": data.get("mgm") or {},
-            "mgm_nearby": data.get("mgm_nearby") or [],
-            "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
-            "airport_primary": data.get("airport_primary") or {},
-            "airport_primary_today_obs": data.get("airport_primary_today_obs") or [],
-            "official_nearby": data.get("official_nearby") or [],
-            "official_network_source": data.get("official_network_source"),
-            "official_network_status": data.get("official_network_status") or {},
-            "network_lead_signal": data.get("network_lead_signal") or {},
-            "network_spread_signal": data.get("network_spread_signal") or {},
-            "center_station_candidate": data.get("center_station_candidate"),
-            "airport_vs_network_delta": data.get("airport_vs_network_delta"),
-        },
-        "timeseries": {
-            "metar_recent_obs": data.get("metar_recent_obs") or [],
-            "metar_today_obs": data.get("metar_today_obs") or [],
-            "settlement_today_obs": data.get("settlement_today_obs") or [],
-            "hourly": data.get("hourly") or {},
-            "mgm_hourly": (data.get("mgm") or {}).get("hourly", []),
-            "forecast_daily": (data.get("forecast") or {}).get("daily", []),
-        },
-        "models": {
-            k: v
-            for k, v in (data.get("multi_model") or {}).items()
-            if not _is_excluded_model_name(k)
-        },
-        "deb": data.get("deb") or {},
-        "multi_model_daily": data.get("multi_model_daily") or {},
-        "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},
-        "dynamic_commentary": data.get("dynamic_commentary") or {"summary": "", "notes": []},
-        "intraday_meteorology": data.get("intraday_meteorology")
-        or _build_intraday_meteorology(data),
-        "vertical_profile_signal": data.get("vertical_profile_signal") or {},
-        "taf": data.get("taf") or {},
-        "market_scan": market_scan,
-        "risk": data.get("risk"),
-        "settlement_station": data.get("settlement_station") or {},
-        "airport_primary": data.get("airport_primary") or {},
-        "official_nearby": data.get("official_nearby") or [],
-        "official_network_source": data.get("official_network_source"),
-        "official_network_status": data.get("official_network_status") or {},
-        "network_lead_signal": data.get("network_lead_signal") or {},
-        "network_spread_signal": data.get("network_spread_signal") or {},
-        "center_station_candidate": data.get("center_station_candidate"),
-        "airport_vs_network_delta": data.get("airport_vs_network_delta"),
-        "airport_current": data.get("airport_current") or {},
-        "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
-        "ai_analysis": data.get("ai_analysis") or "",
-        "errors": {},
-    }
+
 
 
 # ──────────────────────────────────────────────────────────

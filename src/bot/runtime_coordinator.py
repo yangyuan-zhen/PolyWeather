@@ -237,7 +237,7 @@ class StartupCoordinator:
             label="Polymarket 钱包异动监听（已停用）",
             configured_enabled=False,
             started=False,
-            reason="retired",
+            reason="retired_replaced_by_market_monitor",
             details={
                 "note": "wallet activity watcher retired",
             },

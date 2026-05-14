@@ -1,0 +1,111 @@
+"""Market scan API service functions."""
+
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from fastapi import HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
+
+import web.routes as legacy_routes
+
+
+def _boolish(value: Any) -> bool:
+    return str(value or "false").lower() in {"1", "true", "yes", "on"}
+
+
+async def _json_body_or_empty(request: Request) -> Dict[str, Any]:
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+    return body
+
+
+def _extract_required_city(body: Dict[str, Any]) -> str:
+    city = str(body.get("city") or "").strip()
+    if not city:
+        raise HTTPException(status_code=400, detail="city is required")
+    return city
+
+
+async def get_scan_terminal_payload(
+    request: Request,
+    *,
+    scan_mode: str = "tradable",
+    min_price: float = 0.05,
+    max_price: float = 0.95,
+    min_edge_pct: float = 2.0,
+    min_liquidity: float = 500.0,
+    high_liquidity_only: bool = False,
+    market_type: str = "maxtemp",
+    time_range: str = "today",
+    limit: int = 25,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    legacy_routes._assert_entitlement(request)
+    filters = {
+        "scan_mode": scan_mode,
+        "min_price": min_price,
+        "max_price": max_price,
+        "min_edge_pct": min_edge_pct,
+        "min_liquidity": min_liquidity,
+        "high_liquidity_only": high_liquidity_only,
+        "market_type": market_type,
+        "time_range": time_range,
+        "limit": limit,
+    }
+    return await run_in_threadpool(
+        legacy_routes.build_scan_terminal_payload,
+        filters,
+        force_refresh=force_refresh,
+    )
+
+
+async def get_scan_terminal_ai_payload(request: Request) -> Dict[str, Any]:
+    legacy_routes._assert_entitlement(request)
+    body = await _json_body_or_empty(request)
+    filters = body.get("filters") if isinstance(body.get("filters"), dict) else {}
+    snapshot_id = str(body.get("snapshot_id") or "").strip() or None
+    return await run_in_threadpool(
+        legacy_routes.build_scan_terminal_ai_payload,
+        filters,
+        snapshot_id=snapshot_id,
+    )
+
+
+async def get_scan_city_ai_forecast_payload(request: Request) -> Dict[str, Any]:
+    legacy_routes._assert_entitlement(request)
+    body = await _json_body_or_empty(request)
+    city = _extract_required_city(body)
+    force_refresh = _boolish(body.get("force_refresh"))
+    locale = str(body.get("locale") or "zh-CN").strip()
+    return await run_in_threadpool(
+        legacy_routes.build_scan_city_ai_forecast_payload,
+        city,
+        force_refresh=force_refresh,
+        locale=locale,
+    )
+
+
+async def get_scan_city_ai_stream_response(request: Request) -> StreamingResponse:
+    legacy_routes._assert_entitlement(request)
+    body = await _json_body_or_empty(request)
+    city = _extract_required_city(body)
+    force_refresh = _boolish(body.get("force_refresh"))
+    locale = str(body.get("locale") or "zh-CN").strip()
+    return StreamingResponse(
+        legacy_routes.stream_scan_city_ai_forecast_payload(
+            city,
+            force_refresh=force_refresh,
+            locale=locale,
+        ),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-store",
+            "X-Accel-Buffering": "no",
+        },
+    )
