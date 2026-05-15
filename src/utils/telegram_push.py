@@ -878,12 +878,25 @@ def _run_high_freq_airport_cycle(
 
             city_weather: Dict[str, Any] = {}
             deb_pred: Optional[float] = None
+            market_high: Optional[float] = None
             try:
                 from web.app import _analyze
+                from web.services.city_payloads import build_city_market_scan_payload
                 city_weather = _analyze(city)
                 deb_raw = (city_weather.get("deb") or {}).get("prediction")
                 if deb_raw is not None:
                     deb_pred = float(deb_raw)
+                # 取市场最高温度选项
+                scan = build_city_market_scan_payload(city_weather)
+                ms = (scan.get("market_scan") or {}) if isinstance(scan, dict) else {}
+                if ms.get("available"):
+                    related = ms.get("related_buckets") or []
+                    for b in related:
+                        t = b.get("temp") if isinstance(b, dict) else None
+                        if t is not None:
+                            t = float(t)
+                            if market_high is None or t > market_high:
+                                market_high = t
             except Exception:
                 pass
 
@@ -969,6 +982,11 @@ def _run_high_freq_airport_cycle(
                             break
                 if not any_in_window:
                     continue
+                # 如果跑道最高温已超过市场最高选项，行情已定，跳过
+                if market_high is not None:
+                    rwy_max = max((t for (t, _d) in runway_temps if t is not None), default=None)
+                    if rwy_max is not None and rwy_max > market_high:
+                        continue
 
             # 用观测数据时间而非当前本地时间
             airport_cur = city_weather.get("airport_current") or {}
