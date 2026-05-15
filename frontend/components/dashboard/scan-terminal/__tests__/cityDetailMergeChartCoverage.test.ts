@@ -21,4 +21,24 @@ export function runTests() {
     ),
     "deep-analysis refresh must not let sparse incoming hourly data overwrite chart-capable cached hourly data",
   );
+  assert(
+    source.includes("function pickRicherObservationSeries"),
+    "city detail merge should preserve chart observation series when refresh payload is sparse",
+  );
+  assert(
+    /metar_today_obs:\s*pickRicherObservationSeries\(\s*current\.metar_today_obs,\s*incoming\.metar_today_obs,?\s*\)/.test(
+      source,
+    ),
+    "deep-analysis refresh must not wipe METAR observation points used by the intraday path chart",
+  );
+  assert(
+    /settlement_today_obs:\s*pickRicherObservationSeries\(\s*current\.settlement_today_obs,\s*incoming\.settlement_today_obs,?\s*\)/.test(
+      source,
+    ),
+    "deep-analysis refresh must not wipe settlement observation points used by the intraday path chart",
+  );
+  assert(
+    /trend:\s*mergeTrendInfo\(\s*current\.trend,\s*incoming\.trend\s*\)/.test(source),
+    "deep-analysis refresh must merge trend.recent instead of replacing it with sparse trend payloads",
+  );
 }

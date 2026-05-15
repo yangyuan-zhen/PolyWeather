@@ -7,6 +7,12 @@ function assert(condition: unknown, message: string) {
 
 export function runTests() {
   const projectRoot = process.cwd();
+  const dashboardPath = path.join(
+    projectRoot,
+    "components",
+    "dashboard",
+    "ScanTerminalDashboard.tsx",
+  );
   const bannerPath = path.join(
     projectRoot,
     "components",
@@ -14,6 +20,7 @@ export function runTests() {
     "scan-terminal",
     "MarketOverviewBanner.tsx",
   );
+  const dashboardSource = fs.readFileSync(dashboardPath, "utf8");
   const source = fs.readFileSync(bannerPath, "utf8");
 
   assert(
@@ -21,5 +28,9 @@ export function runTests() {
       !source.includes("AI 概览") &&
       !source.includes("styles.badge"),
     "market overview banner should not render the AI overview badge",
+  );
+  assert(
+    !dashboardSource.includes("MarketOverviewBanner"),
+    "scan terminal dashboard should not mount the AI market overview banner",
   );
 }

@@ -46,13 +46,6 @@ import {
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
-const MarketOverviewBanner = dynamic(
-  () =>
-    import(
-      "@/components/dashboard/scan-terminal/MarketOverviewBanner"
-    ).then((m) => m.MarketOverviewBanner),
-  { ssr: false },
-);
 
 const MonitorPanel = dynamic(
   () => import("@/components/dashboard/monitoring/MonitorPanel"),
@@ -452,12 +445,6 @@ function ScanTerminalScreen() {
               }}
             />
           ) : null}
-
-          <MarketOverviewBanner
-            isEn={isEn}
-            isPro={isPro}
-            rows={timeSortedRows}
-          />
 
           <section className="scan-list-section">
             <div className="scan-list-header">
