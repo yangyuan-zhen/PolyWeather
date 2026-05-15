@@ -95,10 +95,6 @@ export function MarketOverviewBanner({
         onClick={() => setCollapsed((c) => !c)}
         aria-label={isEn ? "Toggle market overview" : "切换市场概览"}
       >
-        <span className={styles.badge}>
-          <Sparkles size={13} />
-          {isEn ? "AI Overview" : "AI 概览"}
-        </span>
         <span className={styles.preview}>
           {collapsed && overviewText ? overviewText.slice(0, isEn ? 120 : 60) + "…" : ""}
         </span>

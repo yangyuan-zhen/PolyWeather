@@ -492,6 +492,23 @@ function pickRicherForecast(
   };
 }
 
+function countHourlyPoints(value: CityDetail["hourly"] | undefined) {
+  const times = Array.isArray(value?.times) ? value?.times || [] : [];
+  const temps = Array.isArray(value?.temps) ? value?.temps || [] : [];
+  return Math.min(times.length, temps.length);
+}
+
+function pickRicherHourly(
+  currentValue: CityDetail["hourly"] | undefined,
+  incomingValue: CityDetail["hourly"] | undefined,
+) {
+  const incomingCount = countHourlyPoints(incomingValue);
+  const currentCount = countHourlyPoints(currentValue);
+  if (incomingCount <= 0) return currentValue;
+  if (currentCount <= 0) return incomingValue;
+  return incomingCount >= currentCount ? incomingValue : currentValue;
+}
+
 function pickPreferredNearbyStations(
   currentValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
   incomingValue: CityDetail["official_nearby"] | CityDetail["mgm_nearby"],
@@ -536,6 +553,7 @@ function mergeCityDetail(
       incoming.multi_model_daily,
     ),
     forecast: pickRicherForecast(current.forecast, incoming.forecast),
+    hourly: pickRicherHourly(current.hourly, incoming.hourly),
     official_nearby: pickPreferredNearbyStations(
       current.official_nearby,
       incoming.official_nearby,

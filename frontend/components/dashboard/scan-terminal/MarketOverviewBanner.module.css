@@ -43,17 +43,6 @@
   background: rgba(77, 163, 255, 0.04);
 }
 
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--color-accent-primary, #4DA3FF);
-  font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.03em;
-  flex-shrink: 0;
-}
-
 .preview {
   flex: 1;
   min-width: 0;
@@ -142,9 +131,6 @@
     padding: 4px 8px;
   }
 
-  .badge {
-    font-size: 11px;
-  }
 }
 
 /* Mobile < 640px */

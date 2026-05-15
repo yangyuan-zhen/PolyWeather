@@ -15,7 +15,10 @@ from src.database.runtime_state import (
     get_state_storage_mode,
 )
 from src.data_collection.city_registry import CITY_REGISTRY
-from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import (
+    get_market_monitor_chat_ids_from_env,
+    get_telegram_chat_ids_from_env,
+)
 
 
 SEVERITY_RANK = {
@@ -486,7 +489,117 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 # ── high-freq airport push loop ──
 
 HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+MARKET_MONITOR_INTERVAL_SEC = 60
+MARKET_MONITOR_CITIES = [
+    "seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
+    "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
+    "new york", "los angeles", "chicago", "denver", "atlanta",
+    "miami", "san francisco", "houston", "dallas", "austin", "seattle",
+    "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao",
+    "chengdu", "chongqing", "wuhan",
+]
+
+_FUNCTION_HASHTAGS = {
+    "runway": "#跑道观测",
+    "market": "#市场监控",
+    "trade": "#交易机会",
+}
+
+
+def _city_hashtag(city: Optional[str]) -> Optional[str]:
+    text = str(city or "").strip()
+    if not text:
+        return None
+    parts = [part for part in re.split(r"[^A-Za-z0-9]+", text.title()) if part]
+    if not parts:
+        return None
+    return "#" + "".join(parts)
+
+
+def _station_hashtag(station: Optional[str]) -> Optional[str]:
+    text = re.sub(r"[^A-Za-z0-9]+", "", str(station or "").upper())
+    return f"#{text}" if text else None
+
+
+def _build_telegram_hashtag_line(
+    kind: str,
+    *,
+    city: Optional[str] = None,
+    station: Optional[str] = None,
+    extra: Optional[List[str]] = None,
+) -> str:
+    tags: List[str] = []
+    primary = _FUNCTION_HASHTAGS.get(kind)
+    if primary:
+        tags.append(primary)
+    for item in extra or []:
+        tag = _FUNCTION_HASHTAGS.get(item, item)
+        if tag and tag not in tags:
+            tags.append(tag)
+    city_tag = _city_hashtag(city)
+    if city_tag and city_tag not in tags:
+        tags.append(city_tag)
+    station_tag = _station_hashtag(station)
+    if station_tag and station_tag not in tags:
+        tags.append(station_tag)
+    return " ".join(tags)
+
+
+def _format_percent(value: Any) -> str:
+    try:
+        numeric = float(value)
+    except Exception:
+        return "--"
+    sign = "+" if numeric > 0 else ""
+    return f"{sign}{numeric:.1f}%"
+
+
+def _format_prob(value: Any) -> str:
+    try:
+        numeric = float(value)
+    except Exception:
+        return "--"
+    if numeric <= 1:
+        numeric *= 100
+    return f"{numeric:.1f}%"
+
+
+def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> str:
+    market = city_weather.get("market_scan") or {}
+    current = city_weather.get("current") or {}
+    deb = city_weather.get("deb") or {}
+    local_time = str(city_weather.get("local_time") or "").strip() or "--"
+    city_label = str(city or "").strip().title()
+    signal = str(market.get("signal_label") or market.get("signal_status") or "MONITOR").strip()
+    confidence = str(market.get("confidence") or "low").strip()
+    bucket = str(
+        market.get("selected_bucket")
+        or (market.get("forecast_bucket") or {}).get("label")
+        or "--"
+    ).strip()
+    yes_buy = (
+        market.get("yes_buy")
+        if market.get("yes_buy") is not None
+        else (market.get("forecast_bucket") or {}).get("yes_buy")
+    )
+    edge = market.get("edge_percent")
+    current_temp = current.get("temp")
+    deb_pred = deb.get("prediction")
+
+    lines = [
+        _build_telegram_hashtag_line("market", city=city),
+        f"{city_label} 1分钟市场监控 {local_time}",
+        f"信号：{signal} · 置信度：{confidence}",
+    ]
+    if bucket and bucket != "--":
+        lines.append(f"桶位：{bucket}")
+    lines.append(f"Yes 买价：{_format_prob(yes_buy)} · Edge：{_format_percent(edge)}")
+    if current_temp is not None or deb_pred is not None:
+        current_text = f"{float(current_temp):.1f}°C" if current_temp is not None else "--"
+        deb_text = f"{float(deb_pred):.1f}°C" if deb_pred is not None else "--"
+        lines.append(f"当前：{current_text} · DEB：{deb_text}")
+    return "\n".join(lines)
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -562,7 +675,9 @@ def _build_airport_status_message(
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
                    "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
-                   "taipei": "Songshan"}
+                   "taipei": "Songshan", "beijing": "ZBAA", "shanghai": "ZSPD",
+                   "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD",
+                   "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
@@ -599,7 +714,12 @@ def _build_airport_status_message(
                 and latest_temp - max_so_far >= 0.3)
 
     flag = " \U0001f536新" if new_high else ""
-    lines = [header + flag, ""]
+    hashtag_line = _build_telegram_hashtag_line(
+        "runway",
+        city=city,
+        station=airport_icao,
+    )
+    lines = [hashtag_line, header + flag, ""]
     runway_shown = False
     if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
@@ -893,4 +1013,64 @@ def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optio
     )
     thread.start()
     logger.info("airport high-freq push loop thread started")
+    return thread
+
+
+def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
+    sent_any = False
+    try:
+        from web.app import _analyze
+    except Exception as exc:
+        logger.warning("market monitor push skipped: analyze import failed: {}", exc)
+        return False
+
+    for city in MARKET_MONITOR_CITIES:
+        try:
+            city_weather = _analyze(city)
+            market = city_weather.get("market_scan") or {}
+            if not market.get("available"):
+                continue
+            message = _build_market_monitor_message(city, city_weather)
+            for chat_id in chat_ids:
+                try:
+                    bot.send_message(chat_id, message)
+                    sent_any = True
+                except Exception as exc:
+                    logger.warning("market monitor push failed city={} chat_id={}: {}", city, chat_id, exc)
+        except Exception:
+            logger.exception("market monitor cycle failed for city={}", city)
+    return sent_any
+
+
+def start_market_monitor_push_loop(bot: Any) -> Optional[threading.Thread]:
+    enabled = _env_bool("TELEGRAM_MARKET_MONITOR_PUSH_ENABLED", True)
+    chat_ids = get_market_monitor_chat_ids_from_env()
+    if not enabled:
+        logger.info("market monitor push loop disabled")
+        return None
+    if not chat_ids:
+        logger.warning("market monitor push loop skipped: TELEGRAM_MARKET_MONITOR_CHAT_IDS/TELEGRAM_CHAT_IDS is not set")
+        return None
+
+    interval_sec = MARKET_MONITOR_INTERVAL_SEC
+
+    def _runner() -> None:
+        logger.info(
+            "market monitor push loop started cities={} interval={}s chat_targets={}",
+            len(MARKET_MONITOR_CITIES), interval_sec, len(chat_ids),
+        )
+        while True:
+            cycle_started = time.time()
+            _run_market_monitor_cycle(bot=bot, chat_ids=chat_ids)
+            elapsed = time.time() - cycle_started
+            sleep_sec = max(5, interval_sec - int(elapsed))
+            time.sleep(sleep_sec)
+
+    thread = threading.Thread(
+        target=_runner,
+        name="market-monitor-pusher",
+        daemon=True,
+    )
+    thread.start()
+    logger.info("market monitor push loop thread started")
     return thread

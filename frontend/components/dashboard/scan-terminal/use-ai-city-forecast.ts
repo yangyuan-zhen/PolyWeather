@@ -15,6 +15,8 @@ import {
   readReadyCachedAiForecastState,
 } from "./ai-city-forecast-stream-state";
 
+const AI_CITY_READ_SOFT_TIMEOUT_MS = 4_500;
+
 export function useAiCityForecast({
   detail,
   detailCityName,
@@ -50,6 +52,7 @@ export function useAiCityForecast({
       return;
     }
     let cancelled = false;
+    let resolved = false;
     const cacheKey = buildAiCityForecastCacheKey(aiForecastKey);
     const requestKey = buildAiCityForecastRequestKey(cacheKey, aiRefreshToken);
 
@@ -69,6 +72,17 @@ export function useAiCityForecast({
       report,
     });
     setAiForecast(loadingState);
+    const softTimeoutId = window.setTimeout(() => {
+      if (cancelled || resolved) return;
+      const fallbackState = buildAiCityErrorForecastState({
+        cacheKey,
+        detail,
+        error: "ai_soft_timeout_fallback",
+        isEn,
+        report,
+      });
+      setAiForecast(fallbackState);
+    }, AI_CITY_READ_SOFT_TIMEOUT_MS);
     void scanTerminalClient.streamAiCityRead({
       city: detailCityName,
       forceRefresh: aiRefreshToken > 0,
@@ -88,6 +102,8 @@ export function useAiCityForecast({
     })
       .then((payload) => {
         if (!payload) return;
+        resolved = true;
+        window.clearTimeout(softTimeoutId);
         const readyState = buildAiCityReadyForecastState({
           cacheKey,
           detail,
@@ -100,6 +116,8 @@ export function useAiCityForecast({
         }
       })
       .catch((error) => {
+        resolved = true;
+        window.clearTimeout(softTimeoutId);
         const errorState = buildAiCityErrorForecastState({
           cacheKey,
           detail,
@@ -113,6 +131,7 @@ export function useAiCityForecast({
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(softTimeoutId);
     };
   }, [
     aiForecastKey,
