@@ -165,7 +165,7 @@ export function RunwayObservationsPanel() {
           ensureCityDetail(city.key, true, "panel"),
         ),
       );
-    }, 60_000);
+    }, 300_000);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
