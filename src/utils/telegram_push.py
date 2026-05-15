@@ -878,25 +878,12 @@ def _run_high_freq_airport_cycle(
 
             city_weather: Dict[str, Any] = {}
             deb_pred: Optional[float] = None
-            market_high: Optional[float] = None
             try:
                 from web.app import _analyze
-                from web.services.city_payloads import build_city_market_scan_payload
                 city_weather = _analyze(city)
                 deb_raw = (city_weather.get("deb") or {}).get("prediction")
                 if deb_raw is not None:
                     deb_pred = float(deb_raw)
-                # 取市场最高温度选项
-                scan = build_city_market_scan_payload(city_weather)
-                ms = (scan.get("market_scan") or {}) if isinstance(scan, dict) else {}
-                if ms.get("available"):
-                    related = ms.get("related_buckets") or []
-                    for b in related:
-                        t = b.get("temp") if isinstance(b, dict) else None
-                        if t is not None:
-                            t = float(t)
-                            if market_high is None or t > market_high:
-                                market_high = t
             except Exception:
                 pass
 
@@ -971,27 +958,26 @@ def _run_high_freq_airport_cycle(
             elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
                 continue
 
-            # 今日实测最高已达DEB，行情已兑现，跳过
+            # ── 热度状态机 ──
             daily_high, _ = _get_airport_daily_high(city_weather)
+            # 1) DEB 已兑现 → 跳过
             if daily_high is not None and deb_pred is not None and daily_high >= deb_pred - 0.5:
                 continue
-
-            # 跑道城市：任意一条跑道温度满足 DEB 温差规则就推送
-            if runway_temps:
-                any_in_window = False
-                for (t, _d) in runway_temps:
-                    if t is not None and deb_pred is not None:
-                        d = float(t) - float(deb_pred)
-                        if -5.0 <= d <= 3.0:
-                            any_in_window = True
-                            break
-                if not any_in_window:
-                    continue
-                # 如果跑道最高温已超过市场最高选项，行情已定，跳过
-                if market_high is not None:
-                    rwy_max = max((t for (t, _d) in runway_temps if t is not None), default=None)
-                    if rwy_max is not None and rwy_max > market_high:
-                        continue
+            # 2) 距离今日最高太远 → 跳过
+            gap = (daily_high - current_temp) if daily_high is not None and current_temp is not None else None
+            if gap is not None and gap > 3.0:
+                continue
+            # 3) 夜间降温 → 跳过
+            try:
+                h = int(str(city_weather.get("local_time") or "00")[:2])
+            except ValueError:
+                h = 0
+            if h <= 5 or h >= 20:
+                continue
+            # 4) 接近今日最高（≤1°C）→ Rising/Peak Watch，一定推
+            #    或在冲高窗口（≤2°C 且仍在升温）→ 推
+            if gap is not None and gap > 2.0 and not _check_rising_trend(airport_icao):
+                continue
 
             # 用观测数据时间而非当前本地时间
             airport_cur = city_weather.get("airport_current") or {}
