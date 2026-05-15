@@ -567,38 +567,21 @@ def _format_prob(value: Any) -> str:
 
 
 def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> str:
-    market = city_weather.get("market_scan") or {}
     current = city_weather.get("current") or {}
     deb = city_weather.get("deb") or {}
     local_time = str(city_weather.get("local_time") or "").strip() or "--"
     city_label = str(city or "").strip().title()
-    signal = str(market.get("signal_label") or market.get("signal_status") or "MONITOR").strip()
-    confidence = str(market.get("confidence") or "low").strip()
-    bucket = str(
-        market.get("selected_bucket")
-        or (market.get("forecast_bucket") or {}).get("label")
-        or "--"
-    ).strip()
-    yes_buy = (
-        market.get("yes_buy")
-        if market.get("yes_buy") is not None
-        else (market.get("forecast_bucket") or {}).get("yes_buy")
-    )
-    edge = market.get("edge_percent")
     current_temp = current.get("temp")
     deb_pred = deb.get("prediction")
+    temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
 
     lines = [
         _build_telegram_hashtag_line("market", city=city),
-        f"{city_label} 1分钟市场监控 {local_time}",
-        f"信号：{signal} · 置信度：{confidence}",
+        f"{city_label} 1分钟快报 {local_time}",
     ]
-    if bucket and bucket != "--":
-        lines.append(f"桶位：{bucket}")
-    lines.append(f"Yes 买价：{_format_prob(yes_buy)} · Edge：{_format_percent(edge)}")
     if current_temp is not None or deb_pred is not None:
-        current_text = f"{float(current_temp):.1f}°C" if current_temp is not None else "--"
-        deb_text = f"{float(deb_pred):.1f}°C" if deb_pred is not None else "--"
+        current_text = f"{float(current_temp):.1f}{temp_symbol}" if current_temp is not None else "--"
+        deb_text = f"{float(deb_pred):.1f}{temp_symbol}" if deb_pred is not None else "--"
         lines.append(f"当前：{current_text} · DEB：{deb_text}")
     return "\n".join(lines)
 
