@@ -669,6 +669,7 @@ def _build_airport_status_message(
     city_weather: Dict[str, Any],
     deb_pred: Optional[float],
     local_time: str = "",
+    state: str = "",
 ) -> str:
     _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
@@ -681,6 +682,7 @@ def _build_airport_status_message(
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
     header = f"{en_name} / {ap_name}{time_suffix}" if ap_name else f"{en_name}{time_suffix}"
+    state_line = f"  {state}" if state else ""
 
     amos = city_weather.get("amos") or {}
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
@@ -719,7 +721,10 @@ def _build_airport_status_message(
         "runway" if has_runway else "airport",
         city=city,
     )
-    lines = [hashtag_line, header + flag, ""]
+    lines = [hashtag_line, header + flag]
+    if state_line:
+        lines.append(state_line.strip())
+    lines.append("")
     runway_shown = False
     if is_amsc and runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         point_temps = runway_data.get("point_temperatures") or []
@@ -960,24 +965,32 @@ def _run_high_freq_airport_cycle(
 
             # ── 热度状态机 ──
             daily_high, _ = _get_airport_daily_high(city_weather)
-            # 1) DEB 已兑现 → 跳过
-            if daily_high is not None and deb_pred is not None and daily_high >= deb_pred - 0.5:
-                continue
-            # 2) 距离今日最高太远 → 跳过
             gap = (daily_high - current_temp) if daily_high is not None and current_temp is not None else None
-            if gap is not None and gap > 3.0:
-                continue
-            # 3) 夜间降温 → 跳过
             try:
                 h = int(str(city_weather.get("local_time") or "00")[:2])
             except ValueError:
                 h = 0
-            if h <= 5 or h >= 20:
-                continue
-            # 4) 接近今日最高（≤1°C）→ Rising/Peak Watch，一定推
-            #    或在冲高窗口（≤2°C 且仍在升温）→ 推
-            if gap is not None and gap > 2.0 and not _check_rising_trend(airport_icao):
-                continue
+            rising = _check_rising_trend(airport_icao) if city != "paris" else True
+
+            # 判定状态
+            if current_temp is not None and daily_high is not None and current_temp > daily_high:
+                if deb_pred is not None and current_temp > deb_pred:
+                    state = "\U0001f680 超预期"  # Overshoot
+                else:
+                    state = "\U0001f525 冲高中"  # Rising + new high
+            elif gap is not None and gap <= 1.0:
+                state = "⚠️ 冲顶观察"  # Peak Watch
+            elif gap is not None and gap <= 2.0 and rising:
+                state = "\U0001f525 升温中"  # Rising
+            elif gap is not None and gap <= 3.0 and h < 20 and h > 5:
+                state = "❄️ 降温中"  # Cooling
+            else:
+                continue  # Dead — 不推送
+
+            # 夜间且已过峰 → 额外判断
+            if h >= 20 or h <= 5:
+                if gap is None or gap > 2.0:
+                    continue
 
             # 用观测数据时间而非当前本地时间
             airport_cur = city_weather.get("airport_current") or {}
@@ -985,7 +998,7 @@ def _run_high_freq_airport_cycle(
             if amos_obs and len(str(amos_obs)) >= 16:
                 amos_obs = str(amos_obs)[11:16]  # "2026-05-15 17:32:00" → "17:32"
             obs_local = amos_obs or airport_cur.get("obs_time") or city_weather.get("local_time") or ""
-            message = _build_airport_status_message(city, city_weather, deb_pred, obs_local)
+            message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state=state)
 
             sent = False
             for chat_id in chat_ids:
