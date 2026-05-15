@@ -502,6 +502,7 @@ MARKET_MONITOR_CITIES = [
 
 _FUNCTION_HASHTAGS = {
     "runway": "#跑道观测",
+    "airport": "#机场观测",
     "market": "#市场监控",
     "trade": "#交易机会",
 }
@@ -714,10 +715,10 @@ def _build_airport_status_message(
                 and latest_temp - max_so_far >= 0.3)
 
     flag = " \U0001f536新" if new_high else ""
+    has_runway = bool(runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps))
     hashtag_line = _build_telegram_hashtag_line(
-        "runway",
+        "runway" if has_runway else "airport",
         city=city,
-        station=airport_icao,
     )
     lines = [hashtag_line, header + flag, ""]
     runway_shown = False
@@ -1020,6 +1021,7 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
     sent_any = False
     try:
         from web.app import _analyze
+        from web.services.city_payloads import build_city_market_scan_payload
     except Exception as exc:
         logger.warning("market monitor push skipped: analyze import failed: {}", exc)
         return False
@@ -1027,9 +1029,11 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
     for city in MARKET_MONITOR_CITIES:
         try:
             city_weather = _analyze(city)
-            market = city_weather.get("market_scan") or {}
+            scan_payload = build_city_market_scan_payload(city_weather)
+            market = scan_payload.get("market_scan") or {}
             if not market.get("available"):
                 continue
+            city_weather["market_scan"] = market
             message = _build_market_monitor_message(city, city_weather)
             for chat_id in chat_ids:
                 try:

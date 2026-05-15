@@ -148,7 +148,7 @@ export function RunwayObservationsPanel() {
     async () => {
       await Promise.allSettled(
         RUNWAY_OBSERVATION_CITIES.map((city) =>
-          ensureCityDetail(city.key, false, "panel"),
+          ensureCityDetail(city.key, true, "panel"),
         ),
       );
     },

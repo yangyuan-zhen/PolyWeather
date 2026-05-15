@@ -265,6 +265,7 @@ def build_city_detail_payload(
         "center_station_candidate": data.get("center_station_candidate"),
         "airport_vs_network_delta": data.get("airport_vs_network_delta"),
         "airport_current": data.get("airport_current") or {},
+        "amos": data.get("amos") or {},
         "nearby_source": data.get("nearby_source") or ("mgm" if str(data.get("name") or "").lower() in TURKISH_MGM_CITIES else "metar_cluster"),
         "ai_analysis": data.get("ai_analysis") or "",
         "errors": {},
