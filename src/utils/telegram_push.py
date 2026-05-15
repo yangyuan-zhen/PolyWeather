@@ -964,7 +964,7 @@ def _run_high_freq_airport_cycle(
                 continue
 
             # ── 热度状态机 ──
-            daily_high, _ = _get_airport_daily_high(city_weather)
+            daily_high, max_time = _get_airport_daily_high(city_weather)
             gap = (daily_high - current_temp) if daily_high is not None and current_temp is not None else None
             try:
                 h = int(str(city_weather.get("local_time") or "00")[:2])
@@ -972,25 +972,33 @@ def _run_high_freq_airport_cycle(
                 h = 0
             rising = _check_rising_trend(airport_icao) if city != "paris" else True
 
-            # 判定状态
-            if current_temp is not None and daily_high is not None and current_temp > daily_high:
-                if deb_pred is not None and current_temp > deb_pred:
-                    state = "\U0001f680 超预期"  # Overshoot
-                else:
-                    state = "\U0001f525 冲高中"  # Rising + new high
-            elif gap is not None and gap <= 1.0:
-                state = "⚠️ 冲顶观察"  # Peak Watch
-            elif gap is not None and gap <= 2.0 and rising:
-                state = "\U0001f525 升温中"  # Rising
-            elif gap is not None and gap <= 3.0 and h < 20 and h > 5:
-                state = "❄️ 降温中"  # Cooling
-            else:
-                continue  # Dead — 不推送
-
-            # 夜间且已过峰 → 额外判断
+            # 夜间 (20:00–06:00)：🌙 无有效升温窗口，跳过
             if h >= 20 or h <= 5:
-                if gap is None or gap > 2.0:
-                    continue
+                continue
+
+            # 早晨 (06:00–09:00)："今日最高"可能只是凌晨刚形成的首个观测值
+            # 只有日高已稳定存在一段时间，或当前已明显高于凌晨基线，才有意义
+            high_formed = (
+                max_time is not None
+                and daily_high is not None
+                and current_temp is not None
+                and (h >= 9 or current_temp > daily_high + 0.5)
+            )
+
+            # 判定状态
+            if current_temp is not None and daily_high is not None and current_temp > daily_high + 0.3:
+                if deb_pred is not None and current_temp > deb_pred:
+                    state = "\U0001f680 超预期"
+                else:
+                    state = "\U0001f525 冲高中"
+            elif high_formed and gap is not None and gap <= 1.0:
+                state = "⚠️ 冲顶观察"
+            elif high_formed and gap is not None and gap <= 2.0 and rising:
+                state = "\U0001f525 升温中"
+            elif gap is not None and gap <= 3.0:
+                state = "❄️ 降温中"
+            else:
+                continue
 
             # 用观测数据时间而非当前本地时间
             airport_cur = city_weather.get("airport_current") or {}
