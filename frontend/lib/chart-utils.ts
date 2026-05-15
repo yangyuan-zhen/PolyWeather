@@ -370,13 +370,16 @@ export function getTemperatureChartData(
   const hourly = detail.hourly || {};
   const rawTimes = Array.isArray(hourly.times) ? hourly.times : [];
   const rawTemps = Array.isArray(hourly.temps) ? hourly.temps : [];
-  const times = rawTimes
-    .map((time) => String(time || "").trim())
-    .filter(Boolean);
-  const temps = times.map((_, index) => {
-    const value = Number(rawTemps[index]);
-    return Number.isFinite(value) ? value : null;
-  });
+  const validEntries = rawTimes
+    .map((time, index) => ({
+      tail: String(time || "").trim(),
+      value: Number(rawTemps[index]),
+    }))
+    .filter((entry) => entry.tail !== "");
+  const times = validEntries.map((entry) => entry.tail);
+  const temps = validEntries.map((entry) =>
+    Number.isFinite(entry.value) ? entry.value : null,
+  );
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (!times.length) return null;

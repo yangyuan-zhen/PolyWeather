@@ -66,6 +66,9 @@ function buildFallbackCityDetail(name: string, depth: string, summary: Record<st
       sunshine_hours: null,
     },
     multi_model: {},
+    multi_model_daily: {},
+    source_forecasts: {},
+    hourly: { times: [], temps: [], radiation: [] },
     probabilities: {
       mu: null,
       distribution: [],

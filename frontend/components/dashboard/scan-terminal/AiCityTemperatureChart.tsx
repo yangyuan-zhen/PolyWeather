@@ -174,9 +174,9 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
           x: {
             grid: { color: "rgba(159, 178, 199, 0.08)" },
             ticks: {
-              callback: (_value, index) =>
+              callback: (value, index) =>
                 typeof index === "number" && index % 3 === 0
-                  ? chartData.times[index]
+                  ? String(value)
                   : "",
               color: "#6B7A90",
               font: { size: 10 },

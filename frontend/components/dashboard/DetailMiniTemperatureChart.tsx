@@ -98,9 +98,9 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
           x: {
             grid: { color: "rgba(255,255,255,0.03)" },
             ticks: {
-              callback: (_value, index) =>
+              callback: (value, index) =>
                 typeof index === "number" && index % 4 === 0
-                  ? chartData.times[index]
+                  ? String(value)
                   : "",
               color: "#6B7A90",
               font: { size: 10 },
