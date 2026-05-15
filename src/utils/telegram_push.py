@@ -971,6 +971,11 @@ def _run_high_freq_airport_cycle(
             elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
                 continue
 
+            # 今日实测最高已达DEB，行情已兑现，跳过
+            daily_high, _ = _get_airport_daily_high(city_weather)
+            if daily_high is not None and deb_pred is not None and daily_high >= deb_pred - 0.5:
+                continue
+
             # 跑道城市：任意一条跑道温度满足 DEB 温差规则就推送
             if runway_temps:
                 any_in_window = False
