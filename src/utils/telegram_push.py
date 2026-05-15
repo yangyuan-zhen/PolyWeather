@@ -671,7 +671,7 @@ def _build_narrative(
     models: Dict[str, Any],
     city_weather: Dict[str, Any],
 ) -> str:
-    """Generate a one-line narrative explaining the current market structure."""
+    """Generate a market-structure interpretation based on current state."""
     if current_temp is None:
         return ""
     vals = sorted([v for v in models.values() if isinstance(v, (int, float))])
@@ -683,23 +683,44 @@ def _build_narrative(
     except ValueError:
         pass
 
-    if max_so_far is not None and deb_pred is not None and current_temp > deb_pred:
-        return "实测已突破DEB，模型整体偏保守，关注是否继续冲高"
-    if max_so_far is not None and deb_pred is not None and max_so_far >= deb_pred - 0.3:
-        return "日高已触及DEB，市场接近兑现"
+    lines = []
+    # Delta vs daily high
+    if max_so_far is not None:
+        d = current_temp - max_so_far
+        if d >= 0.3:
+            lines.append(f"🔺 当前已创今日新高（+{d:.1f}°），持续冲高")
+        elif d >= -1.0:
+            lines.append(f"紧贴日高，距峰值仅 {abs(d):.1f}°")
+        else:
+            lines.append(f"低于日高 {abs(d):.1f}°")
 
-    if model_hi is not None and current_temp < model_lo:
-        if h >= 16:
-            return "当前低于所有模型，晚间二次升温空间有限"
-        return "当前低于主流模型，日间仍有升温空间"
-    if model_lo is not None and model_hi is not None and model_lo <= current_temp <= model_hi:
-        return "当前位于模型区间内，市场仍在模型预期路径上"
-    if model_hi is not None and current_temp > model_hi:
-        return "实测已超出最热模型，市场或进入超预期定价"
+    # DEB relation
+    if deb_pred is not None:
+        if current_temp > deb_pred:
+            lines.append("DEB 已被突破，模型偏保守")
+        elif max_so_far is not None and max_so_far >= deb_pred:
+            pass  # already covered by 日高已触及
+        elif current_temp > deb_pred - 2.0:
+            lines.append("DEB 仍在可达范围")
 
-    if max_so_far is not None and current_temp < max_so_far - 1.5:
-        return "已脱离日内峰值，关注后续能否二次冲高"
-    return ""
+    # Model position + time context
+    if model_lo is not None and model_hi is not None:
+        if current_temp < model_lo:
+            if h >= 17:
+                lines.append("低于所有模型，晚间升温窗口有限")
+            else:
+                lines.append("低于主流模型，日间仍有升温空间")
+        elif current_temp <= model_hi:
+            lines.append("位于模型区间内，市场在预期路径上")
+        else:
+            lines.append("已超出最热模型，市场进入超预期定价")
+    elif max_so_far is not None and current_temp < max_so_far - 2.0:
+        if h < 14:
+            lines.append("日间仍可能二次冲高")
+        else:
+            lines.append("已脱离日内峰值")
+
+    return "\n".join(lines)
 
 
 def _build_airport_status_message(
@@ -786,37 +807,38 @@ def _build_airport_status_message(
             if t is not None:
                 lines.append(f"{r1}/{r2} {t:.1f}°C")
 
-    # ── Core metrics ──
+    # ── 第一层：当前 / 日高 / DEB ──
     lines.append("")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
     cur_str = f"{display_temp:.1f}{temp_symbol}" if display_temp is not None else "--"
-    parts = [cur_str]
-    if max_so_far is not None and display_temp is not None:
-        d = display_temp - max_so_far
-        sign = "+" if d >= 0 else ""
-        parts.append(f"({sign}{d:.1f} vs 日高)")
+    lines.append(f"当前：{cur_str}")
+    if max_so_far is not None:
+        time_str = f"（{max_temp_time}）" if max_temp_time else ""
+        lines.append(f"日高：{max_so_far:.1f}{temp_symbol}{time_str}")
     if deb_pred is not None:
         if display_temp is not None and display_temp > deb_pred:
-            parts.append(f"DEB +{display_temp - deb_pred:.1f}")
+            lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（已突破 +{display_temp - deb_pred:.1f}°）")
         else:
-            parts.append(f"DEB {deb_pred:.1f}{temp_symbol}")
-    lines.append("  ".join(parts))
+            lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
 
-    # ── Multi-model structure ──
+    # ── 第二层：模型结构 ──
     models = city_weather.get("multi_model") or {}
     if isinstance(models, dict) and len(models) >= 2:
+        lines.append("")
         vals = sorted([(v, k) for k, v in models.items() if isinstance(v, (int, float))])
         if len(vals) >= 2:
             lo, hi = vals[0][0], vals[-1][0]
             spread = hi - lo
             spread_label = "低分歧" if spread <= 2.0 else ("中等分歧" if spread <= 4.0 else "高分歧")
-            lines.append(f"模型 {lo:.1f}~{hi:.1f}{temp_symbol}  spread {spread:.1f}° ({spread_label})")
+            lines.append(f"模型区间：{lo:.1f}~{hi:.1f}{temp_symbol}    分歧：{spread:.1f}°（{spread_label}）")
             hot = [k for v, k in reversed(vals[-3:])]
             cold = [k for v, k in vals[:3]]
-            lines.append(f"偏热: {' / '.join(hot)}")
-            lines.append(f"偏冷: {' / '.join(cold)}")
+            if hot:
+                lines.append(f"热模型：{' / '.join(hot)}")
+            if cold:
+                lines.append(f"冷模型：{' / '.join(cold)}")
 
-    # ── Narrative direction ──
+    # ── 第三层：市场解释 ──
     narrative = _build_narrative(
         display_temp, max_so_far, deb_pred, models, city_weather,
     )
