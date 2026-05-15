@@ -4,6 +4,7 @@ import os
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -581,10 +582,11 @@ def _format_prob(value: Any) -> str:
 
 def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> str:
     current = city_weather.get("current") or {}
+    airport_cur = city_weather.get("airport_current") or {}
     deb = city_weather.get("deb") or {}
     local_time = str(city_weather.get("local_time") or "").strip() or "--"
     city_label = str(city or "").strip().title()
-    current_temp = current.get("temp")
+    current_temp = airport_cur.get("temp") if airport_cur.get("temp") is not None else current.get("temp")
     deb_pred = deb.get("prediction")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
 
@@ -956,19 +958,17 @@ def _run_high_freq_airport_cycle(
             elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
                 continue
 
-            # ── Three-condition heat window ──
-            threshold = _AIRPORT_HEAT_THRESHOLD.get(city, 3.0)
-            time_ok = _in_peak_time_window(city, city_weather)
-            temp_ok = (deb_pred - current_temp) <= threshold
-            trend_ok = _check_rising_trend(airport_icao) if city != "paris" else True
-
-            in_window = time_ok and temp_ok and trend_ok
-
-            if not in_window:
-                if last_city.get("active"):
-                    last_by_city[city] = {"ts": now_ts, "active": False, "obs_time": current_obs_time}
-                    state_dirty = True
-                continue
+            # 跑道城市：任意一条跑道温度满足 DEB 温差规则就推送
+            if runway_temps:
+                any_in_window = False
+                for (t, _d) in runway_temps:
+                    if t is not None and deb_pred is not None:
+                        d = float(t) - float(deb_pred)
+                        if -5.0 <= d <= 3.0:
+                            any_in_window = True
+                            break
+                if not any_in_window:
+                    continue
 
             # 用观测数据时间而非当前本地时间
             airport_cur = city_weather.get("airport_current") or {}
@@ -986,7 +986,7 @@ def _run_high_freq_airport_cycle(
             if sent:
                 last_by_city[city] = {"ts": now_ts, "active": True, "obs_time": current_obs_time}
                 state_dirty = True
-                logger.info("airport status pushed city={} temp={} deb={} thresh={} obs_time={}", city, current_temp, deb_pred, threshold, current_obs_time)
+                logger.info("airport status pushed city={} temp={} deb={} obs_time={}", city, current_temp, deb_pred, current_obs_time)
 
         except Exception:
             logger.exception("airport cycle failed for city={}", city)
@@ -1046,30 +1046,43 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
         logger.warning("market monitor push skipped: analyze import failed: {}", exc)
         return False
 
-    for city in MARKET_MONITOR_CITIES:
+    def _process_one(city: str) -> Optional[str]:
         try:
             city_weather = _analyze(city)
             scan_payload = build_city_market_scan_payload(city_weather)
             market = scan_payload.get("market_scan") or {}
             if not market.get("available"):
-                continue
+                return None
             city_weather["market_scan"] = market
-            current_temp = (city_weather.get("current") or {}).get("temp")
+            ac = city_weather.get("airport_current") or {}
+            current_temp = ac.get("temp") if ac.get("temp") is not None else (city_weather.get("current") or {}).get("temp")
             deb_pred = (city_weather.get("deb") or {}).get("prediction")
             if current_temp is not None and deb_pred is not None:
                 delta = float(current_temp) - float(deb_pred)
                 is_f = "F" in str(city_weather.get("temp_symbol") or "").upper()
                 if delta > (5.0 if is_f else 3.0) or delta < -(9.0 if is_f else 5.0):
-                    continue
-            message = _build_market_monitor_message(city, city_weather)
+                    return None
+            return _build_market_monitor_message(city, city_weather)
+        except Exception:
+            logger.exception("market monitor cycle failed for city={}", city)
+            return None
+
+    cities = list(MARKET_MONITOR_CITIES)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(_process_one, city): city for city in cities}
+        for future in as_completed(futures):
+            try:
+                message = future.result()
+            except Exception:
+                continue
+            if message is None:
+                continue
             for chat_id in chat_ids:
                 try:
                     bot.send_message(chat_id, message)
                     sent_any = True
                 except Exception as exc:
-                    logger.warning("market monitor push failed city={} chat_id={}: {}", city, chat_id, exc)
-        except Exception:
-            logger.exception("market monitor cycle failed for city={}", city)
+                    logger.warning("market monitor push failed city={} chat_id={}: {}", futures[future], chat_id, exc)
     return sent_any
 
 
