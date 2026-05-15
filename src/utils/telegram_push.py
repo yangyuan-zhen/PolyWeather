@@ -490,7 +490,7 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"}
 HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
-MARKET_MONITOR_INTERVAL_SEC = 60
+MARKET_MONITOR_INTERVAL_SEC = 300
 MARKET_MONITOR_CITIES = [
     "seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
     "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
@@ -1017,6 +1017,13 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
             if not market.get("available"):
                 continue
             city_weather["market_scan"] = market
+            current_temp = (city_weather.get("current") or {}).get("temp")
+            deb_pred = (city_weather.get("deb") or {}).get("prediction")
+            if current_temp is not None and deb_pred is not None:
+                delta = float(current_temp) - float(deb_pred)
+                is_f = "F" in str(city_weather.get("temp_symbol") or "").upper()
+                if delta > (5.0 if is_f else 3.0) or delta < -(9.0 if is_f else 5.0):
+                    continue
             message = _build_market_monitor_message(city, city_weather)
             for chat_id in chat_ids:
                 try:
