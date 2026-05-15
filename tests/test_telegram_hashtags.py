@@ -31,7 +31,9 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
 
     first_line = text.splitlines()[0]
     assert first_line == "#跑道观测 #Qingdao"
-    assert "Qingdao / Jiaodong 13:00" in text
+    assert "Qingdao / Jiaodong" in text
+    assert "TDZ:23.0" in text
+    assert "DEB 24.0" in text
 
 
 def test_market_monitor_message_starts_with_market_hashtag_and_city():

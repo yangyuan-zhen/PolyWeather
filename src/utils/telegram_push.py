@@ -664,6 +664,44 @@ def _fetch_arome_temp() -> Optional[float]:
         return _AROME_CACHE.get("value")
 
 
+def _build_narrative(
+    current_temp: Optional[float],
+    max_so_far: Optional[float],
+    deb_pred: Optional[float],
+    models: Dict[str, Any],
+    city_weather: Dict[str, Any],
+) -> str:
+    """Generate a one-line narrative explaining the current market structure."""
+    if current_temp is None:
+        return ""
+    vals = sorted([v for v in models.values() if isinstance(v, (int, float))])
+    model_lo = vals[0] if vals else None
+    model_hi = vals[-1] if vals else None
+    h = 12
+    try:
+        h = int(str(city_weather.get("local_time") or "12")[:2])
+    except ValueError:
+        pass
+
+    if max_so_far is not None and deb_pred is not None and current_temp > deb_pred:
+        return "实测已突破DEB，模型整体偏保守，关注是否继续冲高"
+    if max_so_far is not None and deb_pred is not None and max_so_far >= deb_pred - 0.3:
+        return "日高已触及DEB，市场接近兑现"
+
+    if model_hi is not None and current_temp < model_lo:
+        if h >= 16:
+            return "当前低于所有模型，晚间二次升温空间有限"
+        return "当前低于主流模型，日间仍有升温空间"
+    if model_lo is not None and model_hi is not None and model_lo <= current_temp <= model_hi:
+        return "当前位于模型区间内，市场仍在模型预期路径上"
+    if model_hi is not None and current_temp > model_hi:
+        return "实测已超出最热模型，市场或进入超预期定价"
+
+    if max_so_far is not None and current_temp < max_so_far - 1.5:
+        return "已脱离日内峰值，关注后续能否二次冲高"
+    return ""
+
+
 def _build_airport_status_message(
     city: str,
     city_weather: Dict[str, Any],
@@ -680,9 +718,8 @@ def _build_airport_status_message(
                    "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
-    time_suffix = f" {local_time}" if local_time else ""
+    time_suffix = f" · {local_time}" if local_time else ""
     header = f"{en_name} / {ap_name}{time_suffix}" if ap_name else f"{en_name}{time_suffix}"
-    state_line = f"  {state}" if state else ""
 
     amos = city_weather.get("amos") or {}
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
@@ -702,31 +739,34 @@ def _build_airport_status_message(
     if station_temp is None:
         station_temp = current.get("temp")
 
-    # Determine current max temp for new-high check
-    latest_temp = station_temp
+    # Current temp from runway max if available
+    display_temp = station_temp
     if runway_temps:
         valid = [t for (t, _d) in runway_temps if t is not None]
         if valid:
-            latest_temp = max(valid)
+            display_temp = max(valid)
 
-    # Check if breaking today's high
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
-    new_high = (latest_temp is not None and max_so_far is not None
-                and latest_temp - max_so_far >= 0.3)
+    new_high = (display_temp is not None and max_so_far is not None
+                and display_temp - max_so_far >= 0.3)
 
-    flag = " \U0001f536新" if new_high else ""
     is_amsc = amos.get("source") == "amsc_awos"
     has_runway = bool(runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps))
     hashtag_line = _build_telegram_hashtag_line(
         "runway" if has_runway else "airport",
         city=city,
     )
-    lines = [hashtag_line, header + flag]
-    if state_line:
-        lines.append(state_line.strip())
-    lines.append("")
-    runway_shown = False
+
+    # ── Build lines ──
+    lines: List[str] = [hashtag_line, header]
+    if new_high:
+        lines.append("\U0001f536 今日新高")
+    if state:
+        lines.append(state)
+
+    # Runway detail block
     if is_amsc and runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+        lines.append("")
         point_temps = runway_data.get("point_temperatures") or []
         for i, ((r1, r2), (t, _d)) in enumerate(zip(runway_pairs, runway_temps)):
             if t is not None:
@@ -740,26 +780,50 @@ def _build_airport_status_message(
                     )
                 else:
                     lines.append(f"{r1}/{r2} {t:.1f}°C")
-                runway_shown = True
     elif has_runway:
+        lines.append("")
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             if t is not None:
                 lines.append(f"{r1}/{r2} {t:.1f}°C")
-                runway_shown = True
-    if not runway_shown and station_temp is not None:
-        label = "AROME预报" if city == "paris" else "当前实测"
-        lines.append(f"{label}：{station_temp:.1f}°C")
-        # Show settlement (rounded-down) temp for HKO floor-rounding cities
-        if city == "hong kong" and station_temp is not None:
-            from src.analysis.settlement_rounding import apply_city_settlement
-            settled = apply_city_settlement(city, station_temp)
-            if settled is not None:
-                lines.append(f"结算温度：{settled}°C")
+
+    # ── Core metrics ──
+    lines.append("")
+    temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
+    cur_str = f"{display_temp:.1f}{temp_symbol}" if display_temp is not None else "--"
+    parts = [cur_str]
+    if max_so_far is not None and display_temp is not None:
+        d = display_temp - max_so_far
+        sign = "+" if d >= 0 else ""
+        parts.append(f"({sign}{d:.1f} vs 日高)")
     if deb_pred is not None:
-        lines.append(f"今日DEB预报最高：{deb_pred:.1f}°C")
-    if max_so_far is not None:
-        time_str = f"（{max_temp_time}）" if max_temp_time else ""
-        lines.append(f"今日实测最高：{max_so_far:.1f}°C{time_str}")
+        if display_temp is not None and display_temp > deb_pred:
+            parts.append(f"DEB +{display_temp - deb_pred:.1f}")
+        else:
+            parts.append(f"DEB {deb_pred:.1f}{temp_symbol}")
+    lines.append("  ".join(parts))
+
+    # ── Multi-model structure ──
+    models = city_weather.get("multi_model") or {}
+    if isinstance(models, dict) and len(models) >= 2:
+        vals = sorted([(v, k) for k, v in models.items() if isinstance(v, (int, float))])
+        if len(vals) >= 2:
+            lo, hi = vals[0][0], vals[-1][0]
+            spread = hi - lo
+            spread_label = "低分歧" if spread <= 2.0 else ("中等分歧" if spread <= 4.0 else "高分歧")
+            lines.append(f"模型 {lo:.1f}~{hi:.1f}{temp_symbol}  spread {spread:.1f}° ({spread_label})")
+            hot = [k for v, k in reversed(vals[-3:])]
+            cold = [k for v, k in vals[:3]]
+            lines.append(f"偏热: {' / '.join(hot)}")
+            lines.append(f"偏冷: {' / '.join(cold)}")
+
+    # ── Narrative direction ──
+    narrative = _build_narrative(
+        display_temp, max_so_far, deb_pred, models, city_weather,
+    )
+    if narrative:
+        lines.append("")
+        lines.append(narrative)
+
     return "\n".join(lines)
 
 
