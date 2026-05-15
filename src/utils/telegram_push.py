@@ -493,7 +493,7 @@ HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "am
 HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
 MARKET_MONITOR_INTERVAL_SEC = 300
 MARKET_MONITOR_CITIES = [
-    "seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
+    "seoul", "busan", "tokyo", "helsinki", "amsterdam",
     "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
