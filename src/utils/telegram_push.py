@@ -488,7 +488,7 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao", "chengdu", "chongqing", "wuhan"}
 HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
 MARKET_MONITOR_INTERVAL_SEC = 300
 MARKET_MONITOR_CITIES = [
@@ -547,6 +547,19 @@ def _build_telegram_hashtag_line(
     return " ".join(tags)
 
 
+def _fmt(value: Any) -> str:
+    """Format a single temperature reading; returns '--' for missing values."""
+    if value is None:
+        return "--"
+    try:
+        f = float(value)
+        if not -80.0 < f < 80.0:
+            return "--"
+        return f"{f:.1f}"
+    except (TypeError, ValueError):
+        return "--"
+
+
 def _format_percent(value: Any) -> str:
     try:
         numeric = float(value)
@@ -577,7 +590,7 @@ def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> st
 
     lines = [
         _build_telegram_hashtag_line("market", city=city),
-        f"{city_label} 1分钟快报 {local_time}",
+        f"{city_label} {local_time}",
     ]
     if current_temp is not None or deb_pred is not None:
         current_text = f"{float(current_temp):.1f}{temp_symbol}" if current_temp is not None else "--"
@@ -659,9 +672,9 @@ def _build_airport_status_message(
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
                    "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
-                   "taipei": "Songshan", "beijing": "ZBAA", "shanghai": "ZSPD",
-                   "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD",
-                   "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+                   "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
+                   "guangzhou": "Baiyun", "shenzhen": "Bao'an", "qingdao": "Jiaodong",
+                   "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" {local_time}" if local_time else ""
@@ -698,6 +711,7 @@ def _build_airport_status_message(
                 and latest_temp - max_so_far >= 0.3)
 
     flag = " \U0001f536新" if new_high else ""
+    is_amsc = amos.get("source") == "amsc_awos"
     has_runway = bool(runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps))
     hashtag_line = _build_telegram_hashtag_line(
         "runway" if has_runway else "airport",
@@ -705,7 +719,22 @@ def _build_airport_status_message(
     )
     lines = [hashtag_line, header + flag, ""]
     runway_shown = False
-    if runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+    if is_amsc and runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+        point_temps = runway_data.get("point_temperatures") or []
+        for i, ((r1, r2), (t, _d)) in enumerate(zip(runway_pairs, runway_temps)):
+            if t is not None:
+                pts = point_temps[i] if i < len(point_temps) else {}
+                tdz = pts.get("tdz_temp")
+                mid = pts.get("mid_temp")
+                end = pts.get("end_temp")
+                if tdz is not None or mid is not None or end is not None:
+                    lines.append(
+                        f"{r1}/{r2}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
+                    )
+                else:
+                    lines.append(f"{r1}/{r2} {t:.1f}°C")
+                runway_shown = True
+    elif has_runway:
         for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
             if t is not None:
                 lines.append(f"{r1}/{r2} {t:.1f}°C")
@@ -753,6 +782,14 @@ _AIRPORT_PUSH_INTERVAL = {
     "hong kong": 60,
     "lau fau shan": 60,
     "taipei": 60,
+    "beijing": 60,
+    "shanghai": 60,
+    "guangzhou": 60,
+    "shenzhen": 60,
+    "qingdao": 60,
+    "chengdu": 60,
+    "chongqing": 60,
+    "wuhan": 60,
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
 # Continental airports: wider window (temp rises steadily over land)
