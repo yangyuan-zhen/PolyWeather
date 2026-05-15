@@ -27,6 +27,13 @@ export function runTests() {
     "scan-terminal",
     "RunwayObservationsPanel.tsx",
   );
+  const monitorPath = path.join(
+    projectRoot,
+    "components",
+    "dashboard",
+    "monitoring",
+    "MonitorPanel.tsx",
+  );
 
   const shellPartsSource = fs.readFileSync(shellPartsPath, "utf8");
   const dashboardSource = fs.readFileSync(dashboardPath, "utf8");
@@ -49,5 +56,24 @@ export function runTests() {
       panelSource.includes("MID") &&
       panelSource.includes("END"),
     "runway tab must identify AMSC AWOS and show TDZ/MID/END point temperatures",
+  );
+  assert(
+    panelSource.includes('key: "qingdao"') &&
+      panelSource.includes("青岛") &&
+      panelSource.includes("ZSQD"),
+    "runway tab must include Qingdao / ZSQD AMSC AWOS runway observations",
+  );
+  assert(
+    panelSource.includes("RKSI") &&
+      panelSource.includes("RKPK") &&
+      panelSource.includes("runway_pairs") &&
+      panelSource.includes("runway_temps"),
+    "runway tab must also own Seoul/Busan AMOS runway-pair observations",
+  );
+  const monitorSource = fs.readFileSync(monitorPath, "utf8");
+  assert(
+    monitorSource.includes("ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(key)") &&
+      monitorSource.includes("showRunwayRows = !KOREA_RUNWAY_MONITOR_KEYS.has(key)"),
+    "market monitor must not render Seoul/Busan runway data after it moves to the runway tab",
   );
 }

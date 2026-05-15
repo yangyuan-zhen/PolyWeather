@@ -7,7 +7,6 @@ import type { useDashboardStore } from "@/hooks/useDashboardStore";
 import {
   findDetailForCity,
   isFullEnoughForDeepAnalysis,
-  waitForDeepAnalysisQueue,
 } from "@/components/dashboard/scan-terminal/city-detail-utils";
 import {
   findRowForCity,
@@ -44,7 +43,7 @@ export function useAiPinnedCityWorkspace({
         try {
           const detail = await store.ensureCityDetail(
             nextCity,
-            Boolean(existingDetail) && !isFullEnoughForDeepAnalysis(existingDetail),
+            false,
             "full",
           );
           if (!isFullEnoughForDeepAnalysis(detail)) {
@@ -53,7 +52,6 @@ export function useAiPinnedCityWorkspace({
         } catch {
           aiFullHydrationRef.current.delete(key);
         }
-        await waitForDeepAnalysisQueue(1200);
       }
     } finally {
       aiHydrationRunningRef.current = false;

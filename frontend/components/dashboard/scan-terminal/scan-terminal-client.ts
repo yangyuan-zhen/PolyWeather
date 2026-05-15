@@ -76,7 +76,7 @@ type AiCityReadOptions = {
   signal?: AbortSignal;
 };
 
-const AI_CITY_READ_MAX_CONCURRENT_STREAMS = 2;
+const AI_CITY_READ_MAX_CONCURRENT_STREAMS = 4;
 const pendingAiCityReadRequests = new Map<string, Promise<AiCityForecastPayload>>();
 const queuedAiCityReadTasks: Array<() => void> = [];
 let activeAiCityReadStreams = 0;
@@ -329,7 +329,7 @@ function runQueuedAiCityReadTask<T>(task: () => Promise<T>, onQueued?: () => voi
         .then(resolve, reject)
         .finally(() => {
           activeAiCityReadStreams = Math.max(0, activeAiCityReadStreams - 1);
-          const next = queuedAiCityReadTasks.shift();
+          const next = queuedAiCityReadTasks.pop();
           if (next) next();
         });
     };
@@ -337,7 +337,7 @@ function runQueuedAiCityReadTask<T>(task: () => Promise<T>, onQueued?: () => voi
       run();
     } else {
       onQueued?.();
-      queuedAiCityReadTasks.push(run);
+      queuedAiCityReadTasks.unshift(run);
     }
   });
 }

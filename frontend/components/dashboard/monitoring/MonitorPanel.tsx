@@ -29,6 +29,7 @@ type MonitorKey = (typeof MONITOR_KEYS)[number];
 type MonitorRefreshRequest = ReturnType<typeof getMonitorRefreshRequest>;
 
 const CONCURRENCY = 6;
+const KOREA_RUNWAY_MONITOR_KEYS = new Set<MonitorKey>(["seoul", "busan"]);
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 type Lang = { isEn: boolean };
@@ -93,7 +94,8 @@ function playNewHighBeep(): void {
 }
 
 function trendClass(detail: CityDetail | undefined, key?: string): "rising" | "falling" | "flat" {
-  const { source } = resolveMonitorTemperature(detail);
+  const ignoreRunway = key === "seoul" || key === "busan";
+  const { source } = resolveMonitorTemperature(detail, { ignoreRunway });
   // Runway surface temp vs air temp comparison is meaningless
   if (
     source === "amos_runway_median" ||
@@ -101,7 +103,7 @@ function trendClass(detail: CityDetail | undefined, key?: string): "rising" | "f
     source === "amsc_awos_runway_max" ||
     source === "amsc_awos_runway"
   ) return "flat";
-  const cur = resolveMonitorTemperature(detail).value;
+  const cur = resolveMonitorTemperature(detail, { ignoreRunway }).value;
   const max = resolveMaxSoFar(detail, key);
   if (cur != null && max != null && cur >= max + 0.3) return "rising";
   if (cur != null && max != null && cur < max - 1.0) return "falling";
@@ -209,7 +211,9 @@ function resolveSourceLabel(
     return isEn ? SOURCE_LABELS[apSource].en : SOURCE_LABELS[apSource].zh;
   }
   // Use temperature resolution source
-  const { source } = resolveMonitorTemperature(detail);
+  const { source } = resolveMonitorTemperature(detail, {
+    ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(key),
+  });
   if (source && SOURCE_LABELS[source]) {
     return isEn ? SOURCE_LABELS[source].en : SOURCE_LABELS[source].zh;
   }
@@ -287,7 +291,9 @@ export default function MonitorPanel({
     const changed: MonitorKey[] = [];
     for (const key of MONITOR_KEYS) {
       const detail = details[key];
-      const cur = resolveMonitorTemperature(detail).value;
+      const cur = resolveMonitorTemperature(detail, {
+        ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(key),
+      }).value;
       const prev = prevTempsRef.current[key];
       if (cur != null && prev != null && cur !== prev) changed.push(key);
       if (cur != null) prevTempsRef.current[key] = cur;
@@ -397,8 +403,12 @@ export default function MonitorPanel({
     return [...MONITOR_KEYS]
       .map((k) => ({ key: k, detail: details[k] }))
       .sort((a, b) => {
-        const ta = resolveMonitorTemperature(a.detail).value;
-        const tb = resolveMonitorTemperature(b.detail).value;
+        const ta = resolveMonitorTemperature(a.detail, {
+          ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(a.key),
+        }).value;
+        const tb = resolveMonitorTemperature(b.detail, {
+          ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(b.key),
+        }).value;
         if (ta == null && tb == null) return 0;
         if (ta == null) return 1;
         if (tb == null) return -1;
@@ -432,7 +442,9 @@ export default function MonitorPanel({
     if (alerted._day !== today) alerted = { _day: today };
 
     for (const { key, detail } of sorted) {
-      const { source, value: cur } = resolveMonitorTemperature(detail);
+      const { source, value: cur } = resolveMonitorTemperature(detail, {
+        ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(key),
+      });
       // Skip runway cities: runway surface temp ≠ air temp
       if (source === "amos_runway_median" || source === "amos_runway") continue;
       const max = resolveMaxSoFar(detail, key);
@@ -517,7 +529,9 @@ export default function MonitorPanel({
           }
 
           const ac = detail.airport_current;
-          const tempInfo = resolveMonitorTemperature(detail);
+          const tempInfo = resolveMonitorTemperature(detail, {
+            ignoreRunway: KOREA_RUNWAY_MONITOR_KEYS.has(key),
+          });
           const cur = tempInfo.value;
           const curSource = tempInfo.source;
           const isRunwayTemp =
@@ -546,6 +560,7 @@ export default function MonitorPanel({
           const tr = trendClass(detail, key);
           const rwPairs = detail.amos?.runway_obs?.runway_pairs ?? [];
           const rwTemps = detail.amos?.runway_obs?.temperatures ?? [];
+          const showRunwayRows = !KOREA_RUNWAY_MONITOR_KEYS.has(key);
           const isFlashing = flashingKeys.has(key);
 
           return (
@@ -633,7 +648,7 @@ export default function MonitorPanel({
               </div>
 
               {/* Runway temps */}
-              {rwPairs.length > 0 && rwTemps.length > 0 && (
+              {showRunwayRows && rwPairs.length > 0 && rwTemps.length > 0 && (
                 <>
                   <div className="monitor-divider" />
                   {rwPairs.map((p, i) => {

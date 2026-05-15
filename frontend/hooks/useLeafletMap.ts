@@ -464,6 +464,7 @@ export function useLeafletMap({
   const handlingAutoNearbyRef = useRef(false);
   const lastMovedCityRef = useRef<string | null>(null);
   const lastCameraSelectionRef = useRef<string | null>(null);
+  const lastTouchMarkerSelectAtRef = useRef(0);
   const lastUserCameraInteractionAtRef = useRef(0);
   const suspendMotionRef = useRef(suspendMotion);
   const hasFittedInitialBoundsRef = useRef(false);
@@ -672,6 +673,56 @@ export function useLeafletMap({
               const existing = currentMarkers[city.name];
               const signature = getMarkerSignature(city, snapshot);
               const previousSignature = lastCityDataRef.current[city.name];
+              const selectCityFromMarker = () => {
+                const currentMap = mapRef.current;
+                currentMap?.stop();
+                if (currentMap && !suspendMotionRef.current) {
+                  currentMap.flyTo([city.lat, city.lon], 11, {
+                    animate: true,
+                    duration: 1.05,
+                    easeLinearity: 0.22,
+                  });
+                  lastMovedCityRef.current = city.name;
+                } else {
+                  lastMovedCityRef.current = null;
+                }
+                onSelectCityRef.current(city.name);
+              };
+              const bindMarkerTouchSelect = (marker: L.Marker) => {
+                const element = marker.getElement();
+                if (!(element instanceof HTMLElement)) return;
+                const boundKey = `${city.name}:${signature}`;
+                if (element.dataset.polyweatherTouchSelectBound === boundKey) return;
+                element.dataset.polyweatherTouchSelectBound = boundKey;
+                const handleTouchSelect = (event: Event) => {
+                  if (Date.now() - lastTouchMarkerSelectAtRef.current < 120) {
+                    return;
+                  }
+                  lastTouchMarkerSelectAtRef.current = Date.now();
+                  L.DomEvent.stopPropagation(event);
+                  L.DomEvent.preventDefault(event);
+                  selectCityFromMarker();
+                };
+                const handlePointerSelect = (event: Event) => {
+                  const pointerType = (event as PointerEvent).pointerType;
+                  if (
+                    pointerType &&
+                    pointerType !== "touch" &&
+                    pointerType !== "pen"
+                  ) {
+                    return;
+                  }
+                  if (Date.now() - lastTouchMarkerSelectAtRef.current < 120) {
+                    return;
+                  }
+                  lastTouchMarkerSelectAtRef.current = Date.now();
+                  L.DomEvent.stopPropagation(event);
+                  L.DomEvent.preventDefault(event);
+                  selectCityFromMarker();
+                };
+                L.DomEvent.on(element, "touchend", handleTouchSelect);
+                L.DomEvent.on(element, "pointerup", handlePointerSelect);
+              };
 
               if (existing) {
                 if (existing.city.lat !== city.lat || existing.city.lon !== city.lon) {
@@ -680,6 +731,7 @@ export function useLeafletMap({
                 if (previousSignature !== signature) {
                   existing.marker.setIcon(createMarkerIcon(city, snapshot));
                 }
+                bindMarkerTouchSelect(existing.marker);
                 currentMarkers[city.name] = { city, marker: existing.marker };
                 lastCityDataRef.current[city.name] = signature;
                 return;
@@ -692,20 +744,12 @@ export function useLeafletMap({
               }).addTo(map);
 
               marker.on("click", () => {
-                const currentMap = mapRef.current;
-                currentMap?.stop();
-                if (currentMap && !suspendMotion) {
-                  currentMap.flyTo([city.lat, city.lon], 11, {
-                    animate: true,
-                    duration: 1.05,
-                    easeLinearity: 0.22,
-                  });
-                  lastMovedCityRef.current = city.name;
-                } else {
-                  lastMovedCityRef.current = null;
+                if (Date.now() - lastTouchMarkerSelectAtRef.current < 650) {
+                  return;
                 }
-                onSelectCityRef.current(city.name);
+                selectCityFromMarker();
               });
+              bindMarkerTouchSelect(marker);
 
               currentMarkers[city.name] = { city, marker };
               lastCityDataRef.current[city.name] = signature;

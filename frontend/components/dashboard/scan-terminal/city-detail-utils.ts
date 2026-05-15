@@ -52,6 +52,3 @@ export function isFullEnoughForDeepAnalysis(detail?: CityDetail | null) {
   );
 }
 
-export function waitForDeepAnalysisQueue(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}

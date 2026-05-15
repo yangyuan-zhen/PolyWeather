@@ -55,12 +55,19 @@ export function getAmosRunwayTemperature(detail?: CityDetail | null) {
 
 export function resolveMonitorTemperature(
   detail?: CityDetail | null,
+  options?: { ignoreRunway?: boolean },
 ): MonitorTemperature {
-  const runway = getAmosRunwayTemperature(detail);
-  if (runway) return runway;
+  if (!options?.ignoreRunway) {
+    const runway = getAmosRunwayTemperature(detail);
+    if (runway) return runway;
+  }
 
   const amosTemp = finiteNumber(detail?.amos?.temp ?? detail?.amos?.temp_c);
-  if (amosTemp != null && detail?.amos?.temp_source === "runway_median") {
+  if (
+    !options?.ignoreRunway &&
+    amosTemp != null &&
+    detail?.amos?.temp_source === "runway_median"
+  ) {
     return { source: "amos", value: amosTemp };
   }
 

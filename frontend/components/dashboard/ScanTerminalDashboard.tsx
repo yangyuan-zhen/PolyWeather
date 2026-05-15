@@ -114,8 +114,22 @@ function ScanTerminalScreen() {
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [showAnnouncement, setShowAnnouncement] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const media = window.matchMedia("(max-width: 768px)");
+    const syncMobileViewport = () => setIsMobileViewport(media.matches);
+    syncMobileViewport();
+    media.addEventListener("change", syncMobileViewport);
+    return () => media.removeEventListener("change", syncMobileViewport);
+  }, []);
+
+  useEffect(() => {
+    if (isMobileViewport) {
+      setShowAnnouncement(false);
+      return;
+    }
     const key = "polyweather_v156_announcement_seen_at";
     const seen = localStorage.getItem(key);
     const now = Date.now();
@@ -126,7 +140,7 @@ function ScanTerminalScreen() {
     }
     const elapsed = now - Number(seen);
     setShowAnnouncement(elapsed < 3 * 24 * 60 * 60 * 1000);
-  }, []);
+  }, [isMobileViewport]);
   const userLocalTime = useUserLocalClock();
   const { setThemeMode, themeMode } = useScanTerminalTheme();
   const lastMapSelectedCityRef = useRef<string>("");
@@ -426,7 +440,7 @@ function ScanTerminalScreen() {
             userLocalTime={userLocalTime}
           />
 
-          {showAnnouncement ? (
+          {showAnnouncement && !isMobileViewport ? (
             <ScanUpgradeAnnouncement
               isEn={isEn}
               onDismiss={() => {
