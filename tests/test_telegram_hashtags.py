@@ -13,9 +13,15 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
             "deb": {"prediction": 24.0},
             "airport_current": {"max_so_far": 23.1, "max_temp_time": "13:00"},
             "amos": {
+                "source": "amsc_awos",
                 "observation_time": "2026-05-15T05:00:00Z",
                 "runway_obs": {
-                    "temperatures": [(23.0, "TDZ"), (23.2, "MID"), (23.1, "END")],
+                    "runway_pairs": [("17", "35"), ("16", "34")],
+                    "temperatures": [(23.0, None), (23.2, None)],
+                    "point_temperatures": [
+                        {"tdz_temp": 23.0, "mid_temp": None, "end_temp": 23.1},
+                        {"tdz_temp": 23.2, "mid_temp": None, "end_temp": 23.3},
+                    ],
                 },
             },
         },
@@ -24,8 +30,8 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
     )
 
     first_line = text.splitlines()[0]
-    assert first_line == "#跑道观测 #Qingdao #ZSQD"
-    assert "Qingdao / ZSQD 13:00" in text
+    assert first_line == "#跑道观测 #Qingdao"
+    assert "Qingdao / Jiaodong 13:00" in text
 
 
 def test_market_monitor_message_starts_with_market_hashtag_and_city():
@@ -33,23 +39,16 @@ def test_market_monitor_message_starts_with_market_hashtag_and_city():
         "shanghai",
         {
             "local_time": "14:01",
-            "current": {"temp": 29.4},
+            "airport_current": {"temp": 29.4},
             "deb": {"prediction": 31.2},
-            "market_scan": {
-                "available": True,
-                "signal_label": "MONITOR",
-                "confidence": "medium",
-                "selected_bucket": "31° or higher",
-                "yes_buy": 0.42,
-                "edge_percent": 8.4,
-            },
+            "market_scan": {"available": True},
         },
     )
 
     assert text.splitlines()[0] == "#市场监控 #Shanghai"
-    assert "1分钟市场监控" in text
-    assert "Edge：+8.4%" in text
+    assert "Shanghai 14:01" in text
+    assert "当前：29.4°C · DEB：31.2°C" in text
 
 
-def test_market_monitor_default_interval_is_one_minute():
-    assert MARKET_MONITOR_INTERVAL_SEC == 60
+def test_market_monitor_default_interval_is_five_minutes():
+    assert MARKET_MONITOR_INTERVAL_SEC == 300
