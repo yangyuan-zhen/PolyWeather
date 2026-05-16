@@ -35,4 +35,9 @@ __all__ = [
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        "web.app:app",
+        host="0.0.0.0",
+        port=8000,
+        workers=int(os.getenv("UVICORN_WORKERS", "4")),
+    )

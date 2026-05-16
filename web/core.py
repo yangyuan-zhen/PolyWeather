@@ -239,19 +239,29 @@ def _resolve_auth_points(request: Request) -> int:
         points = max(0, int(raw_points or 0))
     except Exception:
         points = 0
-    if points > 0:
-        return points
 
     user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
-    if not user_id:
-        return points
-    try:
-        db_points = _account_db.get_points_by_supabase_user_id(user_id)
-        if db_points > points:
-            request.state.auth_points = db_points
-            return db_points
-    except Exception as exc:
-        logger.warning(f"auth points fallback failed user_id={user_id}: {exc}")
+
+    if user_id:
+        try:
+            db_points = _account_db.get_points_by_supabase_user_id(user_id)
+            if db_points > points:
+                request.state.auth_points = db_points
+                points = db_points
+        except Exception as exc:
+            logger.warning(f"auth points fallback failed user_id={user_id}: {exc}")
+
+    if points <= 0:
+        email = str(getattr(request.state, "auth_email", "") or "").strip().lower()
+        if email:
+            try:
+                email_points = _account_db.get_points_by_supabase_email(email)
+                if email_points > points:
+                    request.state.auth_points = email_points
+                    points = email_points
+            except Exception as exc:
+                logger.warning(f"auth points email fallback failed email={email}: {exc}")
+
     return points
 
 

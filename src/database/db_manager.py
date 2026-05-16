@@ -42,6 +42,75 @@ class DBManager:
             "Prefer": "return=minimal",
         }
 
+    def _supabase_admin_users_endpoint(self) -> str:
+        supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        if not supabase_url:
+            return ""
+        return f"{supabase_url}/auth/v1/admin/users"
+
+    def _sync_points_to_supabase_user_metadata(self, telegram_id: int) -> bool:
+        supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+        if not supabase_url:
+            return False
+        headers = self._supabase_service_headers()
+        if not headers:
+            return False
+        endpoint = self._supabase_admin_users_endpoint()
+        if not endpoint:
+            return False
+
+        supabase_user_id = None
+        points = 0
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT supabase_user_id FROM supabase_bindings WHERE telegram_id = ? LIMIT 1",
+                (int(telegram_id),),
+            ).fetchone()
+            if row and row["supabase_user_id"]:
+                supabase_user_id = str(row["supabase_user_id"]).strip()
+            if not supabase_user_id:
+                row = conn.execute(
+                    "SELECT supabase_user_id FROM users WHERE telegram_id = ? LIMIT 1",
+                    (int(telegram_id),),
+                ).fetchone()
+                if row and row["supabase_user_id"]:
+                    supabase_user_id = str(row["supabase_user_id"]).strip()
+            if not supabase_user_id:
+                return False
+            pts_row = conn.execute(
+                "SELECT points FROM users WHERE telegram_id = ? LIMIT 1",
+                (int(telegram_id),),
+            ).fetchone()
+            if pts_row:
+                points = max(0, int(pts_row["points"] or 0))
+
+        try:
+            resp = requests.patch(
+                f"{endpoint}/{supabase_user_id}",
+                json={"user_metadata": {"points": points}},
+                headers={**headers, "Prefer": "return=minimal"},
+                timeout=8,
+            )
+            if resp.status_code not in (200, 204):
+                logger.warning(
+                    "supabase points sync failed tg={} suid={} status={} body={}",
+                    telegram_id,
+                    supabase_user_id,
+                    resp.status_code,
+                    (resp.text or "")[:200],
+                )
+                return False
+            return True
+        except Exception as exc:
+            logger.warning(
+                "supabase points sync error tg={} suid={}: {}",
+                telegram_id,
+                supabase_user_id,
+                exc,
+            )
+            return False
+
     def _sync_supabase_profile_telegram_fields(
         self,
         *,
@@ -1010,6 +1079,36 @@ class DBManager:
         except Exception:
             return 0
 
+    def get_points_by_supabase_email(self, supabase_email: str) -> int:
+        email = str(supabase_email or "").strip().lower()
+        if not email:
+            return 0
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT points
+                FROM users
+                WHERE lower(trim(COALESCE(supabase_email, ''))) = ?
+                LIMIT 1
+                """,
+                (email,),
+            ).fetchone()
+            if not row:
+                row = conn.execute(
+                    """
+                    SELECT u.points
+                    FROM users u
+                    JOIN supabase_bindings b ON b.telegram_id = u.telegram_id
+                    WHERE lower(trim(COALESCE(b.supabase_email, ''))) = ?
+                    LIMIT 1
+                    """,
+                    (email,),
+                ).fetchone()
+            if row:
+                return max(0, int(row["points"] or 0))
+        return 0
+
     def grant_points_by_supabase_email(
         self,
         supabase_email: str,
@@ -1048,6 +1147,7 @@ class DBManager:
                 (after, telegram_id),
             )
             conn.commit()
+            self._sync_points_to_supabase_user_metadata(telegram_id)
             return {
                 "ok": True,
                 "telegram_id": telegram_id,
@@ -1421,6 +1521,7 @@ class DBManager:
                 points=weekly_points + total_added,
             )
             conn.commit()
+            self._sync_points_to_supabase_user_metadata(telegram_id)
             return {
                 "awarded": True,
                 "reason": "ok",
@@ -1492,6 +1593,7 @@ class DBManager:
                 (new_balance, telegram_id),
             )
             conn.commit()
+            self._sync_points_to_supabase_user_metadata(telegram_id)
             return {"ok": True, "balance": new_balance, "spent": amount}
 
     def spend_points_by_supabase_user_id(self, supabase_user_id: str, amount: int) -> Dict[str, Any]:
@@ -1529,6 +1631,7 @@ class DBManager:
                 (new_balance, telegram_id),
             )
             conn.commit()
+            self._sync_points_to_supabase_user_metadata(telegram_id)
             return {"ok": True, "balance": new_balance, "spent": amount}
 
     def set_premium(self, telegram_id: int, plan: str, months: int = 1):
@@ -1839,6 +1942,8 @@ class DBManager:
                 ),
             )
             conn.commit()
+            if bonus > 0:
+                self._sync_points_to_supabase_user_metadata(int(telegram_id))
             return True
 
     def append_airport_obs(
