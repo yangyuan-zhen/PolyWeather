@@ -48,7 +48,7 @@ export function DailyTemperatureChart({
         label: locale === "en-US" ? "DEB baseline" : "DEB 原始路径",
         parsing: false,
         pointRadius: 0,
-        tension: 0.3,
+        tension: 0.1,
       });
 
       if (todayChartData.datasets.calibratedFutureSeries.length > 0) {
@@ -64,7 +64,7 @@ export function DailyTemperatureChart({
           parsing: false,
           pointHoverRadius: 5,
           pointRadius: 0,
-          tension: 0.32,
+          tension: 0.12,
         });
       }
 
@@ -81,7 +81,7 @@ export function DailyTemperatureChart({
           pointHoverRadius: 6,
           pointRadius: 0,
           spanGaps: true,
-          tension: 0.3,
+          tension: 0.1,
         });
       }
 
@@ -146,7 +146,7 @@ export function DailyTemperatureChart({
           label: locale === "en-US" ? "OM Raw" : "OM 原始",
           parsing: false,
           pointRadius: 0,
-          tension: 0.3,
+          tension: 0.1,
         });
       }
       if ((todayChartData.tafMarkers || []).length > 0) {
@@ -342,7 +342,7 @@ export function DailyTemperatureChart({
             label:
               locale === "en-US" ? "Open-Meteo Temperature" : "Open-Meteo 温度",
             pointRadius: 2,
-            tension: 0.28,
+            tension: 0.1,
           },
           {
             backgroundColor: "transparent",
@@ -352,7 +352,7 @@ export function DailyTemperatureChart({
             fill: false,
             label: locale === "en-US" ? "Dew Point" : "露点",
             pointRadius: 0,
-            tension: 0.24,
+            tension: 0.1,
           },
         ],
         labels,

@@ -47,7 +47,7 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
         label: forecastLabel,
         pointRadius: 0,
         spanGaps: true,
-        tension: 0.28,
+        tension: 0.1,
       },
     ];
 
@@ -60,7 +60,7 @@ export function DetailMiniTemperatureChart({ detail }: { detail: CityDetail }) {
         label: calibratedLabel,
         pointRadius: 0,
         spanGaps: true,
-        tension: 0.3,
+        tension: 0.1,
       });
     }
 

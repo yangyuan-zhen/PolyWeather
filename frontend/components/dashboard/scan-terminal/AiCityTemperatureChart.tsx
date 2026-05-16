@@ -121,7 +121,7 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
             chartData.currentIndex != null && ctx.p0DataIndex < chartData.currentIndex ? [] : [6, 4],
         },
         spanGaps: true,
-        tension: 0.28,
+        tension: 0.1,
       },
     ];
 
@@ -135,7 +135,7 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
         pointHoverRadius: 5,
         pointRadius: 0,
         spanGaps: true,
-        tension: 0.32,
+        tension: 0.12,
       });
     }
 

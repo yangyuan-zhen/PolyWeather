@@ -380,13 +380,22 @@ export function getTemperatureChartData(
   validEntries.forEach((entry) => {
     dataByHour.set(entry.tail, Number.isFinite(entry.value) ? entry.value : null);
   });
+  const getHourTemp = (h: number): number | null => {
+    const key = `${String(h).padStart(2, "0")}:00`;
+    return dataByHour.has(key) ? dataByHour.get(key)! : null;
+  };
   const times: string[] = [];
   const temps: Array<number | null> = [];
   for (let h = 0; h < 24; h++) {
     const hh = String(h).padStart(2, "0");
-    const key = `${hh}:00`;
-    times.push(key);
-    temps.push(dataByHour.has(key) ? dataByHour.get(key)! : null);
+    times.push(`${hh}:00`);
+    temps.push(getHourTemp(h));
+    if (h < 23) {
+      const a = getHourTemp(h);
+      const b = getHourTemp(h + 1);
+      times.push(`${hh}:30`);
+      temps.push(a != null && b != null ? Number((a + (b - a) * 0.5).toFixed(1)) : a ?? b);
+    }
   }
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 

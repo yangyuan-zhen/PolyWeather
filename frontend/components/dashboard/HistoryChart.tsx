@@ -54,7 +54,7 @@ export function HistoryChart() {
         pointBorderColor: "#fff",
         pointHoverRadius: 7,
         pointRadius: 5,
-        tension: 0.2,
+        tension: 0.1,
       },
       {
         backgroundColor: "transparent",
@@ -65,7 +65,7 @@ export function HistoryChart() {
         label: locale === "en-US" ? "DEB Fusion" : "DEB 融合",
         pointHoverRadius: 6,
         pointRadius: 4,
-        tension: 0.2,
+        tension: 0.1,
       },
     ];
 
@@ -78,7 +78,7 @@ export function HistoryChart() {
         label: locale === "en-US" ? "MGM Official Forecast" : "MGM 官方预报",
         pointHoverRadius: 6,
         pointRadius: 4,
-        tension: 0.2,
+        tension: 0.1,
       });
     }
 
@@ -95,7 +95,7 @@ export function HistoryChart() {
             : `最佳单模型 (${summary.bestModelName})`,
         pointHoverRadius: 6,
         pointRadius: 4,
-        tension: 0.2,
+        tension: 0.1,
       });
     }
 
