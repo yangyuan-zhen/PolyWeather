@@ -372,7 +372,7 @@ export function getTemperatureChartData(
   const rawTemps = Array.isArray(hourly.temps) ? hourly.temps : [];
   const validEntries = rawTimes
     .map((time, index) => ({
-      tail: String(time || "").trim(),
+      tail: normalizeHm(String(time || "").trim()) || "",
       value: Number(rawTemps[index]),
     }))
     .filter((entry) => entry.tail !== "");
@@ -598,7 +598,7 @@ export function getTemperatureChartData(
   const tafMarkersRaw = Array.isArray(detail.taf?.signal?.markers)
     ? detail.taf?.signal?.markers || []
     : [];
-  const normalizeHm = (value: unknown): string | null => {
+  const normalizeTafHm = (value: unknown): string | null => {
     const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
     if (!match) return null;
     const hour = Number.parseInt(match[1], 10);
@@ -632,7 +632,7 @@ export function getTemperatureChartData(
     }
     return hour * 60 + minute;
   };
-  const currentMinutes = chartHmToMinutes(normalizeHm(detail.local_time));
+  const currentMinutes = chartHmToMinutes(normalizeTafHm(detail.local_time));
   const peakFirstHour = Number(detail.peak?.first_h);
   const peakLastHour = Number(detail.peak?.last_h);
   const peakWindowStartMinutes =
@@ -692,23 +692,23 @@ export function getTemperatureChartData(
   const currentTafMarker =
     currentMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
-          const end = chartHmToMinutes(normalizeHm(marker.endLocal));
+          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
+          const end = chartHmToMinutes(normalizeTafHm(marker.endLocal));
           return start !== null && end !== null && currentMinutes >= start && currentMinutes <= end;
         }) || null
       : null;
   const nextTafMarker =
     currentMinutes !== null && !currentTafMarker
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
+          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
           return start !== null && start > currentMinutes;
         }) || null
       : null;
   const peakWindowTafMarker =
     peakWindowStartMinutes !== null && peakWindowEndMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeHm(marker.startLocal));
-          const end = chartHmToMinutes(normalizeHm(marker.endLocal));
+          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
+          const end = chartHmToMinutes(normalizeTafHm(marker.endLocal));
           return (
             start !== null &&
             end !== null &&
