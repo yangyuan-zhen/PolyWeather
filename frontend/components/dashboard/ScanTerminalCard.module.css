@@ -1061,6 +1061,8 @@
 
 .root :global(.scan-ai-city-chart canvas) {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .root :global(.scan-ai-city-chart-placeholder) {

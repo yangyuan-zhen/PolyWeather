@@ -411,17 +411,6 @@ export function getTemperatureChartData(
       ? Number((temp + offset).toFixed(1))
       : null,
   );
-  const firstValid = debTemps.findIndex((t) => t != null);
-  const lastValid = (() => {
-    for (let i = debTemps.length - 1; i >= 0; i--) {
-      if (debTemps[i] != null) return i;
-    }
-    return -1;
-  })();
-  if (firstValid >= 0 && lastValid >= 0) {
-    for (let i = 0; i < firstValid; i++) debTemps[i] = debTemps[firstValid];
-    for (let i = lastValid + 1; i < debTemps.length; i++) debTemps[i] = debTemps[lastValid];
-  }
   const debPast = debTemps.map((temp, index) =>
     currentIndex >= 0 && index <= currentIndex ? temp : null,
   );

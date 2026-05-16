@@ -107,6 +107,8 @@
 
 .root :global(.detail-mini-chart canvas) {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .root :global(.detail-mini-chart-legend) {

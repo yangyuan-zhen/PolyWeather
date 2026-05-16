@@ -786,6 +786,8 @@
 
 .root :global(.intraday-scene-frame canvas) {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .root :global(.intraday-scene-legend) {
