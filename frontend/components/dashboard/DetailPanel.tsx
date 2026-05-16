@@ -6,7 +6,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ForecastTable } from "@/components/dashboard/PanelSections";
 import {
-  useDashboardHistory,
   useDashboardModal,
   useDashboardStore,
   useProAccess,
@@ -38,7 +37,6 @@ export function DetailPanel({
 } = {}) {
   const store = useDashboardStore();
   const modal = useDashboardModal();
-  const history = useDashboardHistory();
   const { proAccess } = useProAccess();
   const { locale, t } = useI18n();
   const router = useRouter();
@@ -76,7 +74,7 @@ export function DetailPanel({
   );
   const [heavyContentReady, setHeavyContentReady] = useState(false);
   const isOverlayOpen =
-    Boolean(modal.futureModalDate) || history.historyState.isOpen;
+    Boolean(modal.futureModalDate);
   const isVisible = isRail
     ? Boolean(store.selectedCity) && !isOverlayOpen
     : store.isPanelOpen && Boolean(store.selectedCity) && !isOverlayOpen;
@@ -139,24 +137,20 @@ export function DetailPanel({
     }
   };
 
-  const handleFeatureAccess = (feature: "today" | "history") => {
+  const handleTodayAccess = () => {
     blurActiveElement();
 
     if (!isPro) {
       trackAppEvent("paywall_feature_clicked", {
         entry: "detail_panel",
-        feature,
+        feature: "today",
         city: store.selectedCity,
         user_state: isAuthenticated ? "logged_in" : "guest",
       });
     }
 
     if (isPro) {
-      if (feature === "today") {
-        void modal.openTodayModal();
-        return;
-      }
-      void history.openHistory();
+      void modal.openTodayModal();
       return;
     }
 
@@ -165,11 +159,7 @@ export function DetailPanel({
       return;
     }
 
-    if (feature === "today") {
-      void modal.openTodayModal();
-      return;
-    }
-    void history.openHistory();
+    void modal.openTodayModal();
   };
 
   useEffect(() => {
@@ -348,21 +338,6 @@ export function DetailPanel({
                 {locale === "en-US" ? "Market" : "市场页"}
               </a>
             ) : null}
-            <button
-              type="button"
-              className={clsx(
-                "panel-action-button",
-                "panel-action-button-secondary",
-                !isPro && "pro-locked",
-              )}
-              title={
-                isPro ? t("detail.history") : `${t("detail.history")} (Pro)`
-              }
-              onClick={() => handleFeatureAccess("history")}
-              disabled={!store.selectedCity}
-            >
-              {isPro ? t("detail.history") : `${t("detail.history")} · Pro`}
-            </button>
           </div>
         </div>
       </div>

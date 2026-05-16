@@ -376,10 +376,18 @@ export function getTemperatureChartData(
       value: Number(rawTemps[index]),
     }))
     .filter((entry) => entry.tail !== "");
-  const times = validEntries.map((entry) => entry.tail);
-  const temps = validEntries.map((entry) =>
-    Number.isFinite(entry.value) ? entry.value : null,
-  );
+  const dataByHour = new Map<string, number | null>();
+  validEntries.forEach((entry) => {
+    dataByHour.set(entry.tail, Number.isFinite(entry.value) ? entry.value : null);
+  });
+  const times: string[] = [];
+  const temps: Array<number | null> = [];
+  for (let h = 0; h < 24; h++) {
+    const hh = String(h).padStart(2, "0");
+    const key = `${hh}:00`;
+    times.push(key);
+    temps.push(dataByHour.has(key) ? dataByHour.get(key)! : null);
+  }
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   if (!times.length) return null;

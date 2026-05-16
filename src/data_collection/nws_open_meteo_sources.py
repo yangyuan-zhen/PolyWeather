@@ -386,6 +386,7 @@ class NwsOpenMeteoSourceMixin:
                 "daily": "temperature_2m_max,apparent_temperature_max,sunrise,sunset,sunshine_duration",
                 "timezone": "auto",
                 "forecast_days": forecast_days,
+                "past_days": 1,
             }
 
             # 显式指定单位，防止 API 默认行为漂移

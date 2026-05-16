@@ -47,8 +47,8 @@ export function isFullEnoughForDeepAnalysis(detail?: CityDetail | null) {
     return false;
   }
   return (
-    countDetailModels(detail, detail.local_date) > 1 &&
-    countDetailForecastDays(detail) > 1
+    countDetailModels(detail, detail.local_date) >= 1 &&
+    countDetailForecastDays(detail) >= 1
   );
 }
 

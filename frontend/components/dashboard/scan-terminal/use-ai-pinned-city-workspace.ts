@@ -30,6 +30,7 @@ export function useAiPinnedCityWorkspace({
   const aiFullHydrationRef = useRef<Set<string>>(new Set());
   const aiHydrationQueueRef = useRef<string[]>([]);
   const aiHydrationRunningRef = useRef(false);
+  const aiHydrationRetriesRef = useRef<Map<string, number>>(new Map());
 
   const runAiHydrationQueue = useCallback(async () => {
     if (aiHydrationRunningRef.current) return;
@@ -47,10 +48,22 @@ export function useAiPinnedCityWorkspace({
             "full",
           );
           if (!isFullEnoughForDeepAnalysis(detail)) {
-            aiFullHydrationRef.current.delete(key);
+            const retries = aiHydrationRetriesRef.current.get(key) || 0;
+            if (retries >= 3) {
+              aiFullHydrationRef.current.delete(key);
+              aiHydrationRetriesRef.current.delete(key);
+            } else {
+              aiHydrationRetriesRef.current.set(key, retries + 1);
+            }
           }
         } catch {
-          aiFullHydrationRef.current.delete(key);
+          const retries = aiHydrationRetriesRef.current.get(key) || 0;
+          if (retries >= 3) {
+            aiFullHydrationRef.current.delete(key);
+            aiHydrationRetriesRef.current.delete(key);
+          } else {
+            aiHydrationRetriesRef.current.set(key, retries + 1);
+          }
         }
       }
     } finally {
@@ -132,6 +145,8 @@ export function useAiPinnedCityWorkspace({
     aiPinnedCities.forEach((item) => {
       const key = normalizeCityKey(item.cityName);
       if (!key || aiFullHydrationRef.current.has(key)) return;
+      const retries = aiHydrationRetriesRef.current.get(key) || 0;
+      if (retries >= 3) return;
       const detail = findDetailForCity(store.cityDetailsByName, item.cityName);
       const needsFullHydration = !isFullEnoughForDeepAnalysis(detail);
       if (!needsFullHydration) return;
