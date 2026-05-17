@@ -160,50 +160,6 @@ export function ScanTerminalTopBar({
   );
 }
 
-export function ScanUpgradeAnnouncement({
-  isEn,
-  onDismiss,
-}: {
-  isEn: boolean;
-  onDismiss: () => void;
-}) {
-  return (
-    <section
-      className="scan-upgrade-announcement"
-      aria-label={isEn ? "Upgrade announcement" : "升级公告"}
-    >
-      <div className="scan-upgrade-announcement-copy">
-        <span>{isEn ? "v1.5.6 upgrade" : "v1.5.6 升级公告"}</span>
-        <strong>
-          {isEn
-            ? "Scan terminal is upgraded to v1.5.6"
-            : "决策终端已升级到 v1.5.6"}
-        </strong>
-        <p>
-          {isEn
-            ? "City decision cards have been redesigned with a compact hero layout and consistent DEB data source. Sticky headers are removed for smoother scrolling."
-            : "城市决策卡 hero 布局重新设计，三指标并列对比更直观；DEB 数据源统一不再出现不一致；去除顶部固定效果滚动更流畅。"}
-        </p>
-      </div>
-      <ul>
-        <li>{isEn ? "Redesigned decision card hero" : "重设计城市决策卡 hero 布局"}</li>
-        <li>{isEn ? "Unified DEB data source" : "统一 DEB 数据源"}</li>
-        <li>{isEn ? "Light theme coverage" : "亮色主题补全覆盖"}</li>
-        <li>{isEn ? "HKO observatory AI read" : "香港天文台观测 AI 解读"}</li>
-        <li>{isEn ? "Smoother scrolling experience" : "滚动体验优化"}</li>
-      </ul>
-      <button
-        type="button"
-        className="scan-announcement-dismiss"
-        aria-label={isEn ? "Dismiss" : "关闭"}
-        onClick={onDismiss}
-      >
-        ✕
-      </button>
-    </section>
-  );
-}
-
 export function ScanPaywallModal({
   isEn,
   onClose,

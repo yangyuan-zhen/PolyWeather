@@ -28,7 +28,6 @@ import {
   ScanPaywallModal,
   ScanTerminalLoadingScreen,
   ScanTerminalTopBar,
-  ScanUpgradeAnnouncement,
   type ScanTerminalContentView,
 } from "@/components/dashboard/scan-terminal/ScanTerminalShellParts";
 import { findDetailForCity } from "@/components/dashboard/scan-terminal/city-detail-utils";
@@ -92,7 +91,6 @@ function ScanTerminalScreen() {
   const [activeView, setActiveView] = useState<ScanTerminalContentView>("map");
   const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
   const [showScanPaywall, setShowScanPaywall] = useState(false);
-  const [showAnnouncement, setShowAnnouncement] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
   useEffect(() => {
@@ -111,22 +109,6 @@ function ScanTerminalScreen() {
     return () => media.removeEventListener("change", syncMobileViewport);
   }, []);
 
-  useEffect(() => {
-    if (isMobileViewport) {
-      setShowAnnouncement(false);
-      return;
-    }
-    const key = "polyweather_v156_announcement_seen_at";
-    const seen = localStorage.getItem(key);
-    const now = Date.now();
-    if (!seen) {
-      localStorage.setItem(key, String(now));
-      setShowAnnouncement(true);
-      return;
-    }
-    const elapsed = now - Number(seen);
-    setShowAnnouncement(elapsed < 3 * 24 * 60 * 60 * 1000);
-  }, [isMobileViewport]);
   const userLocalTime = useUserLocalClock();
   const { setThemeMode, themeMode } = useScanTerminalTheme();
   const lastMapSelectedCityRef = useRef<string>("");
@@ -443,19 +425,6 @@ function ScanTerminalScreen() {
             toggleLocale={toggleLocale}
             userLocalTime={userLocalTime}
           />
-
-          {showAnnouncement && !isMobileViewport ? (
-            <ScanUpgradeAnnouncement
-              isEn={isEn}
-              onDismiss={() => {
-                localStorage.setItem(
-                  "polyweather_v156_announcement_seen_at",
-                  String(Date.now() + 90 * 24 * 60 * 60 * 1000),
-                );
-                setShowAnnouncement(false);
-              }}
-            />
-          ) : null}
 
           <section className="scan-list-section">
             <div className="scan-list-header">
