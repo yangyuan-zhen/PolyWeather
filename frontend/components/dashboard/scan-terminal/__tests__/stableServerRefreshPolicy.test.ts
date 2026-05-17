@@ -37,10 +37,10 @@ export function runTests() {
     "web auto refresh must read cached scan data instead of forcing a full server scan",
   );
   assert(
-    dashboardSource.includes("scan-mobile-city-list-view") &&
+    dashboardSource.includes("MobileCityPicker") &&
       dashboardSource.includes("MapCanvas") &&
-      dashboardSource.indexOf("scan-mobile-city-list-view") < dashboardSource.indexOf("scan-map-view"),
-    "mobile city list should be the lightweight entry before the optional map view",
+      dashboardSource.indexOf("MobileCityPicker") < dashboardSource.indexOf("MapCanvas"),
+    "mobile city list should use MobileCityPicker before the optional map view",
   );
   assert(
     airportEvidenceSource.includes("FOCUS_RUNWAY_PAIRS") &&

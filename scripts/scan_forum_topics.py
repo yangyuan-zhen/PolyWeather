@@ -1,7 +1,6 @@
 """扫描群组内所有 Forum Topic，打印名称和 thread_id。"""
 from __future__ import annotations
 
-import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -52,7 +51,7 @@ def main() -> int:
         print("未设置 TELEGRAM_BOT_TOKEN", file=sys.stderr)
         return 1
 
-    print(f"扫描群组话题...")
+    print("扫描群组话题...")
     topics = []
     with ThreadPoolExecutor(max_workers=10) as pool:
         futures = {pool.submit(_try_get_topic, tid): tid for tid in range(1, 101)}

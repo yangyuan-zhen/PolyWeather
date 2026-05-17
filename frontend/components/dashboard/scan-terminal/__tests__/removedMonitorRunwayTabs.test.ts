@@ -44,9 +44,9 @@ export function runTests() {
   );
   assert(
     shellPartsSource.includes('"city-list"') &&
-      dashboardSource.includes("scan-mobile-city-list-view") &&
+      dashboardSource.includes("MobileCityPicker") &&
       dashboardSource.includes('setActiveView("city-list")'),
-    "mobile web should expose the lightweight city-list entry view",
+    "mobile web should expose the city-list view via MobileCityPicker",
   );
   assert(
     !dashboardSource.includes('setActiveView("monitor")') &&
