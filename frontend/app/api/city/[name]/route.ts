@@ -109,6 +109,12 @@ function buildFallbackCityDetail(name: string, depth: string, summary: Record<st
 function normalizeCityDetailPayload(data: unknown) {
   if (!data || typeof data !== "object") return data;
   const payload = data as Record<string, any>;
+
+  // Backend v2 nests hourly under timeseries; chart expects it at top level.
+  if (!payload.hourly && payload.timeseries?.hourly) {
+    payload.hourly = payload.timeseries.hourly;
+  }
+
   if (!payload.market_scan && payload.market_scan_payload) {
     return {
       ...payload,
