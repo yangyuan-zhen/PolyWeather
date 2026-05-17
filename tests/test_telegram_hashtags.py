@@ -5,6 +5,7 @@ from src.utils.telegram_push import (
     MARKET_MONITOR_INTERVAL_SEC,
     _build_airport_status_message,
     _build_market_monitor_message,
+    _run_high_freq_airport_cycle,
 )
 
 
@@ -116,3 +117,44 @@ def test_shenzhen_is_removed_from_telegram_push_city_lists():
     assert "shenzhen" not in MARKET_MONITOR_CITIES
     assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
     assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO
+
+
+def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
+    import src.utils.telegram_push as telegram_push
+    import web.app as web_app
+
+    calls = []
+
+    def fake_analyze(city, force_refresh=False, **_kwargs):
+        calls.append((city, force_refresh))
+        return {
+            "local_time": "12:00",
+            "current": {"temp": 31.0},
+            "deb": {"prediction": 29.0},
+            "airport_current": {"max_so_far": 30.0, "max_temp_time": "11:50", "obs_time": "12:00"},
+            "mgm_nearby": [
+                {"icao": "ZSQD", "temp": 31.0, "obs_time": "2026-05-17T04:00:00Z"},
+            ],
+        }
+
+    class Bot:
+        def __init__(self):
+            self.messages = []
+
+        def send_message(self, chat_id, message):
+            self.messages.append((chat_id, message))
+
+    bot = Bot()
+    monkeypatch.setattr(telegram_push, "HIGH_FREQ_AIRPORT_CITIES", {"qingdao"})
+    monkeypatch.setattr(web_app, "_analyze", fake_analyze)
+
+    sent = _run_high_freq_airport_cycle(
+        bot=bot,
+        config={},
+        chat_ids=["chat-1"],
+        state={"last_by_city": {}},
+    )
+
+    assert sent is True
+    assert calls == [("qingdao", True)]
+    assert bot.messages

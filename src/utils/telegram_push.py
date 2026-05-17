@@ -1052,7 +1052,7 @@ def _run_high_freq_airport_cycle(
             deb_pred: Optional[float] = None
             try:
                 from web.app import _analyze
-                city_weather = _analyze(city)
+                city_weather = _analyze(city, force_refresh=True)
                 deb_raw = (city_weather.get("deb") or {}).get("prediction")
                 if deb_raw is not None:
                     deb_pred = float(deb_raw)
@@ -1112,7 +1112,7 @@ def _run_high_freq_airport_cycle(
                     and now_ts - last_city_ts > 540):
                 time.sleep(4)
                 try:
-                    city_weather = _analyze(city)
+                    city_weather = _analyze(city, force_refresh=True)
                     deb_raw2 = (city_weather.get("deb") or {}).get("prediction")
                     if deb_raw2 is not None:
                         deb_pred = float(deb_raw2)
