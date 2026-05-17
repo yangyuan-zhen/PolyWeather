@@ -1656,11 +1656,18 @@ def _archive_intraday_path_snapshot(city: str, result: Dict[str, Any]) -> None:
 def _analyze(
     city: str,
     force_refresh: bool = False,
+    force_refresh_observations_only: bool = False,
     include_llm_commentary: bool = False,
     detail_mode: str = "full",
 ) -> Dict[str, Any]:
-    """Fetch, analyse, and return structured weather data for one city."""
-    # Check cache
+    """Fetch, analyse, and return structured weather data for one city.
+
+    Set *force_refresh_observations_only* to True for high-frequency
+    observation loops that need fresh METAR/AMOS/runway data but should
+    keep the longer-lived multi-model forecast caches intact so the DEB
+    blending does not fall back to the current observed temperature.
+    """
+    # Check cache – skip when explicitly refreshing observations
     ttl = _analysis_ttl_for_city(city)
     normalized_detail_mode_raw = str(detail_mode or "full").strip().lower()
     if normalized_detail_mode_raw == "panel":
@@ -1672,8 +1679,8 @@ def _analyze(
     else:
         normalized_detail_mode = "full"
     cache_key = _analysis_cache_key(city, normalized_detail_mode)
-    
-    if not force_refresh:
+
+    if not force_refresh and not force_refresh_observations_only:
         cached = _cache.get(cache_key)
         if cached and _time.time() - cached["t"] < ttl:
             if include_llm_commentary:
@@ -1707,6 +1714,7 @@ def _analyze(
         lat=lat,
         lon=lon,
         force_refresh=force_refresh,
+        force_refresh_observations_only=force_refresh_observations_only,
         include_taf=not is_panel_mode and not is_nearby_mode and not is_market_mode,
         include_nearby=not is_panel_mode and not is_market_mode,
         include_ensemble=not is_panel_mode and not is_nearby_mode and not is_market_mode,

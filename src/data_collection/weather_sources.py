@@ -727,24 +727,35 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         lat: Optional[float],
         lon: Optional[float],
         use_fahrenheit: bool,
+        *,
+        keep_model_caches: bool = False,
     ) -> None:
-        """Drop in-memory caches for one city before a force-refresh query."""
+        """Drop in-memory caches for one city before a force-refresh query.
+
+        When *keep_model_caches* is True (used by high-frequency observation
+        loops such as airport runway pushes), only observation-level caches
+        (METAR, AMOS, country networks, settlement) are evicted while the
+        longer-lived multi-model / ensemble / single-model forecast caches
+        are left intact so the DEB blending does not fall back to the
+        current observed temperature during an Open-Meteo rate-limit
+        cooldown.
+        """
         if lat is not None and lon is not None:
             base = f"{round(float(lat), 4)}:{round(float(lon), 4)}"
             unit = "f" if use_fahrenheit else "c"
-            open_meteo_key = f"{base}:14:{unit}"
-            ensemble_key = f"{base}:{unit}"
-            cache_city = str(city or "").strip().lower()
-            multi_model_key = (
-                f"{base}:{cache_city}:{unit}:{self.multi_model_cache_version}"
-            )
-
-            with self._open_meteo_cache_lock:
-                self._open_meteo_cache.pop(open_meteo_key, None)
-            with self._ensemble_cache_lock:
-                self._ensemble_cache.pop(ensemble_key, None)
-            with self._multi_model_cache_lock:
-                self._multi_model_cache.pop(multi_model_key, None)
+            if not keep_model_caches:
+                open_meteo_key = f"{base}:14:{unit}"
+                ensemble_key = f"{base}:{unit}"
+                cache_city = str(city or "").strip().lower()
+                multi_model_key = (
+                    f"{base}:{cache_city}:{unit}:{self.multi_model_cache_version}"
+                )
+                with self._open_meteo_cache_lock:
+                    self._open_meteo_cache.pop(open_meteo_key, None)
+                with self._ensemble_cache_lock:
+                    self._ensemble_cache.pop(ensemble_key, None)
+                with self._multi_model_cache_lock:
+                    self._multi_model_cache.pop(multi_model_key, None)
 
         icao = self.get_icao_code(city)
         if icao:
@@ -1284,6 +1295,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         lon: float = None,
         country: str = None,
         force_refresh: bool = False,
+        force_refresh_observations_only: bool = False,
         include_taf: bool = True,
         include_nearby: bool = True,
         include_ensemble: bool = True,
@@ -1298,12 +1310,13 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         use_fahrenheit = self._uses_fahrenheit(city_lower)
         supports_aviationweather = self._supports_aviationweather(city_lower)
 
-        if force_refresh:
+        if force_refresh or force_refresh_observations_only:
             self._evict_city_caches(
                 city=city,
                 lat=lat,
                 lon=lon,
                 use_fahrenheit=use_fahrenheit,
+                keep_model_caches=force_refresh_observations_only,
             )
         self._log_temperature_unit(city, use_fahrenheit)
         self._attach_settlement_sources(results, city_lower)

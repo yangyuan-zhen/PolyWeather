@@ -528,8 +528,24 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+HIGH_FREQ_AIRPORT_CITIES = {
+    "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
+    "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
+    "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
+    "new york", "los angeles", "chicago", "denver", "atlanta",
+    "miami", "san francisco", "houston", "dallas", "austin", "seattle",
+}
+HIGH_FREQ_AIRPORT_ICAO = {
+    "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
+    "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058",
+    "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920",
+    "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD",
+    "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
+    "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
+    "denver": "KBKF", "atlanta": "KATL", "miami": "KMIA",
+    "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
+    "austin": "KAUS", "seattle": "KSEA",
+}
 FOCUS_RUNWAY_PAIRS = {
     "chongqing": {("02L", "20R")},
     "shanghai": {("17L", "35R")},
@@ -853,7 +869,11 @@ def _build_airport_status_message(
                    "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
                    "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
                    "guangzhou": "Baiyun", "shenzhen": "Bao'an", "qingdao": "Jiaodong",
-                   "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe"}
+                   "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe",
+                   "new york": "LaGuardia", "los angeles": "LAX", "chicago": "O'Hare",
+                   "denver": "Buckley", "atlanta": "Hartsfield", "miami": "Intl",
+                   "san francisco": "SFO", "houston": "Hobby", "dallas": "Love Field",
+                   "austin": "Bergstrom", "seattle": "Sea-Tac"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" · {local_time}" if local_time else ""
@@ -984,25 +1004,14 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
 
 # Per-city push interval — unified to 60s, obs_time dedup prevents spam
 _AIRPORT_PUSH_INTERVAL = {
-    "seoul": 60,
-    "busan": 60,
-    "tokyo": 60,
-    "ankara": 60,
-    "helsinki": 60,
-    "amsterdam": 60,
-    "istanbul": 60,
-    "paris": 60,
-    "hong kong": 60,
-    "lau fau shan": 60,
-    "singapore": 60,
-    "taipei": 60,
-    "beijing": 60,
-    "shanghai": 60,
-    "guangzhou": 60,
-    "qingdao": 60,
-    "chengdu": 60,
-    "chongqing": 60,
-    "wuhan": 60,
+    "seoul": 60, "busan": 60, "tokyo": 60, "ankara": 60,
+    "helsinki": 60, "amsterdam": 60, "istanbul": 60, "paris": 60,
+    "hong kong": 60, "lau fau shan": 60, "singapore": 60, "taipei": 60,
+    "beijing": 60, "shanghai": 60, "guangzhou": 60, "qingdao": 60,
+    "chengdu": 60, "chongqing": 60, "wuhan": 60,
+    "new york": 60, "los angeles": 60, "chicago": 60, "denver": 60,
+    "atlanta": 60, "miami": 60, "san francisco": 60, "houston": 60,
+    "dallas": 60, "austin": 60, "seattle": 60,
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
 # Continental airports: wider window (temp rises steadily over land)
@@ -1068,6 +1077,145 @@ def _check_rising_trend(icao: str) -> bool:
         return False
 
 
+def _process_airport_city(
+    city: str,
+    now_ts: int,
+    last_city: dict,
+    chat_ids: List[str],
+    bot: Any,
+) -> tuple | None:
+    """Process one airport city and return (city, new_state_entry) or None.
+
+    This is the per-city unit used by the concurrent thread pool in
+    ``_run_high_freq_airport_cycle``.
+    """
+    last_city_ts = int(last_city.get("ts") or 0)
+    last_obs_time = str(last_city.get("obs_time") or "")
+    city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
+    if now_ts - last_city_ts < city_interval:
+        return None
+
+    from web.app import _analyze  # lazy import — only the bot process needs it
+
+    city_weather: Dict[str, Any] = {}
+    deb_pred: Optional[float] = None
+    try:
+        city_weather = _analyze(city, force_refresh_observations_only=True)
+        deb_raw = (city_weather.get("deb") or {}).get("prediction")
+        if deb_raw is not None:
+            deb_pred = float(deb_raw)
+    except Exception:
+        logger.exception("airport analyze failed for city={}", city)
+        return None
+
+    # Extract airport-level temperature
+    amos = city_weather.get("amos") or {}
+    mgm_nearby = city_weather.get("mgm_nearby") or []
+    airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    airport_row = None
+    for row in mgm_nearby:
+        if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
+            airport_row = row
+            break
+    if not airport_row:
+        airport_row = mgm_nearby[0] if mgm_nearby else {}
+    station_temp = airport_row.get("temp") if airport_row else None
+    current_obs_time = str(airport_row.get("obs_time") or "")
+
+    runway_obs = (amos.get("runway_obs") or {})
+    runway_pairs = runway_obs.get("runway_pairs") or []
+    runway_temps = runway_obs.get("temperatures") or []
+    runway_pairs, runway_temps, _point_temps = _select_focus_runway_obs(
+        city, runway_pairs, runway_temps,
+        runway_obs.get("point_temperatures") or [],
+    )
+    if runway_temps:
+        valid_temps = [t for (t, _d) in runway_temps if t is not None]
+        if valid_temps:
+            station_temp = max(valid_temps)
+        amos_obs_time = amos.get("observation_time") or ""
+        if amos_obs_time:
+            current_obs_time = amos_obs_time
+
+    current_temp = station_temp
+    if current_temp is None:
+        airport_primary = city_weather.get("airport_primary") or {}
+        current_temp = airport_primary.get("temp") or (city_weather.get("current") or {}).get("temp")
+        if not current_obs_time:
+            current_obs_time = str(airport_primary.get("obs_time") or "")
+    if city == "paris":
+        arome_temp = _fetch_arome_temp()
+        if arome_temp is not None:
+            current_temp = arome_temp
+            city_weather.setdefault("current", {})["temp"] = arome_temp
+            if not current_obs_time:
+                current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    if current_temp is None or deb_pred is None:
+        return None
+
+    # Dedup: same observation → skip (with delayed retry for HK / LFS)
+    _CITIES_WITH_DELAYED_API = {"hong kong", "lau fau shan"}
+    if (current_obs_time and last_obs_time and current_obs_time == last_obs_time
+            and city in _CITIES_WITH_DELAYED_API
+            and now_ts - last_city_ts > 540):
+        time.sleep(4)
+        try:
+            city_weather = _analyze(city, force_refresh_observations_only=True)
+            deb_raw2 = (city_weather.get("deb") or {}).get("prediction")
+            if deb_raw2 is not None:
+                deb_pred = float(deb_raw2)
+            mgm_nearby2 = city_weather.get("mgm_nearby") or []
+            row2 = None
+            for r in mgm_nearby2:
+                if str(r.get("istNo") or "") == airport_icao or str(r.get("icao") or "") == airport_icao:
+                    row2 = r
+                    break
+            if not row2 and mgm_nearby2:
+                row2 = mgm_nearby2[0]
+            retry_obs = str(row2.get("obs_time") or "") if row2 else ""
+            if retry_obs and retry_obs != last_obs_time:
+                current_obs_time = retry_obs
+                station_temp = row2.get("temp") if row2 else None
+                current_temp = station_temp or (city_weather.get("current") or {}).get("temp")
+                if current_temp is None or deb_pred is None:
+                    return None
+            else:
+                return None
+        except Exception:
+            return None
+    elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
+        return None
+
+    obs_local = (
+        ((city_weather.get("amos") or {}).get("observation_time_local") or "")[11:16]
+        if len(str((city_weather.get("amos") or {}).get("observation_time_local") or "")) >= 16
+        else (city_weather.get("airport_current") or {}).get("obs_time")
+        or city_weather.get("local_time")
+        or ""
+    )
+    message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state="")
+
+    # Send to all target chats
+    sent = False
+    for chat_id in chat_ids:
+        try:
+            kwargs = {}
+            thread_id = _resolve_thread_id(chat_id, city)
+            if thread_id:
+                kwargs["message_thread_id"] = thread_id
+            bot.send_message(chat_id, message, **kwargs)
+            sent = True
+        except Exception as exc:
+            logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
+
+    if sent:
+        logger.info("airport status pushed city={} temp={} deb={} obs_time={}",
+                     city, current_temp, deb_pred, current_obs_time)
+        return (city, {"ts": now_ts, "active": True, "obs_time": current_obs_time})
+
+    return None
+
+
 def _run_high_freq_airport_cycle(
     bot: Any,
     config: Dict[str, Any],
@@ -1077,170 +1225,32 @@ def _run_high_freq_airport_cycle(
     state_dirty = False
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
+    logger.info("airport cycle tick cities={}", len(HIGH_FREQ_AIRPORT_CITIES))
 
-    for city in sorted(HIGH_FREQ_AIRPORT_CITIES):
-        try:
-            last_city = last_by_city.get(city) or {}
-            last_city_ts = int(last_city.get("ts") or 0)
-            last_obs_time = str(last_city.get("obs_time") or "")
-            city_interval = _AIRPORT_PUSH_INTERVAL.get(city, 600)
-            if now_ts - last_city_ts < city_interval:
-                continue
-
-            city_weather: Dict[str, Any] = {}
-            deb_pred: Optional[float] = None
-            try:
-                from web.app import _analyze
-                city_weather = _analyze(city, force_refresh=True)
-                deb_raw = (city_weather.get("deb") or {}).get("prediction")
-                if deb_raw is not None:
-                    deb_pred = float(deb_raw)
-            except Exception:
-                pass
-
-            # Extract airport-level temperature
-            amos = city_weather.get("amos") or {}
-            mgm_nearby = city_weather.get("mgm_nearby") or []
-            airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
-            airport_row = None
-            for row in mgm_nearby:
-                if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
-                    airport_row = row
-                    break
-            if not airport_row:
-                airport_row = mgm_nearby[0] if mgm_nearby else {}
-            station_temp = airport_row.get("temp") if airport_row else None
-            current_obs_time = str(airport_row.get("obs_time") or "")
-
-            runway_obs = (amos.get("runway_obs") or {})
-            runway_pairs = runway_obs.get("runway_pairs") or []
-            runway_temps = runway_obs.get("temperatures") or []
-            runway_pairs, runway_temps, _point_temps = _select_focus_runway_obs(
+    cities = sorted(HIGH_FREQ_AIRPORT_CITIES)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        futures = {
+            pool.submit(
+                _process_airport_city,
                 city,
-                runway_pairs,
-                runway_temps,
-                runway_obs.get("point_temperatures") or [],
-            )
-            if runway_temps:
-                valid_temps = [t for (t, _d) in runway_temps if t is not None]
-                if valid_temps:
-                    station_temp = max(valid_temps)
-                amos_obs_time = amos.get("observation_time") or ""
-                if amos_obs_time:
-                    current_obs_time = amos_obs_time
-
-            current_temp = station_temp
-            if current_temp is None:
-                current_temp = (city_weather.get("current") or {}).get("temp")
-            if city == "paris":
-                arome_temp = _fetch_arome_temp()
-                if arome_temp is not None:
-                    current_temp = arome_temp
-                    city_weather.setdefault("current", {})["temp"] = arome_temp
-                    if not current_obs_time:
-                        current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
-            if current_temp is None or deb_pred is None:
-                continue
-
-            # 基于原始观测数据时间的去重：同一条观测不重复推送
-            # HK/LFS 数据在 x7 分发布，API 可能有 3-5s 延迟，
-            # obs_time 未变但距上次推送已超 9min → 等 4s 重拉一次
-            _CITIES_WITH_DELAYED_API = {"hong kong", "lau fau shan"}
-            if (current_obs_time and last_obs_time and current_obs_time == last_obs_time
-                    and city in _CITIES_WITH_DELAYED_API
-                    and now_ts - last_city_ts > 540):
-                time.sleep(4)
-                try:
-                    city_weather = _analyze(city, force_refresh=True)
-                    deb_raw2 = (city_weather.get("deb") or {}).get("prediction")
-                    if deb_raw2 is not None:
-                        deb_pred = float(deb_raw2)
-                    mgm_nearby2 = city_weather.get("mgm_nearby") or []
-                    row2 = None
-                    for r in mgm_nearby2:
-                        if str(r.get("istNo") or "") == airport_icao or str(r.get("icao") or "") == airport_icao:
-                            row2 = r
-                            break
-                    if not row2 and mgm_nearby2:
-                        row2 = mgm_nearby2[0]
-                    retry_obs = str(row2.get("obs_time") or "") if row2 else ""
-                    if retry_obs and retry_obs != last_obs_time:
-                        current_obs_time = retry_obs
-                        station_temp = row2.get("temp") if row2 else None
-                        current_temp = station_temp or (city_weather.get("current") or {}).get("temp")
-                        if current_temp is None or deb_pred is None:
-                            continue
-                    else:
-                        continue
-                except Exception:
-                    continue
-            elif current_obs_time and last_obs_time and current_obs_time == last_obs_time:
-                continue
-
-            # ── 热度状态机 ──
-            daily_high, max_time = _get_airport_daily_high(city_weather)
-            gap = (daily_high - current_temp) if daily_high is not None and current_temp is not None else None
+                now_ts,
+                last_by_city.get(city) or {},
+                chat_ids,
+                bot,
+            ): city
+            for city in cities
+        }
+        for future in as_completed(futures):
             try:
-                h = int(str(city_weather.get("local_time") or "00")[:2])
-            except ValueError:
-                h = 0
-            rising = _check_rising_trend(airport_icao) if city != "paris" else True
-
-            # 夜间 (20:00–06:00)：🌙 无有效升温窗口，跳过
-            if h >= 20 or h <= 5:
+                result = future.result()
+            except Exception:
+                logger.exception("airport city task crashed city={}", futures[future])
                 continue
-
-            # 早晨 (06:00–09:00)："今日最高"可能只是凌晨刚形成的首个观测值
-            # 只有日高已稳定存在一段时间，或当前已明显高于凌晨基线，才有意义
-            high_formed = (
-                max_time is not None
-                and daily_high is not None
-                and current_temp is not None
-                and (h >= 9 or current_temp > daily_high + 0.5)
-            )
-
-            # 判定状态
-            if current_temp is not None and daily_high is not None and current_temp > daily_high + 0.3:
-                if deb_pred is not None and current_temp > deb_pred:
-                    state = "\U0001f680 超预期"
-                else:
-                    state = "\U0001f525 冲高中"
-            elif high_formed and gap is not None and gap <= 1.0:
-                state = "⚠️ 冲顶观察"
-            elif high_formed and gap is not None and gap <= 2.0 and rising:
-                state = "\U0001f525 升温中"
-            elif gap is not None and gap <= 3.0:
-                state = "❄️ 降温中"
-            else:
+            if result is None:
                 continue
-
-            # 用观测数据时间而非当前本地时间
-            airport_cur = city_weather.get("airport_current") or {}
-            amos_obs = (city_weather.get("amos") or {}).get("observation_time_local") or ""
-            if amos_obs and len(str(amos_obs)) >= 16:
-                amos_obs = str(amos_obs)[11:16]  # "2026-05-15 17:32:00" → "17:32"
-            obs_local = amos_obs or airport_cur.get("obs_time") or city_weather.get("local_time") or ""
-            message = _build_airport_status_message(city, city_weather, deb_pred, obs_local, state=state)
-
-            sent = False
-            for chat_id in chat_ids:
-                try:
-                    kwargs = {}
-                    thread_id = _resolve_thread_id(chat_id, city)
-                    if thread_id:
-                        kwargs["message_thread_id"] = thread_id
-                    bot.send_message(chat_id, message, **kwargs)
-                    sent = True
-                except Exception as exc:
-                    logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
-
-            if sent:
-                last_by_city[city] = {"ts": now_ts, "active": True, "obs_time": current_obs_time}
-                state_dirty = True
-                logger.info("airport status pushed city={} temp={} deb={} obs_time={}", city, current_temp, deb_pred, current_obs_time)
-
-        except Exception:
-            logger.exception("airport cycle failed for city={}", city)
+            city, entry = result
+            last_by_city[city] = entry
+            state_dirty = True
 
     return state_dirty
 
@@ -1265,14 +1275,17 @@ def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optio
         )
         while True:
             cycle_started = time.time()
-            state = _load_airport_state()
-            if _run_high_freq_airport_cycle(
-                bot=bot,
-                config=config,
-                chat_ids=chat_ids,
-                state=state,
-            ):
-                _save_airport_state(state)
+            try:
+                state = _load_airport_state()
+                if _run_high_freq_airport_cycle(
+                    bot=bot,
+                    config=config,
+                    chat_ids=chat_ids,
+                    state=state,
+                ):
+                    _save_airport_state(state)
+            except Exception:
+                logger.exception("airport push cycle crashed")
 
             elapsed = time.time() - cycle_started
             sleep_sec = max(5, interval_sec - int(elapsed))
