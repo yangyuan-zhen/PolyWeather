@@ -3,6 +3,7 @@
 import { RefreshCw, X } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useState } from "react";
+import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
 import {
   CityStatusTags,
@@ -88,6 +89,7 @@ export function MobileDecisionCard({
   const copy = getMobileDecisionCopy(isEn);
   const loadingCopy = getCityLoadingCopy({ isEn, isHkoObservation });
   const [modelOpen, setModelOpen] = useState(false);
+  const [chartOpen, setChartOpen] = useState(false);
   const statusTags: CityStatusTag[] = decisionState.badges.length
     ? decisionState.badges
     : [{ label: decisionState.aiStatusLabel, tone: decisionState.aiStatusTone as StatusTone }];
@@ -182,6 +184,15 @@ export function MobileDecisionCard({
           >
             <summary className="scan-ai-city-section-title">{copy.modelEvidence}</summary>
             {modelOpen ? <ModelEvidencePanel detail={detail} isEn={isEn} /> : null}
+          </details>
+
+          <details
+            className="scan-ai-city-section scan-mobile-fold"
+            open={chartOpen}
+            onToggle={(event) => setChartOpen(event.currentTarget.open)}
+          >
+            <summary className="scan-ai-city-section-title">{copy.chart}</summary>
+            {chartOpen ? <AiCityTemperatureChart detail={detail} /> : null}
           </details>
         </div>
       )}

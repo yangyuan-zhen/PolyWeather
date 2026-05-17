@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
+import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
 import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
@@ -569,6 +570,7 @@ export function AiPinnedCityCard({
               />
 
               <div className="scan-ai-city-analysis-grid">
+                <AiCityTemperatureChart detail={detail} />
                 <AiEvidencePanel
                   aiBullets={aiBullets}
                   aiCityForecast={aiCityForecast}
