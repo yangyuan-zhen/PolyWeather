@@ -119,6 +119,25 @@ function buildObservationPoints(items: Array<{ time?: string; temp?: number | nu
     .filter((point): point is { labelTime: string; x: number; y: number } => point != null);
 }
 
+function fillTemperaturePathForFullDay(
+  times: string[],
+  values: Array<number | null>,
+) {
+  if (!times.length) return values;
+  const hasAnyValue = values.some((value) => value != null && Number.isFinite(value));
+  if (!hasAnyValue) return values;
+  return times.map((time, index) => {
+    const value = values[index];
+    if (value != null && Number.isFinite(value)) return value;
+    const minute = hmToMinutes(time);
+    if (minute == null) return null;
+    const interpolated = interpolateSeriesAtMinutes(times, values, minute);
+    return interpolated != null && Number.isFinite(interpolated)
+      ? interpolated
+      : null;
+  });
+}
+
 function clampTemperatureDelta(value: number, min = -4, max = 4) {
   return Math.min(Math.max(value, min), max);
 }
@@ -408,12 +427,10 @@ export function getTemperatureChartData(
     const hh = String(h).padStart(2, "0");
     times.push(`${hh}:00`);
     temps.push(getHourTemp(h));
-    if (h < 23) {
-      const a = getHourTemp(h);
-      const b = getHourTemp(h + 1);
-      times.push(`${hh}:30`);
-      temps.push(a != null && b != null ? Number((a + (b - a) * 0.5).toFixed(1)) : a ?? b);
-    }
+    const a = getHourTemp(h);
+    const b = h < 23 ? getHourTemp(h + 1) : null;
+    times.push(`${hh}:30`);
+    temps.push(a != null && b != null ? Number((a + (b - a) * 0.5).toFixed(1)) : a ?? b);
   }
   const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
@@ -431,7 +448,8 @@ export function getTemperatureChartData(
   const debMax = detail.deb?.prediction;
   const offset =
     debMax != null && omMax != null ? Number(debMax) - Number(omMax) : 0;
-  const debTemps = temps.map((temp) =>
+  const debBaseTemps = fillTemperaturePathForFullDay(times, temps);
+  const debTemps = debBaseTemps.map((temp) =>
     temp != null && Number.isFinite(temp)
       ? Number((temp + offset).toFixed(1))
       : null,

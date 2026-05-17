@@ -70,6 +70,15 @@ export function runTests() {
     "Ankara chart should build the DEB original path from MGM hourly data when Open-Meteo hourly is unavailable",
   );
   assert(
+    ankaraChartData?.datasets.debSeries.length === 48,
+    "DEB original path must cover the full 00:00-23:30 chart day even when city hourly data is partial",
+  );
+  assert(
+    ankaraChartData?.datasets.debSeries.some((point) => point.labelTime === "00:00") &&
+      ankaraChartData?.datasets.debSeries.some((point) => point.labelTime === "23:30"),
+    "DEB original path must include both start-of-day and end-of-day points",
+  );
+  assert(
     ankaraChartData?.datasets.calibratedFutureSeries.length,
     "Ankara chart should still expose a calibrated path when observation points exist",
   );
