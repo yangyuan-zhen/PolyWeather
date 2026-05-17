@@ -67,6 +67,20 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "chongqing",
     "wuhan",
 }
+
+
+def _mgm_hourly_high(mgm: Dict[str, Any]) -> Optional[float]:
+    hourly = mgm.get("hourly") if isinstance(mgm, dict) else []
+    if not isinstance(hourly, list):
+        return None
+    values = []
+    for row in hourly:
+        if not isinstance(row, dict):
+            continue
+        value = _sf(row.get("temp"))
+        if value is not None:
+            values.append(value)
+    return max(values) if values else None
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
 _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
     "total_requests": 0,
@@ -2015,11 +2029,14 @@ def _analyze(
     if om_today is None:
         nws_high = _sf(raw.get("nws", {}).get("today_high"))
         mgm_high = _sf(mgm.get("today_high")) if mgm else None
+        mgm_hourly_high = _mgm_hourly_high(mgm)
         fallback_high = (
             nws_high
             if nws_high is not None
             else mgm_high
             if mgm_high is not None
+            else mgm_hourly_high
+            if mgm_hourly_high is not None
             else max_so_far
             if max_so_far is not None
             else cur_temp
@@ -2051,8 +2068,11 @@ def _analyze(
     if nws_high is not None:
         current_forecasts["NWS"] = nws_high
     mgm_high = _sf(mgm.get("today_high")) if mgm else None
+    mgm_hourly_high = _mgm_hourly_high(mgm)
     if mgm_high is not None:
         current_forecasts["MGM"] = mgm_high
+    elif mgm_hourly_high is not None:
+        current_forecasts["MGM Hourly"] = mgm_hourly_high
 
     # ── 6. DEB fusion ──
     deb_val, deb_weights = None, ""
@@ -2874,6 +2894,7 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
     om_today = _sf(maxtemps[0]) if maxtemps else None
     nws_high = _sf((nws or {}).get("today_high")) if isinstance(nws, dict) else None
     mgm_high = _sf((mgm or {}).get("today_high")) if isinstance(mgm, dict) else None
+    mgm_hourly_high = _mgm_hourly_high(mgm)
 
     if om_today is None:
         fallback_high = (
@@ -2881,6 +2902,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
             if nws_high is not None
             else mgm_high
             if mgm_high is not None
+            else mgm_hourly_high
+            if mgm_hourly_high is not None
             else max_so_far
             if max_so_far is not None
             else cur_temp
@@ -2898,6 +2921,8 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
         current_forecasts["NWS"] = nws_high
     if mgm_high is not None:
         current_forecasts["MGM"] = mgm_high
+    elif mgm_hourly_high is not None:
+        current_forecasts["MGM Hourly"] = mgm_hourly_high
     if hko_forecast is not None:
         current_forecasts["HKO"] = _sf(hko_forecast)
     current_forecasts = {
