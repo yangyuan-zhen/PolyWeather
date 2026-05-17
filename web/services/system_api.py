@@ -26,81 +26,11 @@ async def get_system_status_payload() -> Dict[str, Any]:
     return await run_in_threadpool(build_system_status_payload)
 
 
-def run_system_prewarm(
-    request: Request,
-    *,
-    cities: Optional[str] = None,
-    force_refresh: bool = False,
-    include_detail: bool = False,
-    include_market: bool = False,
-) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    selected = legacy_routes._normalize_city_list(cities)
-    if not selected:
-        raise HTTPException(status_code=400, detail="No valid cities to prewarm")
-
-    started = time.perf_counter()
-    warmed: list[dict[str, object]] = []
-    failed: list[dict[str, object]] = []
-    summary_ok = 0
-    detail_ok = 0
-    market_ok = 0
-
-    for city in selected:
-        city_started = time.perf_counter()
-        try:
-            legacy_routes._refresh_city_summary_cache(city, force_refresh=force_refresh)
-            entry: dict[str, object] = {
-                "city": city,
-                "summary": True,
-                "duration_ms": round((time.perf_counter() - city_started) * 1000.0, 1),
-            }
-            summary_ok += 1
-            if include_detail:
-                legacy_routes._refresh_city_panel_cache(city, force_refresh=force_refresh)
-                entry["detail"] = True
-                detail_ok += 1
-            if include_market:
-                entry["market"] = False
-            warmed.append(entry)
-        except Exception as exc:
-            failed.append(
-                {
-                    "city": city,
-                    "error": str(exc),
-                    "duration_ms": round((time.perf_counter() - city_started) * 1000.0, 1),
-                }
-            )
-
-    total_ms = round((time.perf_counter() - started) * 1000.0, 1)
-    logger.info(
-        "system prewarm finished count={} failed={} force_refresh={} include_detail={} include_market={} duration_ms={}",
-        len(warmed),
-        len(failed),
-        force_refresh,
-        include_detail,
-        include_market,
-        total_ms,
-    )
-    return {
-        "ok": len(failed) == 0,
-        "cities": selected,
-        "warmed": warmed,
-        "failed": failed,
-        "summary_ok": summary_ok,
-        "panel_ok": detail_ok,
-        "detail_ok": detail_ok,
-        "market_ok": market_ok,
-        "failed_count": len(failed),
-        "duration_ms": total_ms,
-    }
-
-
 def get_system_cache_status(request: Request, cities: Optional[str] = None) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     selected = legacy_routes._normalize_city_list(cities)
     if not selected:
-        selected = list(legacy_routes.DEFAULT_PREWARM_CITIES)
+        selected = legacy_routes._normalize_city_list(None)
     kinds = {
         "summary": legacy_routes.CITY_SUMMARY_CACHE_TTL_SEC,
         "panel": legacy_routes.CITY_PANEL_CACHE_TTL_SEC,

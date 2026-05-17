@@ -80,7 +80,7 @@ TRACKABLE_ANALYTICS_EVENTS = {
     "checkout_succeeded",
 }
 
-DEFAULT_PREWARM_CITIES = [
+DEFAULT_STATUS_CITIES = [
     "ankara",
     "istanbul",
     "shanghai",
@@ -658,7 +658,7 @@ def _normalize_city_or_404(name: str) -> str:
 
 def _normalize_city_list(raw: Optional[str]) -> list[str]:
     if not raw:
-        return list(DEFAULT_PREWARM_CITIES)
+        return list(DEFAULT_STATUS_CITIES)
     out: list[str] = []
     for part in str(raw).split(","):
         city = str(part or "").strip().lower().replace("-", " ")

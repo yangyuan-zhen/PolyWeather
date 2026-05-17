@@ -23,7 +23,7 @@ def _resolve_default_city(request: Request) -> Optional[str]:
         cities_map = getattr(legacy_routes, "TIMEZONE_DEFAULT_CITIES", {})
         if tz in cities_map:
             return cities_map[tz]
-    return next(iter(getattr(legacy_routes, "DEFAULT_PREWARM_CITIES", [])), None)
+    return next(iter(getattr(legacy_routes, "DEFAULT_STATUS_CITIES", [])), None)
 
 
 async def build_dashboard_init_payload(request: Request) -> Dict[str, Any]:
