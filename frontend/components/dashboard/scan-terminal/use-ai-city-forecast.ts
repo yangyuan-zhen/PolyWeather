@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { scanTerminalClient } from "@/components/dashboard/scan-terminal/scan-terminal-client";
 import type { AiCityForecastState } from "@/components/dashboard/scan-terminal/types";
 import type { CityDetail } from "@/lib/dashboard-types";
@@ -33,6 +33,12 @@ export function useAiCityForecast({
   report: string;
 }) {
   const [aiRefreshToken, setAiRefreshToken] = useState(0);
+  // Keep refs to the latest detail/report so the effect closure always reads
+  // current values without needing to list unstable object refs as deps.
+  const detailRef = useRef<CityDetail | null>(detail);
+  const reportRef = useRef<string>(report);
+  detailRef.current = detail;
+  reportRef.current = report;
   const aiForecastKey = useMemo(
     () => buildAiCityForecastKey({ detail, detailCityName, locale, report }),
     [detail, detailCityName, locale, report],
@@ -67,19 +73,19 @@ export function useAiCityForecast({
 
     const loadingState = buildAiCityLoadingForecastState({
       cacheKey,
-      detail,
+      detail: detailRef.current,
       isEn,
-      report,
+      report: reportRef.current,
     });
     setAiForecast(loadingState);
     const softTimeoutId = window.setTimeout(() => {
       if (cancelled || resolved) return;
       const fallbackState = buildAiCityErrorForecastState({
         cacheKey,
-        detail,
+        detail: detailRef.current,
         error: "ai_soft_timeout_fallback",
         isEn,
-        report,
+        report: reportRef.current,
       });
       setAiForecast(fallbackState);
     }, AI_CITY_READ_SOFT_TIMEOUT_MS);
@@ -106,10 +112,10 @@ export function useAiCityForecast({
         window.clearTimeout(softTimeoutId);
         const readyState = buildAiCityReadyForecastState({
           cacheKey,
-          detail,
+          detail: detailRef.current,
           isEn,
           payload,
-          report,
+          report: reportRef.current,
         });
         if (!cancelled) {
           setAiForecast(readyState);
@@ -120,10 +126,10 @@ export function useAiCityForecast({
         window.clearTimeout(softTimeoutId);
         const errorState = buildAiCityErrorForecastState({
           cacheKey,
-          detail,
+          detail: detailRef.current,
           error,
           isEn,
-          report,
+          report: reportRef.current,
         });
         if (!cancelled) {
           setAiForecast(errorState);
@@ -136,12 +142,10 @@ export function useAiCityForecast({
   }, [
     aiForecastKey,
     aiRefreshToken,
-    detail,
     detailCityName,
     enabled,
     isEn,
     locale,
-    report,
   ]);
 
   const refreshAiForecast = useCallback(() => {
