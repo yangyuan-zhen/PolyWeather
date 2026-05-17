@@ -531,6 +531,7 @@ HIGH_FREQ_AIRPORT_CITIES = {
     "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
+    "tel aviv",
 }
 HIGH_FREQ_AIRPORT_ICAO = {
     "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
@@ -540,6 +541,7 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
     "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
     "denver": "KBKF", "atlanta": "KATL", "miami": "KMIA",
+    "tel aviv": "LLBG",
     "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
     "austin": "KAUS", "seattle": "KSEA",
 }
@@ -818,7 +820,8 @@ def _build_airport_status_message(
                    "new york": "LaGuardia", "los angeles": "LAX", "chicago": "O'Hare",
                    "denver": "Buckley", "atlanta": "Hartsfield", "miami": "Intl",
                    "san francisco": "SFO", "houston": "Hobby", "dallas": "Love Field",
-                   "austin": "Bergstrom", "seattle": "Sea-Tac"}
+                   "austin": "Bergstrom", "seattle": "Sea-Tac",
+                   "tel aviv": "Ben Gurion"}
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" · {local_time}" if local_time else ""
@@ -957,6 +960,7 @@ _AIRPORT_PUSH_INTERVAL = {
     "new york": 60, "los angeles": 60, "chicago": 60, "denver": 60,
     "atlanta": 60, "miami": 60, "san francisco": 60, "houston": 60,
     "dallas": 60, "austin": 60, "seattle": 60,
+    "tel aviv": 60,
 }
 # Per-city temperature window threshold (°C below DEB predicted high)
 # Continental airports: wider window (temp rises steadily over land)
