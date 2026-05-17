@@ -45,6 +45,28 @@ from web.services.city_payloads import (
 )
 
 TURKISH_MGM_CITIES = {"ankara", "istanbul"}
+HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
+    "seoul",
+    "singapore",
+    "busan",
+    "tokyo",
+    "ankara",
+    "helsinki",
+    "amsterdam",
+    "istanbul",
+    "paris",
+    "hong kong",
+    "lau fau shan",
+    "taipei",
+    "beijing",
+    "shanghai",
+    "guangzhou",
+    "shenzhen",
+    "qingdao",
+    "chengdu",
+    "chongqing",
+    "wuhan",
+}
 _ANALYSIS_CACHE_STATS_LOCK = threading.Lock()
 _ANALYSIS_CACHE_STATS: Dict[str, Any] = {
     "total_requests": 0,
@@ -374,6 +396,8 @@ def _analysis_ttl_for_city(city: str) -> int:
         return CACHE_TTL_ANKARA
     if city_lower in KOREAN_AMOS_CITIES:
         return CACHE_TTL_KOREAN_AMOS
+    if city_lower in HIGH_FREQ_AIRPORT_ANALYSIS_CITIES:
+        return 60
     return CACHE_TTL
 
 
