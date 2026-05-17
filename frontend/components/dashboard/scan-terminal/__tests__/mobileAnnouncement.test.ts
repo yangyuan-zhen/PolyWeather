@@ -17,7 +17,7 @@ export function runTests() {
 
   assert(
     source.includes("isMobileViewport") &&
-      source.includes("showAnnouncement && !isMobileViewport"),
-    "scan upgrade announcement must not render on mobile viewports",
+      !source.includes("showAnnouncement"),
+    "v1.5.6 scan upgrade announcement must be removed",
   );
 }
