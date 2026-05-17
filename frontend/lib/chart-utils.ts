@@ -1,4 +1,5 @@
 import type { CityDetail } from "@/lib/dashboard-types";
+import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import type { Locale } from "@/lib/i18n";
 import {
   getNoaaStationCode,
@@ -326,6 +327,7 @@ function normalizeObservationTimeForChart(
 function buildCurrentObservationFallback(
   detail: CityDetail,
 ): Array<{ time?: string; temp?: number | null; sourceLabel?: string | null }> {
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
   const candidates: Array<{
     sourceLabel?: string | null;
     temp?: number | null;
@@ -337,9 +339,9 @@ function buildCurrentObservationFallback(
       time: detail.current?.obs_time || detail.current?.report_time,
     },
     {
-      sourceLabel: detail.airport_primary?.source_label || "METAR",
-      temp: detail.airport_primary?.temp,
-      time: detail.airport_primary?.obs_time || detail.airport_primary?.report_time,
+      sourceLabel: displayAirportPrimary?.source_label || "METAR",
+      temp: displayAirportPrimary?.temp,
+      time: displayAirportPrimary?.obs_time || displayAirportPrimary?.report_time,
     },
     {
       sourceLabel: detail.airport_current?.source_label || "METAR",

@@ -26,6 +26,7 @@ import {
   useAiCityForecast,
   useCityMarketScan,
 } from "@/components/dashboard/scan-terminal/use-ai-city-card-data";
+import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import type { CityDetail, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getModelView } from "@/lib/model-utils";
 import { getTodayPaceView } from "@/lib/pace-utils";
@@ -242,10 +243,11 @@ export function AiPinnedCityCard({
     "--";
   const deb = detail?.deb?.prediction ?? row?.deb_prediction ?? null;
   const isHkoObservation = isHkoObservationCity(detail);
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
   const currentTemp =
     (isHkoObservation
       ? detail?.current?.temp ?? row?.current_temp
-      : detail?.airport_primary?.temp ??
+      : displayAirportPrimary?.temp ??
         detail?.airport_current?.temp ??
         detail?.current?.temp ??
         row?.current_temp) ?? null;
@@ -274,7 +276,7 @@ export function AiPinnedCityCard({
     : detail?.risk?.icao ||
       detail?.current?.station_code ||
       detail?.airport_current?.station_code ||
-      detail?.airport_primary?.station_code ||
+      displayAirportPrimary?.station_code ||
       "";
   const observationSourceZh = isHkoObservation ? "香港天文台观测" : "METAR 实测";
   const observationSourceEn = isHkoObservation ? "HKO observations" : "METAR observations";

@@ -1,4 +1,5 @@
 import type { CityDetail } from "@/lib/dashboard-types";
+import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import type { Locale } from "@/lib/i18n";
 import {
   hmToMinutes,
@@ -18,10 +19,11 @@ export function getTodayPaceView(
   const times = hourly.times || [];
   const temps = hourly.temps || [];
   if (!times.length || !temps.length) return null;
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
 
   const currentMinutes =
     hmToMinutes(detail.local_time) ??
-    hmToMinutes(detail.airport_primary?.obs_time) ??
+    hmToMinutes(displayAirportPrimary?.obs_time) ??
     hmToMinutes(detail.airport_current?.obs_time) ??
     hmToMinutes(detail.current?.obs_time);
   if (currentMinutes == null) return null;
@@ -39,7 +41,7 @@ export function getTodayPaceView(
   if (expectedNow == null) return null;
 
   const observedNowCandidate = [
-    detail.airport_primary?.temp,
+    displayAirportPrimary?.temp,
     detail.airport_current?.temp,
     detail.current?.temp,
   ]
@@ -75,7 +77,7 @@ export function getTodayPaceView(
       : `${delta > 0 ? "+" : ""}${delta.toFixed(1)}${detail.temp_symbol}`;
 
   const topObservedCandidate = [
-    detail.airport_primary?.max_so_far,
+    displayAirportPrimary?.max_so_far,
     detail.airport_current?.max_so_far,
     detail.current?.max_so_far,
     observedNow,
@@ -105,7 +107,7 @@ export function getTodayPaceView(
         ).padStart(2, "0")}:00`
       : "--";
   const observedLabel =
-    detail.airport_primary?.temp != null || detail.airport_current?.temp != null
+    displayAirportPrimary?.temp != null || detail.airport_current?.temp != null
       ? isEnglish(locale)
         ? "Airport obs"
         : "机场实测"

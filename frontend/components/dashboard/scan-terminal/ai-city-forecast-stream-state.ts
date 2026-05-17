@@ -9,6 +9,7 @@ import type {
   AiCityForecastPayload,
   AiCityForecastState,
 } from "@/components/dashboard/scan-terminal/types";
+import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import type { CityDetail } from "@/lib/dashboard-types";
 import { normalizeCityKey } from "./decision-utils";
 
@@ -167,11 +168,12 @@ function computeFallbackPredictedMax(detail: CityDetail | null): number | null {
     predicted = values.reduce((a, b) => a + b, 0) / values.length;
   if (predicted == null) {
     const isHkoObservation = isHkoObservationCity(detail);
+    const displayAirportPrimary = getDisplayAirportPrimary(detail);
     const currentTemp =
       (isHkoObservation
         ? detail?.current?.temp
         : detail?.airport_current?.temp ??
-          detail?.airport_primary?.temp ??
+          displayAirportPrimary?.temp ??
           detail?.current?.temp) ?? null;
     predicted = currentTemp != null && Number.isFinite(currentTemp)
       ? currentTemp
@@ -193,11 +195,12 @@ export function buildAiCityFallbackPayload({
 }): AiCityForecastPayload {
   const tempSymbol = detail?.temp_symbol || "°C";
   const isHkoObservation = isHkoObservationCity(detail);
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
   const currentTemp =
     (isHkoObservation
       ? detail?.current?.temp
       : detail?.airport_current?.temp ??
-        detail?.airport_primary?.temp ??
+        displayAirportPrimary?.temp ??
         detail?.current?.temp) ?? null;
   const currentText =
     currentTemp != null && Number.isFinite(Number(currentTemp))

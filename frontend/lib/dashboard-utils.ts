@@ -21,6 +21,7 @@ import {
 import { formatTafMarkerType } from "@/lib/taf-utils";
 import { normalizeHm } from "@/lib/time-utils";
 import { getWeatherSummary } from "@/lib/weather-summary-utils";
+import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 
 export { getTemperatureChartData } from "@/lib/chart-utils";
 export { getModelView, getProbabilityView } from "@/lib/model-utils";
@@ -1932,6 +1933,7 @@ function getOfficialObservationCandidates(detail: CityDetail) {
 
 function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
   const { mgmNearby } = getOfficialObservationCandidates(detail);
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
   const currentSource = String(
     detail.current?.settlement_source ||
       detail.current?.settlement_source_label ||
@@ -1940,7 +1942,7 @@ function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
     .trim()
     .toLowerCase();
   const isNmcCurrent = currentSource === "nmc" || currentSource.includes("nmc");
-  const isNmcAirport = String(detail.airport_primary?.source_label || "")
+  const isNmcAirport = String(displayAirportPrimary?.source_label || "")
     .trim()
     .toLowerCase()
     .includes("nmc");
@@ -1950,8 +1952,8 @@ function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
       temp: detail.airport_current?.temp,
     },
     {
-      sourceLabel: detail.airport_primary?.source_label || "METAR",
-      temp: isNmcAirport ? null : detail.airport_primary?.temp,
+      sourceLabel: displayAirportPrimary?.source_label || "METAR",
+      temp: isNmcAirport ? null : displayAirportPrimary?.temp,
     },
     {
       sourceLabel: detail.current?.settlement_source_label,
@@ -1988,6 +1990,7 @@ function getObservedTemperatureProfile(detail: CityDetail, locale: Locale) {
 function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
   const { mgmNearby } = getOfficialObservationCandidates(detail);
   const mgmFirstRecord = asRecord(mgmNearby[0]);
+  const displayAirportPrimary = getDisplayAirportPrimary(detail);
   const currentSource = String(
     detail.current?.settlement_source ||
       detail.current?.settlement_source_label ||
@@ -1998,11 +2001,11 @@ function getObservationUpdateProfile(detail: CityDetail, locale: Locale) {
   const isNmcCurrent = currentSource === "nmc" || currentSource.includes("nmc");
   const rawValue = firstNonEmptyString([
     isNmcCurrent ? "" : detail.current?.obs_time,
-    localObservationTimeCandidate(detail.airport_primary?.obs_time),
+    localObservationTimeCandidate(displayAirportPrimary?.obs_time),
     localObservationTimeCandidate(detail.airport_current?.obs_time),
     localObservationTimeCandidate(mgmFirstRecord?.obs_time),
     localObservationTimeCandidate(mgmFirstRecord?.time),
-    detail.airport_primary?.report_time,
+    displayAirportPrimary?.report_time,
     detail.airport_current?.report_time,
     isNmcCurrent ? "" : detail.current?.report_time,
     mgmFirstRecord?.report_time,
