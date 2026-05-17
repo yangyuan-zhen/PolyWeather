@@ -1,10 +1,7 @@
 from src.utils.telegram_push import (
     HIGH_FREQ_AIRPORT_CITIES,
     HIGH_FREQ_AIRPORT_ICAO,
-    MARKET_MONITOR_CITIES,
-    MARKET_MONITOR_INTERVAL_SEC,
     _build_airport_status_message,
-    _build_market_monitor_message,
     _run_high_freq_airport_cycle,
 )
 from pathlib import Path
@@ -41,42 +38,6 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
     assert "DEB" in text and "24.0" in text
 
 
-def test_market_monitor_message_starts_with_market_hashtag_and_city():
-    text = _build_market_monitor_message(
-        "shanghai",
-        {
-            "local_time": "14:01",
-            "airport_current": {"temp": 29.4},
-            "deb": {"prediction": 31.2},
-            "market_scan": {"available": True},
-        },
-    )
-
-    assert text.splitlines()[0] == "#市场监控 #Shanghai"
-    assert "Shanghai 14:01" in text
-    assert "当前：29.4°C · DEB：31.2°C" in text
-
-
-def test_market_monitor_uses_focus_runway_temperature_for_key_airports():
-    text = _build_market_monitor_message(
-        "shanghai",
-        {
-            "local_time": "14:01",
-            "airport_current": {"temp": 29.4},
-            "deb": {"prediction": 31.2},
-            "amos": {
-                "source": "amsc_awos",
-                "runway_obs": {
-                    "runway_pairs": [("16L", "34R"), ("17L", "35R")],
-                    "temperatures": [(36.0, None), (31.8, None)],
-                },
-            },
-        },
-    )
-
-    assert "当前：31.8°C · DEB：31.2°C" in text
-
-
 def test_airport_status_hides_non_focus_runways_for_key_airports():
     text = _build_airport_status_message(
         "chongqing",
@@ -104,18 +65,12 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
     assert "当前：31.1°C" in text
 
 
-def test_market_monitor_default_interval_is_five_minutes():
-    assert MARKET_MONITOR_INTERVAL_SEC == 300
-
-
 def test_singapore_is_in_telegram_push_city_lists():
-    assert "singapore" not in MARKET_MONITOR_CITIES
     assert "singapore" in HIGH_FREQ_AIRPORT_CITIES
     assert HIGH_FREQ_AIRPORT_ICAO["singapore"] == "WSSS"
 
 
 def test_shenzhen_is_removed_from_telegram_push_city_lists():
-    assert "shenzhen" not in MARKET_MONITOR_CITIES
     assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
     assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO
 
