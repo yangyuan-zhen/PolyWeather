@@ -3,18 +3,12 @@
 import { RefreshCw, X } from "lucide-react";
 import type { MouseEvent } from "react";
 import { useState } from "react";
-import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
-import { AirportEvidencePanel } from "@/components/dashboard/scan-terminal/AirportEvidencePanel";
 import {
   CityStatusTags,
   type CityStatusTag,
   type StatusTone,
 } from "@/components/dashboard/scan-terminal/CityStatusTags";
-import {
-  DataFreshnessBar,
-  type DataFreshnessRow,
-} from "@/components/dashboard/scan-terminal/DataFreshnessBar";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import { MarketDecisionLine } from "@/components/dashboard/scan-terminal/MarketDecisionLine";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
@@ -42,15 +36,12 @@ export function MobileDecisionCard({
   aiReadInProgressText,
   aiRuleEvidenceMode,
   aiRuleEvidenceText,
-  currentTempText,
-  dataFreshnessRows,
   debPrediction,
   decisionState,
   detail,
   displayName,
   expectedHighText,
   fallbackAiReason,
-  freshnessSeparator,
   isEn,
   isHkoObservation,
   isRefreshing,
@@ -61,7 +52,6 @@ export function MobileDecisionCard({
   onRefresh,
   onRemove,
   peakWindow,
-  rawObservationText,
   removing,
   tempSymbol,
 }: {
@@ -76,15 +66,12 @@ export function MobileDecisionCard({
   aiReadInProgressText: string;
   aiRuleEvidenceMode: boolean;
   aiRuleEvidenceText: string;
-  currentTempText: string;
-  dataFreshnessRows: DataFreshnessRow[];
   debPrediction: number | null;
   decisionState: CityDecisionState;
   detail: CityDetail | null;
   displayName: string;
   expectedHighText: string;
   fallbackAiReason: string;
-  freshnessSeparator: string;
   isEn: boolean;
   isHkoObservation: boolean;
   isRefreshing: boolean;
@@ -95,15 +82,12 @@ export function MobileDecisionCard({
   onRefresh: (event: MouseEvent<HTMLButtonElement>) => void;
   onRemove: (event: MouseEvent<HTMLButtonElement>) => void;
   peakWindow: string;
-  rawObservationText: string;
   removing?: boolean;
   tempSymbol: string;
 }) {
   const copy = getMobileDecisionCopy(isEn);
   const loadingCopy = getCityLoadingCopy({ isEn, isHkoObservation });
   const [modelOpen, setModelOpen] = useState(false);
-  const [chartOpen, setChartOpen] = useState(false);
-  const [airportOpen, setAirportOpen] = useState(false);
   const statusTags: CityStatusTag[] = decisionState.badges.length
     ? decisionState.badges
     : [{ label: decisionState.aiStatusLabel, tone: decisionState.aiStatusTone as StatusTone }];
@@ -142,11 +126,7 @@ export function MobileDecisionCard({
       </header>
 
       <div className="scan-mobile-decision-metrics">
-        <span>
-          <small>{copy.currentTemp}</small>
-          <b>{currentTempText}</b>
-        </span>
-        <span>
+        <span className="primary">
           <small>{copy.expectedHigh}</small>
           <b>{expectedHighText}</b>
         </span>
@@ -158,13 +138,6 @@ export function MobileDecisionCard({
 
       <p className="scan-mobile-decision-reason">{decisionState.primaryReason}</p>
       <CityStatusTags tags={statusTags} />
-      <DataFreshnessBar
-        aiStatusLabel={decisionState.aiStatusLabel}
-        aiStatusTone={decisionState.aiStatusTone}
-        freshnessSeparator={freshnessSeparator}
-        isEn={isEn}
-        rows={dataFreshnessRows}
-      />
       <MarketDecisionLine
         isEn={isEn}
         marketDecisionView={marketDecisionView}
@@ -199,20 +172,8 @@ export function MobileDecisionCard({
             isHkoObservation={isHkoObservation}
             localModelSupportNote={localModelSupportNote}
             localizedFinalJudgment={localizedFinalJudgment}
-            rawObservationText={rawObservationText}
             tempSymbol={tempSymbol}
           />
-
-          <details
-            className="scan-ai-city-section scan-mobile-fold"
-            open={airportOpen}
-            onToggle={(event) => setAirportOpen(event.currentTarget.open)}
-          >
-            <summary className="scan-ai-city-section-title">
-              {isEn ? "Airport live evidence" : "机场实时证据"}
-            </summary>
-            {airportOpen ? <AirportEvidencePanel detail={detail} isEn={isEn} /> : null}
-          </details>
 
           <details
             className="scan-ai-city-section scan-mobile-fold"
@@ -221,15 +182,6 @@ export function MobileDecisionCard({
           >
             <summary className="scan-ai-city-section-title">{copy.modelEvidence}</summary>
             {modelOpen ? <ModelEvidencePanel detail={detail} isEn={isEn} /> : null}
-          </details>
-
-          <details
-            className="scan-ai-city-section scan-mobile-fold"
-            open={chartOpen}
-            onToggle={(event) => setChartOpen(event.currentTarget.open)}
-          >
-            <summary className="scan-ai-city-section-title">{copy.chart}</summary>
-            {chartOpen ? <AiCityTemperatureChart detail={detail} /> : null}
           </details>
         </div>
       )}

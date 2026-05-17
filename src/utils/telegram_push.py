@@ -21,6 +21,45 @@ from src.utils.telegram_chat_ids import (
     get_telegram_chat_ids_from_env,
 )
 
+# Forum topic routing: maps city_key -> message_thread_id for the push forum group.
+# Created by scripts/create_forum_topics.py, stored in the runtime data dir.
+_CITY_THREAD_IDS_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "data", "city_thread_ids.json",
+)
+_FORUM_CHAT_ID = "-1003965137823"
+_city_thread_ids: dict = {}
+
+
+def _load_city_thread_ids() -> dict:
+    global _city_thread_ids
+    if _city_thread_ids:
+        return _city_thread_ids
+    paths = [
+        _CITY_THREAD_IDS_PATH,
+        "/var/lib/polyweather/city_thread_ids.json",
+        "/app/data/city_thread_ids.json",
+    ]
+    for path in paths:
+        if os.path.isfile(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    _city_thread_ids = json.load(f)
+                logger.info("loaded city_thread_ids from {}: {} cities", path, len(_city_thread_ids))
+                return _city_thread_ids
+            except Exception as exc:
+                logger.warning("failed to load city_thread_ids from {}: {}", path, exc)
+    return {}
+
+
+def _resolve_thread_id(chat_id: str, city: str) -> int:
+    """Return message_thread_id for a given chat and city, or 0 if not a forum topic."""
+    if str(chat_id) != _FORUM_CHAT_ID:
+        return 0
+    mapping = _load_city_thread_ids()
+    city_key = str(city or "").strip().lower()
+    return int(mapping.get(city_key) or 0)
+
 
 SEVERITY_RANK = {
     "none": 0,
@@ -1186,7 +1225,11 @@ def _run_high_freq_airport_cycle(
             sent = False
             for chat_id in chat_ids:
                 try:
-                    bot.send_message(chat_id, message)
+                    kwargs = {}
+                    thread_id = _resolve_thread_id(chat_id, city)
+                    if thread_id:
+                        kwargs["message_thread_id"] = thread_id
+                    bot.send_message(chat_id, message, **kwargs)
                     sent = True
                 except Exception as exc:
                     logger.warning("airport push failed city={} chat_id={}: {}", city, chat_id, exc)
@@ -1288,12 +1331,17 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
                 continue
             if message is None:
                 continue
+            city_name = futures[future]
             for chat_id in chat_ids:
                 try:
-                    bot.send_message(chat_id, message)
+                    kwargs = {}
+                    thread_id = _resolve_thread_id(chat_id, city_name)
+                    if thread_id:
+                        kwargs["message_thread_id"] = thread_id
+                    bot.send_message(chat_id, message, **kwargs)
                     sent_any = True
                 except Exception as exc:
-                    logger.warning("market monitor push failed city={} chat_id={}: {}", futures[future], chat_id, exc)
+                    logger.warning("market monitor push failed city={} chat_id={}: {}", city_name, chat_id, exc)
     return sent_any
 
 

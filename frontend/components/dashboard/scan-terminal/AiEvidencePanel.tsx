@@ -44,7 +44,6 @@ export function AiEvidencePanel({
   isHkoObservation,
   localModelSupportNote,
   localizedFinalJudgment,
-  rawObservationText,
   tempSymbol,
 }: {
   aiBullets: string[];
@@ -64,7 +63,6 @@ export function AiEvidencePanel({
   isHkoObservation: boolean;
   localModelSupportNote: string;
   localizedFinalJudgment: string;
-  rawObservationText: string;
   tempSymbol: string;
 }) {
   const aiConfidenceMeta = confidenceBadge(aiConfidence, isEn);
@@ -173,7 +171,6 @@ export function AiEvidencePanel({
                     <li key={`${line}-${index}`}>{line}</li>
                   ))}
               </ul>
-              <p className="scan-ai-raw-metar">{rawObservationText}</p>
             </>
           ) : aiForecast.status === "ready" ? (
             <>
@@ -181,7 +178,6 @@ export function AiEvidencePanel({
               <ul className="scan-ai-weather-bullets">
                 {fallbackAiReason ? <li>{fallbackAiReason}</li> : null}
                 <li>{localModelSupportNote}</li>
-                <li>{rawObservationText}</li>
               </ul>
             </>
           ) : aiForecast.status === "failed" ? (
@@ -190,7 +186,6 @@ export function AiEvidencePanel({
               <ul className="scan-ai-weather-bullets">
                 {aiForecast.error ? <li>{aiForecast.error}</li> : null}
                 <li>{localModelSupportNote}</li>
-                <li>{rawObservationText}</li>
               </ul>
             </>
           ) : (

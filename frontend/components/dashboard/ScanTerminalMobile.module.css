@@ -629,3 +629,216 @@
     height: 38px;
   }
 }
+
+/* ── Mobile City Picker ── */
+
+.root :global(.scan-mobile-city-picker) {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.root :global(.scan-mobile-picker-search) {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid rgba(77, 163, 255, 0.22);
+  border-radius: 16px;
+  background: rgba(12, 24, 42, 0.88);
+  padding: 0 14px;
+  transition: border-color 0.18s;
+}
+
+.root :global(.scan-mobile-picker-search:focus-within) {
+  border-color: rgba(77, 163, 255, 0.48);
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.08);
+}
+
+.root :global(.scan-mobile-picker-search-icon) {
+  flex: 0 0 auto;
+  color: #7a9cc6;
+}
+
+.root :global(.scan-mobile-picker-search-input) {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 0 10px;
+  outline: none;
+}
+
+.root :global(.scan-mobile-picker-search-input::placeholder) {
+  color: #5b7a9e;
+}
+
+.root :global(.scan-mobile-picker-search-clear) {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.12);
+  color: #8fa4c3;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.root :global(.scan-mobile-picker-result-count) {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0 2px;
+}
+
+.root :global(.scan-mobile-picker-empty) {
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+  color: var(--color-text-muted);
+  font-size: 14px;
+}
+
+.root :global(.scan-mobile-picker-regions) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.root :global(.scan-mobile-picker-regions::-webkit-scrollbar) {
+  display: none;
+}
+
+.root :global(.scan-mobile-picker-region) {
+  border: 1px solid rgba(90, 123, 166, 0.1);
+  border-radius: 16px;
+  background: rgba(8, 18, 35, 0.68);
+  overflow: hidden;
+}
+
+.root :global(.scan-mobile-picker-region-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 13px 15px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.root :global(.scan-mobile-picker-region-head span) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-primary);
+}
+
+.root :global(.scan-mobile-picker-region-head small) {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 8px;
+  background: rgba(77, 163, 255, 0.14);
+  color: var(--color-accent-primary);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 0 6px;
+}
+
+.root :global(.scan-mobile-picker-region-head svg) {
+  color: #5b7a9e;
+  transition: transform 0.2s ease;
+}
+
+.root :global(.scan-mobile-picker-region-head svg.expanded) {
+  transform: rotate(180deg);
+}
+
+.root :global(.scan-mobile-picker-region-cities) {
+  display: grid;
+  gap: 6px;
+  padding: 0 12px 12px;
+}
+
+.root :global(.scan-mobile-picker-city-row) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid rgba(118, 150, 192, 0.12);
+  border-radius: 14px;
+  background: rgba(14, 26, 45, 0.64);
+  color: inherit;
+  padding: 11px 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.root :global(.scan-mobile-picker-city-row:active) {
+  border-color: rgba(77, 163, 255, 0.32);
+  background: rgba(77, 163, 255, 0.08);
+}
+
+.root :global(.scan-mobile-picker-city-name),
+.root :global(.scan-mobile-picker-city-temp) {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.root :global(.scan-mobile-picker-city-name b) {
+  color: var(--color-text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.root :global(.scan-mobile-picker-city-name small) {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.root :global(.scan-mobile-picker-city-temp) {
+  justify-items: end;
+  flex: 0 0 auto;
+}
+
+.root :global(.scan-mobile-picker-city-temp b) {
+  color: var(--color-text-primary);
+  font-size: 15px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.root :global(.scan-mobile-picker-city-temp small) {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}

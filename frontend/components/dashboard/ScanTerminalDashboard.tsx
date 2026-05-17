@@ -19,10 +19,10 @@ import {
 } from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
 import type {
-  CityDetail,
   ScanOpportunityRow,
 } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
+import { MobileCityPicker } from "@/components/dashboard/scan-terminal/MobileCityPicker";
 import { WelcomeOverlay } from "@/components/dashboard/scan-terminal/WelcomeOverlay";
 import {
   ScanPaywallModal,
@@ -102,6 +102,8 @@ function ScanTerminalScreen() {
       setIsMobileViewport(media.matches);
       if (media.matches) {
         setActiveView((current) => (current === "map" ? "city-list" : current));
+      } else {
+        setActiveView((current) => (current === "city-list" ? "map" : current));
       }
     };
     syncMobileViewport();
@@ -343,72 +345,11 @@ function ScanTerminalScreen() {
   const renderMainView = () => {
     if (resolvedView === "city-list") {
       return (
-        <div className="scan-mobile-city-list-view">
-          <div className="scan-mobile-city-list-head">
-            <div>
-              <span>{isEn ? "Lightweight mobile entry" : "移动端轻量入口"}</span>
-              <strong>{isEn ? "Pick one city to inspect" : "选择一个城市进入决策卡"}</strong>
-            </div>
-            <p>
-              {isEn
-                ? "Cached scan rows are used first. The map and heavier evidence load only when opened."
-                : "优先使用缓存扫描结果；地图和重证据只在打开后加载。"}
-            </p>
-          </div>
-          <div className="scan-mobile-city-list">
-            {timeSortedRows.slice(0, 24).map((row, index) => {
-              const cityName = row.city || row.city_display_name || row.display_name || "";
-              const display = row.city_display_name || row.display_name || cityName;
-              const currentTemp = row.current_temp ?? row.current_max_so_far ?? null;
-              const deb = row.deb_prediction ?? null;
-              return (
-                <button
-                  key={row.id || `${cityName}-${index}`}
-                  type="button"
-                  className="scan-mobile-city-row"
-                  onClick={() => handleOpenDecisionRow(row)}
-                >
-                  <span className="scan-mobile-city-rank">{String(index + 1).padStart(2, "0")}</span>
-                  <span className="scan-mobile-city-main">
-                    <b>{display}</b>
-                    <small>{row.market_question || row.target_label || row.local_time || "--"}</small>
-                  </span>
-                  <span className="scan-mobile-city-metrics">
-                    <b>
-                      {currentTemp != null && Number.isFinite(Number(currentTemp))
-                        ? `${Number(currentTemp).toFixed(1)}${row.temp_symbol || "°C"}`
-                        : "--"}
-                    </b>
-                    <small>
-                      DEB{" "}
-                      {deb != null && Number.isFinite(Number(deb))
-                        ? `${Number(deb).toFixed(1)}${row.temp_symbol || "°C"}`
-                        : "--"}
-                    </small>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-          {!timeSortedRows.length ? (
-            <div className="scan-empty-state">
-              <div className="scan-empty-title">
-                {scanLoading
-                  ? isEn
-                    ? "Loading cached scan"
-                    : "正在读取缓存扫描"
-                  : isEn
-                    ? "No city rows yet"
-                    : "暂无城市列表"}
-              </div>
-              <div className="scan-empty-copy">
-                {isEn
-                  ? "Use refresh only when you need a new server-side scan."
-                  : "只有需要新的服务端扫描时再手动刷新。"}
-              </div>
-            </div>
-          ) : null}
-        </div>
+        <MobileCityPicker
+          isEn={isEn}
+          rows={timeSortedRows}
+          onSelectCity={handleOpenDecisionRow}
+        />
       );
     }
     if (resolvedView === "map") {
@@ -508,29 +449,32 @@ function ScanTerminalScreen() {
           <section className="scan-list-section">
             <div className="scan-list-header">
               <div className="scan-list-tabs" role="tablist" aria-label={isEn ? "Content view" : "内容视图"}>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "city-list"}
-                  className={resolvedView === "city-list" ? "active" : ""}
-                  onClick={() => {
-                    setActiveView("city-list");
-                  }}
-                >
-                  {isEn ? "City List" : "城市列表"}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "map"}
-                  className={resolvedView === "map" ? "active" : ""}
-                  onClick={() => {
-                    lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
-                    setActiveView("map");
-                  }}
-                >
-                  {isEn ? "Distribution View" : "分布视图"}
-                </button>
+                {isMobileViewport ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={resolvedView === "city-list"}
+                    className={resolvedView === "city-list" ? "active" : ""}
+                    onClick={() => {
+                      setActiveView("city-list");
+                    }}
+                  >
+                    {isEn ? "City List" : "城市列表"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={resolvedView === "map"}
+                    className={resolvedView === "map" ? "active" : ""}
+                    onClick={() => {
+                      lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
+                      setActiveView("map");
+                    }}
+                  >
+                    {isEn ? "Distribution View" : "分布视图"}
+                  </button>
+                )}
                 <button
                   type="button"
                   role="tab"

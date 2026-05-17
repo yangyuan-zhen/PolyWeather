@@ -3,9 +3,7 @@
 import clsx from "clsx";
 import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
-import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
-import { AirportEvidencePanel } from "@/components/dashboard/scan-terminal/AirportEvidencePanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
 import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
@@ -267,27 +265,8 @@ export function AiPinnedCityCard({
   const report = isHkoObservation
     ? ""
     : detail?.current?.raw_metar || detail?.airport_current?.raw_metar || "";
-  const metarReportTimeDisplay = formatMetarReportTime(detail, report, isEn);
-  const observationStation = isHkoObservation
-    ? detail?.current?.station_name ||
-      detail?.current?.station_code ||
-      detail?.settlement_station?.settlement_station_label ||
-      detail?.settlement_station?.settlement_station_code ||
-      "香港天文台"
-    : detail?.risk?.icao ||
-      detail?.current?.station_code ||
-      detail?.airport_current?.station_code ||
-      displayAirportPrimary?.station_code ||
-      "";
   const observationSourceZh = isHkoObservation ? "香港天文台观测" : "METAR 实测";
   const observationSourceEn = isHkoObservation ? "HKO observations" : "METAR observations";
-  const rawObservationText = isHkoObservation
-    ? `${isEn ? "Observation source" : "观测来源"}：${observationStation || (isEn ? "Hong Kong Observatory" : "香港天文台")}${metarReportTimeDisplay ? `，${metarReportTimeDisplay}` : ""}`
-    : report
-      ? `${isEn ? "Raw METAR" : "原始 METAR"}：${`${observationStation} ${report}`.trim()}`
-      : isEn
-        ? "Raw METAR: unavailable."
-        : "原始 METAR：暂无。";
   const detailCityName = detail?.name || item.cityName;
   const [refreshingDetail, setRefreshingDetail] = useState(false);
   const { aiForecast, refreshAiForecast } = useAiCityForecast({
@@ -316,31 +295,16 @@ export function AiPinnedCityCard({
   }, []);
 
   const aiCityForecast = aiForecast.payload?.city_forecast || null;
-  const localizedFinalJudgmentRaw =
+  const localizedFinalJudgment =
     (isEn ? aiCityForecast?.final_judgment_en : aiCityForecast?.final_judgment_zh) ||
     (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
     "";
-  const localizedMetarReadRaw =
+  const localizedMetarRead =
     (isEn ? aiCityForecast?.metar_read_en : aiCityForecast?.metar_read_zh) ||
     "";
-  const localizedReasoningRaw =
+  const localizedReasoning =
     (isEn ? aiCityForecast?.reasoning_en : aiCityForecast?.reasoning_zh) ||
     "";
-  const localizedFinalJudgment = normalizeMetarReadTime(
-    localizedFinalJudgmentRaw,
-    metarReportTimeDisplay,
-    isEn,
-  );
-  const localizedMetarRead = normalizeMetarReadTime(
-    localizedMetarReadRaw,
-    metarReportTimeDisplay,
-    isEn,
-  );
-  const localizedReasoning = normalizeMetarReadTime(
-    localizedReasoningRaw,
-    metarReportTimeDisplay,
-    isEn,
-  );
   const localizedModelNote =
     (isEn
       ? aiCityForecast?.model_cluster_note_en
@@ -389,11 +353,6 @@ export function AiPinnedCityCard({
   const expectedHighText =
     decisionExpectedHighNumber != null
       ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
-      : "--";
-  const observedLabel = undefined;
-  const currentTempText =
-    currentTempNumber != null
-      ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
       : "--";
   const debText =
     debNumber != null
@@ -464,32 +423,19 @@ export function AiPinnedCityCard({
   });
   const dataFreshnessRows = [
     {
-      label: isHkoObservation ? (isEn ? "HKO" : "天文台") : "METAR",
-      labelTitle: isHkoObservation
-        ? (isEn ? "Hong Kong Observatory official readings" : "香港天文台官方实测")
-        : (isEn ? "Meteorological Aerodrome Report — airport weather observation" : "机场气象观测报文"),
-      value: buildObservationFreshnessValue({
-        detail,
-        displayTime: metarReportTimeDisplay,
-        isEn,
-        isHkoObservation,
-      }),
-      tone: observationStale ? "stale" : "fresh",
-    },
-    {
       label: isEn ? "Models" : "模型",
       value: buildModelFreshnessValue(detail, locale, isEn),
-      tone: "fresh",
+      tone: "fresh" as const,
     },
     {
       label: isEn ? "Market" : "市场价格",
       value: buildMarketFreshnessValue({ isEn, marketScan, marketStatus }),
       tone:
         marketDecisionView.status === "ready"
-          ? "fresh"
+          ? ("fresh" as const)
           : marketDecisionView.status === "loading"
-            ? "loading"
-            : "stale",
+            ? ("loading" as const)
+            : ("stale" as const),
     },
   ];
   const freshnessSeparator = isEn ? ": " : "：";
@@ -569,15 +515,12 @@ export function AiPinnedCityCard({
           aiReadInProgressText={aiReadInProgressText}
           aiRuleEvidenceMode={aiRuleEvidenceMode}
           aiRuleEvidenceText={aiRuleEvidenceText}
-          currentTempText={currentTempText}
-          dataFreshnessRows={dataFreshnessRows}
           debPrediction={debNumber}
           decisionState={decisionState}
           detail={detail}
           displayName={displayName}
           expectedHighText={expectedHighText}
           fallbackAiReason={fallbackAiReason}
-          freshnessSeparator={freshnessSeparator}
           isEn={isEn}
           isHkoObservation={isHkoObservation}
           isRefreshing={isRefreshing}
@@ -588,7 +531,6 @@ export function AiPinnedCityCard({
           onRefresh={handleRefresh}
           onRemove={handleRemove}
           peakWindow={peakWindow}
-          rawObservationText={rawObservationText}
           removing={removing}
           tempSymbol={tempSymbol}
         />
@@ -599,14 +541,10 @@ export function AiPinnedCityCard({
             aiStatusTone={decisionState.aiStatusTone}
             collapseId={collapseId}
             collapsed={collapsed}
-            currentTempText={currentTempText}
-            observedLabel={observedLabel}
-            dataFreshnessRows={dataFreshnessRows}
             debText={debText}
             detailLocalTime={detail?.local_time}
             displayName={displayName}
             expectedHighText={expectedHighText}
-            freshnessSeparator={freshnessSeparator}
             isEn={isEn}
             isRefreshing={isRefreshing}
             modelRange={modelRange}
@@ -631,7 +569,6 @@ export function AiPinnedCityCard({
               />
 
               <div className="scan-ai-city-analysis-grid">
-                <AiCityTemperatureChart detail={detail} />
                 <AiEvidencePanel
                   aiBullets={aiBullets}
                   aiCityForecast={aiCityForecast}
@@ -650,12 +587,10 @@ export function AiPinnedCityCard({
                   isHkoObservation={isHkoObservation}
                   localModelSupportNote={localModelSupportNote}
                   localizedFinalJudgment={localizedFinalJudgment}
-                  rawObservationText={rawObservationText}
                   tempSymbol={tempSymbol}
                 />
               </div>
 
-              <AirportEvidencePanel detail={detail} isEn={isEn} />
               <ModelEvidencePanel detail={detail} isEn={isEn} />
             </div>
           ) : !detail ? (

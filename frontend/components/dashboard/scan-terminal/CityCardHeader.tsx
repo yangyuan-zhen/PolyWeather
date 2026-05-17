@@ -7,24 +7,16 @@ import {
   type CityStatusTag,
   type StatusTone,
 } from "@/components/dashboard/scan-terminal/CityStatusTags";
-import {
-  DataFreshnessBar,
-  type DataFreshnessRow,
-} from "@/components/dashboard/scan-terminal/DataFreshnessBar";
 
 export function CityCardHeader({
   aiStatusLabel,
   aiStatusTone,
   collapseId,
   collapsed,
-  currentTempText,
-  observedLabel,
-  dataFreshnessRows,
   debText,
   detailLocalTime,
   displayName,
   expectedHighText,
-  freshnessSeparator,
   isEn,
   isRefreshing,
   modelRange,
@@ -40,14 +32,10 @@ export function CityCardHeader({
   aiStatusTone: StatusTone;
   collapseId: string;
   collapsed: boolean;
-  currentTempText: string;
-  observedLabel?: string;
-  dataFreshnessRows: DataFreshnessRow[];
   debText: string;
   detailLocalTime?: string | null;
   displayName: string;
   expectedHighText: string;
-  freshnessSeparator: string;
   isEn: boolean;
   isRefreshing: boolean;
   modelRange: string;
@@ -67,20 +55,9 @@ export function CityCardHeader({
         </span>
         <h3>{displayName}</h3>
         <CityStatusTags tags={statusTags} />
-        <DataFreshnessBar
-          aiStatusLabel={aiStatusLabel}
-          aiStatusTone={aiStatusTone}
-          freshnessSeparator={freshnessSeparator}
-          isEn={isEn}
-          rows={dataFreshnessRows}
-        />
       </div>
       <div className="scan-ai-city-hero-side">
         <div className="scan-ai-city-metrics">
-          <span>
-            <small>{observedLabel || (isEn ? "Observed" : "当前温度")}</small>
-            <b>{currentTempText}</b>
-          </span>
           <span className="primary">
             <small>{isEn ? "Expected high" : "预计最高温"}</small>
             <b>{expectedHighText}</b>
