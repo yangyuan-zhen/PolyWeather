@@ -62,7 +62,7 @@ const CITY_REGION_GROUPS: CityRegionGroup[] = [
   {
     key: "africa",
     label: { en: "Africa", zh: "非洲" },
-    cities: ["lagos", "cape town"],
+    cities: ["cape town"],
   },
   {
     key: "oceania",
@@ -121,8 +121,7 @@ const CITY_SEARCH_INDEX: Record<string, string[]> = {
   "panama city": ["巴拿马城", "MPMG", "pty"],
   "buenos aires": ["布宜诺斯艾利斯", "SAEZ", "ba", "ezeiza"],
   "são paulo": ["圣保罗", "SBGR", "sp", "guarulhos"],
-  "lagos": ["拉各斯", "DNMM", "los", "murtala"],
-  "cape town": ["开普敦", "開普敦", "FACT", "cpt"],
+"cape town": ["开普敦", "開普敦", "FACT", "cpt"],
   "wellington": ["惠灵顿", "NZWN", "wel"],
 };
 
