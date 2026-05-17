@@ -15,7 +15,7 @@ import {
 } from "@/lib/backend-api";
 import { formatHttpErrorMessage } from "@/lib/http-error";
 
-const CACHE_KEY = "polyWeather_v1";
+const CACHE_KEY = "polyWeather_v2_chart_full_day";
 const CACHE_TTL_MS = 30 * 60 * 1000;
 const SCAN_TERMINAL_CLIENT_TIMEOUT_MS = 35_000;
 const CITY_DETAIL_CLIENT_TIMEOUT_MS = 35_000;
