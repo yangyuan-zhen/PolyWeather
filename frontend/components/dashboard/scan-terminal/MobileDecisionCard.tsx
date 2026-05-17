@@ -5,6 +5,7 @@ import type { MouseEvent } from "react";
 import { useState } from "react";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
+import { AirportEvidencePanel } from "@/components/dashboard/scan-terminal/AirportEvidencePanel";
 import {
   CityStatusTags,
   type CityStatusTag,
@@ -102,6 +103,7 @@ export function MobileDecisionCard({
   const loadingCopy = getCityLoadingCopy({ isEn, isHkoObservation });
   const [modelOpen, setModelOpen] = useState(false);
   const [chartOpen, setChartOpen] = useState(false);
+  const [airportOpen, setAirportOpen] = useState(false);
   const statusTags: CityStatusTag[] = decisionState.badges.length
     ? decisionState.badges
     : [{ label: decisionState.aiStatusLabel, tone: decisionState.aiStatusTone as StatusTone }];
@@ -200,6 +202,17 @@ export function MobileDecisionCard({
             rawObservationText={rawObservationText}
             tempSymbol={tempSymbol}
           />
+
+          <details
+            className="scan-ai-city-section scan-mobile-fold"
+            open={airportOpen}
+            onToggle={(event) => setAirportOpen(event.currentTarget.open)}
+          >
+            <summary className="scan-ai-city-section-title">
+              {isEn ? "Airport live evidence" : "机场实时证据"}
+            </summary>
+            {airportOpen ? <AirportEvidencePanel detail={detail} isEn={isEn} /> : null}
+          </details>
 
           <details
             className="scan-ai-city-section scan-mobile-fold"

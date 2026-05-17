@@ -865,6 +865,44 @@
   padding: 16px;
 }
 
+.root :global(.scan-airport-evidence-grid) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.root :global(.scan-airport-evidence-card) {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  border-radius: 14px;
+  background: rgba(77, 163, 255, 0.08);
+  padding: 12px;
+}
+
+.root :global(.scan-airport-evidence-card.runway) {
+  border-color: rgba(255, 184, 77, 0.24);
+  background: rgba(255, 184, 77, 0.08);
+}
+
+.root :global(.scan-airport-evidence-card span) {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.root :global(.scan-airport-evidence-card b) {
+  color: var(--color-text-primary);
+  font-size: 20px;
+}
+
+.root :global(.scan-airport-evidence-card small) {
+  color: var(--color-text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .root :global(.scan-ai-city-section-title) {
   display: inline-flex;
   align-items: center;

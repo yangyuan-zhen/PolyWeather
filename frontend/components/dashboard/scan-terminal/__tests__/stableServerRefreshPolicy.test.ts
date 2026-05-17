@@ -1,0 +1,52 @@
+import fs from "node:fs";
+import path from "node:path";
+
+function assert(condition: unknown, message: string) {
+  if (!condition) throw new Error(message);
+}
+
+export function runTests() {
+  const projectRoot = process.cwd();
+  const queryPath = path.join(
+    projectRoot,
+    "components",
+    "dashboard",
+    "scan-terminal",
+    "use-scan-terminal-query.ts",
+  );
+  const dashboardPath = path.join(
+    projectRoot,
+    "components",
+    "dashboard",
+    "ScanTerminalDashboard.tsx",
+  );
+  const airportEvidencePath = path.join(
+    projectRoot,
+    "components",
+    "dashboard",
+    "scan-terminal",
+    "AirportEvidencePanel.tsx",
+  );
+
+  const querySource = fs.readFileSync(queryPath, "utf8");
+  const dashboardSource = fs.readFileSync(dashboardPath, "utf8");
+  const airportEvidenceSource = fs.readFileSync(airportEvidencePath, "utf8");
+
+  assert(
+    querySource.includes("void fetchScanTerminal({ forceRefresh: false, showLoading: false })"),
+    "web auto refresh must read cached scan data instead of forcing a full server scan",
+  );
+  assert(
+    dashboardSource.includes("scan-mobile-city-list-view") &&
+      dashboardSource.includes("MapCanvas") &&
+      dashboardSource.indexOf("scan-mobile-city-list-view") < dashboardSource.indexOf("scan-map-view"),
+    "mobile city list should be the lightweight entry before the optional map view",
+  );
+  assert(
+    airportEvidenceSource.includes("FOCUS_RUNWAY_PAIRS") &&
+      airportEvidenceSource.includes("chongqing") &&
+      airportEvidenceSource.includes("seoul") &&
+      !airportEvidenceSource.includes("busan:"),
+    "airport evidence must only expose configured focused runways, not all runway observations",
+  );
+}

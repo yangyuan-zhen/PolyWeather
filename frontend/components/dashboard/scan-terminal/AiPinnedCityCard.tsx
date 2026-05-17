@@ -5,6 +5,7 @@ import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
+import { AirportEvidencePanel } from "@/components/dashboard/scan-terminal/AirportEvidencePanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
 import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
@@ -654,6 +655,7 @@ export function AiPinnedCityCard({
                 />
               </div>
 
+              <AirportEvidencePanel detail={detail} isEn={isEn} />
               <ModelEvidencePanel detail={detail} isEn={isEn} />
             </div>
           ) : !detail ? (

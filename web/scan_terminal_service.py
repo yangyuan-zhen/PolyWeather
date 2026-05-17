@@ -96,6 +96,12 @@ SCAN_TERMINAL_BUILD_TIMEOUT_SEC = max(
     8,
     int(os.getenv("POLYWEATHER_SCAN_TERMINAL_BUILD_TIMEOUT_SEC", "22")),
 )
+SCAN_TERMINAL_MAX_WORKERS = _env_int(
+    "POLYWEATHER_SCAN_TERMINAL_MAX_WORKERS",
+    2,
+    min_value=1,
+    max_value=4,
+)
 DEFAULT_SCAN_AI_MODEL = "mimo-v2.5-pro"
 DEFAULT_SCAN_AI_BASE_URL = "https://token-plan-cn.xiaomimimo.com/v1"
 SCAN_AI_API_KEY_ENV_HINT = (
@@ -1126,7 +1132,7 @@ def _build_scan_terminal_payload_uncached(
 
     try:
         city_names = list(CITIES.keys())
-        max_workers = max(1, min(4, len(city_names)))
+        max_workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
         city_results: List[Dict[str, Any]] = []
         failed_cities: List[str] = []
         failed_reasons: List[str] = []

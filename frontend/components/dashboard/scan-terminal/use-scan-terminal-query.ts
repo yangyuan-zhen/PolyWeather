@@ -84,7 +84,7 @@ export function useScanTerminalQuery({
       ) {
         return;
       }
-      void fetchScanTerminal({ forceRefresh: true, showLoading: false });
+      void fetchScanTerminal({ forceRefresh: false, showLoading: false });
     }, scanTerminalQueryPolicy.autoRefreshMs);
     return () => window.clearInterval(intervalId);
   }, [fetchScanTerminal, isLoading, isPro, proAccessLoading]);

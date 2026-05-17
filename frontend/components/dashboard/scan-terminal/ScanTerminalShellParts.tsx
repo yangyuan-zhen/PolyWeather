@@ -14,7 +14,7 @@ import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { Locale } from "@/lib/i18n";
 
-export type ScanTerminalContentView = "analysis" | "map";
+export type ScanTerminalContentView = "city-list" | "analysis" | "map";
 
 type ThemeMode = "dark" | "light";
 

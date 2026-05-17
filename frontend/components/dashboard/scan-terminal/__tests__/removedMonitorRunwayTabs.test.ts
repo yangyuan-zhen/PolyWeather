@@ -43,6 +43,12 @@ export function runTests() {
     "scan terminal content views must not include market monitor or runway tabs",
   );
   assert(
+    shellPartsSource.includes('"city-list"') &&
+      dashboardSource.includes("scan-mobile-city-list-view") &&
+      dashboardSource.includes('setActiveView("city-list")'),
+    "mobile web should expose the lightweight city-list entry view",
+  );
+  assert(
     !dashboardSource.includes('setActiveView("monitor")') &&
       !dashboardSource.includes('setActiveView("runway")') &&
       !dashboardSource.includes("市场监控") &&

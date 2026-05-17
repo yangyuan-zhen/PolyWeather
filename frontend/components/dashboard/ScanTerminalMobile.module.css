@@ -6,6 +6,100 @@
   padding-bottom: 14px;
 }
 
+.root :global(.scan-mobile-city-list-view) {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.root :global(.scan-mobile-city-list-head) {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  border: 1px solid rgba(77, 163, 255, 0.16);
+  border-radius: 20px;
+  background: rgba(5, 12, 24, 0.72);
+  padding: 16px;
+}
+
+.root :global(.scan-mobile-city-list-head span) {
+  display: block;
+  color: var(--color-accent-primary);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.root :global(.scan-mobile-city-list-head strong) {
+  display: block;
+  margin-top: 5px;
+  color: var(--color-text-primary);
+  font-size: 17px;
+}
+
+.root :global(.scan-mobile-city-list-head p) {
+  max-width: 360px;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.root :global(.scan-mobile-city-list) {
+  display: grid;
+  gap: 10px;
+}
+
+.root :global(.scan-mobile-city-row) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  border: 1px solid rgba(118, 150, 192, 0.16);
+  border-radius: 18px;
+  background: rgba(8, 18, 35, 0.76);
+  color: inherit;
+  padding: 13px 14px;
+  text-align: left;
+}
+
+.root :global(.scan-mobile-city-rank) {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  background: rgba(77, 163, 255, 0.12);
+  color: var(--color-accent-primary);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.root :global(.scan-mobile-city-main),
+.root :global(.scan-mobile-city-metrics) {
+  display: grid;
+  gap: 4px;
+}
+
+.root :global(.scan-mobile-city-main b),
+.root :global(.scan-mobile-city-metrics b) {
+  color: var(--color-text-primary);
+  font-size: 14px;
+}
+
+.root :global(.scan-mobile-city-main small),
+.root :global(.scan-mobile-city-metrics small) {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.root :global(.scan-mobile-city-metrics) {
+  justify-items: end;
+}
+
 .root :global(.scan-mobile-decision-head) {
   display: flex;
   align-items: flex-start;
@@ -213,6 +307,7 @@
   }
 
   .root :global(.scan-ai-workspace-head),
+  .root :global(.scan-mobile-city-list-head),
   .root :global(.scan-opportunity-hero),
   .root :global(.scan-ai-city-hero),
   .root :global(.scan-ai-city-section-head) {
@@ -225,6 +320,7 @@
   }
 
   .root :global(.scan-ai-workspace-head p),
+  .root :global(.scan-mobile-city-list-head p),
   .root :global(.scan-ai-city-hero-side) {
     text-align: left;
     justify-items: start;
