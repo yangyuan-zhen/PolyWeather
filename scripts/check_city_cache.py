@@ -1,5 +1,6 @@
 """Check which cities have hourly / multi-model data in the analysis cache."""
-import urllib.request, json
+import json
+import urllib.request
 
 TOK = "Bearer ZLuvwSsQvHSj2geIWfX7gjn9rJU_heOlgq0FBp7cUOgXaB2eHbE20R4PKwonP2FP"
 CITIES = [
