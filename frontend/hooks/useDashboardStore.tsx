@@ -810,9 +810,61 @@ export function DashboardStoreProvider({
     if (!cityName || findCachedCityDetail(cityDetailsByName, cityName)) return;
     // Pre-populate cache from scan terminal row so detail panel shows data immediately
     const now = Date.now();
+    const currentTemp = Number(row.current_temp ?? row.current_max_so_far);
+    const debPrediction = Number(row.deb_prediction);
+    const rawModelSources =
+      row.model_cluster_sources && typeof row.model_cluster_sources === "object"
+        ? (row.model_cluster_sources as Record<string, unknown>)
+        : {};
+    const multiModel = Object.fromEntries(
+      Object.entries(rawModelSources)
+        .map(([name, value]) => [name, Number(value)] as const)
+        .filter(([, value]) => Number.isFinite(value)),
+    );
     setCityDetailsByName((current) => ({
       ...current,
-      [cityName]: { display_name: cityName, local_date: "", local_time: "", deb: {}, probabilities: {}, multi_model: {}, } as CityDetail,
+      [cityName]: {
+        name: String(row.city || cityName),
+        display_name: String(row.city_display_name || row.display_name || cityName),
+        detail_depth: "panel",
+        lat: 0,
+        lon: 0,
+        local_date: String(row.local_date || row.selected_date || ""),
+        local_time: String(row.local_time || ""),
+        temp_symbol: String(row.temp_symbol || "°C"),
+        current: {
+          temp: Number.isFinite(currentTemp) ? currentTemp : null,
+          max_so_far: Number.isFinite(Number(row.current_max_so_far))
+            ? Number(row.current_max_so_far)
+            : Number.isFinite(currentTemp)
+              ? currentTemp
+              : null,
+          max_temp_time: null,
+          wu_settlement: null,
+          station_code: null,
+          station_name: String(row.airport || ""),
+          obs_time: String((row.metar_context as { last_time?: string } | null)?.last_time || ""),
+          obs_age_min: null,
+          wind_speed_kt: null,
+          wind_dir: null,
+          humidity: null,
+          cloud_desc: null,
+          clouds_raw: [],
+          visibility_mi: null,
+          wx_desc: null,
+        },
+        deb: {
+          prediction: Number.isFinite(debPrediction) ? debPrediction : null,
+        },
+        forecast: { today_high: null, daily: [] },
+        hourly: { times: [], temps: [] },
+        multi_model: multiModel,
+        probabilities: {},
+        risk: {
+          level: String(row.risk_level || "medium"),
+          airport: String(row.airport || ""),
+        },
+      } as CityDetail,
     }));
     setCityDetailMetaByName((current) => ({
       ...current,

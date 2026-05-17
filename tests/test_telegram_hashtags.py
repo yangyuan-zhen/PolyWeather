@@ -125,8 +125,8 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
 
     calls = []
 
-    def fake_analyze(city, force_refresh=False, **_kwargs):
-        calls.append((city, force_refresh))
+    def fake_analyze(city, force_refresh=False, force_refresh_observations_only=False, **_kwargs):
+        calls.append((city, force_refresh, force_refresh_observations_only))
         return {
             "local_time": "12:00",
             "current": {"temp": 31.0},
@@ -156,5 +156,5 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
     )
 
     assert sent is True
-    assert calls == [("qingdao", True)]
+    assert calls == [("qingdao", False, True)]
     assert bot.messages

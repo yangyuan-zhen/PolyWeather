@@ -123,6 +123,20 @@ export function runTests() {
   assert.equal(errorState.payload?.status, "timeout_fallback");
   assert.match(errorState.payload?.reason_zh || "", /DeepSeek|DEB|METAR/);
 
+  const modelFallbackState = buildAiCityErrorForecastState({
+    cacheKey: `${cacheKey}:models`,
+    detail: cityDetail({
+      deb: { prediction: 29 },
+      multi_model: { ECMWF: 30, GFS: 32, ICON: 31 },
+    } as unknown as Partial<CityDetail>),
+    error: new Error("timeout"),
+    isEn: false,
+    report: "",
+  });
+  assert.equal(modelFallbackState.payload?.city_forecast?.predicted_max, 31);
+  assert.equal(modelFallbackState.payload?.city_forecast?.range_low, 30);
+  assert.equal(modelFallbackState.payload?.city_forecast?.range_high, 32);
+
   const hkoState = buildAiCityErrorForecastState({
     cacheKey: `${cacheKey}:hko`,
     detail: cityDetail({

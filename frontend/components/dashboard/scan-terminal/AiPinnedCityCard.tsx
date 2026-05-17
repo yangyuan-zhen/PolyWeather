@@ -38,6 +38,14 @@ function toFiniteDecisionNumber(value: unknown) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function getRowModelEntries(row: ScanOpportunityRow | null) {
+  const sources = row?.model_cluster_sources;
+  if (!sources || typeof sources !== "object") return [];
+  return Object.entries(sources)
+    .map(([name, value]) => [name, Number(value)] as const)
+    .filter(([, value]) => Number.isFinite(value));
+}
+
 function parseEpochMs(value: unknown) {
   if (value == null || value === "") return null;
   const numeric = Number(value);
@@ -228,11 +236,12 @@ export function AiPinnedCityCard({
     item.cityName;
   const tempSymbol = detail?.temp_symbol || row?.temp_symbol || "°C";
   const modelView = detail ? getModelView(detail, detail.local_date) : null;
-  const modelEntries = modelView
+  const detailModelEntries = modelView
     ? Object.entries(modelView.models || {})
         .map(([name, value]) => [name, Number(value)] as const)
         .filter(([, value]) => Number.isFinite(value))
     : [];
+  const modelEntries = detailModelEntries.length ? detailModelEntries : getRowModelEntries(row);
   const modelValues = modelEntries.map(([, value]) => value);
   const modelMin = modelValues.length ? Math.min(...modelValues) : null;
   const modelMax = modelValues.length ? Math.max(...modelValues) : null;
@@ -325,10 +334,24 @@ export function AiPinnedCityCard({
     : isEn
       ? `Model support is unavailable, so this city must rely on DEB path and ${observationSourceEn}.`
       : `暂无可用多模型支撑，需要主要参考 DEB 路径和${observationSourceZh}。`;
-  const aiPredictedMax = toFiniteDecisionNumber(aiCityForecast?.predicted_max);
-  const aiRangeLow = toFiniteDecisionNumber(aiCityForecast?.range_low);
-  const aiRangeHigh = toFiniteDecisionNumber(aiCityForecast?.range_high);
-  const aiConfidence = String(aiCityForecast?.confidence || "").trim() || null;
+  const rowAiPredictedMax =
+    toFiniteDecisionNumber(row?.ai_predicted_max) ??
+    toFiniteDecisionNumber(row?.ai_predicted_high) ??
+    toFiniteDecisionNumber(row?.cluster_median) ??
+    debNumber;
+  const aiPredictedMax =
+    toFiniteDecisionNumber(aiCityForecast?.predicted_max) ?? rowAiPredictedMax;
+  const aiRangeLow =
+    toFiniteDecisionNumber(aiCityForecast?.range_low) ??
+    toFiniteDecisionNumber(row?.ai_predicted_low) ??
+    modelMin;
+  const aiRangeHigh =
+    toFiniteDecisionNumber(aiCityForecast?.range_high) ??
+    toFiniteDecisionNumber(row?.ai_predicted_high) ??
+    modelMax;
+  const aiConfidence =
+    String(aiCityForecast?.confidence || row?.ai_forecast_confidence || "").trim() ||
+    (rowAiPredictedMax != null ? (isEn ? "fast" : "快速") : null);
   const decisionExpectedHighNumber = resolveExpectedHighCandidate({
     aiPredictedMax,
     currentTemp: currentTempNumber,

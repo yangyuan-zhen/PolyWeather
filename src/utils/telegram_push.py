@@ -1083,7 +1083,7 @@ def _process_airport_city(
     last_city: dict,
     chat_ids: List[str],
     bot: Any,
-) -> tuple | None:
+) -> Optional[Tuple[str, dict]]:
     """Process one airport city and return (city, new_state_entry) or None.
 
     This is the per-city unit used by the concurrent thread pool in
