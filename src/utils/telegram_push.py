@@ -6,7 +6,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 
@@ -489,8 +489,17 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao", "chengdu", "chongqing", "wuhan"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao", "chengdu", "chongqing", "wuhan"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+FOCUS_RUNWAY_PAIRS = {
+    "chongqing": {("02L", "20R")},
+    "shanghai": {("17L", "35R")},
+    "wuhan": {("04", "22")},
+    "beijing": {("01", "19")},
+    "guangzhou": {("02L", "20R")},
+    "chengdu": {("02L", "20R")},
+    "seoul": {("15R", "33L")},
+}
 MARKET_MONITOR_INTERVAL_SEC = 300
 MARKET_MONITOR_CITIES = [
     "seoul", "busan", "tokyo", "helsinki", "amsterdam",
@@ -561,6 +570,72 @@ def _fmt(value: Any) -> str:
         return "--"
 
 
+def _normalize_runway_label(value: Any) -> str:
+    return re.sub(r"[^0-9A-Z]+", "", str(value or "").strip().upper())
+
+
+def _runway_pair_key(r1: Any, r2: Any) -> Tuple[str, str]:
+    a = _normalize_runway_label(r1)
+    b = _normalize_runway_label(r2)
+    return tuple(sorted((a, b)))  # type: ignore[return-value]
+
+
+def _focus_runway_pairs_for_city(city: str) -> Set[Tuple[str, str]]:
+    return {_runway_pair_key(a, b) for a, b in FOCUS_RUNWAY_PAIRS.get(city, set())}
+
+
+def _select_focus_runway_obs(
+    city: str,
+    runway_pairs: List[Any],
+    runway_temps: List[Any],
+    point_temps: Optional[List[Any]] = None,
+) -> Tuple[List[Any], List[Any], List[Any]]:
+    """Return only market-relevant runway pairs when configured for the city.
+
+    If a configured focus pair is not present in the upstream payload, fall back
+    to the original lists so the push still carries useful airport evidence.
+    """
+    focus_pairs = _focus_runway_pairs_for_city(city)
+    if not focus_pairs or not runway_pairs or not runway_temps:
+        return runway_pairs, runway_temps, point_temps or []
+
+    selected_pairs: List[Any] = []
+    selected_temps: List[Any] = []
+    selected_points: List[Any] = []
+    points = point_temps or []
+    for i, (pair, temp) in enumerate(zip(runway_pairs, runway_temps)):
+        try:
+            r1, r2 = pair
+        except Exception:
+            continue
+        if _runway_pair_key(r1, r2) not in focus_pairs:
+            continue
+        selected_pairs.append(pair)
+        selected_temps.append(temp)
+        if i < len(points):
+            selected_points.append(points[i])
+
+    if selected_pairs:
+        return selected_pairs, selected_temps, selected_points
+    return runway_pairs, runway_temps, points
+
+
+def _focused_runway_max(city: str, city_weather: Dict[str, Any]) -> Optional[float]:
+    amos = city_weather.get("amos") or {}
+    runway_obs = (amos.get("runway_obs") or {}) if isinstance(amos, dict) else {}
+    runway_pairs = runway_obs.get("runway_pairs") or []
+    runway_temps = runway_obs.get("temperatures") or []
+    runway_pairs, runway_temps, _points = _select_focus_runway_obs(
+        city,
+        runway_pairs,
+        runway_temps,
+        runway_obs.get("point_temperatures") or [],
+    )
+    del runway_pairs
+    valid = [float(t) for (t, _d) in runway_temps if t is not None]
+    return max(valid) if valid else None
+
+
 def _format_percent(value: Any) -> str:
     try:
         numeric = float(value)
@@ -587,6 +662,9 @@ def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> st
     local_time = str(city_weather.get("local_time") or "").strip() or "--"
     city_label = str(city or "").strip().title()
     current_temp = airport_cur.get("temp") if airport_cur.get("temp") is not None else current.get("temp")
+    focus_runway_temp = _focused_runway_max(city, city_weather)
+    if focus_runway_temp is not None:
+        current_temp = focus_runway_temp
     deb_pred = deb.get("prediction")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
 
@@ -730,7 +808,7 @@ def _build_airport_status_message(
     local_time: str = "",
     state: str = "",
 ) -> str:
-    _AIRPORT_EN = {"seoul": "Incheon", "busan": "Gimhae", "tokyo": "Haneda",
+    _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
                    "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
@@ -746,6 +824,10 @@ def _build_airport_status_message(
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
+    point_temps = runway_data.get("point_temperatures") or []
+    runway_pairs, runway_temps, point_temps = _select_focus_runway_obs(
+        city, runway_pairs, runway_temps, point_temps
+    )
     mgm_nearby = city_weather.get("mgm_nearby") or []
     airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     airport_row = None
@@ -788,7 +870,6 @@ def _build_airport_status_message(
     # Runway detail block
     if is_amsc and runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
         lines.append("")
-        point_temps = runway_data.get("point_temperatures") or []
         for i, ((r1, r2), (t, _d)) in enumerate(zip(runway_pairs, runway_temps)):
             if t is not None:
                 pts = point_temps[i] if i < len(point_temps) else {}
@@ -874,6 +955,7 @@ _AIRPORT_PUSH_INTERVAL = {
     "paris": 60,
     "hong kong": 60,
     "lau fau shan": 60,
+    "singapore": 60,
     "taipei": 60,
     "beijing": 60,
     "shanghai": 60,
@@ -992,7 +1074,15 @@ def _run_high_freq_airport_cycle(
             station_temp = airport_row.get("temp") if airport_row else None
             current_obs_time = str(airport_row.get("obs_time") or "")
 
-            runway_temps = (amos.get("runway_obs") or {}).get("temperatures") or []
+            runway_obs = (amos.get("runway_obs") or {})
+            runway_pairs = runway_obs.get("runway_pairs") or []
+            runway_temps = runway_obs.get("temperatures") or []
+            runway_pairs, runway_temps, _point_temps = _select_focus_runway_obs(
+                city,
+                runway_pairs,
+                runway_temps,
+                runway_obs.get("point_temperatures") or [],
+            )
             if runway_temps:
                 valid_temps = [t for (t, _d) in runway_temps if t is not None]
                 if valid_temps:
@@ -1175,6 +1265,9 @@ def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
             city_weather["market_scan"] = market
             ac = city_weather.get("airport_current") or {}
             current_temp = ac.get("temp") if ac.get("temp") is not None else (city_weather.get("current") or {}).get("temp")
+            focus_runway_temp = _focused_runway_max(city, city_weather)
+            if focus_runway_temp is not None:
+                current_temp = focus_runway_temp
             deb_pred = (city_weather.get("deb") or {}).get("prediction")
             if current_temp is not None and deb_pred is not None:
                 delta = float(current_temp) - float(deb_pred)
