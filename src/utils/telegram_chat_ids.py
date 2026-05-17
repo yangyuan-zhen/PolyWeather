@@ -60,25 +60,6 @@ def get_polymarket_wallet_activity_chat_ids_from_env() -> List[str]:
     )
 
 
-def get_market_monitor_chat_ids_from_env() -> List[str]:
-    """
-    Preferred envs for market monitor push:
-    - TELEGRAM_MARKET_MONITOR_CHAT_IDS (comma-separated)
-    - TELEGRAM_MARKET_MONITOR_CHAT_ID (single)
-
-    Falls back to global TELEGRAM_CHAT_IDS / TELEGRAM_CHAT_ID for compatibility.
-    """
-    dedicated = parse_telegram_chat_ids(
-        os.getenv("TELEGRAM_MARKET_MONITOR_CHAT_IDS"),
-        os.getenv("TELEGRAM_MARKET_MONITOR_CHAT_ID"),
-    )
-    if dedicated:
-        return dedicated
-    return parse_telegram_chat_ids(
-        os.getenv("TELEGRAM_CHAT_IDS"),
-        os.getenv("TELEGRAM_CHAT_ID"),
-    )
-
 
 def get_primary_telegram_chat_id_from_env() -> str:
     chat_ids = get_telegram_chat_ids_from_env()

@@ -7,6 +7,7 @@ from src.utils.telegram_push import (
     _build_market_monitor_message,
     _run_high_freq_airport_cycle,
 )
+from pathlib import Path
 
 
 def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
@@ -158,3 +159,10 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
     assert sent is True
     assert calls == [("qingdao", False, True)]
     assert bot.messages
+
+
+def test_high_freq_airport_push_workers_default_to_one_for_shared_cpu(monkeypatch):
+    source = Path("src/utils/telegram_push.py").read_text(encoding="utf-8")
+    assert 'TELEGRAM_AIRPORT_PUSH_MAX_WORKERS", 1' in source
+    assert "max(1, min(4" in source
+    assert "ThreadPoolExecutor(max_workers=max_workers)" in source

@@ -16,10 +16,7 @@ from src.database.runtime_state import (
     get_state_storage_mode,
 )
 from src.data_collection.city_registry import CITY_REGISTRY
-from src.utils.telegram_chat_ids import (
-    get_market_monitor_chat_ids_from_env,
-    get_telegram_chat_ids_from_env,
-)
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 # Forum topic routing: maps city_key -> message_thread_id for the push forum group.
 # Created by scripts/create_forum_topics.py, stored in the runtime data dir.
@@ -555,20 +552,10 @@ FOCUS_RUNWAY_PAIRS = {
     "chengdu": {("02L", "20R")},
     "seoul": {("15R", "33L")},
 }
-MARKET_MONITOR_INTERVAL_SEC = 300
-MARKET_MONITOR_CITIES = [
-    "seoul", "busan", "tokyo", "helsinki", "amsterdam",
-    "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
-    "new york", "los angeles", "chicago", "denver", "atlanta",
-    "miami", "san francisco", "houston", "dallas", "austin", "seattle",
-    "beijing", "shanghai", "guangzhou", "qingdao",
-    "chengdu", "chongqing", "wuhan",
-]
 
 _FUNCTION_HASHTAGS = {
     "runway": "#跑道观测",
     "airport": "#机场观测",
-    "market": "#市场监控",
     "trade": "#交易机会",
 }
 
@@ -690,48 +677,6 @@ def _focused_runway_max(city: str, city_weather: Dict[str, Any]) -> Optional[flo
     valid = [float(t) for (t, _d) in runway_temps if t is not None]
     return max(valid) if valid else None
 
-
-def _format_percent(value: Any) -> str:
-    try:
-        numeric = float(value)
-    except Exception:
-        return "--"
-    sign = "+" if numeric > 0 else ""
-    return f"{sign}{numeric:.1f}%"
-
-
-def _format_prob(value: Any) -> str:
-    try:
-        numeric = float(value)
-    except Exception:
-        return "--"
-    if numeric <= 1:
-        numeric *= 100
-    return f"{numeric:.1f}%"
-
-
-def _build_market_monitor_message(city: str, city_weather: Dict[str, Any]) -> str:
-    current = city_weather.get("current") or {}
-    airport_cur = city_weather.get("airport_current") or {}
-    deb = city_weather.get("deb") or {}
-    local_time = str(city_weather.get("local_time") or "").strip() or "--"
-    city_label = str(city or "").strip().title()
-    current_temp = airport_cur.get("temp") if airport_cur.get("temp") is not None else current.get("temp")
-    focus_runway_temp = _focused_runway_max(city, city_weather)
-    if focus_runway_temp is not None:
-        current_temp = focus_runway_temp
-    deb_pred = deb.get("prediction")
-    temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
-
-    lines = [
-        _build_telegram_hashtag_line("market", city=city),
-        f"{city_label} {local_time}",
-    ]
-    if current_temp is not None or deb_pred is not None:
-        current_text = f"{float(current_temp):.1f}{temp_symbol}" if current_temp is not None else "--"
-        deb_text = f"{float(deb_pred):.1f}{temp_symbol}" if deb_pred is not None else "--"
-        lines.append(f"当前：{current_text} · DEB：{deb_text}")
-    return "\n".join(lines)
 
 _AIRPORT_PUSH_STATE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -1225,10 +1170,11 @@ def _run_high_freq_airport_cycle(
     state_dirty = False
     now_ts = int(time.time())
     last_by_city = state.setdefault("last_by_city", {})
-    logger.info("airport cycle tick cities={}", len(HIGH_FREQ_AIRPORT_CITIES))
+    max_workers = max(1, min(4, _env_int("TELEGRAM_AIRPORT_PUSH_MAX_WORKERS", 1)))
+    logger.info("airport cycle tick cities={} max_workers={}", len(HIGH_FREQ_AIRPORT_CITIES), max_workers)
 
     cities = sorted(HIGH_FREQ_AIRPORT_CITIES)
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {
             pool.submit(
                 _process_airport_city,
@@ -1298,95 +1244,4 @@ def start_high_freq_airport_push_loop(bot: Any, config: Dict[str, Any]) -> Optio
     )
     thread.start()
     logger.info("airport high-freq push loop thread started")
-    return thread
-
-
-def _run_market_monitor_cycle(bot: Any, chat_ids: List[str]) -> bool:
-    sent_any = False
-    try:
-        from web.app import _analyze
-        from web.services.city_payloads import build_city_market_scan_payload
-    except Exception as exc:
-        logger.warning("market monitor push skipped: analyze import failed: {}", exc)
-        return False
-
-    def _process_one(city: str) -> Optional[str]:
-        try:
-            city_weather = _analyze(city)
-            scan_payload = build_city_market_scan_payload(city_weather)
-            market = scan_payload.get("market_scan") or {}
-            if not market.get("available"):
-                return None
-            city_weather["market_scan"] = market
-            ac = city_weather.get("airport_current") or {}
-            current_temp = ac.get("temp") if ac.get("temp") is not None else (city_weather.get("current") or {}).get("temp")
-            focus_runway_temp = _focused_runway_max(city, city_weather)
-            if focus_runway_temp is not None:
-                current_temp = focus_runway_temp
-            deb_pred = (city_weather.get("deb") or {}).get("prediction")
-            if current_temp is not None and deb_pred is not None:
-                delta = float(current_temp) - float(deb_pred)
-                is_f = "F" in str(city_weather.get("temp_symbol") or "").upper()
-                if delta > (5.0 if is_f else 3.0) or delta < -(9.0 if is_f else 5.0):
-                    return None
-            return _build_market_monitor_message(city, city_weather)
-        except Exception:
-            logger.exception("market monitor cycle failed for city={}", city)
-            return None
-
-    cities = list(MARKET_MONITOR_CITIES)
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        futures = {pool.submit(_process_one, city): city for city in cities}
-        for future in as_completed(futures):
-            try:
-                message = future.result()
-            except Exception:
-                continue
-            if message is None:
-                continue
-            city_name = futures[future]
-            for chat_id in chat_ids:
-                try:
-                    kwargs = {}
-                    thread_id = _resolve_thread_id(chat_id, city_name)
-                    if thread_id:
-                        kwargs["message_thread_id"] = thread_id
-                    bot.send_message(chat_id, message, **kwargs)
-                    sent_any = True
-                except Exception as exc:
-                    logger.warning("market monitor push failed city={} chat_id={}: {}", city_name, chat_id, exc)
-    return sent_any
-
-
-def start_market_monitor_push_loop(bot: Any) -> Optional[threading.Thread]:
-    enabled = _env_bool("TELEGRAM_MARKET_MONITOR_PUSH_ENABLED", True)
-    chat_ids = get_market_monitor_chat_ids_from_env()
-    if not enabled:
-        logger.info("market monitor push loop disabled")
-        return None
-    if not chat_ids:
-        logger.warning("market monitor push loop skipped: TELEGRAM_MARKET_MONITOR_CHAT_IDS/TELEGRAM_CHAT_IDS is not set")
-        return None
-
-    interval_sec = MARKET_MONITOR_INTERVAL_SEC
-
-    def _runner() -> None:
-        logger.info(
-            "market monitor push loop started cities={} interval={}s chat_targets={}",
-            len(MARKET_MONITOR_CITIES), interval_sec, len(chat_ids),
-        )
-        while True:
-            cycle_started = time.time()
-            _run_market_monitor_cycle(bot=bot, chat_ids=chat_ids)
-            elapsed = time.time() - cycle_started
-            sleep_sec = max(5, interval_sec - int(elapsed))
-            time.sleep(sleep_sec)
-
-    thread = threading.Thread(
-        target=_runner,
-        name="market-monitor-pusher",
-        daemon=True,
-    )
-    thread.start()
-    logger.info("market monitor push loop thread started")
     return thread

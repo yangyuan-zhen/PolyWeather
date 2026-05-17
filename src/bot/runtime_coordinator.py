@@ -84,7 +84,6 @@ class StartupCoordinator:
     def start_all(self) -> RuntimeStatus:
         loops = [
             self._start_airport_high_freq_loop(),
-            self._start_market_monitor_push_loop(),
             self._start_dashboard_prewarm_loop(),
             self._start_polygon_wallet_loop(),
             self._start_polymarket_wallet_activity_loop(),
@@ -173,33 +172,6 @@ class StartupCoordinator:
             starter=lambda: import_module("src.utils.telegram_push").start_high_freq_airport_push_loop(
                 self.bot,
                 self.config,
-            ),
-        )
-
-    def _start_market_monitor_push_loop(self) -> LoopStatus:
-        enabled = _env_bool("TELEGRAM_MARKET_MONITOR_PUSH_ENABLED", True)
-        chat_ids = import_module(
-            "src.utils.telegram_chat_ids"
-        ).get_market_monitor_chat_ids_from_env()
-        telegram_push = import_module("src.utils.telegram_push")
-        interval = int(getattr(telegram_push, "MARKET_MONITOR_INTERVAL_SEC", 60))
-        cities_count = len(getattr(telegram_push, "MARKET_MONITOR_CITIES", []))
-        details = {
-            "mode": "market-monitor-periodic",
-            "interval_sec": interval,
-            "cities_count": cities_count,
-            "chat_targets": len(chat_ids),
-            "window": "every 60s, available Polymarket scans only",
-        }
-        validation_error = None if chat_ids else "missing_TELEGRAM_MARKET_MONITOR_CHAT_IDS"
-        return self._start_with_validation(
-            key="market_monitor_push",
-            label="市场监控频道推送",
-            configured_enabled=enabled,
-            details=details,
-            validation_error=validation_error,
-            starter=lambda: telegram_push.start_market_monitor_push_loop(
-                self.bot,
             ),
         )
 
