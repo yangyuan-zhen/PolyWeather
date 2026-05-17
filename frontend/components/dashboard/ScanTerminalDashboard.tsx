@@ -12,7 +12,6 @@ import {
 } from "react";
 import styles from "./Dashboard.module.css";
 import { scanRootClass } from "./scan-root-styles";
-import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   DashboardStoreProvider,
   useDashboardStore,
@@ -46,19 +45,6 @@ import {
   useUserLocalClock,
 } from "@/components/dashboard/scan-terminal/use-scan-terminal-ui-state";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
-
-const MonitorPanel = dynamic(
-  () => import("@/components/dashboard/monitoring/MonitorPanel"),
-  { ssr: false },
-);
-
-const RunwayObservationsPanel = dynamic(
-  () =>
-    import(
-      "@/components/dashboard/scan-terminal/RunwayObservationsPanel"
-    ).then((module) => module.RunwayObservationsPanel),
-  { ssr: false },
-);
 
 const CityDetailPanel = dynamic(
   () =>
@@ -374,9 +360,6 @@ function ScanTerminalScreen() {
         />
       );
     }
-    if (resolvedView === "monitor" || resolvedView === "runway") {
-      return null; // MonitorPanel is rendered below the main view switch
-    }
     if (!isPro) {
       return (
         <div className="scan-table-shell empty">
@@ -472,24 +455,6 @@ function ScanTerminalScreen() {
                 >
                   {isEn ? "Decision Cards" : "城市决策卡"}
                 </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "monitor"}
-                  className={resolvedView === "monitor" ? "active" : ""}
-                  onClick={() => setActiveView("monitor")}
-                >
-                  🔥 {isEn ? "Monitor" : "市场监控"}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "runway"}
-                  className={resolvedView === "runway" ? "active" : ""}
-                  onClick={() => setActiveView("runway")}
-                >
-                  🛬 {isEn ? "Runways" : "跑道观测"}
-                </button>
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
@@ -538,31 +503,6 @@ function ScanTerminalScreen() {
               </div>
             ) : (
               renderMainView()
-            )}
-            {resolvedView === "monitor" && (
-              isPro ? (
-                <MonitorPanel
-                  onCityClick={(cityName) => {
-                    const matchedRow = findRowForCity(timeSortedRows, cityName);
-                    if (matchedRow) {
-                      setSelectedRowId(matchedRow.id);
-                      store.preloadCityFromRow(matchedRow);
-                    }
-                    addAiPinnedCity(cityName);
-                    setActiveView("analysis");
-                    void store.selectCity(cityName);
-                  }}
-                />
-              ) : (
-                <ProFeaturePaywall feature="monitor" />
-              )
-            )}
-            {resolvedView === "runway" && (
-              isPro ? (
-                <RunwayObservationsPanel />
-              ) : (
-                <ProFeaturePaywall feature="monitor" />
-              )
             )}
           </section>
         </main>

@@ -5,7 +5,6 @@ import type { MouseEvent } from "react";
 import { useEffect, useState } from "react";
 import { AiCityTemperatureChart } from "@/components/dashboard/scan-terminal/AiCityTemperatureChart";
 import { AiEvidencePanel } from "@/components/dashboard/scan-terminal/AiEvidencePanel";
-import { AmosRunwayPanel } from "@/components/dashboard/scan-terminal/AmosRunwayPanel";
 import { CityCardHeader } from "@/components/dashboard/scan-terminal/CityCardHeader";
 import { MobileDecisionCard } from "@/components/dashboard/scan-terminal/MobileDecisionCard";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
@@ -388,11 +387,9 @@ export function AiPinnedCityCard({
     decisionExpectedHighNumber != null
       ? formatTemperatureValue(decisionExpectedHighNumber, tempSymbol, { digits: 1 })
       : "--";
-  const amosRange = detail?.amos?.runway_temp_range;
-  const observedLabel = amosRange ? (isEn ? "Runway" : "跑道实况") : undefined;
-  const currentTempText = amosRange
-    ? `${amosRange[0].toFixed(1)}~${amosRange[1].toFixed(1)}${tempSymbol}`
-    : currentTempNumber != null
+  const observedLabel = undefined;
+  const currentTempText =
+    currentTempNumber != null
       ? formatTemperatureValue(currentTempNumber, tempSymbol, { digits: 1 })
       : "--";
   const debText =
@@ -654,15 +651,6 @@ export function AiPinnedCityCard({
                   tempSymbol={tempSymbol}
                 />
               </div>
-
-              {(detail?.name === "seoul" || detail?.name === "busan") ? (
-                <AmosRunwayPanel
-                  amos={detail?.amos}
-                  isEn={isEn}
-                  tempSymbol={tempSymbol}
-                  airportCurrent={detail?.airport_current ?? null}
-                />
-              ) : null}
 
               <ModelEvidencePanel detail={detail} isEn={isEn} />
             </div>

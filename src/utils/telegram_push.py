@@ -489,8 +489,8 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 # ── high-freq airport push loop ──
 
-HIGH_FREQ_AIRPORT_CITIES = {"seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao", "chengdu", "chongqing", "wuhan"}
-HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "shenzhen": "ZGSZ", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
+HIGH_FREQ_AIRPORT_CITIES = {"seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei", "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan"}
+HIGH_FREQ_AIRPORT_ICAO = {"seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166", "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058", "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920", "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD", "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH"}
 FOCUS_RUNWAY_PAIRS = {
     "chongqing": {("02L", "20R")},
     "shanghai": {("17L", "35R")},
@@ -506,7 +506,7 @@ MARKET_MONITOR_CITIES = [
     "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
-    "beijing", "shanghai", "guangzhou", "shenzhen", "qingdao",
+    "beijing", "shanghai", "guangzhou", "qingdao",
     "chengdu", "chongqing", "wuhan",
 ]
 
@@ -960,7 +960,6 @@ _AIRPORT_PUSH_INTERVAL = {
     "beijing": 60,
     "shanghai": 60,
     "guangzhou": 60,
-    "shenzhen": 60,
     "qingdao": 60,
     "chengdu": 60,
     "chongqing": 60,

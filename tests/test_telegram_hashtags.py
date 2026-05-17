@@ -110,3 +110,9 @@ def test_singapore_is_in_telegram_push_city_lists():
     assert "singapore" not in MARKET_MONITOR_CITIES
     assert "singapore" in HIGH_FREQ_AIRPORT_CITIES
     assert HIGH_FREQ_AIRPORT_ICAO["singapore"] == "WSSS"
+
+
+def test_shenzhen_is_removed_from_telegram_push_city_lists():
+    assert "shenzhen" not in MARKET_MONITOR_CITIES
+    assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
+    assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO

@@ -14,7 +14,7 @@ const TELEGRAM_GROUP_URL = String(
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 
 type ProFeaturePaywallProps = {
-  feature: "today" | "history" | "future" | "assistant" | "scan" | "monitor";
+  feature: "today" | "history" | "future" | "assistant" | "scan";
   onClose?: () => void;
 };
 
