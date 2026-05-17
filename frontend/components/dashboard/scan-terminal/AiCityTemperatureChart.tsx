@@ -89,8 +89,8 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
   const forecastLabel = locale === "en-US" ? "DEB baseline" : "DEB 原始路径";
   const calibratedLabel =
     locale === "en-US"
-      ? "METAR-calibrated path"
-      : "METAR 修正路径";
+      ? "DEB calibrated path"
+      : "DEB 修正路径";
   const observationLabel =
     chartData?.observationLabel ||
     (locale === "en-US" ? "METAR obs" : "METAR 实况");

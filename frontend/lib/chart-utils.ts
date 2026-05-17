@@ -8,269 +8,28 @@ import {
   getRealtimeObservationTag,
   isTurkishMgmCity,
 } from "@/lib/observation-source-utils";
-import { normalizeTemperatureSymbol } from "@/lib/temperature-utils";
 import { formatTafMarkerType } from "@/lib/taf-utils";
 import {
   hmToMinutes,
   interpolateSeriesAtMinutes,
   normalizeHm,
 } from "@/lib/time-utils";
+import {
+  buildCalibratedPath,
+  buildChartTimeAxis,
+  buildDebBaselinePath,
+  buildObservationGrid,
+  buildObservationPointSeries,
+  buildSeriesPoints,
+  buildTemperatureTickLabels,
+  findNearestTimeIndex,
+  getNiceTemperatureScale,
+  type ChartTimeAxis,
+  type DebBaselinePath,
+} from "@/lib/temperature-chart-paths";
 
 function isEnglish(locale: Locale) {
   return locale === "en-US";
-}
-function findNearestTimeIndex(
-  times: string[],
-  targetTime?: string | null,
-) {
-  const targetMinutes = hmToMinutes(targetTime);
-  if (targetMinutes == null || !times.length) return -1;
-  let nearestIndex = -1;
-  let nearestDelta = Number.POSITIVE_INFINITY;
-  times.forEach((time, index) => {
-    const minute = hmToMinutes(time);
-    if (minute == null) return;
-    const delta = Math.abs(minute - targetMinutes);
-    if (delta < nearestDelta) {
-      nearestDelta = delta;
-      nearestIndex = index;
-    }
-  });
-  return nearestIndex;
-}
-
-function buildTemperatureTickLabels(times: string[]) {
-  const lastIndex = Math.max(0, times.length - 1);
-  return times.map((time, index) => {
-    if (index === 0 || index === lastIndex) return time;
-    const minute = hmToMinutes(time);
-    if (minute == null) return "";
-    const hour = Math.floor(minute / 60);
-    const minutePart = minute % 60;
-    if (minutePart !== 0) return "";
-    return hour % 2 === 0 ? time : "";
-  });
-}
-
-function getNiceTemperatureScale(values: number[], tempSymbol?: string | null) {
-  const numericValues = values.filter((value) => Number.isFinite(Number(value)));
-  if (!numericValues.length) {
-    return { max: 1, min: 0, step: 1 };
-  }
-
-  const rawMin = Math.min(...numericValues);
-  const rawMax = Math.max(...numericValues);
-  const spread = Math.max(0.1, rawMax - rawMin);
-  const isFahrenheit = normalizeTemperatureSymbol(tempSymbol) === "°F";
-  const padding = Math.max(isFahrenheit ? 1.5 : 0.8, spread * 0.12);
-  const paddedMin = rawMin - padding;
-  const paddedMax = rawMax + padding;
-  const paddedSpread = Math.max(0.1, paddedMax - paddedMin);
-  const candidates = isFahrenheit ? [1, 2, 5, 10, 20] : [0.5, 1, 2, 5, 10];
-  let step =
-    candidates.find((candidate) => candidate >= paddedSpread / 4) ||
-    candidates[candidates.length - 1];
-  let min = Math.floor(paddedMin / step) * step;
-  let max = Math.ceil(paddedMax / step) * step;
-
-  if (min < 0 && rawMin >= 0 && rawMin <= step * 1.25) min = 0;
-  if (max <= min) max = min + step * 4;
-
-  while ((max - min) / step + 1 > 6) {
-    const nextStep = candidates.find((candidate) => candidate > step);
-    if (!nextStep) break;
-    step = nextStep;
-    min = Math.floor(paddedMin / step) * step;
-    max = Math.ceil(paddedMax / step) * step;
-    if (min < 0 && rawMin >= 0 && rawMin <= step * 1.25) min = 0;
-  }
-
-  return { max, min, step };
-}
-
-function buildSeriesPoints(
-  times: string[],
-  values: Array<number | null | undefined>,
-) {
-  return times
-    .map((time, index) => {
-      const x = hmToMinutes(time);
-      const y = values[index];
-      return x != null && y != null && Number.isFinite(Number(y))
-        ? { index, labelTime: time, x, y: Number(y) }
-        : null;
-    })
-    .filter(
-      (point): point is { index: number; labelTime: string; x: number; y: number } =>
-        point != null,
-    );
-}
-
-function buildObservationPoints(items: Array<{ time?: string; temp?: number | null }>) {
-  return items
-    .map((item) => {
-      const labelTime = normalizeHm(String(item.time || ""));
-      const x = hmToMinutes(labelTime);
-      const y = item.temp;
-      return x != null && y != null && Number.isFinite(Number(y))
-        ? { labelTime: labelTime || "", x, y: Number(y) }
-        : null;
-    })
-    .filter((point): point is { labelTime: string; x: number; y: number } => point != null);
-}
-
-function fillTemperaturePathForFullDay(
-  times: string[],
-  values: Array<number | null>,
-) {
-  if (!times.length) return values;
-  const hasAnyValue = values.some((value) => value != null && Number.isFinite(value));
-  if (!hasAnyValue) return values;
-  return times.map((time, index) => {
-    const value = values[index];
-    if (value != null && Number.isFinite(value)) return value;
-    const minute = hmToMinutes(time);
-    if (minute == null) return null;
-    const interpolated = interpolateSeriesAtMinutes(times, values, minute);
-    return interpolated != null && Number.isFinite(interpolated)
-      ? interpolated
-      : null;
-  });
-}
-
-function clampTemperatureDelta(value: number, min = -4, max = 4) {
-  return Math.min(Math.max(value, min), max);
-}
-
-function buildCalibratedFuturePath({
-  observations,
-  times,
-  debTemps,
-  currentMinutes,
-  reversionMinutes,
-}: {
-  observations: Array<{ time?: string | null; temp?: number | null }>;
-  times: string[];
-  debTemps: Array<number | null>;
-  currentMinutes: number | null;
-  reversionMinutes?: number | null;
-}) {
-  if (!times.length || !observations.length) {
-    return {
-      adjustmentDelta: null as number | null,
-      future: new Array(times.length).fill(null) as Array<number | null>,
-    };
-  }
-
-  const normalizedObservations = dedupeObservationItems(observations);
-  const latestObservationMinute = normalizedObservations.reduce<number | null>(
-    (latest, item) => {
-      const minute = hmToMinutes(item.time);
-      if (minute == null) return latest;
-      return latest == null ? minute : Math.max(latest, minute);
-    },
-    null,
-  );
-  if (latestObservationMinute == null && currentMinutes == null) {
-    return {
-      adjustmentDelta: null as number | null,
-      future: new Array(times.length).fill(null) as Array<number | null>,
-    };
-  }
-  // In practice the backend `local_time` can lag the latest METAR/official
-  // observation by one refresh cycle. Anchor the future line to the newest
-  // observation when it is newer, otherwise the "no future obs" guard can
-  // suppress the calibrated path even though the user already sees a fresh
-  // green observation point on the chart.
-  const pathStartMinutes =
-    latestObservationMinute == null || currentMinutes == null
-      ? latestObservationMinute ?? currentMinutes ?? 0
-      : Math.max(currentMinutes, latestObservationMinute);
-
-  const deltas = normalizedObservations
-    .map((item) => {
-      const minute = hmToMinutes(item.time);
-      const observed = Number(item.temp);
-      if (
-        minute == null ||
-        minute > pathStartMinutes + 30 ||
-        !Number.isFinite(observed)
-      ) {
-        return null;
-      }
-      const expected = interpolateSeriesAtMinutes(times, debTemps, minute);
-      if (expected == null || !Number.isFinite(expected)) return null;
-      return {
-        delta: clampTemperatureDelta(observed - expected),
-        minute,
-      };
-    })
-    .filter(
-      (item): item is { delta: number; minute: number } => item != null,
-    )
-    .slice(-3);
-
-  if (!deltas.length) {
-    return {
-      adjustmentDelta: null as number | null,
-      future: new Array(times.length).fill(null) as Array<number | null>,
-    };
-  }
-
-  const weighted = deltas.reduce(
-    (acc, item, index) => {
-      const weight = index + 1;
-      return {
-        total: acc.total + item.delta * weight,
-        weight: acc.weight + weight,
-      };
-    },
-    { total: 0, weight: 0 },
-  );
-  const adjustmentDelta = Number(
-    clampTemperatureDelta(weighted.total / Math.max(weighted.weight, 1)).toFixed(
-      1,
-    ),
-  );
-
-  const lastSeriesMinute = times
-    .map((time) => hmToMinutes(time))
-    .filter((minute): minute is number => minute != null)
-    .at(-1);
-  const returnToBaselineMinute =
-    reversionMinutes != null && reversionMinutes > pathStartMinutes
-      ? reversionMinutes
-      : lastSeriesMinute != null && lastSeriesMinute > pathStartMinutes
-        ? lastSeriesMinute
-        : pathStartMinutes + 6 * 60;
-
-  const future = times.map((time, index) => {
-    const minute = hmToMinutes(time);
-    const base = debTemps[index];
-    if (
-      minute == null ||
-      minute < pathStartMinutes ||
-      base == null ||
-      !Number.isFinite(base)
-    ) {
-      return null;
-    }
-    const progressToEvening = Math.min(
-      Math.max(
-        (minute - pathStartMinutes) /
-          Math.max(returnToBaselineMinute - pathStartMinutes, 1),
-        0,
-      ),
-      1,
-    );
-    // Strongest right after the latest observation, then smoothly fades back
-    // to the unchanged DEB baseline by evening/sunset. This keeps one METAR
-    // point from dragging the whole-day forecast away from the base path.
-    const decay = Math.pow(1 - progressToEvening, 1.35);
-    return Number((base + adjustmentDelta * decay).toFixed(1));
-  });
-
-  return { adjustmentDelta, future };
 }
 
 function sortObservationItemsByTime<T extends { time?: string | null }>(items: T[]) {
@@ -392,51 +151,15 @@ export function getTemperatureChartData(
   const mgmHourlyRows = Array.isArray(detail.mgm?.hourly)
     ? detail.mgm?.hourly || []
     : [];
-  const hasPrimaryHourly =
-    Array.isArray(hourly.times) &&
-    Array.isArray(hourly.temps) &&
-    Math.min(hourly.times.length, hourly.temps.length) > 0;
-  const useMgmHourlyAsForecastBase = !hasPrimaryHourly && isTurkishMgmCity(detail);
-  const rawTimes = useMgmHourlyAsForecastBase
-    ? mgmHourlyRows.map((row) => String(row?.time || ""))
-    : Array.isArray(hourly.times)
-      ? hourly.times
-      : [];
-  const rawTemps = useMgmHourlyAsForecastBase
-    ? mgmHourlyRows.map((row) => row?.temp ?? null)
-    : Array.isArray(hourly.temps)
-      ? hourly.temps
-      : [];
-  const validEntries = rawTimes
-    .map((time, index) => ({
-      tail: normalizeHm(String(time || "").trim()) || "",
-      value: Number(rawTemps[index]),
-    }))
-    .filter((entry) => entry.tail !== "");
-  const dataByHour = new Map<string, number | null>();
-  validEntries.forEach((entry) => {
-    dataByHour.set(entry.tail, Number.isFinite(entry.value) ? entry.value : null);
-  });
-  const getHourTemp = (h: number): number | null => {
-    const key = `${String(h).padStart(2, "0")}:00`;
-    return dataByHour.has(key) ? dataByHour.get(key)! : null;
-  };
-  const times: string[] = [];
-  const temps: Array<number | null> = [];
-  for (let h = 0; h < 24; h++) {
-    const hh = String(h).padStart(2, "0");
-    times.push(`${hh}:00`);
-    temps.push(getHourTemp(h));
-    const a = getHourTemp(h);
-    const b = h < 23 ? getHourTemp(h + 1) : null;
-    times.push(`${hh}:30`);
-    temps.push(a != null && b != null ? Number((a + (b - a) * 0.5).toFixed(1)) : a ?? b);
-  }
-  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
-
+  const axis = buildChartTimeAxis(
+    hourly.times,
+    hourly.temps,
+    mgmHourlyRows,
+    isTurkishMgmCity(detail),
+  );
+  const { times, temps } = axis;
   if (!times.length) return null;
 
-  const currentIndex = findNearestTimeIndex(times, detail.local_time);
   const mgmHourlyMax = mgmHourlyRows
     .map((row) => Number(row?.temp))
     .filter((value) => Number.isFinite(value))
@@ -444,22 +167,22 @@ export function getTemperatureChartData(
       (maxValue, value) => (maxValue == null ? value : Math.max(maxValue, value)),
       null,
     );
-  const omMax = detail.forecast?.today_high ?? mgmHourlyMax;
-  const debMax = detail.deb?.prediction;
-  const offset =
-    debMax != null && omMax != null ? Number(debMax) - Number(omMax) : 0;
-  const debBaseTemps = fillTemperaturePathForFullDay(times, temps);
-  const debTemps = debBaseTemps.map((temp) =>
-    temp != null && Number.isFinite(temp)
-      ? Number((temp + offset).toFixed(1))
-      : null,
+  const baseline = buildDebBaselinePath(
+    times,
+    temps,
+    detail.deb?.prediction,
+    detail.local_time,
+    detail.forecast?.today_high,
+    mgmHourlyMax,
   );
-  const debPast = debTemps.map((temp, index) =>
-    currentIndex >= 0 && index <= currentIndex ? temp : null,
-  );
-  const debFuture = debTemps.map((temp, index) =>
-    currentIndex < 0 || index >= currentIndex ? temp : null,
-  );
+  const {
+    debTemps,
+    debPast,
+    debFuture,
+    currentIndex,
+    offset,
+  } = baseline;
+  const suppressAnkaraMgmObservation = isTurkishMgmCity(detail);
 
   const observationTag = getRealtimeObservationTag(detail);
   const observationCode = getObservationSourceCode(detail);
@@ -561,39 +284,18 @@ export function getTemperatureChartData(
         ? `NOAA ${getNoaaStationCode(detail)}`
         : observationTag;
 
-  const metarPoints = new Array(times.length).fill(null);
-  observationSource.forEach((item) => {
-    const index = findNearestTimeIndex(times, String(item.time || ""));
-    const temp = Number(item.temp);
-    if (index >= 0 && Number.isFinite(temp)) {
-      const existing = metarPoints[index];
-      // Multiple reports can land in the same hour bucket. Keep the peak
-      // value so an intrahour high is not hidden by a later weaker report.
-      metarPoints[index] =
-        existing == null ? temp : Math.max(Number(existing), temp);
-    }
-  });
+  const metarPoints = buildObservationGrid(observationSource, times);
   const airportMetarPoints = new Array(times.length).fill(null);
-  airportMetarSource.forEach((item) => {
-    const index = findNearestTimeIndex(times, String(item.time || ""));
-    const temp = Number(item.temp);
-    if (index >= 0 && Number.isFinite(temp)) {
-      const existing = airportMetarPoints[index];
-      airportMetarPoints[index] =
-        existing == null ? temp : Math.max(Number(existing), temp);
-    }
-  });
   const calibrationObservationSource = dedupeObservationItems(
     metarObservationSource.length ? metarObservationSource : observationSource,
   );
-  const calibratedPath = buildCalibratedFuturePath({
-    observations: calibrationObservationSource,
+  const calibratedPath = buildCalibratedPath(
+    calibrationObservationSource,
     times,
     debTemps,
-    currentMinutes: hmToMinutes(detail.local_time),
-    reversionMinutes:
-      hmToMinutes(detail.forecast?.sunset) ?? hmToMinutes("18:00"),
-  });
+    detail.local_time,
+    detail.forecast?.sunset,
+  );
   const calibratedFuture = calibratedPath.future;
 
   const mgmPoints = new Array(times.length).fill(null);
@@ -638,41 +340,7 @@ export function getTemperatureChartData(
   const tafMarkersRaw = Array.isArray(detail.taf?.signal?.markers)
     ? detail.taf?.signal?.markers || []
     : [];
-  const normalizeTafHm = (value: unknown): string | null => {
-    const match = String(value || "").match(/(\d{1,2}):(\d{2})/);
-    if (!match) return null;
-    const hour = Number.parseInt(match[1], 10);
-    const minute = Number.parseInt(match[2], 10);
-    if (
-      !Number.isFinite(hour) ||
-      !Number.isFinite(minute) ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59
-    ) {
-      return null;
-    }
-    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  };
-  const chartHmToMinutes = (value: string | null) => {
-    if (!value) return null;
-    const [hourPart, minutePart] = value.split(":");
-    const hour = Number.parseInt(hourPart || "", 10);
-    const minute = Number.parseInt(minutePart || "", 10);
-    if (
-      !Number.isFinite(hour) ||
-      !Number.isFinite(minute) ||
-      hour < 0 ||
-      hour > 23 ||
-      minute < 0 ||
-      minute > 59
-    ) {
-      return null;
-    }
-    return hour * 60 + minute;
-  };
-  const currentMinutes = chartHmToMinutes(normalizeTafHm(detail.local_time));
+  const currentMinutes = hmToMinutes(normalizeHm(detail.local_time));
   const peakFirstHour = Number(detail.peak?.first_h);
   const peakLastHour = Number(detail.peak?.last_h);
   const peakWindowStartMinutes =
@@ -732,23 +400,23 @@ export function getTemperatureChartData(
   const currentTafMarker =
     currentMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
-          const end = chartHmToMinutes(normalizeTafHm(marker.endLocal));
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          const end = hmToMinutes(normalizeHm(marker.endLocal));
           return start !== null && end !== null && currentMinutes >= start && currentMinutes <= end;
         }) || null
       : null;
   const nextTafMarker =
     currentMinutes !== null && !currentTafMarker
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
           return start !== null && start > currentMinutes;
         }) || null
       : null;
   const peakWindowTafMarker =
     peakWindowStartMinutes !== null && peakWindowEndMinutes !== null
       ? tafMarkers.find((marker) => {
-          const start = chartHmToMinutes(normalizeTafHm(marker.startLocal));
-          const end = chartHmToMinutes(normalizeTafHm(marker.endLocal));
+          const start = hmToMinutes(normalizeHm(marker.startLocal));
+          const end = hmToMinutes(normalizeHm(marker.endLocal));
           return (
             start !== null &&
             end !== null &&
@@ -790,7 +458,7 @@ export function getTemperatureChartData(
   if (!suppressAnkaraMgmObservation && detail.mgm?.temp != null) {
     legendParts.push(`MGM: ${detail.mgm.temp}${detail.temp_symbol}`);
   }
-  if (!hasMgmHourly && debMax != null && omMax != null && Math.abs(offset) > 0.3) {
+  if (!hasMgmHourly && Math.abs(offset) > 0.3) {
     const sign = offset > 0 ? "+" : "";
     legendParts.push(
       isEnglish(locale)
@@ -802,17 +470,23 @@ export function getTemperatureChartData(
     const sign = calibratedPath.adjustmentDelta > 0 ? "+" : "";
     legendParts.push(
       isEnglish(locale)
-        ? `METAR-calibrated path applies latest observation bias ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}.`
-        : `修正路径使用最新 METAR 偏差 ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}。`,
+        ? `DEB calibrated path applies latest observation bias ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}.`
+        : `DEB 修正路径使用最新观测偏差 ${sign}${calibratedPath.adjustmentDelta.toFixed(1)}${detail.temp_symbol}。`,
     );
   }
   if (hasMgmHourly) {
+    const hourly = detail.hourly || {};
+    const hasPrimaryHourly =
+      Array.isArray(hourly.times) &&
+      Array.isArray(hourly.temps) &&
+      Math.min(hourly.times.length, hourly.temps.length) > 0;
+    const mgmIsForecastBase = !hasPrimaryHourly && isTurkishMgmCity(detail);
     legendParts.push(
       isEnglish(locale)
-        ? useMgmHourlyAsForecastBase
+        ? mgmIsForecastBase
           ? "Using MGM hourly forecast as the DEB curve base"
           : "MGM hourly forecast is shown as official hourly guidance"
-        : useMgmHourlyAsForecastBase
+        : mgmIsForecastBase
           ? "已使用 MGM 小时预报作为 DEB 曲线基底"
           : "MGM 小时预报作为官方小时指引显示",
     );
@@ -908,17 +582,17 @@ export function getTemperatureChartData(
   const calibratedFutureSeries = buildSeriesPoints(times, calibratedFuture);
   const tempsSeries = buildSeriesPoints(times, temps);
   const mgmHourlySeries = buildSeriesPoints(times, mgmHourlyPoints);
-  const metarSeries = buildObservationPoints(observationSource);
-  const airportMetarSeries = buildObservationPoints(airportMetarSource);
+  const metarSeries = buildObservationPointSeries(observationSource);
+  const airportMetarSeries = buildObservationPointSeries(airportMetarSource);
   const mgmSeries =
     !suppressAnkaraMgmObservation && detail.mgm?.temp != null && detail.mgm?.time
-      ? buildObservationPoints([{ time: detail.mgm.time, temp: detail.mgm.temp }])
+      ? buildObservationPointSeries([{ time: detail.mgm.time, temp: detail.mgm.temp }])
       : [];
   const tafCurrentMarkerSeries = tafMarkers
     .filter((marker) => marker.isCurrent)
     .map((marker) => ({
       marker,
-      x: chartHmToMinutes(marker.labelTime) ?? 0,
+      x: hmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue,
     }))
     .filter((point) => point.x > 0);
@@ -926,19 +600,19 @@ export function getTemperatureChartData(
     .filter((marker) => marker.isPeakWindow && !marker.isCurrent)
     .map((marker) => ({
       marker,
-      x: chartHmToMinutes(marker.labelTime) ?? 0,
+      x: hmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue - 0.15,
     }))
     .filter((point) => point.x > 0);
   const tafMarkerSeries = tafMarkers
     .map((marker) => ({
       marker,
-      x: chartHmToMinutes(marker.labelTime) ?? 0,
+      x: hmToMinutes(marker.labelTime) ?? 0,
       y: tafMarkerValue,
     }))
     .filter((point) => point.x > 0);
-  const xMin = times.length ? chartHmToMinutes(times[0]) ?? 0 : 0;
-  const xMax = times.length ? chartHmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
+  const xMin = times.length ? hmToMinutes(times[0]) ?? 0 : 0;
+  const xMax = times.length ? hmToMinutes(times[times.length - 1]) ?? 24 * 60 : 24 * 60;
 
   return {
     currentIndex,
