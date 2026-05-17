@@ -34,6 +34,20 @@ DEFAULT_CITIES = [
     "london",
     "paris",
     "madrid",
+    "amsterdam",
+    "helsinki",
+    "lau fau shan",
+    "new york",
+    "los angeles",
+    "chicago",
+    "denver",
+    "atlanta",
+    "miami",
+    "san francisco",
+    "houston",
+    "dallas",
+    "austin",
+    "seattle",
 ]
 
 _RUNTIME_LOCK = threading.Lock()
