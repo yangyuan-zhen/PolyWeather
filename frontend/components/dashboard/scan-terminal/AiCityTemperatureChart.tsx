@@ -78,14 +78,25 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
     cityKey: string;
     data: TemperatureChartData;
   } | null>(null);
-  if (computedChartData) {
-    lastChartDataRef.current = { cityKey, data: computedChartData };
-  }
-  const chartData =
-    computedChartData ||
-    (lastChartDataRef.current?.cityKey === cityKey
-      ? lastChartDataRef.current.data
-      : null);
+  // Use a memo so we never mutate refs during render (React anti-pattern).
+  // When cityKey changes, discard any stale cache; once computedChartData
+  // arrives, save it into the ref and use it.
+  const chartData = useMemo(() => {
+    if (lastChartDataRef.current && lastChartDataRef.current.cityKey !== cityKey) {
+      // City switched — clear stale cache so the old city's chart cannot
+      // bleed into the new city card while its detail is still loading.
+      lastChartDataRef.current = null;
+    }
+    if (computedChartData) {
+      lastChartDataRef.current = { cityKey, data: computedChartData };
+      return computedChartData;
+    }
+    if (lastChartDataRef.current?.cityKey === cityKey) {
+      return lastChartDataRef.current.data;
+    }
+    return null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cityKey, computedChartData]);
   const forecastLabel = locale === "en-US" ? "DEB baseline" : "DEB 原始路径";
   const calibratedLabel =
     locale === "en-US"
@@ -205,6 +216,7 @@ export const AiCityTemperatureChart = memo(function AiCityTemperatureChart({ det
   }, [
     calibratedLabel,
     chartData,
+    cityKey,
     detail.temp_symbol,
     forecastLabel,
     hasCalibratedPath,

@@ -40,7 +40,6 @@ export function useAiPinnedCityWorkspace({
         const nextCity = aiHydrationQueueRef.current.shift();
         const key = normalizeCityKey(nextCity || "");
         if (!nextCity || !key) continue;
-        const existingDetail = findDetailForCity(store.cityDetailsByName, nextCity);
         try {
           const detail = await store.ensureCityDetail(
             nextCity,
@@ -72,7 +71,7 @@ export function useAiPinnedCityWorkspace({
         void runAiHydrationQueue();
       }
     }
-  }, [store.cityDetailsByName, store.ensureCityDetail]);
+  }, [store.ensureCityDetail]);
 
   const queueAiFullHydration = useCallback(
     (cityName: string) => {
@@ -97,6 +96,10 @@ export function useAiPinnedCityWorkspace({
       getLocalizedCityName(cleanName, prettyName || cleanName, locale) ||
       prettyName ||
       cleanName;
+    // Clear the hydration guard so that re-selecting this city always
+    // triggers a fresh hydration attempt (fixes second-city loading failure).
+    aiFullHydrationRef.current.delete(key);
+    aiHydrationRetriesRef.current.delete(key);
     setAiPinnedCities((current) => {
       const existing = current.findIndex(
         (item) => normalizeCityKey(item.cityName) === key,
