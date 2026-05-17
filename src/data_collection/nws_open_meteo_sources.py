@@ -359,6 +359,13 @@ class NwsOpenMeteoSourceMixin:
                         if stale and isinstance(stale.get("data"), dict):
                             record_source_call("open_meteo", "forecast", "stale_cache", (time.perf_counter() - started) * 1000.0)
                             return dict(stale["data"])
+                # Memory miss: force-reload from disk and retry once
+                self._load_open_meteo_disk_cache()
+                with self._open_meteo_cache_lock:
+                    stale2 = self._open_meteo_cache.get(cache_key)
+                    if stale2 and isinstance(stale2.get("data"), dict):
+                        record_source_call("open_meteo", "forecast", "disk_fallback", (time.perf_counter() - started) * 1000.0)
+                        return dict(stale2["data"])
                 record_source_call("open_meteo", "forecast", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
         with self._open_meteo_cache_lock:
@@ -528,9 +535,15 @@ class NwsOpenMeteoSourceMixin:
                     if stale and isinstance(stale.get("data"), dict):
                         record_source_call("open_meteo", "ensemble", "stale_cache", (time.perf_counter() - started) * 1000.0)
                         return dict(stale["data"])
+                self._load_open_meteo_disk_cache()
+                with self._ensemble_cache_lock:
+                    stale2 = self._ensemble_cache.get(cache_key)
+                    if stale2 and isinstance(stale2.get("data"), dict):
+                        record_source_call("open_meteo", "ensemble", "disk_fallback", (time.perf_counter() - started) * 1000.0)
+                        return dict(stale2["data"])
                 record_source_call("open_meteo", "ensemble", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
-                
+
         with self._ensemble_cache_lock:
             cached = self._ensemble_cache.get(cache_key)
             if (
@@ -685,6 +698,12 @@ class NwsOpenMeteoSourceMixin:
                     if stale and isinstance(stale.get("data"), dict):
                         record_source_call("open_meteo", "multi_model", "stale_cache", (time.perf_counter() - started) * 1000.0)
                         return dict(stale["data"])
+                self._load_open_meteo_disk_cache()
+                with self._multi_model_cache_lock:
+                    stale2 = self._multi_model_cache.get(cache_key)
+                    if stale2 and isinstance(stale2.get("data"), dict):
+                        record_source_call("open_meteo", "multi_model", "disk_fallback", (time.perf_counter() - started) * 1000.0)
+                        return dict(stale2["data"])
                 record_source_call("open_meteo", "multi_model", "cooldown_skip", (time.perf_counter() - started) * 1000.0)
                 return None
 
