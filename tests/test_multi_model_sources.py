@@ -2,6 +2,7 @@ from src.data_collection.nws_open_meteo_sources import (
     OPEN_METEO_MULTI_MODEL_ORDER,
     _parse_open_meteo_multi_model_daily,
 )
+from src.data_collection.weather_sources import WeatherDataCollector
 
 
 def test_multi_model_parser_exposes_open_recommended_models():
@@ -44,3 +45,52 @@ def test_multi_model_order_includes_legacy_and_new_sources():
     assert "gem_regional" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "gem_hrdps_continental" in OPEN_METEO_MULTI_MODEL_ORDER
     assert "jma_seamless" in OPEN_METEO_MULTI_MODEL_ORDER
+
+
+def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    collector = WeatherDataCollector({})
+    calls = []
+
+    monkeypatch.setattr(collector, "_log_temperature_unit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
+    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_korean_amos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_amsc_awos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_japan_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_fmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_knmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_hko_obs_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_cwa_settlement_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_russia_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_global_nearby_cluster", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "fetch_ensemble", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "fetch_nws", lambda *args, **kwargs: None)
+
+    def fake_multi_model(*args, **kwargs):
+        calls.append("multi_model")
+        return {"forecasts": {"ECMWF": 24.0, "GFS": 25.0}}
+
+    def fake_open_meteo(*args, **kwargs):
+        calls.append("open_meteo")
+        return {"utc_offset": 10800, "daily": {"temperature_2m_max": [24]}}
+
+    monkeypatch.setattr(collector, "fetch_multi_model", fake_multi_model)
+    monkeypatch.setattr(collector, "fetch_from_open_meteo", fake_open_meteo)
+
+    result = collector.fetch_all_sources(
+        "ankara",
+        lat=40.1281,
+        lon=32.9951,
+        include_ensemble=False,
+        include_nearby=False,
+        include_taf=False,
+        include_mgm=False,
+    )
+
+    assert calls[:2] == ["multi_model", "open_meteo"]
+    assert result["multi_model"]["forecasts"]["ECMWF"] == 24.0

@@ -370,8 +370,24 @@ export function getTemperatureChartData(
   locale: Locale = "zh-CN",
 ) {
   const hourly = detail.hourly || {};
-  const rawTimes = Array.isArray(hourly.times) ? hourly.times : [];
-  const rawTemps = Array.isArray(hourly.temps) ? hourly.temps : [];
+  const mgmHourlyRows = Array.isArray(detail.mgm?.hourly)
+    ? detail.mgm?.hourly || []
+    : [];
+  const hasPrimaryHourly =
+    Array.isArray(hourly.times) &&
+    Array.isArray(hourly.temps) &&
+    Math.min(hourly.times.length, hourly.temps.length) > 0;
+  const useMgmHourlyAsForecastBase = !hasPrimaryHourly && isTurkishMgmCity(detail);
+  const rawTimes = useMgmHourlyAsForecastBase
+    ? mgmHourlyRows.map((row) => String(row?.time || ""))
+    : Array.isArray(hourly.times)
+      ? hourly.times
+      : [];
+  const rawTemps = useMgmHourlyAsForecastBase
+    ? mgmHourlyRows.map((row) => row?.temp ?? null)
+    : Array.isArray(hourly.temps)
+      ? hourly.temps
+      : [];
   const validEntries = rawTimes
     .map((time, index) => ({
       tail: normalizeHm(String(time || "").trim()) || "",
@@ -404,7 +420,14 @@ export function getTemperatureChartData(
   if (!times.length) return null;
 
   const currentIndex = findNearestTimeIndex(times, detail.local_time);
-  const omMax = detail.forecast?.today_high;
+  const mgmHourlyMax = mgmHourlyRows
+    .map((row) => Number(row?.temp))
+    .filter((value) => Number.isFinite(value))
+    .reduce<number | null>(
+      (maxValue, value) => (maxValue == null ? value : Math.max(maxValue, value)),
+      null,
+    );
+  const omMax = detail.forecast?.today_high ?? mgmHourlyMax;
   const debMax = detail.deb?.prediction;
   const offset =
     debMax != null && omMax != null ? Number(debMax) - Number(omMax) : 0;
@@ -570,9 +593,6 @@ export function getTemperatureChartData(
 
   const mgmHourlyPoints = new Array(times.length).fill(null);
   let hasMgmHourly = false;
-  const mgmHourlyRows = Array.isArray(detail.mgm?.hourly)
-    ? detail.mgm?.hourly || []
-    : [];
   mgmHourlyRows.forEach((item) => {
     const index = findNearestTimeIndex(times, String(item.time || ""));
     const temp = Number(item.temp);
@@ -771,8 +791,12 @@ export function getTemperatureChartData(
   if (hasMgmHourly) {
     legendParts.push(
       isEnglish(locale)
-        ? "Using MGM hourly forecast to replace DEB curve"
-        : "已使用 MGM 小时预报替代 DEB 曲线",
+        ? useMgmHourlyAsForecastBase
+          ? "Using MGM hourly forecast as the DEB curve base"
+          : "MGM hourly forecast is shown as official hourly guidance"
+        : useMgmHourlyAsForecastBase
+          ? "已使用 MGM 小时预报作为 DEB 曲线基底"
+          : "MGM 小时预报作为官方小时指引显示",
     );
   }
   if ((detail.trend?.recent?.length || 0) > 0 || observationSource.length > 0) {

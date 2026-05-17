@@ -1322,6 +1322,21 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self._attach_settlement_sources(results, city_lower)
 
         if lat and lon:
+            # Prioritize the model cluster before the regular Open-Meteo
+            # forecast.  The regular forecast endpoint can set the shared
+            # Open-Meteo 429 cooldown; if that happens first, cities with no
+            # existing multi-model cache (notably Ankara after a deploy) fall
+            # back to a single Open-Meteo/DEB line and the decision card loses
+            # most of its model support.  Fetching the multi-model payload
+            # first gives the richer, longer-lived model cache the first chance
+            # to populate; the regular forecast can still use its stale cache
+            # if Open-Meteo rate-limits the cycle.
+            if include_multi_model:
+                multi_model_data = self.fetch_multi_model(
+                    lat, lon, city=city, use_fahrenheit=use_fahrenheit
+                )
+                if multi_model_data:
+                    results["multi_model"] = multi_model_data
             open_meteo = self.fetch_from_open_meteo(
                 lat, lon, use_fahrenheit=use_fahrenheit
             )
@@ -1370,7 +1385,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     lon,
                     use_fahrenheit,
                     include_ensemble=include_ensemble,
-                    include_multi_model=include_multi_model,
+                    include_multi_model=False,
                 )
             else:
                 fallback_utc_offset = int(
@@ -1419,7 +1434,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                     lon,
                     use_fahrenheit,
                     include_ensemble=include_ensemble,
-                    include_multi_model=include_multi_model,
+                    include_multi_model=False,
                 )
         else:
             if supports_aviationweather:
