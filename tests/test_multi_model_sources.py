@@ -2,7 +2,9 @@ from src.data_collection.nws_open_meteo_sources import (
     OPEN_METEO_MULTI_MODEL_ORDER,
     _parse_open_meteo_multi_model_daily,
 )
+import src.data_collection.open_meteo_cache as open_meteo_cache_module
 from src.data_collection.weather_sources import WeatherDataCollector
+from src.database.runtime_state import OpenMeteoRateLimitRepository, RuntimeStateDB
 
 
 def test_multi_model_parser_exposes_open_recommended_models():
@@ -94,3 +96,67 @@ def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, 
 
     assert calls[:2] == ["multi_model", "open_meteo"]
     assert result["multi_model"]["forecasts"]["ECMWF"] == 24.0
+
+
+def test_force_refresh_preserves_open_meteo_model_caches_by_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    collector = WeatherDataCollector({})
+    captured = {}
+
+    def fake_evict(*args, **kwargs):
+        captured["keep_model_caches"] = kwargs.get("keep_model_caches")
+
+    monkeypatch.setattr(collector, "_evict_city_caches", fake_evict)
+    monkeypatch.setattr(collector, "_log_temperature_unit", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_settlement_sources", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_supports_aviationweather", lambda city: False)
+    monkeypatch.setattr(collector, "fetch_multi_model", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "fetch_from_open_meteo", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_nws_and_models", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_turkish_mgm_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_korean_amos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_amsc_awos_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_madis_hfmetar_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_singapore_mss_data", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_china_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_japan_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_fmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_knmi_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_hko_obs_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_cwa_settlement_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_russia_official_nearby", lambda *args, **kwargs: None)
+    monkeypatch.setattr(collector, "_attach_global_nearby_cluster", lambda *args, **kwargs: None)
+
+    collector.fetch_all_sources(
+        "ankara",
+        lat=40.1281,
+        lon=32.9951,
+        force_refresh=True,
+        include_ensemble=False,
+        include_nearby=False,
+        include_taf=False,
+        include_mgm=False,
+    )
+
+    assert captured["keep_model_caches"] is True
+
+
+def test_persisted_open_meteo_cooldown_skips_outbound_request(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_STATE_STORAGE_MODE", "sqlite")
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "polyweather.db"))
+    monkeypatch.setenv("OPEN_METEO_DISK_CACHE_PATH", str(tmp_path / "om-cache.json"))
+    db = RuntimeStateDB(str(tmp_path / "polyweather.db"))
+    rate_repo = OpenMeteoRateLimitRepository(db)
+    rate_repo.set_until(9999999999.0, reason="test_429")
+    monkeypatch.setattr(open_meteo_cache_module, "_open_meteo_rate_limit_repo", rate_repo)
+
+    collector = WeatherDataCollector({})
+
+    def fail_http(*args, **kwargs):
+        raise AssertionError("Open-Meteo HTTP request should be skipped during persisted cooldown")
+
+    monkeypatch.setattr(collector, "_http_get", fail_http)
+
+    result = collector.fetch_multi_model(40.1281, 32.9951, city="ankara")
+
+    assert result is None

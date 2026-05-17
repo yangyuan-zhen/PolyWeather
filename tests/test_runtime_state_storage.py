@@ -4,6 +4,7 @@ import time
 from src.database.runtime_state import (
     DailyRecordRepository,
     OpenMeteoCacheRepository,
+    OpenMeteoRateLimitRepository,
     ProbabilitySnapshotRepository,
     RuntimeStateDB,
     TelegramAlertStateRepository,
@@ -75,6 +76,16 @@ def test_open_meteo_cache_repository_roundtrip(tmp_path, monkeypatch):
     loaded = repo.load_payload(86400)
     assert loaded['forecast']['ankara']['temp'] == 15
     assert loaded['ensemble']['ankara']['spread'] == 1.5
+
+
+def test_open_meteo_rate_limit_repository_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv('POLYWEATHER_DB_PATH', str(tmp_path / 'polyweather.db'))
+    repo = OpenMeteoRateLimitRepository(RuntimeStateDB(str(tmp_path / 'polyweather.db')))
+
+    repo.set_until(12345.0, reason='429')
+
+    loaded = repo.load_until()
+    assert loaded == 12345.0
 
 
 def test_truth_record_repository_tracks_revisions(tmp_path, monkeypatch):

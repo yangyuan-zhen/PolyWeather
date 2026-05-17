@@ -39,5 +39,7 @@ if __name__ == "__main__":
         "web.app:app",
         host="0.0.0.0",
         port=8000,
-        workers=int(os.getenv("UVICORN_WORKERS", "4")),
+        # Default to a single worker so per-process weather-source guards do
+        # not multiply outbound Open-Meteo traffic on small VPS deployments.
+        workers=int(os.getenv("UVICORN_WORKERS", "1")),
     )

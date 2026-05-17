@@ -7,11 +7,13 @@ import time
 from loguru import logger
 from src.database.runtime_state import (
     OpenMeteoCacheRepository,
+    OpenMeteoRateLimitRepository,
     STATE_STORAGE_SQLITE,
     get_state_storage_mode,
 )
 
 _open_meteo_cache_repo = OpenMeteoCacheRepository()
+_open_meteo_rate_limit_repo = OpenMeteoRateLimitRepository()
 
 
 class OpenMeteoCacheMixin:
@@ -182,3 +184,26 @@ class OpenMeteoCacheMixin:
                 time.sleep(wait_for)
                 now_ts = time.time()
             self._open_meteo_last_call_ts = now_ts
+
+    def _refresh_open_meteo_rate_limit_until(self) -> float:
+        """Load the cross-process Open-Meteo cooldown marker from runtime state."""
+        if get_state_storage_mode() != STATE_STORAGE_SQLITE:
+            return getattr(self, "_open_meteo_rate_limit_until", 0.0)
+        try:
+            persisted_until = _open_meteo_rate_limit_repo.load_until()
+        except Exception as exc:
+            logger.debug(f"Open-Meteo cooldown load skipped: {exc}")
+            return getattr(self, "_open_meteo_rate_limit_until", 0.0)
+        if persisted_until > getattr(self, "_open_meteo_rate_limit_until", 0.0):
+            self._open_meteo_rate_limit_until = persisted_until
+        return self._open_meteo_rate_limit_until
+
+    def _set_open_meteo_rate_limit_until(self, rate_limit_until: float, *, reason: str = "") -> None:
+        """Persist the shared Open-Meteo cooldown marker for all workers."""
+        self._open_meteo_rate_limit_until = float(rate_limit_until)
+        if get_state_storage_mode() != STATE_STORAGE_SQLITE:
+            return
+        try:
+            _open_meteo_rate_limit_repo.set_until(rate_limit_until, reason=reason)
+        except Exception as exc:
+            logger.debug(f"Open-Meteo cooldown persist skipped: {exc}")

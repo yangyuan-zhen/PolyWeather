@@ -1316,7 +1316,11 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 lat=lat,
                 lon=lon,
                 use_fahrenheit=use_fahrenheit,
-                keep_model_caches=force_refresh_observations_only,
+                # Force-refresh is usually a UI/API freshness request for live
+                # observations.  Do not evict longer-lived Open-Meteo forecast
+                # caches by default: one accidental all-city refresh can
+                # otherwise cold-start the VPS into Open-Meteo 429s.
+                keep_model_caches=True,
             )
         self._log_temperature_unit(city, use_fahrenheit)
         self._attach_settlement_sources(results, city_lower)

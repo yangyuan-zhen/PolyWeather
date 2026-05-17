@@ -195,6 +195,16 @@ class RuntimeStateDB:
             )
             conn.execute(
                 """
+                CREATE TABLE IF NOT EXISTS open_meteo_rate_limit_state (
+                    state_key TEXT PRIMARY KEY,
+                    rate_limit_until REAL NOT NULL,
+                    reason TEXT,
+                    updated_at REAL NOT NULL
+                )
+                """
+            )
+            conn.execute(
+                """
                 CREATE TABLE IF NOT EXISTS official_intraday_observations_store (
                     source_code TEXT NOT NULL,
                     station_code TEXT NOT NULL,
@@ -997,6 +1007,43 @@ class OpenMeteoCacheRepository:
             return 0.0
         try:
             return float(row["max_updated_at"] or 0.0)
+        except Exception:
+            return 0.0
+
+
+class OpenMeteoRateLimitRepository:
+    def __init__(self, db: Optional[RuntimeStateDB] = None):
+        self.db = db or RuntimeStateDB.instance()
+
+    def set_until(self, rate_limit_until: float, *, reason: str = "") -> None:
+        with self.db.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO open_meteo_rate_limit_state (
+                    state_key, rate_limit_until, reason, updated_at
+                ) VALUES ('global', ?, ?, ?)
+                ON CONFLICT(state_key) DO UPDATE SET
+                    rate_limit_until = excluded.rate_limit_until,
+                    reason = excluded.reason,
+                    updated_at = excluded.updated_at
+                """,
+                (float(rate_limit_until), str(reason or ""), time.time()),
+            )
+            conn.commit()
+
+    def load_until(self) -> float:
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT rate_limit_until
+                FROM open_meteo_rate_limit_state
+                WHERE state_key = 'global'
+                """
+            ).fetchone()
+        if not row:
+            return 0.0
+        try:
+            return float(row["rate_limit_until"] or 0.0)
         except Exception:
             return 0.0
 
