@@ -78,7 +78,7 @@ export function runTests() {
     "Ankara chart should build the DEB original path from MGM hourly data when Open-Meteo hourly is unavailable",
   );
   assert(
-    ankaraChartData?.datasets.debSeries.length >= 4,
+    (ankaraChartData?.datasets.debSeries.length ?? 0) >= 4,
     "Ankara chart should build the DEB original path from MGM hourly data",
   );
   assert(

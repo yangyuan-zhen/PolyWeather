@@ -289,8 +289,15 @@ function ScanTerminalScreen() {
     setMapSelectedCityName(cityName);
     lastMapSelectedCityRef.current = normalizeCityKey(cityName);
     const matchedRow = findRowForCity(timeSortedRows, cityName);
-    if (matchedRow) store.preloadCityFromRow(matchedRow);
-    setSelectedRowId(matchedRow?.id || null);
+    if (matchedRow) {
+      store.preloadCityFromRow(matchedRow);
+      setSelectedRowId(matchedRow.id);
+    } else {
+      // City not in scan rows — still preload its detail so the decision
+      // card can render immediately instead of showing a loading spinner.
+      void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
+      setSelectedRowId(null);
+    }
     addAiPinnedCity(cityName);
     setActiveView("analysis");
   }, [addAiPinnedCity, store, timeSortedRows]);
@@ -352,30 +359,6 @@ function ScanTerminalScreen() {
         />
       );
     }
-    if (resolvedView === "map") {
-      return (
-        <div className="scan-map-view">
-          <div className="scan-map-shell">
-            <MapCanvas
-              onCitySelect={handleMapCitySelect}
-              selectionMode="select"
-            />
-          </div>
-        </div>
-      );
-    }
-    if (resolvedView === "analysis") {
-      return (
-        <AiPinnedForecastView
-          items={aiPinnedCities}
-          rows={timeSortedRows}
-          detailsByName={store.cityDetailsByName}
-          locale={locale}
-          onRefreshCityDetail={refreshAiPinnedCityDetail}
-          onRemoveCity={removeAiPinnedCity}
-        />
-      );
-    }
     if (!isPro) {
       return (
         <div className="scan-table-shell empty">
@@ -392,7 +375,35 @@ function ScanTerminalScreen() {
         </div>
       );
     }
-    return null;
+
+    // Keep MapCanvas always mounted — hiding with CSS avoids Leaflet
+    // reinitialization that causes a white background on tab switches.
+    // The analysis view overlays on top when active.
+    return (
+      <>
+        <div
+          className="scan-map-view"
+          style={{ display: resolvedView === "map" ? undefined : "none" }}
+        >
+          <div className="scan-map-shell">
+            <MapCanvas
+              onCitySelect={handleMapCitySelect}
+              selectionMode="select"
+            />
+          </div>
+        </div>
+        {resolvedView === "analysis" ? (
+          <AiPinnedForecastView
+            items={aiPinnedCities}
+            rows={timeSortedRows}
+            detailsByName={store.cityDetailsByName}
+            locale={locale}
+            onRefreshCityDetail={refreshAiPinnedCityDetail}
+            onRemoveCity={removeAiPinnedCity}
+          />
+        ) : null}
+      </>
+    );
   };
 
   if (proAccess.loading) {
