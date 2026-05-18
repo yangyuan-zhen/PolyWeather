@@ -140,26 +140,18 @@ export function DetailPanel({
   const handleTodayAccess = () => {
     blurActiveElement();
 
-    if (!isPro) {
-      trackAppEvent("paywall_feature_clicked", {
-        entry: "detail_panel",
-        feature: "today",
-        city: store.selectedCity,
-        user_state: isAuthenticated ? "logged_in" : "guest",
-      });
-    }
-
     if (isPro) {
       void modal.openTodayModal();
       return;
     }
 
-    if (isAuthenticated) {
-      router.push("/account");
-      return;
-    }
-
-    void modal.openTodayModal();
+    trackAppEvent("paywall_feature_clicked", {
+      entry: "detail_panel",
+      feature: "today",
+      city: store.selectedCity,
+      user_state: isAuthenticated ? "logged_in" : "guest",
+    });
+    router.push("/account");
   };
 
   useEffect(() => {
