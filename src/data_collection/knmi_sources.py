@@ -36,7 +36,7 @@ class KnmiSourceMixin:
         headers = {"Authorization": api_key}
         getter = getattr(self, "_http_get", None)
         if callable(getter):
-            resp = getter(url)
+            resp = getter(url, headers=headers)
             return resp.content if hasattr(resp, "content") else resp
         resp = self.session.get(url, timeout=self.timeout, headers=headers)
         resp.raise_for_status()
@@ -46,7 +46,7 @@ class KnmiSourceMixin:
         headers = {"Authorization": api_key}
         getter = getattr(self, "_http_get_json", None)
         if callable(getter):
-            return getter(url)
+            return getter(url, headers=headers)
         resp = self.session.get(url, timeout=self.timeout, headers=headers)
         resp.raise_for_status()
         return resp.json()
