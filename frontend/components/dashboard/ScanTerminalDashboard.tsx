@@ -275,14 +275,10 @@ function ScanTerminalScreen() {
       store.preloadCityFromRow(matchedRow);
       setSelectedRowId(matchedRow.id);
     } else {
-      // City not in scan rows — still preload its detail so the decision
-      // card can render immediately instead of showing a loading spinner.
       void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
       setSelectedRowId(null);
     }
-    addAiPinnedCity(cityName);
-    setActiveView("analysis");
-  }, [addAiPinnedCity, store, timeSortedRows]);
+  }, [store, timeSortedRows]);
 
   useEffect(() => {
     if (activeView !== "map") return;
