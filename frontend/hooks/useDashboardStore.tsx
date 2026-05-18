@@ -28,10 +28,6 @@ import {
   CitySummary,
   DashboardState,
   ForecastModalMode,
-  HistoryPoint,
-  HistoryPayload,
-  HistoryPayloadMeta,
-  HistoryState,
   LoadingState,
   ProAccessState,
 } from "@/lib/dashboard-types";
@@ -39,7 +35,6 @@ import {
 interface DashboardStoreValue extends DashboardState {
   clearCityFocus: () => void;
   closeFutureModal: () => void;
-  closeHistory: () => void;
   closePanel: () => void;
   ensureCityDetail: (
     cityName: string,
@@ -61,7 +56,6 @@ interface DashboardStoreValue extends DashboardState {
   loadCities: () => Promise<void>;
   preloadCityFromRow: (row: { city?: string | null; city_display_name?: string | null; display_name?: string | null }) => void;
   openFutureModal: (dateStr: string, forceRefresh?: boolean) => Promise<void>;
-  openHistory: () => Promise<void>;
   openTodayModal: (forceRefresh?: boolean) => Promise<void>;
   registerMapStopMotion: (stopMotion: () => void) => void;
   refreshAll: () => Promise<void>;
@@ -84,10 +78,6 @@ type DashboardModalContextValue = Pick<
   | "selectedForecastDate"
   | "setForecastDate"
 >;
-type DashboardHistoryContextValue = Pick<
-  DashboardStoreValue,
-  "closeHistory" | "historyState" | "openHistory"
->;
 type DashboardProAccessContextValue = Pick<
   DashboardStoreValue,
   "proAccess" | "refreshProAccess"
@@ -100,8 +90,6 @@ const DashboardActionsContext = createContext<Pick<
 > | null>(null);
 const DashboardModalContext =
   createContext<DashboardModalContextValue | null>(null);
-const DashboardHistoryContext =
-  createContext<DashboardHistoryContextValue | null>(null);
 const DashboardProAccessContext =
   createContext<DashboardProAccessContextValue | null>(null);
 const DashboardSelectionContext = createContext<Pick<
@@ -126,21 +114,8 @@ function getInitialLoadingState(): LoadingState {
     cities: false,
     cityDetail: false,
     futureDeep: false,
-    history: false,
-    historyRecords: false,
     refresh: false,
     marketScan: false,
-  };
-}
-
-function getInitialHistoryState(): HistoryState {
-  return {
-    dataByCity: {},
-    error: null,
-    isOpen: false,
-    loading: false,
-    metaByCity: {},
-    recordsLoading: false,
   };
 }
 
@@ -666,20 +641,6 @@ function mergeMarketScan(
   };
 }
 
-function toHistoryMeta(payload: HistoryPayload): HistoryPayloadMeta {
-  const history = Array.isArray(payload.history) ? payload.history : [];
-  const previewCount = Number(payload.preview_count || history.length || 0);
-  const fullCount = Number(payload.full_count || previewCount || 0);
-  return {
-    mode: payload.mode === "full" ? "full" : "preview",
-    hasMore: payload.has_more === true,
-    fullCount,
-    previewCount,
-    settlementSource: payload.settlement_source ?? null,
-    settlementSourceLabel: payload.settlement_source_label ?? null,
-  };
-}
-
 export function DashboardStoreProvider({
   children,
 }: {
@@ -709,9 +670,6 @@ export function DashboardStoreProvider({
   const [isMapInteracting, setIsMapInteracting] = useState(false);
   const [loadingState, setLoadingState] = useState<LoadingState>(
     getInitialLoadingState,
-  );
-  const [historyState, setHistoryState] = useState<HistoryState>(
-    getInitialHistoryState,
   );
   const [proAccess, setProAccess] = useState<ProAccessState>(
     getInitialProAccessState,
@@ -1427,127 +1385,12 @@ export function DashboardStoreProvider({
     }
   };
 
-  const openHistory = async () => {
-    if (!selectedCity) return;
-    if (!proAccess.subscriptionActive) {
-      setHistoryState((current) => ({
-        ...current,
-        error: null,
-        isOpen: true,
-        loading: false,
-        recordsLoading: false,
-      }));
-      return;
-    }
-    const cityName = selectedCity;
-    const cachedHistory = historyState.dataByCity[cityName];
-    const cachedMeta = historyState.metaByCity[cityName];
-
-    if (cachedMeta && cachedHistory?.length) {
-      setHistoryState((current) => ({
-        ...current,
-        error: null,
-        isOpen: true,
-        loading: false,
-        recordsLoading: cachedMeta.mode !== "full" && cachedMeta.hasMore,
-      }));
-
-      if (cachedMeta.mode !== "full" && cachedMeta.hasMore) {
-        void dashboardClient
-          .getHistory(cityName, { includeRecords: true })
-          .then((payload) => {
-            if (selectedCityRef.current !== cityName) return;
-            setHistoryState((current) => ({
-              ...current,
-              dataByCity: {
-                ...current.dataByCity,
-                [cityName]: payload.history,
-              },
-              metaByCity: {
-                ...current.metaByCity,
-                [cityName]: toHistoryMeta(payload),
-              },
-              recordsLoading: false,
-            }));
-          })
-          .catch(() => {
-            if (selectedCityRef.current !== cityName) return;
-            setHistoryState((current) => ({
-              ...current,
-              recordsLoading: false,
-            }));
-          });
-      }
-      return;
-    }
-
-    setHistoryState((current) => ({
-      ...current,
-      error: null,
-      isOpen: true,
-      loading: true,
-      recordsLoading: false,
-    }));
-    try {
-      const payload = await dashboardClient.getHistory(cityName);
-      setHistoryState((current) => ({
-        ...current,
-        dataByCity: {
-          ...current.dataByCity,
-          [cityName]: payload.history,
-        },
-        metaByCity: {
-          ...current.metaByCity,
-          [cityName]: toHistoryMeta(payload),
-        },
-        loading: false,
-        recordsLoading: payload.has_more === true,
-      }));
-
-      if (payload.has_more) {
-        void dashboardClient
-          .getHistory(cityName, { includeRecords: true })
-          .then((fullPayload) => {
-            if (selectedCityRef.current !== cityName) return;
-            setHistoryState((current) => ({
-              ...current,
-              dataByCity: {
-                ...current.dataByCity,
-                [cityName]: fullPayload.history,
-              },
-              metaByCity: {
-                ...current.metaByCity,
-                [cityName]: toHistoryMeta(fullPayload),
-              },
-              recordsLoading: false,
-            }));
-          })
-          .catch(() => {
-            if (selectedCityRef.current !== cityName) return;
-            setHistoryState((current) => ({
-              ...current,
-              recordsLoading: false,
-            }));
-          });
-      }
-    } catch (error) {
-      setHistoryState((current) => ({
-        ...current,
-        error: String(error),
-        loading: false,
-        recordsLoading: false,
-      }));
-    }
-  };
-
   const closeFutureModal = () => {
     modalOpenSeqRef.current += 1;
     setFutureModalDate(null);
     setForecastModalMode(null);
   };
 
-  const closeHistory = () =>
-    setHistoryState((current) => ({ ...current, isOpen: false }));
 
   const openFutureModal = async (dateStr: string, forceRefresh = false) => {
     mapStopMotionRef.current();
@@ -1679,7 +1522,6 @@ export function DashboardStoreProvider({
       citySummariesByName,
       clearCityFocus,
       closeFutureModal,
-      closeHistory,
       closePanel: () => {
         setIsPanelOpen(false);
       },
@@ -1688,14 +1530,12 @@ export function DashboardStoreProvider({
       focusCity,
       forecastModalMode,
       futureModalDate,
-      historyState,
       isPanelOpen,
       loadCities,
       preloadCityFromRow,
       loadingState,
       proAccess,
       openFutureModal,
-      openHistory,
       openTodayModal,
       registerMapStopMotion: (stopMotion: () => void) => {
         mapStopMotionRef.current = stopMotion;
@@ -1716,7 +1556,6 @@ export function DashboardStoreProvider({
       citySummariesByName,
       forecastModalMode,
       futureModalDate,
-      historyState,
       isPanelOpen,
       loadingState,
       proAccess,
@@ -1784,14 +1623,6 @@ export function DashboardStoreProvider({
       setForecastDate,
     ],
   );
-  const dashboardHistoryValue = useMemo<DashboardHistoryContextValue>(
-    () => ({
-      closeHistory,
-      historyState,
-      openHistory,
-    }),
-    [closeHistory, historyState, openHistory],
-  );
   const dashboardProAccessValue = useMemo<DashboardProAccessContextValue>(
     () => ({
       proAccess,
@@ -1805,13 +1636,11 @@ export function DashboardStoreProvider({
       <DashboardActionsContext.Provider value={dashboardActionsValue}>
         <DashboardProAccessContext.Provider value={dashboardProAccessValue}>
           <DashboardModalContext.Provider value={dashboardModalValue}>
-            <DashboardHistoryContext.Provider value={dashboardHistoryValue}>
-              <DashboardSelectionContext.Provider value={dashboardSelectionValue}>
-                <CityDetailsContext.Provider value={cityDetailsValue}>
-                  {children}
-                </CityDetailsContext.Provider>
-              </DashboardSelectionContext.Provider>
-            </DashboardHistoryContext.Provider>
+            <DashboardSelectionContext.Provider value={dashboardSelectionValue}>
+              <CityDetailsContext.Provider value={cityDetailsValue}>
+                {children}
+              </CityDetailsContext.Provider>
+            </DashboardSelectionContext.Provider>
           </DashboardModalContext.Provider>
         </DashboardProAccessContext.Provider>
       </DashboardActionsContext.Provider>
@@ -1859,16 +1688,6 @@ export function useDashboardModal() {
   return context;
 }
 
-export function useDashboardHistory() {
-  const context = useContext(DashboardHistoryContext);
-  if (!context) {
-    throw new Error(
-      "useDashboardHistory must be used within DashboardStoreProvider",
-    );
-  }
-  return context;
-}
-
 export function useProAccess() {
   const context = useContext(DashboardProAccessContext);
   if (!context) {
@@ -1899,20 +1718,3 @@ export function useCityData(name?: string | null) {
       selection.selectedCity === key,
   };
 }
-
-export function useHistoryData(name?: string | null) {
-  const history = useDashboardHistory();
-  const selection = useDashboardSelection();
-  const key = name || selection.selectedCity;
-  return {
-    data: key
-      ? history.historyState.dataByCity[key] || ([] as HistoryPoint[])
-      : [],
-    error: history.historyState.error,
-    isLoading: history.historyState.loading,
-    isOpen: history.historyState.isOpen,
-    isRecordsLoading: history.historyState.recordsLoading,
-    meta: key ? history.historyState.metaByCity[key] || null : null,
-  };
-}
-

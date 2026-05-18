@@ -29,14 +29,6 @@ from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.database.runtime_state import IntradayPathSnapshotRepository
-from web.services.groq_commentary import (
-    build_groq_commentary_context as _groq_context_builder,
-    clean_commentary_text as _groq_clean_text,
-    groq_commentary_enabled as _groq_enabled,
-    maybe_enrich_dynamic_commentary_with_groq as _groq_enrich,
-    normalize_groq_commentary_payload as _groq_normalize_payload,
-    request_groq_commentary as _groq_request,
-)
 from web.services.city_payloads import (
     build_city_detail_payload as _city_payload_detail,
     build_city_market_scan_payload as _city_payload_market_scan,
@@ -475,31 +467,11 @@ def _set_cached_summary(city: str, payload: Dict[str, Any]) -> None:
         _SUMMARY_CACHE[city] = {"t": _time.time(), "d": dict(payload)}
 
 
-def _groq_commentary_enabled() -> bool:
-    return _groq_enabled()
-
-
-def _clean_commentary_text(value: Any, *, limit: int = 240) -> str:
-    return _groq_clean_text(value, limit=limit)
-
-
-def _build_groq_commentary_context(result: Dict[str, Any]) -> Dict[str, Any]:
-    return _groq_context_builder(result)
-
-
-def _normalize_groq_commentary_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    return _groq_normalize_payload(payload)
-
-
-def _request_groq_commentary(context: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    return _groq_request(context)
-
-
 def _maybe_enrich_dynamic_commentary_with_groq(
-    city: str,
+    _city: str,
     result: Dict[str, Any],
 ) -> Dict[str, Any]:
-    return _groq_enrich(city, result)
+    return result.get("dynamic_commentary") or {"summary": "", "notes": []}
 
 
 

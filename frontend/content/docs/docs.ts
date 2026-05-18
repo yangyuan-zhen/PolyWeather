@@ -22,7 +22,7 @@ export interface DocsPageContent {
 
 export interface DocsPageMeta {
   slug: string;
-  group: "getting-started" | "analysis" | "settlement" | "history";
+  group: "getting-started" | "analysis" | "settlement";
 }
 
 export interface DocsPage extends DocsPageMeta {
@@ -55,7 +55,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "你会在页面上看到什么",
             blocks: [
-              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "专业气象结论条：先给今日主判断、置信度、基准/上修/下修路径和下一观测点。", "城市决策卡：从地图进入城市简报，读取 AI 机场报文解读、最高温中枢、市场温度桶和模型-市场差。", "校准模型概率 / 模型区间与分歧：概率层看当前生产概率引擎输出；EMOS / LGBM 只有在评估通过或 shadow 对照时进入解释层，模型区间用于解释分歧。", "气象证据链 / 失效条件 / 确认条件：解释为什么这么判断，以及什么情况会让判断降级。", "历史对账：查看已结算样本、DEB MAE、单模型表现和新增模型参考。"] },
+              { type: "bullets", items: ["锚点状态：先确认当前机场主站实测、日内已见高点和结算时钟。", "当前节奏：把“此刻应到温度”和“机场实测”放在一张卡里，判断今天跑得快还是慢。", "专业气象结论条：先给今日主判断、置信度、基准/上修/下修路径和下一观测点。", "城市决策卡：从地图进入城市简报，读取 AI 机场报文解读、最高温中枢、市场温度桶和模型-市场差。", "校准模型概率 / 模型区间与分歧：概率层看当前生产概率引擎输出；EMOS / LGBM 只有在评估通过或 shadow 对照时进入解释层，模型区间用于解释分歧。", "气象证据链 / 失效条件 / 确认条件：解释为什么这么判断，以及什么情况会让判断降级。"] },
             ],
           },
           {
@@ -83,7 +83,7 @@ export const DOCS_PAGES: DocsPage[] = [
             id: "core-modules",
             title: "What you see on the site",
             blocks: [
-              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Professional meteorology read: headline, confidence, base/upside/downside path, and next observation point.", "City decision cards: map-launched city briefs with the AI airport read, expected-high center, market bucket, and model-market difference.", "Calibrated model probability / model spread: probability comes from the calibrated engine; spread explains model disagreement.", "Evidence chain / failure modes / confirmation: why the read is valid and what would downgrade it.", "History reconciliation: settled-sample MAE, single-model performance, and the new model reference stack."] },
+              { type: "bullets", items: ["Anchor status: current airport-primary observation, day-high-so-far, and the settlement clock.", "Current pace: compares where the airport should be by now versus the actual observation.", "Professional meteorology read: headline, confidence, base/upside/downside path, and next observation point.", "City decision cards: map-launched city briefs with the AI airport read, expected-high center, market bucket, and model-market difference.", "Calibrated model probability / model spread: probability comes from the calibrated engine; spread explains model disagreement.", "Evidence chain / failure modes / confirmation: why the read is valid and what would downgrade it."] },
             ],
           },
           {
@@ -466,82 +466,6 @@ export const DOCS_PAGES: DocsPage[] = [
     },
   },
   {
-    slug: "history-reconciliation",
-    group: "history",
-    content: {
-      "zh-CN": {
-        title: "历史对账",
-        description: "历史对账用于看已结算样本，不用于把当天未结算的行情硬算进胜率。",
-        sections: [
-          {
-            id: "settled-only",
-            title: "为什么只看已结算样本",
-            blocks: [
-              { type: "paragraph", text: "网页上的历史对账只统计已结算样本。当天还在交易中的市场，不会被提前算进 DEB 命中率或 MAE。这样做的目的，是避免用还没兑现的结果污染历史准确率。" },
-            ],
-          },
-          {
-            id: "rolling-window",
-            title: "近 15 天滚动视图",
-            blocks: [
-              { type: "paragraph", text: "网页默认展示近 15 天滚动视图，方便比较最近这轮模型状态，而不是用过长的旧样本稀释当前表现。" },
-            ],
-          },
-          {
-            id: "peak-minus-12h",
-            title: "峰值前 12 小时 DEB 参考",
-            blocks: [
-              { type: "paragraph", text: "这项指标用来回答一个更具体的问题：在真正出现高温之前 12 小时，DEB 当时大概有多准。它不是额外结算规则，而是一个用来观察模型是否过慢修正的参考视角。" },
-              { type: "callout", tone: "info", title: "近似值说明", text: "当前峰值时间是根据历史快照链路反推的近似时间，不是逐分钟官方复盘。页面会明确标记为“参考 / 近似”。" },
-            ],
-          },
-          {
-            id: "model-reference",
-            title: "新增模型参考",
-            blocks: [
-              { type: "paragraph", text: "历史对账会保留 DEB、最佳单模型和实测最高温对比，同时加入当前模型栈的参考信息。新增模型用于解释当时模型家族分歧，不会 retroactively 改写已经结算的历史真值。" },
-            ],
-          },
-        ],
-      },
-      "en-US": {
-        title: "History Reconciliation",
-        description: "History reconciliation is for settled samples only. It is not meant to leak same-day unsettled outcomes into historical hit-rate or MAE.",
-        sections: [
-          {
-            id: "settled-only",
-            title: "Why only settled samples count",
-            blocks: [
-              { type: "paragraph", text: "The history panel only counts settled samples. Markets still trading on the same day are excluded from DEB hit-rate and MAE so unfinished outcomes do not contaminate the historical record." },
-            ],
-          },
-          {
-            id: "rolling-window",
-            title: "Rolling 15-day view",
-            blocks: [
-              { type: "paragraph", text: "The web dashboard defaults to a rolling 15-day view so the panel reflects current model behavior rather than being overly diluted by older regimes." },
-            ],
-          },
-          {
-            id: "peak-minus-12h",
-            title: "DEB at peak minus 12 hours",
-            blocks: [
-              { type: "paragraph", text: "This field answers a more specific question: how good was DEB roughly 12 hours before the eventual high actually printed? It is not a settlement rule, but a way to judge whether the model corrected too slowly." },
-              { type: "callout", tone: "info", title: "Approximation note", text: "The current peak time is inferred from the snapshot chain and should be treated as an approximate reference rather than a minute-perfect official replay." },
-            ],
-          },
-          {
-            id: "model-reference",
-            title: "New model reference",
-            blocks: [
-              { type: "paragraph", text: "History reconciliation keeps the DEB, best single model, and observed high comparison, while adding the current model-stack reference. New model lines explain family spread at the time; they do not rewrite already settled truth records." },
-            ],
-          },
-        ],
-      },
-    },
-  },
-  {
     slug: "extension",
     group: "getting-started",
     content: {
@@ -557,7 +481,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "link",
                 href: "https://chromewebstore.google.com/detail/mhndjbgjljjfcfkojhmhpfcbconnikne?utm_source=item-share-cb",
                 label: "打开 Chrome Web Store",
-                caption: "安装插件后，可在侧边栏里快速跳回主站的今日日内分析与历史对账。",
+                caption: "安装插件后，可在侧边栏里快速跳回主站的今日日内分析。",
               },
             ],
           },
@@ -597,7 +521,7 @@ export const DOCS_PAGES: DocsPage[] = [
             blocks: [
               {
                 type: "paragraph",
-                text: "插件不承担完整分析体验，也不承载支付链路。复杂结构判断、历史对账和完整交易语境仍以主站为准。",
+                text: "插件不承担完整分析体验，也不承载支付链路。复杂结构判断和完整交易语境仍以主站为准。",
               },
               {
                 type: "callout",
@@ -631,7 +555,7 @@ export const DOCS_PAGES: DocsPage[] = [
                 type: "link",
                 href: "https://chromewebstore.google.com/detail/mhndjbgjljjfcfkojhmhpfcbconnikne?utm_source=item-share-cb",
                 label: "Open Chrome Web Store",
-                caption: "Once installed, the side panel can route users back into the main intraday analysis and history views.",
+                caption: "Once installed, the side panel can route users back into the main intraday analysis.",
               },
             ],
           },

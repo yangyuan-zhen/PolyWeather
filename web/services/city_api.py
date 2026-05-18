@@ -109,24 +109,6 @@ async def get_city_detail_payload(
     return await run_in_threadpool(legacy_routes._analyze, city, force_refresh, False, detail_mode)
 
 
-async def get_city_history_payload(
-    request: Request,
-    name: str,
-    *,
-    include_records: bool = False,
-) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
-    city = legacy_routes._normalize_city_or_404(name)
-    if include_records:
-        return await run_in_threadpool(legacy_routes._build_city_history_payload, city, True)
-    cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "history_preview", city)
-    if cached_entry:
-        if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_HISTORY_PREVIEW_CACHE_TTL_SEC):
-            return await run_in_threadpool(legacy_routes._refresh_city_history_preview_cache, city)
-        return cached_entry.get("payload") or {}
-    return await run_in_threadpool(legacy_routes._refresh_city_history_preview_cache, city)
-
-
 async def get_city_summary_payload(
     _request: Request,
     name: str,

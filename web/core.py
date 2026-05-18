@@ -405,8 +405,7 @@ def _sf(v) -> Optional[float]:
 
 
 def _is_excluded_model_name(model_name: str) -> bool:
-    normalized = str(model_name or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
-    return "meteoblue" in normalized
+    return False
 
 
 def _sqlite_health() -> Dict[str, Any]:
@@ -464,7 +463,6 @@ def _integration_summary() -> Dict[str, Any]:
     weather_cfg = _config.get("weather", {}) if isinstance(_config, dict) else {}
     return {
         "supabase_configured": bool(SUPABASE_ENTITLEMENT.configured),
-        "meteoblue_configured": bool(os.getenv("METEOBLUE_API_KEY")),
         "telegram_bot_configured": bool((_config.get("telegram", {}) or {}).get("bot_token")),
         "walletconnect_configured": bool(os.getenv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID")),
         "weather_sources": {

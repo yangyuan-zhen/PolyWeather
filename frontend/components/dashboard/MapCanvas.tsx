@@ -31,9 +31,7 @@ export function MapCanvas({
     },
     selectedCity: store.selectedCity,
     selectedDetail: store.selectedDetail,
-    suspendMotion:
-      Boolean(store.futureModalDate) ||
-      store.historyState.isOpen,
+    suspendMotion: Boolean(store.futureModalDate),
     isLoadingDetail: store.loadingState.cityDetail,
   });
 

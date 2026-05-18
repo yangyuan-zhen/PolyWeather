@@ -308,16 +308,6 @@ class DBManager:
                 )
             """)
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS city_history_preview_cache (
-                    city TEXT PRIMARY KEY,
-                    payload_json TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    updated_at_ts REAL NOT NULL,
-                    version TEXT,
-                    source_fingerprint TEXT
-                )
-            """)
-            conn.execute("""
                 CREATE TABLE IF NOT EXISTS cache_refresh_locks (
                     cache_key TEXT PRIMARY KEY,
                     locked_until_ts REAL NOT NULL,
@@ -430,8 +420,6 @@ class DBManager:
             return "city_nearby_cache"
         if normalized == "market":
             return "city_market_cache"
-        if normalized == "history_preview":
-            return "city_history_preview_cache"
         return None
 
     def get_city_cache(self, kind: str, city: str) -> Optional[Dict[str, Any]]:

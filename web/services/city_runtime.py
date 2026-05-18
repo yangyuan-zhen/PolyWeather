@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
@@ -13,8 +13,7 @@ from src.database.db_manager import DBManager
 from src.database.runtime_state import (
     DailyRecordRepository,
     STATE_STORAGE_SQLITE,
-    TrainingFeatureRecordRepository,
-    TruthRecordRepository,
+    TruthRecordRepository,  # noqa: F401 - compatibility export for ops/truth-history
     get_state_storage_mode,
 )
 from src.analysis.settlement_rounding import apply_city_settlement
@@ -40,7 +39,7 @@ from web.core import (
     CITY_RISK_PROFILES,  # noqa: F401 - compatibility export for tests and transitional routers
     PAYMENT_CHECKOUT,  # noqa: F401 - compatibility export for tests and transitional routers
     PaymentCheckoutError,  # noqa: F401 - compatibility export for tests and transitional routers
-    SETTLEMENT_SOURCE_LABELS,
+    SETTLEMENT_SOURCE_LABELS,  # noqa: F401 - compatibility export for city list payloads
     SUPABASE_ENTITLEMENT,  # noqa: F401 - compatibility export for tests and transitional routers
     ConfirmPaymentTxRequest,  # noqa: F401 - compatibility export for tests and transitional routers
     CreatePaymentIntentRequest,  # noqa: F401 - compatibility export for tests and transitional routers
@@ -58,7 +57,6 @@ from web.core import (
     _resolve_auth_points,  # noqa: F401 - compatibility export for tests and transitional routers
     _resolve_weekly_profile,  # noqa: F401 - compatibility export for tests and transitional routers
     _sf,
-    _is_excluded_model_name,
 )
 
 router = APIRouter()
@@ -67,8 +65,6 @@ _CACHE_DB = DBManager()
 _DEB_RECENT_LOOKBACK = 7
 _DEB_RECENT_MIN_SAMPLES = 3
 _daily_record_repo = DailyRecordRepository()
-_truth_record_repo = TruthRecordRepository()
-_training_feature_repo = TrainingFeatureRecordRepository()
 
 TRACKABLE_ANALYTICS_EVENTS = {
     "signup_completed",
@@ -100,7 +96,6 @@ DEFAULT_STATUS_CITIES = [
     "paris",
     "madrid",
 ]
-HISTORY_PREVIEW_DAY_LIMIT = 21
 ASIA_CORE_CITIES = [
     "hong kong",
     "taipei",
@@ -150,10 +145,6 @@ CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
-)
-CITY_HISTORY_PREVIEW_CACHE_TTL_SEC = max(
-    60,
-    int(os.getenv("POLYWEATHER_CITY_HISTORY_PREVIEW_CACHE_TTL_SEC", "1800")),
 )
 CACHE_REFRESH_LOCK_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CACHE_REFRESH_LOCK_TTL_SEC", "120")))
 
@@ -328,175 +319,6 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
-def _build_history_model_reference(
-    *,
-    forecasts: dict,
-    actual: object,
-    deb: object,
-) -> dict:
-    """Expose the archived model snapshot as reference evidence, not truth."""
-    actual_value = _sf(actual)
-    deb_value = _sf(deb)
-    entries = []
-    for model_name, model_value in (forecasts or {}).items():
-        if _is_excluded_model_name(str(model_name)):
-            continue
-        value = _sf(model_value)
-        if value is None:
-            continue
-        error = abs(value - actual_value) if actual_value is not None else None
-        entries.append(
-            {
-                "model": str(model_name),
-                "value": round(value, 1),
-                "error": round(error, 1) if error is not None else None,
-                "participates_in_deb": True,
-            }
-        )
-    entries.sort(
-        key=lambda row: (
-            row["error"] is None,
-            row["error"] if row["error"] is not None else 999,
-            row["model"],
-        )
-    )
-    deb_error = abs(deb_value - actual_value) if deb_value is not None and actual_value is not None else None
-    return {
-        "available": bool(entries),
-        "truth_layer": "settlement_actual",
-        "reference_layer": "archived_model_snapshot",
-        "deb": {
-            "value": round(deb_value, 1) if deb_value is not None else None,
-            "error": round(deb_error, 1) if deb_error is not None else None,
-        },
-        "models": entries,
-        "model_count": len(entries),
-    }
-
-
-def _build_city_history_payload(city: str, include_records: bool = False) -> dict:
-    source = str(CITIES.get(city, {}).get("settlement_source") or "metar").strip().lower()
-    truth_rows = _truth_record_repo.load_city(city)
-    feature_rows = _training_feature_repo.load_city(city)
-
-    if not truth_rows and not feature_rows:
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        history_file = os.path.join(project_root, "data", "daily_records.json")
-        data = load_history(history_file)
-        city_data = data.get(city, {}) if isinstance(data.get(city, {}), dict) else {}
-    else:
-        all_dates = sorted(set(truth_rows.keys()) | set(feature_rows.keys()))
-        city_data = {}
-        for day in all_dates:
-            record: dict[str, object] = {}
-            truth = truth_rows.get(day) or {}
-            features = feature_rows.get(day) or {}
-            if truth.get("actual_high") is not None:
-                record["actual_high"] = truth.get("actual_high")
-                record["settlement_source"] = truth.get("settlement_source")
-                record["settlement_station_code"] = truth.get("settlement_station_code")
-                record["settlement_station_label"] = truth.get("settlement_station_label")
-                record["truth_version"] = truth.get("truth_version")
-                record["updated_by"] = truth.get("updated_by")
-                record["truth_updated_at"] = truth.get("truth_updated_at")
-            if isinstance(features, dict):
-                if features.get("deb_prediction") is not None:
-                    record["deb_prediction"] = features.get("deb_prediction")
-                if features.get("mu") is not None:
-                    record["mu"] = features.get("mu")
-                if isinstance(features.get("forecasts"), dict):
-                    record["forecasts"] = features.get("forecasts")
-            city_data[day] = record
-
-    if not city_data:
-        return {
-            "history": [],
-            "mode": "full" if include_records else "preview",
-            "has_more": False,
-            "full_count": 0,
-            "preview_count": 0,
-            "settlement_source": source,
-            "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
-        }
-
-    all_days = sorted(city_data.keys())
-    selected_days = all_days if include_records else all_days[-HISTORY_PREVIEW_DAY_LIMIT:]
-    out = []
-    for day in selected_days:
-        rec = city_data.get(day, {})
-        if not isinstance(rec, dict):
-            rec = {}
-
-        act = rec.get("actual_high")
-        deb = rec.get("deb_prediction")
-        mu = rec.get("mu")
-        snapshots = _load_snapshot_rows_for_day(city, day)
-        peak_ref = _build_peak_minus_12h_reference(
-            actual_high=act,
-            snapshots=snapshots,
-        )
-        forecasts_raw = rec.get("forecasts", {}) or {}
-        forecasts = {}
-        if isinstance(forecasts_raw, dict):
-            for model_name, model_value in forecasts_raw.items():
-                if _is_excluded_model_name(str(model_name)):
-                    continue
-                fv = _sf(model_value)
-                forecasts[str(model_name)] = fv if fv is not None else None
-        forecasts = _merge_missing_history_forecasts_from_snapshots(
-            forecasts,
-            snapshots,
-        )
-        model_reference = _build_history_model_reference(
-            forecasts=forecasts,
-            actual=act,
-            deb=deb,
-        )
-        mgm = forecasts.get("MGM")
-        out.append(
-            {
-                "date": day,
-                "actual": float(act) if act is not None else None,
-                "deb": float(deb) if deb is not None else None,
-                "mu": float(mu) if mu is not None else None,
-                "mgm": float(mgm) if mgm is not None else None,
-                "forecasts": forecasts,
-                "model_reference": model_reference,
-                "settlement_source": rec.get("settlement_source"),
-                "settlement_station_code": rec.get("settlement_station_code"),
-                "settlement_station_label": rec.get("settlement_station_label"),
-                "truth_version": rec.get("truth_version"),
-                "updated_by": rec.get("updated_by"),
-                "truth_updated_at": rec.get("truth_updated_at"),
-                "actual_peak_time": peak_ref.get("actual_peak_time"),
-                "deb_at_peak_minus_12h": peak_ref.get("deb_at_peak_minus_12h"),
-                "deb_at_peak_minus_12h_time": peak_ref.get("deb_at_peak_minus_12h_time"),
-                "deb_at_peak_minus_12h_error": peak_ref.get("deb_at_peak_minus_12h_error"),
-            }
-        )
-
-    return {
-        "history": out,
-        "mode": "full" if include_records else "preview",
-        "has_more": len(all_days) > len(selected_days),
-        "full_count": len(all_days),
-        "preview_count": len(out),
-        "settlement_source": source,
-        "settlement_source_label": SETTLEMENT_SOURCE_LABELS.get(source, source.upper()),
-    }
-
-
-def _refresh_city_history_preview_cache(city: str) -> dict:
-    payload = _build_city_history_payload(city, include_records=False)
-    _CACHE_DB.set_city_cache(
-        "history_preview",
-        city,
-        payload,
-        version="v1",
-        source_fingerprint=f"{city}:history_preview",
-    )
-    return payload
-
 
 def _schedule_cache_refresh(
     background_tasks: BackgroundTasks,
@@ -507,7 +329,7 @@ def _schedule_cache_refresh(
 ) -> bool:
     normalized_kind = str(kind or "").strip().lower()
     normalized_city = str(city or "").strip().lower()
-    if normalized_kind not in {"summary", "panel", "nearby", "market", "history_preview"} or not normalized_city:
+    if normalized_kind not in {"summary", "panel", "nearby", "market"} or not normalized_city:
         return False
     cache_key = f"city:{normalized_kind}:{normalized_city}"
     owner = _CACHE_DB.acquire_cache_refresh_lock(
@@ -525,8 +347,6 @@ def _schedule_cache_refresh(
                 _refresh_city_panel_cache(normalized_city, force_refresh=force_refresh)
             elif normalized_kind == "nearby":
                 _refresh_city_nearby_cache(normalized_city, force_refresh=force_refresh)
-            elif normalized_kind == "history_preview":
-                _refresh_city_history_preview_cache(normalized_city)
             else:
                 _refresh_city_market_cache(normalized_city, force_refresh=force_refresh)
         except Exception as exc:
@@ -543,108 +363,6 @@ def _schedule_cache_refresh(
     background_tasks.add_task(_runner)
     return True
 
-
-def _parse_snapshot_dt(value: object) -> Optional[datetime]:
-    raw = str(value or "").strip()
-    if not raw:
-        return None
-    try:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-
-def _build_peak_minus_12h_reference(
-    *,
-    actual_high: object,
-    snapshots: list[dict],
-) -> dict:
-    actual = _sf(actual_high)
-    if actual is None or not snapshots:
-        return {}
-
-    tolerance = 0.11
-    normalized = []
-    for row in snapshots:
-        if not isinstance(row, dict):
-            continue
-        dt = _parse_snapshot_dt(row.get("timestamp"))
-        if dt is None:
-            continue
-        normalized.append(
-            {
-                "dt": dt,
-                "max_so_far": _sf(row.get("max_so_far")),
-                "deb_prediction": _sf(row.get("deb_prediction")),
-            }
-        )
-    if not normalized:
-        return {}
-
-    peak_row = next(
-        (
-            row
-            for row in normalized
-            if row["max_so_far"] is not None and row["max_so_far"] >= actual - tolerance
-        ),
-        None,
-    )
-    if peak_row is None:
-        return {}
-
-    peak_dt = peak_row["dt"]
-    anchor_dt = peak_dt - timedelta(hours=12)
-    anchor_row = None
-    for row in normalized:
-        if row["dt"] <= anchor_dt and row["deb_prediction"] is not None:
-            anchor_row = row
-        elif row["dt"] > anchor_dt:
-            break
-
-    peak_time = peak_dt.strftime("%H:%M")
-    result = {
-        "actual_peak_time": peak_time,
-    }
-    if anchor_row and anchor_row["deb_prediction"] is not None:
-        deb_value = float(anchor_row["deb_prediction"])
-        result.update(
-            {
-                "deb_at_peak_minus_12h": deb_value,
-                "deb_at_peak_minus_12h_time": anchor_row["dt"].strftime("%H:%M"),
-                "deb_at_peak_minus_12h_error": round(deb_value - actual, 1),
-            }
-        )
-    return result
-
-
-def _merge_missing_history_forecasts_from_snapshots(
-    forecasts: dict,
-    snapshots: list[dict],
-) -> dict:
-    merged = dict(forecasts or {})
-    if not snapshots:
-        return merged
-
-    fallback_values: dict[str, Optional[float]] = {}
-    for row in snapshots:
-        if not isinstance(row, dict):
-            continue
-        multi_model = row.get("multi_model") or {}
-        if not isinstance(multi_model, dict):
-            continue
-        for model_name, model_value in multi_model.items():
-            model_key = str(model_name or "").strip()
-            if not model_key or _is_excluded_model_name(model_key):
-                continue
-            parsed = _sf(model_value)
-            if parsed is not None:
-                fallback_values[model_key] = parsed
-
-    for model_name, model_value in fallback_values.items():
-        existing = _sf(merged.get(model_name))
-        if existing is None:
-            merged[model_name] = model_value
-    return merged
 
 
 def _normalize_city_or_404(name: str) -> str:
@@ -798,10 +516,6 @@ def _build_recent_deb_performance_index(
             "last_date": settled[0][0] if settled else None,
         }
     return index
-
-
-def _load_snapshot_rows_for_day(_city: str, _day: str) -> list:
-    return []
 
 __all__ = [name for name in globals() if not (name.startswith('__') and name.endswith('__'))]
 

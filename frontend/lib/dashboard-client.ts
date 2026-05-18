@@ -4,7 +4,6 @@ import {
   CityDetail,
   CityListItem,
   CitySummary,
-  HistoryPayload,
   MarketScan,
   ScanTerminalFilters,
   ScanTerminalResponse,
@@ -20,7 +19,6 @@ const CACHE_TTL_MS = 30 * 60 * 1000;
 const SCAN_TERMINAL_CLIENT_TIMEOUT_MS = 35_000;
 const CITY_DETAIL_CLIENT_TIMEOUT_MS = 35_000;
 const pendingCityDetailRequests = new Map<string, Promise<CityDetail>>();
-const pendingHistoryRequests = new Map<string, Promise<HistoryPayload>>();
 const pendingCitySummaryRequests = new Map<string, Promise<CitySummary>>();
 const pendingCityMarketScanRequests = new Map<
   string,
@@ -452,43 +450,6 @@ export const dashboardClient = {
     return request;
   },
 
-  async getHistory(cityName: string, options?: { includeRecords?: boolean }) {
-    const includeRecords = options?.includeRecords === true;
-    const requestKey = `${normalizeCityName(cityName)}::${
-      includeRecords ? "full" : "preview"
-    }`;
-    const existing = pendingHistoryRequests.get(requestKey);
-    if (existing) {
-      return existing;
-    }
-
-    const params = new URLSearchParams();
-    if (includeRecords) {
-      params.set("include_records", "true");
-    }
-
-    const request = fetchJson<HistoryPayload>(
-      `/api/history/${normalizeCityName(cityName)}${
-        params.size ? `?${params.toString()}` : ""
-      }`,
-    )
-      .then((data) => ({
-        ...data,
-        full_count: Number(data.full_count || 0),
-        has_more: data.has_more === true,
-        history: Array.isArray(data.history) ? data.history : [],
-        mode: (data.mode === "full" ? "full" : "preview") as
-          | "full"
-          | "preview",
-        preview_count: Number(data.preview_count || 0),
-      }))
-      .finally(() => {
-        pendingHistoryRequests.delete(requestKey);
-      });
-
-    pendingHistoryRequests.set(requestKey, request);
-    return request;
-  },
 
   isCityDetailFresh(meta?: CityCacheMeta | null) {
     return isFresh(meta);

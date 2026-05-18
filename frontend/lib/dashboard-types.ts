@@ -976,78 +976,13 @@ export interface AmosData {
   observation_time_local?: string | null;
 }
 
-export interface HistoryPoint {
-  date: string;
-  actual: number | null;
-  deb: number | null;
-  mu?: number | null;
-  mgm?: number | null;
-  forecasts?: Record<string, number | null>;
-  model_reference?: {
-    available?: boolean;
-    truth_layer?: string | null;
-    reference_layer?: string | null;
-    deb?: {
-      value?: number | null;
-      error?: number | null;
-    };
-    models?: Array<{
-      model?: string | null;
-      value?: number | null;
-      error?: number | null;
-      participates_in_deb?: boolean;
-    }>;
-    model_count?: number | null;
-  };
-  settlement_source?: string | null;
-  settlement_station_code?: string | null;
-  settlement_station_label?: string | null;
-  truth_version?: string | null;
-  updated_by?: string | null;
-  truth_updated_at?: number | null;
-  actual_peak_time?: string | null;
-  deb_at_peak_minus_12h?: number | null;
-  deb_at_peak_minus_12h_time?: string | null;
-  deb_at_peak_minus_12h_error?: number | null;
-}
-
-export interface HistoryPayloadMeta {
-  mode: "preview" | "full";
-  hasMore: boolean;
-  fullCount: number;
-  previewCount: number;
-  settlementSource?: string | null;
-  settlementSourceLabel?: string | null;
-}
-
-export interface HistoryPayload {
-  history: HistoryPoint[];
-  has_more?: boolean;
-  full_count?: number;
-  preview_count?: number;
-  mode?: "preview" | "full";
-  settlement_source?: string | null;
-  settlement_source_label?: string | null;
-}
 
 export interface LoadingState {
   cities: boolean;
   cityDetail: boolean;
-  refresh: boolean;
-  history: boolean;
-  marketScan?: boolean;
-  futureDeep?: boolean;
-  historyRecords?: boolean;
-}
+  refresh: boolean;  marketScan?: boolean;
+  futureDeep?: boolean;}
 
-export interface HistoryState {
-  isOpen: boolean;
-  loading: boolean;
-  recordsLoading: boolean;
-  error: string | null;
-  dataByCity: Record<string, HistoryPoint[]>;
-  metaByCity: Record<string, HistoryPayloadMeta>;
-}
 
 export interface ProAccessState {
   loading: boolean;
@@ -1073,6 +1008,5 @@ export interface DashboardState {
   selectedForecastDate: string | null;
   forecastModalMode: ForecastModalMode | null;
   loadingState: LoadingState;
-  historyState: HistoryState;
   proAccess: ProAccessState;
 }

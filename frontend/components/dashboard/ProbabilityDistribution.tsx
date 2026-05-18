@@ -343,7 +343,6 @@ function getRoundedModelVoteDistribution(
 
   Object.entries(view.models || {}).forEach(([name, rawValue]) => {
     const normalized = normalizeModelNameForVote(name);
-    if (normalized === "lgbm" || normalized.includes("meteoblue")) return;
     const value = Number(rawValue);
     if (!Number.isFinite(value)) return;
     const family = getModelVoteFamily(name);

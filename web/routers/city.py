@@ -7,7 +7,6 @@ from fastapi import APIRouter, BackgroundTasks, Request
 from web.services.city_api import (
     get_city_detail_aggregate_payload,
     get_city_detail_payload,
-    get_city_history_payload,
     get_city_market_scan_payload,
     get_city_summary_payload,
     list_cities_payload,
@@ -34,20 +33,6 @@ async def city_detail(
         name,
         force_refresh=force_refresh,
         depth=depth,
-    )
-
-
-@router.get("/api/history/{name}")
-async def city_history(
-    request: Request,
-    background_tasks: BackgroundTasks,
-    name: str,
-    include_records: bool = False,
-):
-    return await get_city_history_payload(
-        request,
-        name,
-        include_records=include_records,
     )
 
 

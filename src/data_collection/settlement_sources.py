@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import math
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -22,8 +23,8 @@ _official_intraday_repo = OfficialIntradayObservationRepository()
 
 class SettlementSourceMixin:
     IMGW_METEO_API_BASE = "https://meteo.imgw.pl/api/v1"
-    IMGW_METEO_API_TOKEN = "p4DXKjsYadfBV21TYrDk"
-    NOAA_WRH_MESO_TOKEN = "7c76618b66c74aee913bdbae4b448bdd"
+    IMGW_METEO_API_TOKEN = os.environ.get("IMGW_METEO_API_TOKEN", "")
+    NOAA_WRH_MESO_TOKEN = os.environ.get("NOAA_WRH_MESO_TOKEN", "")
     NOAA_WRH_TIMESERIES_REFERER_BASE = "https://www.weather.gov/wrh/timeseries?site="
 
     def _get_settlement_cache(self, key: str) -> Optional[Dict[str, Any]]:

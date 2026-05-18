@@ -61,8 +61,7 @@ def _sf(value):
 
 
 def _is_excluded_model_name(model_name: str) -> bool:
-    normalized = str(model_name or "").strip().lower().replace(" ", "").replace("_", "").replace("-", "")
-    return "meteoblue" in normalized
+    return False
 
 
 def _normalize_deb_model_name(model_name: str) -> str:

@@ -35,9 +35,7 @@ def get_system_cache_status(request: Request, cities: Optional[str] = None) -> D
         "summary": legacy_routes.CITY_SUMMARY_CACHE_TTL_SEC,
         "panel": legacy_routes.CITY_PANEL_CACHE_TTL_SEC,
         "nearby": legacy_routes.CITY_NEARBY_CACHE_TTL_SEC,
-        "market": legacy_routes.CITY_MARKET_CACHE_TTL_SEC,
-        "history_preview": legacy_routes.CITY_HISTORY_PREVIEW_CACHE_TTL_SEC,
-    }
+        "market": legacy_routes.CITY_MARKET_CACHE_TTL_SEC,    }
     items = []
     for city in selected:
         row = {"city": city}

@@ -437,7 +437,9 @@ def get_ops_logs(
 
 def get_ops_health_check(request: Request) -> dict[str, Any]:
     _require_ops(request)
-    import os, requests as _r, time as _time
+    import os
+    import requests as _r
+    import time as _time
 
     results: dict[str, dict] = {}
     timeout = 3
