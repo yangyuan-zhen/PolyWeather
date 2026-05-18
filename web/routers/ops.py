@@ -4,14 +4,19 @@ from fastapi import APIRouter, Request
 
 from web.core import GrantPointsRequest
 from web.services.ops_api import (
+    extend_ops_subscription,
     get_ops_analytics_funnel,
+    get_ops_config,
+    get_ops_logs,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
     grant_ops_points,
+    grant_ops_subscription,
     list_ops_memberships,
     list_ops_payment_incidents,
     resolve_ops_payment_incident,
     search_ops_users,
+    update_ops_config,
 )
 
 router = APIRouter(tags=["ops"])
@@ -77,3 +82,57 @@ async def ops_truth_history(
         date_to=date_to,
         limit=limit,
     )
+
+
+# ── Config ──────────────────────────────────────────────────────────
+
+@router.get("/api/ops/config")
+async def ops_config(request: Request):
+    return get_ops_config(request)
+
+
+@router.put("/api/ops/config")
+async def ops_update_config(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8"))
+    key = str(body.get("key") or "").strip()
+    value = str(body.get("value") or "")
+    if not key:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="key is required")
+    return update_ops_config(request, key, value)
+
+
+# ── Subscriptions ───────────────────────────────────────────────────
+
+@router.post("/api/ops/subscriptions/grant")
+async def ops_subscription_grant(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8"))
+    email = str(body.get("email") or "").strip()
+    plan_code = str(body.get("plan_code") or "pro_monthly").strip()
+    days = int(body.get("days") or 30)
+    return grant_ops_subscription(request, email=email, plan_code=plan_code, days=days)
+
+
+@router.post("/api/ops/subscriptions/extend")
+async def ops_subscription_extend(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8"))
+    email = str(body.get("email") or "").strip()
+    days = int(body.get("additional_days") or 30)
+    return extend_ops_subscription(request, email=email, additional_days=days)
+
+
+# ── Logs ────────────────────────────────────────────────────────────
+
+@router.get("/api/ops/logs")
+async def ops_logs(
+    request: Request,
+    level: str = "",
+    lines: int = 100,
+):
+    return get_ops_logs(request, level=level, lines=lines)

@@ -226,3 +226,206 @@ def get_ops_truth_history(
         },
         "filtered_count": filtered_count,
     }
+
+
+# ── Config ──────────────────────────────────────────────────────────
+
+_EDITABLE_CONFIG_KEYS: dict[str, str] = {
+    "POLYWEATHER_AUTH_REQUIRED": "是否强制要求 Supabase 登录访问 API",
+    "POLYWEATHER_PAYMENT_ENABLED": "是否启用支付功能",
+    "POLYWEATHER_PAYMENT_POINTS_ENABLED": "是否启用积分抵扣",
+    "POLYWEATHER_TELEGRAM_ALERT_PUSH_ENABLED": "是否启用 Telegram 告警推送",
+    "POLYWEATHER_GROUP_MEMBER_PRICE_USDC": "群成员月费 (USDC)",
+    "POLYWEATHER_PUBLIC_PRICE_USDC": "公开月费 (USDC)",
+    "POLYWEATHER_PAYMENT_POINTS_PER_USDC": "积分兑换汇率 (积分/USDC)",
+    "POLYWEATHER_PAYMENT_POINTS_MAX_DISCOUNT_USDC": "积分最高抵扣金额 (USDC)",
+}
+
+
+def get_ops_config(request: Request) -> dict[str, Any]:
+    _require_ops(request)
+    import os
+    configs: list[dict[str, str]] = []
+    for key, desc in _EDITABLE_CONFIG_KEYS.items():
+        configs.append({
+            "key": key,
+            "value": os.getenv(key) or "",
+            "description": desc,
+        })
+    return {"configs": configs}
+
+
+def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
+    _require_ops(request)
+    import os
+    if key not in _EDITABLE_CONFIG_KEYS:
+        raise HTTPException(status_code=400, detail=f"config key '{key}' is not editable")
+    os.environ[key] = str(value)
+    return {"key": key, "value": value, "ok": True}
+
+
+# ── Subscriptions ───────────────────────────────────────────────────
+
+def grant_ops_subscription(
+    request: Request,
+    email: str,
+    plan_code: str = "pro_monthly",
+    days: int = 30,
+) -> dict[str, Any]:
+    _require_ops(request)
+    import os
+    from datetime import datetime, timedelta
+    import requests as _requests
+
+    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    allowed_plans = {"pro_monthly", "pro_quarterly", "pro_yearly"}
+    if plan_code not in allowed_plans:
+        raise HTTPException(status_code=400, detail=f"invalid plan_code, allowed: {allowed_plans}")
+
+    safe_days = max(1, min(365, int(days or 30)))
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+    # Look up user by email
+    user_resp = _requests.get(
+        f"{supabase_url}/auth/v1/admin/users",
+        headers=headers,
+        params={"filter": f"email.eq.{normalized_email}"},
+        timeout=10,
+    )
+    users = user_resp.json().get("users", []) if user_resp.ok else []
+    user_id = users[0].get("id") if users else None
+    if not user_id:
+        raise HTTPException(status_code=404, detail=f"user not found: {normalized_email}")
+
+    now = datetime.utcnow()
+    starts_at = now.isoformat() + "Z"
+    expires_at = (now + timedelta(days=safe_days)).isoformat() + "Z"
+
+    payload = {
+        "user_id": user_id,
+        "email": normalized_email,
+        "plan_code": plan_code,
+        "starts_at": starts_at,
+        "expires_at": expires_at,
+        "source": "ops_manual_grant",
+        "created_at": now.isoformat() + "Z",
+    }
+
+    resp = _requests.post(
+        f"{supabase_url}/rest/v1/subscriptions",
+        headers=headers,
+        json=payload,
+        timeout=10,
+    )
+    if resp.ok:
+        return {"ok": True, "user_id": user_id, "plan_code": plan_code, "days": safe_days, "expires_at": expires_at}
+    raise HTTPException(status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}")
+
+
+def extend_ops_subscription(
+    request: Request,
+    email: str,
+    additional_days: int = 30,
+) -> dict[str, Any]:
+    _require_ops(request)
+    import os
+    from datetime import datetime, timedelta
+    import requests as _requests
+
+    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    safe_days = max(1, min(365, int(additional_days or 30)))
+    normalized_email = str(email or "").strip().lower()
+    if not normalized_email:
+        raise HTTPException(status_code=400, detail="email is required")
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+        "Content-Type": "application/json",
+        "Prefer": "return=representation",
+    }
+
+    # Find latest active subscription
+    subs_resp = _requests.get(
+        f"{supabase_url}/rest/v1/subscriptions",
+        headers=headers,
+        params={
+            "select": "*",
+            "email": f"eq.{normalized_email}",
+            "order": "expires_at.desc",
+            "limit": "1",
+        },
+        timeout=10,
+    )
+    subs = subs_resp.json() if subs_resp.ok else []
+    if not subs:
+        raise HTTPException(status_code=404, detail=f"no subscription found for {normalized_email}")
+
+    sub = subs[0]
+    current_expiry = sub.get("expires_at", "")
+    try:
+        dt = datetime.fromisoformat(current_expiry.replace("Z", "+00:00"))
+        new_expiry = (dt + timedelta(days=safe_days)).isoformat()
+    except Exception:
+        new_expiry = (datetime.utcnow() + timedelta(days=safe_days)).isoformat() + "Z"
+
+    patch_resp = _requests.patch(
+        f"{supabase_url}/rest/v1/subscriptions?id=eq.{sub['id']}",
+        headers=headers,
+        json={"expires_at": new_expiry},
+        timeout=10,
+    )
+    if patch_resp.ok:
+        return {"ok": True, "email": normalized_email, "additional_days": safe_days, "new_expires_at": new_expiry}
+    raise HTTPException(status_code=500, detail=f"Supabase update failed: {patch_resp.text[:200]}")
+
+
+# ── Logs ────────────────────────────────────────────────────────────
+
+def get_ops_logs(
+    request: Request,
+    level: str = "",
+    lines: int = 100,
+) -> dict[str, Any]:
+    _require_ops(request)
+    import subprocess
+    safe_lines = max(10, min(1000, int(lines or 100)))
+    try:
+        # Read from Docker logs
+        result = subprocess.run(
+            ["docker", "logs", "--tail", str(safe_lines), "polyweather_bot"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        log_text = result.stdout or result.stderr or ""
+    except Exception:
+        log_text = ""
+
+    log_lines = log_text.strip().split("\n") if log_text.strip() else []
+
+    if level:
+        level_upper = level.upper()
+        log_lines = [line for line in log_lines if level_upper in line.upper()]
+
+    return {
+        "lines": log_lines[-safe_lines:],
+        "total": len(log_lines),
+    }
