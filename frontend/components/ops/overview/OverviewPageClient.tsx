@@ -92,7 +92,7 @@ export function OverviewPageClient() {
     { name: "命中", value: cacheAnalysis.cache_hits ?? 0, color: "#22c55e" },
     { name: "未命中", value: cacheAnalysis.cache_misses ?? 0, color: "#f59e0b" },
     { name: "强制刷新", value: cacheAnalysis.force_refresh_requests ?? 0, color: "#3b82f6" },
-  ].filter((d) => d.value > 0) : [];
+  ] : [];
 
   // Membership pie
   const memberPie = [
