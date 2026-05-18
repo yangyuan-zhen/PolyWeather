@@ -67,12 +67,13 @@ async def get_city_detail_payload(
     force_refresh: bool = False,
     depth: str = "panel",
 ) -> Dict[str, Any]:
-    legacy_routes._assert_entitlement(request)
     city = legacy_routes._normalize_city_or_404(name)
     normalized_depth = str(depth or "panel").strip().lower()
     if normalized_depth == "full":
+        legacy_routes._assert_entitlement(request)
         detail_mode = "full"
     elif normalized_depth == "market":
+        legacy_routes._assert_entitlement(request)
         detail_mode = "market"
     elif normalized_depth == "nearby":
         detail_mode = "nearby"
