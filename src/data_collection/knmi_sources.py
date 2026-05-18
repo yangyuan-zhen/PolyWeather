@@ -20,7 +20,7 @@ KNMI_VERSION = "1.0"
 KNMI_API_BASE = "https://api.dataplatform.knmi.nl/open-data/v1"
 KNMI_STATION = {
     "amsterdam": {
-        "station": "240",
+        "station": "06240",
         "icao": "EHAM",
         "label": "Schiphol 10min (KNMI)",
     },
@@ -117,20 +117,22 @@ class KnmiSourceMixin:
             try:
                 stn = meta["station"]
                 # Find station index
-                station_ids = list(nc.variables.get("station_id", [])[:])
-                if not station_ids:
-                    station_codes = []
-                    for s in nc.variables.get("station", []):
-                        try:
-                            station_codes.append(str(int(s)))
-                        except Exception:
-                            station_codes.append("")
-                    station_ids = station_codes
+                station_var = nc.variables.get("station_id") or nc.variables.get("station")
+                station_ids = []
+                for s in (station_var[:] if station_var is not None else []):
+                    try:
+                        val = str(int(s))
+                    except Exception:
+                        val = str(s).strip()
+                    station_ids.append(val)
 
                 try:
                     idx = station_ids.index(stn)
                 except ValueError:
-                    idx = station_ids.index(int(stn)) if stn.isdigit() else -1
+                    try:
+                        idx = station_ids.index(str(int(stn)))
+                    except (ValueError, TypeError):
+                        idx = -1
 
                 if idx < 0 or idx >= len(station_ids):
                     logger.warning("KNMI station {} not found in file", stn)
