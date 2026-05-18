@@ -89,12 +89,15 @@ def verify_telegram_login_payload(
 class TelegramGroupPricing:
     def __init__(self) -> None:
         self.bot_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
-        self.group_chat_ids = parse_telegram_chat_ids(
+        dedicated_group_chat_ids = parse_telegram_chat_ids(
             os.getenv("POLYWEATHER_TELEGRAM_GROUP_ID"),
             os.getenv("POLYWEATHER_TELEGRAM_GROUP_IDS"),
+        )
+        fallback_group_chat_ids = parse_telegram_chat_ids(
             os.getenv("TELEGRAM_CHAT_IDS"),
             os.getenv("TELEGRAM_CHAT_ID"),
         )
+        self.group_chat_ids = dedicated_group_chat_ids or fallback_group_chat_ids
         self.member_price = _decimal_env("POLYWEATHER_GROUP_MEMBER_PRICE_USDC", "5")
         self.public_price = _decimal_env("POLYWEATHER_PUBLIC_PRICE_USDC", "10")
         self.timeout_sec = max(

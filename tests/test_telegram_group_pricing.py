@@ -104,6 +104,16 @@ def test_group_pricing_treats_left_status_as_public_price(monkeypatch):
     assert result["telegram_status"] == "left"
 
 
+def test_dedicated_group_id_overrides_legacy_chat_ids(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "bot-token")
+    monkeypatch.setenv("POLYWEATHER_TELEGRAM_GROUP_ID", "-100internal")
+    monkeypatch.setenv("TELEGRAM_CHAT_IDS", "-100old")
+
+    pricing = TelegramGroupPricing()
+
+    assert pricing.group_chat_ids == ["-100internal"]
+
+
 def test_payment_plan_uses_linked_telegram_group_price(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
