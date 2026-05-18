@@ -4,9 +4,7 @@ loguru
 pyTelegramBotAPI
 python-dotenv
 netCDF4
-pytz
 numpy
-lightgbm
 web3
 fastapi
 uvicorn
