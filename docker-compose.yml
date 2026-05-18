@@ -32,7 +32,7 @@ services:
       - "127.0.0.1:8000:8000"
     user: "${UID:-1000}:${GID:-1000}"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/healthz')"]
       interval: 30s
       timeout: 5s
       retries: 3
