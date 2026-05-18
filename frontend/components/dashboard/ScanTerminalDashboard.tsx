@@ -341,23 +341,6 @@ function ScanTerminalScreen() {
         />
       );
     }
-    if (!isPro) {
-      return (
-        <div className="scan-table-shell empty">
-          <div className="scan-empty-state">
-            <div className="scan-empty-title">
-              {isEn ? "Scan is available on Pro" : "扫描功能需 Pro 权限"}
-            </div>
-            <div className="scan-empty-copy">
-              {isEn
-                ? "Distribution view and city briefing remain available."
-                : "分布视图和右侧城市简报仍可查看。"}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
     // Keep MapCanvas always mounted — hiding with CSS avoids Leaflet
     // reinitialization that causes a white background on tab switches.
     // The analysis view overlays on top when active.
