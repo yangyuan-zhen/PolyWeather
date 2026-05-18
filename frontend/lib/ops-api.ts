@@ -19,8 +19,34 @@ export const opsApi = {
   paymentRuntime() {
     return opsFetch<Record<string, unknown>>("/api/payments/runtime");
   },
-  funnel(days = 30) {
-    return opsFetch<Record<string, unknown>>(`/api/ops/analytics/funnel?days=${days}`);
+  async funnel(days = 30) {
+    const raw = await opsFetch<{
+      events?: Record<string, { total?: number; unique_users?: number }>;
+      rates?: Record<string, number>;
+      window_days?: number;
+    }>(`/api/ops/analytics/funnel?days=${days}`);
+    const stepOrder = ["signup_completed", "dashboard_active", "paywall_feature_clicked", "paywall_viewed", "checkout_started", "checkout_succeeded"];
+    const stepLabels: Record<string, string> = {
+      signup_completed: "注册",
+      dashboard_active: "活跃",
+      paywall_feature_clicked: "点击付费",
+      paywall_viewed: "看到入口",
+      checkout_started: "发起支付",
+      checkout_succeeded: "支付成功",
+    };
+    const steps = stepOrder.map((key, i) => {
+      const evt = raw?.events?.[key];
+      const count = evt?.total ?? 0;
+      let pct_of_prev: number | undefined;
+      if (i > 0) {
+        const prevCount = raw?.events?.[stepOrder[i - 1]]?.total ?? 0;
+        pct_of_prev = prevCount > 0 ? Math.round((count / prevCount) * 100) : 0;
+      } else {
+        pct_of_prev = 100;
+      }
+      return { label: stepLabels[key] ?? key, count, pct_of_prev };
+    });
+    return { steps, rates: raw?.rates, window_days: raw?.window_days };
   },
   users(q: string, limit = 20) {
     return opsFetch<Record<string, unknown>>(`/api/ops/users?q=${encodeURIComponent(q)}&limit=${limit}`);

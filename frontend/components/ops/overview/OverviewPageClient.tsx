@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { opsApi } from "@/lib/ops-api";
 import Link from "next/link";
-import type { SystemStatusPayload, MembershipsPayload, FunnelPayload, MembershipEntry } from "@/types/ops";
+import type { SystemStatusPayload, MembershipsPayload, MembershipEntry } from "@/types/ops";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -36,7 +36,7 @@ export function OverviewPageClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [memberships, setMemberships] = useState<MembershipEntry[]>([]);
-  const [funnel, setFunnel] = useState<FunnelPayload | null>(null);
+  const [funnel, setFunnel] = useState<{ steps: { label: string; count: number; pct_of_prev?: number }[] } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -44,7 +44,7 @@ export function OverviewPageClient() {
       const [s, m, f] = await Promise.all([
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
         opsApi.memberships() as Promise<MembershipsPayload>,
-        opsApi.funnel(30) as Promise<FunnelPayload>,
+        opsApi.funnel(30),
       ]);
       setStatus(s);
       setMemberships((m as MembershipsPayload).memberships ?? []);

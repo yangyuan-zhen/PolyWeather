@@ -21,13 +21,15 @@ type FunnelStep = { label: string; count: number; pct_of_prev?: number };
 export function AnalyticsPageClient() {
   const [loading, setLoading] = useState(true);
   const [funnel, setFunnel] = useState<FunnelStep[]>([]);
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
   const [days, setDays] = useState(30);
 
   const load = async () => {
     setLoading(true);
     try {
       const data = await opsApi.funnel(days);
-      setFunnel((data as unknown as { steps?: FunnelStep[] }).steps ?? []);
+      setFunnel(data.steps);
+      setRates(data.rates ?? null);
     } catch { /* */ }
     setLoading(false);
   };
