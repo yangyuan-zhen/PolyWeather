@@ -136,6 +136,43 @@ function ScanTerminalScreen() {
     () => sortRowsByUserTime(terminalData?.rows || []),
     [terminalData?.rows],
   );
+
+  const cityListRows = useMemo(() => {
+    if (timeSortedRows.length > 0) return timeSortedRows;
+    return store.cities.map((city, index) => {
+      const cityKey = normalizeCityKey(city.name);
+      const summary =
+        store.citySummariesByName[cityKey] ??
+        Object.values(store.citySummariesByName).find(
+          (s) => normalizeCityKey(s?.name) === cityKey,
+        ) ??
+        null;
+      return {
+        id: `city-fallback:${cityKey}:${index}`,
+        city: cityKey,
+        city_display_name: city.display_name || city.name,
+        display_name: city.display_name || city.name,
+        temp_symbol: city.temp_unit === "fahrenheit" ? "°F" : "°C",
+        current_temp: summary?.current?.temp ?? null,
+        current_max_so_far: summary?.current?.temp ?? null,
+        deb_prediction: summary?.deb?.prediction ?? null,
+        airport: city.airport || null,
+        local_time: summary?.local_time ?? null,
+        risk_level: city.risk_level || "low",
+        market_slug: null,
+        market_question: null,
+        target_label: null,
+        side: null,
+        edge_percent: null,
+        final_score: null,
+        window_phase: null,
+        tradable: false,
+        active: false,
+        closed: false,
+        accepting_orders: false,
+      } satisfies ScanOpportunityRow;
+    });
+  }, [timeSortedRows, store.cities, store.citySummariesByName]);
   const {
     addAiPinnedCity,
     aiPinnedCities,
@@ -347,8 +384,8 @@ function ScanTerminalScreen() {
       return (
         <MobileCityPicker
           isEn={isEn}
-          rows={timeSortedRows}
-          onSelectCity={handleOpenDecisionRow}
+          rows={cityListRows}
+          onSelectCity={isPro ? handleOpenDecisionRow : handleSelectRow}
         />
       );
     }
