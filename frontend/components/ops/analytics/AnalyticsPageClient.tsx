@@ -5,6 +5,16 @@ import { RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+} from "recharts";
 
 type FunnelStep = { label: string; count: number; pct_of_prev?: number };
 
@@ -17,13 +27,18 @@ export function AnalyticsPageClient() {
     setLoading(true);
     try {
       const data = await opsApi.funnel(days);
-      const steps = (data as unknown as { steps?: FunnelStep[] }).steps ?? [];
-      setFunnel(steps);
+      setFunnel((data as unknown as { steps?: FunnelStep[] }).steps ?? []);
     } catch { /* */ }
     setLoading(false);
   };
 
   useEffect(() => { void load(); }, [days]);
+
+  const chartData = [...funnel].reverse().map((s) => ({
+    name: s.label,
+    count: s.count,
+    pct: s.pct_of_prev,
+  }));
 
   const maxCount = Math.max(...funnel.map((s) => s.count), 1);
 
@@ -50,34 +65,100 @@ export function AnalyticsPageClient() {
         </div>
       </div>
 
+      {/* Summary cards */}
+      {funnel.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500">总注册</div>
+              <div className="text-xl font-bold text-white">{funnel[0]?.count ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500">点击付费</div>
+              <div className="text-xl font-bold text-cyan-400">{funnel[2]?.count ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500">发起支付</div>
+              <div className="text-xl font-bold text-amber-400">{funnel[4]?.count ?? 0}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-xs text-slate-500">支付成功</div>
+              <div className="text-xl font-bold text-emerald-400">{funnel[5]?.count ?? 0}</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                总体转化 {maxCount > 0 ? `${((funnel[5]?.count ?? 0) / maxCount * 100).toFixed(1)}%` : "—"}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Funnel chart */}
       <Card>
-        <CardHeader><CardTitle>用户转化漏斗</CardTitle></CardHeader>
+        <CardHeader><CardTitle>转化漏斗 (Recharts)</CardTitle></CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {funnel.map((step, i) => {
-              const pct = (step.count / maxCount) * 100;
-              const prevPct = step.pct_of_prev != null ? `${step.pct_of_prev}%` : "—";
-              return (
-                <div key={i}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="text-slate-300">{step.label}</span>
-                    <span className="text-slate-400">
-                      <span className="text-white font-bold">{step.count}</span>
-                      <span className="ml-2 text-xs">转化 {prevPct}</span>
-                    </span>
-                  </div>
-                  <div className="h-6 w-full rounded-full bg-white/5 overflow-hidden">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-500"
-                      style={{ width: `${Math.max(pct, 2)}%` }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-            {funnel.length === 0 && (
-              <p className="text-slate-500 text-sm py-4 text-center">暂无数据</p>
-            )}
+          {chartData.length === 0 ? (
+            <p className="text-slate-500 text-sm py-8 text-center">暂无数据</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={chartData.length * 60 + 40}>
+              <BarChart
+                data={chartData}
+                layout="vertical"
+                margin={{ top: 5, right: 40, left: 140, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                <XAxis type="number" stroke="rgba(255,255,255,0.3)" tick={{ fill: "#94a3b8", fontSize: 12 }} />
+                <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{ fill: "#e2e8f0", fontSize: 13 }} width={130} />
+                <Tooltip
+                  contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0" }}
+                  formatter={(value) => [`${value} 人`, "数量"]}
+                />
+                <Bar dataKey="count" radius={[0, 6, 6, 0]}>
+                  {chartData.map((_, i) => {
+                    const colors = ["#06b6d4", "#0ea5e9", "#6366f1", "#f59e0b", "#22c55e", "#10b981"];
+                    return <Cell key={i} fill={colors[i % colors.length]} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Drop-off table */}
+      <Card>
+        <CardHeader><CardTitle>各阶段详情</CardTitle></CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-left text-slate-400">
+                  <th className="py-2 px-3 font-medium">阶段</th>
+                  <th className="py-2 px-3 font-medium text-right">人数</th>
+                  <th className="py-2 px-3 font-medium text-right">转化率</th>
+                  <th className="py-2 px-3 font-medium text-right">流失率</th>
+                </tr>
+              </thead>
+              <tbody>
+                {funnel.map((step, i) => {
+                  const pct = step.pct_of_prev;
+                  const dropPct = pct != null ? 100 - pct : 0;
+                  return (
+                    <tr key={i} className="border-b border-white/5">
+                      <td className="py-2 px-3 text-white">{step.label}</td>
+                      <td className="py-2 px-3 text-right font-mono text-white">{step.count}</td>
+                      <td className="py-2 px-3 text-right text-emerald-400">{pct != null ? `${pct}%` : "—"}</td>
+                      <td className="py-2 px-3 text-right text-amber-400">{i > 0 ? `${dropPct}%` : "—"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </CardContent>
       </Card>

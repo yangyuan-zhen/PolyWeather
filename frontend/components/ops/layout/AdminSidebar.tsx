@@ -20,6 +20,7 @@ const navGroups = [
   {
     label: "监控",
     items: [
+      { href: "/ops/overview", icon: LayoutDashboard, label: "总览" },
       { href: "/ops/system", icon: Cpu, label: "系统状态" },
       { href: "/ops/training", icon: Database, label: "训练数据" },
       { href: "/ops/analytics", icon: BarChart3, label: "转化分析" },
