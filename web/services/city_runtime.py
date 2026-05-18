@@ -9,7 +9,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from loguru import logger
 
 from src.analysis.deb_algorithm import load_history
-from src.analysis.probability_snapshot_archive import load_snapshot_rows_for_day
 from src.database.db_manager import DBManager
 from src.database.runtime_state import (
     DailyRecordRepository,
@@ -431,7 +430,7 @@ def _build_city_history_payload(city: str, include_records: bool = False) -> dic
         act = rec.get("actual_high")
         deb = rec.get("deb_prediction")
         mu = rec.get("mu")
-        snapshots = load_snapshot_rows_for_day(city, day)
+        snapshots = _load_snapshot_rows_for_day(city, day)
         peak_ref = _build_peak_minus_12h_reference(
             actual_high=act,
             snapshots=snapshots,
@@ -799,6 +798,10 @@ def _build_recent_deb_performance_index(
             "last_date": settled[0][0] if settled else None,
         }
     return index
+
+
+def _load_snapshot_rows_for_day(_city: str, _day: str) -> list:
+    return []
 
 __all__ = [name for name in globals() if not (name.startswith('__') and name.endswith('__'))]
 
