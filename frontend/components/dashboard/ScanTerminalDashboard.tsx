@@ -353,7 +353,7 @@ function ScanTerminalScreen() {
             />
           </div>
         </div>
-        {resolvedView === "analysis" ? (
+        {resolvedView === "analysis" && isPro ? (
           <AiPinnedForecastView
             items={aiPinnedCities}
             rows={timeSortedRows}
@@ -434,17 +434,19 @@ function ScanTerminalScreen() {
                     {isEn ? "Distribution View" : "分布视图"}
                   </button>
                 )}
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={resolvedView === "analysis"}
-                  className={resolvedView === "analysis" ? "active" : ""}
-                  onClick={() => {
-                    setActiveView("analysis");
-                  }}
-                >
-                  {isEn ? "Decision Cards" : "城市决策卡"}
-                </button>
+                {isPro ? (
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={resolvedView === "analysis"}
+                    className={resolvedView === "analysis" ? "active" : ""}
+                    onClick={() => {
+                      setActiveView("analysis");
+                    }}
+                  >
+                    {isEn ? "Decision Cards" : "城市决策卡"}
+                  </button>
+                ) : null}
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
