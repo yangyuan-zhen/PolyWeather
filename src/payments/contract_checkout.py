@@ -15,6 +15,7 @@ from eth_account.messages import encode_defunct
 from web3 import Web3
 
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
+from src.auth.telegram_group_pricing import TelegramGroupPricing
 from src.database.db_manager import DBManager
 
 DEFAULT_POLYGON_CHAIN_ID = 137
@@ -72,6 +73,17 @@ PAYMENT_CONTRACT_ABI = [
         "type": "event",
     },
 ]
+
+ERC20_TRANSFER_EVENT_ABI = {
+    "anonymous": False,
+    "inputs": [
+        {"indexed": True, "name": "from", "type": "address"},
+        {"indexed": True, "name": "to", "type": "address"},
+        {"indexed": False, "name": "value", "type": "uint256"},
+    ],
+    "name": "Transfer",
+    "type": "event",
+}
 
 DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
     "pro_monthly": {"plan_id": 101, "amount_usdc": "5", "duration_days": 30},
@@ -276,6 +288,10 @@ class PaymentContractCheckoutService:
         default_token = self.supported_tokens.get(self.default_token_address)
         self.token_address = default_token.address if default_token else ""
         self.receiver_contract = default_token.receiver_contract if default_token else ""
+        self.direct_receiver_address = (
+            _normalize_address(os.getenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS") or "")
+            or self.receiver_contract
+        )
         self.token_decimals = (
             int(default_token.decimals) if default_token else int(self.token_decimals)
         )
@@ -906,6 +922,7 @@ class PaymentContractCheckoutService:
             "token_address": self.token_address,
             "token_decimals": self.token_decimals,
             "receiver_contract": self.receiver_contract,
+            "direct_receiver_address": self.direct_receiver_address,
             "default_token_address": self.default_token_address or self.token_address,
             "tokens": tokens_payload,
             "confirmations": self.confirmations,
@@ -1261,8 +1278,36 @@ class PaymentContractCheckoutService:
             "plan_code": code,
             "plan_id": int(row.get("plan_id") or 0),
             "duration_days": int(row.get("duration_days") or 0),
+            "amount_usdc": _format_decimal(amount_dec),
             "amount_usdc_decimal": amount_dec,
         }
+
+    def _apply_telegram_group_pricing(
+        self,
+        user_id: str,
+        plan: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        out = dict(plan)
+        if str(out.get("plan_code") or "").strip().lower() != "pro_monthly":
+            return out
+        pricing = TelegramGroupPricing()
+        if not pricing.configured:
+            return out
+        telegram_id = None
+        try:
+            user = self._db.get_user_by_supabase_user_id(user_id)
+            if isinstance(user, dict):
+                telegram_id = int(user.get("telegram_id") or 0) or None
+        except Exception:
+            telegram_id = None
+        price_payload = pricing.resolve_price_for_telegram_id(telegram_id)
+        amount_dec = _parse_decimal(price_payload.get("amount_usdc"), out["amount_usdc_decimal"])
+        if amount_dec <= 0:
+            return out
+        out["amount_usdc"] = _format_decimal(amount_dec)
+        out["amount_usdc_decimal"] = amount_dec
+        out["telegram_pricing"] = price_payload
+        return out
 
     def _build_tx_payload(self, intent: PaymentIntentRecord) -> Dict[str, Any]:
         contract = self._get_contract(intent.receiver_address)
@@ -1300,16 +1345,23 @@ class PaymentContractCheckoutService:
         points_to_consume: Optional[int] = None,
     ) -> Dict[str, Any]:
         self._ensure_enabled()
-        plan = self._select_plan(plan_code)
+        plan = self._apply_telegram_group_pricing(
+            user_id,
+            self._select_plan(plan_code),
+        )
         selected_token = self._resolve_supported_token(token_address)
         mode = str(payment_mode or "strict").strip().lower()
-        if mode not in {"strict", "flex"}:
-            raise PaymentCheckoutError(400, "payment_mode must be strict or flex")
-        bound_wallets = self.list_wallets(user_id)
-        if not bound_wallets:
+        if mode == "manual":
+            mode = "direct"
+        if mode not in {"strict", "flex", "direct"}:
+            raise PaymentCheckoutError(400, "payment_mode must be strict, flex, or direct")
+        bound_wallets = [] if mode == "direct" else self.list_wallets(user_id)
+        if mode != "direct" and not bound_wallets:
             raise PaymentCheckoutError(403, "bind wallet first")
         target_wallet = _normalize_address(allowed_wallet or "")
-        if mode == "strict":
+        if mode == "direct":
+            target_wallet = ""
+        elif mode == "strict":
             if target_wallet:
                 self._require_user_wallet(user_id, target_wallet)
             else:
@@ -1334,6 +1386,13 @@ class PaymentContractCheckoutService:
         combined_metadata = dict(metadata or {})
         combined_metadata["token_code"] = str(selected_token.code)
         combined_metadata["token_symbol"] = str(selected_token.symbol)
+        if isinstance(plan.get("telegram_pricing"), dict):
+            combined_metadata["telegram_pricing"] = plan["telegram_pricing"]
+        receiver_address = (
+            self.direct_receiver_address
+            if mode == "direct"
+            else selected_token.receiver_contract
+        )
         combined_metadata["amount_before_discount_usdc"] = _format_decimal(plan_amount_usdc)
         combined_metadata["amount_after_discount_usdc"] = _format_decimal(final_amount_usdc)
         combined_metadata["points_redemption"] = {
@@ -1358,7 +1417,7 @@ class PaymentContractCheckoutService:
                 "plan_id": plan["plan_id"],
                 "chain_id": self.chain_id,
                 "token_address": selected_token.address,
-                "receiver_address": selected_token.receiver_contract,
+                "receiver_address": receiver_address,
                 "amount_units": str(amount_units),
                 "payment_mode": mode,
                 "allowed_wallet": target_wallet or None,
@@ -1375,9 +1434,9 @@ class PaymentContractCheckoutService:
         if not isinstance(rows, list) or not rows:
             raise PaymentCheckoutError(500, "failed to create payment intent")
         intent = self._serialize_intent(rows[0])
-        return {
+        response = {
             "intent": intent.__dict__,
-            "tx_payload": self._build_tx_payload(intent),
+            "tx_payload": None if mode == "direct" else self._build_tx_payload(intent),
             "plan": {
                 "plan_code": plan["plan_code"],
                 "plan_id": plan["plan_id"],
@@ -1400,6 +1459,20 @@ class PaymentContractCheckoutService:
                 "points_balance_snapshot": int(redemption.get("points_balance_snapshot") or 0),
             },
         }
+        if mode == "direct":
+            response["direct_payment"] = {
+                "chain_id": self.chain_id,
+                "chain": "polygon",
+                "token_symbol": intent.token_symbol,
+                "token_address": intent.token_address,
+                "token_decimals": int(intent.token_decimals),
+                "receiver_address": intent.receiver_address,
+                "amount_units": str(intent.amount_units),
+                "amount_usdc": intent.amount_usdc,
+                "intent_id": intent.intent_id,
+                "expires_at": intent.expires_at,
+            }
+        return response
     def get_intent(self, user_id: str, intent_id: str) -> PaymentIntentRecord:
         self._ensure_enabled()
         rows = self._rest(
@@ -1525,24 +1598,102 @@ class PaymentContractCheckoutService:
             )
         return out
 
+    def _ensure_tx_hash_unused(self, tx_hash: str, intent_id: str) -> None:
+        tx_hash_text = str(tx_hash or "").strip().lower()
+        if not tx_hash_text:
+            return
+        rows = self._rest(
+            "GET",
+            "payment_transactions",
+            params={
+                "select": "intent_id,tx_hash,status",
+                "tx_hash": f"eq.{tx_hash_text}",
+                "limit": "5",
+            },
+            allowed_status=[200],
+        )
+        if not isinstance(rows, list):
+            return
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            existing_intent = str(row.get("intent_id") or "").strip()
+            if existing_intent and existing_intent != str(intent_id):
+                raise PaymentCheckoutError(409, "tx_hash already used by another payment intent")
+
+    def _record_duplicate_transaction(
+        self,
+        *,
+        intent: PaymentIntentRecord,
+        tx_hash: str,
+        from_address: Optional[str] = None,
+        to_address: Optional[str] = None,
+        status: str = "duplicate",
+        detail: str = "payment intent already confirmed",
+    ) -> Dict[str, Any]:
+        tx_hash_text = str(tx_hash or "").strip().lower()
+        if not tx_hash_text:
+            return {}
+        now_iso = _to_iso(_now_utc())
+        try:
+            rows = self._rest(
+                "POST",
+                "payment_transactions",
+                params={"on_conflict": "tx_hash"},
+                payload={
+                    "intent_id": intent.intent_id,
+                    "chain_id": self.chain_id,
+                    "tx_hash": tx_hash_text,
+                    "from_address": _normalize_address(from_address) or None,
+                    "to_address": _normalize_address(to_address) or intent.receiver_address,
+                    "payment_method": "direct" if intent.payment_mode == "direct" else "wallet",
+                    "status": status,
+                    "raw_receipt": {},
+                    "raw_tx": {
+                        "duplicate_of_intent_id": intent.intent_id,
+                        "duplicate_reason": detail,
+                    },
+                    "updated_at": now_iso,
+                },
+                prefer="resolution=merge-duplicates,return=representation",
+                allowed_status=[200, 201],
+            )
+            return rows[0] if isinstance(rows, list) and rows else {}
+        except Exception:
+            return {}
+
     def submit_intent_tx(
         self,
         user_id: str,
         intent_id: str,
         tx_hash: str,
-        from_address: str,
+        from_address: Optional[str],
     ) -> Dict[str, Any]:
         self._ensure_enabled()
         intent = self.get_intent(user_id, intent_id)
+        tx_hash_text = str(tx_hash or "").strip().lower()
+        if intent.status == "confirmed":
+            if tx_hash_text and tx_hash_text != str(intent.tx_hash or "").strip().lower():
+                self._record_duplicate_transaction(
+                    intent=intent,
+                    tx_hash=tx_hash_text,
+                    from_address=from_address,
+                    status="refund_required",
+                    detail="submitted tx after order already paid",
+                )
+            raise PaymentCheckoutError(
+                409,
+                "该订单已支付，请勿重复付款；如已重复转账请联系客服处理退款",
+            )
         if intent.status not in {"created", "submitted"}:
             raise PaymentCheckoutError(409, f"intent status is {intent.status}, cannot submit")
 
-        tx_hash_text = str(tx_hash or "").strip().lower()
         from_addr = _normalize_address(from_address)
         if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
             raise PaymentCheckoutError(400, "invalid tx_hash")
-        if not from_addr:
+        if not from_addr and intent.payment_mode != "direct":
             raise PaymentCheckoutError(400, "invalid from_address")
+        self._ensure_tx_hash_unused(tx_hash_text, intent.intent_id)
 
         now = _now_utc()
         try:
@@ -1560,7 +1711,9 @@ class PaymentContractCheckoutService:
             )
             raise PaymentCheckoutError(409, "payment intent expired")
 
-        if intent.payment_mode == "strict" and intent.allowed_wallet:
+        if intent.payment_mode == "direct":
+            from_addr = None
+        elif intent.payment_mode == "strict" and intent.allowed_wallet:
             if from_addr != intent.allowed_wallet:
                 raise PaymentCheckoutError(
                     400,
@@ -1592,6 +1745,7 @@ class PaymentContractCheckoutService:
                 "tx_hash": tx_hash_text,
                 "from_address": from_addr,
                 "to_address": intent.receiver_address,
+                "payment_method": "direct" if intent.payment_mode == "direct" else "wallet",
                 "status": "submitted",
                 "updated_at": now_iso,
             },
@@ -1665,6 +1819,38 @@ class PaymentContractCheckoutService:
                     "payer": payer,
                     "plan_id": plan_id,
                     "token_address": token,
+                    "amount_units": amount,
+                }
+        return None
+
+    def _extract_direct_transfer_event(
+        self, receipt: Any, intent: PaymentIntentRecord
+    ) -> Optional[Dict[str, Any]]:
+        token_contract = self._get_web3().eth.contract(
+            address=Web3.to_checksum_address(intent.token_address),
+            abi=[ERC20_TRANSFER_EVENT_ABI],
+        )
+        try:
+            events = token_contract.events.Transfer().process_receipt(receipt)
+        except Exception:
+            events = []
+        if not events:
+            return None
+
+        expected_to = intent.receiver_address
+        expected_amount = int(intent.amount_units)
+        for ev in events:
+            args = ev.get("args") if isinstance(ev, dict) else getattr(ev, "args", None)
+            if not args:
+                continue
+            payer = _normalize_address(args.get("from"))
+            receiver = _normalize_address(args.get("to"))
+            amount = int(args.get("value") or 0)
+            if receiver == expected_to and amount >= expected_amount:
+                return {
+                    "from": payer,
+                    "to": receiver,
+                    "token_address": intent.token_address,
                     "amount_units": amount,
                 }
         return None
@@ -2037,12 +2223,19 @@ class PaymentContractCheckoutService:
             raise PaymentCheckoutError(
                 409, f"confirmations not enough: {confirmations}/{self.confirmations}"
             )
-        event_match = self._extract_matching_event(receipt, intent)
-        event_payer = _normalize_address(event_match.get("payer")) if event_match else None
-        effective_payer = event_payer or tx_from
-        routed_via_delegate = bool(
-            event_match and tx_to and tx_to != intent.receiver_address
-        )
+        is_direct = intent.payment_mode == "direct"
+        if is_direct:
+            event_match = self._extract_direct_transfer_event(receipt, intent)
+            event_payer = _normalize_address(event_match.get("from")) if event_match else None
+            effective_payer = event_payer or tx_from
+            routed_via_delegate = False
+        else:
+            event_match = self._extract_matching_event(receipt, intent)
+            event_payer = _normalize_address(event_match.get("payer")) if event_match else None
+            effective_payer = event_payer or tx_from
+            routed_via_delegate = bool(
+                event_match and tx_to and tx_to != intent.receiver_address
+            )
         if tx_to != intent.receiver_address and not event_match:
             self._mark_intent_failed(
                 user_id=user_id,
@@ -2059,7 +2252,9 @@ class PaymentContractCheckoutService:
                 400,
                 f"tx to mismatch: got={tx_to} expected={intent.receiver_address}",
             )
-        if intent.payment_mode == "strict" and intent.allowed_wallet:
+        if is_direct:
+            pass
+        elif intent.payment_mode == "strict" and intent.allowed_wallet:
             if effective_payer != intent.allowed_wallet:
                 self._mark_intent_failed(
                     user_id=user_id,
@@ -2083,13 +2278,19 @@ class PaymentContractCheckoutService:
                 user_id=user_id,
                 intent=intent,
                 tx_hash=tx_hash_text,
-                reason="event_mismatch",
-                detail="OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",
+                reason="direct_transfer_mismatch" if is_direct else "event_mismatch",
+                detail=(
+                    "ERC20 Transfer mismatch; ensure token transfer sends enough funds to receiver"
+                    if is_direct
+                    else "OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)"
+                ),
                 extra={"from_address": tx_from, "receiver_actual": tx_to},
             )
             raise PaymentCheckoutError(
                 400,
-                "OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",
+                "ERC20 Transfer mismatch; ensure token transfer sends enough funds to receiver"
+                if is_direct
+                else "OrderPaid event mismatch; ensure contract emits OrderPaid(orderId,payer,planId,token,amount)",
             )
         points_result = self._consume_points_for_intent(user_id, intent)
         now_iso = _to_iso(_now_utc())
@@ -2109,10 +2310,14 @@ class PaymentContractCheckoutService:
                 "receiver_expected": intent.receiver_address,
                 "matched_via_event": True,
             }
-        self._rest(
+        confirm_rows = self._rest(
             "PATCH",
             "payment_intents",
-            params={"id": f"eq.{intent.intent_id}", "user_id": f"eq.{user_id}"},
+            params={
+                "id": f"eq.{intent.intent_id}",
+                "user_id": f"eq.{user_id}",
+                "status": "in.(created,submitted,failed)",
+            },
             payload={
                 "status": "confirmed",
                 "tx_hash": tx_hash_text,
@@ -2123,6 +2328,31 @@ class PaymentContractCheckoutService:
             prefer="return=representation",
             allowed_status=[200],
         )
+        if not isinstance(confirm_rows, list) or not confirm_rows:
+            refreshed = self.get_intent(user_id, intent.intent_id)
+            if refreshed.status == "confirmed":
+                if tx_hash_text != str(refreshed.tx_hash or "").strip().lower():
+                    self._record_duplicate_transaction(
+                        intent=refreshed,
+                        tx_hash=tx_hash_text,
+                        from_address=tx_from,
+                        to_address=tx_to,
+                        status="refund_required",
+                        detail="order was already confirmed by another transaction",
+                    )
+                repaired = self._ensure_confirm_side_effects(
+                    user_id,
+                    refreshed,
+                    str(refreshed.tx_hash or tx_hash_text).strip().lower(),
+                )
+                return {
+                    "intent": refreshed.__dict__,
+                    "already_confirmed": True,
+                    "duplicate_tx_hash": tx_hash_text,
+                    "payment": repaired.get("payment"),
+                    "subscription": repaired.get("subscription"),
+                }
+            raise PaymentCheckoutError(409, f"intent status is {refreshed.status}, cannot confirm")
         tx_rows = self._rest(
             "POST",
             "payment_transactions",
@@ -2134,6 +2364,7 @@ class PaymentContractCheckoutService:
                 "from_address": tx_from,
                 "to_address": tx_to,
                 "block_number": block_number,
+                "payment_method": "direct" if is_direct else "wallet",
                 "status": "confirmed",
                 "raw_receipt": json.loads(Web3.to_json(receipt)),
                 "raw_tx": json.loads(Web3.to_json(tx)) if tx is not None else None,

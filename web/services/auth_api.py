@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
+from src.auth.telegram_group_pricing import TelegramGroupPricing
+from src.database.db_manager import DBManager
+from web.core import TelegramLoginRequest
 import web.routes as legacy_routes
 
 
@@ -75,6 +78,22 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
 
     points = legacy_routes._resolve_auth_points(request)
     weekly_profile = legacy_routes._resolve_weekly_profile(request)
+    telegram_pricing = None
+    if user_id:
+        try:
+            pricing = TelegramGroupPricing()
+            if pricing.configured:
+                linked = DBManager().get_user_by_supabase_user_id(user_id)
+                telegram_id = (
+                    int(linked.get("telegram_id") or 0)
+                    if isinstance(linked, dict)
+                    else 0
+                )
+                telegram_pricing = pricing.resolve_price_for_telegram_id(
+                    telegram_id or None
+                )
+        except Exception:
+            telegram_pricing = None
 
     return {
         "authenticated": bool(user_id),
@@ -105,4 +124,36 @@ def get_auth_me_payload(request: Request) -> Dict[str, Any]:
         "subscription_total_expires_at": subscription_total_expires_at,
         "subscription_queued_days": subscription_queued_days,
         "subscription_queued_count": subscription_queued_count,
+        "telegram_pricing": telegram_pricing,
+    }
+
+
+def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[str, Any]:
+    legacy_routes._assert_entitlement(request)
+    identity = legacy_routes._require_supabase_identity(request)
+    pricing = TelegramGroupPricing()
+    if not pricing.configured:
+        raise HTTPException(status_code=503, detail="telegram login is not configured")
+    try:
+        payload = body.model_dump() if hasattr(body, "model_dump") else body.dict()
+        verified = pricing.verify_login_payload(payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    telegram_id = int(verified["telegram_id"])
+    username = str(verified.get("username") or "").strip()
+    db = DBManager()
+    db.upsert_user(telegram_id, username)
+    bind_result = db.bind_supabase_identity(
+        telegram_id=telegram_id,
+        supabase_user_id=identity["user_id"],
+        supabase_email=identity.get("email") or "",
+    )
+    if not bind_result.get("ok"):
+        raise HTTPException(status_code=409, detail=str(bind_result.get("reason") or "telegram bind failed"))
+    price = pricing.resolve_price_for_telegram_id(telegram_id)
+    return {
+        "ok": True,
+        "telegram": verified,
+        "binding": bind_result,
+        "telegram_pricing": price,
     }

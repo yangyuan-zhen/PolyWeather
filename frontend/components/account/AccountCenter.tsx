@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -68,6 +68,26 @@ type AuthMeResponse = {
   subscription_total_expires_at?: string | null;
   subscription_queued_days?: number | null;
   subscription_queued_count?: number | null;
+  telegram_pricing?: TelegramPricing | null;
+};
+
+type TelegramPricing = {
+  configured?: boolean;
+  telegram_id?: number | null;
+  telegram_status?: string | null;
+  is_group_member?: boolean;
+  amount_usdc?: string;
+  pricing_source?: string;
+};
+
+type TelegramAuthPayload = {
+  id: number;
+  first_name?: string;
+  last_name?: string;
+  username?: string;
+  photo_url?: string;
+  auth_date: number;
+  hash: string;
 };
 
 type PaymentPlan = {
@@ -132,6 +152,18 @@ type CreatedIntent = {
     token_address: string;
     token_symbol?: string;
     token_decimals?: number;
+  };
+  direct_payment?: {
+    chain_id: number;
+    chain?: string;
+    token_symbol?: string;
+    token_address: string;
+    token_decimals?: number;
+    receiver_address: string;
+    amount_units: string;
+    amount_usdc: string;
+    intent_id: string;
+    expires_at: string;
   };
 };
 
@@ -218,6 +250,11 @@ const TELEGRAM_GROUP_URL = String(
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
+const TELEGRAM_LOGIN_BOT_USERNAME = String(
+  process.env.NEXT_PUBLIC_TELEGRAM_LOGIN_BOT_USERNAME || "WeatherQuant_bot",
+)
+  .replace(/^@/, "")
+  .trim();
 const TELEGRAM_MARKET_CHANNEL_URL = "https://t.me/+hGAk7JsjtdhiOTUx";
 const TELEGRAM_TOPICS_GROUP_URL = "https://t.me/+8vel7rwjZagxODUx";
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
@@ -859,6 +896,10 @@ export function AccountCenter() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
+  const [manualPayment, setManualPayment] = useState<CreatedIntent["direct_payment"] | null>(null);
+  const [manualTxHash, setManualTxHash] = useState("");
+  const [telegramLoginBusy, setTelegramLoginBusy] = useState(false);
+  const telegramLoginWidgetRef = useRef<HTMLDivElement | null>(null);
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
@@ -1360,6 +1401,8 @@ export function AccountCenter() {
     if (!backend?.subscription_active) return;
     setLastIntentId("");
     setLastTxHash("");
+    setManualPayment(null);
+    setManualTxHash("");
     setLastPaymentStartedAt(0);
     clearStoredPaymentRecovery();
   }, [backend?.subscription_active]);
@@ -1467,6 +1510,64 @@ export function AccountCenter() {
   const userId = backend?.user_id || user?.id || "";
   const isAuthenticated = Boolean(userId);
   const email = backend?.email || user?.email || "";
+  useEffect(() => {
+    const container = telegramLoginWidgetRef.current;
+    if (!container || !TELEGRAM_LOGIN_BOT_USERNAME || !isAuthenticated) return;
+    container.innerHTML = "";
+    const callbackName = "onPolyWeatherTelegramAuth";
+    (window as unknown as Record<string, unknown>)[callbackName] = async (
+      payload: TelegramAuthPayload,
+    ) => {
+      setTelegramLoginBusy(true);
+      setPaymentError("");
+      setPaymentInfo("");
+      try {
+        const authHeaders = await buildAuthedHeaders(true, false);
+        const res = await fetch("/api/auth/telegram/login", {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const raw = (await res.text()).slice(0, 350);
+          throw new Error(`telegram login failed: ${raw}`);
+        }
+        const data = (await res.json()) as {
+          telegram_pricing?: TelegramPricing | null;
+        };
+        const amount = data.telegram_pricing?.amount_usdc || "10";
+        setPaymentInfo(
+          data.telegram_pricing?.is_group_member
+            ? `Telegram 群成员验证成功，当前会员价 ${amount}U。`
+            : `Telegram 已登录，但未检测到群成员身份，当前价格 ${amount}U。`,
+        );
+        await loadSnapshot();
+        await loadPaymentSnapshot();
+      } catch (error) {
+        setPaymentError(normalizePaymentError(error).message);
+      } finally {
+        setTelegramLoginBusy(false);
+      }
+    };
+    const script = document.createElement("script");
+    script.src = "https://telegram.org/js/telegram-widget.js?22";
+    script.async = true;
+    script.setAttribute("data-telegram-login", TELEGRAM_LOGIN_BOT_USERNAME);
+    script.setAttribute("data-size", "large");
+    script.setAttribute("data-radius", "12");
+    script.setAttribute("data-userpic", "false");
+    script.setAttribute("data-request-access", "write");
+    script.setAttribute("data-onauth", `${callbackName}(user)`);
+    container.appendChild(script);
+    return () => {
+      container.innerHTML = "";
+    };
+  }, [
+    buildAuthedHeaders,
+    isAuthenticated,
+    loadPaymentSnapshot,
+    loadSnapshot,
+  ]);
   const displayName =
     String(user?.user_metadata?.full_name || "").trim() ||
     (email ? String(email).split("@")[0] : "") ||
@@ -1673,7 +1774,9 @@ export function AccountCenter() {
   );
 
   const billing = useMemo(() => {
-    const parsedPlanAmount = Number(selectedPlan?.amount_usdc ?? 5);
+    const parsedPlanAmount = Number(
+      backend?.telegram_pricing?.amount_usdc ?? selectedPlan?.amount_usdc ?? 5,
+    );
     const planAmount =
       Number.isFinite(parsedPlanAmount) && parsedPlanAmount > 0
         ? parsedPlanAmount
@@ -1718,6 +1821,7 @@ export function AccountCenter() {
     };
   }, [
     paymentConfig?.points_redemption,
+    backend?.telegram_pricing?.amount_usdc,
     selectedPlan?.amount_usdc,
     totalPoints,
     usePoints,
@@ -2366,6 +2470,145 @@ export function AccountCenter() {
     }
   };
 
+  const createManualPaymentIntent = async () => {
+    setPaymentError("");
+    setPaymentInfo("");
+    setManualPayment(null);
+    setManualTxHash("");
+    setLastIntentId("");
+    setLastTxHash("");
+    if (!paymentHostAllowed) {
+      setPaymentError(
+        copy.paymentHostBlocked.replace(
+          "{host}",
+          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+        ),
+      );
+      return;
+    }
+    if (!isAuthenticated) {
+      setPaymentError(copy.loginBeforePay);
+      return;
+    }
+    if (!paymentConfig?.configured) {
+      setPaymentError(copy.payNotReady);
+      return;
+    }
+
+    setPaymentBusy(true);
+    try {
+      const authHeaders = await buildAuthedHeaders(true, false);
+      const createRes = await fetch("/api/payments/intents", {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          plan_code: selectedPlan?.plan_code || "pro_monthly",
+          payment_mode: "direct",
+          token_address: resolvedSelectedTokenAddress || undefined,
+          use_points: billing.canRedeem && usePoints,
+          points_to_consume:
+            billing.canRedeem && usePoints ? billing.pointsUsed : 0,
+          metadata: {
+            source: "account_center_manual_transfer",
+            frontend_host: currentPaymentHost || null,
+            account_email: email || null,
+          },
+        }),
+      });
+      if (!createRes.ok) {
+        const raw = (await createRes.text()).slice(0, 350);
+        throw new Error(`create manual intent failed: ${raw}`);
+      }
+      const created = (await createRes.json()) as CreatedIntent;
+      const direct = created.direct_payment;
+      const intentId = String(created.intent?.intent_id || direct?.intent_id || "");
+      if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
+        throw new Error("manual payment payload invalid");
+      }
+      setLastIntentId(intentId);
+      setManualPayment(direct);
+      setShowOverlay(false);
+      setPaymentInfo(
+        `手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${shortAddress(direct.receiver_address)}，完成后提交 tx hash。`,
+      );
+      trackAppEvent("checkout_started", {
+        entry: "account_center_manual_transfer",
+        plan_code: selectedPlan?.plan_code || "pro_monthly",
+        intent_id: intentId,
+        payment_mode: "direct",
+        use_points: billing.canRedeem && usePoints,
+        pay_amount_usd: billing.payAmount,
+      });
+    } catch (error) {
+      setPaymentError(normalizePaymentError(error).message);
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
+  const submitManualPaymentTx = async () => {
+    const txHashNorm = String(manualTxHash || "").trim().toLowerCase();
+    const intentId = String(lastIntentId || manualPayment?.intent_id || "").trim();
+    if (!intentId || !manualPayment) {
+      setPaymentError("请先创建手动转账订单。");
+      return;
+    }
+    if (!txHashNorm.startsWith("0x") || txHashNorm.length !== 66) {
+      setPaymentError("请输入有效的 tx hash。");
+      return;
+    }
+    setPaymentBusy(true);
+    setPaymentError("");
+    try {
+      const authHeaders = await buildAuthedHeaders(true, false);
+      const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ tx_hash: txHashNorm }),
+      });
+      if (!submitRes.ok) {
+        const raw = (await submitRes.text()).slice(0, 350);
+        throw new Error(`submit tx failed: ${raw}`);
+      }
+      const confirmRes = await fetch(`/api/payments/intents/${intentId}/confirm`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({ tx_hash: txHashNorm }),
+      });
+      if (!confirmRes.ok) {
+        const raw = (await confirmRes.text()).slice(0, 350);
+        const lowerRaw = raw.toLowerCase();
+        const maybePending =
+          confirmRes.status === 408 ||
+          (confirmRes.status === 409 &&
+            (lowerRaw.includes("confirmations not enough") ||
+              lowerRaw.includes("tx indexed partially")));
+        if (maybePending) {
+          setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`);
+          await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
+          return;
+        }
+        throw new Error(`confirm failed: ${raw}`);
+      }
+      setLastTxHash(txHashNorm);
+      setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
+      setManualPayment(null);
+      setManualTxHash("");
+      trackAppEvent("checkout_succeeded", {
+        entry: "account_center_manual_transfer",
+        plan_code: selectedPlan?.plan_code || "pro_monthly",
+        intent_id: intentId,
+        tx_hash: txHashNorm,
+      });
+      await loadSnapshot();
+      await loadPaymentSnapshot();
+    } catch (error) {
+      setPaymentError(normalizePaymentError(error).message);
+    } finally {
+      setPaymentBusy(false);
+    }
+  };
+
   const handleOverlayCheckout = async () => {
     if (!paymentHostAllowed) {
       setPaymentError(
@@ -2736,9 +2979,11 @@ export function AccountCenter() {
                   pointsPerUsd: billing.pointsPerUsdc,
                 }}
                 onPay={() => void handleOverlayCheckout()}
+                onManualPay={() => void createManualPaymentIntent()}
                 onClose={() => setShowOverlay(false)}
                 payBusy={paymentBusy}
                 payLabel={hasPayingWallet ? copy.payNow : copy.connectAndPay}
+                manualPayLabel="手动转账"
                 errorText={paymentError || undefined}
                 infoText={paymentInfo || undefined}
                 txHash={lastTxHash || undefined}
@@ -2766,6 +3011,28 @@ export function AccountCenter() {
                 <p className="text-slate-400 text-sm mb-6">
                   {copy.telegramHint}
                 </p>
+                <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 px-4 py-3">
+                  <p className="text-xs font-bold text-emerald-200">
+                    Telegram 群内价格
+                  </p>
+                  <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
+                    登录 Telegram 后由后端检查群成员身份：群成员 5U，非群成员 10U。
+                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3">
+                    <div ref={telegramLoginWidgetRef} />
+                    {telegramLoginBusy ? (
+                      <span className="text-[11px] text-cyan-200">
+                        正在验证 Telegram...
+                      </span>
+                    ) : null}
+                    {backend?.telegram_pricing?.amount_usdc ? (
+                      <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[11px] font-bold text-white">
+                        当前价格: {backend.telegram_pricing.amount_usdc}U
+                        {backend.telegram_pricing.is_group_member ? " · 群成员" : " · 普通价"}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
 
                 {/* Channel Upgrade / Migration Notice — Pro users only */}
                 {isSubscribed ? (
@@ -2934,6 +3201,77 @@ export function AccountCenter() {
                     </div>
                   </div>
                 )}
+                <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-4">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-emerald-200">
+                        手动转账（无需绑定钱包）
+                      </p>
+                      <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
+                        先创建订单，向唯一收款地址转账，完成后提交 tx hash 自动开通。请不要和钱包支付同时使用。
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void createManualPaymentIntent()}
+                      disabled={paymentBusy || !isAuthenticated}
+                      className="shrink-0 rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-[11px] font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50"
+                    >
+                      创建转账订单
+                    </button>
+                  </div>
+                  {manualPayment ? (
+                    <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                          Amount
+                        </p>
+                        <p className="font-mono text-sm font-bold text-white">
+                          {manualPayment.amount_usdc}{" "}
+                          {manualPayment.token_symbol || selectedTokenLabel}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                          Receiver
+                        </p>
+                        <div className="mt-1 flex gap-2">
+                          <code className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
+                            {manualPayment.receiver_address}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCopy(manualPayment.receiver_address)
+                            }
+                            className="rounded-lg bg-blue-600 px-2 text-xs font-bold text-white"
+                          >
+                            复制
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                          Tx Hash
+                        </p>
+                        <input
+                          value={manualTxHash}
+                          onChange={(event) => setManualTxHash(event.target.value)}
+                          placeholder="0x..."
+                          className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void submitManualPaymentTx()}
+                        disabled={paymentBusy}
+                        className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
+                      >
+                        提交 tx hash 并自动确认
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 {boundWallets.length ? (
                   <div className="space-y-3">
                     {boundWallets.map((w) => (

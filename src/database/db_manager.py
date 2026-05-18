@@ -2,17 +2,21 @@ import sqlite3
 import os
 import hashlib
 import json
+import threading
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set
 
 import requests
 from loguru import logger
 
 
 class DBManager:
+    _init_lock = threading.Lock()
+    _initialized_paths: Set[str] = set()
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = self._resolve_db_path(db_path)
-        self._init_db()
+        self._ensure_initialized()
 
     def _resolve_db_path(self, db_path: Optional[str]) -> str:
         raw = (db_path or os.getenv("POLYWEATHER_DB_PATH") or "").strip()
@@ -23,6 +27,17 @@ class DBManager:
 
     def _get_connection(self):
         return sqlite3.connect(self.db_path)
+
+    def _init_cache_key(self) -> str:
+        return os.path.abspath(self.db_path)
+
+    def _ensure_initialized(self) -> None:
+        cache_key = self._init_cache_key()
+        with self._init_lock:
+            if cache_key in self._initialized_paths:
+                return
+            self._init_db()
+            self._initialized_paths.add(cache_key)
 
     def _supabase_profiles_endpoint(self) -> str:
         supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")

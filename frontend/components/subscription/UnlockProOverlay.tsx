@@ -41,9 +41,11 @@ type UnlockProOverlayProps = {
   billing: UnlockProBilling;
   onToggleUsePoints: () => void;
   onPay: () => void;
+  onManualPay?: () => void;
   onClose?: () => void;
   payBusy?: boolean;
   payLabel?: string;
+  manualPayLabel?: string;
   locale?: "zh-CN" | "en-US";
   errorText?: string;
   infoText?: string;
@@ -76,9 +78,11 @@ export function UnlockProOverlay({
   billing,
   onToggleUsePoints,
   onPay,
+  onManualPay,
   onClose,
   payBusy = false,
   payLabel,
+  manualPayLabel,
   locale = "zh-CN",
   errorText,
   infoText,
@@ -368,6 +372,43 @@ export function UnlockProOverlay({
               </>
             )}
           </button>
+          {onManualPay ? (
+            <button
+              onClick={onManualPay}
+              disabled={payBusy}
+              className={s.ctaBtn}
+              style={{
+                marginTop: 10,
+                background: "rgba(15, 23, 42, 0.78)",
+                border: "1px solid rgba(148, 163, 184, 0.28)",
+              }}
+            >
+              {payBusy ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <>
+                  <Wallet size={17} />
+                  {manualPayLabel || (isEn ? "Manual transfer" : "手动转账")}
+                  <ArrowRight size={17} />
+                </>
+              )}
+            </button>
+          ) : null}
+          {onManualPay ? (
+            <p
+              style={{
+                marginTop: 10,
+                color: "rgba(203, 213, 225, 0.72)",
+                fontSize: 12,
+                lineHeight: 1.5,
+                textAlign: "center",
+              }}
+            >
+              {isEn
+                ? "Choose one payment method only. Do not pay again after the order is completed."
+                : "请只选择一种支付方式；订单完成后请勿重复付款。"}
+            </p>
+          ) : null}
         </div>
       </div>
 

@@ -394,11 +394,21 @@ class CreatePaymentIntentRequest(BaseModel):
 
 class SubmitPaymentTxRequest(BaseModel):
     tx_hash: str = Field(..., min_length=10)
-    from_address: str = Field(..., min_length=8)
+    from_address: Optional[str] = None
 
 
 class ConfirmPaymentTxRequest(BaseModel):
     tx_hash: Optional[str] = None
+
+
+class TelegramLoginRequest(BaseModel):
+    id: int
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
+    auth_date: int
+    hash: str = Field(..., min_length=10)
 
 
 class AnalyticsEventRequest(BaseModel):
