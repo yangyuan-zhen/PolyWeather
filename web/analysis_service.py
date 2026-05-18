@@ -29,7 +29,6 @@ from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
 from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.database.runtime_state import IntradayPathSnapshotRepository
-from src.models.lgbm_daily_high import predict_lgbm_daily_high
 from web.services.groq_commentary import (
     build_groq_commentary_context as _groq_context_builder,
     clean_commentary_text as _groq_clean_text,
@@ -2187,24 +2186,6 @@ def _analyze(
     else:
         peak_status = "before"
 
-    lgbm_val = None
-    if current_forecasts and deb_val is not None:
-        lgbm_val, _ = predict_lgbm_daily_high(
-            city_name=city,
-            current_forecasts=current_forecasts,
-            deb_prediction=deb_val,
-            current_temp=cur_temp,
-            max_so_far=max_so_far,
-            humidity=_sf(primary_current.get("humidity")),
-            wind_speed_kt=_sf(primary_current.get("wind_speed_kt")),
-            visibility_mi=_sf(primary_current.get("visibility_mi")),
-            local_hour=local_hour,
-            local_date=local_date_str,
-            peak_status=peak_status,
-        )
-        # LGBM is kept as an independent reference (lgbm.prediction),
-        # not fed back into DEB to avoid circular dependency
-
     deviation_monitor = _build_deviation_monitor(
         current_temp=cur_temp,
         deb_prediction=deb_val,
@@ -2225,33 +2206,14 @@ def _analyze(
 
     probabilities = []
     probabilities_all = []
-    shadow_probabilities = []
-    shadow_probabilities_all = []
     mu = None
-    probability_engine = "legacy"
-    probability_calibration_mode = "legacy"
-    probability_calibration_version = None
-    probability_raw_mu = None
-    probability_raw_sigma = None
-    probability_calibrated_mu = None
-    probability_calibrated_sigma = None
     dynamic_commentary = {"summary": "", "notes": []}
     try:
         _, _ai_context, sd = _trend_analyze(raw, sym, city)
 
-        # Use structured data from shared engine
         mu = sd.get("mu")
         probabilities = sd.get("probabilities", [])
         probabilities_all = sd.get("probabilities_all", probabilities)
-        shadow_probabilities = sd.get("shadow_probabilities", [])
-        shadow_probabilities_all = sd.get("shadow_probabilities_all", shadow_probabilities)
-        probability_engine = sd.get("probability_engine", "legacy")
-        probability_calibration_mode = sd.get("probability_calibration_mode", "legacy")
-        probability_calibration_version = sd.get("probability_calibration_version")
-        probability_raw_mu = sd.get("probability_raw_mu")
-        probability_raw_sigma = sd.get("probability_raw_sigma")
-        probability_calibrated_mu = sd.get("probability_calibrated_mu")
-        probability_calibrated_sigma = sd.get("probability_calibrated_sigma")
         dynamic_commentary = sd.get("dynamic_commentary") or dynamic_commentary
         trend_info["is_dead_market"] = sd.get("trend_info", {}).get("is_dead_market", False)
         trend_info["direction"] = sd.get("trend_info", {}).get("direction", trend_info.get("direction", "unknown"))
@@ -2632,22 +2594,13 @@ def _analyze(
         "multi_model": {k: v for k, v in current_forecasts.items() if v is not None},
         "multi_model_daily": multi_model_daily,
         "deb": {"prediction": deb_val, "weights_info": deb_weights},
-        "lgbm": {"prediction": lgbm_val},
         "deviation_monitor": deviation_monitor,
         "ensemble": ens_data,
         "probabilities": {
             "mu": round(mu, 1) if mu is not None else None,
             "distribution": probabilities,
             "distribution_all": probabilities_all or probabilities,
-            "engine": probability_engine,
-            "calibration_mode": probability_calibration_mode,
-            "calibration_version": probability_calibration_version,
-            "raw_mu": probability_raw_mu,
-            "raw_sigma": probability_raw_sigma,
-            "calibrated_mu": probability_calibrated_mu,
-            "calibrated_sigma": probability_calibrated_sigma,
-            "shadow_distribution": shadow_probabilities,
-            "shadow_distribution_all": shadow_probabilities_all or shadow_probabilities,
+            "engine": "legacy",
         },
         "trend": trend_info,
         "peak": {

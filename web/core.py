@@ -27,12 +27,6 @@ from src.utils.metrics import (
     gauge_set,
     histogram_observe,
 )
-from src.analysis.probability_calibration import (
-    DEFAULT_CALIBRATION_FILE,
-    check_calibration_drift,
-    resolve_probability_engine_mode,
-)
-from src.analysis.probability_rollout import build_rollout_report
 from src.database.db_manager import DBManager
 from src.database.runtime_state import get_state_storage_mode
 from src.payments import PAYMENT_CHECKOUT, PaymentCheckoutError  # noqa: F401
@@ -87,12 +81,6 @@ CACHE_TTL = 300
 CACHE_TTL_ANKARA = 60
 CACHE_TTL_KOREAN_AMOS = 60
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PROBABILITY_EVALUATION_REPORT = os.path.join(
-    _PROJECT_ROOT,
-    "artifacts",
-    "probability_calibration",
-    "evaluation_report.json",
-)
 
 
 @app.middleware("http")
@@ -166,26 +154,6 @@ async def _etag_middleware(request: Request, call_next):
     response.headers["ETag"] = etag_value
     response.headers["Cache-Control"] = "private, max-age=30"
     return response
-
-_PROBABILITY_SHADOW_REPORT = os.path.join(
-    _PROJECT_ROOT,
-    "artifacts",
-    "probability_calibration",
-    "shadow_report.json",
-)
-_PROBABILITY_TRAINING_SAMPLES = os.path.join(
-    _PROJECT_ROOT,
-    "artifacts",
-    "probability_calibration",
-    "training_samples.json",
-)
-_LGBM_SCHEMA_REPORT = os.path.join(
-    _PROJECT_ROOT,
-    "artifacts",
-    "models",
-    "lgbm_daily_high_schema.json",
-)
-
 
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
@@ -508,44 +476,8 @@ def _integration_summary() -> Dict[str, Any]:
 
 
 def _probability_summary() -> Dict[str, Any]:
-    rollout = build_rollout_report(
-        _PROBABILITY_EVALUATION_REPORT,
-        _PROBABILITY_SHADOW_REPORT,
-    )
-    drift = {"drifted": False, "sample_count": 0, "warning": "not checked"}
-    try:
-        import sqlite3
-        conn = sqlite3.connect(_account_db.db_path)
-        rows = conn.execute(
-            "SELECT city, target_date, actual_high, deb_prediction, extra_json FROM daily_records_store ORDER BY target_date DESC LIMIT 200"
-        ).fetchall()
-        conn.close()
-        records: list[dict[str, Any]] = []
-        for row in rows:
-            rec = {"city": row[0], "target_date": row[1], "actual_high": row[2], "deb_prediction": row[3]}
-            try:
-                extra = json.loads(row[4] or "{}") if row[4] else {}
-                rec["mu"] = extra.get("mu")
-                rec["sigma"] = extra.get("sigma")
-            except Exception:
-                pass
-            records.append(rec)
-        if records:
-            drift = check_calibration_drift(records)
-            if drift.get("drifted"):
-                logger.warning(
-                    "Calibration drift detected: {} — {}",
-                    drift.get("warning") or "CRPS degraded",
-                    f"delta={drift.get('delta_pct')}% samples={drift.get('sample_count')}",
-                )
-    except Exception:
-        pass
     return {
-        "engine_mode": resolve_probability_engine_mode(),
-        "calibration_file": os.getenv("POLYWEATHER_PROBABILITY_CALIBRATION_FILE")
-        or DEFAULT_CALIBRATION_FILE,
-        "rollout": rollout,
-        "drift": drift,
+        "engine_mode": "legacy",
     }
 
 
@@ -698,27 +630,10 @@ def _city_coverage_summary(conn: sqlite3.Connection) -> Dict[str, Any]:
 
 def _model_city_coverage_summary(
     city_entries: Any,
-    training_samples_payload: Dict[str, Any],
-    evaluation_report: Dict[str, Any],
 ) -> Dict[str, Any]:
-    training_samples = training_samples_payload.get("samples") or []
-    emos_training_counts: Dict[str, int] = {}
-    emos_snapshot_counts: Dict[str, int] = {}
-    for item in training_samples:
-        if not isinstance(item, dict):
-            continue
-        city = str(item.get("city") or "").strip().lower()
-        if not city:
-            continue
-        emos_training_counts[city] = emos_training_counts.get(city, 0) + 1
-        if str(item.get("sample_source") or "").strip().lower() == "snapshot":
-            emos_snapshot_counts[city] = emos_snapshot_counts.get(city, 0) + 1
-
-    evaluation_by_city = (evaluation_report.get("by_city") or {}) if isinstance(evaluation_report, dict) else {}
     rows = []
     for entry in city_entries or []:
         city = str(entry.get("city") or "").strip().lower()
-        emos_eval = evaluation_by_city.get(city) or {}
         rows.append(
             {
                 "city": city,
@@ -726,22 +641,13 @@ def _model_city_coverage_summary(
                 "settlement_source": entry.get("settlement_source"),
                 "truth_rows": int(entry.get("truth_rows") or 0),
                 "feature_rows": int(entry.get("feature_rows") or 0),
-                "emos_training_samples": int(emos_training_counts.get(city, 0)),
-                "emos_snapshot_samples": int(emos_snapshot_counts.get(city, 0)),
-                "emos_evaluation_samples": int(emos_eval.get("samples") or 0),
-                "emos_delta_crps": emos_eval.get("emos_mean_crps"),
-                "lgbm_candidate_rows": int(entry.get("feature_rows") or 0),
             }
         )
 
     weakest = sorted(
         rows,
         key=lambda row: (
-            row["emos_training_samples"] > 0,
-            row["lgbm_candidate_rows"] > 0,
             row["truth_rows"] > 0,
-            row["emos_training_samples"],
-            row["lgbm_candidate_rows"],
             row["truth_rows"],
             row["city"],
         ),
@@ -749,15 +655,11 @@ def _model_city_coverage_summary(
     strongest = sorted(
         rows,
         key=lambda row: (
-            -row["emos_training_samples"],
-            -row["lgbm_candidate_rows"],
             -row["truth_rows"],
             row["city"],
         ),
     )[:8]
     return {
-        "cities_with_emos_training": sum(1 for row in rows if row["emos_training_samples"] > 0),
-        "cities_with_lgbm_candidates": sum(1 for row in rows if row["lgbm_candidate_rows"] > 0),
         "weakest": weakest,
         "strongest": strongest,
     }
@@ -786,16 +688,8 @@ def _training_data_summary() -> Dict[str, Any]:
             "truth_revisions": truth_revisions,
             "training_features": training_features,
             "city_coverage": {},
-            "artifacts": {},
+            "model_city_coverage": {},
         }
-
-    evaluation_report = _read_json_file(_PROBABILITY_EVALUATION_REPORT) or {}
-    shadow_report = _read_json_file(_PROBABILITY_SHADOW_REPORT) or {}
-    training_samples = _read_json_file(_PROBABILITY_TRAINING_SAMPLES) or {}
-    lgbm_report = _read_json_file(_LGBM_SCHEMA_REPORT) or {}
-    evaluation_summary = (evaluation_report.get("summary") or {}) if isinstance(evaluation_report, dict) else {}
-    shadow_summary = shadow_report.get("summary") or {}
-    lgbm_validation = ((lgbm_report.get("metrics") or {}).get("validation") or {})
 
     return {
         "db_path": db_path,
@@ -806,22 +700,7 @@ def _training_data_summary() -> Dict[str, Any]:
         "city_coverage": city_coverage,
         "model_city_coverage": _model_city_coverage_summary(
             city_coverage.get("entries") or [],
-            training_samples,
-            evaluation_report,
         ),
-        "artifacts": {
-            "emos_training_samples": training_samples.get("sample_count"),
-            "emos_snapshot_samples": training_samples.get("snapshot_sample_count"),
-            "emos_daily_record_samples": training_samples.get("daily_record_sample_count"),
-            "emos_evaluation_samples": evaluation_summary.get("sample_count"),
-            "emos_shadow_samples": shadow_summary.get("sample_count"),
-            "emos_delta_crps": (evaluation_summary.get("delta") or {}).get("crps"),
-            "lgbm_sample_count": lgbm_report.get("sample_count"),
-            "lgbm_train_count": lgbm_report.get("train_count"),
-            "lgbm_validation_count": lgbm_report.get("validation_count"),
-            "lgbm_validation_mae": lgbm_validation.get("lgbm_mae"),
-            "lgbm_validation_deb_mae": lgbm_validation.get("deb_mae"),
-        },
     }
 
 
