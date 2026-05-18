@@ -109,6 +109,8 @@ export type MembershipEntry = {
   queued_days?: number;
   queued_count?: number;
   plan_code?: string;
+  source?: string;
+  is_trial?: boolean;
 };
 
 export type MembershipsPayload = {

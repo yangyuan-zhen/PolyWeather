@@ -76,6 +76,8 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
             if isinstance(subscription_window, dict)
             else 0
         )
+        source = str(item.get("source") or "")
+        is_trial = source == "signup_trial" or str(item.get("plan_code") or "").startswith("signup_trial")
         row = {
             "user_id": user_id,
             "email": str(auth_user.get("email") or local_user.get("supabase_email") or ""),
@@ -83,6 +85,8 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
             "username": local_user.get("username"),
             "registered_at": local_user.get("created_at") or auth_user.get("created_at"),
             "plan_code": item.get("plan_code"),
+            "source": source,
+            "is_trial": is_trial,
             "starts_at": item.get("starts_at"),
             "current_expires_at": current_expires_at,
             "total_expires_at": total_expires_at or current_expires_at,
