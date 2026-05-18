@@ -146,23 +146,31 @@ class KnmiSourceMixin:
                     return None
 
                 data = ta[:]
-                latest_temp = float(data[-1, idx]) if data.ndim == 2 else float(data[-1])
+                # Handle both old (time,station) and new (station,time) layouts
+                dim_names = [str(d.name).lower() for d in ta.dimensions]
+                if data.ndim == 2:
+                    if dim_names and dim_names[0] == "station":
+                        latest_temp = float(data[idx, -1])
+                    else:
+                        latest_temp = float(data[-1, idx])
+                else:
+                    latest_temp = float(data[-1])
 
-                # Wind speed
-                ff = nc.variables.get("ff", None)
-                wind_ms = None
-                if ff is not None:
-                    wind_data = ff[:]
-                    wind_ms = float(wind_data[-1, idx] if wind_data.ndim == 2 else wind_data[-1])
+                def _read_2d(var, idx: int) -> Optional[float]:
+                    if var is None:
+                        return None
+                    vdata = var[:]
+                    if vdata.ndim == 2:
+                        vdim_names = [str(d.name).lower() for d in var.dimensions]
+                        if vdim_names and vdim_names[0] == "station":
+                            return float(vdata[idx, -1])
+                        return float(vdata[-1, idx])
+                    return float(vdata[-1])
 
-                # Pressure
-                p0 = nc.variables.get("p0", None)
-                pressure_hpa = None
-                if p0 is not None:
-                    p_data = p0[:]
-                    pressure_hpa = float(p_data[-1, idx] if p_data.ndim == 2 else p_data[-1])
-                    if pressure_hpa > 5000:
-                        pressure_hpa = pressure_hpa / 100.0
+                wind_ms = _read_2d(nc.variables.get("ff"), idx)
+                pressure_hpa = _read_2d(nc.variables.get("p0"), idx)
+                if pressure_hpa is not None and pressure_hpa > 5000:
+                    pressure_hpa = pressure_hpa / 100.0
 
                 nc.close()
 
