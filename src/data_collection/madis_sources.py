@@ -4,7 +4,7 @@ Fetches NetCDF files from NOAA MADIS public archive.
 HFMETAR data updates every 5 minutes (12 values/hour/station).
 Public anonymous access — no API key required.
 
-URL: https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/
+URL: https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from loguru import logger
 from src.utils.metrics import record_source_call
 
 MADIS_HFMETAR_URL = (
-    "https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/"
+    "https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/"
 )
 
 
