@@ -411,6 +411,10 @@ class TelegramLoginRequest(BaseModel):
     hash: str = Field(..., min_length=10)
 
 
+class TelegramBindTokenRequest(BaseModel):
+    token: str = Field(..., min_length=8)
+
+
 class AnalyticsEventRequest(BaseModel):
     event_type: str = Field(..., min_length=3, max_length=64)
     client_id: Optional[str] = Field(default=None, max_length=128)

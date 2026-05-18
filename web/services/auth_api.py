@@ -157,3 +157,43 @@ def login_with_telegram(request: Request, body: TelegramLoginRequest) -> Dict[st
         "binding": bind_result,
         "telegram_pricing": price,
     }
+
+
+def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
+    """Bind Telegram identity using a one-time token from the bot /bind command."""
+    legacy_routes._assert_entitlement(request)
+    identity = legacy_routes._require_supabase_identity(request)
+
+    token = str(getattr(body, "token", "") or "").strip()
+    if not token:
+        raise HTTPException(status_code=400, detail="bind_token is required")
+
+    db = DBManager()
+    telegram_id = db.consume_bind_token(token)
+    if telegram_id is None:
+        raise HTTPException(status_code=400, detail="invalid or expired bind token")
+
+    pricing = TelegramGroupPricing()
+    member_status = pricing.get_member_status(telegram_id) if pricing.configured else None
+    if not member_status or member_status not in ("creator", "administrator", "member"):
+        raise HTTPException(status_code=403, detail="not a group member")
+
+    db.upsert_user(telegram_id, "")
+    bind_result = db.bind_supabase_identity(
+        telegram_id=telegram_id,
+        supabase_user_id=identity["user_id"],
+        supabase_email=identity.get("email") or "",
+    )
+    if not bind_result.get("ok"):
+        raise HTTPException(
+            status_code=409,
+            detail=str(bind_result.get("reason") or "telegram bind failed"),
+        )
+
+    price = pricing.resolve_price_for_telegram_id(telegram_id)
+    return {
+        "ok": True,
+        "telegram_id": telegram_id,
+        "binding": bind_result,
+        "telegram_pricing": price,
+    }

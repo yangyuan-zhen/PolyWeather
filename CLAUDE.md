@@ -38,8 +38,8 @@ Users (Web / Telegram) → Next.js Frontend (Vercel) → FastAPI /web/app.py
                                             Payment Layer (Intent + Event + Confirm Loop)
 ```
 
-- **Backend**: FastAPI on port 8000 (`web/app.py` → `web/core.py` + `web/routes.py` + `web/analysis_service.py`)
-- **Frontend**: Next.js 15 + React 19 + TypeScript + Tailwind CSS 3 on port 3000 (dev)
+- **Backend**: FastAPI on port 8000 (`web/app.py` → `web/app_factory.py` → `web/routers/` (8 route modules) + `web/services/` (14 service modules) + `web/core.py`)
+- **Frontend**: Next.js 15 + React 19 + TypeScript + Tailwind CSS 3 + shadcn/ui (new-york style) on port 3000 (dev)
 - **Bot**: Telegram bot via `bot_listener.py` → `src/bot/`
 - **Shared analysis core** in `src/` is used by both web API and bot
 - **Scan Terminal**: Real-time city opportunity scanning (`web/scan_terminal_service.py` and `frontend/components/dashboard/scan-terminal/`)
@@ -54,9 +54,12 @@ Users (Web / Telegram) → Next.js Frontend (Vercel) → FastAPI /web/app.py
 ```bash
 cd frontend
 npm ci
-npm run dev        # Next.js dev server
-npm run build      # Production build
-npm run lint       # ESLint via next lint
+npm run dev         # Next.js dev server (runs sync-next-server-chunks.mjs first)
+npm run build       # Production build (runs sync-next-server-chunks.mjs after)
+npm run start       # Production server
+npm run lint        # ESLint via next lint
+npm run typecheck   # tsc --noEmit
+npm run test:business  # Business state tests (also runs in CI)
 ```
 
 ### Backend (dev on port 8000)
@@ -73,10 +76,9 @@ python run.py
 
 ### Docker (production-like stack)
 ```bash
-docker compose up -d --build                    # bot + web API
-docker compose --profile workers up -d          # + prewarm worker
-docker compose --profile monitoring up -d       # + Prometheus/Grafana/Alertmanager
+docker compose up -d --build                    # bot + web API (polyweather + polyweather_web)
 ```
+The compose file defines two services: `polyweather` (bot) and `polyweather_web` (FastAPI on :8000). Prewarm worker and monitoring profiles were removed in v1.6.0.
 
 ### Python tests
 ```bash
@@ -101,21 +103,26 @@ curl http://127.0.0.1:8000/metrics
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/data_collection/` | Weather sources (METAR, TAF, Open-Meteo, JMA, KMA, MGM, NMC, Russia stations, settlement sources), city registry (52 cities), Polymarket readonly layer. Also: `madis_sources.py` (NOAA 5-min NetCDF), `amos_station_sources.py` (Korean runway sensors), `country_networks.py` (per-country provider routing + `_airport_primary_from_raw`) |
 | `src/analysis/` | DEB algorithm, trend engine, probability calibration (EMOS/LGBM), market alert engine, settlement rounding |
-| `src/models/` | LightGBM daily-high model training and feature engineering |
-| `src/payments/` | Onchain checkout, event listener, confirm loop, contract audit |
+| `src/auth/` | Supabase entitlement checks, Telegram group pricing |
 | `src/bot/` | Telegram bot handlers and orchestrator |
 | `src/database/` | SQLite-based runtime state, DB manager, daily/truth/training feature repositories |
-| `web/` | FastAPI app, routes (~65K), analysis service (~130K), scan terminal service (~56K), AI scan modules |
+| `src/data_collection/` | Weather sources (METAR, TAF, Open-Meteo, JMA, KMA, MGM, NMC, Russia stations, settlement sources), city registry (52 cities), Polymarket readonly layer. Also: `madis_sources.py` (NOAA 5-min NetCDF), `amos_station_sources.py` (Korean runway sensors), `country_networks.py` (per-country provider routing + `_airport_primary_from_raw`) |
+| `src/data_mining/` | Historical data fetch utilities |
+| `src/models/` | LightGBM daily-high model training and feature engineering |
+| `src/onchain/` | Polygon wallet watcher, Polymarket wallet activity watcher |
+| `src/payments/` | Onchain checkout, event listener, confirm loop, contract audit |
+| `src/strategy/` | Trading strategy modules |
+| `src/trading/` | Trading execution modules |
+| `src/utils/` | Shared utilities: config loader, logging, metrics, Telegram push, chat ID helpers |
+| `web/` | FastAPI app (`app.py` → `app_factory.py`), `routers/` (8 route modules), `services/` (14 service modules), `core.py`, scan terminal modules (AI fallback, AI prompts, METAR gate, city rows, ranker, cache) |
 | `frontend/app/` | Next.js App Router pages (dashboard, account, auth, docs, ops, probabilities, scan) |
 | `frontend/components/dashboard/` | Dashboard UI components (map, sidebar, detail panel, modals, charts, scan terminal). `scan-root-styles.ts` is the CSS Module barrel, combining 22 module roots into one pre-composed className. `monitoring/` subdirectory: `MonitorPanel`, `monitor-temperature.ts` (temp resolution chain), `monitor-refresh-policy.ts`. |
 | `frontend/lib/` | Shared client logic: types (`dashboard-types.ts`, including `AirportCurrentConditions`, `CityDetail`), API client, chart utils, i18n, `source-freshness.ts` (per-source freshness with `expected_next_update_at`), dashboard utils |
 | `frontend/hooks/` | React hooks: dashboard store (global state), Leaflet map, chart helper |
-| `scripts/` | Operational scripts: probability calibration training, backfills, payment reconciliation, prewarm worker |
+| `scripts/` | Operational scripts: probability calibration training, backfills, payment reconciliation. `supabase/` subdirectory: DB schema and migration SQL. |
 | `config/` | YAML config (city list, weather settings, logging) |
 | `docs/` | Bilingual product & technical docs |
-| `monitoring/` | Prometheus/Grafana/Alertmanager configs |
 
 ## Key Technical Details
 
@@ -124,6 +131,7 @@ curl http://127.0.0.1:8000/metrics
 - **Frontend package manager**: npm
 - **State storage**: SQLite primary path (set via `POLYWEATHER_STATE_STORAGE_MODE=sqlite` + `POLYWEATHER_DB_PATH`). Legacy JSON/JSONL files are migration/fallback only.
 - **Runtime data**: External dir recommended (`POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`) to avoid git conflicts
+- **Configuration**: `.env.example` is the comprehensive reference (8 config sections: runtime, Telegram, weather cache, auth, ops, frontend, optional modules, Polygon monitor). Copy to `.env` and fill in secrets.
 - **Auth gating** (frontend middleware): Token-based (`POLYWEATHER_DASHBOARD_ACCESS_TOKEN`) or Supabase session-based (`POLYWEATHER_AUTH_ENABLED`). Local dev hosts bypass auth.
 - **CORS**: Allowed origins from `WEB_CORS_ORIGINS` env var (defaults: localhost:3000, polyweather-pro.vercel.app)
 - **EMOS/CRPS calibration**: Trainable but production should use `legacy` or `emos_shadow` engine; `emos_primary` only after local evaluation + manual rollout

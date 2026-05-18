@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
@@ -78,16 +78,6 @@ type TelegramPricing = {
   is_group_member?: boolean;
   amount_usdc?: string;
   pricing_source?: string;
-};
-
-type TelegramAuthPayload = {
-  id: number;
-  first_name?: string;
-  last_name?: string;
-  username?: string;
-  photo_url?: string;
-  auth_date: number;
-  hash: string;
 };
 
 type PaymentPlan = {
@@ -250,11 +240,6 @@ const TELEGRAM_GROUP_URL = String(
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
-const TELEGRAM_LOGIN_BOT_USERNAME = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_LOGIN_BOT_USERNAME || "WeatherQuant_bot",
-)
-  .replace(/^@/, "")
-  .trim();
 const TELEGRAM_MARKET_CHANNEL_URL = "https://t.me/+hGAk7JsjtdhiOTUx";
 const TELEGRAM_TOPICS_GROUP_URL = "https://t.me/+8vel7rwjZagxODUx";
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
@@ -898,8 +883,6 @@ export function AccountCenter() {
   const [lastTxHash, setLastTxHash] = useState("");
   const [manualPayment, setManualPayment] = useState<CreatedIntent["direct_payment"] | null>(null);
   const [manualTxHash, setManualTxHash] = useState("");
-  const [telegramLoginBusy, setTelegramLoginBusy] = useState(false);
-  const telegramLoginWidgetRef = useRef<HTMLDivElement | null>(null);
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
@@ -1510,64 +1493,44 @@ export function AccountCenter() {
   const userId = backend?.user_id || user?.id || "";
   const isAuthenticated = Boolean(userId);
   const email = backend?.email || user?.email || "";
+  // Handle ?bind_token=xxx from Telegram bot /bind deep link
   useEffect(() => {
-    const container = telegramLoginWidgetRef.current;
-    if (!container || !TELEGRAM_LOGIN_BOT_USERNAME || !isAuthenticated) return;
-    container.innerHTML = "";
-    const callbackName = "onPolyWeatherTelegramAuth";
-    (window as unknown as Record<string, unknown>)[callbackName] = async (
-      payload: TelegramAuthPayload,
-    ) => {
-      setTelegramLoginBusy(true);
+    if (!isAuthenticated) return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("bind_token");
+    if (!token) return;
+    // Remove token from URL so refresh doesn't retry
+    const url = new URL(window.location.href);
+    url.searchParams.delete("bind_token");
+    window.history.replaceState(null, "", url.toString());
+    (async () => {
       setPaymentError("");
       setPaymentInfo("");
       try {
         const authHeaders = await buildAuthedHeaders(true, false);
-        const res = await fetch("/api/auth/telegram/login", {
+        const res = await fetch("/api/auth/telegram/bind-by-token", {
           method: "POST",
           headers: authHeaders,
-          body: JSON.stringify(payload),
+          body: JSON.stringify({ token }),
         });
         if (!res.ok) {
           const raw = (await res.text()).slice(0, 350);
-          throw new Error(`telegram login failed: ${raw}`);
+          throw new Error(`bind failed: ${raw}`);
         }
         const data = (await res.json()) as {
           telegram_pricing?: TelegramPricing | null;
         };
-        const amount = data.telegram_pricing?.amount_usdc || "10";
-        setPaymentInfo(
-          data.telegram_pricing?.is_group_member
-            ? `Telegram 群成员验证成功，当前会员价 ${amount}U。`
-            : `Telegram 已登录，但未检测到群成员身份，当前价格 ${amount}U。`,
-        );
+        if (data.telegram_pricing?.is_group_member) {
+          const amount = data.telegram_pricing.amount_usdc || "5";
+          setPaymentInfo(`Telegram 群成员验证成功，当前会员价 ${amount}U。`);
+        }
         await loadSnapshot();
         await loadPaymentSnapshot();
       } catch (error) {
         setPaymentError(normalizePaymentError(error).message);
-      } finally {
-        setTelegramLoginBusy(false);
       }
-    };
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.setAttribute("data-telegram-login", TELEGRAM_LOGIN_BOT_USERNAME);
-    script.setAttribute("data-size", "large");
-    script.setAttribute("data-radius", "12");
-    script.setAttribute("data-userpic", "false");
-    script.setAttribute("data-request-access", "write");
-    script.setAttribute("data-onauth", `${callbackName}(user)`);
-    container.appendChild(script);
-    return () => {
-      container.innerHTML = "";
-    };
-  }, [
-    buildAuthedHeaders,
-    isAuthenticated,
-    loadPaymentSnapshot,
-    loadSnapshot,
-  ]);
+    })();
+  }, [isAuthenticated, buildAuthedHeaders, loadPaymentSnapshot, loadSnapshot]);
   const displayName =
     String(user?.user_metadata?.full_name || "").trim() ||
     (email ? String(email).split("@")[0] : "") ||
@@ -3011,28 +2974,21 @@ export function AccountCenter() {
                 <p className="text-slate-400 text-sm mb-6">
                   {copy.telegramHint}
                 </p>
-                <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 px-4 py-3">
-                  <p className="text-xs font-bold text-emerald-200">
-                    Telegram 群内价格
-                  </p>
-                  <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
-                    登录 Telegram 后由后端检查群成员身份：群成员 5U，非群成员 10U。
-                  </p>
-                  <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <div ref={telegramLoginWidgetRef} />
-                    {telegramLoginBusy ? (
-                      <span className="text-[11px] text-cyan-200">
-                        正在验证 Telegram...
-                      </span>
-                    ) : null}
-                    {backend?.telegram_pricing?.amount_usdc ? (
+                {backend?.telegram_pricing?.is_group_member ? (
+                  <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 px-4 py-3">
+                    <p className="text-xs font-bold text-emerald-200">
+                      Telegram 群成员价格
+                    </p>
+                    <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
+                      已验证群成员身份，当前会员价 {backend.telegram_pricing.amount_usdc ?? "5"}U。
+                    </p>
+                    <div className="mt-3">
                       <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[11px] font-bold text-white">
-                        当前价格: {backend.telegram_pricing.amount_usdc}U
-                        {backend.telegram_pricing.is_group_member ? " · 群成员" : " · 普通价"}
+                        当前价格: {backend.telegram_pricing.amount_usdc ?? "5"}U · 群成员
                       </span>
-                    ) : null}
+                    </div>
                   </div>
-                </div>
+                ) : null}
 
                 {/* Channel Upgrade / Migration Notice — Pro users only */}
                 {isSubscribed ? (

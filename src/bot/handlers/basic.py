@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 from typing import Callable
 
@@ -7,6 +8,7 @@ from src.bot.command_parser import extract_command_name
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
+from src.auth.telegram_group_pricing import TelegramGroupPricing, TELEGRAM_MEMBER_STATUSES
 
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind", "markets"}
@@ -140,27 +142,48 @@ class BasicCommandHandler:
         trace = CommandTrace("/bind", message)
         try:
             parts = (message.text or "").split(maxsplit=2)
+            user = message.from_user
+
+            # No-args mode: generate a one-time bind token for group members
             if len(parts) < 2:
+                pricing = TelegramGroupPricing()
+                if not pricing.configured:
+                    self.bot.reply_to(
+                        message,
+                        "⚠️ 机器人未配置群组定价，请联系管理员。",
+                    )
+                    trace.set_status("error", "pricing_not_configured")
+                    return
+                member_status = pricing.get_member_status(user.id)
+                if not member_status or member_status not in TELEGRAM_MEMBER_STATUSES:
+                    self.bot.reply_to(
+                        message,
+                        "🔒 此功能仅限内部群成员使用。",
+                    )
+                    trace.set_status("blocked", f"not_group_member:{member_status or 'none'}")
+                    return
+                token = self.io_layer.db.create_bind_token(user.id, ttl_minutes=10)
+                app_url = str(os.getenv("POLYWEATHER_APP_URL") or "https://polyweather-pro.vercel.app").rstrip("/")
+                bind_url = f"{app_url}/account?bind_token={token}"
                 self.bot.reply_to(
                     message,
                     (
-                        "❌ 用法:\n"
-                        "<code>/bind &lt;supabase_user_id&gt; [email]</code>\n\n"
-                        "示例:\n"
-                        "<code>/bind 11111111-2222-3333-4444-555555555555 user@example.com</code>"
+                        "🔗 点击以下链接绑定网页账户（10 分钟内有效）：\n"
+                        f"{bind_url}\n\n"
+                        "打开链接后系统将自动验证群成员身份并绑定 Telegram。"
                     ),
-                    parse_mode="HTML",
+                    disable_web_page_preview=False,
                 )
-                trace.set_status("bad_request", "missing_supabase_user_id")
+                trace.set_status("ok", "token_generated")
                 return
 
+            # Args mode: manual bind with supabase_user_id
             supabase_user_id = str(parts[1] or "").strip()
             if len(supabase_user_id) < 8:
                 self.bot.reply_to(message, "❌ supabase_user_id 格式不正确。")
                 trace.set_status("bad_request", "invalid_supabase_user_id")
                 return
             supabase_email = str(parts[2] or "").strip() if len(parts) >= 3 else ""
-            user = message.from_user
             self.io_layer.db.upsert_user(user.id, self.io_layer.display_name(user))
             result = self.io_layer.db.bind_supabase_identity(
                 telegram_id=user.id,
