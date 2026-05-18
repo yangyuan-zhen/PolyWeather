@@ -57,7 +57,11 @@ class MadisSourceMixin:
     def _madis_parse_hfmetar(
         self, nc_bytes: bytes, fname: str
     ) -> List[Dict[str, Any]]:
-        """Parse a MADIS HFMETAR NetCDF file and return per-station observations."""
+        """Parse a MADIS HFMETAR NetCDF file and return per-station observations.
+
+        NOAA restructured the netCDF layout (2026-05): stationId replaces icaoId,
+        temperatures are in Kelvin, altimeter in Pascal.
+        """
         try:
             from netCDF4 import Dataset
             nc = Dataset(fname, memory=nc_bytes)
@@ -70,71 +74,85 @@ class MadisSourceMixin:
 
         results: List[Dict[str, Any]] = []
         try:
-            # MADIS HFMETAR uses these variable names
-            icaos = [str(s).strip() for s in nc.variables.get("icaoId", [])[:]]
-            temps = nc.variables.get("temperature", None)  # in Celsius
-            dewpts = nc.variables.get("dewpoint", None)
-            winds = nc.variables.get("windSpeed", None)
-            pressures = nc.variables.get("seaLevelPress", None)
-            obs_times = nc.variables.get("observationTime", None)
+            station_ids = nc.variables.get("stationId")
+            temps = nc.variables.get("temperature")  # Kelvin
+            dewpts = nc.variables.get("dewpoint")    # Kelvin
+            winds = nc.variables.get("windSpeed")    # m/s
+            pressures = nc.variables.get("altimeter")  # Pa
+            obs_times = nc.variables.get("observationTime")  # epoch seconds
 
-            n = len(icaos)
+            if station_ids is None:
+                logger.warning("MADIS: stationId variable not found in netCDF")
+                return []
+
+            n = station_ids.shape[0]
             for i in range(n):
-                icao = str(icaos[i]).strip().upper()
-                if not icao or icao == "0":
+                # Decode stationId (char array per row)
+                try:
+                    import numpy as np
+                    row = station_ids[i]
+                    if isinstance(row, np.ndarray):
+                        sid_bytes = b"".join(row.tobytes().split(b"\x00")[:1])
+                        icao = sid_bytes.decode("ascii", errors="replace").strip()
+                    else:
+                        icao = str(row).strip()
+                except Exception:
+                    icao = ""
+
+                icao = icao.upper()
+                if not icao or len(icao) != 4:
                     continue
 
+                # Temperature (Kelvin → Celsius)
                 temp_c = None
                 if temps is not None:
                     try:
                         v = float(temps[i])
-                        if -90 < v < 60:
-                            temp_c = round(v, 1)
+                        if 180 < v < 340:  # valid Kelvin range (-93C to +67C)
+                            temp_c = round(v - 273.15, 1)
                     except (ValueError, IndexError):
                         pass
                 if temp_c is None:
-                    continue  # skip stations without temperature
+                    continue
 
+                # Dewpoint (Kelvin → Celsius)
                 dewp_c = None
                 if dewpts is not None:
                     try:
                         v = float(dewpts[i])
-                        if -90 < v < 60:
-                            dewp_c = round(v, 1)
+                        if 180 < v < 340:
+                            dewp_c = round(v - 273.15, 1)
                     except (ValueError, IndexError):
                         pass
 
+                # Wind (m/s → kt)
                 wind_kt = None
                 if winds is not None:
                     try:
                         w = float(winds[i])
-                        if w >= 0:
+                        if 0 <= w < 200:
                             wind_kt = round(w * 1.94384, 1)
                     except (ValueError, IndexError):
                         pass
 
+                # Pressure (Pa → hPa)
                 pressure_hpa = None
                 if pressures is not None:
                     try:
                         p = float(pressures[i])
-                        if 800 < p < 1100:
-                            pressure_hpa = round(p, 1)
+                        if 50000 < p < 120000:  # valid Pa range
+                            pressure_hpa = round(p / 100.0, 1)
                     except (ValueError, IndexError):
                         pass
 
+                # Observation time (epoch seconds)
                 obs_time = ""
                 if obs_times is not None:
                     try:
-                        ts = str(obs_times[i]).strip()
-                        # Try to parse as epoch or ISO
-                        if ts and ts != "0":
-                            try:
-                                epoch = int(float(ts))
-                                dt = datetime.fromtimestamp(epoch, tz=timezone.utc)
-                                obs_time = dt.isoformat()
-                            except (ValueError, OverflowError):
-                                obs_time = ts
-                    except (ValueError, IndexError):
+                        ts = obs_times[i]
+                        dt = datetime.fromtimestamp(float(ts), tz=timezone.utc)
+                        obs_time = dt.isoformat()
+                    except Exception:
                         pass
 
                 results.append({
