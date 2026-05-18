@@ -32,13 +32,13 @@ class KnmiSourceMixin:
         import os
         return str(os.getenv("KNMI_API_KEY") or "").strip()
 
-    def _knmi_http_get(self, url: str, api_key: str) -> bytes:
-        headers = {"Authorization": api_key}
+    def _knmi_http_get(self, url: str, api_key: str = "") -> bytes:
+        """Download file. Does NOT send auth header — download URLs are pre-signed S3 links."""
         getter = getattr(self, "_http_get", None)
         if callable(getter):
-            resp = getter(url, headers=headers)
+            resp = getter(url)
             return resp.content if hasattr(resp, "content") else resp
-        resp = self.session.get(url, timeout=self.timeout, headers=headers)
+        resp = self.session.get(url, timeout=self.timeout)
         resp.raise_for_status()
         return resp.content
 
