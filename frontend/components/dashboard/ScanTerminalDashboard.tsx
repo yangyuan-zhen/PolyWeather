@@ -259,6 +259,21 @@ function ScanTerminalScreen() {
       : selectedRow;
   const scanStatus = terminalData?.status || "ready";
   const staleReason = terminalData?.stale_reason || null;
+  const proPreviewItems = isEn
+    ? [
+        "Intraday METAR rule analysis",
+        "Multi-model high-temp forecast",
+        "Real-time observation deviation",
+        "Future-date decision cards",
+        "Telegram group price $5",
+      ]
+    : [
+        "日内机场报文规则分析",
+        "多模型高温预测",
+        "实时观测偏差",
+        "未来日期城市决策卡",
+        "Telegram 群内价 5U",
+      ];
 
   useEffect(() => {
     if (!activeDetailRow) return;
@@ -404,6 +419,45 @@ function ScanTerminalScreen() {
             toggleLocale={toggleLocale}
             userLocalTime={userLocalTime}
           />
+
+          {!isPro ? (
+            <section
+              className="scan-upgrade-announcement"
+              aria-label={isEn ? "Pro preview" : "Pro 能力预览"}
+            >
+              <div className="scan-upgrade-announcement-copy">
+                <span>{isEn ? "What Pro unlocks" : "开通 Pro 后可看到"}</span>
+                <strong>
+                  {isEn
+                    ? "Full weather decision context, not just the public map."
+                    : "不只是公开地图，而是完整天气交易辅助信息。"}
+                </strong>
+                <p>
+                  {isEn
+                    ? "Guests and free users can browse the map. Pro adds live evidence, model deltas and city-level decision cards for current and future dates."
+                    : "游客和免费用户可浏览地图；Pro 会补齐实时证据、模型偏差和当前/未来日期的城市决策卡。"}
+                </p>
+              </div>
+              <ul>
+                {proPreviewItems.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+              {proAccess.authenticated ? (
+                <button
+                  type="button"
+                  className="scan-primary-button"
+                  onClick={openScanPaywall}
+                >
+                  {isEn ? "View Pro" : "查看 Pro"}
+                </button>
+              ) : (
+                <a href={accountHref} className="scan-primary-button">
+                  {isEn ? "Sign in for Pro" : "登录查看 Pro"}
+                </a>
+              )}
+            </section>
+          ) : null}
 
           <section className="scan-list-section">
             <div className="scan-list-header">

@@ -7,6 +7,7 @@ from web.services.ops_api import (
     extend_ops_subscription,
     get_ops_analytics_funnel,
     get_ops_config,
+    get_ops_health_check,
     get_ops_logs,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
@@ -136,3 +137,8 @@ async def ops_logs(
     lines: int = 100,
 ):
     return get_ops_logs(request, level=level, lines=lines)
+
+
+@router.get("/api/ops/health-check")
+async def ops_health_check(request: Request):
+    return get_ops_health_check(request)

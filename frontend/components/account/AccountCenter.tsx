@@ -707,8 +707,8 @@ export function AccountCenter() {
       weatherEngine: isEn ? "Weather Engine" : "气象引擎",
       intradayAnalysis: isEn ? "Intraday Analysis" : "今日内分析",
       historyFuture: isEn
-        ? "Historical + Future-date Analysis"
-        : "历史对账 + 未来日期分析",
+        ? "Future-date + Decision Card Analysis"
+        : "未来日期分析 + 城市决策卡",
       smartPush: isEn
         ? "Cross-platform Smart Weather Push"
         : "全平台智能气象查询",
@@ -814,8 +814,8 @@ export function AccountCenter() {
       noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
       trialEndsSoonTitle: isEn ? "Trial ending soon" : "试用即将结束",
       trialEndsSoonBody: isEn
-        ? "Your 3-day trial is almost over. Upgrade to Pro to keep full intraday analysis and history."
-        : "你的 3 天试用即将结束。升级 Pro 后可继续使用完整日内分析和历史对账。",
+        ? "Your 3-day trial is almost over. Upgrade to Pro to keep full intraday analysis and decision cards."
+        : "你的 3 天试用即将结束。升级 Pro 后可继续使用完整日内分析和城市决策卡。",
       trialExpiredTitle: isEn ? "Trial ended" : "试用已结束",
       trialExpiredBody: isEn
         ? "Your trial access has ended. Renew with Pro to restore full access."

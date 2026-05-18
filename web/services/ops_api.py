@@ -433,3 +433,74 @@ def get_ops_logs(
         "lines": log_lines[-safe_lines:],
         "total": len(log_lines),
     }
+
+
+def get_ops_health_check(request: Request) -> dict[str, Any]:
+    _require_ops(request)
+    import os, requests as _r, time as _time
+
+    results: dict[str, dict] = {}
+    timeout = 3
+
+    # Supabase
+    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    supabase_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if supabase_url and supabase_key:
+        try:
+            r = _r.get(f"{supabase_url}/rest/v1/", headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}, timeout=timeout)
+            results["supabase"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round(r.elapsed.total_seconds() * 1000)}
+        except Exception as e:
+            results["supabase"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["supabase"] = {"ok": False, "error": "not configured"}
+
+    # Open-Meteo
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&daily=temperature_2m_max&timezone=auto&forecast_days=1", timeout=timeout)
+        results["open_meteo"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["open_meteo"] = {"ok": False, "error": str(e)[:100]}
+
+    # METAR (aviationweather)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://aviationweather.gov/api/data/metar?ids=KJFK&format=json", timeout=timeout)
+        results["metar"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["metar"] = {"ok": False, "error": str(e)[:100]}
+
+    # KNMI
+    knmi_key = str(os.getenv("KNMI_API_KEY") or "").strip()
+    if knmi_key:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get("https://api.dataplatform.knmi.nl/open-data/v1/datasets", headers={"Authorization": knmi_key}, timeout=timeout)
+            results["knmi"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["knmi"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["knmi"] = {"ok": False, "error": "not configured"}
+
+    # MADIS (NOAA)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/", timeout=timeout)
+        results["madis"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["madis"] = {"ok": False, "error": str(e)[:100]}
+
+    # Telegram Bot
+    bot_token = str(os.getenv("TELEGRAM_BOT_TOKEN") or "").strip()
+    if bot_token:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"https://api.telegram.org/bot{bot_token}/getMe", timeout=timeout)
+            results["telegram"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["telegram"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["telegram"] = {"ok": False, "error": "not configured"}
+
+    all_ok = all(v.get("ok") for v in results.values())
+    return {"ok": all_ok, "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z", "services": results}
