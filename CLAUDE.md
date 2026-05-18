@@ -103,13 +103,12 @@ curl http://127.0.0.1:8000/metrics
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/analysis/` | DEB algorithm, trend engine, probability calibration (EMOS/LGBM), market alert engine, settlement rounding |
+| `src/analysis/` | DEB algorithm, trend engine, market alert engine, settlement rounding |
 | `src/auth/` | Supabase entitlement checks, Telegram group pricing |
 | `src/bot/` | Telegram bot handlers and orchestrator |
 | `src/database/` | SQLite-based runtime state, DB manager, daily/truth/training feature repositories |
 | `src/data_collection/` | Weather sources (METAR, TAF, Open-Meteo, JMA, KMA, MGM, NMC, Russia stations, settlement sources), city registry (52 cities), Polymarket readonly layer. Also: `madis_sources.py` (NOAA 5-min NetCDF), `amos_station_sources.py` (Korean runway sensors), `country_networks.py` (per-country provider routing + `_airport_primary_from_raw`) |
 | `src/data_mining/` | Historical data fetch utilities |
-| `src/models/` | LightGBM daily-high model training and feature engineering |
 | `src/onchain/` | Polygon wallet watcher, Polymarket wallet activity watcher |
 | `src/payments/` | Onchain checkout, event listener, confirm loop, contract audit |
 | `src/strategy/` | Trading strategy modules |
@@ -120,7 +119,7 @@ curl http://127.0.0.1:8000/metrics
 | `frontend/components/dashboard/` | Dashboard UI components (map, sidebar, detail panel, modals, charts, scan terminal). `scan-root-styles.ts` is the CSS Module barrel, combining 22 module roots into one pre-composed className. `monitoring/` subdirectory: `MonitorPanel`, `monitor-temperature.ts` (temp resolution chain), `monitor-refresh-policy.ts`. |
 | `frontend/lib/` | Shared client logic: types (`dashboard-types.ts`, including `AirportCurrentConditions`, `CityDetail`), API client, chart utils, i18n, `source-freshness.ts` (per-source freshness with `expected_next_update_at`), dashboard utils |
 | `frontend/hooks/` | React hooks: dashboard store (global state), Leaflet map, chart helper |
-| `scripts/` | Operational scripts: probability calibration training, backfills, payment reconciliation. `supabase/` subdirectory: DB schema and migration SQL. |
+| `scripts/` | Operational scripts: backfills, payment reconciliation. `supabase/` subdirectory: DB schema and migration SQL. |
 | `config/` | YAML config (city list, weather settings, logging) |
 | `docs/` | Bilingual product & technical docs |
 
@@ -134,7 +133,6 @@ curl http://127.0.0.1:8000/metrics
 - **Configuration**: `.env.example` is the comprehensive reference (8 config sections: runtime, Telegram, weather cache, auth, ops, frontend, optional modules, Polygon monitor). Copy to `.env` and fill in secrets.
 - **Auth gating** (frontend middleware): Token-based (`POLYWEATHER_DASHBOARD_ACCESS_TOKEN`) or Supabase session-based (`POLYWEATHER_AUTH_ENABLED`). Local dev hosts bypass auth.
 - **CORS**: Allowed origins from `WEB_CORS_ORIGINS` env var (defaults: localhost:3000, polyweather-pro.vercel.app)
-- **EMOS/CRPS calibration**: Trainable but production should use `legacy` or `emos_shadow` engine; `emos_primary` only after local evaluation + manual rollout
 - **API proxy**: Frontend uses Next.js rewrites to proxy `/api/*` to the FastAPI backend; see `frontend/lib/api-proxy.ts` and `frontend/lib/backend-api.ts`
 
 ## Commit Convention

@@ -63,3 +63,9 @@ frontend/.next-start.log
 .codex/skills/.system/**
 !.codex/prompts/
 !.codex/prompts/**
+tmp_apikey.js
+tmp_obs.js
+tmp_rctp.html
+playwright-home-check.png
+.codex-backend-*.log
+frontend-next-*.log

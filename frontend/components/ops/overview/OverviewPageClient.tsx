@@ -309,12 +309,12 @@ export function OverviewPageClient() {
                     <div className="text-[11px] text-slate-500">有真值</div>
                   </div>
                   <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-purple-400">{coverage.with_emos_samples ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">有EMOS</div>
+                    <div className="text-xl font-bold text-purple-400">{coverage.with_feature_rows ?? 0}</div>
+                    <div className="text-[11px] text-slate-500">有特征</div>
                   </div>
                   <div className="rounded-xl bg-white/5 p-3 text-center">
-                    <div className="text-xl font-bold text-amber-400">{coverage.with_lgbm_samples ?? 0}</div>
-                    <div className="text-[11px] text-slate-500">有LGBM</div>
+                    <div className="text-xl font-bold text-amber-400">{td?.truth_records?.row_count ?? 0}</div>
+                    <div className="text-[11px] text-slate-500">真值行数</div>
                   </div>
                 </div>
               </CardContent>

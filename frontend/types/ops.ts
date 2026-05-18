@@ -44,13 +44,9 @@ export type SystemStatusPayload = {
       total_cities?: number;
       with_truth_rows?: number;
       with_feature_rows?: number;
-      with_emos_samples?: number;
-      with_lgbm_samples?: number;
     };
-    emos_samples?: Record<string, unknown>;
-    lgbm_samples?: Record<string, unknown>;
     model_cities?: {
-      strongest?: Array<{ city: string; emos?: number; lgbm?: number }>;
+      strongest?: Array<{ city: string; truth_rows?: number; feature_rows?: number }>;
       gaps?: string[];
     };
   };

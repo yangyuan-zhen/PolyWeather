@@ -40,8 +40,6 @@ export function TrainingPageClient() {
   const truth = td?.truth_records;
   const features = td?.training_features;
   const coverage = td?.city_coverage;
-  const emos = td?.emos_samples as Record<string, unknown> | undefined;
-  const lgbm = td?.lgbm_samples as Record<string, unknown> | undefined;
   const modelCities = td?.model_cities;
 
   return (
@@ -76,35 +74,6 @@ export function TrainingPageClient() {
             <StatRow label="城市总数" value={coverage?.total_cities ?? "—"} />
             <StatRow label="有真值" value={coverage?.with_truth_rows ?? "—"} />
             <StatRow label="有特征" value={coverage?.with_feature_rows ?? "—"} />
-            <StatRow label="有EMOS" value={coverage?.with_emos_samples ?? "—"} />
-            <StatRow label="有LGBM" value={coverage?.with_lgbm_samples ?? "—"} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader><CardTitle>EMOS 样本</CardTitle></CardHeader>
-          <CardContent>
-            {emos ? (
-              <dl className="space-y-1 text-sm">
-                {Object.entries(emos).map(([k, v]) => (
-                  <StatRow key={k} label={k} value={String(v)} />
-                ))}
-              </dl>
-            ) : <span className="text-slate-500 text-sm">无数据</span>}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>LGBM 样本</CardTitle></CardHeader>
-          <CardContent>
-            {lgbm ? (
-              <dl className="space-y-1 text-sm">
-                {Object.entries(lgbm).map(([k, v]) => (
-                  <StatRow key={k} label={k} value={String(v)} />
-                ))}
-              </dl>
-            ) : <span className="text-slate-500 text-sm">无数据</span>}
           </CardContent>
         </Card>
       </div>
@@ -119,7 +88,7 @@ export function TrainingPageClient() {
                   {modelCities.strongest.map((c, i) => (
                     <li key={i} className="text-sm text-slate-300">
                       <span className="text-white font-medium">{c.city}</span>
-                      <span className="text-slate-500 ml-3">EMOS:{c.emos ?? "—"} LGBM:{c.lgbm ?? "—"}</span>
+                      <span className="text-slate-500 ml-3">真值:{c.truth_rows ?? "—"} 特征:{c.feature_rows ?? "—"}</span>
                     </li>
                   ))}
                 </ul>
