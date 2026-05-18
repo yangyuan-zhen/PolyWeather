@@ -29,7 +29,7 @@ services:
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/var/lib/polyweather
       - ${POLYWEATHER_RUNTIME_DATA_DIR:-/var/lib/polyweather}:/app/data
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     user: "${UID:-1000}:${GID:-1000}"
     healthcheck:
       test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://localhost:8000/healthz')"]
