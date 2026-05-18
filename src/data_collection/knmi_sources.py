@@ -147,12 +147,11 @@ class KnmiSourceMixin:
 
                 data = ta[:]
                 # Handle both old (time,station) and new (station,time) layouts
-                dim_names = [str(d.name).lower() for d in ta.dimensions]
-                if data.ndim == 2:
-                    if dim_names and dim_names[0] == "station":
-                        latest_temp = float(data[idx, -1])
-                    else:
-                        latest_temp = float(data[-1, idx])
+                n_stations = len(station_ids)
+                if data.ndim == 2 and data.shape[0] == n_stations:
+                    latest_temp = float(data[idx, -1])
+                elif data.ndim == 2:
+                    latest_temp = float(data[-1, idx])
                 else:
                     latest_temp = float(data[-1])
 
@@ -160,10 +159,9 @@ class KnmiSourceMixin:
                     if var is None:
                         return None
                     vdata = var[:]
+                    if vdata.ndim == 2 and vdata.shape[0] == n_stations:
+                        return float(vdata[idx, -1])
                     if vdata.ndim == 2:
-                        vdim_names = [str(d.name).lower() for d in var.dimensions]
-                        if vdim_names and vdim_names[0] == "station":
-                            return float(vdata[idx, -1])
                         return float(vdata[-1, idx])
                     return float(vdata[-1])
 
