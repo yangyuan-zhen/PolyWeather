@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test:business": "node scripts/run-business-state-tests.mjs"
+    "test:business": "node scripts/run-business-state-tests.mjs",
+    "prepare": "husky"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.1.2",
