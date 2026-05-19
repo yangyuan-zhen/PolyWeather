@@ -233,7 +233,7 @@ const WALLETCONNECT_POLYGON_RPC_URL = String(
   process.env.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL ||
     "https://polygon-bor-rpc.publicnode.com",
 ).trim();
-const TELEGRAM_GROUP_URL = "https://t.me/+8vel7rwjZagxODUx";
+const TELEGRAM_GROUP_URL = "https://t.me/+Se93RpNQ58FhYmZh";
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
@@ -298,7 +298,9 @@ const InfoRow = ({
       <div className="shrink-0 p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
         {Icon && <Icon size={18} />}
       </div>
-      <span className="min-w-0 text-slate-400 text-sm font-medium leading-5">{label}</span>
+      <span className="min-w-0 text-slate-400 text-sm font-medium leading-5">
+        {label}
+      </span>
     </div>
     <span
       className={`min-w-0 break-all text-left text-sm font-semibold font-mono sm:text-right ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
@@ -733,12 +735,10 @@ export function AccountCenter() {
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
-      telegramGroupLink: isEn
-        ? "Apply to Join Pro Telegram Group"
-        : "申请加入 Pro Telegram 群（需审核）",
+      telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
       telegramTopicsGroupLink: isEn
-        ? "Apply to City Topics Group (Pro)"
-        : "申请加入城市话题群（Pro，需审核）",
+        ? "Real-time Weather Updates"
+        : "城市实测温度群",
       copyCommand: isEn ? "Copy command" : "复制命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
@@ -869,7 +869,9 @@ export function AccountCenter() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
-  const [manualPayment, setManualPayment] = useState<CreatedIntent["direct_payment"] | null>(null);
+  const [manualPayment, setManualPayment] = useState<
+    CreatedIntent["direct_payment"] | null
+  >(null);
   const [manualTxHash, setManualTxHash] = useState("");
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
@@ -1346,17 +1348,13 @@ export function AccountCenter() {
       const parsed = JSON.parse(raw) as PaymentRecoveryState;
       const userId = String(parsed?.userId || "").trim();
       const intentId = String(parsed?.intentId || "").trim();
-      const txHash = String(parsed?.txHash || "").trim().toLowerCase();
+      const txHash = String(parsed?.txHash || "")
+        .trim()
+        .toLowerCase();
       const createdAt = Number(parsed?.createdAt || 0);
       const expired =
         !createdAt || Date.now() - createdAt > PAYMENT_RECOVERY_TTL_MS;
-      if (
-        expired ||
-        !intentId ||
-        !txHash ||
-        !userId ||
-        userId !== authUserId
-      ) {
+      if (expired || !intentId || !txHash || !userId || userId !== authUserId) {
         clearStoredPaymentRecovery();
         return;
       }
@@ -1543,7 +1541,9 @@ export function AccountCenter() {
   );
   const hasQueuedExtension = Boolean(isSubscribed && queuedExtensionDays > 0);
   const displayExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw;
-  const reminderExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw || totalExpiryRaw;
+  const reminderExpiryRaw = isSubscribed
+    ? totalExpiryRaw
+    : currentExpiryRaw || totalExpiryRaw;
   const expiryInfo = parseSubscriptionExpiry(reminderExpiryRaw);
   const expiryFormatted = formatTime(displayExpiryRaw, locale);
   const currentExpiryFormatted = formatTime(currentExpiryRaw, locale);
@@ -1555,16 +1555,18 @@ export function AccountCenter() {
     : copy.noProSubscription;
   const showExpiringSoon = Boolean(
     isSubscribed &&
-      !hasQueuedExtension &&
-      expiryInfo &&
-      !expiryInfo.expired &&
-      expiryInfo.daysLeft <= 3,
+    !hasQueuedExtension &&
+    expiryInfo &&
+    !expiryInfo.expired &&
+    expiryInfo.daysLeft <= 3,
   );
-  const showExpiredReminder = Boolean(!isSubscribed && expiryInfo && expiryInfo.expired);
+  const showExpiredReminder = Boolean(
+    !isSubscribed && expiryInfo && expiryInfo.expired,
+  );
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
-      (!isSubscribed || isTrialPlan || showExpiringSoon || showExpiredReminder),
+    (!isSubscribed || isTrialPlan || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
     ? isTrialPlan
@@ -1607,12 +1609,12 @@ export function AccountCenter() {
     });
   }, [
     isAuthenticated,
-      canOpenCheckoutOverlay,
-      planCode,
-      showExpiredReminder,
-      showExpiringSoon,
-      showOverlay,
-    ]);
+    canOpenCheckoutOverlay,
+    planCode,
+    showExpiredReminder,
+    showExpiringSoon,
+    showOverlay,
+  ]);
 
   // Points Logic
   const backendPointsRaw = Number(backend?.points);
@@ -2472,7 +2474,9 @@ export function AccountCenter() {
       }
       const created = (await createRes.json()) as CreatedIntent;
       const direct = created.direct_payment;
-      const intentId = String(created.intent?.intent_id || direct?.intent_id || "");
+      const intentId = String(
+        created.intent?.intent_id || direct?.intent_id || "",
+      );
       if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
         throw new Error("manual payment payload invalid");
       }
@@ -2498,8 +2502,12 @@ export function AccountCenter() {
   };
 
   const submitManualPaymentTx = async () => {
-    const txHashNorm = String(manualTxHash || "").trim().toLowerCase();
-    const intentId = String(lastIntentId || manualPayment?.intent_id || "").trim();
+    const txHashNorm = String(manualTxHash || "")
+      .trim()
+      .toLowerCase();
+    const intentId = String(
+      lastIntentId || manualPayment?.intent_id || "",
+    ).trim();
     if (!intentId || !manualPayment) {
       setPaymentError("请先创建手动转账订单。");
       return;
@@ -2512,20 +2520,26 @@ export function AccountCenter() {
     setPaymentError("");
     try {
       const authHeaders = await buildAuthedHeaders(true, false);
-      const submitRes = await fetch(`/api/payments/intents/${intentId}/submit`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ tx_hash: txHashNorm }),
-      });
+      const submitRes = await fetch(
+        `/api/payments/intents/${intentId}/submit`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ tx_hash: txHashNorm }),
+        },
+      );
       if (!submitRes.ok) {
         const raw = (await submitRes.text()).slice(0, 350);
         throw new Error(`submit tx failed: ${raw}`);
       }
-      const confirmRes = await fetch(`/api/payments/intents/${intentId}/confirm`, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ tx_hash: txHashNorm }),
-      });
+      const confirmRes = await fetch(
+        `/api/payments/intents/${intentId}/confirm`,
+        {
+          method: "POST",
+          headers: authHeaders,
+          body: JSON.stringify({ tx_hash: txHashNorm }),
+        },
+      );
       if (!confirmRes.ok) {
         const raw = (await confirmRes.text()).slice(0, 350);
         const lowerRaw = raw.toLowerCase();
@@ -2535,7 +2549,9 @@ export function AccountCenter() {
             (lowerRaw.includes("confirmations not enough") ||
               lowerRaw.includes("tx indexed partially")));
         if (maybePending) {
-          setPaymentInfo(`交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`);
+          setPaymentInfo(
+            `交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`,
+          );
           await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
           return;
         }
@@ -2627,17 +2643,17 @@ export function AccountCenter() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-            {!showOverlay && canOpenCheckoutOverlay && (
-              <button
-                onClick={() => setShowOverlay(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
-              >
-                <Crown size={16} />{" "}
-                {showExpiringSoon || showExpiredReminder
-                  ? copy.renewNow
-                  : copy.upgradePro}
-              </button>
-            )}
+          {!showOverlay && canOpenCheckoutOverlay && (
+            <button
+              onClick={() => setShowOverlay(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 border border-yellow-500/30 text-yellow-500 rounded-xl text-sm transition-all animate-pulse"
+            >
+              <Crown size={16} />{" "}
+              {showExpiringSoon || showExpiredReminder
+                ? copy.renewNow
+                : copy.upgradePro}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void onRefresh()}
@@ -2688,8 +2704,8 @@ export function AccountCenter() {
                 ) : null}
                 {billing.canRedeem ? (
                   <p className="mt-2 text-xs text-emerald-200/90">
-                    当前可用 {billing.pointsUsed} 积分抵扣 ${billing.discountAmount.toFixed(2)}，
-                    续费时会自动生效。
+                    当前可用 {billing.pointsUsed} 积分抵扣 $
+                    {billing.discountAmount.toFixed(2)}， 续费时会自动生效。
                   </p>
                 ) : null}
               </div>
@@ -2826,7 +2842,8 @@ export function AccountCenter() {
             <div className="mt-6 flex items-start gap-2 p-3 bg-black/20 rounded-xl">
               <Info size={14} className="text-slate-500 mt-0.5 shrink-0" />
               <p className="text-[10px] text-slate-500 leading-normal italic">
-                积分规则：群内有效发言（自动防刷检测）+ 每日首条发言额外奖励。每周一零点结算周榜，所有活跃用户均享参与奖。
+                积分规则：群内有效发言（自动防刷检测）+
+                每日首条发言额外奖励。每周一零点结算周榜，所有活跃用户均享参与奖。
               </p>
             </div>
           </div>
@@ -2843,9 +2860,9 @@ export function AccountCenter() {
 
         {/* Subscription Info & Paywall */}
         <div className="lg:col-span-12 relative">
-            <div
+          <div
             className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-all duration-700 ${canOpenCheckoutOverlay && showOverlay ? "blur-md grayscale-[0.3] opacity-30 select-none pointer-events-none" : ""}`}
-            >
+          >
             <section className="bg-white/5 border border-white/10 rounded-[2rem] p-6 space-y-3">
               <h3 className="text-sm font-bold text-blue-400 uppercase tracking-widest mb-4">
                 {copy.membershipDetails}
@@ -2968,11 +2985,13 @@ export function AccountCenter() {
                       Telegram 群成员价格
                     </p>
                     <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
-                      已验证群成员身份，当前会员价 {backend.telegram_pricing.amount_usdc ?? "5"}U。
+                      已验证群成员身份，当前会员价{" "}
+                      {backend.telegram_pricing.amount_usdc ?? "5"}U。
                     </p>
                     <div className="mt-3">
                       <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[11px] font-bold text-white">
-                        当前价格: {backend.telegram_pricing.amount_usdc ?? "5"}U · 群成员
+                        当前价格: {backend.telegram_pricing.amount_usdc ?? "5"}U
+                        · 群成员
                       </span>
                     </div>
                   </div>
@@ -3125,7 +3144,8 @@ export function AccountCenter() {
                         手动转账（无需绑定钱包）
                       </p>
                       <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
-                        先创建订单，向唯一收款地址转账，完成后提交 tx hash 自动开通。请不要和钱包支付同时使用。
+                        先创建订单，向唯一收款地址转账，完成后提交 tx hash
+                        自动开通。请不要和钱包支付同时使用。
                       </p>
                     </div>
                     <button
@@ -3173,7 +3193,9 @@ export function AccountCenter() {
                         </p>
                         <input
                           value={manualTxHash}
-                          onChange={(event) => setManualTxHash(event.target.value)}
+                          onChange={(event) =>
+                            setManualTxHash(event.target.value)
+                          }
                           placeholder="0x..."
                           className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
                         />

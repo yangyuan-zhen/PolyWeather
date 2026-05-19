@@ -4,11 +4,15 @@ import os
 from typing import Any
 from typing import Callable
 
+from loguru import logger  # type: ignore
+
 from src.bot.command_parser import extract_command_name
 from src.bot.io_layer import BotIOLayer
 from src.bot.observability import CommandTrace
 from src.bot.runtime_coordinator import RuntimeStatus, render_runtime_status_html
+from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT
 from src.auth.telegram_group_pricing import TelegramGroupPricing, TELEGRAM_MEMBER_STATUSES
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
 
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind"}
 _BASIC_COMMANDS = {"start", "help", "id", "top", "diag", "bind", "unbind", "markets"}
@@ -21,11 +25,13 @@ class BasicCommandHandler:
         io_layer: BotIOLayer,
         runtime_status_provider: Callable[[], RuntimeStatus],
         config: dict | None = None,
+        entitlement_service: Any | None = None,
     ):
         self.bot = bot
         self.io_layer = io_layer
         self.runtime_status_provider = runtime_status_provider
         self.config = config or {}
+        self.entitlement_service = entitlement_service or SUPABASE_ENTITLEMENT
 
     def register(self) -> None:
         @self.bot.message_handler(commands=["start", "help"])
@@ -55,6 +61,11 @@ class BasicCommandHandler:
         @self.bot.message_handler(commands=["markets"])
         def _markets(message):
             self._dispatch(message)
+
+        if hasattr(self.bot, "chat_join_request_handler"):
+            @self.bot.chat_join_request_handler(func=lambda request: True)
+            def _chat_join_request(request):
+                self.handle_chat_join_request(request)
 
         @self.bot.message_handler(
             content_types=["text"],
@@ -245,6 +256,93 @@ class BasicCommandHandler:
             trace.set_status("ok")
         finally:
             trace.emit()
+
+    def handle_chat_join_request(self, request: Any) -> str:
+        chat = getattr(request, "chat", None)
+        user = getattr(request, "from_user", None)
+        chat_id = getattr(chat, "id", None)
+        user_id = getattr(user, "id", None)
+        if chat_id is None or user_id is None:
+            logger.warning("telegram join request missing chat_id/user_id")
+            return "ignored:invalid_request"
+
+        configured_chat_ids = {str(value).strip() for value in get_telegram_chat_ids_from_env() if str(value).strip()}
+        configured_chat_ids.update(
+            str(value).strip()
+            for value in [
+                os.getenv("POLYWEATHER_TELEGRAM_GROUP_ID"),
+                os.getenv("POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID"),
+            ]
+            if str(value or "").strip()
+        )
+        if configured_chat_ids and str(chat_id) not in configured_chat_ids:
+            logger.info(
+                "telegram join request ignored for non-configured chat chat_id={} user_id={}",
+                chat_id,
+                user_id,
+            )
+            return "ignored:chat_not_configured"
+
+        try:
+            supabase_user_ids = self.io_layer.db.list_supabase_user_ids_for_telegram(int(user_id))
+        except Exception as exc:
+            logger.warning("telegram join request binding lookup failed user_id={}: {}", user_id, exc)
+            return "pending:lookup_error"
+
+        if not supabase_user_ids:
+            return self._handle_ineligible_join_request(
+                chat_id=int(chat_id),
+                user_id=int(user_id),
+                reason="unbound",
+            )
+
+        for supabase_user_id in supabase_user_ids:
+            try:
+                if self.entitlement_service.has_active_subscription(
+                    supabase_user_id,
+                    respect_requirement=False,
+                ):
+                    self.bot.approve_chat_join_request(int(chat_id), int(user_id))
+                    logger.info(
+                        "telegram join request approved chat_id={} user_id={} supabase_user_id={}",
+                        chat_id,
+                        user_id,
+                        supabase_user_id,
+                    )
+                    return "approved"
+            except Exception as exc:
+                logger.warning(
+                    "telegram join request entitlement lookup failed user_id={} supabase_user_id={}: {}",
+                    user_id,
+                    supabase_user_id,
+                    exc,
+                )
+                return "pending:entitlement_error"
+
+        return self._handle_ineligible_join_request(
+            chat_id=int(chat_id),
+            user_id=int(user_id),
+            reason="no_active_subscription",
+        )
+
+    def _handle_ineligible_join_request(self, chat_id: int, user_id: int, reason: str) -> str:
+        action = str(os.getenv("POLYWEATHER_TELEGRAM_JOIN_INELIGIBLE_ACTION") or "pending").strip().lower()
+        if action in {"decline", "reject", "deny"}:
+            self.bot.decline_chat_join_request(chat_id, user_id)
+            logger.info(
+                "telegram join request declined chat_id={} user_id={} reason={}",
+                chat_id,
+                user_id,
+                reason,
+            )
+            return f"declined:{reason}"
+        logger.info(
+            "telegram join request left pending chat_id={} user_id={} reason={}",
+            chat_id,
+            user_id,
+            reason,
+        )
+        return f"pending:{reason}"
 
     def handle_unbind(self, message: Any) -> None:
         trace = CommandTrace("/unbind", message)

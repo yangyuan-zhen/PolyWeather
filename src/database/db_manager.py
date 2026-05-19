@@ -988,6 +988,38 @@ class DBManager:
                 return dict(row)
         return None
 
+    def list_supabase_user_ids_for_telegram(self, telegram_id: int) -> List[str]:
+        """Return all Supabase accounts currently bound to a Telegram user."""
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT supabase_user_id
+                FROM supabase_bindings
+                WHERE telegram_id = ?
+                ORDER BY updated_at DESC, supabase_user_id ASC
+                """,
+                (int(telegram_id),),
+            ).fetchall()
+            ids = {
+                str(row["supabase_user_id"] or "").strip().lower()
+                for row in rows
+                if str(row["supabase_user_id"] or "").strip()
+            }
+            legacy = conn.execute(
+                """
+                SELECT supabase_user_id
+                FROM users
+                WHERE telegram_id = ?
+                LIMIT 1
+                """,
+                (int(telegram_id),),
+            ).fetchone()
+            legacy_id = str((legacy["supabase_user_id"] if legacy else "") or "").strip().lower()
+            if legacy_id:
+                ids.add(legacy_id)
+            return sorted(ids)
+
     def search_users(self, query: str, limit: int = 20) -> List[Dict[str, Any]]:
         text = str(query or "").strip()
         safe_limit = max(1, min(int(limit or 20), 100))
