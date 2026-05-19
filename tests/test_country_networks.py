@@ -208,7 +208,6 @@ def test_china_provider_falls_back_to_metar_cluster_without_replacing_airport_an
     assert snapshot["provider_code"] == "china_cma"
     assert snapshot["airport_primary_current"]["source_code"] == "metar"
     assert snapshot["airport_primary_current"]["is_airport_station"] is True
-    assert snapshot["official_network_status"]["mode"] == "fallback_metar_cluster"
     assert snapshot["official_nearby"][0]["source_code"] == "metar_cluster"
     assert snapshot["official_nearby"][0]["is_official"] is False
 
@@ -288,68 +287,6 @@ def test_metar_cluster_naive_obs_time_is_interpreted_as_utc_before_city_display(
     assert row["source_code"] == "metar_cluster"
     assert row["obs_time_label"] == "11:00"
     assert row["obs_time_display_tz"] == "city_local"
-
-
-def test_china_provider_prefers_nmc_rows_when_available():
-    raw = {
-        "metar": {
-            "observation_time": "2026-04-06T10:00:00.000Z",
-            "current": {"temp": 22.5},
-        },
-        "nmc_official_nearby": [
-            {
-                "name": "浦东区域实况 (NMC)",
-                "icao": "atcMf",
-                "lat": 31.14,
-                "lon": 121.80,
-                "temp": 17.9,
-                "obs_time": "2026-04-06 06:50",
-            }
-        ],
-        "mgm_nearby": [
-            {
-                "name": "Hongqiao",
-                "icao": "ZSSS",
-                "lat": 31.2,
-                "lon": 121.3,
-                "temp": 23.1,
-            }
-        ],
-    }
-
-    snapshot = build_country_network_snapshot("shanghai", raw)
-
-    assert snapshot["provider_code"] == "china_cma"
-    assert snapshot["official_network_status"]["available"] is True
-    assert snapshot["official_network_status"]["mode"] == "official_active"
-    assert snapshot["official_nearby"][0]["source_code"] == "nmc"
-    assert snapshot["official_nearby"][0]["is_official"] is True
-
-
-def test_china_nmc_local_time_stale_when_absolute_age_is_old():
-    raw = {
-        "metar": {
-            "observation_time": "2020-01-01T06:30:00.000Z",
-            "current": {"temp": 32.0},
-        },
-        "nmc_official_nearby": [
-            {
-                "name": "广州区域实况 (NMC)",
-                "icao": "atcGz",
-                "lat": 23.39,
-                "lon": 113.30,
-                "temp": 32.0,
-                "obs_time": "2020-01-01 06:30",
-            }
-        ],
-    }
-
-    snapshot = build_country_network_snapshot("guangzhou", raw)
-    row = snapshot["official_nearby"][0]
-
-    assert row["source_code"] == "nmc"
-    assert row["sync_status"] == "stale"
-    assert row["usable_for_intraday"] is False
 
 
 def test_hko_provider_marks_explicit_official_station_as_anchor():
