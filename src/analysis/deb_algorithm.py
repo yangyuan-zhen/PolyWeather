@@ -611,7 +611,7 @@ def _reconcile_recent_noaa_actual_highs(city_name: str, lookback_days: int = 14)
                 "showemptystations": 1,
                 "recent": recent_minutes,
                 "complete": 1,
-                "token": "7c76618b66c74aee913bdbae4b448bdd",
+                "token": os.environ.get("NOAA_WRH_MESO_TOKEN", ""),
                 "obtimezone": "local",
             },
             headers={
