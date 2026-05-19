@@ -553,5 +553,157 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     else:
         results["telegram"] = {"ok": False, "error": "not configured"}
 
+    # JMA (Japan Meteorological Agency)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://www.jma.go.jp/bosai/forecast/", timeout=timeout)
+        results["jma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["jma"] = {"ok": False, "error": str(e)[:100]}
+
+    # MGM (Turkish State Meteorological Service)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://servis.mgm.gov.tr/web/sondurumlar?istno=17130&_=1", timeout=timeout, headers={"Origin": "https://www.mgm.gov.tr"})
+        results["mgm"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["mgm"] = {"ok": False, "error": str(e)[:100]}
+
+    # FMI (Finnish Meteorological Institute)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetCapabilities", timeout=timeout)
+        results["fmi"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["fmi"] = {"ok": False, "error": str(e)[:100]}
+
+    # KMA (Korea Meteorological Administration)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://www.weather.go.kr/wgis-nuri/js/info/sfc.geojson", timeout=timeout)
+        results["kma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["kma"] = {"ok": False, "error": str(e)[:100]}
+
+    # HKO (Hong Kong Observatory)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv", timeout=timeout)
+        results["hko"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["hko"] = {"ok": False, "error": str(e)[:100]}
+
+    # Singapore MSS (data.gov.sg)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://api.data.gov.sg/v1/environment/air-temperature", timeout=timeout)
+        results["singapore_mss"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["singapore_mss"] = {"ok": False, "error": str(e)[:100]}
+
+    # CWA (Taiwan Central Weather Administration)
+    cwa_key = str(os.getenv("CWA_API_KEY") or "").strip()
+    if cwa_key:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization={cwa_key}&limit=1", timeout=timeout)
+            results["cwa"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["cwa"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["cwa"] = {"ok": False, "error": "not configured"}
+
+    # IMGW (Poland)
+    imgw_token = str(os.getenv("IMGW_METEO_API_TOKEN") or "").strip()
+    if imgw_token:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get("https://meteo.imgw.pl/api/v1/station/aviation", timeout=timeout, headers={"Authorization": f"Bearer {imgw_token}"})
+            results["imgw"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["imgw"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["imgw"] = {"ok": False, "error": "not configured"}
+
+    # Polymarket Gamma API
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://gamma-api.polymarket.com/events?limit=1", timeout=timeout)
+        results["polymarket_gamma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["polymarket_gamma"] = {"ok": False, "error": str(e)[:100]}
+
+    # Polymarket CLOB API
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://clob.polymarket.com/server-time", timeout=timeout)
+        results["polymarket_clob"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["polymarket_clob"] = {"ok": False, "error": str(e)[:100]}
+
+    # Synoptic Data (US settlement verification)
+    synoptic_token = str(os.getenv("SYNOPTIC_API_TOKEN") or "").strip()
+    if synoptic_token:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"https://api.synopticdata.com/v2/stations/metadata?token={synoptic_token}&limit=1", timeout=timeout)
+            results["synoptic"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["synoptic"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["synoptic"] = {"ok": False, "error": "not configured"}
+
+    # AMOS (Korea runway sensors)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do", timeout=timeout)
+        results["amos"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["amos"] = {"ok": False, "error": str(e)[:100]}
+
+    # AMSC AWOS (China mainland airports)
+    amsc_base = str(os.getenv("AMSC_AWOS_BASE_URL") or "").strip()
+    if amsc_base:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"{amsc_base}/getWindPlate", timeout=timeout)
+            results["amsc_awos"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["amsc_awos"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["amsc_awos"] = {"ok": False, "error": "not configured"}
+
+    # OpenWeather
+    ow_key = str(os.getenv("OPENWEATHER_API_KEY") or "").strip()
+    if ow_key:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"https://api.openweathermap.org/data/2.5/weather?q=London&appid={ow_key}", timeout=timeout)
+            results["openweather"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["openweather"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["openweather"] = {"ok": False, "error": "not configured"}
+
+    # VisualCrossing
+    vc_key = str(os.getenv("VISUALCROSSING_API_KEY") or "").strip()
+    if vc_key:
+        try:
+            t0 = _time.perf_counter()
+            r = _r.get(f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/London/today?key={vc_key}&include=current", timeout=timeout)
+            results["visualcrossing"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        except Exception as e:
+            results["visualcrossing"] = {"ok": False, "error": str(e)[:100]}
+    else:
+        results["visualcrossing"] = {"ok": False, "error": "not configured"}
+
+    # NOAA WRH (US settlement verification)
+    try:
+        t0 = _time.perf_counter()
+        r = _r.get("https://www.weather.gov/wrh/timeseries?site=KJFK", timeout=timeout)
+        results["noaa_wrh"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+    except Exception as e:
+        results["noaa_wrh"] = {"ok": False, "error": str(e)[:100]}
+
     all_ok = all(v.get("ok") for v in results.values())
     return {"ok": all_ok, "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z", "services": results}

@@ -15,6 +15,22 @@ const LABELS: Record<string, string> = {
   knmi: "KNMI (Amsterdam)",
   madis: "MADIS (NOAA)",
   telegram: "Telegram Bot",
+  jma: "JMA (日本)",
+  mgm: "MGM (土耳其)",
+  fmi: "FMI (芬兰)",
+  kma: "KMA (韩国)",
+  hko: "HKO (香港)",
+  singapore_mss: "Singapore MSS",
+  cwa: "CWA (台湾)",
+  imgw: "IMGW (波兰)",
+  polymarket_gamma: "Polymarket Gamma",
+  polymarket_clob: "Polymarket CLOB",
+  synoptic: "Synoptic Data",
+  amos: "AMOS (韩国跑道)",
+  amsc_awos: "AMSC AWOS (中国)",
+  openweather: "OpenWeather",
+  visualcrossing: "VisualCrossing",
+  noaa_wrh: "NOAA WRH (美国结算)",
 };
 
 function StatusIcon({ svc }: { svc: ServiceResult }) {
