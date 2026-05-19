@@ -10,4 +10,3 @@ ssh "$VPS" "cd $PROJECT && git pull && docker compose up -d --build"
 echo "✅ Deploy complete. Checking health..."
 sleep 8
 ssh "$VPS" "curl -s http://localhost:8000/healthz"
-# deploy test
