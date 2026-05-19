@@ -68,7 +68,6 @@ def test_fetch_all_sources_prioritizes_multi_model_before_forecast(monkeypatch, 
     monkeypatch.setattr(collector, "_attach_knmi_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_hko_obs_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_cwa_settlement_nearby", lambda *args, **kwargs: None)
-    monkeypatch.setattr(collector, "_attach_russia_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_global_nearby_cluster", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "fetch_ensemble", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "fetch_nws", lambda *args, **kwargs: None)
@@ -124,7 +123,6 @@ def test_force_refresh_preserves_open_meteo_model_caches_by_default(monkeypatch,
     monkeypatch.setattr(collector, "_attach_knmi_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_hko_obs_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_cwa_settlement_nearby", lambda *args, **kwargs: None)
-    monkeypatch.setattr(collector, "_attach_russia_official_nearby", lambda *args, **kwargs: None)
     monkeypatch.setattr(collector, "_attach_global_nearby_cluster", lambda *args, **kwargs: None)
 
     collector.fetch_all_sources(
