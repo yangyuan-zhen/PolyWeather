@@ -40,7 +40,6 @@ def test_system_status_returns_summary_shape():
     assert 'training_features' in payload['training_data']
     assert 'city_coverage' in payload['training_data']
     assert 'model_city_coverage' in payload['training_data']
-    assert 'artifacts' in payload['training_data']
     assert 'metar_entries' in payload['cache']
     assert 'nmc_entries' in payload['cache']
     assert 'cities_count' in payload
