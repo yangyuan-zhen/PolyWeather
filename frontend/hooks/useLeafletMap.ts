@@ -674,20 +674,6 @@ export function useLeafletMap({
               const signature = getMarkerSignature(city, snapshot);
               const previousSignature = lastCityDataRef.current[city.name];
               const selectCityFromMarker = () => {
-                const currentMap = mapRef.current;
-                currentMap?.stop();
-                if (currentMap && !suspendMotionRef.current) {
-                  const c = currentMap.getContainer();
-                  if (!c || c.offsetWidth <= 0 || c.offsetHeight <= 0) return;
-                  currentMap.flyTo([city.lat, city.lon], 11, {
-                    animate: true,
-                    duration: 1.05,
-                    easeLinearity: 0.22,
-                  });
-                  lastMovedCityRef.current = city.name;
-                } else {
-                  lastMovedCityRef.current = null;
-                }
                 onSelectCityRef.current(city.name);
               };
               const bindMarkerTouchSelect = (marker: L.Marker) => {
