@@ -29,9 +29,6 @@ export function FutureAnchorStatusCard({
   currentTempText,
   weatherSummary,
   obsTime,
-  daylightProgress,
-  sunrise,
-  sunset,
   topObservedTemp,
   tempSymbol,
   gapToBaseBucket,
@@ -41,9 +38,6 @@ export function FutureAnchorStatusCard({
   currentTempText: string;
   weatherSummary: WeatherSummaryView;
   obsTime?: string | null;
-  daylightProgress: DaylightProgressView | null;
-  sunrise?: string | null;
-  sunset?: string | null;
   topObservedTemp: number | string | null | undefined;
   tempSymbol: string;
   gapToBaseBucket: number | null;
@@ -74,28 +68,6 @@ export function FutureAnchorStatusCard({
         </div>
       </div>
       <div className="future-v2-hero-obs">@{obsTime || "--"}</div>
-      {daylightProgress ? (
-        <div className="future-v2-daylight">
-          <div className="future-v2-daylight-head">
-            <span>{locale === "en-US" ? "Solar Window" : "昼夜进度"}</span>
-            <strong>
-              {daylightProgress.phase} {Math.round(daylightProgress.percent)}%
-            </strong>
-          </div>
-          <div
-            className="future-v2-daylight-bar"
-            style={
-              {
-                "--daylight-progress": `${daylightProgress.percent}%`,
-              } as CSSProperties & { "--daylight-progress": string }
-            }
-          />
-          <div className="future-v2-daylight-times">
-            <span>{sunrise || "--"}</span>
-            <span>{sunset || "--"}</span>
-          </div>
-        </div>
-      ) : null}
       <div className="future-v2-mini-grid">
         <FutureMiniMetric
           label={locale === "en-US" ? "High so far" : "日内已见高点"}
@@ -116,14 +88,6 @@ export function FutureAnchorStatusCard({
         <FutureMiniMetric
           label={locale === "en-US" ? "Path state" : "路径状态"}
           value={pathStatus}
-        />
-        <FutureMiniMetric
-          label={locale === "en-US" ? "Sunrise" : "日出时间"}
-          value={sunrise || "--"}
-        />
-        <FutureMiniMetric
-          label={locale === "en-US" ? "Sunset" : "日落时间"}
-          value={sunset || "--"}
         />
       </div>
     </section>

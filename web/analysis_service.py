@@ -1239,11 +1239,26 @@ def _analyze(
 
     # ── 3. Daily forecast ──
     daily = om.get("daily", {})
-    dates = daily.get("time", [])[:5]
-    maxtemps = daily.get("temperature_2m_max", [])[:5]
-    sunrises = daily.get("sunrise", [])
-    sunsets = daily.get("sunset", [])
-    sunshine = daily.get("sunshine_duration", [])
+    all_dates = daily.get("time", [])
+    all_maxtemps = daily.get("temperature_2m_max", [])
+    all_sunrises = daily.get("sunrise", [])
+    all_sunsets = daily.get("sunset", [])
+    all_sunshine = daily.get("sunshine_duration", [])
+
+    start_idx = 0
+    if local_date_str in all_dates:
+        start_idx = all_dates.index(local_date_str)
+    else:
+        for idx, d in enumerate(all_dates):
+            if d >= local_date_str:
+                start_idx = idx
+                break
+
+    dates = all_dates[start_idx : start_idx + 5]
+    maxtemps = all_maxtemps[start_idx : start_idx + 5]
+    sunrises = all_sunrises[start_idx : start_idx + 5]
+    sunsets = all_sunsets[start_idx : start_idx + 5]
+    sunshine = all_sunshine[start_idx : start_idx + 5]
     om_today = _sf(maxtemps[0]) if maxtemps else None
 
     forecast_daily = _dedupe_forecast_daily(
@@ -2067,7 +2082,20 @@ def _analyze_summary(city: str, force_refresh: bool = False) -> Dict[str, Any]:
 
     om_daily = (open_meteo.get("daily") or {}) if isinstance(open_meteo, dict) else {}
     om_hourly = (open_meteo.get("hourly") or {}) if isinstance(open_meteo, dict) else {}
-    maxtemps = om_daily.get("temperature_2m_max", [])[:5]
+
+    all_dates = om_daily.get("time", [])
+    all_maxtemps = om_daily.get("temperature_2m_max", [])
+
+    start_idx = 0
+    if local_date_str in all_dates:
+        start_idx = all_dates.index(local_date_str)
+    else:
+        for idx, d in enumerate(all_dates):
+            if d >= local_date_str:
+                start_idx = idx
+                break
+
+    maxtemps = all_maxtemps[start_idx : start_idx + 5]
     om_today = _sf(maxtemps[0]) if maxtemps else None
     nws_high = _sf((nws or {}).get("today_high")) if isinstance(nws, dict) else None
     mgm_high = _sf((mgm or {}).get("today_high")) if isinstance(mgm, dict) else None

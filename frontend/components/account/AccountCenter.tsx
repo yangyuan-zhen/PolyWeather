@@ -3015,23 +3015,6 @@ export function AccountCenter() {
                 <p className="text-slate-400 text-sm mb-6">
                   {copy.telegramHint}
                 </p>
-                {backend?.telegram_pricing?.is_group_member ? (
-                  <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 px-4 py-3">
-                    <p className="text-xs font-bold text-emerald-200">
-                      Telegram 群成员价格
-                    </p>
-                    <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
-                      已验证群成员身份，当前会员价{" "}
-                      {backend.telegram_pricing.amount_usdc ?? "5"}U。
-                    </p>
-                    <div className="mt-3">
-                      <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1.5 text-[11px] font-bold text-white">
-                        当前价格: {backend.telegram_pricing.amount_usdc ?? "5"}U
-                        · 群成员
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
 
                 <div className="mb-4 flex flex-wrap gap-2">
                   {TELEGRAM_TOPICS_GROUP_URL &&

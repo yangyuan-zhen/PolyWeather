@@ -94,9 +94,6 @@ export function FutureForecastTodayLayout(props: FutureForecastTodayLayoutProps)
           currentTempText={currentTempText}
           weatherSummary={weatherSummary}
           obsTime={detail.current?.obs_time}
-          daylightProgress={daylightProgress}
-          sunrise={detail.forecast?.sunrise}
-          sunset={detail.forecast?.sunset}
           topObservedTemp={topObservedTemp}
           tempSymbol={detail.temp_symbol}
           gapToBaseBucket={gapToBaseBucket}
