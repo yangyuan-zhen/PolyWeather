@@ -40,7 +40,8 @@ class _DummyCollector(NmcSourceMixin):
         self._nmc_cache_lock = threading.Lock()
 
 
-def test_fetch_nmc_region_current_parses_rest_payload():
+def test_fetch_nmc_region_current_parses_rest_payload(monkeypatch):
+    monkeypatch.setenv("NMC_REALTIME_BASE_URL", "https://www.nmc.cn/rest/real")
     collector = _DummyCollector(
         {
             "https://www.nmc.cn/rest/real/atcMf": _DummyResponse(
@@ -70,7 +71,8 @@ def test_fetch_nmc_region_current_parses_rest_payload():
     assert out["current"]["airpressure"] is None
 
 
-def test_fetch_nmc_official_nearby_returns_normalized_row():
+def test_fetch_nmc_official_nearby_returns_normalized_row(monkeypatch):
+    monkeypatch.setenv("NMC_REALTIME_BASE_URL", "https://www.nmc.cn/rest/real")
     collector = _DummyCollector(
         {
             "https://www.nmc.cn/rest/real/atcMf": _DummyResponse(
