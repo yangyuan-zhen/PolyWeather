@@ -12,7 +12,6 @@ from src.data_collection.metar_sources import MetarSourceMixin
 from src.data_collection.mgm_sources import MgmSourceMixin
 from src.data_collection.jma_amedas_sources import JmaAmedasSourceMixin
 from src.data_collection.russia_station_sources import RussiaStationSourceMixin
-from src.data_collection.nmc_sources import NmcSourceMixin
 from src.data_collection.nws_open_meteo_sources import NwsOpenMeteoSourceMixin
 from src.data_collection.amos_station_sources import AmosStationSourceMixin
 from src.data_collection.amsc_awos_sources import AmscAwosSourceMixin
@@ -24,7 +23,7 @@ from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NmcSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, RussiaStationSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin):
     """
     Multi-source weather data collector
 
@@ -35,7 +34,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     - AMSC AWOS (China mainland runway-point airport sensors)
     - NWS (US National Weather Service)
     - MGM (Turkish Meteorological Service)
-    - JMA / NMC / HKO / CWA (country official networks)
+    - JMA / HKO / CWA (country official networks)
     - Polymarket (weather derivative markets)
     """
 
@@ -204,11 +203,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         )
         self._taf_cache: Dict[str, Dict] = {}
         self._taf_cache_lock = threading.Lock()
-        self.nmc_cache_ttl_sec = int(
-            os.getenv("NMC_CACHE_TTL_SEC", "300")
-        )
-        self._nmc_cache: Dict[str, Dict] = {}
-        self._nmc_cache_lock = threading.Lock()
         self.jma_cache_ttl_sec = int(
             os.getenv("JMA_AMEDAS_CACHE_TTL_SEC", "120")
         )
@@ -773,8 +767,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             self._knmi_cache.pop(f"knmi:{normalized}:{use_fahrenheit}", None)
         with self._hko_obs_cache_lock:
             self._hko_obs_cache.pop(f"hko_obs:{normalized}:{use_fahrenheit}", None)
-        with self._nmc_cache_lock:
-            self._nmc_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._ru_station_cache_lock:
             self._ru_station_cache.pop(f"{normalized}:{use_fahrenheit}", None)
         with self._settlement_cache_lock:
@@ -907,24 +899,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def _attach_china_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
-        if city_lower not in {
-            "beijing",
-            "chengdu",
-            "chongqing",
-            "shanghai",
-            "shenzhen",
-            "wuhan",
-        }:
-            return
-        official_rows = self.fetch_nmc_official_nearby(
-            city_lower, use_fahrenheit=use_fahrenheit
-        )
-        if not official_rows:
-            return
-        results["nmc_official_nearby"] = official_rows
-        if "mgm_nearby" not in results:
-            results["mgm_nearby"] = official_rows
-        results["nearby_source"] = "nmc"
+        return
 
     def _attach_japan_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool

@@ -425,7 +425,6 @@ def _cache_summary() -> Dict[str, Any]:
     open_meteo_multi_model_entries = len(getattr(_weather, "_multi_model_cache", {}) or {})
     metar_entries = len(getattr(_weather, "_metar_cache", {}) or {})
     taf_entries = len(getattr(_weather, "_taf_cache", {}) or {})
-    nmc_entries = len(getattr(_weather, "_nmc_cache", {}) or {})
     settlement_entries = len(getattr(_weather, "_settlement_cache", {}) or {})
 
     gauge_set("polyweather_api_cache_entries", len(_cache))
@@ -434,7 +433,6 @@ def _cache_summary() -> Dict[str, Any]:
     gauge_set("polyweather_open_meteo_multi_model_cache_entries", open_meteo_multi_model_entries)
     gauge_set("polyweather_metar_cache_entries", metar_entries)
     gauge_set("polyweather_taf_cache_entries", taf_entries)
-    gauge_set("polyweather_nmc_cache_entries", nmc_entries)
     gauge_set("polyweather_settlement_cache_entries", settlement_entries)
     return {
         "api_cache_entries": len(_cache),
@@ -443,7 +441,6 @@ def _cache_summary() -> Dict[str, Any]:
         "open_meteo_multi_model_entries": open_meteo_multi_model_entries,
         "metar_entries": metar_entries,
         "taf_entries": taf_entries,
-        "nmc_entries": nmc_entries,
         "settlement_entries": settlement_entries,
         "analysis": get_analysis_cache_stats(),
     }

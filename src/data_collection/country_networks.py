@@ -508,41 +508,6 @@ def _metar_cluster_rows(raw: Dict[str, Any]) -> List[Dict[str, Any]]:
     return out
 
 
-def _nmc_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
-    rows = raw.get("nmc_official_nearby") or []
-    city_offset = get_city_utc_offset_seconds(city)
-    out: List[Dict[str, Any]] = []
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-        out.append(
-            _normalize_station_row(
-                station_code=row.get("icao") or row.get("istNo"),
-                station_label=row.get("name"),
-                temp=row.get("temp"),
-                lat=row.get("lat"),
-                lon=row.get("lon"),
-                obs_time=row.get("obs_time"),
-                source_code="nmc",
-                source_label="NMC",
-                is_official=True,
-                is_airport_station=False,
-                is_settlement_anchor=False,
-                extra={
-                    "obs_time_utc_offset_seconds": city_offset,
-                    "page_url": row.get("page_url"),
-                    "humidity": _safe_float(row.get("humidity")),
-                    "rain": _safe_float(row.get("rain")),
-                    "airpressure": _safe_float(row.get("airpressure")),
-                    "wx_desc": row.get("wx_desc"),
-                    "wind_direction_text": row.get("wind_direction_text"),
-                    "wind_power_text": row.get("wind_power_text"),
-                },
-            )
-        )
-    return out
-
-
 def _jma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
     rows = raw.get("jma_official_nearby") or []
     out: List[Dict[str, Any]] = []
@@ -830,22 +795,16 @@ class TurkeyMgmNetworkProvider(CountryNetworkProvider):
 
 class ChinaCmaNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
-        super().__init__("china_cma", "CMA/NMC")
+        super().__init__("china_cma", "CMA")
 
     def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
-        rows = _nmc_rows(raw, city)
-        if rows:
-            return rows
         return _metar_cluster_rows(raw)
 
     def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         rows = self.official_nearby_current(city, raw)
-        has_nmc = bool(_nmc_rows(raw, city))
         return {
             "provider_code": self.provider_code,
             "provider_label": self.provider_label,
-            "available": has_nmc,
-            "mode": "official_active" if has_nmc else ("fallback_metar_cluster" if rows else "reference_only"),
             "row_count": len(rows),
         }
 

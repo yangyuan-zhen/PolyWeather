@@ -27,7 +27,6 @@ from src.analysis.settlement_rounding import apply_city_settlement
 from src.data_collection.country_networks import build_country_network_snapshot
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
 from src.data_collection.city_time import get_city_utc_offset_seconds
-from src.data_collection.nmc_sources import NMC_CITY_REFERENCES
 from src.database.runtime_state import IntradayPathSnapshotRepository
 from web.services.city_payloads import (
     build_city_detail_payload as _city_payload_detail,
@@ -126,18 +125,7 @@ def _format_observation_time_local(value: Any, utc_offset: int) -> str:
 
 
 def _fetch_nmc_current_fallback(city: str, *, use_fahrenheit: bool) -> Dict[str, Any]:
-    city_key = str(city or "").strip().lower()
-    if city_key not in NMC_CITY_REFERENCES:
-        return {}
-    try:
-        payload = _weather.fetch_nmc_region_current(
-            city_key,
-            use_fahrenheit=use_fahrenheit,
-        )
-        return payload if isinstance(payload, dict) else {}
-    except Exception as exc:
-        logger.debug("NMC current fallback failed city={}: {}", city_key, exc)
-        return {}
+    return {}
 
 
 def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
@@ -263,13 +251,6 @@ _OBSERVATION_SOURCE_PROFILES: Dict[str, Dict[str, Any]] = {
         "expected_grace_sec": 900,
         "stale_after_sec": 3600,
     },
-    "nmc": {
-        "label": "NMC",
-        "native_update_interval_sec": 3600,
-        "fresh_window_sec": 3600,
-        "expected_grace_sec": 1800,
-        "stale_after_sec": 7200,
-    },
 }
 
 
@@ -293,8 +274,6 @@ def _canonical_observation_source_code(value: Any) -> str:
         return "mgm"
     if "noaa" in raw:
         return "noaa"
-    if "nmc" in raw:
-        return "nmc"
     if "wunderground" in raw or raw == "wu":
         return "wunderground"
     return raw
