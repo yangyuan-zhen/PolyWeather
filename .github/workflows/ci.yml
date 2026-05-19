@@ -62,3 +62,21 @@ jobs:
 
       - name: Build Docker image
         run: docker build -t polyweather-ci .
+
+  deploy:
+    needs: [python-quality, frontend-quality, docker-build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /root/PolyWeather
+            git pull origin main
+            docker compose up -d --build
+            sleep 10
+            curl -s http://localhost:8000/healthz
