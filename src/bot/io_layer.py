@@ -15,6 +15,8 @@ from src.bot.settings import (
     MESSAGE_POINTS,
 )
 from src.database.db_manager import DBManager
+from src.utils.telegram_chat_ids import get_telegram_chat_ids_from_env
+from src.utils.telegram_chat_ids import parse_telegram_chat_ids
 
 
 class BotIOLayer:
@@ -29,6 +31,7 @@ class BotIOLayer:
         self.message_cooldown_map = self._parse_int_map(
             os.getenv("POLYWEATHER_BOT_MESSAGE_COOLDOWN_BY_CHAT")
         )
+        self.points_chat_ids = self._resolve_points_chat_ids()
         self.query_topic_chat_id = str(
             os.getenv("TELEGRAM_QUERY_TOPIC_CHAT_ID") or ""
         ).strip()
@@ -97,6 +100,22 @@ class BotIOLayer:
         if chat_key and chat_key in self.message_cooldown_map:
             return self.message_cooldown_map[chat_key]
         return MESSAGE_COOLDOWN_SEC
+
+    @staticmethod
+    def _resolve_points_chat_ids() -> set[str]:
+        dedicated = parse_telegram_chat_ids(
+            os.getenv("POLYWEATHER_BOT_POINTS_CHAT_IDS"),
+            os.getenv("POLYWEATHER_BOT_POINTS_CHAT_ID"),
+        )
+        if dedicated:
+            return set(dedicated)
+        return set(get_telegram_chat_ids_from_env())
+
+    def _is_points_chat_allowed(self, chat_id: Any) -> bool:
+        if not self.points_chat_ids:
+            return True
+        chat_key = str(chat_id).strip() if chat_id is not None else ""
+        return chat_key in self.points_chat_ids
 
     def _resolve_query_target(
         self,
@@ -248,6 +267,14 @@ class BotIOLayer:
             return
         chat = getattr(message, "chat", None)
         if not chat or chat.type not in ("group", "supergroup"):
+            return
+        if not self._is_points_chat_allowed(getattr(chat, "id", None)):
+            logger.info(
+                "message points skipped chat_id={} thread_id={} user_id={} reason=chat_not_allowed",
+                getattr(chat, "id", None),
+                getattr(message, "message_thread_id", None),
+                getattr(getattr(message, "from_user", None), "id", None),
+            )
             return
 
         user = message.from_user
