@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import time
 from datetime import datetime
@@ -9,36 +10,38 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
+_NMC_FORECAST_BASE = os.getenv("NMC_FORECAST_BASE_URL", "").strip()
+_NMC_REALTIME_BASE = os.getenv("NMC_REALTIME_BASE_URL", "").strip()
 
 NMC_CITY_REFERENCES: Dict[str, Dict[str, Any]] = {
     "shanghai": {
         "region_label": "浦东",
-        "page_url": "https://m.nmc.cn/publish/forecast/ASH/pudong.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/ASH/pudong.html" if _NMC_FORECAST_BASE else "",
         "station_code": "atcMf",
     },
     "beijing": {
         "region_label": "顺义",
-        "page_url": "https://m.nmc.cn/publish/forecast/ABJ/shunyi.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/ABJ/shunyi.html" if _NMC_FORECAST_BASE else "",
         "station_code": "MKoqG",
     },
     "chongqing": {
         "region_label": "渝北",
-        "page_url": "https://m.nmc.cn/publish/forecast/ACQ/yubei.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/ACQ/yubei.html" if _NMC_FORECAST_BASE else "",
         "station_code": "xFVYU",
     },
     "chengdu": {
         "region_label": "双流",
-        "page_url": "https://m.nmc.cn/publish/forecast/ASC/shuangliu.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/ASC/shuangliu.html" if _NMC_FORECAST_BASE else "",
         "station_code": "grFhZ",
     },
     "wuhan": {
         "region_label": "武汉",
-        "page_url": "https://m.nmc.cn/publish/forecast/AHB/wuhan.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/AHB/wuhan.html" if _NMC_FORECAST_BASE else "",
         "station_code": "bSpCz",
     },
     "shenzhen": {
         "region_label": "深圳",
-        "page_url": "https://m.nmc.cn/publish/forecast/AGD/shenzuo.html",
+        "page_url": f"{_NMC_FORECAST_BASE}/AGD/shenzuo.html" if _NMC_FORECAST_BASE else "",
         "station_code": "AhpEU",
     },
 }
@@ -129,7 +132,7 @@ class NmcSourceMixin:
             return None
 
         try:
-            url = f"https://www.nmc.cn/rest/real/{station_code}"
+            url = f"{_NMC_REALTIME_BASE}/{station_code}"
             payload = self._nmc_http_get_json(url)
             if not isinstance(payload, dict) or not isinstance(payload.get("weather"), dict):
                 record_source_call("nmc", "current", "empty", (time.perf_counter() - started) * 1000.0)

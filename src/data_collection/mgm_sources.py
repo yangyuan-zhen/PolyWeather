@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import unicodedata
 from datetime import datetime, timedelta
 from typing import Dict, Optional
@@ -20,10 +21,9 @@ class MgmSourceMixin:
         从土耳其气象局 (MGM) 获取实时数据和预测 (由用户提供其内部 API)
         """
         started = datetime.now()
-        base_url = "https://servis.mgm.gov.tr/web"
-        # 必须带 Origin，否则会被反爬拦截
+        base_url = os.getenv("MGM_BASE_URL", "").strip() or "https://servis.mgm.gov.tr/web"
         headers = {
-            "Origin": "https://www.mgm.gov.tr",
+            "Origin": os.getenv("MGM_ORIGIN_URL", "").strip() or "https://www.mgm.gov.tr",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         }
         results = {}
@@ -234,9 +234,9 @@ class MgmSourceMixin:
         使用多线程辅助抓取，因为直接通过 il={province} 往往只返回 1 个站。
         """
         started = datetime.now()
-        base_url = "https://servis.mgm.gov.tr/web"
+        base_url = os.getenv("MGM_BASE_URL", "").strip() or "https://servis.mgm.gov.tr/web"
         headers = {
-            "Origin": "https://www.mgm.gov.tr",
+            "Origin": os.getenv("MGM_ORIGIN_URL", "").strip() or "https://www.mgm.gov.tr",
             "User-Agent": "Mozilla/5.0",
         }
         import time

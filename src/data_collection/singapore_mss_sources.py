@@ -10,6 +10,7 @@ URL: https://api.data.gov.sg/v1/environment/air-temperature
 
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
@@ -19,7 +20,7 @@ from loguru import logger
 from src.utils.metrics import record_source_call
 
 SINGAPORE_MSS_TEMP_URL = (
-    "https://api.data.gov.sg/v1/environment/air-temperature"
+    os.getenv("SINGAPORE_MSS_BASE_URL", "").strip() or "https://api.data.gov.sg/v1/environment/air-temperature"
 )
 
 # Preferred station: closest to Changi Airport (WSSS)

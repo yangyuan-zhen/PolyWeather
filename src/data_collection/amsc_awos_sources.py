@@ -21,10 +21,7 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
-AMSC_AWOS_BASE_URL = (
-    "https://www.amsc.net.cn/gateway/api/saas/rest/amc/"
-    "AwosController/getWindPlate"
-)
+AMSC_AWOS_BASE_URL = os.getenv("AMSC_AWOS_BASE_URL", "").strip()
 
 AMSC_AWOS_AIRPORTS: Dict[str, Dict[str, str]] = {
     "shanghai": {"icao": "ZSPD", "label": "Shanghai Pudong"},
@@ -176,7 +173,7 @@ class AmscAwosSourceMixin:
     def _amsc_headers(self) -> Dict[str, str]:
         headers = {
             "Accept": "application/json, text/plain, */*",
-            "Referer": "https://www.amsc.net.cn/",
+            "Referer": os.getenv("AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"),
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"

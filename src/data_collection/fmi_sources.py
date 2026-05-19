@@ -7,6 +7,7 @@ for Helsinki-Vantaa airport (EFHK, WMO 2974, FMISID 100968).
 from __future__ import annotations
 
 import re
+import os
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -15,7 +16,7 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
-FMI_BASE_URL = "https://opendata.fmi.fi/wfs"
+FMI_BASE_URL = os.getenv("FMI_BASE_URL", "").strip() or "https://opendata.fmi.fi/wfs"
 FMI_STATION = {
     "helsinki": {
         "fmisid": "100968",

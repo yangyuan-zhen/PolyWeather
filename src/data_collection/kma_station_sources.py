@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -9,6 +10,7 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
+_KMA_BASE = os.getenv("KMA_BASE_URL", "").strip() or "https://www.weather.go.kr"
 
 KMA_CITY_STATIONS: Dict[str, Dict[str, Any]] = {
     "busan": {
@@ -24,15 +26,15 @@ KMA_CITY_STATIONS: Dict[str, Dict[str, Any]] = {
 }
 
 KMA_GEOJSON_URLS: Dict[str, str] = {
-    "air": "https://www.weather.go.kr/wgis-nuri/js/info/air.geojson",
-    "sfc": "https://www.weather.go.kr/wgis-nuri/js/info/sfc.geojson",
-    "aws": "https://www.weather.go.kr/wgis-nuri/js/info/aws.geojson",
+    "air": f"{_KMA_BASE}/wgis-nuri/js/info/air.geojson",
+    "sfc": f"{_KMA_BASE}/wgis-nuri/js/info/sfc.geojson",
+    "aws": f"{_KMA_BASE}/wgis-nuri/js/info/aws.geojson",
 }
 
 KMA_OBSERVATION_URLS: Dict[str, str] = {
-    "air": "https://www.weather.go.kr/wgis-nuri/aws/air?date=",
-    "sfc": "https://www.weather.go.kr/wgis-nuri/aws/sfc?date=",
-    "aws": "https://www.weather.go.kr/wgis-nuri/aws/aws?date=",
+    "air": f"{_KMA_BASE}/wgis-nuri/aws/air?date=",
+    "sfc": f"{_KMA_BASE}/wgis-nuri/aws/sfc?date=",
+    "aws": f"{_KMA_BASE}/wgis-nuri/aws/aws?date=",
 }
 
 

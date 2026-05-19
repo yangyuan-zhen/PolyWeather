@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,8 @@ from typing import Any, Dict, List, Optional
 from loguru import logger
 
 from src.utils.metrics import record_source_call
+
+_JMA_BASE = os.getenv("JMA_AMEDAS_BASE_URL", "").strip() or "https://www.jma.go.jp"
 
 
 JMA_AMEDAS_STATIONS: Dict[str, Dict[str, Any]] = {
@@ -60,13 +63,13 @@ class JmaAmedasSourceMixin:
 
         try:
             latest_time_text = self._jma_http_get_text(
-                "https://www.jma.go.jp/bosai/amedas/data/latest_time.txt"
+                f"{_JMA_BASE}/bosai/amedas/data/latest_time.txt"
             ).strip()
             latest_dt = datetime.fromisoformat(latest_time_text)
             bucket_hour = (latest_dt.hour // 3) * 3
             bucket_key = f"{latest_dt.strftime('%Y%m%d')}_{bucket_hour:02d}"
             station_code = str(meta.get("station_code") or "").strip()
-            url = f"https://www.jma.go.jp/bosai/amedas/data/point/{station_code}/{bucket_key}.json"
+            url = f"{_JMA_BASE}/bosai/amedas/data/point/{station_code}/{bucket_key}.json"
 
             getter = getattr(self, "_http_get_json", None)
             if callable(getter):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import math
 import re
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -207,7 +208,7 @@ class RussiaStationSourceMixin:
 
         started = time.perf_counter()
         try:
-            url = f"https://www.pogodaiklimat.ru/weather.php?id={station_code}"
+            url = f"{os.getenv("RUSSIA_POGODAIKLIMAT_BASE_URL", "").strip() or "https://www.pogodaiklimat.ru"}/weather.php?id={station_code}"
             html_text = self._ru_http_get_text(url)
             parsed = self._ru_parse_station_current_from_weather_html(html_text)
             if not parsed:
@@ -267,7 +268,7 @@ class RussiaStationSourceMixin:
                 "is_official": True,
                 "is_airport_station": station_code == "27524",
                 "is_settlement_anchor": False,
-                "page_url": f"https://www.pogodaiklimat.ru/weather.php?id={station_code}",
+                "page_url": f"{os.getenv("RUSSIA_POGODAIKLIMAT_BASE_URL", "").strip() or "https://www.pogodaiklimat.ru"}/weather.php?id={station_code}",
             }
             with self._ru_station_cache_lock:
                 self._ru_station_cache[cache_key] = {"d": result, "t": now_ts}

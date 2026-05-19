@@ -8,6 +8,7 @@ No API key required.
 from __future__ import annotations
 
 import csv
+import os
 import io
 import time
 from datetime import datetime
@@ -17,7 +18,7 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
-HKO_BASE_URL = "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
+HKO_BASE_URL = os.getenv("HKO_BASE_URL", "").strip() or "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather"
 HKO_STATIONS = {
     "hong kong": {
         "code": "HK Observatory",

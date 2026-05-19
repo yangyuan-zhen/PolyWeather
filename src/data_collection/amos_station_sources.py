@@ -7,6 +7,7 @@ Provides per-runway wind, temperature, pressure, visibility, RVR, cloud data.
 from __future__ import annotations
 
 import re
+import os
 import time
 from html import unescape
 from datetime import datetime
@@ -16,7 +17,7 @@ from loguru import logger
 
 from src.utils.metrics import record_source_call
 
-AMOS_BASE_URL = "https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do"
+AMOS_BASE_URL = os.getenv("AMOS_BASE_URL", "").strip() or "https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do"
 AMOS_AIRPORT_QUERY_KEYS = (
     "stnCd",
     "icao",
