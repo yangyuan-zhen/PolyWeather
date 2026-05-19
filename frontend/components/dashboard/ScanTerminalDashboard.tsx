@@ -331,8 +331,12 @@ function ScanTerminalScreen() {
         void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
         setSelectedRowId(null);
       }
+      if (isPro) {
+        addAiPinnedCity(cityName);
+        setActiveView("analysis");
+      }
     },
-    [store, timeSortedRows],
+    [store, timeSortedRows, isPro, addAiPinnedCity],
   );
 
   useEffect(() => {
