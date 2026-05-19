@@ -677,6 +677,8 @@ export function useLeafletMap({
                 const currentMap = mapRef.current;
                 currentMap?.stop();
                 if (currentMap && !suspendMotionRef.current) {
+                  const c = currentMap.getContainer();
+                  if (!c || c.offsetWidth <= 0 || c.offsetHeight <= 0) return;
                   currentMap.flyTo([city.lat, city.lon], 11, {
                     animate: true,
                     duration: 1.05,
@@ -810,11 +812,14 @@ export function useLeafletMap({
 
       if (!nearbyStations.length) {
         if (!preserveView && detail.lat != null && detail.lon != null) {
-          map.flyTo([detail.lat, detail.lon], 10, {
-            animate: true,
-            duration: 1.5,
-            easeLinearity: 0.25,
-          });
+          const container = map.getContainer();
+          if (container && container.offsetWidth > 0 && container.offsetHeight > 0) {
+            map.flyTo([detail.lat, detail.lon], 10, {
+              animate: true,
+              duration: 1.5,
+              easeLinearity: 0.25,
+            });
+          }
         }
         return;
       }
@@ -1058,6 +1063,8 @@ export function useLeafletMap({
       )
         return;
 
+      const container = currentMap.getContainer();
+      if (!container || container.offsetWidth <= 0 || container.offsetHeight <= 0) return;
       currentMap.stop();
       currentMap.flyTo([entry.city.lat, entry.city.lon], 11, {
         animate: true,
