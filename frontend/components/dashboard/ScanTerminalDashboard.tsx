@@ -295,16 +295,18 @@ function ScanTerminalScreen() {
   const staleReason = terminalData?.stale_reason || null;
   const proPreviewItems = isEn
     ? [
-        "Intraday METAR rule analysis",
-        "Multi-model high-temp forecast",
-        "Real-time observation deviation",
-        "Future-date decision cards",
-        "Telegram group price $5",
+        "Real-time METAR & official station data for 52 cities",
+        "Multi-model DEB blend vs market-implied temperature",
+        "Probability buckets mapped to Polymarket contracts",
+        "Live observation deviation & mispricing signals",
+        "City decision cards for current & future settlement dates",
       ]
     : [
-        "日内机场报文规则分析",
-        "多模型高温预测",
-        "实时观测偏差",
+        "52 城实时机场报文与官方观测站数据",
+        "多模型 DEB 融合预测 vs 市场隐含温度",
+        "概率分布桶对照 Polymarket 合约",
+        "实时观测偏差与错价信号",
+        "当前日与未来结算日的城市决策卡",
         "未来日期城市决策卡",
       ];
 
@@ -471,16 +473,16 @@ function ScanTerminalScreen() {
               aria-label={isEn ? "Pro preview" : "Pro 能力预览"}
             >
               <div className="scan-upgrade-announcement-copy">
-                <span>{isEn ? "What Pro unlocks" : "开通 Pro 后可看到"}</span>
+                <span>{isEn ? "PolyWeather Pro" : "PolyWeather Pro"}</span>
                 <strong>
                   {isEn
-                    ? "Full weather decision context, not just the public map."
-                    : "不只是公开地图，而是完整天气交易辅助信息。"}
+                    ? "Weather intelligence for temperature settlement markets."
+                    : "面向温度结算市场的气象情报系统。"}
                 </strong>
                 <p>
                   {isEn
-                    ? "Guests and free users can browse the map. Pro adds live evidence, model deltas and city-level decision cards for current and future dates."
-                    : "游客和免费用户可浏览地图；Pro 会补齐实时证据、模型偏差和当前/未来日期的城市决策卡。"}
+                    ? "Turn weather data into trading decisions. Compare multi-model forecasts against live observations, identify mispriced Polymarket contracts, and back your trades with calibrated probability distributions."
+                    : "将气象数据转化为交易决策。多模型预报对照实时观测，识别 Polymarket 错价合约，用校准概率分布支撑每一笔交易。"}
                 </p>
               </div>
               <ul>
