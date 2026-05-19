@@ -1925,8 +1925,6 @@ class PaymentContractCheckoutService:
                     current_subscription = row
                     break
         if isinstance(current_subscription, dict):
-            current_plan_code = str(current_subscription.get("plan_code") or "").strip().lower()
-            current_source = str(current_subscription.get("source") or "").strip().lower()
             try:
                 latest_exp = datetime.fromisoformat(
                     str(current_subscription.get("expires_at") or "").replace("Z", "+00:00")
