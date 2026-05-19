@@ -477,7 +477,7 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     if knmi_key:
         try:
             t0 = _time.perf_counter()
-            r = _r.get("https://api.dataplatform.knmi.nl/open-data/v1/datasets", headers={"Authorization": knmi_key}, timeout=timeout)
+            r = _r.get("https://api.dataplatform.knmi.nl/open-data/v1/datasets/10-minute-in-situ-meteorological-observations/versions/1.0/files?maxKeys=1", headers={"Authorization": knmi_key}, timeout=timeout)
             results["knmi"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
         except Exception as e:
             results["knmi"] = {"ok": False, "error": str(e)[:100]}
