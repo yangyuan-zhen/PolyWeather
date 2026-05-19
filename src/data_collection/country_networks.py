@@ -560,7 +560,6 @@ def _kma_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
     return out
 
 
-def _ru_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
     rows = raw.get("ru_official_nearby") or []
     out: List[Dict[str, Any]] = []
     for row in rows:
@@ -574,7 +573,6 @@ def _ru_rows(raw: Dict[str, Any], city: str) -> List[Dict[str, Any]]:
                 lat=row.get("lat"),
                 lon=row.get("lon"),
                 obs_time=row.get("obs_time"),
-                source_code="ru_station_web",
                 source_label="Russia station web",
                 is_official=True,
                 is_airport_station=_bool(row.get("is_airport_station")),
