@@ -3,13 +3,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
-import {
-  LogIn,
-  MessageCircle,
-  Moon,
-  Sun,
-  UserRound,
-} from "lucide-react";
+import { LogIn, MessageCircle, Moon, Sun, UserRound } from "lucide-react";
 import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { Locale } from "@/lib/i18n";
@@ -50,7 +44,9 @@ export function ScanTerminalLoadingScreen({
           </div>
           <div className="scan-loading-state">
             <LoadingSignal
-              title={isEn ? "Preparing decision workspace" : "正在准备决策工作台"}
+              title={
+                isEn ? "Preparing decision workspace" : "正在准备决策工作台"
+              }
               description={
                 isEn
                   ? "Checking access, city context and today's tradable weather windows."
@@ -90,7 +86,9 @@ export function ScanTerminalTopBar({
   return (
     <div className="scan-topbar">
       <div className="scan-topbar-title">
-        <strong>{isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}</strong>
+        <strong>
+          {isEn ? "AI Weather Decision Terminal" : "AI 天气交易决策台"}
+        </strong>
         <span>
           {isEn
             ? "Start from the map, then open city cards to verify weather evidence"
@@ -127,7 +125,9 @@ export function ScanTerminalTopBar({
         <button
           type="button"
           className="scan-theme-button"
-          aria-label={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
+          aria-label={
+            themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"
+          }
           title={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
           onClick={() =>
             setThemeMode((current) => (current === "light" ? "dark" : "light"))
@@ -145,16 +145,6 @@ export function ScanTerminalTopBar({
             <UserRound size={15} />
           </Link>
         ) : null}
-        <a
-          href="https://t.me/+nMG7SjziUKYyZmM1"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="scan-account-button"
-          aria-label={isEn ? "Feedback" : "反馈"}
-          title={isEn ? "Join Telegram for feedback" : "加入 Telegram 反馈"}
-        >
-          <MessageCircle size={15} />
-        </a>
       </div>
     </div>
   );
