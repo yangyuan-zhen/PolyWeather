@@ -114,10 +114,56 @@ class BasicCommandHandler:
     def handle_start_help(self, message: Any) -> None:
         trace = CommandTrace("/start", message)
         try:
+            parts = (getattr(message, "text", None) or "").split(maxsplit=1)
+            payload = str(parts[1] if len(parts) > 1 else "").strip()
+            if payload.startswith("bind_"):
+                token = payload[len("bind_") :].strip()
+                result = self._bind_from_web_token(message, token)
+                trace.set_status("ok" if result == "bound" else "error", result)
+                return
             self.bot.reply_to(message, self.io_layer.build_welcome_text(), parse_mode="HTML")
             trace.set_status("ok")
         finally:
             trace.emit()
+
+    def _bind_from_web_token(self, message: Any, token: str) -> str:
+        if not token:
+            self.bot.reply_to(message, "❌ 绑定链接无效，请回到网页重新点击一键绑定。")
+            return "invalid_token"
+        user = message.from_user
+        try:
+            payload = self.io_layer.db.consume_web_bind_token(token)
+        except Exception as exc:
+            logger.warning("web bind token consume failed user_id={}: {}", getattr(user, "id", ""), exc)
+            payload = None
+        if not isinstance(payload, dict):
+            self.bot.reply_to(message, "❌ 绑定链接已过期或无效，请回到网页重新点击一键绑定。")
+            return "invalid_or_expired_token"
+
+        supabase_user_id = str(payload.get("supabase_user_id") or "").strip()
+        supabase_email = str(payload.get("supabase_email") or "").strip()
+        if not supabase_user_id:
+            self.bot.reply_to(message, "❌ 绑定链接缺少网页账号信息，请重新登录后再试。")
+            return "missing_supabase_user_id"
+
+        self.io_layer.db.upsert_user(user.id, self.io_layer.display_name(user))
+        bind_result = self.io_layer.db.bind_supabase_identity(
+            telegram_id=user.id,
+            supabase_user_id=supabase_user_id,
+            supabase_email=supabase_email,
+        )
+        if not bool(bind_result.get("ok")):
+            reason = str(bind_result.get("reason") or "bind_failed")
+            self.bot.reply_to(message, f"❌ 绑定失败：{reason}")
+            return reason
+        self.bot.reply_to(
+            message,
+            (
+                "✅ 账号绑定完成。\n"
+                "现在可以回到网页点击“加入 Telegram 群组”，入群申请会自动审核。"
+            ),
+        )
+        return "bound"
 
     def handle_id(self, message: Any) -> None:
         trace = CommandTrace("/id", message)

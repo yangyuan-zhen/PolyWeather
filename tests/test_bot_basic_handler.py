@@ -91,6 +91,42 @@ def test_basic_handler_diag_returns_html():
     assert "Bot 启动诊断" in bot.replies[0]["text"]
 
 
+def test_start_bind_token_binds_telegram_to_web_account():
+    bot = DummyBot()
+    db = SimpleNamespace(
+        consume_web_bind_token=lambda token: {
+            "supabase_user_id": "user-1",
+            "supabase_email": "u@example.com",
+        }
+        if token == "abc123"
+        else None,
+        upsert_user=lambda *_args, **_kwargs: None,
+        bind_supabase_identity=lambda **_kwargs: {"ok": True, "reason": "bound"},
+    )
+    io_layer = SimpleNamespace(
+        build_welcome_text=lambda: "WELCOME",
+        build_points_rank_text=lambda _user: "TOP",
+        display_name=lambda user: user.username,
+        db=db,
+    )
+    handler = BasicCommandHandler(
+        bot=bot,
+        io_layer=io_layer,
+        runtime_status_provider=lambda: RuntimeStatus(
+            started_at="2026-03-12 00:00:00 UTC",
+            loops=[],
+            command_access_mode="group_member",
+            protected_commands=["/city", "/deb"],
+            required_group_chat_id="-1001234567890",
+        ),
+    )
+
+    handler.handle_start_help(_message("/start bind_abc123"))
+
+    assert len(bot.replies) == 1
+    assert "账号绑定完成" in bot.replies[0]["text"]
+
+
 def test_basic_handler_markets_returns_summary():
     bot = DummyBot()
     io_layer = SimpleNamespace(

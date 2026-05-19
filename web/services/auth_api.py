@@ -197,3 +197,30 @@ def bind_telegram_by_token(request: Request, body) -> Dict[str, Any]:
         "binding": bind_result,
         "telegram_pricing": price,
     }
+
+
+def create_telegram_bot_bind_link(request: Request) -> Dict[str, Any]:
+    """Create a one-time web-to-bot bind deep link for the authenticated account."""
+    legacy_routes._assert_entitlement(request)
+    identity = legacy_routes._require_supabase_identity(request)
+
+    db = DBManager()
+    token = db.create_web_bind_token(
+        supabase_user_id=identity["user_id"],
+        supabase_email=identity.get("email") or "",
+        ttl_minutes=10,
+    )
+    start_param = f"bind_{token}"
+    bot_username = str(
+        legacy_routes.os.getenv("TELEGRAM_BOT_USERNAME")
+        or legacy_routes.os.getenv("NEXT_PUBLIC_TELEGRAM_BOT_USERNAME")
+        or "WeatherQuant_bot"
+    ).strip().lstrip("@")
+    bot_url = f"https://t.me/{bot_username}?start={start_param}"
+    return {
+        "ok": True,
+        "token": token,
+        "start_param": start_param,
+        "bot_url": bot_url,
+        "expires_in_seconds": 600,
+    }

@@ -727,19 +727,23 @@ export function AccountCenter() {
       restricted: isEn ? "Restricted" : "受限",
       telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
       telegramHint: isEn
-        ? "Send the command below to the polyweather bot to sync notifications and access. Telegram group access is reviewed for Pro users."
-        : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。Telegram 群组需提交申请并完成 Pro 审核。",
+        ? "Use one-click Bot binding first to sync notifications and access. Telegram group access is reviewed automatically for Pro users."
+        : "优先使用「一键绑定机器人」同步通知与权限。Telegram 群组会根据 Pro 状态自动审核入群申请。",
+      telegramFallbackHint: isEn
+        ? "Fallback: if one-click binding does not open Telegram correctly, copy the command below and send it to @WeatherQuant_bot."
+        : "备用复制方式：如果一键绑定无法正常打开 Telegram，请复制下方命令并发送给 @WeatherQuant_bot。",
       paymentManualSupport: isEn
         ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
         : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
+      telegramBotBindLink: isEn ? "One-click Bot Binding" : "一键绑定机器人",
       telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
       telegramTopicsGroupLink: isEn
         ? "Real-time Weather Updates"
         : "城市实测温度群",
-      copyCommand: isEn ? "Copy command" : "复制命令",
+      copyCommand: isEn ? "Copy fallback command" : "复制备用命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
@@ -869,6 +873,7 @@ export function AccountCenter() {
   const [paymentError, setPaymentError] = useState("");
   const [lastIntentId, setLastIntentId] = useState("");
   const [lastTxHash, setLastTxHash] = useState("");
+  const [telegramBindOpening, setTelegramBindOpening] = useState(false);
   const [manualPayment, setManualPayment] = useState<
     CreatedIntent["direct_payment"] | null
   >(null);
@@ -1789,6 +1794,31 @@ export function AccountCenter() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     });
+  };
+
+  const openTelegramBotBindLink = async () => {
+    setTelegramBindOpening(true);
+    setPaymentError("");
+    try {
+      const authHeaders = await buildAuthedHeaders(true, false);
+      const res = await fetch("/api/auth/telegram/bot-bind-link", {
+        method: "POST",
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        const raw = (await res.text()).slice(0, 300);
+        throw new Error(raw || "failed to create telegram bind link");
+      }
+      const data = (await res.json()) as { bot_url?: string };
+      const botUrl = String(data.bot_url || "").trim();
+      if (!botUrl) throw new Error("telegram bind link missing");
+      window.open(botUrl, "_blank", "noopener,noreferrer");
+      setPaymentInfo("已打开 Telegram Bot，请在 Bot 内点击 Start 完成绑定。");
+    } catch (error) {
+      setPaymentError(normalizePaymentError(error).message);
+    } finally {
+      setTelegramBindOpening(false);
+    }
   };
 
   // --- Payment Logic (preserved) ---
@@ -3009,7 +3039,8 @@ export function AccountCenter() {
                       <ExternalLink size={12} />
                     </Link>
                   ) : null}
-                  {TELEGRAM_TOPICS_GROUP_URL ? (
+                  {TELEGRAM_TOPICS_GROUP_URL &&
+                  TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL ? (
                     <Link
                       href={TELEGRAM_TOPICS_GROUP_URL}
                       target="_blank"
@@ -3037,6 +3068,15 @@ export function AccountCenter() {
                     {bindCommand}
                   </code>
                   <button
+                    onClick={() => void openTelegramBotBindLink()}
+                    disabled={telegramBindOpening || !isAuthenticated}
+                    className="px-4 py-3 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all shadow-lg text-white text-xs font-bold"
+                    title={copy.telegramBotBindLink}
+                    aria-label={copy.telegramBotBindLink}
+                  >
+                    {telegramBindOpening ? "..." : copy.telegramBotBindLink}
+                  </button>
+                  <button
                     onClick={() => handleCopy(bindCommand)}
                     className="p-4 bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-lg text-white"
                     title={copy.copyCommand}
@@ -3045,6 +3085,9 @@ export function AccountCenter() {
                     {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
                   </button>
                 </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                  {copy.telegramFallbackHint}
+                </p>
                 <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-500/8 px-4 py-3 text-xs leading-6 text-amber-100/90">
                   {copy.paymentManualSupport}
                 </div>
