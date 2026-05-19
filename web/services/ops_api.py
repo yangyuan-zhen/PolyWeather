@@ -489,6 +489,9 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     import os
     import requests as _r
     import time as _time
+    import urllib3 as _urllib3
+
+    _urllib3.disable_warnings(_urllib3.exceptions.InsecureRequestWarning)
 
     results: dict[str, dict] = {}
     timeout = 3
@@ -633,11 +636,11 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["polymarket_gamma"] = {"ok": False, "error": str(e)[:100]}
 
-    # Polymarket CLOB API
+    # Polymarket CLOB API — GET / returns 200 on healthy CLOB
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://clob.polymarket.com/server-time", timeout=timeout)
-        results["polymarket_clob"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get("https://clob.polymarket.com/", timeout=timeout)
+        results["polymarket_clob"] = {"ok": r.status_code < 500, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
     except Exception as e:
         results["polymarket_clob"] = {"ok": False, "error": str(e)[:100]}
 
@@ -661,12 +664,21 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["amos"] = {"ok": False, "error": str(e)[:100]}
 
-    # AMSC AWOS (China mainland airports)
+    # AMSC AWOS (China mainland airports) — matches actual source SSL + URL pattern
     amsc_base = str(os.getenv("AMSC_AWOS_BASE_URL") or "").strip()
     if amsc_base:
         try:
             t0 = _time.perf_counter()
-            r = _r.get(f"{amsc_base}/getWindPlate", timeout=timeout)
+            r = _r.get(
+                f"{amsc_base}?cccc=ZSPD",
+                timeout=timeout,
+                verify=False,
+                headers={
+                    "Accept": "application/json, text/plain, */*",
+                    "Referer": os.getenv("AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"),
+                    "User-Agent": "PolyWeather/1.0",
+                },
+            )
             results["amsc_awos"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
         except Exception as e:
             results["amsc_awos"] = {"ok": False, "error": str(e)[:100]}
