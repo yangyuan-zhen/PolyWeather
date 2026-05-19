@@ -41,7 +41,8 @@ class _DummyCollector(NmcSourceMixin):
 
 
 def test_fetch_nmc_region_current_parses_rest_payload(monkeypatch):
-    monkeypatch.setenv("NMC_REALTIME_BASE_URL", "https://www.nmc.cn/rest/real")
+    import src.data_collection.nmc_sources as _nmc
+    monkeypatch.setattr(_nmc, "_NMC_REALTIME_BASE", "https://www.nmc.cn/rest/real")
     collector = _DummyCollector(
         {
             "https://www.nmc.cn/rest/real/atcMf": _DummyResponse(
@@ -72,7 +73,8 @@ def test_fetch_nmc_region_current_parses_rest_payload(monkeypatch):
 
 
 def test_fetch_nmc_official_nearby_returns_normalized_row(monkeypatch):
-    monkeypatch.setenv("NMC_REALTIME_BASE_URL", "https://www.nmc.cn/rest/real")
+    import src.data_collection.nmc_sources as _nmc
+    monkeypatch.setattr(_nmc, "_NMC_REALTIME_BASE", "https://www.nmc.cn/rest/real")
     collector = _DummyCollector(
         {
             "https://www.nmc.cn/rest/real/atcMf": _DummyResponse(
