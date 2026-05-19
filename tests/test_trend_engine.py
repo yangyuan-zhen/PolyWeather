@@ -263,10 +263,9 @@ class TestTrendDirection:
 class TestDynamicCommentary:
     @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
     @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
-    @patch("src.analysis.trend_engine.append_probability_snapshot")
     @patch("src.analysis.trend_engine.update_daily_record")
     def test_dynamic_commentary_detects_cloud_build_without_cooling(
-        self, _udr, _snapshot, _deb_acc, _dw
+        self, _udr, _deb_acc, _dw
     ):
         data = _make_weather_data(
             cur_temp=28.0,
@@ -292,10 +291,9 @@ class TestDynamicCommentary:
 
     @patch("src.analysis.trend_engine.calculate_dynamic_weights", return_value=(None, ""))
     @patch("src.analysis.trend_engine.get_deb_accuracy", return_value=None)
-    @patch("src.analysis.trend_engine.append_probability_snapshot")
     @patch("src.analysis.trend_engine.update_daily_record")
     def test_dynamic_commentary_falls_back_when_recent_obs_missing(
-        self, _udr, _snapshot, _deb_acc, _dw
+        self, _udr, _deb_acc, _dw
     ):
         data = _make_weather_data(recent_obs=[])
 
