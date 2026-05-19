@@ -106,6 +106,55 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
     return {"memberships": rows}
 
 
+def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, Any]:
+    _require_ops(request)
+    from collections import defaultdict
+    from datetime import datetime, timedelta
+
+    safe_days = max(7, min(365, int(days or 90)))
+    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=5000)
+    now = datetime.utcnow()
+    cutoff = now - timedelta(days=safe_days)
+
+    trial_by_day: dict[str, int] = defaultdict(int)
+    paid_by_day: dict[str, int] = defaultdict(int)
+    running = 0
+
+    for item in subscriptions:
+        starts_raw = str(item.get("starts_at") or "").strip()
+        if not starts_raw:
+            continue
+        try:
+            dt = datetime.fromisoformat(starts_raw.replace("Z", "+00:00"))
+            if dt.tzinfo is not None:
+                dt = dt.replace(tzinfo=None)
+        except Exception:
+            continue
+        if dt < cutoff:
+            continue
+        day_key = dt.strftime("%Y-%m-%d")
+        source = str(item.get("source") or "").strip().lower()
+        plan = str(item.get("plan_code") or "").strip().lower()
+        is_trial = source == "signup_trial" or plan.startswith("signup_trial")
+        if is_trial:
+            trial_by_day[day_key] += 1
+        else:
+            paid_by_day[day_key] += 1
+
+    daily = []
+    cursor = cutoff.date()
+    while cursor <= now.date():
+        key = cursor.isoformat()
+        tc = trial_by_day.get(key, 0)
+        pc = paid_by_day.get(key, 0)
+        total = tc + pc
+        running += total
+        daily.append({"date": key, "trial": tc, "paid": pc, "total": total, "cumulative": running})
+        cursor += timedelta(days=1)
+
+    return {"days": safe_days, "daily": daily}
+
+
 def list_ops_payment_incidents(
     request: Request,
     limit: int = 50,
