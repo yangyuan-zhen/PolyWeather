@@ -8,7 +8,6 @@ It redacts hardcoded API keys, tokens, and replaces .env files.
 from __future__ import annotations
 
 import re
-import os
 import shutil
 from pathlib import Path
 
