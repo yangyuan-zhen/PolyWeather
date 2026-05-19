@@ -1464,6 +1464,37 @@ class DBManager:
             conn.commit()
             return int(row["telegram_id"])
 
+    def peek_web_bind_token(self, token: str) -> Optional[Dict[str, str]]:
+        token = str(token or "").strip()
+        if not token:
+            return None
+        now = datetime.now()
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                """
+                SELECT supabase_user_id, supabase_email, expires_at
+                FROM web_telegram_bind_tokens
+                WHERE token = ?
+                LIMIT 1
+                """,
+                (token,),
+            ).fetchone()
+            if not row:
+                return None
+            try:
+                expires_at = datetime.fromisoformat(row["expires_at"])
+            except Exception:
+                expires_at = now
+            if now > expires_at:
+                conn.execute("DELETE FROM web_telegram_bind_tokens WHERE token = ?", (token,))
+                conn.commit()
+                return None
+            return {
+                "supabase_user_id": str(row["supabase_user_id"] or "").strip().lower(),
+                "supabase_email": str(row["supabase_email"] or "").strip(),
+            }
+
     def create_web_bind_token(
         self,
         supabase_user_id: str,

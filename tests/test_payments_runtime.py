@@ -8,6 +8,18 @@ from src.payments.contract_checkout import (
 )
 
 
+def _payment_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
+    monkeypatch.setenv("POLYWEATHER_PAYMENT_RPC_URL", "https://rpc-1.example")
+    monkeypatch.setenv(
+        "POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON",
+        '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
+    )
+    monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+
+
 def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):
     db_path = tmp_path / "payments.db"
     db = DBManager(str(db_path))
@@ -22,6 +34,95 @@ def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):
     assert events
     assert events[0]["event_type"] == "event_loop_cycle"
     assert events[0]["payload"]["events"] == 2
+
+
+def test_paid_subscription_starts_after_active_trial(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    now = datetime.now(timezone.utc)
+    trial_expires = now + timedelta(days=2)
+    inserted = []
+
+    def fake_rest(method, table, **kwargs):
+        if method == "GET" and table == "subscriptions":
+            return [
+                {
+                    "id": "trial-1",
+                    "expires_at": trial_expires.isoformat(),
+                    "status": "active",
+                    "plan_code": "signup_trial_3d",
+                    "source": "signup_trial",
+                    "starts_at": (now - timedelta(days=1)).isoformat(),
+                }
+            ]
+        if method == "POST" and table == "subscriptions":
+            inserted.append(kwargs["payload"])
+            return [kwargs["payload"]]
+        if method == "POST" and table == "entitlement_events":
+            return [kwargs["payload"]]
+        raise AssertionError((method, table, kwargs))
+
+    monkeypatch.setattr(service, "_rest", fake_rest)
+
+    row = service._grant_subscription(
+        user_id="user-1",
+        plan_code="pro_monthly",
+        duration_days=30,
+        tx_hash="0x" + "7" * 64,
+        payload={},
+    )
+
+    starts_at = datetime.fromisoformat(str(row["starts_at"]))
+    expires_at = datetime.fromisoformat(str(row["expires_at"]))
+    assert starts_at == trial_expires
+    assert expires_at == trial_expires + timedelta(days=30)
+
+
+def test_confirm_side_effect_repair_does_not_treat_trial_as_paid(monkeypatch, tmp_path):
+    _payment_env(monkeypatch, tmp_path)
+    service = PaymentContractCheckoutService()
+    intent = PaymentIntentRecord(
+        intent_id="intent-trial-repair",
+        order_id_hex="0x" + "1" * 64,
+        plan_code="pro_monthly",
+        plan_id=101,
+        chain_id=137,
+        amount_units=5000000,
+        amount_usdc="5",
+        token_address="0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+        token_decimals=6,
+        token_symbol="USDC.e",
+        receiver_address="0xed2f13aa5ff033c58fb436e178451cd07f693f32",
+        status="confirmed",
+        payment_mode="strict",
+        allowed_wallet="0x1111111111111111111111111111111111111111",
+        expires_at="2099-01-01T00:00:00+00:00",
+        tx_hash="0x" + "8" * 64,
+        metadata={},
+    )
+    trial_row = {"plan_code": "signup_trial_3d", "source": "signup_trial"}
+    granted = []
+
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.SUPABASE_ENTITLEMENT.get_latest_active_subscription",
+        lambda user_id, respect_requirement=False: trial_row,
+    )
+    monkeypatch.setattr(
+        "src.payments.contract_checkout.SUPABASE_ENTITLEMENT.invalidate_subscription_cache",
+        lambda user_id: None,
+    )
+    monkeypatch.setattr(service, "_select_plan", lambda plan_code: {"duration_days": 30})
+    monkeypatch.setattr(
+        service,
+        "_grant_subscription",
+        lambda **kwargs: granted.append(kwargs)
+        or {"plan_code": kwargs["plan_code"], "status": "active"},
+    )
+
+    result = service._ensure_confirmed_subscription("user-1", intent, intent.tx_hash or "")
+
+    assert result["plan_code"] == "pro_monthly"
+    assert granted
 
 
 def test_payment_checkout_parses_multiple_rpc_urls(monkeypatch, tmp_path):
@@ -284,7 +385,7 @@ def test_reconcile_recent_intents_dedupes_users(monkeypatch, tmp_path):
     assert seen == ["user-1", "user-2"]
 
 
-def test_grant_subscription_starts_immediately_when_only_trial_is_active(monkeypatch, tmp_path):
+def test_grant_subscription_starts_after_trial_when_only_trial_is_active(monkeypatch, tmp_path):
     monkeypatch.setenv("POLYWEATHER_PAYMENT_ENABLED", "true")
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service-role")
@@ -320,7 +421,6 @@ def test_grant_subscription_starts_immediately_when_only_trial_is_active(monkeyp
 
     monkeypatch.setattr(service, "_rest", _fake_rest)
 
-    before_call = datetime.now(timezone.utc)
     result = service._grant_subscription(
         user_id="user-1",
         plan_code="pro_monthly",
@@ -328,9 +428,7 @@ def test_grant_subscription_starts_immediately_when_only_trial_is_active(monkeyp
         tx_hash="0x" + "1" * 64,
         payload={"kind": "test"},
     )
-    after_call = datetime.now(timezone.utc)
 
     starts_at = datetime.fromisoformat(str(result["starts_at"]).replace("Z", "+00:00"))
 
-    assert starts_at >= before_call - timedelta(seconds=1)
-    assert starts_at <= after_call
+    assert starts_at == trial_end

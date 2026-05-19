@@ -727,23 +727,23 @@ export function AccountCenter() {
       restricted: isEn ? "Restricted" : "受限",
       telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
       telegramHint: isEn
-        ? "Use one-click Bot binding first to sync notifications and access. Telegram group access is reviewed automatically for Pro users."
-        : "优先使用「一键绑定机器人」同步通知与权限。Telegram 群组会根据 Pro 状态自动审核入群申请。",
+        ? "Use one-click Telegram binding first to sync notifications and access. After binding, refresh this page and submit your Telegram group join request."
+        : "优先使用「一键绑定 Telegram Bot」同步通知与权限。绑定完成后刷新本页，再提交 Telegram 群组入群申请。",
       telegramFallbackHint: isEn
-        ? "Fallback: if one-click binding does not open Telegram correctly, copy the command below and send it to @WeatherQuant_bot."
-        : "备用复制方式：如果一键绑定无法正常打开 Telegram，请复制下方命令并发送给 @WeatherQuant_bot。",
+        ? "Fallback copy method: only use this if one-click binding does not open Telegram correctly. Copy the command below and send it to @WeatherQuant_bot. After binding, refresh this page to show the group entry."
+        : "兜底复制方式：仅在一键绑定无法正常打开 Telegram 时使用。请复制下方命令并发送给 @WeatherQuant_bot。绑定完成后刷新本页，即可显示入群入口。",
       paymentManualSupport: isEn
         ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
         : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
-      telegramBotBindLink: isEn ? "One-click Bot Binding" : "一键绑定机器人",
+      telegramBotBindLink: isEn ? "One-click Telegram Binding" : "一键绑定 Telegram Bot",
       telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
       telegramTopicsGroupLink: isEn
         ? "Real-time Weather Updates"
         : "城市实测温度群",
-      copyCommand: isEn ? "Copy fallback command" : "复制备用命令",
+      copyCommand: isEn ? "Copy fallback command" : "复制兜底命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
@@ -1545,6 +1545,10 @@ export function AccountCenter() {
     Number(backend?.subscription_queued_days || 0),
   );
   const hasQueuedExtension = Boolean(isSubscribed && queuedExtensionDays > 0);
+  const canAccessPaidTelegramGroup = Boolean(
+    isSubscribed && (!isTrialPlan || hasQueuedExtension),
+  );
+  const telegramBound = Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
   const displayExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw;
   const reminderExpiryRaw = isSubscribed
     ? totalExpiryRaw
@@ -1813,7 +1817,9 @@ export function AccountCenter() {
       const botUrl = String(data.bot_url || "").trim();
       if (!botUrl) throw new Error("telegram bind link missing");
       window.open(botUrl, "_blank", "noopener,noreferrer");
-      setPaymentInfo("已打开 Telegram Bot，请在 Bot 内点击 Start 完成绑定。");
+      setPaymentInfo(
+        "已打开 Telegram Bot，请在 Bot 内点击 Start 并确认绑定；完成后刷新本页再申请入群。",
+      );
     } catch (error) {
       setPaymentError(normalizePaymentError(error).message);
     } finally {
@@ -2988,14 +2994,14 @@ export function AccountCenter() {
                 chainId={paymentConfig?.chain_id || 137}
                 paymentTokenLabel={selectedTokenLabel}
                 faqHref={SUBSCRIPTION_HELP_HREF}
-                telegramGroupUrl={TELEGRAM_GROUP_URL}
+                telegramGroupUrl=""
               />
             </div>
           )}
         </div>
 
         {/* Telegram Bot Section — paid users only */}
-        {showSecondarySections && isSubscribed ? (
+        {showSecondarySections && canAccessPaidTelegramGroup ? (
           <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
             <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
               <Bot
@@ -3028,19 +3034,9 @@ export function AccountCenter() {
                 ) : null}
 
                 <div className="mb-4 flex flex-wrap gap-2">
-                  {TELEGRAM_BOT_URL ? (
-                    <Link
-                      href={TELEGRAM_BOT_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-cyan-400/30 bg-cyan-500/10 px-3 py-2 text-xs font-semibold text-cyan-200 hover:bg-cyan-500/20"
-                    >
-                      {copy.telegramBotLink}
-                      <ExternalLink size={12} />
-                    </Link>
-                  ) : null}
                   {TELEGRAM_TOPICS_GROUP_URL &&
-                  TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL ? (
+                  TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL &&
+                  telegramBound ? (
                     <Link
                       href={TELEGRAM_TOPICS_GROUP_URL}
                       target="_blank"
@@ -3051,7 +3047,7 @@ export function AccountCenter() {
                       <ExternalLink size={12} />
                     </Link>
                   ) : null}
-                  {TELEGRAM_GROUP_URL ? (
+                  {TELEGRAM_GROUP_URL && telegramBound ? (
                     <Link
                       href={TELEGRAM_GROUP_URL}
                       target="_blank"

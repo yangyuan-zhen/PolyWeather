@@ -1927,19 +1927,17 @@ class PaymentContractCheckoutService:
         if isinstance(current_subscription, dict):
             current_plan_code = str(current_subscription.get("plan_code") or "").strip().lower()
             current_source = str(current_subscription.get("source") or "").strip().lower()
-            current_is_trial = "trial" in current_plan_code or "trial" in current_source
-            if not current_is_trial:
-                try:
-                    latest_exp = datetime.fromisoformat(
-                        str(current_subscription.get("expires_at") or "").replace("Z", "+00:00")
-                    )
-                    if latest_exp.tzinfo is None:
-                        latest_exp = latest_exp.replace(tzinfo=timezone.utc)
-                    latest_exp = latest_exp.astimezone(timezone.utc)
-                    if latest_exp > starts:
-                        starts = latest_exp
-                except Exception:
-                    pass
+            try:
+                latest_exp = datetime.fromisoformat(
+                    str(current_subscription.get("expires_at") or "").replace("Z", "+00:00")
+                )
+                if latest_exp.tzinfo is None:
+                    latest_exp = latest_exp.replace(tzinfo=timezone.utc)
+                latest_exp = latest_exp.astimezone(timezone.utc)
+                if latest_exp > starts:
+                    starts = latest_exp
+            except Exception:
+                pass
         expires = starts + timedelta(days=max(1, duration_days))
         sub_rows = self._rest(
             "POST",
@@ -1985,7 +1983,9 @@ class PaymentContractCheckoutService:
             user_id,
             respect_requirement=False,
         )
-        if isinstance(latest_subscription, dict):
+        if isinstance(latest_subscription, dict) and not self._subscription_row_is_trial(
+            latest_subscription
+        ):
             return latest_subscription
 
         plan = self._select_plan(intent.plan_code)
@@ -2000,6 +2000,12 @@ class PaymentContractCheckoutService:
                 "repaired_from_confirmed_intent": True,
             },
         )
+
+    @staticmethod
+    def _subscription_row_is_trial(row: Dict[str, Any]) -> bool:
+        plan_code = str(row.get("plan_code") or "").strip().lower()
+        source = str(row.get("source") or "").strip().lower()
+        return "trial" in plan_code or "trial" in source
 
     def _ensure_confirm_side_effects(
         self,

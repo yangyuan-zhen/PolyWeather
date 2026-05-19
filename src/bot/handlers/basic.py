@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 import os
 from typing import Any
 from typing import Callable
@@ -67,6 +68,13 @@ class BasicCommandHandler:
             def _chat_join_request(request):
                 self.handle_chat_join_request(request)
 
+        if hasattr(self.bot, "callback_query_handler"):
+            @self.bot.callback_query_handler(
+                func=lambda call: str(getattr(call, "data", "") or "").startswith("confirm_bind:")
+            )
+            def _confirm_bind(call):
+                self.handle_bind_confirm_callback(call)
+
         @self.bot.message_handler(
             content_types=["text"],
             func=lambda message: extract_command_name(
@@ -118,19 +126,63 @@ class BasicCommandHandler:
             payload = str(parts[1] if len(parts) > 1 else "").strip()
             if payload.startswith("bind_"):
                 token = payload[len("bind_") :].strip()
-                result = self._bind_from_web_token(message, token)
-                trace.set_status("ok" if result == "bound" else "error", result)
+                result = self._prompt_bind_from_web_token(message, token)
+                trace.set_status("ok" if result == "confirm_prompted" else "error", result)
                 return
             self.bot.reply_to(message, self.io_layer.build_welcome_text(), parse_mode="HTML")
             trace.set_status("ok")
         finally:
             trace.emit()
 
-    def _bind_from_web_token(self, message: Any, token: str) -> str:
+    def _prompt_bind_from_web_token(self, message: Any, token: str) -> str:
         if not token:
             self.bot.reply_to(message, "❌ 绑定链接无效，请回到网页重新点击一键绑定。")
             return "invalid_token"
-        user = message.from_user
+        try:
+            payload = self.io_layer.db.peek_web_bind_token(token)
+        except Exception as exc:
+            logger.warning("web bind token peek failed token_prefix={}: {}", token[:6], exc)
+            payload = None
+        if not isinstance(payload, dict):
+            self.bot.reply_to(message, "❌ 绑定链接已过期或无效，请回到网页重新点击一键绑定。")
+            return "invalid_or_expired_token"
+
+        supabase_user_id = str(payload.get("supabase_user_id") or "").strip()
+        supabase_email = str(payload.get("supabase_email") or "").strip()
+        if not supabase_user_id:
+            self.bot.reply_to(message, "❌ 绑定链接缺少网页账号信息，请重新登录后再试。")
+            return "missing_supabase_user_id"
+
+        masked_email = self._mask_email(supabase_email)
+        text = (
+            "请确认绑定：\n"
+            f"Telegram: <code>{html.escape(self.io_layer.display_name(message.from_user))}</code>\n"
+            f"网站账号: <code>{html.escape(masked_email or supabase_user_id)}</code>\n\n"
+            "确认后，入群申请将按此网站账号的 Pro 状态自动审核。"
+        )
+        reply_markup = self._build_confirm_bind_markup(token)
+        self.bot.reply_to(message, text, parse_mode="HTML", reply_markup=reply_markup)
+        return "confirm_prompted"
+
+    def handle_bind_confirm_callback(self, call: Any) -> str:
+        data = str(getattr(call, "data", "") or "")
+        token = data[len("confirm_bind:") :].strip() if data.startswith("confirm_bind:") else ""
+        message = getattr(call, "message", None)
+        user = getattr(call, "from_user", None)
+        if hasattr(self.bot, "answer_callback_query"):
+            try:
+                self.bot.answer_callback_query(getattr(call, "id", None))
+            except Exception:
+                pass
+        if message is None or user is None:
+            logger.warning("telegram bind confirm callback missing message/user")
+            return "invalid_callback"
+        return self._bind_from_web_token(message, user, token)
+
+    def _bind_from_web_token(self, message: Any, user: Any, token: str) -> str:
+        if not token:
+            self.bot.reply_to(message, "❌ 绑定链接无效，请回到网页重新点击一键绑定。")
+            return "invalid_token"
         try:
             payload = self.io_layer.db.consume_web_bind_token(token)
         except Exception as exc:
@@ -160,10 +212,36 @@ class BasicCommandHandler:
             message,
             (
                 "✅ 账号绑定完成。\n"
-                "现在可以回到网页点击“加入 Telegram 群组”，入群申请会自动审核。"
+                "现在可以回到网页刷新本页，再点击“加入 Telegram 群组”。入群申请会自动审核。"
             ),
         )
         return "bound"
+
+    @staticmethod
+    def _mask_email(email: str) -> str:
+        email = str(email or "").strip()
+        if "@" not in email:
+            return email
+        name, domain = email.split("@", 1)
+        if not name:
+            return f"***@{domain}"
+        return f"{name[0]}***@{domain}"
+
+    @staticmethod
+    def _build_confirm_bind_markup(token: str) -> Any:
+        try:
+            from telebot import types  # type: ignore
+
+            markup = types.InlineKeyboardMarkup()
+            markup.add(
+                types.InlineKeyboardButton(
+                    "确认绑定",
+                    callback_data=f"confirm_bind:{token}",
+                )
+            )
+            return markup
+        except Exception:
+            return None
 
     def handle_id(self, message: Any) -> None:
         trace = CommandTrace("/id", message)
@@ -344,10 +422,7 @@ class BasicCommandHandler:
 
         for supabase_user_id in supabase_user_ids:
             try:
-                if self.entitlement_service.has_active_subscription(
-                    supabase_user_id,
-                    respect_requirement=False,
-                ):
+                if self._has_paid_subscription(supabase_user_id):
                     self.bot.approve_chat_join_request(int(chat_id), int(user_id))
                     logger.info(
                         "telegram join request approved chat_id={} user_id={} supabase_user_id={}",
@@ -370,6 +445,40 @@ class BasicCommandHandler:
             user_id=int(user_id),
             reason="no_active_subscription",
         )
+
+    def _has_paid_subscription(self, supabase_user_id: str) -> bool:
+        if hasattr(self.entitlement_service, "get_subscription_window"):
+            window = self.entitlement_service.get_subscription_window(
+                supabase_user_id,
+                respect_requirement=False,
+            )
+            rows = window.get("rows") if isinstance(window, dict) else None
+            if isinstance(rows, list):
+                for row in rows:
+                    if self._subscription_row_is_paid(row):
+                        return True
+        if hasattr(self.entitlement_service, "get_latest_active_subscription"):
+            row = self.entitlement_service.get_latest_active_subscription(
+                supabase_user_id,
+                respect_requirement=False,
+            )
+            return self._subscription_row_is_paid(row)
+        return bool(
+            self.entitlement_service.has_active_subscription(
+                supabase_user_id,
+                respect_requirement=False,
+            )
+        )
+
+    @staticmethod
+    def _subscription_row_is_paid(row: Any) -> bool:
+        if not isinstance(row, dict):
+            return False
+        plan_code = str(row.get("plan_code") or "").strip().lower()
+        source = str(row.get("source") or "").strip().lower()
+        if not plan_code and not source:
+            return False
+        return "trial" not in plan_code and "trial" not in source
 
     def _handle_ineligible_join_request(self, chat_id: int, user_id: int, reason: str) -> str:
         action = str(os.getenv("POLYWEATHER_TELEGRAM_JOIN_INELIGIBLE_ACTION") or "pending").strip().lower()
