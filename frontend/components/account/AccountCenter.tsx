@@ -233,14 +233,11 @@ const WALLETCONNECT_POLYGON_RPC_URL = String(
   process.env.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL ||
     "https://polygon-bor-rpc.publicnode.com",
 ).trim();
-const TELEGRAM_GROUP_URL = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_GROUP_URL ||
-    "https://t.me/+nMG7SjziUKYyZmM1",
-).trim();
+const TELEGRAM_GROUP_URL = "https://t.me/+8vel7rwjZagxODUx";
 const TELEGRAM_BOT_URL = String(
   process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
 ).trim();
-const TELEGRAM_TOPICS_GROUP_URL = "https://t.me/+8vel7rwjZagxODUx";
+const TELEGRAM_TOPICS_GROUP_URL = TELEGRAM_GROUP_URL;
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 const PAYMENT_RECOVERY_STORAGE_KEY = "polyweather:lastPaymentRecovery";
 const PAYMENT_RECOVERY_TTL_MS = 6 * 60 * 60 * 1000;
@@ -728,16 +725,20 @@ export function AccountCenter() {
       restricted: isEn ? "Restricted" : "受限",
       telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
       telegramHint: isEn
-        ? "Send the command below to the polyweather bot to sync notifications and access."
-        : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。",
+        ? "Send the command below to the polyweather bot to sync notifications and access. Telegram group access is reviewed for Pro users."
+        : "将下方命令发送给polyweather机器人，实现全平台气象查询与权限同步。Telegram 群组需提交申请并完成 Pro 审核。",
       paymentManualSupport: isEn
         ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
         : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
       telegramBotLink: isEn
         ? "Open Bot (@WeatherQuant_bot)"
         : "打开机器人 (@WeatherQuant_bot)",
-      telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
-      telegramTopicsGroupLink: isEn ? "City Topics Group (Pro)" : "城市话题群 (Pro)",
+      telegramGroupLink: isEn
+        ? "Apply to Join Pro Telegram Group"
+        : "申请加入 Pro Telegram 群（需审核）",
+      telegramTopicsGroupLink: isEn
+        ? "Apply to City Topics Group (Pro)"
+        : "申请加入城市话题群（Pro，需审核）",
       copyCommand: isEn ? "Copy command" : "复制命令",
       paymentMgmt: isEn ? "Payment Management" : "支付管理",
       paymentToken: isEn ? "Payment Token" : "支付币种",
