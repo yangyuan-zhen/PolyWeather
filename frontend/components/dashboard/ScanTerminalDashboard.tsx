@@ -3,13 +3,7 @@
 import clsx from "clsx";
 import dynamic from "next/dynamic";
 import { RefreshCw } from "lucide-react";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import styles from "./Dashboard.module.css";
 import { scanRootClass } from "./scan-root-styles";
 import {
@@ -18,9 +12,7 @@ import {
   useProAccess,
 } from "@/hooks/useDashboardStore";
 import { I18nProvider, useI18n } from "@/hooks/useI18n";
-import type {
-  ScanOpportunityRow,
-} from "@/lib/dashboard-types";
+import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { MobileCityPicker } from "@/components/dashboard/scan-terminal/MobileCityPicker";
 import { WelcomeOverlay } from "@/components/dashboard/scan-terminal/WelcomeOverlay";
@@ -78,18 +70,16 @@ function ScanTerminalScreen() {
   const accountHref = proAccess.authenticated
     ? "/account"
     : "/auth/login?next=%2Faccount";
-  const {
-    refreshScanTerminalManually,
-    scanError,
-    scanLoading,
-    terminalData,
-  } = useScanTerminalQuery({
-    isPro,
-    proAccessLoading: proAccess.loading,
-  });
+  const { refreshScanTerminalManually, scanError, scanLoading, terminalData } =
+    useScanTerminalQuery({
+      isPro,
+      proAccessLoading: proAccess.loading,
+    });
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<ScanTerminalContentView>("map");
-  const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(null);
+  const [mapSelectedCityName, setMapSelectedCityName] = useState<string | null>(
+    null,
+  );
   const [showScanPaywall, setShowScanPaywall] = useState(false);
   const [isMobileViewport, setIsMobileViewport] = useState(false);
 
@@ -185,12 +175,17 @@ function ScanTerminalScreen() {
   });
   const selectedRow = useMemo(() => {
     if (!timeSortedRows.length) return null;
-    return timeSortedRows.find((row) => row.id === selectedRowId) || timeSortedRows[0] || null;
+    return (
+      timeSortedRows.find((row) => row.id === selectedRowId) ||
+      timeSortedRows[0] ||
+      null
+    );
   }, [timeSortedRows, selectedRowId]);
 
   useEffect(() => {
     if (!timeSortedRows.length) return;
-    if (selectedRowId && timeSortedRows.some((row) => row.id === selectedRowId)) return;
+    if (selectedRowId && timeSortedRows.some((row) => row.id === selectedRowId))
+      return;
     setSelectedRowId(timeSortedRows[0].id);
   }, [selectedRowId, timeSortedRows]);
 
@@ -205,7 +200,8 @@ function ScanTerminalScreen() {
     const cityKey = normalizeCityKey(rawCityName);
     if (!cityKey || mapFocusedRow) return null;
     const selectedDetail =
-      store.selectedDetail && normalizeCityKey(store.selectedDetail.name) === cityKey
+      store.selectedDetail &&
+      normalizeCityKey(store.selectedDetail.name) === cityKey
         ? store.selectedDetail
         : Object.values(store.cityDetailsByName).find(
             (detail) => normalizeCityKey(detail?.name) === cityKey,
@@ -246,7 +242,8 @@ function ScanTerminalScreen() {
       display_name: displayName,
       selected_date: selectedDetail?.local_date || null,
       local_date: selectedDetail?.local_date || null,
-      local_time: selectedDetail?.local_time || selectedSummary?.local_time || null,
+      local_time:
+        selectedDetail?.local_time || selectedSummary?.local_time || null,
       temp_symbol: tempSymbol,
       current_temp: currentTemp,
       current_max_so_far:
@@ -309,28 +306,32 @@ function ScanTerminalScreen() {
         "多模型高温预测",
         "实时观测偏差",
         "未来日期城市决策卡",
-        "Telegram 群内价 5U",
       ];
 
   useEffect(() => {
     if (!activeDetailRow) return;
     if (!findDetailForCity(store.cityDetailsByName, activeDetailRow.city)) {
-      void store.ensureCityDetail(activeDetailRow.city, false, "panel").catch(() => {});
+      void store
+        .ensureCityDetail(activeDetailRow.city, false, "panel")
+        .catch(() => {});
     }
   }, [activeDetailRow, store.cityDetailsByName, store.ensureCityDetail]);
 
-  const handleMapCitySelect = useCallback((cityName: string) => {
-    setMapSelectedCityName(cityName);
-    lastMapSelectedCityRef.current = normalizeCityKey(cityName);
-    const matchedRow = findRowForCity(timeSortedRows, cityName);
-    if (matchedRow) {
-      store.preloadCityFromRow(matchedRow);
-      setSelectedRowId(matchedRow.id);
-    } else {
-      void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
-      setSelectedRowId(null);
-    }
-  }, [store, timeSortedRows]);
+  const handleMapCitySelect = useCallback(
+    (cityName: string) => {
+      setMapSelectedCityName(cityName);
+      lastMapSelectedCityRef.current = normalizeCityKey(cityName);
+      const matchedRow = findRowForCity(timeSortedRows, cityName);
+      if (matchedRow) {
+        store.preloadCityFromRow(matchedRow);
+        setSelectedRowId(matchedRow.id);
+      } else {
+        void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
+        setSelectedRowId(null);
+      }
+    },
+    [store, timeSortedRows],
+  );
 
   useEffect(() => {
     if (activeView !== "map") return;
@@ -344,36 +345,44 @@ function ScanTerminalScreen() {
     addAiPinnedCity(selectedCity);
   }, [activeView, addAiPinnedCity, store.selectedCity, timeSortedRows]);
 
-  const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
-    const cityName = row.city || row.city_display_name || row.display_name || "";
-    if (!cityName) return;
-    setSelectedRowId(row.id);
-    store.preloadCityFromRow(row);
-    const selectedCityKey = normalizeCityKey(store.selectedCity);
-    const rowCityKey = normalizeCityKey(cityName);
-    const hasCachedDetail =
-      Boolean(findDetailForCity(store.cityDetailsByName, cityName)) ||
-      Object.values(store.cityDetailsByName).some((detail) =>
-        rowMatchesCity(row, detail?.name || detail?.display_name || ""),
-      );
-    if (store.isPanelOpen && selectedCityKey === rowCityKey) {
-      if (!hasCachedDetail) {
-        void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
+  const handleSelectRow = useCallback(
+    (row: ScanOpportunityRow) => {
+      const cityName =
+        row.city || row.city_display_name || row.display_name || "";
+      if (!cityName) return;
+      setSelectedRowId(row.id);
+      store.preloadCityFromRow(row);
+      const selectedCityKey = normalizeCityKey(store.selectedCity);
+      const rowCityKey = normalizeCityKey(cityName);
+      const hasCachedDetail =
+        Boolean(findDetailForCity(store.cityDetailsByName, cityName)) ||
+        Object.values(store.cityDetailsByName).some((detail) =>
+          rowMatchesCity(row, detail?.name || detail?.display_name || ""),
+        );
+      if (store.isPanelOpen && selectedCityKey === rowCityKey) {
+        if (!hasCachedDetail) {
+          void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
+        }
+        return;
       }
-      return;
-    }
-    void store.selectCity(cityName);
-  }, [store]);
+      void store.selectCity(cityName);
+    },
+    [store],
+  );
 
-  const handleOpenDecisionRow = useCallback((row: ScanOpportunityRow) => {
-    const cityName = row.city || row.city_display_name || row.display_name || "";
-    if (!cityName) return;
-    setSelectedRowId(row.id);
-    store.preloadCityFromRow(row);
-    addAiPinnedCity(cityName);
-    setActiveView("analysis");
-    void store.selectCity(cityName);
-  }, [addAiPinnedCity, store]);
+  const handleOpenDecisionRow = useCallback(
+    (row: ScanOpportunityRow) => {
+      const cityName =
+        row.city || row.city_display_name || row.display_name || "";
+      if (!cityName) return;
+      setSelectedRowId(row.id);
+      store.preloadCityFromRow(row);
+      addAiPinnedCity(cityName);
+      setActiveView("analysis");
+      void store.selectCity(cityName);
+    },
+    [addAiPinnedCity, store],
+  );
 
   const openScanPaywall = useCallback(() => {
     setShowScanPaywall(true);
@@ -429,7 +438,6 @@ function ScanTerminalScreen() {
       />
     );
   }
-
 
   return (
     <div className={scanTerminalRootClassName}>
@@ -498,7 +506,11 @@ function ScanTerminalScreen() {
 
           <section className="scan-list-section">
             <div className="scan-list-header">
-              <div className="scan-list-tabs" role="tablist" aria-label={isEn ? "Content view" : "内容视图"}>
+              <div
+                className="scan-list-tabs"
+                role="tablist"
+                aria-label={isEn ? "Content view" : "内容视图"}
+              >
                 {isMobileViewport ? (
                   <button
                     type="button"
@@ -518,7 +530,9 @@ function ScanTerminalScreen() {
                     aria-selected={resolvedView === "map"}
                     className={resolvedView === "map" ? "active" : ""}
                     onClick={() => {
-                      lastMapSelectedCityRef.current = normalizeCityKey(store.selectedCity);
+                      lastMapSelectedCityRef.current = normalizeCityKey(
+                        store.selectedCity,
+                      );
                       setActiveView("map");
                     }}
                   >
@@ -541,13 +555,19 @@ function ScanTerminalScreen() {
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
-                  <span className={clsx("scan-status-chip", terminalData?.stale ? "stale" : "live")}>
+                  <span
+                    className={clsx(
+                      "scan-status-chip",
+                      terminalData?.stale ? "stale" : "live",
+                    )}
+                  >
                     {isEn ? "Updated" : "已更新"} {serverAgeText || ""}
                   </span>
                 ) : null}
                 {terminalData?.stale && localAgeText ? (
                   <span className="scan-status-chip stale">
-                    {isEn ? "Local fetch " : "本地下发 "}{localAgeText}
+                    {isEn ? "Local fetch " : "本地下发 "}
+                    {localAgeText}
                   </span>
                 ) : null}
                 {isPro ? (
@@ -557,12 +577,13 @@ function ScanTerminalScreen() {
                     onClick={refreshScanTerminalManually}
                     disabled={scanLoading}
                     title={
-                      isEn
-                        ? "Force refresh decision cards"
-                        : "强制刷新决策卡"
+                      isEn ? "Force refresh decision cards" : "强制刷新决策卡"
                     }
                   >
-                    <RefreshCw size={14} className={scanLoading ? "spin" : undefined} />
+                    <RefreshCw
+                      size={14}
+                      className={scanLoading ? "spin" : undefined}
+                    />
                     {isEn ? "Refresh" : "刷新"}
                   </button>
                 ) : null}
@@ -613,4 +634,3 @@ export function ScanTerminalDashboard() {
     </I18nProvider>
   );
 }
-
