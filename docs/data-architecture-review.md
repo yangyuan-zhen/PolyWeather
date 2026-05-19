@@ -21,8 +21,6 @@ Polymarket Gamma/CLOB    ─┤
                               │                                  │
                               ├─ _analyze()                      ├─ useDashboardStore
                               │   ├─ DEB 融合 (11模型加权)        │   (双Context拆分)
-                              │   ├─ LGBM 独立预测               │
-                              │   ├─ EMOS 概率校准               ├─ ScanTerminalDashboard
                               │   └─ 趋势引擎                    │   (扫描数据预加载)
                               │                                  │
                               ├─ scan_terminal_service.py        ├─ 扫描终端查询
@@ -64,11 +62,9 @@ Polymarket Gamma/CLOB    ─┤
 
 自适应加权：11 模型按过去 7 天 MAE 动态分配权重。回退链完善。
 
-**已修复：LGBM 循环依赖解除** — LGBM 预测值不再参与 DEB 权重计算，保留为独立参考字段 `lgbm.prediction`。
 
 ### 概率校准
 
-EMOS 线性回归校准 raw distribution，支持 `legacy` / `emos_shadow` / `emos_primary` 三种模式。
 
 **已修复：校准漂移检测** — `check_calibration_drift()` 对比最近 CRPS 与基线，漂移 >15% 时告警，集成在 `/api/system/status` 的 `probability.drift` 字段。
 

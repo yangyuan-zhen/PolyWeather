@@ -25,7 +25,6 @@ POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 - 系统健康
 - SQLite / rollout / metrics 摘要
 - 支付运行态
-- prewarm worker 运行态
 - 缓存桶状态与 summary cache hit/miss
 - 当前会员
 - 周榜
@@ -101,11 +100,9 @@ python scripts/reconcile_subscription_by_email.py --email <user_email>
 
 ## 7. 备注
 
-### 7.1 当前 prewarm / 缓存观测项
 
 `/ops` 里的系统状态卡目前已额外展示：
 
-- `prewarm` 是否启用
 - `thread_alive` / `heartbeat_age_sec`
 - 最近一轮：
   - `cycle_count`

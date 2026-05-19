@@ -29,7 +29,6 @@ flowchart TD
     end
 
     subgraph S["状态与概率"]
-        S1["EMOS 本地训练与 shadow 发布门禁"]
     end
 
     A --> P
@@ -50,13 +49,11 @@ flowchart TD
 - 钱包异动支持独立频道路由。
 - 运行态状态/缓存与核心离线训练、评估、回填链路已完成 SQLite 主路径收口。
 - 轻量可观测性已上线（`/healthz`、`/api/system/status`、`/metrics`）。
-- EMOS/CRPS 校准链路已接通；生产主概率保持 `legacy` 或 `emos_shadow`，`emos_primary` 只允许本地训练通过门禁后人工灰度。
 
 ## 3. 高优先级技术债
 
 | 项目 | 影响 | 建议动作 |
 | :-- | :-- | :-- |
-| EMOS 发布门禁 | 低配 VPS 不适合训练，主概率不能绕过评估 | 本地拉生产 SQLite 训练，`ready_for_promotion=true` 后先 `emos_shadow` |
 | 外部监控与告警 | 只有轻量指标，无外部抓取 | 接 Prometheus/Grafana 或最小巡检 |
 | 退款与售后链路 | 商业闭环不完整 | 增加退款状态机与工单系统 |
 
@@ -77,6 +74,5 @@ flowchart TD
 
 ## 6. 下阶段里程碑
 
-1. 固化 EMOS 本地训练流程，禁止低配 VPS 自动训练和自动主用。
 2. 补外部监控抓取与告警阈值。
 3. 评估并推进支付合约 V2 升级。

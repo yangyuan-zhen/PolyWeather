@@ -126,18 +126,14 @@ SSE 事件：
 
 #### 2. `probabilities`
 
-概率层现在按“校准模型概率”对外解释，而不是直接把模型票数或市场价格当成概率。
+概率层基于 legacy 高斯分桶，以 DEB 融合预测 μ 和 ensemble spread σ 生成 1°C 粒度概率分布。
 
-新增 / 重点字段：
+概率字段：
 
-- `engine`：概率引擎名称，例如 `lgbm_calibrated`、`emos`、`legacy`
-- `calibration_mode`：校准运行模式
-- `calibration_version`：校准产物版本
-- `raw_mu` / `raw_sigma`：原始分布参数
-- `calibrated_mu` / `calibrated_sigma`：校准后分布参数
-- `shadow_distribution`：shadow / 对照分布，供回归与灰度验证
-
-当前前端展示 `probabilities.engine` 对应的生产概率分布；`EMOS` / `LGBM` 只有在评估通过、显式启用或 shadow 对照时才进入展示/解释层。模型共识与市场价格只作为辅助参考，不再作为主结论。
+- `engine`：固定为 `legacy`
+- `mu`：DEB 融合预测中心值
+- `distribution`：当天合约桶概率分布
+- `distribution_all`：包含外围桶的完整分布
 
 #### 3. `detail_depth`
 

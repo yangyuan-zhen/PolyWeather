@@ -151,7 +151,6 @@ HRDPS > RDPS > GDPS > GEM
 - MGM
 - NWS
 - HKO
-- LGBM
 - Open-Meteo
 
 ECMWF IFS 与 ECMWF AIFS 分开保留，因为前者是传统 NWP，后者是 AIFS 模型。
@@ -219,7 +218,6 @@ raw current_forecasts
 当前前端把三层拆开展示：
 
 - `模型区间与分歧`：解释不同模型当前给出的最高温范围和分歧，不直接等于命中概率。
-- `校准模型概率`：由当前生产概率引擎输出温度桶概率；默认可保持 legacy，EMOS / LGBM 只在评估通过、显式启用或 shadow 对照时进入展示。
 - `市场参考`：只展示市场价格和错价背景，不再作为主判断，也不默认输出 BUY YES / BUY NO。
 
 模型票数只用于解释“哪些模型支持某个档位”，不等于最终概率。最终概率应优先读取 `probabilities.engine` 对应的校准分布。
@@ -230,7 +228,6 @@ raw current_forecasts
 
 - `tests/test_multi_model_sources.py`
 - `tests/test_deb_model_family.py`
-- `tests/test_lgbm_features.py`
 
 重点覆盖：
 
