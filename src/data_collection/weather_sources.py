@@ -252,7 +252,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             os.getenv("CWA_OPEN_DATA_AUTH")
             or os.getenv("CWA_OPEN_DATA_API_KEY")
             or ""
-        )
         ).strip()
 
         # 磁盘持久化缓存：重启后即可加载上次的预报数据，避免冷启动请求爆发
