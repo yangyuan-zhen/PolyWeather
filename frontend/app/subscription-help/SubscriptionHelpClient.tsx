@@ -27,8 +27,8 @@ const FAQ_ITEMS = [
   {
     q_zh: "当前订阅价格是多少？",
     q_en: "What is the current subscription price?",
-    a_zh: "目前仅提供月付：5 USDC / 30 天。",
-    a_en: "Monthly plan only: 5 USDC / 30 days.",
+    a_zh: "目前仅提供月付：10 USDC / 30 天。",
+    a_en: "Monthly plan only: 10 USDC / 30 days.",
   },
   {
     q_zh: "积分如何抵扣？",
@@ -55,7 +55,7 @@ export function SubscriptionHelpClient() {
       ? "Complete subscription rules and payment guide."
       : "这里是完整的订阅规则和支付说明。你可以先在页面内绑定钱包，再直接开通 Pro。",
     priceLabel: isEn ? "Price" : "订阅价格",
-    priceText: "5 USDC / 30 " + (isEn ? "Days" : "天"),
+    priceText: "10 USDC / 30 " + (isEn ? "Days" : "天"),
     discountLabel: isEn ? "Points Discount" : "积分抵扣",
     discountText: isEn ? "Up to 3 USDC off" : "最多抵 3U",
     communityLabel: isEn ? "Community Points" : "社群积分",

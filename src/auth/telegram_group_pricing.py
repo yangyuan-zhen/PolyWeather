@@ -98,7 +98,7 @@ class TelegramGroupPricing:
             os.getenv("TELEGRAM_CHAT_ID"),
         )
         self.group_chat_ids = dedicated_group_chat_ids or fallback_group_chat_ids
-        self.member_price = _decimal_env("POLYWEATHER_GROUP_MEMBER_PRICE_USDC", "5")
+        self.member_price = _decimal_env("POLYWEATHER_GROUP_MEMBER_PRICE_USDC", "10")
         self.public_price = _decimal_env("POLYWEATHER_PUBLIC_PRICE_USDC", "10")
         self.timeout_sec = max(
             2,

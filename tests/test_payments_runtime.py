@@ -18,6 +18,7 @@ def _payment_env(monkeypatch, tmp_path):
         '[{"code":"usdc_e","address":"0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174","decimals":6,"receiver_contract":"0xeD2f13Aa5fF033c58FB436E178451Cd07f693f32","is_default":true}]',
     )
     monkeypatch.setenv("POLYWEATHER_DB_PATH", str(tmp_path / "payments.db"))
+    monkeypatch.delenv("POLYWEATHER_PAYMENT_DIRECT_RECEIVER_ADDRESS", raising=False)
 
 
 def test_payment_runtime_state_and_audit_event_roundtrip(tmp_path):

@@ -13,7 +13,7 @@ DEB（Dynamic Error Balancing）基于过去 N 天模型误差（MAE）倒数加
 趋势/概率引擎在 `trend_engine.py` 中实现：综合“集合预报区间→σ/μ→高温窗口→死盘判定→温度桶概率分布→边界提示”等，用于 bot 展示与 web 结构化数据输出。
 **城市决策层（Scan Terminal / AI 机场报文解读）**：地图点击城市后加入城市决策卡，前端拉取 full detail、多模型区间、最新 METAR，并通过 `/api/scan/terminal/ai-city/stream` 生成城市级 AI 解读。该解读由 `final_judgment`、`metar_read`、`reasoning`、`model_cluster_note`、`risks` 与原始 METAR 证据组成；最高温中枢优先使用 AI `predicted_max`，再回退到 DEB、多模型中心、日内 pace 或当前实测。
 **市场层（Polymarket 行情对照）**：只读模式从 Gamma API 发现市场、从 CLOB（`py-clob-client` 或 REST 回退）读取价格/盘口，并用完整 `all_buckets` 对目标温度桶做 exact/range/“or higher”/“or lower” 严格匹配，计算“模型-市场差”（模型概率 − 市场隐含概率）生成信号标签。
-**商业化与支付**：订阅（`Pro Monthly 5 USDC`）、积分抵扣、Polygon 链上收款合约（USDC/USDC.e），并提供“事件监听 + 周期确认”的自动补单机制。
+**商业化与支付**：订阅（`Pro Monthly 10 USDC`）、积分抵扣、Polygon 链上收款合约（USDC/USDC.e），并提供“事件监听 + 周期确认”的自动补单机制。
 **支持的数据集/数据源**：项目不是传统“训练数据集+模型训练”的机器学习仓库；其“数据集”本质是外部实时/预报 API 与站点观测数据。对外部数据的使用需要遵守来源方的访问与速率限制，例如 AviationWeather Data API 明确限制请求频率（含每分钟请求上限/建议降低频率与使用缓存文件）。
 **许可证**：仓库根目录 `LICENSE` 当前为 `AGPL-3.0-only`。同时 README 与策略文档明确：品牌、商标、生产私有数据与运营策略不随代码许可证一并授权。
 （插图：项目 README 中包含产品截图，可用于快速理解信息架构与 UI 形态） 

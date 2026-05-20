@@ -23,7 +23,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 ## Product Status (2026-05-11)
 
-- Subscription live: `Pro Monthly 5 USDC`.
+- Subscription live: `Pro Monthly 10 USDC`.
 - Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
 - `/city` and `/deb` now free (daily cap 10 each); points redeemable for payment discount (`500 pts = 1 USDC`, max `3 USDC`).
 - Weekly leaderboard rewards restructured: smaller point bonuses for winners (200/100/50), all active users receive participation rewards.

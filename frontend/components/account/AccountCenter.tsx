@@ -2522,7 +2522,7 @@ export function AccountCenter() {
       setPaymentMethodTab("manual");
       setShowOverlay(false);
       setPaymentInfo(
-        `手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${shortAddress(direct.receiver_address)}，完成后提交 tx hash。`,
+        `手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${direct.receiver_address}，请在下方【手动转账】面板中查看详情并复制地址，完成后提交 tx hash。`,
       );
       trackAppEvent("checkout_started", {
         entry: "account_center_manual_transfer",
