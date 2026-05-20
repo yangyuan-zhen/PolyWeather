@@ -206,7 +206,7 @@ def _amsc_parse_wind_plate_payload(
         "station_label": airport_meta.get("label") or icao,
         "raw_metar": raw_metar,
         "raw_taf": None,
-        "wind_dir": point_temperatures[0].get("wind_dir") if point_temperatures else None,
+        "wind_dir": next((pt.get("wind_dir") for pt in point_temperatures if pt.get("wind_dir") is not None), None) if point_temperatures else None,
         "wind_speed": point_temperatures[0].get("wind_speed") if point_temperatures else None,
         "runway_obs": {
             "runway_pairs": runway_pairs,
