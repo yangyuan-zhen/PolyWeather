@@ -43,4 +43,9 @@ export function runTests() {
       accountCenterSource.includes("如支付卡住，请优先使用 WalletConnect 扫码支付"),
     "Binance extension binding must show a WalletConnect fallback hint for payment stability",
   );
+  assert(
+    accountCenterSource.includes("钱包里需要少量 Polygon POL/MATIC 作为 gas 手续费") &&
+      accountCenterSource.includes("只有 USDC 可能无法完成授权或支付"),
+    "payment wallet tab must warn users that Polygon POL/MATIC gas is required in addition to USDC",
+  );
 }

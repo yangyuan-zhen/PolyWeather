@@ -3281,6 +3281,9 @@ export function AccountCenter() {
                       <p className="text-[11px] leading-relaxed text-slate-400">
                         方式一：绑定您的 EVM 钱包（如 MetaMask 扩展或 WalletConnect 扫码），通过智能合约自动签名付款，额度即时到账。
                       </p>
+                      <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">
+                        钱包里需要少量 Polygon POL/MATIC 作为 gas 手续费；只有 USDC 可能无法完成授权或支付。请确认当前钱包在 Polygon 网络，并预留一点 POL/MATIC 后再支付。
+                      </div>
                       
                       {boundWallets.length ? (
                         <div className="space-y-3">
