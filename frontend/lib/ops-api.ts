@@ -126,4 +126,21 @@ export const opsApi = {
       }>;
     }>("/api/ops/training/accuracy");
   },
+  telegramAudit() {
+    return opsFetch<{
+      anomalies: Array<{
+        telegram_id: number;
+        username: string;
+        chat_id: string;
+        status: string;
+        anomaly_type: "unbound" | "expired" | "trial_only";
+        reason: string;
+        email: string | null;
+        expires_at: string | null;
+      }>;
+      valid_count: number;
+      anomaly_count: number;
+      error?: string;
+    }>("/api/ops/telegram/members-audit");
+  },
 };

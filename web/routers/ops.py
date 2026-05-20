@@ -22,6 +22,7 @@ from web.services.ops_api import (
     search_ops_users,
     update_ops_config,
     get_ops_training_accuracy,
+    get_ops_telegram_audit,
 )
 
 router = APIRouter(tags=["ops"])
@@ -166,4 +167,10 @@ async def ops_health_check(request: Request):
 @router.get("/api/ops/training/accuracy")
 async def ops_training_accuracy(request: Request):
     return get_ops_training_accuracy(request)
+
+
+@router.get("/api/ops/telegram/members-audit")
+async def ops_telegram_audit(request: Request):
+    return get_ops_telegram_audit(request)
+
 

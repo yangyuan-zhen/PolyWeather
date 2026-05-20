@@ -14,6 +14,7 @@ import {
   FileText,
   ScrollText,
   Activity,
+  ShieldAlert,
 } from "lucide-react";
 
 const navGroups = [
@@ -32,6 +33,7 @@ const navGroups = [
     items: [
       { href: "/ops/payments", icon: CreditCard, label: "支付管理" },
       { href: "/ops/memberships", icon: UserCheck, label: "会员订阅" },
+      { href: "/ops/telegram-audit", icon: ShieldAlert, label: "电报清理" },
       { href: "/ops/users", icon: Users, label: "用户积分" },
     ],
   },
