@@ -239,6 +239,29 @@ def grant_ops_points(request: Request, body: GrantPointsRequest) -> Dict[str, An
     return result
 
 
+def transfer_ops_points(
+    request: Request,
+    from_email: str = "",
+    to_email: str = "",
+    amount: int = 0,
+) -> Dict[str, Any]:
+    """Transfer points from one user to another."""
+    admin = _require_ops(request) or {}
+    from_email = str(from_email or "").strip()
+    to_email = str(to_email or "").strip()
+    amount = int(amount or 0)
+    if not from_email or not to_email:
+        raise HTTPException(status_code=400, detail="from_email and to_email are required")
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="amount must be positive")
+    db = DBManager()
+    result = db.transfer_points_by_email(from_email, to_email, amount)
+    result["operator_email"] = admin.get("email")
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result)
+    return result
+
+
 def get_ops_analytics_funnel(request: Request, days: int = 30) -> Dict[str, Any]:
     _require_ops(request)
     db = DBManager()

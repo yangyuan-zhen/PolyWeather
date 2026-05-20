@@ -14,6 +14,7 @@ from web.services.ops_api import (
     get_ops_weekly_leaderboard,
     get_ops_user_subscriptions,
     grant_ops_points,
+    transfer_ops_points,
     grant_ops_subscription,
     list_ops_memberships,
     list_ops_payment_incidents,
@@ -76,6 +77,17 @@ async def ops_payments(request: Request, limit: int = 50):
 @router.post("/api/ops/users/grant-points")
 async def ops_grant_points(request: Request, body: GrantPointsRequest):
     return grant_ops_points(request, body)
+
+
+@router.post("/api/ops/users/transfer-points")
+async def ops_transfer_points(request: Request):
+    import json as _json
+    body_bytes = await request.body()
+    body = _json.loads(body_bytes.decode("utf-8"))
+    from_email = str(body.get("from_email") or "").strip()
+    to_email = str(body.get("to_email") or "").strip()
+    amount = int(body.get("amount") or 0)
+    return transfer_ops_points(request, from_email=from_email, to_email=to_email, amount=amount)
 
 
 @router.get("/api/ops/analytics/funnel")
