@@ -394,6 +394,13 @@ function detectWalletLabel(
   ) {
     return "Bitget Wallet";
   }
+  if (
+    (provider as any)?.isBinance ||
+    announcedName.toLowerCase().includes("binance") ||
+    announcedRdns.includes("binance")
+  ) {
+    return "Binance Web3 Wallet";
+  }
   if (announcedName) return announcedName;
   return "EVM 钱包";
 }
@@ -469,6 +476,9 @@ function listInjectedProviders(): InjectedProviderOption[] {
   candidates.forEach((provider, index) => {
     const detail = detailByProvider.get(provider);
     const label = detectWalletLabel(provider, detail);
+    // Binance Web3 Wallet injected provider does not support eth_sendTransaction;
+    // users should use WalletConnect mode instead.
+    if (label.toLowerCase().includes("binance")) return;
     const key = getInjectedProviderStableId(provider, index, detail);
     if (seen.has(key)) return;
     const normalizedLabel = label.trim().toLowerCase();
