@@ -1567,7 +1567,7 @@ export function AccountCenter() {
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
-    (!isSubscribed || showExpiringSoon || showExpiredReminder),
+    (!isSubscribed || isTrialPlan || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
     ? copy.proExpiredTitle
