@@ -4,6 +4,27 @@ import { useState } from "react";
 import { ScrollText, Coins, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  getSupabaseBrowserClient,
+  hasSupabasePublicEnv,
+} from "@/lib/supabase/client";
+
+async function buildOpsAuthHeaders() {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (!hasSupabasePublicEnv()) return headers;
+  try {
+    const {
+      data: { session },
+    } = await getSupabaseBrowserClient().auth.getSession();
+    const token = String(session?.access_token || "").trim();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  } catch {
+    // Route cookies may still authenticate the request.
+  }
+  return headers;
+}
 
 export function SubscriptionsPageClient() {
   const [email, setEmail] = useState("");
@@ -21,7 +42,7 @@ export function SubscriptionsPageClient() {
     try {
       const res = await fetch("/api/ops/subscriptions/grant", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await buildOpsAuthHeaders(),
         body: JSON.stringify({
           email: email.trim(),
           plan_code: planCode,
@@ -56,7 +77,7 @@ export function SubscriptionsPageClient() {
     try {
       const res = await fetch("/api/ops/subscriptions/extend", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await buildOpsAuthHeaders(),
         body: JSON.stringify({ email: email.trim(), additional_days: extendDays }),
       });
       if (res.ok) {
