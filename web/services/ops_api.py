@@ -395,7 +395,7 @@ def grant_ops_subscription(
     if not supabase_url or not service_role_key:
         raise HTTPException(status_code=503, detail="Supabase not configured")
 
-    allowed_plans = {"pro_monthly", "pro_quarterly", "pro_yearly"}
+    allowed_plans = {"pro_monthly"}
     if plan_code not in allowed_plans:
         raise HTTPException(status_code=400, detail=f"invalid plan_code, allowed: {allowed_plans}")
 
