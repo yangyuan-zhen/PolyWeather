@@ -752,7 +752,7 @@ export function AccountCenter() {
       paymentHost: isEn ? "Payment Host" : "支付域名",
       primary: "Primary",
       polygonChain: "Polygon Chain",
-      noWallet: isEn ? "No payout wallet bound yet." : "未绑定任何收件钱包",
+      noWallet: isEn ? "No payment wallet bound yet." : "未绑定任何付款钱包",
       bindExt: isEn
         ? "Bind Browser Wallet (EVM Extension)"
         : "绑定浏览器钱包（EVM扩展）",
@@ -878,6 +878,7 @@ export function AccountCenter() {
     CreatedIntent["direct_payment"] | null
   >(null);
   const [manualTxHash, setManualTxHash] = useState("");
+  const [paymentMethodTab, setPaymentMethodTab] = useState<"wallet" | "manual">("wallet");
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
@@ -2518,6 +2519,7 @@ export function AccountCenter() {
       }
       setLastIntentId(intentId);
       setManualPayment(direct);
+      setPaymentMethodTab("manual");
       setShowOverlay(false);
       setPaymentInfo(
         `手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${shortAddress(direct.receiver_address)}，完成后提交 tx hash。`,
@@ -3159,175 +3161,229 @@ export function AccountCenter() {
                     </div>
                   </div>
                 )}
-                <div className="mb-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-4">
-                  <div className="mb-2 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold text-emerald-200">
-                        手动转账（无需绑定钱包）
-                      </p>
-                      <p className="mt-1 text-[11px] leading-5 text-emerald-100/75">
-                        先创建订单，向唯一收款地址转账，完成后提交 tx hash
-                        自动开通。请不要和钱包支付同时使用。
-                      </p>
-                    </div>
+
+                {/* 支付方式选择 Tabs */}
+                <div className="mt-6 border-t border-white/10 pt-6">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3 font-semibold">
+                    请选择支付方式 (Payment Method)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-black/40 border border-white/5 mb-5">
                     <button
                       type="button"
-                      onClick={() => void createManualPaymentIntent()}
-                      disabled={paymentBusy || !isAuthenticated}
-                      className="shrink-0 rounded-xl border border-emerald-400/35 bg-emerald-500/15 px-3 py-2 text-[11px] font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50"
+                      onClick={() => setPaymentMethodTab("wallet")}
+                      className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        paymentMethodTab === "wallet"
+                          ? "bg-blue-600/95 text-white shadow-lg"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                      }`}
                     >
-                      创建转账订单
+                      <Wallet size={12} />
+                      钱包快捷支付
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPaymentMethodTab("manual")}
+                      className={`py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                        paymentMethodTab === "manual"
+                          ? "bg-emerald-600/95 text-white shadow-lg"
+                          : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+                      }`}
+                    >
+                      <ExternalLink size={12} />
+                      手动链上转账
                     </button>
                   </div>
-                  {manualPayment ? (
-                    <div className="mt-3 space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
-                      <div>
-                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                          Amount
-                        </p>
-                        <p className="font-mono text-sm font-bold text-white">
-                          {manualPayment.amount_usdc}{" "}
-                          {manualPayment.token_symbol || selectedTokenLabel}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                          Receiver
-                        </p>
-                        <div className="mt-1 flex gap-2">
-                          <code className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
-                            {manualPayment.receiver_address}
-                          </code>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleCopy(manualPayment.receiver_address)
-                            }
-                            className="rounded-lg bg-blue-600 px-2 text-xs font-bold text-white"
-                          >
-                            复制
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                          Tx Hash
-                        </p>
-                        <input
-                          value={manualTxHash}
-                          onChange={(event) =>
-                            setManualTxHash(event.target.value)
-                          }
-                          placeholder="0x..."
-                          className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void submitManualPaymentTx()}
-                        disabled={paymentBusy}
-                        className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
-                      >
-                        提交 tx hash 并自动确认
-                      </button>
-                    </div>
-                  ) : null}
-                </div>
-                {boundWallets.length ? (
-                  <div className="space-y-3">
-                    {boundWallets.map((w) => (
-                      <div
-                        key={w.address}
-                        className={`p-3 rounded-xl border transition-all ${selectedWallet === w.address ? "bg-blue-500/10 border-blue-500/30 text-white" : "bg-white/5 border-white/5 text-slate-400"}`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-[10px] font-mono">
-                            {shortAddress(w.address)}
-                          </span>
-                          {w.is_primary && (
-                            <span className="text-[8px] bg-blue-500 px-1 rounded">
-                              {copy.primary}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px]">{copy.polygonChain}</div>
-                        <div className="mt-2 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() => void handleUnbindWallet(w.address)}
-                            disabled={paymentBusy}
-                            className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
-                          >
-                            <Minus size={12} />
-                            {copy.unbind}
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-slate-500 italic">
-                    {copy.noWallet}
-                  </p>
-                )}
-              </div>
 
-              <div className="mt-6 grid grid-cols-1 gap-2">
-                {injectedProviderOptions.length > 1 && (
-                  <label className="mb-2 block">
-                    <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
-                      {copy.walletExtensionDetected}
-                    </span>
-                    <select
-                      value={selectedInjectedProviderKey}
-                      onChange={(event) =>
-                        setSelectedInjectedProviderKey(event.target.value)
-                      }
-                      disabled={paymentBusy}
-                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
-                    >
-                      {injectedProviderOptions.map((option) => (
-                        <option
-                          key={option.key}
-                          value={option.key}
-                          className="bg-slate-900 text-slate-200"
+                  {paymentMethodTab === "wallet" ? (
+                    <div className="space-y-4">
+                      <p className="text-[11px] leading-relaxed text-slate-400">
+                        方式一：绑定您的 EVM 钱包（如 MetaMask 扩展或 WalletConnect 扫码），通过智能合约自动签名付款，额度即时到账。
+                      </p>
+                      
+                      {boundWallets.length ? (
+                        <div className="space-y-3">
+                          {boundWallets.map((w) => (
+                            <div
+                              key={w.address}
+                              className={`p-3 rounded-xl border transition-all ${
+                                selectedWallet === w.address
+                                  ? "bg-blue-500/10 border-blue-500/30 text-white"
+                                  : "bg-white/5 border-white/5 text-slate-400"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[10px] font-mono">
+                                  {shortAddress(w.address)}
+                                </span>
+                                {w.is_primary && (
+                                  <span className="text-[8px] bg-blue-500 px-1 rounded text-white font-semibold">
+                                    {copy.primary}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-[10px]">{copy.polygonChain}</div>
+                              <div className="mt-2 flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUnbindWallet(w.address)}
+                                  disabled={paymentBusy}
+                                  className="inline-flex items-center gap-1 rounded-md border border-red-500/30 bg-red-500/10 px-2 py-1 text-[10px] font-semibold text-red-300 transition-all hover:bg-red-500/20 disabled:opacity-50"
+                                >
+                                  <Minus size={12} />
+                                  {copy.unbind}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-4 rounded-xl border border-white/5 bg-white/5 text-center">
+                          <p className="text-xs text-slate-400 italic">
+                            {copy.noWallet}
+                          </p>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 gap-2 pt-2">
+                        {injectedProviderOptions.length > 1 && (
+                          <label className="mb-2 block">
+                            <span className="mb-2 block text-[11px] uppercase tracking-widest text-slate-500">
+                              {copy.walletExtensionDetected}
+                            </span>
+                            <select
+                              value={selectedInjectedProviderKey}
+                              onChange={(event) =>
+                                setSelectedInjectedProviderKey(event.target.value)
+                              }
+                              disabled={paymentBusy}
+                              className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-slate-200 outline-none transition-all hover:bg-white/10 disabled:opacity-60"
+                            >
+                              {injectedProviderOptions.map((option) => (
+                                <option
+                                  key={option.key}
+                                  value={option.key}
+                                  className="bg-slate-900 text-slate-200"
+                                >
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        )}
+                        <button
+                          onClick={() => {
+                            setProviderMode("auto");
+                            void connectAndBindWallet("auto");
+                          }}
+                          disabled={paymentBusy || !isAuthenticated}
+                          className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
                         >
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                )}
-                <button
-                  onClick={() => {
-                    setProviderMode("auto");
-                    void connectAndBindWallet("auto");
-                  }}
-                  disabled={paymentBusy || !isAuthenticated}
-                  className="w-full py-3 border border-white/10 bg-white/5 hover:bg-white/10 rounded-xl text-xs font-bold text-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  <PlusIcon className="w-4 h-4" /> {copy.bindExt}
-                </button>
-                <button
-                  onClick={() => {
-                    setProviderMode("walletconnect");
-                    void connectAndBindWallet("walletconnect");
-                  }}
-                  disabled={
-                    paymentBusy || !isAuthenticated || !walletConnectEnabled
-                  }
-                  className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  <CreditCard className="w-4 h-4" /> {copy.bindQr}
-                </button>
-                {!walletConnectEnabled && (
-                  <p className="text-[11px] text-slate-500">
-                    {copy.walletConnectMissing}
-                    <code className="mx-1">
-                      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-                    </code>
-                  </p>
-                )}
+                          <PlusIcon className="w-4 h-4" /> {copy.bindExt}
+                        </button>
+                        <button
+                          onClick={() => {
+                            setProviderMode("walletconnect");
+                            void connectAndBindWallet("walletconnect");
+                          }}
+                          disabled={
+                            paymentBusy || !isAuthenticated || !walletConnectEnabled
+                          }
+                          className="w-full py-3 border border-cyan-400/30 bg-cyan-500/10 hover:bg-cyan-500/20 rounded-xl text-xs font-bold text-cyan-300 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                        >
+                          <CreditCard className="w-4 h-4" /> {copy.bindQr}
+                        </button>
+                        {!walletConnectEnabled && (
+                          <p className="text-[11px] text-slate-500 text-center mt-1">
+                            {copy.walletConnectMissing}
+                            <code className="mx-1">
+                              NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+                            </code>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-[11px] leading-relaxed text-slate-400">
+                        方式二：无需将钱包绑定到账号，直接向平台收款合约转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。
+                      </p>
+                      
+                      <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-4">
+                        <div className="flex flex-col gap-3">
+                          <div>
+                            <p className="text-xs font-bold text-emerald-200">
+                              手动转账（无需绑定钱包）
+                            </p>
+                            <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/75">
+                              先创建订单，向指定收款地址转账，完成后在此处提交 tx hash。请勿与钱包付款通道重复混用。
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void createManualPaymentIntent()}
+                            disabled={paymentBusy || !isAuthenticated}
+                            className="w-full rounded-xl border border-emerald-400/35 bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50"
+                          >
+                            创建转账订单
+                          </button>
+                        </div>
+                        {manualPayment ? (
+                          <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                                Amount
+                              </p>
+                              <p className="font-mono text-sm font-bold text-white">
+                                {manualPayment.amount_usdc}{" "}
+                                {manualPayment.token_symbol || selectedTokenLabel}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                                Receiver
+                              </p>
+                              <div className="mt-1 flex gap-2">
+                                <code className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
+                                  {manualPayment.receiver_address}
+                                </code>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleCopy(manualPayment.receiver_address)
+                                  }
+                                  className="rounded-lg bg-blue-600 px-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
+                                >
+                                  复制
+                                </button>
+                              </div>
+                            </div>
+                            <div>
+                              <p className="text-[10px] uppercase tracking-widest text-slate-500">
+                                Tx Hash
+                              </p>
+                              <input
+                                value={manualTxHash}
+                                onChange={(event) =>
+                                  setManualTxHash(event.target.value)
+                                }
+                                placeholder="0x..."
+                                className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void submitManualPaymentTx()}
+                              disabled={paymentBusy}
+                              className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
+                            >
+                              提交 tx hash 并自动确认
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </div>
