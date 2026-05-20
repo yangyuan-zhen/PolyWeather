@@ -45,11 +45,11 @@ export function runTests() {
     "mobile city list should use MobileCityPicker before the optional map view",
   );
   assert(
-    airportEvidenceSource.includes("FOCUS_RUNWAY_PAIRS") &&
+    airportEvidenceSource.includes("SETTLEMENT_RUNWAY_PAIRS") &&
       airportEvidenceSource.includes("chongqing") &&
       airportEvidenceSource.includes("seoul") &&
       !airportEvidenceSource.includes("busan:"),
-    "airport evidence must only expose configured focused runways, not all runway observations",
+    "settlement runway mapping must cover all active settlement cities without mixing in non-settlement airports",
   );
   assert(
     dashboardClientSource.includes('CACHE_KEY = "polyWeather_v2_chart_full_day"'),
