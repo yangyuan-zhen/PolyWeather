@@ -21,6 +21,8 @@ from src.database.db_manager import DBManager
 DEFAULT_POLYGON_CHAIN_ID = 137
 DEFAULT_USDC_E_ADDRESS = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"
 DEFAULT_NATIVE_USDC_ADDRESS = "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359"
+DEFAULT_USDT_ADDRESS = "0xc2132d05d31c914a87c6611c10748aeb04b58e8f"
+DEFAULT_PUSD_ADDRESS = "0xc011a7e12a19f7b1f670d46f03b03f3342e82dfb"
 
 PAYMENT_CONTRACT_ABI = [
     {
@@ -86,7 +88,7 @@ ERC20_TRANSFER_EVENT_ABI = {
 }
 
 DEFAULT_PLAN_CATALOG: Dict[str, Dict[str, Any]] = {
-    "pro_monthly": {"plan_id": 101, "amount_usdc": "5", "duration_days": 30},
+    "pro_monthly": {"plan_id": 101, "amount_usdc": "10", "duration_days": 30},
     "pro_quarterly": {"plan_id": 102, "amount_usdc": "79", "duration_days": 90},
     "pro_yearly": {"plan_id": 103, "amount_usdc": "279", "duration_days": 365},
 }
@@ -266,8 +268,8 @@ class PaymentContractCheckoutService:
         legacy_receiver_contract = _normalize_address(
             os.getenv("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT") or ""
         )
-        legacy_token_address = _normalize_address(
-            os.getenv("POLYWEATHER_PAYMENT_TOKEN_ADDRESS") or DEFAULT_USDC_E_ADDRESS
+        legacy_token_address = (
+            os.getenv("POLYWEATHER_PAYMENT_TOKEN_ADDRESS") or DEFAULT_NATIVE_USDC_ADDRESS
         )
         self.supported_tokens = self._load_supported_tokens(
             os.getenv("POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON") or "",
@@ -381,6 +383,10 @@ class PaymentContractCheckoutService:
         normalized = _normalize_address(address)
         if normalized == _normalize_address(DEFAULT_NATIVE_USDC_ADDRESS):
             return {"code": "usdc", "symbol": "USDC", "name": "Native USDC"}
+        if normalized == _normalize_address(DEFAULT_USDT_ADDRESS):
+            return {"code": "usdt", "symbol": "USDT", "name": "USDT"}
+        if normalized == _normalize_address(DEFAULT_PUSD_ADDRESS):
+            return {"code": "pusd", "symbol": "pUSD", "name": "Polymarket pUSD"}
         if normalized == _normalize_address(DEFAULT_USDC_E_ADDRESS):
             return {"code": "usdc_e", "symbol": "USDC.e", "name": "USDC.e (PoS)"}
         return {"code": "usdc_token", "symbol": "USDC", "name": "USDC"}

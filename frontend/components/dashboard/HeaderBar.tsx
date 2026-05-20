@@ -76,9 +76,6 @@ export function HeaderBar({
     proAccess.subscriptionActive &&
       proAccess.subscriptionQueuedDays > 0,
   );
-  const isTrialPlan = /trial/i.test(
-    String(proAccess.subscriptionPlanCode || ""),
-  );
   const showRenewReminder =
     isAuthenticated &&
     !proAccess.loading &&
@@ -90,20 +87,12 @@ export function HeaderBar({
   const renewReminderLabel = !showRenewReminder
     ? ""
     : !proAccess.subscriptionActive
-      ? isTrialPlan
-        ? locale === "en-US"
-          ? "Trial ended"
-          : "试用已结束"
-        : locale === "en-US"
-          ? "Pro expired"
-          : "Pro 已到期"
-      : isTrialPlan
-        ? locale === "en-US"
-          ? `Trial ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
-          : `试用剩余 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`
-        : locale === "en-US"
-          ? `Pro ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
-          : `Pro 还剩 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`;
+      ? locale === "en-US"
+        ? "Pro expired"
+        : "Pro 已到期"
+      : locale === "en-US"
+        ? `Pro ${Math.max(expiryInfo?.daysLeft || 0, 0)}d left`
+        : `Pro 还剩 ${Math.max(expiryInfo?.daysLeft || 0, 0)} 天`;
 
   useEffect(() => {
     const savedTheme =
