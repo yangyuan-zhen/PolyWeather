@@ -32,4 +32,15 @@ export function runTests() {
     !/STATIC_ASSETS\s*=\s*\[[^\]]*["']\/_next\//s.test(serviceWorkerSource),
     "service worker must not cache-first the whole /_next/ tree; stale chunks break checkout after deploys",
   );
+  assert(
+    !/label\.toLowerCase\(\)\.includes\(["']binance["']\)\)\s*return/.test(
+      accountCenterSource,
+    ),
+    "Binance Web3 Wallet injected provider must remain available for browser-extension binding",
+  );
+  assert(
+    accountCenterSource.includes("Binance 扩展已绑定") &&
+      accountCenterSource.includes("如支付卡住，请优先使用 WalletConnect 扫码支付"),
+    "Binance extension binding must show a WalletConnect fallback hint for payment stability",
+  );
 }

@@ -480,9 +480,6 @@ function listInjectedProviders(): InjectedProviderOption[] {
   candidates.forEach((provider, index) => {
     const detail = detailByProvider.get(provider);
     const label = detectWalletLabel(provider, detail);
-    // Binance Web3 Wallet injected provider does not support eth_sendTransaction;
-    // users should use WalletConnect mode instead.
-    if (label.toLowerCase().includes("binance")) return;
     const key = getInjectedProviderStableId(provider, index, detail);
     if (seen.has(key)) return;
     const normalizedLabel = label.trim().toLowerCase();
@@ -2040,6 +2037,9 @@ export function AccountCenter() {
       );
       const eth = providerSelection.provider;
       const walletLabel = providerSelection.label;
+      const binanceBindHint = walletLabel.toLowerCase().includes("binance")
+        ? " Binance 扩展已绑定；如支付卡住，请优先使用 WalletConnect 扫码支付。"
+        : "";
 
       // Ensure we have a valid token BEFORE opening the wallet modal.
       let accessToken: string;
@@ -2071,7 +2071,7 @@ export function AccountCenter() {
         setWalletAddress(address);
         setSelectedWallet(address);
         setPaymentInfo(
-          `${walletLabel} 已绑定: ${shortAddress(address)}。现在可点击“立即订阅并激活服务”。`,
+          `${walletLabel} 已绑定: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`,
         );
         await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
         if (options.openOverlayAfterBind) setShowOverlay(true);
@@ -2110,7 +2110,7 @@ export function AccountCenter() {
       }
 
       setPaymentInfo(
-        `${walletLabel} 绑定成功: ${shortAddress(address)}。现在可点击“立即订阅并激活服务”。`,
+        `${walletLabel} 绑定成功: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`,
       );
       setProviderMode(providerSelection.mode);
       if (options.openOverlayAfterBind) setShowOverlay(true);
