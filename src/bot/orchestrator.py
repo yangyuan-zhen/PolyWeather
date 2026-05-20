@@ -103,4 +103,4 @@ def start_bot() -> None:
         started_count,
         len(runtime_status.loops),
     )
-    bot.infinity_polling(allowed_updates=["message", "chat_join_request"])
+    bot.infinity_polling(allowed_updates=["message", "callback_query", "chat_join_request"])
