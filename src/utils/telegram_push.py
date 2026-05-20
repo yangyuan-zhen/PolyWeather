@@ -560,7 +560,7 @@ SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
 
 # All cities with active runway observation data (AMSC AWOS / AMOS).
 RUNWAY_OBSERVATION_CITIES = {
-    "shanghai", "beijing", "guangzhou", "shenzhen",
+    "shanghai", "beijing", "guangzhou",
     "chengdu", "chongqing", "wuhan", "qingdao",
     "seoul", "busan",
 }
@@ -574,7 +574,6 @@ WIND_REGIME: Dict[str, Dict[str, Tuple[int, int]]] = {
     "qingdao": {"sea_breeze": (90, 180), "warm_advection": (200, 300)},
     "beijing": {"sea_breeze": (120, 200), "warm_advection": (220, 320)},
     "guangzhou": {"sea_breeze": (120, 200), "warm_advection": (200, 300)},
-    "shenzhen": {"sea_breeze": (120, 200), "warm_advection": (200, 300)},
     "chengdu": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
     "chongqing": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
     "wuhan": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},

@@ -27,7 +27,6 @@ AMSC_AWOS_AIRPORTS: Dict[str, Dict[str, str]] = {
     "shanghai": {"icao": "ZSPD", "label": "Shanghai Pudong"},
     "beijing": {"icao": "ZBAA", "label": "Beijing Capital"},
     "guangzhou": {"icao": "ZGGG", "label": "Guangzhou Baiyun"},
-    "shenzhen": {"icao": "ZGSZ", "label": "Shenzhen Bao'an"},
     "chengdu": {"icao": "ZUUU", "label": "Chengdu Shuangliu"},
     "chongqing": {"icao": "ZUCK", "label": "Chongqing Jiangbei"},
     "wuhan": {"icao": "ZHHH", "label": "Wuhan Tianhe"},

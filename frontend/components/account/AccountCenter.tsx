@@ -241,6 +241,8 @@ const TELEGRAM_TOPICS_GROUP_URL = TELEGRAM_GROUP_URL;
 const SUBSCRIPTION_HELP_HREF = "/subscription-help";
 const PAYMENT_RECOVERY_STORAGE_KEY = "polyweather:lastPaymentRecovery";
 const PAYMENT_RECOVERY_TTL_MS = 6 * 60 * 60 * 1000;
+const WALLET_REQUEST_TIMEOUT_MS = 60_000;
+const WALLET_TRANSACTION_REQUEST_TIMEOUT_MS = 120_000;
 
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
@@ -572,6 +574,31 @@ function buildApproveCalldata(spender: string, amount: bigint) {
 
 function buildBalanceOfCalldata(owner: string) {
   return `0x70a08231${toPaddedAddress(owner)}`;
+}
+
+async function requestWalletWithTimeout<T>(
+  provider: EvmProvider,
+  args: { method: string; params?: unknown[] },
+  actionLabel = "钱包操作",
+  timeoutMs = WALLET_REQUEST_TIMEOUT_MS,
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return (await Promise.race([
+      provider.request(args),
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(() => {
+          reject(
+            new Error(
+              `${actionLabel}长时间无响应，请确认钱包弹窗是否被拦截；如使用 Binance Web3 Wallet，请回到钱包确认或重新连接后再试。`,
+            ),
+          );
+        }, timeoutMs);
+      }),
+    ])) as T;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 function formatTokenUnits(amount: bigint, decimals: number) {
@@ -1835,17 +1862,23 @@ export function AccountCenter() {
 
   const waitForReceipt = async (
     txHash: string,
+    provider?: EvmProvider,
     timeoutMs = 120000,
     pollMs = 3000,
   ) => {
-    const eth = getEvmProvider();
+    const eth = provider || getEvmProvider();
     if (!eth) throw new Error("No EVM wallet provider found");
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
-      const receipt = (await eth.request({
-        method: "eth_getTransactionReceipt",
-        params: [txHash],
-      })) as { status?: string } | null;
+      const receipt = await requestWalletWithTimeout<{ status?: string } | null>(
+        eth,
+        {
+          method: "eth_getTransactionReceipt",
+          params: [txHash],
+        },
+        "查询授权交易确认",
+        15_000,
+      );
       if (receipt && receipt.status) {
         if (receipt.status === "0x1") return receipt;
         throw new Error(`transaction reverted: ${txHash}`);
@@ -1938,16 +1971,24 @@ export function AccountCenter() {
     targetChainId: number,
   ): Promise<void> => {
     const currentChainIdHex = String(
-      (await eth.request({ method: "eth_chainId" })) || "",
+      (await requestWalletWithTimeout<string>(
+        eth,
+        { method: "eth_chainId" },
+        "读取钱包网络",
+      )) || "",
     );
     const targetChainHex = `0x${targetChainId.toString(16)}`;
     if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase())
       return;
     try {
-      await eth.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: targetChainHex }],
-      });
+      await requestWalletWithTimeout(
+        eth,
+        {
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: targetChainHex }],
+        },
+        "切换钱包网络",
+      );
     } catch (err: any) {
       const code = Number(err?.code);
       const msg = String(err?.message || "").toLowerCase();
@@ -1955,9 +1996,11 @@ export function AccountCenter() {
       // If the error code indicates the chain is not added (4902), or it's Polygon (137)
       if (code === 4902 || targetChainId === 137) {
         try {
-          await eth.request({
-            method: "wallet_addEthereumChain",
-            params: [
+          await requestWalletWithTimeout(
+            eth,
+            {
+              method: "wallet_addEthereumChain",
+              params: [
               {
                 chainId: "0x89",
                 chainName: "Polygon Mainnet",
@@ -1965,8 +2008,10 @@ export function AccountCenter() {
                 rpcUrls: ["https://polygon-rpc.com"],
                 blockExplorerUrls: ["https://polygonscan.com"],
               },
-            ],
-          });
+              ],
+            },
+            "添加 Polygon 网络",
+          );
           return;
         } catch (addErr: any) {
           err = addErr;
@@ -2010,9 +2055,11 @@ export function AccountCenter() {
         Authorization: `Bearer ${accessToken}`,
       };
 
-      const accounts = (await eth.request({
-        method: "eth_requestAccounts",
-      })) as string[];
+      const accounts = await requestWalletWithTimeout<string[]>(
+        eth,
+        { method: "eth_requestAccounts" },
+        "连接绑定钱包",
+      );
       const address = String(accounts?.[0] || "").toLowerCase();
       if (!address)
         throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
@@ -2209,9 +2256,11 @@ export function AccountCenter() {
         selectedInjectedProviderKey,
       );
       const eth = providerSelection.provider;
-      const activeAccounts = (await eth.request({
-        method: "eth_requestAccounts",
-      })) as string[];
+      const activeAccounts = await requestWalletWithTimeout<string[]>(
+        eth,
+        { method: "eth_requestAccounts" },
+        "连接付款钱包",
+      );
       const activeAddress = String(activeAccounts?.[0] || "").toLowerCase();
       if (!activeAddress)
         throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
@@ -2330,16 +2379,20 @@ export function AccountCenter() {
           6,
       );
 
-      const balanceHex = (await eth.request({
-        method: "eth_call",
-        params: [
+      const balanceHex = await requestWalletWithTimeout<string>(
+        eth,
+        {
+          method: "eth_call",
+          params: [
           {
             to: tokenAddress,
             data: buildBalanceOfCalldata(payingWallet),
           },
           "latest",
-        ],
-      })) as string;
+          ],
+        },
+        `读取 ${tokenSymbol} 余额`,
+      );
       const tokenBalance = BigInt(String(balanceHex || "0x0"));
       if (tokenBalance < amountUnits) {
         const need = formatTokenUnits(amountUnits, tokenDecimals);
@@ -2349,16 +2402,20 @@ export function AccountCenter() {
         );
       }
 
-      const allowanceHex = (await eth.request({
-        method: "eth_call",
-        params: [
+      const allowanceHex = await requestWalletWithTimeout<string>(
+        eth,
+        {
+          method: "eth_call",
+          params: [
           {
             to: tokenAddress,
             data: buildAllowanceCalldata(payingWallet, txPayload.to),
           },
           "latest",
-        ],
-      })) as string;
+          ],
+        },
+        `读取 ${tokenSymbol} 授权额度`,
+      );
       const allowance = BigInt(String(allowanceHex || "0x0"));
 
       if (allowance < amountUnits) {
@@ -2368,11 +2425,16 @@ export function AccountCenter() {
           to: tokenAddress,
           data: buildApproveCalldata(txPayload.to, amountUnits),
         };
-        const approveHash = (await eth.request({
-          method: "eth_sendTransaction",
-          params: [approveParams],
-        })) as string;
-        await waitForReceipt(String(approveHash || ""));
+        const approveHash = await requestWalletWithTimeout<string>(
+          eth,
+          {
+            method: "eth_sendTransaction",
+            params: [approveParams],
+          },
+          `发起 ${tokenSymbol} 授权`,
+          WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
+        );
+        await waitForReceipt(String(approveHash || ""), eth);
         approvedInThisRun = true;
         setPaymentInfo(`${tokenSymbol} 授权成功，正在发起支付...`);
       } else {
@@ -2388,10 +2450,15 @@ export function AccountCenter() {
         payParams.value = txPayload.value;
       }
       
-      const txHash = (await eth.request({
-        method: "eth_sendTransaction",
-        params: [payParams],
-      })) as string;
+      const txHash = await requestWalletWithTimeout<string>(
+        eth,
+        {
+          method: "eth_sendTransaction",
+          params: [payParams],
+        },
+        "发起支付交易",
+        WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
+      );
       const txHashNorm = String(txHash || "").toLowerCase();
       setLastTxHash(txHashNorm);
       setLastPaymentStartedAt(Date.now());
