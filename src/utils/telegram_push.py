@@ -1014,10 +1014,16 @@ def _build_airport_status_message(
     lines.append("")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
     cur_str = f"{display_temp:.1f}{temp_symbol}" if display_temp is not None else "--"
-    lines.append(f"结算跑道当前：{cur_str}")
+    if has_runway:
+        lines.append(f"结算跑道当前：{cur_str}")
+    else:
+        lines.append(f"当前：{cur_str}")
     if max_so_far is not None:
         time_str = f"（{max_temp_time}）" if max_temp_time else ""
-        lines.append(f"今日跑道高点：{max_so_far:.1f}{temp_symbol}{time_str}")
+        if has_runway:
+            lines.append(f"今日跑道高点：{max_so_far:.1f}{temp_symbol}{time_str}")
+        else:
+            lines.append(f"日高：{max_so_far:.1f}{temp_symbol}{time_str}")
     if slope_15m is not None:
         sign = "+" if slope_15m >= 0 else ""
         lines.append(f"15分钟趋势：{sign}{slope_15m:.1f}°C")
