@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { RefreshCcw } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshCcw, TrendingUp, TrendingDown, Target, Activity } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { SystemStatusPayload } from "@/types/ops";
 import Link from "next/link";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  ComposedChart, Line, Legend, Cell, LabelList,
+} from "recharts";
 
 function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -15,6 +19,26 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="text-slate-400">{label}</span>
       <span className="text-white font-medium">{value}</span>
     </div>
+  );
+}
+
+function KpiCard({ label, value, sub, icon: Icon, color }: {
+  label: string; value: string | number; sub?: string;
+  icon: React.ComponentType<{ className?: string }>; color: string;
+}) {
+  return (
+    <Card className="bg-slate-900/60 border-white/5">
+      <CardContent className="p-4 flex items-center gap-4">
+        <div className={`p-3 rounded-xl ${color}`}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div>
+          <div className="text-2xl font-bold text-white">{value}</div>
+          <div className="text-xs text-slate-400">{label}</div>
+          {sub ? <div className="text-[10px] text-slate-500 mt-0.5">{sub}</div> : null}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -36,6 +60,37 @@ interface CityAccuracy {
   } | null;
 }
 
+const CHART_COLORS = {
+  green: "#22c55e",
+  yellow: "#eab308",
+  red: "#ef4444",
+  blue: "#3b82f6",
+  cyan: "#06b6d4",
+  purple: "#a855f7",
+  slate: "#64748b",
+  emerald: "#10b981",
+  amber: "#f59e0b",
+  rose: "#f43f5e",
+};
+
+function hitColor(hitRate: number) {
+  if (hitRate >= 80) return CHART_COLORS.green;
+  if (hitRate >= 60) return CHART_COLORS.yellow;
+  return CHART_COLORS.red;
+}
+
+function maeColor(mae: number) {
+  if (mae <= 1.5) return CHART_COLORS.green;
+  if (mae <= 2.5) return CHART_COLORS.yellow;
+  return CHART_COLORS.red;
+}
+
+function brierColor(score: number) {
+  if (score <= 0.1) return CHART_COLORS.green;
+  if (score <= 0.25) return CHART_COLORS.yellow;
+  return CHART_COLORS.red;
+}
+
 export function TrainingPageClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
@@ -46,15 +101,54 @@ export function TrainingPageClient() {
     try {
       const [s, accData] = await Promise.all([
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
-        opsApi.trainingAccuracy().catch(() => ({ accuracy: [] }))
+        opsApi.trainingAccuracy().catch(() => ({ accuracy: [] as CityAccuracy[] })),
       ]);
       setStatus(s);
-      setAccuracy(accData.accuracy);
+      setAccuracy((accData as { accuracy: CityAccuracy[] }).accuracy ?? []);
     } catch { /* */ }
     setLoading(false);
   };
 
   useEffect(() => { void load(); }, []);
+
+  const kpis = useMemo(() => {
+    if (!accuracy?.length) return null;
+    const debCities = accuracy.filter((c) => c.deb);
+    const avgHit = debCities.reduce((s, c) => s + (c.deb?.hit_rate ?? 0), 0) / debCities.length;
+    const avgMae = debCities.reduce((s, c) => s + (c.deb?.mae ?? 0), 0) / debCities.length;
+    const best = debCities.reduce((a, b) => ((a.deb?.hit_rate ?? 0) > (b.deb?.hit_rate ?? 0) ? a : b));
+    const worst = debCities.reduce((a, b) => ((a.deb?.mae ?? 0) > (b.deb?.mae ?? 0) ? a : b));
+    return { avgHit, avgMae, best, worst };
+  }, [accuracy]);
+
+  const debChartData = useMemo(() => {
+    if (!accuracy?.length) return [];
+    return accuracy
+      .filter((c) => c.deb && c.deb.total_days >= 5)
+      .sort((a, b) => (b.deb?.hit_rate ?? 0) - (a.deb?.hit_rate ?? 0))
+      .map((c) => ({
+        name: c.name,
+        cityId: c.city_id,
+        hitRate: Number((c.deb?.hit_rate ?? 0).toFixed(1)),
+        mae: Number((c.deb?.mae ?? 0).toFixed(1)),
+        days: c.deb?.total_days ?? 0,
+      }));
+  }, [accuracy]);
+
+  const muChartData = useMemo(() => {
+    if (!accuracy?.length) return [];
+    return accuracy
+      .filter((c) => c.mu && c.mu.total_days >= 5 && c.mu.brier_score !== null)
+      .sort((a, b) => ((a.mu?.brier_score ?? 1) - (b.mu?.brier_score ?? 1)))
+      .map((c) => ({
+        name: c.name,
+        cityId: c.city_id,
+        brierScore: Number((c.mu?.brier_score ?? 0).toFixed(4)),
+        hitRate: Number((c.mu?.hit_rate ?? 0).toFixed(1)),
+        mae: Number((c.mu?.mae ?? 0).toFixed(1)),
+        days: c.mu?.total_days ?? 0,
+      }));
+  }, [accuracy]);
 
   if (loading) return <div className="text-slate-400 animate-pulse">加载中...</div>;
   if (!status) return <div className="text-red-400">加载失败</div>;
@@ -74,6 +168,7 @@ export function TrainingPageClient() {
         </Button>
       </div>
 
+      {/* Data volume KPIs */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card>
           <CardHeader><CardTitle>真值记录</CardTitle></CardHeader>
@@ -101,6 +196,141 @@ export function TrainingPageClient() {
         </Card>
       </div>
 
+      {/* Accuracy KPI row */}
+      {kpis ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard
+            icon={Target} color="bg-cyan-500/20 text-cyan-400"
+            label="DEB 平均命中率" value={`${kpis.avgHit.toFixed(1)}%`}
+          />
+          <KpiCard
+            icon={Activity} color="bg-blue-500/20 text-blue-400"
+            label="DEB 平均 MAE" value={`${kpis.avgMae.toFixed(1)}°`}
+          />
+          <KpiCard
+            icon={TrendingUp} color="bg-emerald-500/20 text-emerald-400"
+            label="最佳城市" value={kpis.best.name}
+            sub={`命中 ${kpis.best.deb?.hit_rate.toFixed(0)}% · MAE ${kpis.best.deb?.mae.toFixed(1)}°`}
+          />
+          <KpiCard
+            icon={TrendingDown} color="bg-rose-500/20 text-rose-400"
+            label="最大偏差" value={kpis.worst.name}
+            sub={`MAE ${kpis.worst.deb?.mae.toFixed(1)}° · ${kpis.worst.deb?.total_days}天`}
+          />
+        </div>
+      ) : null}
+
+      {/* DEB Accuracy Charts */}
+      {debChartData.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader><CardTitle>DEB 命中率 by 城市</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer>
+                  <BarChart data={debChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
+                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
+                    <Tooltip
+                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
+                    />
+                    <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                      {debChartData.map((entry, i) => (
+                        <Cell key={i} fill={hitColor(entry.hitRate)} fillOpacity={0.85} />
+                      ))}
+                      <LabelList dataKey="hitRate" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}%`} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>DEB MAE by 城市</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer>
+                  <ComposedChart data={debChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
+                    <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} unit="°" />
+                    <Tooltip
+                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}°`, "MAE"]}
+                    />
+                    <Bar dataKey="mae" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                      {debChartData.map((entry, i) => (
+                        <Cell key={i} fill={maeColor(entry.mae)} fillOpacity={0.85} />
+                      ))}
+                      <LabelList dataKey="mae" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}°`} />
+                    </Bar>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* Mu Probability Charts */}
+      {muChartData.length > 0 ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader><CardTitle>概率 μ Brier Score by 城市</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer>
+                  <BarChart data={muChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
+                    <YAxis domain={[0, 0.5]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                    <Tooltip
+                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      formatter={(value: unknown) => [Number(value).toFixed(4), "Brier Score"]}
+                    />
+                    <Bar dataKey="brierScore" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                      {muChartData.map((entry, i) => (
+                        <Cell key={i} fill={brierColor(entry.brierScore)} fillOpacity={0.85} />
+                      ))}
+                      <LabelList dataKey="brierScore" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => Number(v).toFixed(3)} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>概率 μ 命中率 by 城市</CardTitle></CardHeader>
+            <CardContent>
+              <div className="h-[400px]">
+                <ResponsiveContainer>
+                  <BarChart data={muChartData} margin={{ top: 8, right: 8, left: 8, bottom: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+                    <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
+                    <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
+                    <Tooltip
+                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
+                    />
+                    <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
+                      {muChartData.map((entry, i) => (
+                        <Cell key={i} fill={hitColor(entry.hitRate)} fillOpacity={0.85} />
+                      ))}
+                      <LabelList dataKey="hitRate" position="top" style={{ fill: "#94a3b8", fontSize: 10 }} formatter={(v: unknown) => `${Number(v)}%`} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
+
+      {/* City coverage */}
       {modelCities ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
@@ -133,9 +363,10 @@ export function TrainingPageClient() {
         </div>
       ) : null}
 
+      {/* Detail table */}
       <Card>
         <CardHeader>
-          <CardTitle>模型融合与预测准确率效果 (DEB & 概率引擎)</CardTitle>
+          <CardTitle>模型融合与预测准确率详情</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -143,13 +374,13 @@ export function TrainingPageClient() {
               <thead className="text-xs uppercase bg-slate-800/50 text-slate-400">
                 <tr>
                   <th scope="col" className="px-4 py-3">城市</th>
-                  <th scope="col" className="px-4 py-3 text-center">DEB 结算命中</th>
+                  <th scope="col" className="px-4 py-3 text-center">DEB 命中</th>
                   <th scope="col" className="px-4 py-3 text-center">DEB MAE</th>
                   <th scope="col" className="px-4 py-3 text-center">DEB 天数</th>
-                  <th scope="col" className="px-4 py-3 text-center">概率 μ 结算命中</th>
-                  <th scope="col" className="px-4 py-3 text-center">概率 μ MAE</th>
-                  <th scope="col" className="px-4 py-3 text-center">Brier Score</th>
-                  <th scope="col" className="px-4 py-3 text-center">概率天数</th>
+                  <th scope="col" className="px-4 py-3 text-center">μ 命中</th>
+                  <th scope="col" className="px-4 py-3 text-center">μ MAE</th>
+                  <th scope="col" className="px-4 py-3 text-center">Brier</th>
+                  <th scope="col" className="px-4 py-3 text-center">μ 天数</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -222,7 +453,7 @@ export function TrainingPageClient() {
                 ) : (
                   <tr>
                     <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
-                      无有效准确率记录，请确认 daily_records.json 中已有历史结算数据。
+                      无有效准确率记录
                     </td>
                   </tr>
                 )}
@@ -246,4 +477,3 @@ export function TrainingPageClient() {
     </div>
   );
 }
-
