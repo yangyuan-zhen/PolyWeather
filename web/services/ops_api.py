@@ -384,6 +384,7 @@ def grant_ops_subscription(
     email: str,
     plan_code: str = "pro_monthly",
     days: int = 30,
+    deduct_points: int = 0,
 ) -> dict[str, Any]:
     _require_ops(request)
     import os
@@ -400,6 +401,7 @@ def grant_ops_subscription(
         raise HTTPException(status_code=400, detail=f"invalid plan_code, allowed: {allowed_plans}")
 
     safe_days = max(1, min(365, int(days or 30)))
+    safe_deduct = max(0, int(deduct_points or 0))
     normalized_email = str(email or "").strip().lower()
     if not normalized_email:
         raise HTTPException(status_code=400, detail="email is required")
@@ -443,9 +445,22 @@ def grant_ops_subscription(
         json=payload,
         timeout=10,
     )
-    if resp.ok:
-        return {"ok": True, "user_id": user_id, "plan_code": plan_code, "days": safe_days, "expires_at": expires_at}
-    raise HTTPException(status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}")
+    if not resp.ok:
+        raise HTTPException(status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}")
+
+    result: dict[str, Any] = {
+        "ok": True, "user_id": user_id, "plan_code": plan_code,
+        "days": safe_days, "expires_at": expires_at,
+    }
+
+    # Optionally deduct points from the user (manual Pro grant with points payment)
+    if safe_deduct > 0:
+        db = DBManager()
+        deduct_result = db.deduct_points_by_supabase_email(normalized_email, safe_deduct)
+        result["points_deducted"] = safe_deduct
+        result["points_result"] = deduct_result
+
+    return result
 
 
 def extend_ops_subscription(

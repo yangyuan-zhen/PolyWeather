@@ -142,7 +142,8 @@ async def ops_subscription_grant(request: Request):
     email = str(body.get("email") or "").strip()
     plan_code = str(body.get("plan_code") or "pro_monthly").strip()
     days = int(body.get("days") or 30)
-    return grant_ops_subscription(request, email=email, plan_code=plan_code, days=days)
+    deduct_points = int(body.get("deduct_points") or 0)
+    return grant_ops_subscription(request, email=email, plan_code=plan_code, days=days, deduct_points=deduct_points)
 
 
 @router.post("/api/ops/subscriptions/extend")
