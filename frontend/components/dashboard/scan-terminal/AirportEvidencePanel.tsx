@@ -4,13 +4,14 @@ import type { CityDetail } from "@/lib/dashboard-types";
 import { getDisplayAirportPrimary } from "@/lib/airport-observation-display";
 import { formatTemperatureValue } from "@/lib/temperature-utils";
 
-const FOCUS_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
-  chongqing: [["02L", "20R"]],
+// Settlement runway mapping — matches Polymarket settlement anchors
+const SETTLEMENT_RUNWAY_PAIRS: Record<string, Array<[string, string]>> = {
   shanghai: [["17L", "35R"]],
-  wuhan: [["04", "22"]],
   beijing: [["01", "19"]],
   guangzhou: [["02L", "20R"]],
   chengdu: [["02L", "20R"]],
+  chongqing: [["02L", "20R"]],
+  wuhan: [["04", "22"]],
   seoul: [["15R", "33L"]],
 };
 
@@ -45,12 +46,11 @@ function formatObsTime(value: unknown) {
   return raw.length >= 16 && raw[10] === " " ? raw.slice(11, 16) : raw;
 }
 
-function buildFocusedRunwayEvidence(detail: CityDetail | null) {
+function buildRunwayEvidence(detail: CityDetail | null) {
   if (!detail) return null;
   const cityKey = normalizeCityKey(detail.name) || normalizeCityKey(detail.display_name);
-  const focusPairs = FOCUS_RUNWAY_PAIRS[cityKey];
-  if (!focusPairs?.length) return null;
-  const focusKeys = new Set(focusPairs.map(pairKey));
+  const settlementPairs = SETTLEMENT_RUNWAY_PAIRS[cityKey] || [];
+  const settlementKeys = new Set(settlementPairs.map(pairKey));
   const runwayObs = detail.amos?.runway_obs || {};
   const runwayPairs = runwayObs.runway_pairs || [];
   const runwayTemps = runwayObs.temperatures || [];
@@ -59,12 +59,13 @@ function buildFocusedRunwayEvidence(detail: CityDetail | null) {
     label: string;
     maxTemp: number;
     values: number[];
+    isSettlement: boolean;
   }> = [];
 
   runwayPairs.forEach((rawPair, index) => {
     const pair = rawPair as [string, string];
     if (!Array.isArray(pair) || pair.length < 2) return;
-    if (!focusKeys.has(pairKey(pair))) return;
+    const isSettlement = settlementKeys.has(pairKey(pair));
     const values = [
       ...(Array.isArray(runwayTemps[index]) ? runwayTemps[index] : []),
       toFiniteNumber(pointTemps[index]?.tdz_temp),
@@ -76,6 +77,7 @@ function buildFocusedRunwayEvidence(detail: CityDetail | null) {
       label: `${normalizeRunwayLabel(pair[0])}/${normalizeRunwayLabel(pair[1])}`,
       maxTemp: Math.max(...values),
       values,
+      isSettlement,
     });
   });
 
@@ -99,7 +101,7 @@ export function AirportEvidencePanel({
   const airportPrimary = getDisplayAirportPrimary(detail);
   const airportCurrent = detail?.airport_current;
   const station = airportPrimary || airportCurrent || null;
-  const runwayEvidence = buildFocusedRunwayEvidence(detail);
+  const runwayEvidence = buildRunwayEvidence(detail);
   const tempSymbol = detail?.temp_symbol || "°C";
   if (!station && !runwayEvidence) return null;
 
@@ -110,7 +112,7 @@ export function AirportEvidencePanel({
           <span className="scan-ai-city-kicker">
             {isEn ? "Airport live evidence" : "机场实时证据"}
           </span>
-          <h4>{isEn ? "Airport / focused runway" : "机场主站 / 重点跑道"}</h4>
+          <h4>{isEn ? "Airport / runway observations" : "机场 / 跑道观测"}</h4>
         </div>
       </div>
       <div className="scan-airport-evidence-grid">
@@ -130,8 +132,15 @@ export function AirportEvidencePanel({
           </div>
         ) : null}
         {runwayEvidence?.rows.map((row) => (
-          <div className="scan-airport-evidence-card runway" key={row.label}>
-            <span>{isEn ? "Focused runway" : "重点跑道"}</span>
+          <div
+            className={`scan-airport-evidence-card runway${row.isSettlement ? " settlement" : ""}`}
+            key={row.label}
+          >
+            <span>
+              {row.isSettlement
+                ? isEn ? "★ Settlement runway" : "★ 结算跑道"
+                : isEn ? "Runway" : "跑道"}
+            </span>
             <b>{formatTemperatureValue(row.maxTemp, tempSymbol, { digits: 1 })}</b>
             <small>
               {[row.label, runwayEvidence.sourceLabel, runwayEvidence.observedAt]

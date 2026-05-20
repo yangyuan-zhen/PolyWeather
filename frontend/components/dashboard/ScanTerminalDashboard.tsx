@@ -477,44 +477,7 @@ function ScanTerminalScreen() {
             userLocalTime={userLocalTime}
           />
 
-          {!isPro ? (
-            <section
-              className="scan-upgrade-announcement"
-              aria-label={isEn ? "Pro preview" : "Pro 能力预览"}
-            >
-              <div className="scan-upgrade-announcement-copy">
-                <span>{isEn ? "PolyWeather Pro" : "PolyWeather Pro"}</span>
-                <strong>
-                  {isEn
-                    ? "Weather intelligence for temperature settlement markets."
-                    : "面向温度结算市场的气象情报系统。"}
-                </strong>
-                <p>
-                  {isEn
-                    ? "Turn weather data into trading decisions. Compare multi-model forecasts against live observations, identify mispriced Polymarket contracts, and back your trades with calibrated probability distributions."
-                    : "将气象数据转化为交易决策。多模型预报对照实时观测，识别 Polymarket 错价合约，用校准概率分布支撑每一笔交易。"}
-                </p>
-              </div>
-              <ul>
-                {proPreviewItems.map((item) => (
-                  <li key={item}>{item}</li>
-                ))}
-              </ul>
-              {proAccess.authenticated ? (
-                <button
-                  type="button"
-                  className="scan-primary-button"
-                  onClick={openScanPaywall}
-                >
-                  {isEn ? "View Pro" : "查看 Pro"}
-                </button>
-              ) : (
-                <a href={accountHref} className="scan-primary-button">
-                  {isEn ? "Sign in for Pro" : "登录查看 Pro"}
-                </a>
-              )}
-            </section>
-          ) : null}
+
 
           <section className="scan-list-section">
             <div className="scan-list-header">

@@ -21,8 +21,8 @@ def test_airport_status_message_starts_with_runway_city_and_station_hashtags():
                     "runway_pairs": [("17", "35"), ("16", "34")],
                     "temperatures": [(23.0, None), (23.2, None)],
                     "point_temperatures": [
-                        {"tdz_temp": 23.0, "mid_temp": None, "end_temp": 23.1},
-                        {"tdz_temp": 23.2, "mid_temp": None, "end_temp": 23.3},
+                        {"runway": "17/35", "tdz_temp": 23.0, "mid_temp": None, "end_temp": 23.1, "target_runway_max": 23.1, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
+                        {"runway": "16/34", "tdz_temp": 23.2, "mid_temp": None, "end_temp": 23.3, "target_runway_max": 23.3, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
                     ],
                 },
             },
@@ -50,8 +50,8 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
                     "runway_pairs": [("02L", "20R"), ("02R", "20L")],
                     "temperatures": [(31.1, None), (34.9, None)],
                     "point_temperatures": [
-                        {"tdz_temp": 31.0, "mid_temp": 31.1, "end_temp": 31.2},
-                        {"tdz_temp": 34.8, "mid_temp": 34.9, "end_temp": 35.0},
+                        {"runway": "02L/20R", "tdz_temp": 31.0, "mid_temp": 31.1, "end_temp": 31.2, "target_runway_max": 31.2, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
+                        {"runway": "02R/20L", "tdz_temp": 34.8, "mid_temp": 34.9, "end_temp": 35.0, "target_runway_max": 35.0, "wind_dir": None, "wind_speed": None, "rvr": None, "mor": None, "humidity": None},
                     ],
                 },
             },
@@ -61,8 +61,8 @@ def test_airport_status_hides_non_focus_runways_for_key_airports():
     )
 
     assert "02L/20R" in text
-    assert "02R/20L" not in text
-    assert "当前：31.1°C" in text
+    assert "02R/20L" in text
+    assert "结算跑道当前：31.2°C" in text
 
 
 def test_singapore_is_in_telegram_push_city_lists():

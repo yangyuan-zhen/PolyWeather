@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loguru import logger
 
+from src.database.db_manager import DBManager
 from src.database.runtime_state import (
     STATE_STORAGE_SQLITE,
     TelegramAlertStateRepository,
@@ -545,15 +546,42 @@ HIGH_FREQ_AIRPORT_ICAO = {
     "san francisco": "KSFO", "houston": "KHOU", "dallas": "KDAL",
     "austin": "KAUS", "seattle": "KSEA",
 }
-FOCUS_RUNWAY_PAIRS = {
-    "chongqing": {("02L", "20R")},
+# Settlement runway mapping — matches Polymarket settlement anchor stations.
+# Format: (low_number, high_number) order-independent; stored sorted for lookup.
+SETTLEMENT_RUNWAY_PAIRS: Dict[str, Set[Tuple[str, str]]] = {
     "shanghai": {("17L", "35R")},
-    "wuhan": {("04", "22")},
     "beijing": {("01", "19")},
     "guangzhou": {("02L", "20R")},
     "chengdu": {("02L", "20R")},
+    "chongqing": {("02L", "20R")},
+    "wuhan": {("04", "22")},
     "seoul": {("15R", "33L")},
 }
+
+# All cities with active runway observation data (AMSC AWOS / AMOS).
+RUNWAY_OBSERVATION_CITIES = {
+    "shanghai", "beijing", "guangzhou", "shenzhen",
+    "chengdu", "chongqing", "wuhan", "qingdao",
+    "seoul", "busan",
+}
+
+# Wind regime sectors per airport (approximate, based on runway orientation + coastline).
+# Values: {sea_breeze: (from_deg, to_deg), warm_advection: (from_deg, to_deg)}
+WIND_REGIME: Dict[str, Dict[str, Tuple[int, int]]] = {
+    "shanghai": {"sea_breeze": (45, 140), "warm_advection": (180, 260)},
+    "seoul": {"sea_breeze": (270, 350), "warm_advection": (150, 230)},
+    "busan": {"sea_breeze": (120, 200), "warm_advection": (250, 340)},
+    "qingdao": {"sea_breeze": (90, 180), "warm_advection": (200, 300)},
+    "beijing": {"sea_breeze": (120, 200), "warm_advection": (220, 320)},
+    "guangzhou": {"sea_breeze": (120, 200), "warm_advection": (200, 300)},
+    "shenzhen": {"sea_breeze": (120, 200), "warm_advection": (200, 300)},
+    "chengdu": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
+    "chongqing": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
+    "wuhan": {"sea_breeze": (0, 0), "warm_advection": (0, 0)},
+}
+
+# Legacy alias for backward compat with existing _select_focus_runway_obs / _focus_runway_pairs_for_city
+FOCUS_RUNWAY_PAIRS = SETTLEMENT_RUNWAY_PAIRS
 
 _FUNCTION_HASHTAGS = {
     "runway": "#跑道观测",
@@ -662,6 +690,69 @@ def _select_focus_runway_obs(
     if selected_pairs:
         return selected_pairs, selected_temps, selected_points
     return runway_pairs, runway_temps, points
+
+
+def _settlement_runway_for_city(city: str) -> Optional[Tuple[str, str]]:
+    """Return the settlement runway pair for a city, if configured."""
+    pairs = SETTLEMENT_RUNWAY_PAIRS.get(str(city or "").strip().lower(), set())
+    return next(iter(pairs)) if pairs else None
+
+
+def _is_settlement_runway(city: str, r1: str, r2: str) -> bool:
+    """Check if a runway pair is the settlement anchor for this city."""
+    pair_set = SETTLEMENT_RUNWAY_PAIRS.get(str(city or "").strip().lower(), set())
+    return _runway_pair_key(r1, r2) in pair_set
+
+
+def _wind_regime_label(city: str, wind_dir: Optional[int]) -> Optional[str]:
+    """Classify wind direction into a thermal regime label."""
+    if wind_dir is None:
+        return None
+    regimes = WIND_REGIME.get(str(city or "").strip().lower(), {})
+    sea = regimes.get("sea_breeze")
+    warm = regimes.get("warm_advection")
+    if sea and sea[0] != sea[1] and sea[0] <= wind_dir <= sea[1]:
+        return "海风降温"
+    if warm and warm[0] != warm[1] and warm[0] <= wind_dir <= warm[1]:
+        return "暖平流增强"
+    return None
+
+
+def _compute_slope_15m(icao: str, current_temp: float) -> Optional[float]:
+    """Estimate 15-minute temperature trend from runway_obs_log."""
+    try:
+        db = DBManager()
+        rows = db.get_runway_obs_recent(icao, minutes=20)
+        temps = []
+        for r in rows:
+            t = r.get("target_runway_max") or r.get("tdz_temp")
+            if t is not None:
+                temps.append(float(t))
+        if len(temps) >= 2:
+            # Compare latest vs earliest in ~15 min window
+            return round(current_temp - temps[0], 1)
+    except Exception:
+        pass
+    return None
+
+
+def _runway_heat_signal(
+    current_temp: float,
+    slope_15m: Optional[float],
+    wind_dir: Optional[int],
+    city: str,
+) -> str:
+    """Compute a simple runway heat signal label."""
+    if slope_15m is None:
+        return ""
+    regime = _wind_regime_label(city, wind_dir)
+    if slope_15m >= 1.0:
+        return "🚀 冲顶增强" if regime == "暖平流增强" else "🔥 升温中"
+    if slope_15m >= 0.5:
+        return "🔥 升温中"
+    if slope_15m >= -0.2:
+        return "⚠️ 高位观察" if regime == "海风降温" else "⏸️ 高位横盘"
+    return "🧊 过峰风险"
 
 
 def _focused_runway_max(city: str, city_weather: Dict[str, Any]) -> Optional[float]:
@@ -825,114 +916,131 @@ def _build_airport_status_message(
     en_name = city.title()
     ap_name = _AIRPORT_EN.get(city, "")
     time_suffix = f" · {local_time}" if local_time else ""
-    header = f"{en_name} / {ap_name}{time_suffix}" if ap_name else f"{en_name}{time_suffix}"
 
     amos = city_weather.get("amos") or {}
     runway_data = (amos.get("runway_obs") or {}) if amos else {}
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     point_temps = runway_data.get("point_temperatures") or []
-    runway_pairs, runway_temps, point_temps = _select_focus_runway_obs(
-        city, runway_pairs, runway_temps, point_temps
-    )
-    mgm_nearby = city_weather.get("mgm_nearby") or []
-    airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
-    airport_row = None
-    for row in mgm_nearby:
-        if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
-            airport_row = row
-            break
-    if not airport_row:
-        airport_row = mgm_nearby[0] if mgm_nearby else {}
-    station_temp = airport_row.get("temp") if airport_row else None
-    current = city_weather.get("current") or {}
-    if station_temp is None:
-        station_temp = current.get("temp")
+    is_amsc = amos.get("source") == "amsc_awos"
+    amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+    settlement_pair = _settlement_runway_for_city(city)
 
-    # Current temp from runway max if available
-    display_temp = station_temp
-    if runway_temps:
-        valid = [t for (t, _d) in runway_temps if t is not None]
-        if valid:
-            display_temp = max(valid)
+    # ── Display temp: settlement runway max first, then airport temp ──
+    settlement_temp: Optional[float] = None
+    display_temp: Optional[float] = None
+    if point_temps:
+        for pt in point_temps:
+            rw = str(pt.get("runway") or "")
+            rw_parts = [p.strip() for p in str(rw).split("/") if p.strip()]
+            if settlement_pair and len(rw_parts) >= 2 and _runway_pair_key(rw_parts[0], rw_parts[1]) == _runway_pair_key(*settlement_pair):
+                tmax = pt.get("target_runway_max")
+                if tmax is not None:
+                    settlement_temp = float(tmax)
+                break
+        if settlement_temp is not None:
+            display_temp = settlement_temp
+    if display_temp is None:
+        if point_temps:
+            valid_tmax = [float(p.get("target_runway_max")) for p in point_temps if p.get("target_runway_max") is not None]
+            display_temp = max(valid_tmax) if valid_tmax else None
+    if display_temp is None:
+        station_temp = None
+        mgm_nearby = city_weather.get("mgm_nearby") or []
+        airport_icao = HIGH_FREQ_AIRPORT_ICAO.get(city, "")
+        for row in mgm_nearby:
+            if str(row.get("istNo") or "") == airport_icao or str(row.get("icao") or "") == airport_icao:
+                station_temp = row.get("temp")
+                break
+        if station_temp is None and mgm_nearby:
+            station_temp = mgm_nearby[0].get("temp")
+        if station_temp is None:
+            station_temp = (city_weather.get("current") or {}).get("temp")
+        display_temp = station_temp
+
+    # ── Heat model ──
+    wind_dir = amos.get("wind_dir") if is_amsc else None
+    slope_15m = _compute_slope_15m(amos_icao, display_temp) if is_amsc and display_temp is not None else None
+    heat_signal = _runway_heat_signal(display_temp or 0, slope_15m, wind_dir, city) if is_amsc else ""
+    wind_label = _wind_regime_label(city, wind_dir) if is_amsc and wind_dir is not None else None
 
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
-    new_high = (display_temp is not None and max_so_far is not None
-                and display_temp - max_so_far >= 0.3)
+    has_runway = bool(is_amsc and point_temps)
 
-    is_amsc = amos.get("source") == "amsc_awos"
-    has_runway = bool(runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps))
+    # ── Build message ──
+    lines: List[str] = []
+
+    # Header
     hashtag_line = _build_telegram_hashtag_line(
         "runway" if has_runway else "airport",
         city=city,
     )
+    icao_display = f"{amos_icao} · " if amos_icao else ""
+    settlement_str = f" · ★{settlement_pair[0]}/{settlement_pair[1]}" if settlement_pair else ""
+    header = f"{icao_display}{en_name} / {ap_name}{settlement_str}{time_suffix}" if ap_name else f"{icao_display}{en_name}{settlement_str}{time_suffix}"
+    lines.append(hashtag_line)
+    lines.append("")
+    lines.append(header)
 
-    # ── Build lines ──
-    lines: List[str] = [hashtag_line, header]
-    if new_high:
-        lines.append("\U0001f536 今日新高")
-    if state:
-        lines.append(state)
+    # Heat signal
+    if heat_signal:
+        lines.append("")
+        lines.append(heat_signal)
+        if state:
+            lines.append(state)
 
-    # Runway detail block
-    if is_amsc and runway_pairs and runway_temps and len(runway_pairs) == len(runway_temps):
+    # All runway detail block
+    if has_runway:
         lines.append("")
         for i, ((r1, r2), (t, _d)) in enumerate(zip(runway_pairs, runway_temps)):
-            if t is not None:
-                pts = point_temps[i] if i < len(point_temps) else {}
-                tdz = pts.get("tdz_temp")
-                mid = pts.get("mid_temp")
-                end = pts.get("end_temp")
-                if tdz is not None or mid is not None or end is not None:
-                    lines.append(
-                        f"{r1}/{r2}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
-                    )
-                else:
-                    lines.append(f"{r1}/{r2} {t:.1f}°C")
-    elif has_runway:
-        lines.append("")
-        for (r1, r2), (t, _d) in zip(runway_pairs, runway_temps):
-            if t is not None:
-                lines.append(f"{r1}/{r2} {t:.1f}°C")
+            if t is None:
+                continue
+            pts = point_temps[i] if i < len(point_temps) else {}
+            tdz = pts.get("tdz_temp")
+            mid = pts.get("mid_temp")
+            end = pts.get("end_temp")
+            is_settlement = _is_settlement_runway(city, r1, r2)
+            marker = " ★结算" if is_settlement else ""
+            tmax = pts.get("target_runway_max")
+            if tdz is not None or mid is not None or end is not None:
+                line = f"{r1}/{r2}{marker}  TDZ:{_fmt(tdz)}  MID:{_fmt(mid)}  END:{_fmt(end)}"
+                if tmax is not None:
+                    line += f"  max:{tmax:.1f}"
+                lines.append(line)
+            else:
+                lines.append(f"{r1}/{r2}{marker} {t:.1f}°C")
 
-    # ── 第一层：当前 / 日高 / DEB ──
+    # Summary stats
     lines.append("")
     temp_symbol = str(city_weather.get("temp_symbol") or "°C").strip()
     cur_str = f"{display_temp:.1f}{temp_symbol}" if display_temp is not None else "--"
-    lines.append(f"当前：{cur_str}")
+    lines.append(f"结算跑道当前：{cur_str}")
     if max_so_far is not None:
         time_str = f"（{max_temp_time}）" if max_temp_time else ""
-        lines.append(f"日高：{max_so_far:.1f}{temp_symbol}{time_str}")
+        lines.append(f"今日跑道高点：{max_so_far:.1f}{temp_symbol}{time_str}")
+    if slope_15m is not None:
+        sign = "+" if slope_15m >= 0 else ""
+        lines.append(f"15分钟趋势：{sign}{slope_15m:.1f}°C")
+    if wind_dir is not None:
+        wind_str = f"风向：{wind_dir}°"
+        if wind_label:
+            wind_str += f"  {wind_label}"
+        lines.append(wind_str)
     if deb_pred is not None:
         if display_temp is not None and display_temp > deb_pred:
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（已突破 +{display_temp - deb_pred:.1f}°）")
         else:
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}")
 
-    # ── 第二层：模型结构 ──
+    # Model summary (compact)
     models = city_weather.get("multi_model") or {}
     if isinstance(models, dict) and len(models) >= 2:
-        lines.append("")
         vals = sorted([(v, k) for k, v in models.items() if isinstance(v, (int, float))])
         if len(vals) >= 2:
             lo, hi = vals[0][0], vals[-1][0]
             spread = hi - lo
             spread_label = "低分歧" if spread <= 2.0 else ("中等分歧" if spread <= 4.0 else "高分歧")
-            lines.append(f"模型区间：{lo:.1f}~{hi:.1f}{temp_symbol}    分歧：{spread:.1f}°（{spread_label}）")
-            hot = [k for v, k in reversed(vals[-3:])]
-            cold = [k for v, k in vals[:3]]
-            if hot:
-                lines.append(f"热模型：{' / '.join(hot)}")
-            if cold:
-                lines.append(f"冷模型：{' / '.join(cold)}")
-
-    # ── 第三层：市场解释 ──
-    narrative = _build_narrative(
-        display_temp, max_so_far, deb_pred, models, city_weather,
-    )
-    if narrative:
-        lines.append("")
-        lines.append(narrative)
+            lines.append(f"模型区间：{lo:.1f}~{hi:.1f}{temp_symbol}  {spread_label}")
 
     return "\n".join(lines)
 

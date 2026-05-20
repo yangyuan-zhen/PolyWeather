@@ -1726,7 +1726,7 @@ export function AccountCenter() {
     const planAmount =
       Number.isFinite(parsedPlanAmount) && parsedPlanAmount > 0
         ? parsedPlanAmount
-        : 5;
+        : 10;
 
     const pointsCfg = paymentConfig?.points_redemption || {};
     const pointsEnabled = pointsCfg.enabled !== false;

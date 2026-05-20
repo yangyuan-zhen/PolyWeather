@@ -56,12 +56,17 @@ def test_parse_wind_plate_payload_normalizes_runway_point_temperatures():
     runway_obs = parsed["runway_obs"]
     assert runway_obs["runway_pairs"] == [("18R", "36L"), ("18L", "36R"), ("19", "01")]
     assert runway_obs["temperatures"] == [(20.8, None), (21.0, None), (20.2, None)]
-    assert runway_obs["point_temperatures"][0] == {
-        "runway": "18R/36L",
-        "tdz_temp": 20.8,
-        "mid_temp": None,
-        "end_temp": 20.8,
-    }
+    pt0 = runway_obs["point_temperatures"][0]
+    assert pt0["runway"] == "18R/36L"
+    assert pt0["tdz_temp"] == 20.8
+    assert pt0["mid_temp"] is None
+    assert pt0["end_temp"] == 20.8
+    assert pt0["target_runway_max"] == 20.8
+    assert pt0["wind_dir"] is None
+    assert pt0["wind_speed"] is None
+    assert pt0["rvr"] is None
+    assert pt0["mor"] is None
+    assert pt0["humidity"] == 67.0
 
 
 def test_parse_wind_plate_payload_rejects_unauthorized_or_empty_payloads():

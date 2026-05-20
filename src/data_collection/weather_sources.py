@@ -1090,26 +1090,47 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             # Reuse the existing `amos` detail shape consumed by dashboard runway panels.
             results["amos"] = amsc_data
             try:
+                icao = amsc_data.get("icao") or ""
+                obs_time = amsc_data.get("observation_time") or datetime.now().isoformat()
                 DBManager().append_airport_obs(
-                    icao=amsc_data.get("icao") or "",
+                    icao=icao,
                     city=city_lower,
                     temp_c=amsc_data.get("temp_c"),
-                    wind_kt=amsc_data.get("wind_kt"),
+                    wind_kt=amsc_data.get("wind_speed"),
                     pressure_hpa=amsc_data.get("pressure_hpa"),
-                    obs_time=amsc_data.get("observation_time") or datetime.now().isoformat(),
+                    obs_time=obs_time,
                 )
                 runway_obs = amsc_data.get("runway_obs") or {}
                 rw_pairs = runway_obs.get("runway_pairs") or []
                 rw_temps = runway_obs.get("temperatures") or []
+                point_temps = runway_obs.get("point_temperatures") or []
                 for i, (pair, temp_pair) in enumerate(zip(rw_pairs, rw_temps)):
                     t = temp_pair[0] if temp_pair else None
                     if t is not None and i < 6:
                         pair_label = "/".join(pair) if isinstance(pair, (list, tuple)) else str(pair)
+                        # Legacy airport_obs_log (keep backward compat)
                         DBManager().append_airport_obs(
-                            icao=f"{amsc_data.get('icao', '')}_RWY_{i}",
+                            icao=f"{icao}_RWY_{i}",
                             city=city_lower,
                             temp_c=t,
-                            obs_time=amsc_data.get("observation_time") or datetime.now().isoformat(),
+                            obs_time=obs_time,
+                        )
+                        # New runway_obs_log with full detail
+                        pt = point_temps[i] if i < len(point_temps) else {}
+                        DBManager().append_runway_obs(
+                            icao=icao,
+                            city=city_lower,
+                            runway=pair_label,
+                            tdz_temp=pt.get("tdz_temp"),
+                            mid_temp=pt.get("mid_temp"),
+                            end_temp=pt.get("end_temp"),
+                            target_runway_max=pt.get("target_runway_max"),
+                            wind_dir=pt.get("wind_dir"),
+                            wind_speed=pt.get("wind_speed"),
+                            rvr=pt.get("rvr"),
+                            mor=pt.get("mor"),
+                            humidity=pt.get("humidity"),
+                            otime_utc=obs_time,
                         )
                         logger.debug("AMSC AWOS stored runway row city={} runway={} temp={}", city_lower, pair_label, t)
             except Exception:

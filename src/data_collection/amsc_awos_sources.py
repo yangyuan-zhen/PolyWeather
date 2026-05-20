@@ -62,6 +62,25 @@ def _amsc_split_runway_pair(label: str) -> tuple[str, str]:
     return runway, runway
 
 
+def _amsc_wind_dir(*candidates: Any) -> Optional[int]:
+    """Parse wind direction from AMSC fields (degrees)."""
+    for value in candidates:
+        parsed = _amsc_safe_float(value)
+        if parsed is not None and 0 <= parsed <= 360:
+            return int(round(parsed))
+    return None
+
+
+def _amsc_parse_rvr(value: Any) -> Optional[int]:
+    """Parse RVR field like 'P2000' → 2000 (meters)."""
+    text = str(value or "").strip().upper()
+    if not text or text in {"--", "-", "NULL", "NONE"}:
+        return None
+    text = text.lstrip("PM")
+    parsed = _amsc_safe_float(text)
+    return int(round(parsed)) if parsed is not None else None
+
+
 def _amsc_parse_utc_time(value: Any) -> tuple[Optional[str], Optional[str]]:
     text = str(value or "").strip()
     if not text:
@@ -124,12 +143,44 @@ def _amsc_parse_wind_plate_payload(
         best_temp = tdz if tdz is not None else max(points)
         runway_temps.append((best_temp, None))
         valid_values.extend(points)
+
+        # Wind: prefer TDZ point, fallback to END
+        wind_dir = _amsc_wind_dir(
+            raw_row.get("TDZ_WIND_D10"),
+            raw_row.get("END_WIND_D10"),
+        )
+        wind_speed = _amsc_safe_float(
+            raw_row.get("TDZ_WIND_F10") or raw_row.get("END_WIND_F10")
+        )
+        # RVR / MOR: prefer 1-min average
+        raw_rvr = (
+            raw_row.get("TDZ_RVR_1A") or raw_row.get("END_RVR_1A")
+            or raw_row.get("TDZ_RVR_10A") or raw_row.get("END_RVR_10A")
+        )
+        rvr = _amsc_parse_rvr(raw_rvr)
+        raw_mor = (
+            raw_row.get("TDZ_MOR_1A") or raw_row.get("END_MOR_1A")
+            or raw_row.get("TDZ_MOR_10A") or raw_row.get("END_MOR_10A")
+        )
+        mor = _amsc_safe_float(raw_mor)
+        # Humidity: prefer TDZ, fallback to END, then MID
+        humidity = _amsc_safe_float(
+            raw_row.get("TDZ_HUMID") or raw_row.get("END_HUMID") or raw_row.get("MID_HUMID")
+        )
+
+        target_max = max(points)
         point_temperatures.append(
             {
                 "runway": runway_label,
                 "tdz_temp": tdz,
                 "mid_temp": mid,
                 "end_temp": end,
+                "target_runway_max": target_max,
+                "wind_dir": wind_dir,
+                "wind_speed": wind_speed,
+                "rvr": rvr,
+                "mor": mor,
+                "humidity": humidity,
             }
         )
 
@@ -155,6 +206,8 @@ def _amsc_parse_wind_plate_payload(
         "station_label": airport_meta.get("label") or icao,
         "raw_metar": raw_metar,
         "raw_taf": None,
+        "wind_dir": point_temperatures[0].get("wind_dir") if point_temperatures else None,
+        "wind_speed": point_temperatures[0].get("wind_speed") if point_temperatures else None,
         "runway_obs": {
             "runway_pairs": runway_pairs,
             "temperatures": runway_temps,

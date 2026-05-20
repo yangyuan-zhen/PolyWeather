@@ -31,7 +31,7 @@ export function ProFeaturePaywall({
   const isAuthenticated = proAccess.authenticated;
   const pointsAvailable = Number(proAccess.points || 0);
 
-  const PRO_PRICE_USD = 5;
+  const PRO_PRICE_USD = 10;
   const POINTS_PER_USD = 500;
   const MAX_DISCOUNT_USD = 3;
 
