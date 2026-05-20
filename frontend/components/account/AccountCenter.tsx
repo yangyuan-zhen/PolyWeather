@@ -365,19 +365,13 @@ function detectWalletLabel(
   if (!provider && !detail) return "EVM 钱包";
   const announcedName = String(detail?.info?.name || "").trim();
   const announcedRdns = String(detail?.info?.rdns || "").toLowerCase();
+  
   if (
     provider?.isOkxWallet ||
     announcedName.toLowerCase().includes("okx") ||
     announcedRdns.includes("okx")
   ) {
     return "OKX Wallet";
-  }
-  if (
-    provider?.isMetaMask ||
-    announcedName.toLowerCase().includes("metamask") ||
-    announcedRdns.includes("metamask")
-  ) {
-    return "MetaMask";
   }
   if (
     provider?.isRabby ||
@@ -396,10 +390,18 @@ function detectWalletLabel(
   }
   if (
     (provider as any)?.isBinance ||
+    (provider as any)?.bnbSign ||
     announcedName.toLowerCase().includes("binance") ||
     announcedRdns.includes("binance")
   ) {
     return "Binance Web3 Wallet";
+  }
+  if (
+    provider?.isMetaMask ||
+    announcedName.toLowerCase().includes("metamask") ||
+    announcedRdns.includes("metamask")
+  ) {
+    return "MetaMask";
   }
   if (announcedName) return announcedName;
   return "EVM 钱包";
@@ -1948,19 +1950,29 @@ export function AccountCenter() {
       });
     } catch (err: any) {
       const code = Number(err?.code);
-      if (code !== 4902 || targetChainId !== 137) throw err;
-      await eth.request({
-        method: "wallet_addEthereumChain",
-        params: [
-          {
-            chainId: "0x89",
-            chainName: "Polygon Mainnet",
-            nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-            rpcUrls: ["https://polygon-rpc.com"],
-            blockExplorerUrls: ["https://polygonscan.com"],
-          },
-        ],
-      });
+      const msg = String(err?.message || "").toLowerCase();
+      
+      // If the error code indicates the chain is not added (4902), or it's Polygon (137)
+      if (code === 4902 || targetChainId === 137) {
+        try {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [
+              {
+                chainId: "0x89",
+                chainName: "Polygon Mainnet",
+                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
+                rpcUrls: ["https://polygon-rpc.com"],
+                blockExplorerUrls: ["https://polygonscan.com"],
+              },
+            ],
+          });
+          return;
+        } catch (addErr: any) {
+          err = addErr;
+        }
+      }
+      throw new Error(`请在钱包中手动切换到 Polygon (Matic) 网络后再试。(${err?.message || "网络切换失败"})`);
     }
   };
 
@@ -2351,16 +2363,14 @@ export function AccountCenter() {
 
       if (allowance < amountUnits) {
         setPaymentInfo(`检测到授权不足，正在发起 ${tokenSymbol} 授权...`);
+        const approveParams: Record<string, any> = {
+          from: payingWallet,
+          to: tokenAddress,
+          data: buildApproveCalldata(txPayload.to, amountUnits),
+        };
         const approveHash = (await eth.request({
           method: "eth_sendTransaction",
-          params: [
-            {
-              from: payingWallet,
-              to: tokenAddress,
-              data: buildApproveCalldata(txPayload.to, amountUnits),
-              value: "0x0",
-            },
-          ],
+          params: [approveParams],
         })) as string;
         await waitForReceipt(String(approveHash || ""));
         approvedInThisRun = true;
@@ -2369,16 +2379,18 @@ export function AccountCenter() {
         setPaymentInfo("授权额度充足，正在发起支付...");
       }
 
+      const payParams: Record<string, any> = {
+        from: payingWallet,
+        to: txPayload.to,
+        data: txPayload.data,
+      };
+      if (txPayload.value && txPayload.value !== "0x0" && txPayload.value !== "0") {
+        payParams.value = txPayload.value;
+      }
+      
       const txHash = (await eth.request({
         method: "eth_sendTransaction",
-        params: [
-          {
-            from: payingWallet,
-            to: txPayload.to,
-            data: txPayload.data,
-            value: txPayload.value || "0x0",
-          },
-        ],
+        params: [payParams],
       })) as string;
       const txHashNorm = String(txHash || "").toLowerCase();
       setLastTxHash(txHashNorm);
