@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ScrollText, Coins } from "lucide-react";
+import { ScrollText, Coins, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
@@ -9,6 +9,7 @@ export function SubscriptionsPageClient() {
   const [email, setEmail] = useState("");
   const [planCode, setPlanCode] = useState("pro_monthly");
   const [days, setDays] = useState(30);
+  const [deductPoints, setDeductPoints] = useState(0);
   const [extendDays, setExtendDays] = useState(30);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState("");
@@ -21,12 +22,26 @@ export function SubscriptionsPageClient() {
       const res = await fetch("/api/ops/subscriptions/grant", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.trim(), plan_code: planCode, days }),
+        body: JSON.stringify({
+          email: email.trim(),
+          plan_code: planCode,
+          days,
+          deduct_points: deductPoints,
+        }),
       });
+      const text = await res.text();
       if (res.ok) {
-        setResult(`已为 ${email} 开通 ${planCode}，${days} 天`);
+        let msg = `已为 ${email} 开通 ${planCode}，${days} 天`;
+        if (deductPoints > 0) msg += `，扣除 ${deductPoints} 积分`;
+        try {
+          const data = JSON.parse(text);
+          if (data.points_result && !data.points_result.ok) {
+            msg += ` (⚠ 扣分失败: ${data.points_result.reason})`;
+          }
+        } catch {}
+        setResult(msg);
       } else {
-        setResult(`失败: ${await res.text().catch(() => "")}`);
+        setResult(`失败: ${text.slice(0, 200)}`);
       }
     } catch (e) {
       setResult(`错误: ${String(e).slice(0, 100)}`);
@@ -58,11 +73,11 @@ export function SubscriptionsPageClient() {
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold text-white">订阅操作</h1>
-      <p className="text-sm text-slate-500">手动为用户开通或延期订阅（需要后端 API 就绪）</p>
+      <p className="text-sm text-slate-500">手动为用户开通或延期订阅</p>
 
       <Card>
         <CardHeader><CardTitle>手动开通</CardTitle></CardHeader>
-        <CardContent>
+        <CardContent className="space-y-3">
           <div className="flex flex-wrap gap-2">
             <input
               value={email}
@@ -76,8 +91,6 @@ export function SubscriptionsPageClient() {
               className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none"
             >
               <option value="pro_monthly">Pro 月付</option>
-              <option value="pro_quarterly">Pro 季付</option>
-              <option value="pro_yearly">Pro 年付</option>
             </select>
             <input
               type="number"
@@ -85,10 +98,27 @@ export function SubscriptionsPageClient() {
               onChange={(e) => setDays(Math.max(1, Math.min(365, Number(e.target.value) || 30)))}
               className="w-20 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:border-cyan-400/50"
             />
+            <span className="text-slate-400 text-sm self-center">天</span>
             <Button onClick={handleGrant} disabled={busy} size="sm" className="gap-1.5">
               <Coins className="h-3.5 w-3.5" /> 开通
             </Button>
           </div>
+          <div className="flex items-center gap-2">
+            <Minus className="h-3.5 w-3.5 text-slate-500" />
+            <input
+              type="number"
+              value={deductPoints}
+              onChange={(e) => setDeductPoints(Math.max(0, Number(e.target.value) || 0))}
+              placeholder="0"
+              className="w-24 rounded-lg border border-white/10 bg-black/30 px-3 py-2 text-sm text-white placeholder:text-slate-600 outline-none focus:border-cyan-400/50"
+            />
+            <span className="text-slate-400 text-xs">扣除积分（0=不扣）</span>
+          </div>
+          {result && (
+            <p className={`text-sm ${result.startsWith("失败") || result.startsWith("错误") || result.includes("⚠") ? "text-amber-400" : "text-emerald-400"}`}>
+              {result}
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -113,11 +143,6 @@ export function SubscriptionsPageClient() {
               <ScrollText className="h-3.5 w-3.5" /> 延期
             </Button>
           </div>
-          {result && (
-            <p className={`mt-3 text-sm ${result.startsWith("失败") || result.startsWith("错误") ? "text-amber-400" : "text-emerald-400"}`}>
-              {result}
-            </p>
-          )}
         </CardContent>
       </Card>
     </div>
