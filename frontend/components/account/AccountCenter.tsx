@@ -45,7 +45,7 @@ import {
   getCurrentPaymentHost,
   isPaymentHostAllowed,
 } from "@/lib/payment-host";
-import { trackAppEvent } from "@/lib/app-analytics";
+import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
@@ -926,6 +926,23 @@ export function AccountCenter() {
     () => isPaymentHostAllowed(currentPaymentHost),
     [currentPaymentHost],
   );
+
+  useEffect(() => {
+    if (!authIsAuthenticated || !authUserId) return;
+    const actorKey = authUserId.toLowerCase();
+    if (markAnalyticsOnce(`signup_completed:${actorKey}`, "local")) {
+      trackAppEvent("signup_completed", {
+        entry: "account_center",
+        user_id: authUserId,
+      });
+    }
+    if (markAnalyticsOnce(`dashboard_active:${actorKey}`, "session")) {
+      trackAppEvent("dashboard_active", {
+        entry: "account_center",
+        user_id: authUserId,
+      });
+    }
+  }, [authIsAuthenticated, authUserId]);
 
   useEffect(() => {
     let canceled = false;

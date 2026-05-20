@@ -17,6 +17,14 @@ export function runTests() {
 
   const accountCenterSource = fs.readFileSync(accountCenterPath, "utf8");
   const serviceWorkerSource = fs.readFileSync(serviceWorkerPath, "utf8");
+  const appAnalyticsSource = fs.readFileSync(
+    path.join(projectRoot, "lib", "app-analytics.ts"),
+    "utf8",
+  );
+  const analyticsRouteSource = fs.readFileSync(
+    path.join(projectRoot, "app", "api", "analytics", "events", "route.ts"),
+    "utf8",
+  );
 
   assert(
     accountCenterSource.includes(
@@ -47,5 +55,15 @@ export function runTests() {
     accountCenterSource.includes("钱包里需要少量 Polygon POL/MATIC 作为 gas 手续费") &&
       accountCenterSource.includes("只有 USDC 可能无法完成授权或支付"),
     "payment wallet tab must warn users that Polygon POL/MATIC gas is required in addition to USDC",
+  );
+  assert(
+    !appAnalyticsSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"') &&
+      !analyticsRouteSource.includes('NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true"'),
+    "app analytics must be enabled by default so ops funnel can collect data without a fragile production env flag",
+  );
+  assert(
+    accountCenterSource.includes('trackAppEvent("signup_completed"') &&
+      accountCenterSource.includes('trackAppEvent("dashboard_active"'),
+    "account center must emit signup_completed and dashboard_active so the ops funnel has top-of-funnel data",
   );
 }

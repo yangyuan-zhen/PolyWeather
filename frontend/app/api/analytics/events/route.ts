@@ -10,7 +10,7 @@ import {
 
 const API_BASE = process.env.POLYWEATHER_API_BASE_URL;
 const ANALYTICS_ENABLED =
-  process.env.NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS === "true";
+  process.env.NEXT_PUBLIC_POLYWEATHER_APP_ANALYTICS !== "false";
 
 export async function POST(req: NextRequest) {
   if (!ANALYTICS_ENABLED) {
