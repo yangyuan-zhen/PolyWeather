@@ -3343,7 +3343,7 @@ export function AccountCenter() {
                                 Receiver
                               </p>
                               <div className="mt-1 flex gap-2">
-                                <code className="min-w-0 flex-1 truncate rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
+                                <code className="min-w-0 flex-1 break-all whitespace-normal rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
                                   {manualPayment.receiver_address}
                                 </code>
                                 <button
