@@ -310,6 +310,10 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
         if forwarded_user_id:
             forwarded_email = str(request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or "").strip()
             return {"user_id": forwarded_user_id, "email": forwarded_email}
+        # Entitlement token is valid but forwarded headers are missing.
+        # Return a placeholder identity — callers (e.g. _require_ops_admin)
+        # can decide whether to accept it.
+        return {"user_id": "entitlement", "email": ""}
 
     logger.warning(
         "payment auth identity missing state_user={} auth_bearer={} legacy_ok={} forwarded_user={}"
