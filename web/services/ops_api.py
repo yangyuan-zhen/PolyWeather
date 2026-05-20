@@ -458,8 +458,10 @@ def get_ops_logs(
     lines: int = 100,
 ) -> dict[str, Any]:
     _require_ops(request)
+    import os
     import subprocess
     safe_lines = max(10, min(1000, int(lines or 100)))
+    log_text = ""
     try:
         # Read from Docker logs
         result = subprocess.run(
@@ -470,7 +472,18 @@ def get_ops_logs(
         )
         log_text = result.stdout or result.stderr or ""
     except Exception:
-        log_text = ""
+        pass
+
+    # Fallback to local log file if docker logs returns empty
+    if not log_text.strip():
+        log_file = "data/logs/trading_system.log"
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
+                    all_lines = f.readlines()
+                    log_text = "".join(all_lines[-safe_lines:])
+            except Exception:
+                pass
 
     log_lines = log_text.strip().split("\n") if log_text.strip() else []
 
