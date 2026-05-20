@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { PaymentRuntimePayload, PaymentIncident } from "@/types/ops";
+import {
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+} from "recharts";
 
 export function PaymentsPageClient() {
   const [loading, setLoading] = useState(true);
@@ -43,6 +46,19 @@ export function PaymentsPageClient() {
 
   if (loading) return <div className="text-slate-400 animate-pulse">加载中...</div>;
 
+  const reasonCounts: Record<string, number> = {};
+  incidents.forEach((inc) => {
+    const r = inc.reason || "unknown";
+    reasonCounts[r] = (reasonCounts[r] || 0) + 1;
+  });
+
+  const incidentPieData = Object.entries(reasonCounts).map(([name, value]) => ({
+    name,
+    value,
+  }));
+
+  const COLORS = ["#ef4444", "#f59e0b", "#3b82f6", "#10b981", "#a855f7", "#6366f1", "#ec4899"];
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -52,29 +68,72 @@ export function PaymentsPageClient() {
         </Button>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>支付运行时</CardTitle></CardHeader>
-        <CardContent>
-          <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
-            {runtime ? Object.entries({
-              chain_id: runtime.chain_id,
-              last_scanned_block: runtime.last_scanned_block,
-              audit_events_count: runtime.audit_events_count,
-            }).map(([k, v]) => (
-              <div key={k}>
-                <div className="text-slate-500 text-xs">{k}</div>
-                <div className="text-white font-mono">{String(v ?? "—")}</div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle>支付运行时</CardTitle></CardHeader>
+          <CardContent>
+            <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+              {runtime ? Object.entries({
+                chain_id: runtime.chain_id,
+                last_scanned_block: runtime.last_scanned_block,
+                audit_events_count: runtime.audit_events_count,
+              }).map(([k, v]) => (
+                <div key={k}>
+                  <div className="text-slate-500 text-xs">{k}</div>
+                  <div className="text-white font-mono">{String(v ?? "—")}</div>
+                </div>
+              )) : <span className="text-slate-500">无数据</span>}
+            </dl>
+            {runtime?.receiver_contract ? (
+              <div className="mt-3">
+                <div className="text-slate-500 text-xs">receiver_contract</div>
+                <code className="text-xs text-blue-300 bg-black/40 rounded-lg px-2 py-1.5 block mt-1 truncate">{runtime.receiver_contract}</code>
               </div>
-            )) : <span className="text-slate-500">无数据</span>}
-          </dl>
-          {runtime?.receiver_contract ? (
-            <div className="mt-3">
-              <div className="text-slate-500 text-xs">receiver_contract</div>
-              <code className="text-xs text-blue-300 bg-black/40 rounded-lg px-2 py-1.5 block mt-1 truncate">{runtime.receiver_contract}</code>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+            ) : null}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader><CardTitle>异常原因分布</CardTitle></CardHeader>
+          <CardContent className="h-[125px] flex items-center justify-center p-3">
+            {incidentPieData.length === 0 ? (
+              <span className="text-sm text-slate-500">暂无异常数据</span>
+            ) : (
+              <div className="w-full h-full flex items-center gap-2">
+                <div className="w-[100px] h-[100px] shrink-0">
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={incidentPieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={24}
+                        outerRadius={40}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {incidentPieData.map((d, i) => (
+                          <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 11 }} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex-1 space-y-1 overflow-y-auto max-h-[100px] text-xs">
+                  {incidentPieData.map((d, i) => (
+                    <div key={d.name} className="flex items-center gap-1.5 truncate">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
+                      <span className="text-slate-400 truncate" title={d.name}>{d.name}</span>
+                      <span className="text-white font-bold ml-auto">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader><CardTitle>支付异常 ({incidents.length})</CardTitle></CardHeader>

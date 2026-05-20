@@ -11,6 +11,7 @@ import type { SystemStatusPayload, MembershipsPayload, MembershipEntry } from "@
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  AreaChart, Area, Legend,
 } from "recharts";
 
 function KpiCard({ href, icon: Icon, label, value, color, sub }: {
@@ -37,18 +38,21 @@ export function OverviewPageClient() {
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
   const [memberships, setMemberships] = useState<MembershipEntry[]>([]);
   const [funnel, setFunnel] = useState<{ steps: { label: string; count: number; pct_of_prev?: number }[] } | null>(null);
+  const [growth, setGrowth] = useState<{ date: string; trial: number; paid: number; total: number; cumulative: number }[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const [s, m, f] = await Promise.all([
+      const [s, m, f, g] = await Promise.all([
         opsApi.systemStatus() as Promise<SystemStatusPayload>,
         opsApi.memberships() as Promise<MembershipsPayload>,
         opsApi.funnel(30),
+        opsApi.membershipsGrowth(30),
       ]);
       setStatus(s);
       setMemberships((m as MembershipsPayload).memberships ?? []);
       setFunnel(f);
+      setGrowth(g?.daily ?? []);
     } catch { /* */ }
     setLoading(false);
   };
@@ -137,6 +141,54 @@ export function OverviewPageClient() {
         <KpiCard href="/ops/payments" icon={CreditCard} label="支付成功" value={payingUsers} color="text-emerald-400" sub="30天内" />
         <KpiCard href="/ops/system" icon={Cpu} label="概率引擎" value={status?.probability?.engine_mode ?? "—"} color="text-amber-400" />
       </div>
+
+      {/* Membership Growth Trend */}
+      {growth.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">会员增长趋势 — 近 30 天</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Cumulative area chart */}
+              <div>
+                <h4 className="text-xs text-slate-500 mb-2">累计会员</h4>
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={growth}>
+                    <defs>
+                      <linearGradient id="colorCumulative" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.2}/>
+                        <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={35} />
+                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Area type="monotone" dataKey="cumulative" stroke="#06b6d4" fillOpacity={1} fill="url(#colorCumulative)" name="累计" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+
+              {/* Daily stack chart */}
+              <div>
+                <h4 className="text-xs text-slate-500 mb-2">每日新增</h4>
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={growth}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
+                    <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={25} />
+                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Area type="monotone" dataKey="paid" stackId="1" stroke="#22c55e" fill="#22c55e40" name="付费" />
+                    <Area type="monotone" dataKey="trial" stackId="1" stroke="#f59e0b" fill="#f59e0b40" name="体验" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Main grid: 2 columns */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">

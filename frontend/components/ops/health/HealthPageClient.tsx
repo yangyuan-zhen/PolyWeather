@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { RefreshCcw, CheckCircle2, XCircle, AlertTriangle } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
+} from "recharts";
 
 type ServiceResult = { ok: boolean; status?: number; latency_ms?: number; error?: string };
 type HealthPayload = { ok: boolean; checked_at: string; services: Record<string, ServiceResult> };
@@ -70,6 +74,14 @@ export function HealthPageClient() {
   const services = Object.entries(data.services);
   const okCount = services.filter(([, v]) => v.ok).length;
 
+  const latencyData = services
+    .filter(([, svc]) => svc.ok && svc.latency_ms != null)
+    .map(([key, svc]) => ({
+      name: LABELS[key] || key,
+      latency: svc.latency_ms ?? 0,
+    }))
+    .sort((a, b) => a.latency - b.latency);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -86,6 +98,35 @@ export function HealthPageClient() {
           </Button>
         </div>
       </div>
+
+      {latencyData.length > 0 && (
+        <Card className="border-slate-800 bg-slate-900/50">
+          <CardContent className="p-4">
+            <h3 className="text-sm font-semibold text-white mb-4">服务响应延迟对比 (ms)</h3>
+            <ResponsiveContainer width="100%" height={Math.max(160, latencyData.length * 28 + 40)}>
+              <BarChart
+                data={latencyData}
+                layout="vertical"
+                margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                <XAxis type="number" stroke="rgba(255,255,255,0.2)" tick={{ fill: "#64748b", fontSize: 10 }} />
+                <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.2)" tick={{ fill: "#94a3b8", fontSize: 11 }} width={120} />
+                <Tooltip
+                  contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                  formatter={(value) => [`${value} ms`, "延迟"]}
+                />
+                <Bar dataKey="latency" radius={[0, 4, 4, 0]}>
+                  {latencyData.map((d, i) => {
+                    const colors = ["#22c55e", "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#ef4444"];
+                    return <Cell key={i} fill={colors[i % colors.length]} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {services.map(([key, svc]) => (

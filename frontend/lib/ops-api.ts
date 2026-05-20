@@ -64,6 +64,12 @@ export const opsApi = {
   memberships() {
     return opsFetch<Record<string, unknown>>("/api/ops/memberships?limit=200");
   },
+  membershipsGrowth(days = 90) {
+    return opsFetch<{
+      days: number;
+      daily: { date: string; trial: number; paid: number; total: number; cumulative: number }[];
+    }>(`/api/ops/memberships/growth?days=${days}`);
+  },
   incidents(limit = 20, reason?: string) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (reason) params.set("reason", reason);
