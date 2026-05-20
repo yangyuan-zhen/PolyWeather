@@ -690,18 +690,6 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     else:
         results["cwa"] = {"ok": False, "error": "not configured"}
 
-    # IMGW (Poland)
-    imgw_token = str(os.getenv("IMGW_METEO_API_TOKEN") or "").strip()
-    if imgw_token:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get("https://meteo.imgw.pl/api/v1/station/aviation", timeout=timeout, headers={"Authorization": f"Bearer {imgw_token}"})
-            results["imgw"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-        except Exception as e:
-            results["imgw"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["imgw"] = {"ok": False, "error": "not configured"}
-
     # Polymarket Gamma API
     try:
         t0 = _time.perf_counter()
@@ -718,17 +706,8 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     except Exception as e:
         results["polymarket_clob"] = {"ok": False, "error": str(e)[:100]}
 
-    # Synoptic Data (US settlement verification)
-    synoptic_token = str(os.getenv("SYNOPTIC_API_TOKEN") or "").strip()
-    if synoptic_token:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get(f"https://api.synopticdata.com/v2/stations/metadata?token={synoptic_token}&limit=1", timeout=timeout)
-            results["synoptic"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-        except Exception as e:
-            results["synoptic"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["synoptic"] = {"ok": False, "error": "not configured"}
+
+
 
     # AMOS (Korea runway sensors)
     try:
