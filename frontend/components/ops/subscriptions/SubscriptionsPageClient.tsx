@@ -15,9 +15,15 @@ async function buildOpsAuthHeaders() {
   };
   if (!hasSupabasePublicEnv()) return headers;
   try {
-    const {
+    const supabase = getSupabaseBrowserClient();
+    let {
       data: { session },
-    } = await getSupabaseBrowserClient().auth.getSession();
+    } = await supabase.auth.getSession();
+    const expiresAtMs = Number(session?.expires_at || 0) * 1000;
+    if (session && expiresAtMs > 0 && expiresAtMs - Date.now() < 60_000) {
+      const refreshed = await supabase.auth.refreshSession();
+      session = refreshed.data.session || session;
+    }
     const token = String(session?.access_token || "").trim();
     if (token) headers.Authorization = `Bearer ${token}`;
   } catch {

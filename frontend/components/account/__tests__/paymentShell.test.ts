@@ -78,6 +78,7 @@ export function runTests() {
   );
   assert(
     subscriptionsPageSource.includes("getSupabaseBrowserClient") &&
+      subscriptionsPageSource.includes("refreshSession") &&
       subscriptionsPageSource.includes("Authorization") &&
       subscriptionsPageSource.includes("/api/ops/subscriptions/grant") &&
       subscriptionsPageSource.includes("/api/ops/subscriptions/extend"),
