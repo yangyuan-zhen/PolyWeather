@@ -860,7 +860,7 @@ export function DashboardStoreProvider({
       void (async () => {
         try {
           const latestDetail = await dashboardClient.getCityDetail(cityName, {
-            force: true,
+            force: false,
             depth,
           });
           const detail = latestDetail;

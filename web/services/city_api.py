@@ -79,6 +79,15 @@ async def get_city_detail_payload(
         detail_mode = "nearby"
     else:
         detail_mode = "panel"
+    if detail_mode == "full":
+        if force_refresh:
+            return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, True)
+        cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
+        if cached_entry:
+            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+                return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
+            return cached_entry.get("payload") or {}
+        return await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
     if detail_mode == "panel":
         if force_refresh:
             return await run_in_threadpool(legacy_routes._refresh_city_panel_cache, city, True)

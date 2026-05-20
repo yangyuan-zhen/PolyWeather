@@ -518,8 +518,8 @@ export const dashboardClient = {
     meta: Record<string, CityCacheMeta>,
   ) {
     if (!isClient()) return;
-    // Keep only the 3 most-recently-accessed cities to prevent sessionStorage bloat
-    const MAX_CACHED_CITIES = 3;
+    // Keep only the 12 most-recently-accessed cities to prevent sessionStorage bloat
+    const MAX_CACHED_CITIES = 12;
     const allEntries = Object.entries(details).map(([cityName, detail]) => ({
       cityName,
       cachedAt: meta[cityName]?.cachedAt || 0,

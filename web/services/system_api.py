@@ -35,7 +35,9 @@ def get_system_cache_status(request: Request, cities: Optional[str] = None) -> D
         "summary": legacy_routes.CITY_SUMMARY_CACHE_TTL_SEC,
         "panel": legacy_routes.CITY_PANEL_CACHE_TTL_SEC,
         "nearby": legacy_routes.CITY_NEARBY_CACHE_TTL_SEC,
-        "market": legacy_routes.CITY_MARKET_CACHE_TTL_SEC,    }
+        "market": legacy_routes.CITY_MARKET_CACHE_TTL_SEC,
+        "full": legacy_routes.CITY_FULL_CACHE_TTL_SEC,
+    }
     items = []
     for city in selected:
         row = {"city": city}
@@ -71,6 +73,7 @@ def run_system_priority_warm(
                 legacy_routes._refresh_city_panel_cache(city, force_refresh=False)
                 legacy_routes._refresh_city_nearby_cache(city, force_refresh=False)
                 legacy_routes._refresh_city_market_cache(city, force_refresh=False)
+                legacy_routes._refresh_city_full_cache(city, force_refresh=False)
             except Exception as exc:
                 logger.warning("priority warm primary failed city={} timezone={}: {}", city, timezone, exc)
         for city in secondary:

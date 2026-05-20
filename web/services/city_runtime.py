@@ -142,6 +142,7 @@ CITY_SUMMARY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_SUMMARY_CAC
 CITY_PANEL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_PANEL_CACHE_TTL_SEC", "1800")))
 CITY_NEARBY_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_NEARBY_CACHE_TTL_SEC", "1800")))
 CITY_MARKET_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_MARKET_CACHE_TTL_SEC", "1800")))
+CITY_FULL_CACHE_TTL_SEC = max(30, int(os.getenv("POLYWEATHER_CITY_FULL_CACHE_TTL_SEC", "1800")))
 MARKET_SCAN_PAYLOAD_TTL_SEC = max(
     5,
     int(os.getenv("POLYWEATHER_MARKET_SCAN_PAYLOAD_TTL_SEC", "30")),
@@ -319,6 +320,18 @@ def _refresh_city_market_cache(city: str, force_refresh: bool = False) -> dict:
     return payload
 
 
+def _refresh_city_full_cache(city: str, force_refresh: bool = False) -> dict:
+    payload = _analyze(city, force_refresh=force_refresh, include_llm_commentary=True, detail_mode="full")
+    _CACHE_DB.set_city_cache(
+        "full",
+        city,
+        payload,
+        version="v1",
+        source_fingerprint=f"{city}:full",
+    )
+    return payload
+
+
 
 def _schedule_cache_refresh(
     background_tasks: BackgroundTasks,
@@ -329,7 +342,7 @@ def _schedule_cache_refresh(
 ) -> bool:
     normalized_kind = str(kind or "").strip().lower()
     normalized_city = str(city or "").strip().lower()
-    if normalized_kind not in {"summary", "panel", "nearby", "market"} or not normalized_city:
+    if normalized_kind not in {"summary", "panel", "nearby", "market", "full"} or not normalized_city:
         return False
     cache_key = f"city:{normalized_kind}:{normalized_city}"
     owner = _CACHE_DB.acquire_cache_refresh_lock(
@@ -347,8 +360,10 @@ def _schedule_cache_refresh(
                 _refresh_city_panel_cache(normalized_city, force_refresh=force_refresh)
             elif normalized_kind == "nearby":
                 _refresh_city_nearby_cache(normalized_city, force_refresh=force_refresh)
-            else:
+            elif normalized_kind == "market":
                 _refresh_city_market_cache(normalized_city, force_refresh=force_refresh)
+            else:
+                _refresh_city_full_cache(normalized_city, force_refresh=force_refresh)
         except Exception as exc:
             logger.warning(
                 "cache refresh failed kind={} city={} force_refresh={}: {}",
