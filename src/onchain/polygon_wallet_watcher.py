@@ -1,4 +1,4 @@
-﻿import json
+import json
 import os
 import threading
 import time
@@ -33,7 +33,8 @@ ERC20_ABI = [
 # Source: Polymarket official developer docs (Polygon contract addresses)
 # https://docs.polymarket.com/developers/market-makers/setup
 DEFAULT_POLYMARKET_CONTRACTS: Dict[str, str] = {
-    "USDC.e": "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+    "USDC": "0x3c499c542cef5e3811e1192ce70d8cc03d5c3359",
+    "pUSD": "0xc011a7e12a19f7b1f670d46f03b03f3342e82dfb",
     "CTF": "0x4d97dcd97ec945f40cf65f87097ace5ea0476045",
     "CTF_EXCHANGE": "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E",
     "NEG_RISK_CTF_EXCHANGE": "0xC5d563A36AE78145C45a50134d48A1215220f80a",

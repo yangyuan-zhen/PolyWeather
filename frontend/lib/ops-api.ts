@@ -105,4 +105,25 @@ export const opsApi = {
       count: number;
     }>(`/api/ops/subscriptions/user?email=${encodeURIComponent(email)}`);
   },
+  trainingAccuracy() {
+    return opsFetch<{
+      accuracy: Array<{
+        city_id: string;
+        name: string;
+        deb?: {
+          hit_rate: number;
+          mae: number;
+          total_days: number;
+          details_str: string;
+        } | null;
+        mu?: {
+          mae: number;
+          hit_rate: number;
+          brier_score: number | null;
+          total_days: number;
+          details_str: string;
+        } | null;
+      }>;
+    }>("/api/ops/training/accuracy");
+  },
 };

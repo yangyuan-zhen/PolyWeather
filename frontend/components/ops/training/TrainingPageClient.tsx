@@ -18,15 +18,38 @@ function StatRow({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+interface CityAccuracy {
+  city_id: string;
+  name: string;
+  deb?: {
+    hit_rate: number;
+    mae: number;
+    total_days: number;
+    details_str: string;
+  } | null;
+  mu?: {
+    mae: number;
+    hit_rate: number;
+    brier_score: number | null;
+    total_days: number;
+    details_str: string;
+  } | null;
+}
+
 export function TrainingPageClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<SystemStatusPayload | null>(null);
+  const [accuracy, setAccuracy] = useState<CityAccuracy[] | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const s = await opsApi.systemStatus() as SystemStatusPayload;
+      const [s, accData] = await Promise.all([
+        opsApi.systemStatus() as Promise<SystemStatusPayload>,
+        opsApi.trainingAccuracy().catch(() => ({ accuracy: [] }))
+      ]);
       setStatus(s);
+      setAccuracy(accData.accuracy);
     } catch { /* */ }
     setLoading(false);
   };
@@ -112,6 +135,105 @@ export function TrainingPageClient() {
 
       <Card>
         <CardHeader>
+          <CardTitle>模型融合与预测准确率效果 (DEB & 概率引擎)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-slate-300">
+              <thead className="text-xs uppercase bg-slate-800/50 text-slate-400">
+                <tr>
+                  <th scope="col" className="px-4 py-3">城市</th>
+                  <th scope="col" className="px-4 py-3 text-center">DEB 结算命中</th>
+                  <th scope="col" className="px-4 py-3 text-center">DEB MAE</th>
+                  <th scope="col" className="px-4 py-3 text-center">DEB 天数</th>
+                  <th scope="col" className="px-4 py-3 text-center">概率 μ 结算命中</th>
+                  <th scope="col" className="px-4 py-3 text-center">概率 μ MAE</th>
+                  <th scope="col" className="px-4 py-3 text-center">Brier Score</th>
+                  <th scope="col" className="px-4 py-3 text-center">概率天数</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {accuracy && accuracy.length > 0 ? (
+                  accuracy.map((row) => (
+                    <tr key={row.city_id} className="hover:bg-white/5 transition-colors">
+                      <td className="px-4 py-3 font-medium text-white capitalize">
+                        {row.name}
+                        <span className="text-xs text-slate-500 block font-mono">{row.city_id}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {row.deb ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            row.deb.hit_rate >= 80
+                              ? "bg-green-500/15 text-green-400"
+                              : row.deb.hit_rate >= 60
+                              ? "bg-yellow-500/15 text-yellow-400"
+                              : "bg-red-500/15 text-red-400"
+                          }`}>
+                            {row.deb.hit_rate.toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">
+                        {row.deb ? `${row.deb.mae.toFixed(1)}°` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-400">
+                        {row.deb ? row.deb.total_days : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {row.mu ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            row.mu.hit_rate >= 80
+                              ? "bg-green-500/15 text-green-400"
+                              : row.mu.hit_rate >= 60
+                              ? "bg-yellow-500/15 text-yellow-400"
+                              : "bg-red-500/15 text-red-400"
+                          }`}>
+                            {row.mu.hit_rate.toFixed(0)}%
+                          </span>
+                        ) : (
+                          <span className="text-slate-600">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">
+                        {row.mu ? `${row.mu.mae.toFixed(1)}°` : "—"}
+                      </td>
+                      <td className="px-4 py-3 text-center font-mono">
+                        {row.mu && row.mu.brier_score !== null ? (
+                          <span className={`${
+                            row.mu.brier_score <= 0.1
+                              ? "text-green-400 font-bold"
+                              : row.mu.brier_score <= 0.25
+                              ? "text-yellow-400"
+                              : "text-red-400"
+                          }`}>
+                            {row.mu.brier_score.toFixed(3)}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-400">
+                        {row.mu ? row.mu.total_days : "—"}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500">
+                      无有效准确率记录，请确认 daily_records.json 中已有历史结算数据。
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>真值历史浏览</CardTitle>
         </CardHeader>
         <CardContent>
@@ -124,3 +246,4 @@ export function TrainingPageClient() {
     </div>
   );
 }
+

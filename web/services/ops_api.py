@@ -783,3 +783,56 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
 
     all_ok = all(v.get("ok") for v in results.values())
     return {"ok": all_ok, "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z", "services": results}
+
+
+def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
+    _require_ops(request)
+    from src.analysis.deb_algorithm import get_deb_accuracy, get_mu_accuracy
+    from src.data_collection.city_registry import CITY_REGISTRY
+
+    accuracy_data = []
+    for city_id, info in CITY_REGISTRY.items():
+        name = info.get("name") or city_id
+
+        # Calculate DEB accuracy
+        deb_acc = get_deb_accuracy(city_id)
+        deb_payload = None
+        if deb_acc:
+            deb_payload = {
+                "hit_rate": deb_acc[0],
+                "mae": deb_acc[1],
+                "total_days": deb_acc[2],
+                "details_str": deb_acc[3]
+            }
+
+        # Calculate Mu accuracy
+        mu_acc = get_mu_accuracy(city_id)
+        mu_payload = None
+        if mu_acc:
+            mu_payload = {
+                "mae": mu_acc[0],
+                "hit_rate": mu_acc[1],
+                "brier_score": mu_acc[2],
+                "total_days": mu_acc[3],
+                "details_str": mu_acc[4]
+            }
+
+        if deb_payload or mu_payload:
+            accuracy_data.append({
+                "city_id": city_id,
+                "name": name,
+                "deb": deb_payload,
+                "mu": mu_payload
+            })
+
+    # Sort by total days of DEB or Mu
+    accuracy_data.sort(
+        key=lambda x: max(
+            x["deb"]["total_days"] if x["deb"] else 0,
+            x["mu"]["total_days"] if x["mu"] else 0
+        ),
+        reverse=True
+    )
+
+    return {"accuracy": accuracy_data}
+

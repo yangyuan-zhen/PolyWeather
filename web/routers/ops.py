@@ -21,6 +21,7 @@ from web.services.ops_api import (
     list_ops_payments,
     search_ops_users,
     update_ops_config,
+    get_ops_training_accuracy,
 )
 
 router = APIRouter(tags=["ops"])
@@ -160,3 +161,9 @@ async def ops_logs(
 @router.get("/api/ops/health-check")
 async def ops_health_check(request: Request):
     return get_ops_health_check(request)
+
+
+@router.get("/api/ops/training/accuracy")
+async def ops_training_accuracy(request: Request):
+    return get_ops_training_accuracy(request)
+
