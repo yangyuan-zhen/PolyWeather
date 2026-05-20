@@ -12,7 +12,8 @@ import web.routes as legacy_routes
 
 
 def _require_ops(request: Request) -> Dict[str, Any] | None:
-    legacy_routes._assert_entitlement(request)
+    # Ops admins are authenticated via Supabase identity + email whitelist.
+    # They do NOT need an active Pro subscription to manage the system.
     return legacy_routes._require_ops_admin(request)
 
 
