@@ -1272,7 +1272,7 @@ export function AccountCenter() {
 
   const loadSnapshot = useCallback(async () => {
     setErrorText("");
-    try {
+    const attempt = async (retry: boolean): Promise<void> => {
       const userPromise = supabaseReady
         ? getSupabaseBrowserClient().auth.getUser()
         : Promise.resolve({ data: { user: null as User | null } });
@@ -1289,12 +1289,20 @@ export function AccountCenter() {
       ]);
       setUser(userResult.data?.user ?? null);
       if (!backendResult.ok) {
+        if (retry && backendResult.status === 401) {
+          // Supabase session may not be hydrated yet; wait and retry once.
+          await new Promise((r) => setTimeout(r, 1200));
+          return attempt(false);
+        }
         const raw = (await backendResult.text()).slice(0, 260);
         throw new Error(`HTTP ${backendResult.status} ${raw}`.trim());
       }
       const backendJson = (await backendResult.json()) as AuthMeResponse;
       setBackend(backendJson);
       setUpdatedAt(new Date().toISOString());
+    };
+    try {
+      await attempt(true);
     } catch (error) {
       setErrorText(String(error));
     }
