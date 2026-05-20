@@ -32,8 +32,6 @@ const LABELS: Record<string, string> = {
   synoptic: "Synoptic Data",
   amos: "AMOS (韩国跑道)",
   amsc_awos: "AMSC AWOS (中国)",
-  openweather: "OpenWeather",
-  visualcrossing: "VisualCrossing",
   noaa_wrh: "NOAA WRH (美国结算)",
 };
 

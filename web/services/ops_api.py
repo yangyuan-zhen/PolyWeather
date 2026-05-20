@@ -759,30 +759,6 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     else:
         results["amsc_awos"] = {"ok": False, "error": "not configured"}
 
-    # OpenWeather
-    ow_key = str(os.getenv("OPENWEATHER_API_KEY") or "").strip()
-    if ow_key:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get(f"https://api.openweathermap.org/data/2.5/weather?q=London&appid={ow_key}", timeout=timeout)
-            results["openweather"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-        except Exception as e:
-            results["openweather"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["openweather"] = {"ok": False, "error": "not configured"}
-
-    # VisualCrossing
-    vc_key = str(os.getenv("VISUALCROSSING_API_KEY") or "").strip()
-    if vc_key:
-        try:
-            t0 = _time.perf_counter()
-            r = _r.get(f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/London/today?key={vc_key}&include=current", timeout=timeout)
-            results["visualcrossing"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-        except Exception as e:
-            results["visualcrossing"] = {"ok": False, "error": str(e)[:100]}
-    else:
-        results["visualcrossing"] = {"ok": False, "error": "not configured"}
-
     # NOAA WRH (US settlement verification)
     try:
         t0 = _time.perf_counter()
