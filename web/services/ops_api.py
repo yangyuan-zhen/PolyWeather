@@ -191,6 +191,41 @@ def resolve_ops_payment_incident(request: Request, event_id: int) -> Dict[str, A
     return {"ok": True, "incident": resolved}
 
 
+def list_ops_payments(
+    request: Request,
+    limit: int = 50,
+) -> Dict[str, Any]:
+    """List successful payment records from Supabase."""
+    _require_ops(request)
+    import os
+    import requests as _requests
+
+    supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
+    service_role_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+    if not supabase_url or not service_role_key:
+        raise HTTPException(status_code=503, detail="Supabase not configured")
+
+    headers = {
+        "apikey": service_role_key,
+        "Authorization": f"Bearer {service_role_key}",
+    }
+    safe_limit = max(1, min(int(limit or 50), 200))
+    resp = _requests.get(
+        f"{supabase_url}/rest/v1/payments",
+        headers=headers,
+        params={
+            "select": "id,user_id,amount,currency,chain,tx_hash,status,created_at",
+            "order": "created_at.desc",
+            "limit": str(safe_limit),
+        },
+        timeout=10,
+    )
+    rows = resp.json() if resp.ok and resp.content else []
+    if not isinstance(rows, list):
+        rows = []
+    return {"payments": rows, "total": len(rows)}
+
+
 def grant_ops_points(request: Request, body: GrantPointsRequest) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
     db = DBManager()

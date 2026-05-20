@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCcw, CheckCircle2 } from "lucide-react";
+import { RefreshCcw, CheckCircle2, ExternalLink } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
-import type { PaymentRuntimePayload, PaymentIncident } from "@/types/ops";
+import type { PaymentRuntimePayload, PaymentIncident, PaymentRecord } from "@/types/ops";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
 } from "recharts";
@@ -14,17 +14,20 @@ export function PaymentsPageClient() {
   const [loading, setLoading] = useState(true);
   const [runtime, setRuntime] = useState<PaymentRuntimePayload | null>(null);
   const [incidents, setIncidents] = useState<PaymentIncident[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
   const [resolving, setResolving] = useState<Set<number>>(new Set());
 
   const load = async () => {
     setLoading(true);
     try {
-      const [rt, inc] = await Promise.all([
+      const [rt, inc, pay] = await Promise.all([
         opsApi.paymentRuntime() as Promise<PaymentRuntimePayload>,
         opsApi.incidents(50),
+        opsApi.listPayments(50),
       ]);
       setRuntime(rt);
       setIncidents((inc as unknown as { incidents?: PaymentIncident[] }).incidents ?? []);
+      setPayments((pay as unknown as { payments?: PaymentRecord[] }).payments ?? []);
     } catch { /* */ }
     setLoading(false);
   };
@@ -169,6 +172,54 @@ export function PaymentsPageClient() {
                           {resolving.has(inc.id) ? "处理中" : "标记处理"}
                         </Button>
                       </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>成功支付记录 ({payments.length})</CardTitle></CardHeader>
+        <CardContent>
+          {payments.length === 0 ? (
+            <span className="text-sm text-slate-500">暂无记录</span>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-slate-400">
+                    <th className="py-2 pr-4 font-medium">ID</th>
+                    <th className="py-2 pr-4 font-medium">用户</th>
+                    <th className="py-2 pr-4 font-medium">金额</th>
+                    <th className="py-2 pr-4 font-medium">链</th>
+                    <th className="py-2 pr-4 font-medium">Tx Hash</th>
+                    <th className="py-2 pr-4 font-medium">时间</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="border-b border-white/5">
+                      <td className="py-2 pr-4 text-slate-500 font-mono text-xs">{p.id}</td>
+                      <td className="py-2 pr-4 text-slate-400 font-mono text-xs" title={p.user_id}>{p.user_id?.slice(0, 10) ?? "—"}...</td>
+                      <td className="py-2 pr-4 text-emerald-300 font-mono">{p.amount} {p.currency}</td>
+                      <td className="py-2 pr-4 text-slate-400 text-xs">{p.chain ?? "—"}</td>
+                      <td className="py-2 pr-4 text-xs">
+                        {p.tx_hash ? (
+                          <a
+                            href={`https://polygonscan.com/tx/${p.tx_hash}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 font-mono inline-flex items-center gap-1"
+                          >
+                            {p.tx_hash.slice(0, 8)}...{p.tx_hash.slice(-6)}
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        ) : "—"}
+                      </td>
+                      <td className="py-2 pr-4 text-slate-400 text-xs whitespace-nowrap">{p.created_at?.slice(0, 19) ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -75,6 +75,22 @@ export type IncidentsPayload = {
   total?: number;
 };
 
+export type PaymentRecord = {
+  id: number;
+  user_id?: string;
+  amount?: number;
+  currency?: string;
+  chain?: string;
+  tx_hash?: string;
+  status?: string;
+  created_at?: string;
+};
+
+export type PaymentsPayload = {
+  payments?: PaymentRecord[];
+  total?: number;
+};
+
 export type OpsUser = {
   telegram_id?: number;
   username?: string;

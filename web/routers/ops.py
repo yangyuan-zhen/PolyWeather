@@ -12,11 +12,13 @@ from web.services.ops_api import (
     get_ops_logs,
     get_ops_truth_history,
     get_ops_weekly_leaderboard,
+    get_ops_user_subscriptions,
     grant_ops_points,
     grant_ops_subscription,
     list_ops_memberships,
     list_ops_payment_incidents,
     resolve_ops_payment_incident,
+    list_ops_payments,
     search_ops_users,
     update_ops_config,
 )
@@ -62,6 +64,11 @@ async def ops_payment_incidents(
 @router.post("/api/ops/payments/incidents/{event_id}/resolve")
 async def ops_resolve_payment_incident(request: Request, event_id: int):
     return resolve_ops_payment_incident(request, event_id)
+
+
+@router.get("/api/ops/payments")
+async def ops_payments(request: Request, limit: int = 50):
+    return list_ops_payments(request, limit=limit)
 
 
 @router.post("/api/ops/users/grant-points")
@@ -132,6 +139,11 @@ async def ops_subscription_extend(request: Request):
     email = str(body.get("email") or "").strip()
     days = int(body.get("additional_days") or 30)
     return extend_ops_subscription(request, email=email, additional_days=days)
+
+
+@router.get("/api/ops/subscriptions/user")
+async def ops_user_subscriptions(request: Request, email: str = ""):
+    return get_ops_user_subscriptions(request, email=email)
 
 
 # ── Logs ────────────────────────────────────────────────────────────

@@ -19,6 +19,9 @@ export const opsApi = {
   paymentRuntime() {
     return opsFetch<Record<string, unknown>>("/api/payments/runtime");
   },
+  listPayments(limit = 50) {
+    return opsFetch<{ payments?: Array<Record<string, unknown>>; total?: number }>(`/api/ops/payments?limit=${limit}`);
+  },
   async funnel(days = 30) {
     const raw = await opsFetch<{
       events?: Record<string, { total?: number; unique_users?: number }>;
@@ -83,5 +86,23 @@ export const opsApi = {
   truthHistory(params: Record<string, string>) {
     const qs = new URLSearchParams(params).toString();
     return opsFetch<Record<string, unknown>>(`/api/ops/truth-history?${qs}`);
+  },
+  userSubscriptions(email: string) {
+    return opsFetch<{
+      email: string;
+      user_id: string;
+      subscriptions: Array<{
+        id?: string;
+        user_id?: string;
+        status?: string;
+        plan_code?: string;
+        source?: string;
+        starts_at?: string;
+        expires_at?: string;
+        created_at?: string;
+        updated_at?: string;
+      }>;
+      count: number;
+    }>(`/api/ops/subscriptions/user?email=${encodeURIComponent(email)}`);
   },
 };
