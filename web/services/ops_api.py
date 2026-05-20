@@ -912,7 +912,6 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
         except Exception:
             return chat_id, None
 
-    all_tasks = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         futures = {}
         for tg_id in user_info.keys():
