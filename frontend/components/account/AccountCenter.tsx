@@ -3002,10 +3002,11 @@ export function AccountCenter() {
           )}
         </div>
 
-        {/* Telegram Bot Section — paid users only */}
-        {showSecondarySections && canAccessPaidTelegramGroup ? (
+        {/* Telegram Bot Section & Payment Details */}
+        {showSecondarySections ? (
           <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
-            <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
+            {canAccessPaidTelegramGroup && (
+              <section className="flex-1 bg-white/5 border border-white/10 rounded-[2rem] p-8 relative overflow-hidden group">
               <Bot
                 size={140}
                 className="absolute -right-8 -bottom-8 text-white/5 -rotate-12 group-hover:rotate-0 transition-transform duration-1000"
@@ -3074,9 +3075,12 @@ export function AccountCenter() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* Payment Details / Wallet Management */}
-            <section className="w-full md:w-96 bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between">
+            <section className={`bg-white/5 border border-white/10 rounded-[2rem] p-8 flex flex-col justify-between ${
+              canAccessPaidTelegramGroup ? "w-full md:w-96" : "w-full"
+            }`}>
               <div>
                 <h3 className="text-blue-400 text-sm font-bold uppercase tracking-widest mb-6 flex items-center gap-2">
                   <Wallet size={18} /> {copy.paymentMgmt}
