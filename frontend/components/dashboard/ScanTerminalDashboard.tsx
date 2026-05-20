@@ -16,6 +16,7 @@ import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import { AiPinnedForecastView } from "@/components/dashboard/scan-terminal/AiPinnedForecastView";
 import { MobileCityPicker } from "@/components/dashboard/scan-terminal/MobileCityPicker";
 import { WelcomeOverlay } from "@/components/dashboard/scan-terminal/WelcomeOverlay";
+import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import {
   ScanPaywallModal,
   ScanTerminalLoadingScreen,
@@ -331,12 +332,11 @@ function ScanTerminalScreen() {
         void store.ensureCityDetail(cityName, false, "panel").catch(() => {});
         setSelectedRowId(null);
       }
-      if (isPro) {
-        addAiPinnedCity(cityName);
-        setActiveView("analysis");
-      }
+      void store.selectCity(cityName);
+      addAiPinnedCity(cityName);
+      setActiveView("analysis");
     },
-    [store, timeSortedRows, isPro, addAiPinnedCity],
+    [store, timeSortedRows, addAiPinnedCity],
   );
 
   useEffect(() => {
@@ -400,7 +400,7 @@ function ScanTerminalScreen() {
         <MobileCityPicker
           isEn={isEn}
           rows={cityListRows}
-          onSelectCity={isPro ? handleOpenDecisionRow : handleSelectRow}
+          onSelectCity={handleOpenDecisionRow}
         />
       );
     }
@@ -420,15 +420,21 @@ function ScanTerminalScreen() {
             />
           </div>
         </div>
-        {resolvedView === "analysis" && isPro ? (
-          <AiPinnedForecastView
-            items={aiPinnedCities}
-            rows={timeSortedRows}
-            detailsByName={store.cityDetailsByName}
-            locale={locale}
-            onRefreshCityDetail={refreshAiPinnedCityDetail}
-            onRemoveCity={removeAiPinnedCity}
-          />
+        {resolvedView === "analysis" ? (
+          isPro ? (
+            <AiPinnedForecastView
+              items={aiPinnedCities}
+              rows={timeSortedRows}
+              detailsByName={store.cityDetailsByName}
+              locale={locale}
+              onRefreshCityDetail={refreshAiPinnedCityDetail}
+              onRemoveCity={removeAiPinnedCity}
+            />
+          ) : (
+            <div className="scan-ai-workspace empty">
+              <ProFeaturePaywall feature="scan" />
+            </div>
+          )
         ) : null}
       </>
     );
@@ -545,19 +551,22 @@ function ScanTerminalScreen() {
                     {isEn ? "Distribution View" : "分布视图"}
                   </button>
                 )}
-                {isPro ? (
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={resolvedView === "analysis"}
-                    className={resolvedView === "analysis" ? "active" : ""}
-                    onClick={() => {
-                      setActiveView("analysis");
-                    }}
-                  >
-                    {isEn ? "Decision Cards" : "城市决策卡"}
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={resolvedView === "analysis"}
+                  className={resolvedView === "analysis" ? "active" : ""}
+                  onClick={() => {
+                    setActiveView("analysis");
+                  }}
+                >
+                  {isEn ? "Decision Cards" : "城市决策卡"}
+                  {!isPro && (
+                    <span className="scan-lock-icon" style={{ marginLeft: "4.5px", fontSize: "13.5px" }}>
+                      🔒
+                    </span>
+                  )}
+                </button>
               </div>
               <div className="scan-list-status">
                 {terminalData?.generated_at ? (
