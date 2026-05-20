@@ -568,7 +568,7 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     _urllib3.disable_warnings(_urllib3.exceptions.InsecureRequestWarning)
 
     results: dict[str, dict] = {}
-    timeout = 3
+    timeout = 8
 
     # Supabase
     supabase_url = str(os.getenv("SUPABASE_URL") or "").strip().rstrip("/")
