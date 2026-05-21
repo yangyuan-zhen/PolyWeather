@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+# Scratch / temp scripts
+scratch/
+
 # Data and Logs
 data/*.db
 data/*.db-*
