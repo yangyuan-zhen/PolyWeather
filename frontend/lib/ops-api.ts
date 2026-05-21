@@ -32,8 +32,8 @@ export const opsApi = {
     const stepLabels: Record<string, string> = {
       signup_completed: "注册",
       dashboard_active: "活跃",
-      paywall_feature_clicked: "点击付费",
-      paywall_viewed: "看到入口",
+      paywall_feature_clicked: "点击高级功能",
+      paywall_viewed: "看到付费墙",
       checkout_started: "发起支付",
       checkout_succeeded: "支付成功",
     };

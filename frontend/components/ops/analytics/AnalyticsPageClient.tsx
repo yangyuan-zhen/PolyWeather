@@ -78,7 +78,7 @@ export function AnalyticsPageClient() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <div className="text-xs text-slate-500">点击付费</div>
+              <div className="text-xs text-slate-500">点击高级功能</div>
               <div className="text-xl font-bold text-cyan-400">{funnel[2]?.count ?? 0}</div>
             </CardContent>
           </Card>
