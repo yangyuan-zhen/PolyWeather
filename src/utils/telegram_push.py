@@ -1031,6 +1031,37 @@ def _build_airport_status_message(
         if wind_label:
             wind_str += f"  {wind_label}"
         lines.append(wind_str)
+    # --- AMSC METAR temp + time for Chinese cities (Beijing time) ---
+    if is_amsc:
+        raw_metar = amos.get("raw_metar") or ""
+        if raw_metar:
+            parts = raw_metar.split()
+            # Extract temp/dew: "20/17" → 20
+            metar_temp = None
+            for p in parts:
+                m = re.match(r"^(M?\d{2})/(M?\d{2})$", p)
+                if m:
+                    t = m.group(1)
+                    metar_temp = str(int(t.replace("M", "-")))
+                    break
+            # Extract time: "211930Z" → Beijing time (UTC+8)
+            metar_time = None
+            for p in parts:
+                m = re.match(r"^(\d{2})(\d{2})(\d{2})Z$", p)
+                if m:
+                    _day, hh, mm = int(m.group(1)), int(m.group(2)), m.group(3)
+                    bj_h = hh + 8
+                    if bj_h >= 24:
+                        bj_h -= 24
+                    metar_time = f"北京时 {bj_h:02d}:{mm}"
+                    break
+            if metar_temp or metar_time:
+                bits = []
+                if metar_temp:
+                    bits.append(f"{metar_temp}{temp_symbol}")
+                if metar_time:
+                    bits.append(metar_time)
+                lines.append(f"报文: {'  '.join(bits)}")
     if deb_pred is not None:
         if display_temp is not None and display_temp > deb_pred:
             lines.append(f"DEB：{deb_pred:.1f}{temp_symbol}（已突破 +{display_temp - deb_pred:.1f}°）")
