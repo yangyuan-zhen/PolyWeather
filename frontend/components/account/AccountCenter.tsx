@@ -722,8 +722,8 @@ export function AccountCenter() {
   const router = useRouter();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
-  const copy = useMemo(
-    () => ({
+  const copy: Record<string, string> = useMemo(
+    (): Record<string, string> => ({
       backHome: isEn ? "Back to Home" : "返回首页",
       accountCenter: isEn ? "Account Center" : "账户中心",
       loadingAccount: isEn ? "Loading account info..." : "加载账户信息中...",
@@ -787,7 +787,7 @@ export function AccountCenter() {
       paymentReceiver: isEn ? "Receiver Contract" : "当前收款合约",
       paymentHost: isEn ? "Payment Host" : "支付域名",
       primary: "Primary",
-      polygonChain: "Polygon Chain",
+      polygonChain: isEn ? "Polygon (Matic) Network" : "Polygon (Matic) 网络",
       noWallet: isEn ? "No payment wallet bound yet." : "未绑定任何付款钱包",
       bindExt: isEn
         ? "Bind Browser Wallet (EVM Extension)"
@@ -868,6 +868,38 @@ export function AccountCenter() {
       queuedExtensionSummary: isEn
         ? "Current plan until {current}. Queued extension: +{days} days. Total access until {total}."
         : "当前订阅至 {current}，已排队延长 +{days} 天，总可用至 {total}。",
+      paymentMethodLabel: isEn ? "Payment Method" : "请选择支付方式",
+      paymentMethodWallet: isEn ? "Wallet Quick Pay" : "钱包快捷支付",
+      paymentMethodManual: isEn ? "Manual On-chain Transfer" : "手动链上转账",
+      paymentWalletDesc: isEn
+        ? "Option 1: Bind your EVM wallet (e.g. MetaMask extension or WalletConnect QR scan) to sign and pay via smart contract. Credits are credited instantly."
+        : "方式一：绑定您的 EVM 钱包（如 MetaMask 扩展或 WalletConnect 扫码），通过智能合约自动签名付款，额度即时到账。",
+      paymentGasWarning: isEn
+        ? "Your wallet needs a small amount of Polygon POL/MATIC for gas fees; USDC alone may not complete authorization or payment. Please confirm your wallet is on Polygon network and keep some POL/MATIC before paying."
+        : "钱包里需要少量 Polygon POL/MATIC 作为 gas 手续费；只有 USDC 可能无法完成授权或支付。请确认当前钱包在 Polygon 网络，并预留一点 POL/MATIC 后再支付。",
+      paymentManualDesc: isEn
+        ? "Option 2: Transfer directly to the platform's receiver contract without binding a wallet. After the transfer, submit the transaction hash (Tx Hash) and the system will verify and activate Pro automatically."
+        : "方式二：无需将钱包绑定到账号，直接向平台收款合约转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。",
+      paymentManualTitle: isEn
+        ? "Manual Transfer (No Wallet Binding)"
+        : "手动转账（无需绑定钱包）",
+      paymentManualHint: isEn
+        ? "Create an order first, transfer to the specified receiver address, then submit the tx hash here. Do not mix with the wallet payment channel."
+        : "先创建订单，向指定收款地址转账，完成后在此处提交 tx hash。请勿与钱包付款通道重复混用。",
+      paymentManualCreate: isEn ? "Create Transfer Order" : "创建转账订单",
+      paymentAmount: isEn ? "Amount" : "金额",
+      paymentReceiverLabel: isEn ? "Receiver" : "收款地址",
+      paymentTxHash: "Tx Hash",
+      paymentCopyAddress: isEn ? "Copy" : "复制",
+      paymentManualSubmit: isEn
+        ? "Submit Tx Hash & Confirm"
+        : "提交 tx hash 并自动确认",
+      chainReadError: isEn ? "Reading wallet network" : "读取钱包网络",
+      chainSwitchError: isEn ? "Switch wallet network" : "切换钱包网络",
+      chainAddPolygon: isEn ? "Add Polygon network" : "添加 Polygon 网络",
+      chainSwitchPrompt: isEn
+        ? "Please manually switch to Polygon (Matic) network in your wallet and try again."
+        : "请在钱包中手动切换到 Polygon (Matic) 网络后再试。",
     }),
     [isEn],
   );
@@ -1988,7 +2020,7 @@ export function AccountCenter() {
       (await requestWalletWithTimeout<string>(
         eth,
         { method: "eth_chainId" },
-        "读取钱包网络",
+        copy.chainReadError,
       )) || "",
     );
     const targetChainHex = `0x${targetChainId.toString(16)}`;
@@ -2001,7 +2033,7 @@ export function AccountCenter() {
           method: "wallet_switchEthereumChain",
           params: [{ chainId: targetChainHex }],
         },
-        "切换钱包网络",
+        copy.chainSwitchError,
       );
     } catch (err: any) {
       const code = Number(err?.code);
@@ -2024,14 +2056,16 @@ export function AccountCenter() {
               },
               ],
             },
-            "添加 Polygon 网络",
+            copy.chainAddPolygon,
           );
           return;
         } catch (addErr: any) {
           err = addErr;
         }
       }
-      throw new Error(`请在钱包中手动切换到 Polygon (Matic) 网络后再试。(${err?.message || "网络切换失败"})`);
+      throw new Error(
+        `${copy.chainSwitchPrompt} (${err?.message || (isEn ? "Network switch failed" : "网络切换失败")})`,
+      );
     }
   };
 
@@ -3264,7 +3298,7 @@ export function AccountCenter() {
                 {/* 支付方式选择 Tabs */}
                 <div className="mt-6 border-t border-white/10 pt-6">
                   <p className="text-[10px] uppercase tracking-widest text-slate-500 mb-3 font-semibold">
-                    请选择支付方式 (Payment Method)
+                    {copy.paymentMethodLabel}
                   </p>
                   <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-black/40 border border-white/5 mb-5">
                     <button
@@ -3277,7 +3311,7 @@ export function AccountCenter() {
                       }`}
                     >
                       <Wallet size={12} />
-                      钱包快捷支付
+                      {copy.paymentMethodWallet}
                     </button>
                     <button
                       type="button"
@@ -3289,17 +3323,17 @@ export function AccountCenter() {
                       }`}
                     >
                       <ExternalLink size={12} />
-                      手动链上转账
+                      {copy.paymentMethodManual}
                     </button>
                   </div>
 
                   {paymentMethodTab === "wallet" ? (
                     <div className="space-y-4">
                       <p className="text-[11px] leading-relaxed text-slate-400">
-                        方式一：绑定您的 EVM 钱包（如 MetaMask 扩展或 WalletConnect 扫码），通过智能合约自动签名付款，额度即时到账。
+                        {copy.paymentWalletDesc}
                       </p>
                       <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-3 text-[11px] leading-relaxed text-amber-100">
-                        钱包里需要少量 Polygon POL/MATIC 作为 gas 手续费；只有 USDC 可能无法完成授权或支付。请确认当前钱包在 Polygon 网络，并预留一点 POL/MATIC 后再支付。
+                        {copy.paymentGasWarning}
                       </div>
                       
                       {boundWallets.length ? (
@@ -3407,17 +3441,17 @@ export function AccountCenter() {
                   ) : (
                     <div className="space-y-4">
                       <p className="text-[11px] leading-relaxed text-slate-400">
-                        方式二：无需将钱包绑定到账号，直接向平台收款合约转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。
+                        {copy.paymentManualDesc}
                       </p>
                       
                       <div className="rounded-2xl border border-emerald-400/25 bg-emerald-500/8 p-4">
                         <div className="flex flex-col gap-3">
                           <div>
                             <p className="text-xs font-bold text-emerald-200">
-                              手动转账（无需绑定钱包）
+                              {copy.paymentManualTitle}
                             </p>
                             <p className="mt-1 text-[11px] leading-relaxed text-emerald-100/75">
-                              先创建订单，向指定收款地址转账，完成后在此处提交 tx hash。请勿与钱包付款通道重复混用。
+                              {copy.paymentManualHint}
                             </p>
                           </div>
                           <button
@@ -3426,14 +3460,14 @@ export function AccountCenter() {
                             disabled={paymentBusy || !isAuthenticated}
                             className="w-full rounded-xl border border-emerald-400/35 bg-emerald-500/15 py-2.5 text-xs font-bold text-emerald-100 transition-all hover:bg-emerald-500/25 disabled:opacity-50"
                           >
-                            创建转账订单
+                            {copy.paymentManualCreate}
                           </button>
                         </div>
                         {manualPayment ? (
                           <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/25 p-3">
                             <div>
                               <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                                Amount
+                                {copy.paymentAmount}
                               </p>
                               <p className="font-mono text-sm font-bold text-white">
                                 {manualPayment.amount_usdc}{" "}
@@ -3442,7 +3476,7 @@ export function AccountCenter() {
                             </div>
                             <div>
                               <p className="text-[10px] uppercase tracking-widest text-slate-500">
-                                Receiver
+                                {copy.paymentReceiverLabel}
                               </p>
                               <div className="mt-1 flex gap-2">
                                 <code className="min-w-0 flex-1 break-all whitespace-normal rounded-lg bg-black/40 px-2 py-2 font-mono text-[11px] text-blue-200">
@@ -3455,7 +3489,7 @@ export function AccountCenter() {
                                   }
                                   className="rounded-lg bg-blue-600 px-2 text-xs font-bold text-white transition-colors hover:bg-blue-500"
                                 >
-                                  复制
+                                  {copy.paymentCopyAddress}
                                 </button>
                               </div>
                             </div>
@@ -3478,7 +3512,7 @@ export function AccountCenter() {
                               disabled={paymentBusy}
                               className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
                             >
-                              提交 tx hash 并自动确认
+                              {copy.paymentManualSubmit}
                             </button>
                           </div>
                         ) : null}
