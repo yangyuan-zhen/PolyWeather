@@ -156,6 +156,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         self.session = httpx.Client(
             timeout=self.timeout,
             follow_redirects=True,
+            trust_env=False,
             headers={"User-Agent": self.user_agent},
             limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
         )

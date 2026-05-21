@@ -158,3 +158,64 @@ def test_persisted_open_meteo_cooldown_skips_outbound_request(monkeypatch, tmp_p
     result = collector.fetch_multi_model(40.1281, 32.9951, city="ankara")
 
     assert result is None
+
+
+def test_multi_model_hourly_parser():
+    from src.data_collection.nws_open_meteo_sources import _parse_open_meteo_multi_model_hourly
+
+    hourly = {
+        "time": ["2026-05-21T00:00", "2026-05-21T01:00"],
+        "temperature_2m_ecmwf_ifs025": [15.2, 15.0],
+        "temperature_2m_gfs_seamless": [14.8, None],
+        "temperature_2m_icon_d2": [None, None],  # completely empty, should be ignored
+    }
+
+    times, forecasts = _parse_open_meteo_multi_model_hourly(hourly)
+
+    assert times == ["2026-05-21T00:00", "2026-05-21T01:00"]
+    assert forecasts["ECMWF"] == [15.2, 15.0]
+    assert forecasts["GFS"] == [14.8, None]
+    assert "ICON-D2" not in forecasts
+
+
+def test_merge_multi_model_result_with_cache_hourly():
+    from src.data_collection.nws_open_meteo_sources import _merge_multi_model_result_with_cache
+
+    cached = {
+        "forecasts": {"ECMWF": 20.0, "GFS": 19.5, "ICON-EU": 19.8},
+        "daily_forecasts": {
+            "2026-05-21": {"ECMWF": 20.0, "GFS": 19.5, "ICON-EU": 19.8}
+        },
+        "hourly_times": ["2026-05-21T00:00", "2026-05-21T01:00"],
+        "hourly_forecasts": {
+            "ECMWF": [15.2, 15.0],
+            "GFS": [14.8, 14.5],
+            "ICON-EU": [15.0, 14.8],
+        },
+    }
+
+    fresh = {
+        "forecasts": {"ECMWF": 20.2},  # Only ECMWF returned (e.g. subset refresh)
+        "daily_forecasts": {
+            "2026-05-21": {"ECMWF": 20.2}
+        },
+        "hourly_times": ["2026-05-21T01:00", "2026-05-21T02:00"],  # time shifts forward
+        "hourly_forecasts": {
+            "ECMWF": [15.1, 15.3],
+        },
+    }
+
+    merged = _merge_multi_model_result_with_cache(cached, fresh)
+
+    # Standard checks
+    assert merged["forecasts"]["ECMWF"] == 20.2
+    assert merged["forecasts"]["GFS"] == 19.5
+    assert merged["forecasts"]["ICON-EU"] == 19.8
+
+    # Hourly merge and alignment checks
+    assert merged["hourly_times"] == ["2026-05-21T01:00", "2026-05-21T02:00"]
+    # At T01:00, fresh has ECMWF=15.1, cached has GFS=14.5, ICON-EU=14.8
+    assert merged["hourly_forecasts"]["ECMWF"] == [15.1, 15.3]
+    assert merged["hourly_forecasts"]["GFS"] == [14.5, None]
+    assert merged["hourly_forecasts"]["ICON-EU"] == [14.8, None]
+

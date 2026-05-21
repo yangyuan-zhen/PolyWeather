@@ -139,6 +139,45 @@ def _parse_open_meteo_multi_model_daily(
     return [str(d) for d in dates], daily_forecasts, model_metadata, model_keys
 
 
+def _parse_open_meteo_multi_model_hourly(
+    hourly: Dict[str, Any],
+) -> tuple[list[str], Dict[str, list[Optional[float]]]]:
+    times = hourly.get("time", [])
+    if not isinstance(times, list):
+        times = []
+
+    hourly_times = [str(t) for t in times]
+    hourly_forecasts: Dict[str, list[Optional[float]]] = {}
+
+    for model_key, spec in OPEN_METEO_MULTI_MODEL_SPECS.items():
+        label = str(spec["label"])
+        key = f"temperature_2m_{model_key}"
+        values = hourly.get(key, [])
+        if not isinstance(values, list) or not values:
+            continue
+
+        parsed_values = []
+        has_valid = False
+        for v in values:
+            if v is None:
+                parsed_values.append(None)
+            else:
+                try:
+                    parsed_values.append(round(float(v), 1))
+                    has_valid = True
+                except (TypeError, ValueError):
+                    parsed_values.append(None)
+
+        if has_valid:
+            if len(parsed_values) < len(hourly_times):
+                parsed_values.extend([None] * (len(hourly_times) - len(parsed_values)))
+            elif len(parsed_values) > len(hourly_times):
+                parsed_values = parsed_values[:len(hourly_times)]
+            hourly_forecasts[label] = parsed_values
+
+    return hourly_times, hourly_forecasts
+
+
 def _count_models(values: Any) -> int:
     if not isinstance(values, dict):
         return 0
@@ -150,6 +189,38 @@ def _count_models(values: Any) -> int:
         except (TypeError, ValueError):
             continue
     return count
+
+
+def _get_hourly_by_time(
+    times: list[str],
+    forecasts: Dict[str, list[Optional[float]]],
+) -> Dict[str, Dict[str, float]]:
+    hourly_by_time: Dict[str, Dict[str, float]] = {}
+    for i, t_str in enumerate(times):
+        hour_data: Dict[str, float] = {}
+        for label, values in forecasts.items():
+            if i < len(values) and values[i] is not None:
+                hour_data[label] = values[i]
+        if hour_data:
+            hourly_by_time[t_str] = hour_data
+    return hourly_by_time
+
+
+def _reconstruct_hourly_forecasts(
+    merged_times: list[str],
+    merged_hourly_by_time: Dict[str, Dict[str, float]],
+) -> Dict[str, list[Optional[float]]]:
+    labels = set()
+    for hour_data in merged_hourly_by_time.values():
+        labels.update(hour_data.keys())
+
+    hourly_forecasts: Dict[str, list[Optional[float]]] = {}
+    for label in sorted(labels):
+        values = []
+        for t_str in merged_times:
+            values.append(merged_hourly_by_time[t_str].get(label))
+        hourly_forecasts[label] = values
+    return hourly_forecasts
 
 
 def _merge_multi_model_result_with_cache(
@@ -173,21 +244,51 @@ def _merge_multi_model_result_with_cache(
         merged_daily[str(date)] = (
             dict(fresh_day)
             if _count_models(fresh_day) >= _count_models(cached_day)
-            else {**dict(fresh_day), **dict(cached_day)}
+            else {**dict(cached_day), **dict(fresh_day)}
         )
+
+    # Merge hourly forecasts
+    cached_hourly_times = cached.get("hourly_times") or []
+    cached_hourly_forecasts = cached.get("hourly_forecasts") or {}
+    fresh_hourly_times = fresh.get("hourly_times") or []
+    fresh_hourly_forecasts = fresh.get("hourly_forecasts") or {}
+
+    cached_hourly_by_time = _get_hourly_by_time(cached_hourly_times, cached_hourly_forecasts)
+    fresh_hourly_by_time = _get_hourly_by_time(fresh_hourly_times, fresh_hourly_forecasts)
+
+    merged_hourly_by_time = {}
+    all_hourly_times = sorted({*cached_hourly_by_time.keys(), *fresh_hourly_by_time.keys()})
+
+    # Cutoff to keep cache size bounded: discard times before fresh starts
+    if fresh_hourly_times:
+        cutoff = fresh_hourly_times[0]
+        all_hourly_times = [t for t in all_hourly_times if t >= cutoff]
+
+    for t_str in all_hourly_times:
+        c_hour = cached_hourly_by_time.get(t_str) or {}
+        f_hour = fresh_hourly_by_time.get(t_str) or {}
+        merged_hourly_by_time[t_str] = (
+            dict(f_hour)
+            if _count_models(f_hour) >= _count_models(c_hour)
+            else {**dict(c_hour), **dict(f_hour)}
+        )
+
+    merged_hourly_forecasts = _reconstruct_hourly_forecasts(all_hourly_times, merged_hourly_by_time)
 
     merged = {
         **cached,
         **fresh,
-        "forecasts": {**dict(fresh_forecasts), **dict(cached_forecasts)},
+        "forecasts": {**dict(cached_forecasts), **dict(fresh_forecasts)},
         "daily_forecasts": merged_daily or cached_daily or fresh_daily,
+        "hourly_times": all_hourly_times,
+        "hourly_forecasts": merged_hourly_forecasts,
         "model_metadata": {
-            **(fresh.get("model_metadata") if isinstance(fresh.get("model_metadata"), dict) else {}),
             **(cached.get("model_metadata") if isinstance(cached.get("model_metadata"), dict) else {}),
+            **(fresh.get("model_metadata") if isinstance(fresh.get("model_metadata"), dict) else {}),
         },
         "model_keys": {
-            **(fresh.get("model_keys") if isinstance(fresh.get("model_keys"), dict) else {}),
             **(cached.get("model_keys") if isinstance(cached.get("model_keys"), dict) else {}),
+            **(fresh.get("model_keys") if isinstance(fresh.get("model_keys"), dict) else {}),
         },
         "partial_refresh": True,
         "partial_refresh_model_count": _count_models(fresh_forecasts),
@@ -728,6 +829,7 @@ class NwsOpenMeteoSourceMixin:
                 "latitude": lat,
                 "longitude": lon,
                 "daily": "temperature_2m_max",
+                "hourly": "temperature_2m",
                 "models": models,
                 "timezone": "auto",
                 "forecast_days": 3,
@@ -751,6 +853,13 @@ class NwsOpenMeteoSourceMixin:
                 _parse_open_meteo_multi_model_daily(daily)
             )
 
+            hourly = data.get("hourly", {})
+            if not isinstance(hourly, dict):
+                hourly = {}
+            hourly_times, hourly_forecasts = (
+                _parse_open_meteo_multi_model_hourly(hourly)
+            )
+
             if not daily_forecasts:
                 logger.warning("Multi-model: 无有效模型数据")
                 record_source_call("open_meteo", "multi_model", "empty", (time.perf_counter() - started) * 1000.0)
@@ -770,6 +879,8 @@ class NwsOpenMeteoSourceMixin:
                 "provider": "open-meteo",
                 "forecasts": forecasts,  # 今天 {"ECMWF": 12.3, "GFS": 11.8, ...} (向后兼容)
                 "daily_forecasts": daily_forecasts,  # 按天 {"2026-02-23": {...}, "2026-02-24": {...}}
+                "hourly_times": hourly_times,
+                "hourly_forecasts": hourly_forecasts,
                 "model_metadata": model_metadata,
                 "model_keys": model_keys,
                 "dates": dates,
