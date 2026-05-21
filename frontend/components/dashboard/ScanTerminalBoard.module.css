@@ -105,7 +105,7 @@
   padding-bottom: 12px;
 }
 
-@media (max-width: 1680px), (max-height: 900px) {
+@media (max-width: 1400px), (max-height: 860px) {
   .root :global(.scan-terminal.map-view-active > .detail-panel.scan-city-detail-rail) {
     display: none;
   }
