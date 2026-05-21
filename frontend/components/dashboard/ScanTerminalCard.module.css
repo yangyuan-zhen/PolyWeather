@@ -756,16 +756,21 @@
 }
 
 .root :global(.scan-ai-market-decision) {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
-  align-items: center;
+  align-items: flex-start;
   margin-top: 14px;
   border: 1px solid rgba(77, 163, 255, 0.18);
   border-radius: 14px;
   background: rgba(11, 18, 32, 0.44);
   padding: 12px;
   width: 100%;
+}
+
+.root :global(.scan-ai-market-decision > div:first-child) {
+  flex: 1 1 180px;
+  min-width: 0;
 }
 
 .root :global(.scan-ai-market-decision.warm) {
@@ -798,12 +803,13 @@
 }
 
 .root :global(.scan-ai-market-decision-stats) {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(82px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .root :global(.scan-ai-market-decision-stats small) {
+  flex: 1 1 72px;
   display: grid;
   gap: 3px;
   border-radius: 10px;
