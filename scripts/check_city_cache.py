@@ -6,7 +6,7 @@ TOK = "Bearer ZLuvwSsQvHSj2geIWfX7gjn9rJU_heOlgq0FBp7cUOgXaB2eHbE20R4PKwonP2FP"
 CITIES = [
     "london", "paris", "amsterdam", "helsinki", "istanbul", "ankara",
     "moscow", "new york", "los angeles", "chicago", "miami", "houston",
-    "lagos", "jeddah", "karachi", "tel aviv",
+    "jeddah", "karachi", "tel aviv",
 ]
 
 for city in CITIES:

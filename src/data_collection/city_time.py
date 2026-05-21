@@ -34,7 +34,6 @@ CITY_TIME_ZONES = {
     "jeddah": "Asia/Riyadh",
     "karachi": "Asia/Karachi",
     "kuala lumpur": "Asia/Kuala_Lumpur",
-    "lagos": "Africa/Lagos",
     "lau fau shan": "Asia/Hong_Kong",
     "london": "Europe/London",
     "los angeles": "America/Los_Angeles",

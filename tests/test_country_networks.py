@@ -66,7 +66,6 @@ def test_turkey_metar_uses_fast_cache_ttl():
 
     assert source._metar_cache_ttl_for_city("ankara", "LTAC") == 60
     assert source._metar_cache_ttl_for_city("istanbul", "LTFM") == 60
-    assert source._metar_cache_ttl_for_city("lagos", "DNMM") == 60
     assert source._metar_cache_ttl_for_city("karachi", "OPKC") == 600
 
 
@@ -88,12 +87,12 @@ def test_metar_marks_previous_local_day_report_stale(monkeypatch):
         def json(self):
             return [
                 {
-                    "rawOb": "METAR DNMM 200600Z 00000KT 9999 SCT015 26/25 Q1012",
+                    "rawOb": "METAR OPKC 200600Z 00000KT 9999 SCT015 26/25 Q1012",
                     "reportTime": "2026-04-20T06:00:00Z",
                     "receiptTime": "2026-04-20T06:12:07Z",
                     "temp": 26,
                     "dewp": 25,
-                    "name": "Murtala Muhammed International Airport",
+                    "name": "Jinnah International Airport",
                 }
             ]
 
@@ -107,7 +106,7 @@ def test_metar_marks_previous_local_day_report_stale(monkeypatch):
 
     monkeypatch.setattr(metar_sources, "datetime", FixedDateTime)
 
-    result = source.fetch_metar("lagos", utc_offset=3600)
+    result = source.fetch_metar("karachi", utc_offset=18000)
 
     assert result["stale_for_today"] is True
     assert result["observation_local_date"] == "2026-04-20"
