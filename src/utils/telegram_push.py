@@ -922,7 +922,7 @@ def _build_airport_status_message(
     runway_temps = runway_data.get("temperatures") or []
     point_temps = runway_data.get("point_temperatures") or []
     is_amsc = amos.get("source") in ("amsc_awos", "amos")
-    has_runway = bool(point_temps and (is_amsc or amos.get("runway_obs")))
+    has_runway = bool(is_amsc and (point_temps or runway_temps))
     amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     settlement_pair = _settlement_runway_for_city(city)
 
