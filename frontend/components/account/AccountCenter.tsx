@@ -244,6 +244,13 @@ const PAYMENT_RECOVERY_TTL_MS = 6 * 60 * 60 * 1000;
 const WALLET_REQUEST_TIMEOUT_MS = 60_000;
 const WALLET_TRANSACTION_REQUEST_TIMEOUT_MS = 120_000;
 
+function chainIdToDisplayName(chainId: number | undefined | null): string {
+  if (chainId === 137) return "Polygon (Matic)";
+  if (chainId === 1) return "Ethereum Mainnet";
+  if (chainId) return `Chain ID ${chainId}`;
+  return "Polygon (Matic)";
+}
+
 let walletConnectProviderCache: EvmProvider | null = null;
 let walletConnectProviderChainId: number | null = null;
 const eip6963Providers = new Map<string, Eip6963ProviderDetail>();
@@ -785,6 +792,7 @@ export function AccountCenter() {
       paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
       paymentWallet: isEn ? "Paying Wallet" : "付款钱包",
       paymentReceiver: isEn ? "Receiver Contract" : "当前收款合约",
+      paymentNetwork: isEn ? "Payment Network" : "支付网络",
       paymentHost: isEn ? "Payment Host" : "支付域名",
       primary: "Primary",
       polygonChain: isEn ? "Polygon (Matic) Network" : "Polygon (Matic) 网络",
@@ -3248,6 +3256,11 @@ export function AccountCenter() {
                     icon={ShieldCheck}
                     label={copy.paymentReceiver}
                     value={shortAddress(paymentReceiverAddress) || "--"}
+                  />
+                  <InfoRow
+                    icon={ExternalLink}
+                    label={copy.paymentNetwork}
+                    value={chainIdToDisplayName(paymentConfig?.chain_id)}
                   />
                   <InfoRow
                     icon={ExternalLink}
