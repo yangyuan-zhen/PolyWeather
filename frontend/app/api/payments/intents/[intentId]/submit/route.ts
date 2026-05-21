@@ -37,8 +37,14 @@ export async function POST(
     );
     if (!res.ok) {
       const raw = await res.text();
+      let detail = raw.slice(0, 350);
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed.detail) detail = String(parsed.detail).slice(0, 350);
+      } catch {}
       const response = buildUpstreamErrorResponse(res.status, raw, {
         detailLimit: 350,
+        error: detail || undefined,
       });
       return applyAuthResponseCookies(response, auth.response);
     }

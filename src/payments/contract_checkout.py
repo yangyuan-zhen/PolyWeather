@@ -1666,6 +1666,168 @@ class PaymentContractCheckoutService:
         except Exception:
             return {}
 
+    def validate_intent_tx(
+        self,
+        user_id: str,
+        intent_id: str,
+        tx_hash: str,
+    ) -> Dict[str, Any]:
+        """Pre-check a tx hash against an intent before submission.
+
+        Returns a validation report with ``valid`` and per-field checks.
+        Does NOT mutate any database state.
+        """
+        self._ensure_enabled()
+        intent = self.get_intent(user_id, intent_id)
+        tx_hash_text = str(tx_hash or "").strip().lower()
+        if not (tx_hash_text.startswith("0x") and len(tx_hash_text) == 66):
+            return {
+                "valid": False,
+                "reason": "invalid_tx_hash_format",
+                "checks": {"tx_hash_format": False},
+            }
+        if intent.status not in {"created", "submitted"}:
+            return {
+                "valid": False,
+                "reason": f"intent status is {intent.status}, cannot validate",
+                "checks": {"intent_status": intent.status},
+            }
+        now = _now_utc()
+        try:
+            expires_at = datetime.fromisoformat(intent.expires_at)
+        except Exception:
+            expires_at = now - timedelta(seconds=1)
+        if expires_at <= now:
+            return {
+                "valid": False,
+                "reason": "payment intent expired",
+                "checks": {"intent_expired": True},
+            }
+
+        w3 = self._get_web3()
+        try:
+            receipt = w3.eth.get_transaction_receipt(tx_hash_text)
+        except Exception:
+            try:
+                w3 = self._get_web3(force_refresh=True)
+                receipt = w3.eth.get_transaction_receipt(tx_hash_text)
+            except Exception:
+                receipt = None
+
+        if receipt is None:
+            return {
+                "valid": False,
+                "reason": "tx_not_mined",
+                "checks": {"tx_mined": False},
+            }
+        if int(receipt.get("status") or 0) != 1:
+            return {
+                "valid": False,
+                "reason": "tx_reverted",
+                "checks": {"tx_mined": True, "tx_status": "reverted"},
+            }
+
+        tx_to = _normalize_address(receipt.get("to") or "")
+        is_direct = intent.payment_mode == "direct"
+
+        checks: Dict[str, Any] = {
+            "tx_mined": True,
+            "tx_status": "success",
+            "tx_to": tx_to,
+            "block_number": int(receipt.get("blockNumber") or 0),
+        }
+
+        if is_direct:
+            event_match = self._extract_direct_transfer_event(receipt, intent)
+            if not event_match:
+                return {
+                    "valid": False,
+                    "reason": "direct_transfer_not_found",
+                    "detail": "ERC20 Transfer event not found on token contract. "
+                              "Ensure you transferred the correct token to the receiver address.",
+                    "checks": checks,
+                }
+            event_from = _normalize_address(event_match.get("from"))
+            event_to = _normalize_address(event_match.get("to"))
+            event_amount = int(event_match.get("amount_units") or 0)
+            expected_receiver = intent.receiver_address
+            expected_amount = int(intent.amount_units)
+
+            receiver_match = event_to == expected_receiver
+            amount_match = event_amount >= expected_amount
+
+            checks["event"] = "Transfer"
+            checks["event_from"] = event_from
+            checks["event_to"] = event_to
+            checks["event_amount"] = str(event_amount)
+            checks["expected_receiver"] = expected_receiver
+            checks["expected_amount"] = str(expected_amount)
+            checks["receiver_match"] = receiver_match
+            checks["amount_match"] = amount_match
+
+            if not receiver_match:
+                return {
+                    "valid": False,
+                    "reason": "receiver_mismatch",
+                    "detail": f"Transfer went to {event_to}, expected {expected_receiver}",
+                    "checks": checks,
+                }
+            if not amount_match:
+                return {
+                    "valid": False,
+                    "reason": "amount_insufficient",
+                    "detail": f"Transfer amount {event_amount} is less than expected {expected_amount}",
+                    "checks": checks,
+                }
+        else:
+            event_match = self._extract_matching_event(receipt, intent)
+            if not event_match:
+                return {
+                    "valid": False,
+                    "reason": "order_paid_event_not_found",
+                    "detail": "OrderPaid event not found. "
+                              "Ensure the tx was sent to the correct receiver contract.",
+                    "checks": checks,
+                }
+            event_payer = _normalize_address(event_match.get("payer"))
+            event_order_id = str(event_match.get("order_id_hex") or "")
+            event_plan_id = int(event_match.get("plan_id") or 0)
+            event_amount = int(event_match.get("amount_units") or 0)
+            event_token = _normalize_address(event_match.get("token_address") or "")
+
+            order_match = event_order_id == intent.order_id_hex.lower()
+            plan_match = event_plan_id == int(intent.plan_id)
+            token_match = event_token == intent.token_address
+            amount_match = event_amount == int(intent.amount_units)
+
+            checks["event"] = "OrderPaid"
+            checks["event_payer"] = event_payer
+            checks["order_id_match"] = order_match
+            checks["plan_id_match"] = plan_match
+            checks["token_match"] = token_match
+            checks["amount_match"] = amount_match
+            checks["event_amount"] = str(event_amount)
+            checks["expected_amount"] = str(intent.amount_units)
+
+            if not all([order_match, plan_match, token_match, amount_match]):
+                failures = []
+                if not order_match:
+                    failures.append(f"order_id mismatch: got {event_order_id}, expected {intent.order_id_hex.lower()}")
+                if not plan_match:
+                    failures.append(f"plan_id mismatch: got {event_plan_id}, expected {intent.plan_id}")
+                if not token_match:
+                    failures.append(f"token mismatch: got {event_token}, expected {intent.token_address}")
+                if not amount_match:
+                    failures.append(f"amount mismatch: got {event_amount}, expected {intent.amount_units}")
+                return {
+                    "valid": False,
+                    "reason": "event_mismatch",
+                    "detail": "; ".join(failures),
+                    "checks": checks,
+                }
+
+        return {"valid": True, "checks": checks}
+
     def submit_intent_tx(
         self,
         user_id: str,

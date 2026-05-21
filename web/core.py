@@ -376,6 +376,10 @@ class SubmitPaymentTxRequest(BaseModel):
     from_address: Optional[str] = None
 
 
+class ValidatePaymentTxRequest(BaseModel):
+    tx_hash: str = Field(..., min_length=10)
+
+
 class ConfirmPaymentTxRequest(BaseModel):
     tx_hash: Optional[str] = None
 

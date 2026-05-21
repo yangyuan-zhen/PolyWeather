@@ -945,6 +945,14 @@ export function AccountCenter() {
     CreatedIntent["direct_payment"] | null
   >(null);
   const [manualTxHash, setManualTxHash] = useState("");
+  const [txValidation, setTxValidation] = useState<{
+    loading: boolean;
+    checked: boolean;
+    valid?: boolean;
+    reason?: string;
+    detail?: string;
+    checks?: Record<string, unknown>;
+  }>({ loading: false, checked: false });
   const [paymentMethodTab, setPaymentMethodTab] = useState<"wallet" | "manual">("wallet");
   const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
   const [showSecondarySections, setShowSecondarySections] = useState(false);
@@ -1519,6 +1527,67 @@ export function AccountCenter() {
     loadSnapshot,
     reconcileBusy,
   ]);
+
+  const handleSubmit409 = useCallback(
+    async (intentId: string, txHashNorm: string, raw: string) => {
+      const lowerRaw = raw.toLowerCase();
+      // If intent was already confirmed (maybe by confirm loop), reconcile
+      if (
+        lowerRaw.includes("已支付") ||
+        lowerRaw.includes("already confirmed") ||
+        lowerRaw.includes("already paid")
+      ) {
+        const ok = await reconcileLatestPayment();
+        if (ok) return;
+        setPaymentInfo("该订单已支付，正在恢复订阅...");
+        await loadSnapshot();
+        await loadPaymentSnapshot();
+        return;
+      }
+      // If intent expired, tell user to create a new order
+      if (lowerRaw.includes("expired")) {
+        throw new Error("支付订单已过期（30分钟有效），请重新创建订单。");
+      }
+      // Try fetching intent status as fallback
+      try {
+        const headers = await buildAuthedHeaders(true, false);
+        const intentRes = await fetch(`/api/payments/intents/${intentId}`, {
+          headers,
+          cache: "no-store",
+        });
+        if (intentRes.ok) {
+          const intentJson = (await intentRes.json()) as {
+            intent?: { status?: string; tx_hash?: string };
+          };
+          const status = intentJson.intent?.status;
+          if (status === "confirmed") {
+            await reconcileLatestPayment();
+            const txHash =
+              intentJson.intent?.tx_hash || txHashNorm;
+            setPaymentInfo(
+              `支付已确认，交易: ${shortAddress(txHash)}`,
+            );
+            setPaymentError("");
+            await loadSnapshot();
+            await loadPaymentSnapshot();
+            return;
+          }
+          if (status === "expired") {
+            throw new Error("支付订单已过期（30分钟有效），请重新创建订单。");
+          }
+        }
+      } catch (e) {
+        if (e instanceof Error && e.message !== raw) throw e;
+      }
+      throw new Error(`submit tx failed: ${raw}`);
+    },
+    [
+      buildAuthedHeaders,
+      loadPaymentSnapshot,
+      loadSnapshot,
+      reconcileLatestPayment,
+    ],
+  );
 
   useEffect(() => {
     if (!authIsAuthenticated) return;
@@ -2535,6 +2604,10 @@ export function AccountCenter() {
       );
       if (!submitRes.ok) {
         const raw = (await submitRes.text()).slice(0, 350);
+        if (submitRes.status === 409) {
+          await handleSubmit409(intentId, txHashNorm, raw);
+          return;
+        }
         throw new Error(`submit tx failed: ${raw}`);
       }
 
@@ -2707,6 +2780,10 @@ export function AccountCenter() {
       );
       if (!submitRes.ok) {
         const raw = (await submitRes.text()).slice(0, 350);
+        if (submitRes.status === 409) {
+          await handleSubmit409(intentId, txHashNorm, raw);
+          return;
+        }
         throw new Error(`submit tx failed: ${raw}`);
       }
       const confirmRes = await fetch(
@@ -2738,6 +2815,7 @@ export function AccountCenter() {
       setPaymentInfo(`支付确认成功，交易: ${shortAddress(txHashNorm)}`);
       setManualPayment(null);
       setManualTxHash("");
+      setTxValidation({ loading: false, checked: false });
       trackAppEvent("checkout_succeeded", {
         entry: "account_center_manual_transfer",
         plan_code: selectedPlan?.plan_code || "pro_monthly",
@@ -2752,6 +2830,42 @@ export function AccountCenter() {
       setPaymentBusy(false);
     }
   };
+
+  const validateTxHash = useCallback(
+    async (intentId: string, hash: string) => {
+      const hashNorm = String(hash || "").trim().toLowerCase();
+      if (!hashNorm.startsWith("0x") || hashNorm.length !== 66) {
+        setTxValidation({ loading: false, checked: false });
+        return;
+      }
+      setTxValidation({ loading: true, checked: false });
+      try {
+        const headers = await buildAuthedHeaders(true, false);
+        const res = await fetch(`/api/payments/intents/${intentId}/validate`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ tx_hash: hashNorm }),
+        });
+        const json = (await res.json()) as {
+          valid?: boolean;
+          reason?: string;
+          detail?: string;
+          checks?: Record<string, unknown>;
+        };
+        setTxValidation({
+          loading: false,
+          checked: true,
+          valid: Boolean(json.valid),
+          reason: json.reason,
+          detail: json.detail,
+          checks: json.checks,
+        });
+      } catch {
+        setTxValidation({ loading: false, checked: false });
+      }
+    },
+    [buildAuthedHeaders],
+  );
 
   const handleOverlayCheckout = async () => {
     if (!paymentHostAllowed) {
@@ -3512,17 +3626,53 @@ export function AccountCenter() {
                               </p>
                               <input
                                 value={manualTxHash}
-                                onChange={(event) =>
-                                  setManualTxHash(event.target.value)
-                                }
+                                onChange={(event) => {
+                                  setManualTxHash(event.target.value);
+                                  void validateTxHash(
+                                    manualPayment.intent_id ||
+                                      lastIntentId ||
+                                      "",
+                                    event.target.value,
+                                  );
+                                }}
                                 placeholder="0x..."
                                 className="mt-1 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 font-mono text-xs text-slate-100 outline-none focus:border-emerald-400/50"
                               />
+                              {txValidation.loading ? (
+                                <p className="mt-1 text-[10px] text-slate-500">
+                                  验证中...
+                                </p>
+                              ) : txValidation.checked && txValidation.valid ? (
+                                <p className="mt-1 text-[10px] text-emerald-400">
+                                  收款地址和金额匹配
+                                </p>
+                              ) : txValidation.checked &&
+                                txValidation.valid === false ? (
+                                <p className="mt-1 text-[10px] text-red-400">
+                                  {txValidation.reason ===
+                                  "tx_not_mined"
+                                    ? "交易未上链，请等待"
+                                    : txValidation.reason === "receiver_mismatch"
+                                      ? "收款地址不匹配！请检查是否转到了正确的地址"
+                                      : txValidation.reason ===
+                                          "amount_insufficient"
+                                        ? "转账金额不足"
+                                        : txValidation.reason === "tx_reverted"
+                                          ? "该交易已回滚"
+                                          : txValidation.detail ||
+                                            "验证失败: " +
+                                              (txValidation.reason ||
+                                                "未知错误")}
+                                </p>
+                              ) : null}
                             </div>
                             <button
                               type="button"
                               onClick={() => void submitManualPaymentTx()}
-                              disabled={paymentBusy}
+                              disabled={
+                                paymentBusy ||
+                                (txValidation.checked && !txValidation.valid)
+                              }
                               className="w-full rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-500 disabled:opacity-50"
                             >
                               {copy.paymentManualSubmit}

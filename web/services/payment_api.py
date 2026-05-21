@@ -11,6 +11,7 @@ from web.core import (
     ConfirmPaymentTxRequest,
     CreatePaymentIntentRequest,
     SubmitPaymentTxRequest,
+    ValidatePaymentTxRequest,
     WalletChallengeRequest,
     WalletUnbindRequest,
     WalletVerifyRequest,
@@ -150,6 +151,22 @@ def submit_payment_tx(
             intent_id=intent_id,
             tx_hash=body.tx_hash,
             from_address=body.from_address,
+        )
+    except legacy_routes.PaymentCheckoutError as exc:
+        _raise_payment_error(exc)
+
+
+def validate_payment_tx(
+    request: Request,
+    intent_id: str,
+    body: ValidatePaymentTxRequest,
+) -> Dict[str, Any]:
+    identity = _require_payment_identity(request)
+    try:
+        return legacy_routes.PAYMENT_CHECKOUT.validate_intent_tx(
+            user_id=identity["user_id"],
+            intent_id=intent_id,
+            tx_hash=body.tx_hash,
         )
     except legacy_routes.PaymentCheckoutError as exc:
         _raise_payment_error(exc)

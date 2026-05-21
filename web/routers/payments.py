@@ -6,6 +6,7 @@ from web.core import (
     ConfirmPaymentTxRequest,
     CreatePaymentIntentRequest,
     SubmitPaymentTxRequest,
+    ValidatePaymentTxRequest,
     WalletChallengeRequest,
     WalletUnbindRequest,
     WalletVerifyRequest,
@@ -21,6 +22,7 @@ from web.services.payment_api import (
     reconcile_latest_payment,
     submit_payment_tx as submit_payment_tx_service,
     unbind_payment_wallet,
+    validate_payment_tx,
     verify_payment_wallet,
 )
 
@@ -65,6 +67,15 @@ async def payment_create_intent(request: Request, body: CreatePaymentIntentReque
 @router.get("/api/payments/intents/{intent_id}")
 async def payment_get_intent(request: Request, intent_id: str):
     return get_payment_intent(request, intent_id)
+
+
+@router.post("/api/payments/intents/{intent_id}/validate")
+async def payment_validate_tx(
+    request: Request,
+    intent_id: str,
+    body: ValidatePaymentTxRequest,
+):
+    return validate_payment_tx(request, intent_id, body)
 
 
 @router.post("/api/payments/intents/{intent_id}/submit")
