@@ -5,6 +5,7 @@
   right: 0;
   width: var(--panel-width);
   height: 100vh;
+  height: 100dvh;
   z-index: 950;
   background: linear-gradient(
     180deg,
@@ -12,6 +13,7 @@
     rgba(15, 23, 42, 0.95) 100%
   );
   backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-left: 1px solid var(--border-glass);
   box-shadow: -10px 0 60px rgba(0, 0, 0, 0.5);
   transform: translateX(100%);
