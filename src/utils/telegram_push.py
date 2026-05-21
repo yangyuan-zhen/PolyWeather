@@ -921,7 +921,8 @@ def _build_airport_status_message(
     runway_pairs = runway_data.get("runway_pairs") or []
     runway_temps = runway_data.get("temperatures") or []
     point_temps = runway_data.get("point_temperatures") or []
-    is_amsc = amos.get("source") == "amsc_awos"
+    is_amsc = amos.get("source") in ("amsc_awos", "amos")
+    has_runway = bool(point_temps and (is_amsc or amos.get("runway_obs")))
     amos_icao = amos.get("icao") or HIGH_FREQ_AIRPORT_ICAO.get(city, "")
     settlement_pair = _settlement_runway_for_city(city)
 
@@ -964,8 +965,6 @@ def _build_airport_status_message(
     wind_label = _wind_regime_label(city, wind_dir) if is_amsc and wind_dir is not None else None
 
     max_so_far, max_temp_time = _get_airport_daily_high(city_weather)
-    has_runway = bool(is_amsc and point_temps)
-
     # ── Build message ──
     lines: List[str] = []
 
