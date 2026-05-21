@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import json
 from datetime import datetime, timedelta
@@ -138,6 +140,83 @@ def _collapse_forecasts_for_deb(current_forecasts):
     for rep in representatives.values():
         collapsed[rep["name"]] = rep["value"]
     return collapsed
+
+
+def compute_hourly_model_errors(
+    hourly_forecasts: dict[str, list[float]],
+    hourly_actuals: list[float],
+) -> dict[str, dict[str, float]]:
+    """
+    Compute per-model hourly error aggregation for a single day.
+
+    hourly_forecasts: {model_name: [t0, t1, ..., tN]}  — N-hour forecast per model
+    hourly_actuals:  [t0, t1, ..., tM]                 — actual hourly temps
+
+    Returns: {model_name: {"mae": float, "rmse": float, "samples": int}}
+    """
+    if not hourly_actuals or not hourly_forecasts:
+        return {}
+
+    n = min(len(hourly_actuals), min(len(v) for v in hourly_forecasts.values()))
+    if n < 6:  # require at least 6 valid hours
+        return {}
+
+    actuals = hourly_actuals[:n]
+    result: dict[str, dict[str, float]] = {}
+
+    for model, preds in hourly_forecasts.items():
+        if not isinstance(preds, (list, tuple)) or len(preds) < n:
+            continue
+        try:
+            valid = preds[:n]
+        except (TypeError, IndexError):
+            continue
+
+        abs_errors = []
+        sq_errors = []
+        for p, a in zip(valid, actuals):
+            try:
+                pv = float(p)
+                av = float(a)
+            except (TypeError, ValueError):
+                continue
+            abs_errors.append(abs(pv - av))
+            sq_errors.append((pv - av) ** 2)
+
+        samples = len(abs_errors)
+        if samples < 6:
+            continue
+
+        mae = sum(abs_errors) / samples
+        rmse = (sum(sq_errors) / samples) ** 0.5
+        result[model] = {"mae": round(mae, 2), "rmse": round(rmse, 2), "samples": samples}
+
+    return result
+
+
+def _blend_mae(daily_mae: float, hourly_error: dict[str, float] | None) -> float:
+    """
+    Blend daily MAE and hourly MAE into a single error metric.
+
+    hourly_error  = {"mae": float, "rmse": float, "samples": int}
+
+    Weight split: daily=0.3, hourly=0.7 when hourly samples >= 24;
+    scales linearly from daily-only (0 samples) to full blend (≥24 samples).
+    """
+    if not hourly_error or not isinstance(hourly_error, dict):
+        return daily_mae
+
+    h_mae = float(hourly_error.get("mae", daily_mae))
+    h_samples = int(hourly_error.get("samples", 0))
+
+    if h_samples < 6:
+        return daily_mae
+
+    # Blend ratio: the more hourly samples, the more we trust hourly MAE
+    h_weight = min(0.7, h_samples / 24 * 0.7)
+    d_weight = 1.0 - h_weight
+
+    return round(daily_mae * d_weight + h_mae * h_weight, 2)
 
 
 def load_history(filepath):
@@ -800,6 +879,7 @@ def update_daily_record(
     probability_features=None,
     shadow_probabilities=None,
     calibration_summary=None,
+    hourly_error=None,
 ):
     """
     保存/更新某城市某天的各个模型预报与最终实测值
@@ -809,6 +889,7 @@ def update_daily_record(
     mu: float, 概率引擎中心值（用于 μ MAE 追踪）
     probabilities: list[dict], 概率分布快照（用于 Brier Score 校准）
         例如 [{"value": 25, "probability": 0.8}, {"value": 26, "probability": 0.2}]
+    hourly_error: dict, 逐模型小时级误差聚合 {"ECMWF": {"mae": 1.1, "rmse": 1.4, "samples": 68}, ...}
     """
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -882,6 +963,27 @@ def update_daily_record(
             merged_forecasts[model_name] = model_value
         elif model_name not in merged_forecasts:
             merged_forecasts[model_name] = model_value
+    old_hourly_error = existing.get("hourly_error")
+    # Merge hourly_error: keep existing per-model data and overlay new values
+    merged_hourly_error = dict(old_hourly_error) if isinstance(old_hourly_error, dict) else {}
+    if isinstance(hourly_error, dict):
+        for model, err in hourly_error.items():
+            if isinstance(err, dict) and all(
+                k in err for k in ("mae", "samples")
+            ):
+                # Prefer the entry with more samples
+                old_entry = merged_hourly_error.get(model)
+                if (
+                    not isinstance(old_entry, dict)
+                    or int(err.get("samples", 0)) >= int(old_entry.get("samples", 0))
+                ):
+                    merged_hourly_error[model] = {
+                        "mae": round(float(err["mae"]), 2),
+                        "rmse": round(float(err.get("rmse", err["mae"])), 2),
+                        "samples": int(err["samples"]),
+                    }
+    next_hourly_error = merged_hourly_error if merged_hourly_error else None
+
     next_mu = round(mu, 2) if mu is not None else None
     if (
         old_actual == actual_high
@@ -901,6 +1003,7 @@ def update_daily_record(
             compact_calibration is None
             or existing.get("probability_calibration") == compact_calibration
         )
+        and old_hourly_error == next_hourly_error
     ):
         return
 
@@ -925,6 +1028,8 @@ def update_daily_record(
         existing["shadow_prob_snapshot"] = compact_shadow_probs
     if compact_calibration is not None:
         existing["probability_calibration"] = compact_calibration
+    if next_hourly_error is not None:
+        existing["hourly_error"] = next_hourly_error
 
     if actual_high is not None:
         try:
@@ -1025,6 +1130,7 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
         record = city_data[date_str]
         actual = record.get("actual_high")
         past_forecasts = record.get("forecasts", {})
+        past_hourly_error = record.get("hourly_error")
 
         if actual is None:
             continue
@@ -1038,7 +1144,15 @@ def calculate_dynamic_weights(city_name, current_forecasts, lookback_days=7, dec
                     av = float(actual)
                 except (TypeError, ValueError):
                     continue
-                errors[model].append((abs(pv - av), decay_weight))
+                daily_error = abs(pv - av)
+                # Blend with hourly error when available
+                h_err = (
+                    past_hourly_error.get(model)
+                    if isinstance(past_hourly_error, dict)
+                    else None
+                )
+                blended_error = _blend_mae(daily_error, h_err)
+                errors[model].append((blended_error, decay_weight))
 
         days_used += 1
         if days_used >= lookback_days:
