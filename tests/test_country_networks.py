@@ -53,11 +53,11 @@ def test_paris_registry_uses_le_bourget_anchor():
     paris = CITY_REGISTRY["paris"]
 
     assert paris["icao"] == "LFPB"
-    assert paris["settlement_source"] == "metar"
+    assert paris["settlement_source"] == "aeroweb"
     assert paris["settlement_station_code"] == "LFPB"
     assert "bonneuil-en-france/LFPB" in paris["settlement_url"]
     assert CITIES["paris"]["lat"] == paris["lat"]
-    assert CITIES["paris"]["settlement_source"] == "metar"
+    assert CITIES["paris"]["settlement_source"] == "aeroweb"
     assert _DummyMetarSource.CITY_TO_ICAO["paris"] == "LFPB"
 
 
