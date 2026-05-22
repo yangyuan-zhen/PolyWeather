@@ -11,15 +11,15 @@ from src.utils.metrics import record_source_call
 class ImsSourceMixin:
     """Fetch realtime observations from Israel Meteorological Service (IMS).
 
-    The IMS public API at /en/hourly_observations returns a JSON payload with
-    data.hourly_observations_map keyed by timestamp and station ID, covering all
-    active IMS stations for the current day.
+    Uses the hourly_observations_full endpoint which provides 10-minute data.
+    In this feed, TD = Temperature Dry (dry-bulb in °C), NOT dew point.
+    TT / TX1 / TN1 only exist in the plain hourly_observations endpoint.
 
     Station 225 = Lod Airport (Ben Gurion / LLBG), elevation 40 m.
     """
 
     IMS_LOD_AIRPORT_STATION = "225"
-    IMS_OBSERVATIONS_URL = "https://ims.gov.il/en/hourly_observations"
+    IMS_OBSERVATIONS_URL = "https://ims.gov.il/en/hourly_observations_full"
 
     def fetch_from_ims(self, station_id: str = "225") -> Optional[Dict]:
         started = datetime.now()
@@ -46,8 +46,8 @@ class ImsSourceMixin:
                 record_source_call("ims", "station", "empty", _elapsed_ms())
                 return None
 
-            def _f(key: str) -> Optional[float]:
-                raw = latest.get(key)
+            def _f(key: str, source: dict = latest) -> Optional[float]:
+                raw = source.get(key)
                 if raw is None:
                     return None
                 try:
@@ -55,15 +55,25 @@ class ImsSourceMixin:
                 except (ValueError, TypeError):
                     return None
 
-            temp = _f("TT")
+            # TD = Temperature Dry (dry-bulb °C) in the 10-minute feed
+            temp = _f("TD")
             rh = _f("RH")
-            wind_kmh = _f("FF")
-            wind_dir = _f("DD")
-            tx1 = _f("TX1")
-            tn1 = _f("TN1")
-            td = _f("TD")
+            # WS = wind speed in m/s (10-min average); convert to km/h and knots
+            wind_ms = _f("WS")
+            wind_kmh = round(wind_ms * 3.6, 1) if wind_ms is not None else None
+            wind_kt = round(wind_ms * 1.94384, 1) if wind_ms is not None else None
+            wind_dir = _f("WD")
 
-            wind_kt = round(wind_kmh / 1.852, 1) if wind_kmh is not None else None
+            # Compute max / min so far today from all 10-min slots
+            today_prefix = latest_time[:10]
+            td_vals = []
+            for t, stations in obs_map.items():
+                if t.startswith(today_prefix):
+                    td = _f("TD", source=(stations.get(station_id) or {}))
+                    if td is not None:
+                        td_vals.append(td)
+            max_so_far = round(max(td_vals), 1) if td_vals else None
+            min_so_far = round(min(td_vals), 1) if td_vals else None
 
             result: Dict = {
                 "current": {
@@ -72,9 +82,8 @@ class ImsSourceMixin:
                     "wind_speed_kmh": wind_kmh,
                     "wind_speed_kt": wind_kt,
                     "wind_dir": wind_dir,
-                    "dew_point": td,
-                    "max_temp_so_far": tx1,
-                    "min_temp_so_far": tn1,
+                    "max_temp_so_far": max_so_far,
+                    "min_temp_so_far": min_so_far,
                 },
                 "obs_time": latest_time,
                 "station_id": station_id,
@@ -85,12 +94,14 @@ class ImsSourceMixin:
             }
             record_source_call("ims", "station", "success", _elapsed_ms())
             logger.info(
-                "IMS Lod Airport (s{}) {}: temp={}°C RH={}% wind={}km/h",
+                "IMS Lod Airport (s{}) {}: temp={}°C RH={}% wind={}km/h max={} min={}",
                 station_id,
                 latest_time,
                 temp,
                 rh,
                 wind_kmh,
+                max_so_far,
+                min_so_far,
             )
             return result
 
