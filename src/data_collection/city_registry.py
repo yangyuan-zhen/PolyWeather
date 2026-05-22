@@ -298,6 +298,9 @@ CITY_REGISTRY = {
         "airport_name": "Ben Gurion 机场",
         "distance_km": 14.8,
         "warning": "海陆风转换明显，午后海风可压制升温，最高温时点可能后移。",
+        "settlement_source": "ims",
+        "settlement_station_code": "225",
+        "settlement_station_label": "Lod Airport",
     },
     "toronto": {
         "name": "Toronto",

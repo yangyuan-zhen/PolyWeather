@@ -186,6 +186,8 @@ def _provider_code_for_city(city: str) -> str:
         return "turkey_mgm"
     if normalized in {"busan", "seoul"}:
         return "korea_kma"
+    if normalized == "tel aviv":
+        return "israel_ims"
     if normalized == "moscow":
         return "russia_metar_cluster"
     if settlement_source == "hko":
@@ -414,6 +416,39 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
                 "wind_speed_kt": _safe_float(current.get("wind_speed_kt")),
                 "wind_dir": _safe_float(current.get("wind_dir")),
                 "humidity": _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    ims = raw.get("ims") or {}
+    ims_current = ims.get("current") or {}
+    if ims_current.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or ims.get("station_id") or "LLBG",
+            station_label=meta.get("airport_name") or ims.get("station_label") or "Ben Gurion Airport",
+            temp=_safe_float(ims_current["temp"]),
+            obs_time=ims.get("obs_time") or metar.get("observation_time"),
+            source_code="ims",
+            source_label="IMS Lod Airport",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(ims_current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(ims_current.get("wind_speed_kt"))
+                or _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(ims_current.get("wind_dir"))
+                or _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(ims_current.get("humidity"))
+                or _safe_float(current.get("humidity")),
                 "visibility_mi": _safe_float(current.get("visibility_mi")),
                 "wx_desc": current.get("wx_desc"),
                 "raw_metar": current.get("raw_metar"),
@@ -869,6 +904,51 @@ class RussiaStationWebNetworkProvider(CountryNetworkProvider):
         }
 
 
+class IsraelImsNetworkProvider(CountryNetworkProvider):
+    def __init__(self) -> None:
+        super().__init__("israel_ims", "IMS Lod Airport")
+
+    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        ims = raw.get("ims") or {}
+        ims_current = ims.get("current") or {}
+        if ims_current.get("temp") is not None:
+            row = _normalize_station_row(
+                station_code="LLBG",
+                station_label=ims.get("station_label") or "Lod Airport",
+                temp=ims_current.get("temp"),
+                lat=ims.get("lat"),
+                lon=ims.get("lon"),
+                obs_time=ims.get("obs_time"),
+                source_code="ims",
+                source_label="IMS Lod Airport",
+                is_official=True,
+                is_airport_station=True,
+                is_settlement_anchor=False,
+            )
+            return [row]
+        return _metar_cluster_rows(raw)
+
+    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        ims = raw.get("ims") or {}
+        has_ims = (ims.get("current") or {}).get("temp") is not None
+        if has_ims:
+            return {
+                "provider_code": self.provider_code,
+                "provider_label": self.provider_label,
+                "available": True,
+                "mode": "official_active",
+                "row_count": 1,
+            }
+        rows = _metar_cluster_rows(raw)
+        return {
+            "provider_code": self.provider_code,
+            "provider_label": self.provider_label,
+            "available": bool(rows),
+            "mode": "fallback_metar_cluster" if rows else "no_official_network",
+            "row_count": len(rows),
+        }
+
+
 class HongKongHkoNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("hongkong_hko", "HKO")
@@ -899,6 +979,8 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return JapanJmaNetworkProvider()
     if provider_code == "china_cma":
         return ChinaCmaNetworkProvider()
+    if provider_code == "israel_ims":
+        return IsraelImsNetworkProvider()
     if provider_code == "hongkong_hko":
         return HongKongHkoNetworkProvider()
     if provider_code == "taiwan_cwa":
