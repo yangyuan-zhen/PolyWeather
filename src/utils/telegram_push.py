@@ -1236,12 +1236,15 @@ def _process_airport_city(
         if not current_obs_time:
             current_obs_time = str(airport_primary.get("obs_time") or "")
     if city == "paris":
-        arome_temp = _fetch_arome_temp()
-        if arome_temp is not None:
-            current_temp = arome_temp
-            city_weather.setdefault("current", {})["temp"] = arome_temp
-            if not current_obs_time:
-                current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+        # AEROWEB provides real observations; prefer over AROME model nowcast
+        airport_primary = city_weather.get("airport_primary") or {}
+        if airport_primary.get("source_code") != "aeroweb":
+            arome_temp = _fetch_arome_temp()
+            if arome_temp is not None:
+                current_temp = arome_temp
+                city_weather.setdefault("current", {})["temp"] = arome_temp
+                if not current_obs_time:
+                    current_obs_time = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
     if current_temp is None or deb_pred is None:
         return None
 

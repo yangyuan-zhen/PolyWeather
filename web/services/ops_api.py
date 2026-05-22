@@ -611,7 +611,7 @@ def get_ops_logs(
 
     # Fallback to local log file if docker logs returns empty
     if not log_text.strip():
-        log_file = "data/logs/trading_system.log"
+        log_file = "data/logs/polyweather.log"
         if os.path.exists(log_file):
             try:
                 with open(log_file, "r", encoding="utf-8", errors="ignore") as f:

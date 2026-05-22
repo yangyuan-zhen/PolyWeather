@@ -20,10 +20,12 @@ from src.data_collection.hko_obs_sources import HkoObsSourceMixin
 from src.data_collection.madis_sources import MadisSourceMixin
 from src.data_collection.singapore_mss_sources import SingaporeMssSourceMixin
 from src.data_collection.ims_sources import ImsSourceMixin
+from src.data_collection.ncm_sources import NcmSourceMixin
+from src.data_collection.aeroweb_sources import AerowebSourceMixin
 from src.database.db_manager import DBManager
 
 
-class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin):
+class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSourceMixin, MgmSourceMixin, JmaAmedasSourceMixin, NwsOpenMeteoSourceMixin, AmosStationSourceMixin, AmscAwosSourceMixin, FmiSourceMixin, KnmiSourceMixin, HkoObsSourceMixin, MadisSourceMixin, SingaporeMssSourceMixin, ImsSourceMixin, NcmSourceMixin, AerowebSourceMixin):
     """
     Multi-source weather data collector
 
@@ -859,7 +861,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         if (
             city_lower not in self.CITY_METAR_CLUSTERS
             or "mgm_nearby" in results
-            or settlement_source in {"hko", "cwa", "ims"}
+            or settlement_source in {"hko", "cwa", "ims", "ncm", "aeroweb"}
         ):
             return
         cluster_icaos = self.CITY_METAR_CLUSTERS[city_lower]
@@ -904,6 +906,42 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 )
             except Exception:
                 logger.exception("airport_obs_log append failed for ims city={}", city_lower)
+
+    def _attach_saudi_ncm_data(self, results: Dict, city_lower: str) -> None:
+        if city_lower != "jeddah":
+            return
+        ncm_data = self.fetch_from_ncm()
+        if ncm_data:
+            results["ncm"] = ncm_data
+            try:
+                ncm_current = ncm_data.get("current") or {}
+                DBManager().append_airport_obs(
+                    icao="OEJN",
+                    city=city_lower,
+                    temp_c=ncm_current.get("temp"),
+                    wind_kt=ncm_current.get("wind_speed_kt"),
+                    obs_time=ncm_data.get("obs_time") or datetime.now().isoformat(),
+                )
+            except Exception:
+                logger.exception("airport_obs_log append failed for ncm city={}", city_lower)
+
+    def _attach_paris_aeroweb_data(self, results: Dict, city_lower: str) -> None:
+        if city_lower != "paris":
+            return
+        aw_data = self.fetch_from_aeroweb()
+        if aw_data:
+            results["aeroweb"] = aw_data
+            try:
+                aw_current = aw_data.get("current") or {}
+                DBManager().append_airport_obs(
+                    icao="LFPB",
+                    city=city_lower,
+                    temp_c=aw_current.get("temp"),
+                    wind_kt=aw_current.get("wind_speed_kt"),
+                    obs_time=aw_data.get("obs_time") or datetime.now().isoformat(),
+                )
+            except Exception:
+                logger.exception("airport_obs_log append failed for aeroweb city={}", city_lower)
 
     def _attach_china_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
@@ -1384,6 +1422,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 self._attach_madis_hfmetar_data(results, city_lower)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
+                self._attach_saudi_ncm_data(results, city_lower)
+                self._attach_paris_aeroweb_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)
@@ -1433,6 +1473,8 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
                 self._attach_madis_hfmetar_data(results, city_lower)
                 self._attach_singapore_mss_data(results, city_lower)
                 self._attach_israel_ims_data(results, city_lower)
+                self._attach_saudi_ncm_data(results, city_lower)
+                self._attach_paris_aeroweb_data(results, city_lower)
                 if include_nearby:
                     self._attach_china_official_nearby(results, city_lower, use_fahrenheit)
                     self._attach_japan_official_nearby(results, city_lower, use_fahrenheit)

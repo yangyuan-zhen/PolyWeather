@@ -188,6 +188,10 @@ def _provider_code_for_city(city: str) -> str:
         return "korea_kma"
     if normalized == "tel aviv":
         return "israel_ims"
+    if normalized == "jeddah":
+        return "saudi_ncm"
+    if normalized == "paris":
+        return "fr_aeroweb"
     if normalized == "moscow":
         return "russia_metar_cluster"
     if settlement_source == "hko":
@@ -422,6 +426,39 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
             },
         )
 
+    aeroweb = raw.get("aeroweb") or {}
+    aw_current = aeroweb.get("current") or {}
+    if aw_current.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or "LFPB",
+            station_label=meta.get("airport_name") or aeroweb.get("station_label") or "Paris Le Bourget (AEROWEB)",
+            temp=_safe_float(aw_current["temp"]),
+            obs_time=aeroweb.get("obs_time") or metar.get("observation_time"),
+            source_code="aeroweb",
+            source_label="AEROWEB",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(aw_current.get("wind_speed_kt"))
+                or _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(aw_current.get("wind_dir"))
+                or _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(current.get("humidity")),
+                "pressure": _safe_float(aw_current.get("pressure")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": aw_current.get("raw_metar") or current.get("raw_metar"),
+            },
+        )
+
     ims = raw.get("ims") or {}
     ims_current = ims.get("current") or {}
     if ims_current.get("temp") is not None:
@@ -449,6 +486,39 @@ def _airport_primary_from_raw(city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
                 or _safe_float(current.get("wind_dir")),
                 "humidity": _safe_float(ims_current.get("humidity"))
                 or _safe_float(current.get("humidity")),
+                "visibility_mi": _safe_float(current.get("visibility_mi")),
+                "wx_desc": current.get("wx_desc"),
+                "raw_metar": current.get("raw_metar"),
+            },
+        )
+
+    ncm = raw.get("ncm") or {}
+    ncm_current = ncm.get("current") or {}
+    if ncm_current.get("temp") is not None:
+        return _normalize_station_row(
+            station_code=meta.get("icao") or "OEJN",
+            station_label=meta.get("airport_name") or ncm.get("station_label") or "King Abdulaziz Intl (NCM)",
+            temp=_safe_float(ncm_current["temp"]),
+            obs_time=ncm.get("obs_time") or metar.get("observation_time"),
+            source_code="ncm",
+            source_label="Saudi NCM",
+            is_official=True,
+            is_airport_station=True,
+            is_settlement_anchor=False,
+            extra={
+                "max_so_far": _safe_float(current.get("max_temp_so_far")),
+                "max_temp_time": current.get("max_temp_time"),
+                "obs_age_min": None,
+                "report_time": metar.get("report_time"),
+                "receipt_time": metar.get("receipt_time"),
+                "obs_time_epoch": metar.get("obs_time_epoch"),
+                "obs_time_utc_offset_seconds": 0,
+                "wind_speed_kt": _safe_float(ncm_current.get("wind_speed_kt"))
+                or _safe_float(current.get("wind_speed_kt")),
+                "wind_dir": _safe_float(current.get("wind_dir")),
+                "humidity": _safe_float(ncm_current.get("humidity"))
+                or _safe_float(current.get("humidity")),
+                "pressure": _safe_float(ncm_current.get("pressure")),
                 "visibility_mi": _safe_float(current.get("visibility_mi")),
                 "wx_desc": current.get("wx_desc"),
                 "raw_metar": current.get("raw_metar"),
@@ -949,6 +1019,96 @@ class IsraelImsNetworkProvider(CountryNetworkProvider):
         }
 
 
+class AerowebNetworkProvider(CountryNetworkProvider):
+    def __init__(self) -> None:
+        super().__init__("fr_aeroweb", "AEROWEB")
+
+    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        aw = raw.get("aeroweb") or {}
+        aw_current = aw.get("current") or {}
+        if aw_current.get("temp") is not None:
+            row = _normalize_station_row(
+                station_code="LFPB",
+                station_label=aw.get("station_label") or "Paris Le Bourget (AEROWEB)",
+                temp=aw_current.get("temp"),
+                lat=aw.get("lat"),
+                lon=aw.get("lon"),
+                obs_time=aw.get("obs_time"),
+                source_code="aeroweb",
+                source_label="AEROWEB",
+                is_official=True,
+                is_airport_station=True,
+                is_settlement_anchor=False,
+            )
+            return [row]
+        return _metar_cluster_rows(raw)
+
+    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        aw = raw.get("aeroweb") or {}
+        has_aw = (aw.get("current") or {}).get("temp") is not None
+        if has_aw:
+            return {
+                "provider_code": self.provider_code,
+                "provider_label": self.provider_label,
+                "available": True,
+                "mode": "official_active",
+                "row_count": 1,
+            }
+        rows = _metar_cluster_rows(raw)
+        return {
+            "provider_code": self.provider_code,
+            "provider_label": self.provider_label,
+            "available": bool(rows),
+            "mode": "fallback_metar_cluster" if rows else "no_official_network",
+            "row_count": len(rows),
+        }
+
+
+class SaudiNcmNetworkProvider(CountryNetworkProvider):
+    def __init__(self) -> None:
+        super().__init__("saudi_ncm", "Saudi NCM")
+
+    def official_nearby_current(self, city: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+        ncm = raw.get("ncm") or {}
+        ncm_current = ncm.get("current") or {}
+        if ncm_current.get("temp") is not None:
+            row = _normalize_station_row(
+                station_code="OEJN",
+                station_label=ncm.get("station_label") or "Jeddah OEJN (NCM)",
+                temp=ncm_current.get("temp"),
+                lat=ncm.get("lat"),
+                lon=ncm.get("lon"),
+                obs_time=ncm.get("obs_time"),
+                source_code="ncm",
+                source_label="Saudi NCM",
+                is_official=True,
+                is_airport_station=True,
+                is_settlement_anchor=False,
+            )
+            return [row]
+        return _metar_cluster_rows(raw)
+
+    def official_network_status(self, city: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+        ncm = raw.get("ncm") or {}
+        has_ncm = (ncm.get("current") or {}).get("temp") is not None
+        if has_ncm:
+            return {
+                "provider_code": self.provider_code,
+                "provider_label": self.provider_label,
+                "available": True,
+                "mode": "official_active",
+                "row_count": 1,
+            }
+        rows = _metar_cluster_rows(raw)
+        return {
+            "provider_code": self.provider_code,
+            "provider_label": self.provider_label,
+            "available": bool(rows),
+            "mode": "fallback_metar_cluster" if rows else "no_official_network",
+            "row_count": len(rows),
+        }
+
+
 class HongKongHkoNetworkProvider(CountryNetworkProvider):
     def __init__(self) -> None:
         super().__init__("hongkong_hko", "HKO")
@@ -981,6 +1141,10 @@ def get_country_network_provider(city: str) -> CountryNetworkProvider:
         return ChinaCmaNetworkProvider()
     if provider_code == "israel_ims":
         return IsraelImsNetworkProvider()
+    if provider_code == "saudi_ncm":
+        return SaudiNcmNetworkProvider()
+    if provider_code == "fr_aeroweb":
+        return AerowebNetworkProvider()
     if provider_code == "hongkong_hko":
         return HongKongHkoNetworkProvider()
     if provider_code == "taiwan_cwa":

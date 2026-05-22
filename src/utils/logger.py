@@ -17,7 +17,7 @@ def setup_logger(level="DEBUG"):
 
     # 文件输出
     logger.add(
-        "data/logs/trading_system.log",
+        "data/logs/polyweather.log",
         rotation="10 MB",
         retention="10 days",
         level=level,
