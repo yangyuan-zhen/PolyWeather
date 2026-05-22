@@ -60,15 +60,14 @@ class AerowebSourceMixin:
 
         try:
             # Step 1: get a fresh PHPSESSID
-            resp = self._http_get(f"{self.AEROWEB_BASE}/login.php", timeout=self.timeout)
-            # httpx follows redirects; grab PHPSESSID from the cookie jar
-            sid = None
-            for cookie in resp.cookies.jar:
-                if cookie.name == "PHPSESSID":
-                    sid = cookie.value
-                    break
+            # Use the shared httpx session so cookies persist across requests.
+            resp = self.session.get(
+                f"{self.AEROWEB_BASE}/login.php", timeout=self.timeout
+            )
+            # httpx stores cookies on the session; grab PHPSESSID from there.
+            sid = self.session.cookies.get("PHPSESSID")
             if not sid:
-                # Try extracting from Set-Cookie header
+                # Fallback: parse Set-Cookie header directly
                 set_cookie = resp.headers.get("set-cookie", "")
                 for part in set_cookie.replace(",", ";").split(";"):
                     part = part.strip()
