@@ -29,7 +29,6 @@ export function runTests() {
     aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
-    marketDecisionView: market("ready"),
     modelHighlyConsistent: true,
     needsNextBulletin: false,
     observationStale: false,
@@ -51,7 +50,6 @@ export function runTests() {
     aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
-    marketDecisionView: market("unavailable"),
     modelHighlyConsistent: false,
     needsNextBulletin: false,
     observationStale: false,
@@ -61,9 +59,6 @@ export function runTests() {
     peakHasPassed: false,
   });
 
-  assert.equal(marketUnavailable.marketStatus, "unavailable");
-  assert.match(marketUnavailable.primaryReason, /暂无可交易价格/);
-  assert.doesNotMatch(marketUnavailable.primaryReason, /未接入|系统缺失|系统坏/);
 
   const fallback = buildCityDecisionState({
     aiCityForecast: null,
@@ -71,7 +66,6 @@ export function runTests() {
     aiRuleEvidenceMode: true,
     isEn: false,
     isHkoObservation: false,
-    marketDecisionView: market("ready"),
     modelHighlyConsistent: false,
     needsNextBulletin: false,
     observationStale: false,
@@ -91,7 +85,6 @@ export function runTests() {
     aiRuleEvidenceMode: false,
     isEn: false,
     isHkoObservation: false,
-    marketDecisionView: market("ready"),
     modelHighlyConsistent: false,
     needsNextBulletin: true,
     observationStale: false,

@@ -1,4 +1,3 @@
-import type { MarketDecisionView } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
 import type {
   AiCityForecastPayload,
   AiCityForecastState,
@@ -12,7 +11,6 @@ export type CityDecisionAiStatus =
   | "deepseek-loading"
   | "complete"
   | "fallback";
-export type CityDecisionMarketStatus = "ready" | "loading" | "unavailable";
 export type StatusBadgeTone = "green" | "blue" | "amber" | "red" | "muted";
 
 export type StatusBadge = {
@@ -27,8 +25,6 @@ export type CityDecisionState = {
   aiStatus: CityDecisionAiStatus;
   aiStatusLabel: string;
   aiStatusTone: StatusBadgeTone;
-  marketStatus: CityDecisionMarketStatus;
-  marketStatusTone: StatusBadgeTone;
   badges: StatusBadge[];
   primaryReason: string;
 };
@@ -82,19 +78,12 @@ function resolveAiStatusView(aiStatus: CityDecisionAiStatus, isEn: boolean) {
   };
 }
 
-function resolveMarketTone(status: CityDecisionMarketStatus): StatusBadgeTone {
-  if (status === "ready") return "green";
-  if (status === "loading") return "blue";
-  return "muted";
-}
-
 export function buildCityDecisionState({
   aiCityForecast,
   aiForecast,
   aiRuleEvidenceMode,
   isEn,
   isHkoObservation,
-  marketDecisionView,
   modelHighlyConsistent,
   needsNextBulletin,
   observationStale,
@@ -108,7 +97,6 @@ export function buildCityDecisionState({
   aiRuleEvidenceMode: boolean;
   isEn: boolean;
   isHkoObservation: boolean;
-  marketDecisionView: MarketDecisionView;
   modelHighlyConsistent: boolean;
   needsNextBulletin: boolean;
   observationStale: boolean;
@@ -119,11 +107,9 @@ export function buildCityDecisionState({
 }): CityDecisionState {
   const aiStatus = resolveAiStatus({ aiCityForecast, aiForecast, aiRuleEvidenceMode });
   const aiStatusView = resolveAiStatusView(aiStatus, isEn);
-  const marketStatus = marketDecisionView.status;
-  const marketStatusTone = resolveMarketTone(marketStatus);
   const evidenceQuality: CityDecisionEvidenceQuality = observationStale
     ? "stale"
-    : aiStatus === "fallback" || marketStatus === "unavailable"
+    : aiStatus === "fallback"
       ? "mixed"
       : "fresh";
   const urgency: CityDecisionUrgency = peakHasPassed
@@ -152,11 +138,7 @@ export function buildCityDecisionState({
         ? isEn
           ? "Observation is stale and needs the next report. Use only as background reference until fresh data arrives."
           : "观测已过旧，需要下一报文确认。当前数据仅作背景参考，建议等待新报文后再做判断。"
-        : marketStatus === "unavailable"
-          ? isEn
-            ? "Weather evidence is usable, but no tradable quote is available yet. Weather judgment still applies."
-            : "天气证据可参考，但暂无可交易价格。天气判断仍可参考，无需急于操作。"
-          : modelHighlyConsistent
+        : modelHighlyConsistent
             ? isEn
               ? "Models are aligned; wait for observation confirmation. A clear direction should emerge after the next report."
               : "模型高度一致，等待实测确认。下一报文后方向会更明确。"
@@ -205,12 +187,6 @@ export function buildCityDecisionState({
           tone: aiStatusView.tone,
         }
       : null,
-    marketStatus === "unavailable"
-      ? {
-          label: isEn ? "Market unavailable" : "市场价暂不可用",
-          tone: marketStatusTone,
-        }
-      : null,
     modelHighlyConsistent
       ? {
           label: isEn ? "Models agree" : "模型高度一致",
@@ -232,8 +208,6 @@ export function buildCityDecisionState({
     aiStatus,
     aiStatusLabel: aiStatusView.label,
     aiStatusTone: aiStatusView.tone,
-    marketStatus,
-    marketStatusTone,
     badges,
     primaryReason,
   };

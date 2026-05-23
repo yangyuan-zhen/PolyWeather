@@ -11,9 +11,7 @@ import {
   type StatusTone,
 } from "@/components/dashboard/scan-terminal/CityStatusTags";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
-import { MarketDecisionLine } from "@/components/dashboard/scan-terminal/MarketDecisionLine";
 import { ModelEvidencePanel } from "@/components/dashboard/scan-terminal/ModelEvidencePanel";
-import type { MarketDecisionView } from "@/components/dashboard/scan-terminal/city-card-decision-utils";
 import type { CityDecisionState } from "@/components/dashboard/scan-terminal/city-decision-state";
 import {
   getCityLoadingCopy,
@@ -48,8 +46,6 @@ export function MobileDecisionCard({
   isRefreshing,
   localModelSupportNote,
   localizedFinalJudgment,
-  marketDecisionView,
-  marketLineText,
   onRefresh,
   onRemove,
   peakWindow,
@@ -78,8 +74,6 @@ export function MobileDecisionCard({
   isRefreshing: boolean;
   localModelSupportNote: string;
   localizedFinalJudgment: string;
-  marketDecisionView: MarketDecisionView;
-  marketLineText: string;
   onRefresh: (event: MouseEvent<HTMLButtonElement>) => void;
   onRemove: (event: MouseEvent<HTMLButtonElement>) => void;
   peakWindow: string;
@@ -140,11 +134,6 @@ export function MobileDecisionCard({
 
       <p className="scan-mobile-decision-reason">{decisionState.primaryReason}</p>
       <CityStatusTags tags={statusTags} />
-      <MarketDecisionLine
-        isEn={isEn}
-        marketDecisionView={marketDecisionView}
-        marketLineText={marketLineText}
-      />
 
       {!detail ? (
         <div className="scan-ai-city-loading">
