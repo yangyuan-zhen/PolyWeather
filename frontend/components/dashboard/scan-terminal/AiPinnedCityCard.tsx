@@ -305,13 +305,10 @@ export function AiPinnedCityCard({
     : isEn
       ? `Model support is unavailable, so this city must rely on DEB path and ${observationSourceEn}.`
       : `暂无可用多模型支撑，需要主要参考 DEB 路径和${observationSourceZh}。`;
-  const rowAiPredictedMax =
-    toFiniteDecisionNumber(row?.ai_predicted_max) ??
-    toFiniteDecisionNumber(row?.ai_predicted_high) ??
-    toFiniteDecisionNumber(row?.cluster_median) ??
-    debNumber;
   const aiPredictedMax =
-    toFiniteDecisionNumber(aiCityForecast?.predicted_max) ?? rowAiPredictedMax;
+    aiForecast.status === "ready"
+      ? toFiniteDecisionNumber(aiCityForecast?.predicted_max)
+      : null;
   const aiRangeLow =
     toFiniteDecisionNumber(aiCityForecast?.range_low) ??
     toFiniteDecisionNumber(row?.ai_predicted_low) ??
@@ -321,8 +318,7 @@ export function AiPinnedCityCard({
     toFiniteDecisionNumber(row?.ai_predicted_high) ??
     modelMax;
   const aiConfidence =
-    String(aiCityForecast?.confidence || row?.ai_forecast_confidence || "").trim() ||
-    (rowAiPredictedMax != null ? (isEn ? "fast" : "快速") : null);
+    String(aiCityForecast?.confidence || row?.ai_forecast_confidence || "").trim() || null;
   const decisionExpectedHighNumber = resolveExpectedHighCandidate({
     aiPredictedMax,
     currentTemp: currentTempNumber,
