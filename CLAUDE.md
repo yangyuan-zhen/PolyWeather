@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PolyWeather Pro — a production weather-intelligence stack for temperature settlement markets. Aggregates observations and forecasts for 52 monitored cities globally, blends multi-model highs using DEB (Dynamic Error Balancing), generates calibrated probability buckets for settlement, maps weather to Polymarket quotes for mispricing scans, and serves both a Next.js dashboard (Vercel) and a Telegram bot.
+PolyWeather Pro — a production weather-intelligence stack for temperature settlement markets. Aggregates observations and forecasts for 52 monitored cities globally, blends multi-model highs using DEB (Dynamic Error Balancing), generates calibrated probability buckets for settlement, and serves both a Next.js dashboard (Vercel) and a Telegram bot.
 
 ## Environment & Preferences (ALWAYS follow)
 
@@ -117,7 +117,7 @@ curl http://127.0.0.1:8000/metrics
 | `src/database/` | SQLite-based runtime state, DB manager, daily/truth/training feature repositories |
 | `src/data_collection/` | Weather sources (METAR, TAF, Open-Meteo, JMA, KMA, MGM, NMC, Russia stations, settlement sources), city registry (52 cities), Polymarket readonly layer. Also: `madis_sources.py` (NOAA 5-min NetCDF), `amos_station_sources.py` (Korean runway sensors), `country_networks.py` (per-country provider routing + `_airport_primary_from_raw`) |
 | `src/data_mining/` | Historical data fetch utilities |
-| `src/onchain/` | Polygon wallet watcher, Polymarket wallet activity watcher |
+| `src/onchain/` | Polygon wallet watcher |
 | `src/payments/` | Onchain checkout, event listener, confirm loop, contract audit |
 | `src/strategy/` | Trading strategy modules |
 | `src/trading/` | Trading execution modules |

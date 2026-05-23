@@ -85,7 +85,6 @@ class StartupCoordinator:
         loops = [
             self._start_airport_high_freq_loop(),
             self._start_polygon_wallet_loop(),
-            self._start_polymarket_wallet_activity_loop(),
             self._start_weekly_reward_loop(),
             self._start_payment_event_loop(),
             self._start_payment_confirm_loop(),
@@ -217,18 +216,6 @@ class StartupCoordinator:
             starter=lambda: import_module(
                 "src.onchain.polygon_wallet_watcher"
             ).start_polygon_wallet_watch_loop(self.bot),
-        )
-
-    def _start_polymarket_wallet_activity_loop(self) -> LoopStatus:
-        return LoopStatus(
-            key="polymarket_wallet_activity",
-            label="Polymarket 钱包异动监听（已停用）",
-            configured_enabled=False,
-            started=False,
-            reason="retired_replaced_by_market_monitor",
-            details={
-                "note": "wallet activity watcher retired",
-            },
         )
 
     def _start_weekly_reward_loop(self) -> LoopStatus:

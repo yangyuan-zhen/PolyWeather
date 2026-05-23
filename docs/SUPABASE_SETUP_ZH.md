@@ -92,20 +92,7 @@ POLYWEATHER_PAYMENT_EVENT_LOOP_ENABLED=true
 POLYWEATHER_PAYMENT_CONFIRM_LOOP_ENABLED=true
 ```
 
-## 5. 钱包异动频道拆分（推荐）
-
-如果要把“钱包异动监控”发到独立频道：
-
-```env
-POLYMARKET_WALLET_ACTIVITY_CHAT_ID=-1003821482461
-```
-
-说明：
-
-- 设置了 `POLYMARKET_WALLET_ACTIVITY_CHAT_ID(S)` 后，钱包异动推送优先发该频道。
-- 未设置时，回退到全局 `TELEGRAM_CHAT_IDS/TELEGRAM_CHAT_ID`。
-
-## 6. 验证步骤
+## 5. 验证步骤
 
 1. 登录后请求 `/api/auth/me`，确认 `authenticated=true`。
 2. 请求 `/api/payments/config`，确认 `enabled=true`、`configured=true`。

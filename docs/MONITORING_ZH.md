@@ -114,12 +114,6 @@ python scripts/check_ops_health.py --base-url http://127.0.0.1:8000
 
 目前已覆盖：
 
-- `prewarm` worker 是否启用、线程 / heartbeat 是否活着
-- 最近一轮 prewarm 的：
-  - `cycle_count`
-  - `success_count / failure_count`
-  - `last_started_at / last_finished_at`
-  - `last_summary_ok / last_detail_ok / last_market_ok`
 - 缓存桶条目数：
   - `api_cache`
   - `metar`

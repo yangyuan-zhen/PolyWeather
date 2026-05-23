@@ -12,9 +12,9 @@
 
 示例：
 
-- `1.4.0 -> 1.4.1`：告警逻辑修正、缓存修正、文档修正
-- `1.4.0 -> 1.5.0`：新增支付能力、新增页面、新增 API
-- `1.4.0 -> 2.0.0`：接口重构或数据结构不兼容
+- `1.7.0 -> 1.7.1`：告警逻辑修正、缓存修正、文档修正
+- `1.7.0 -> 1.8.0`：新增能力、接口扩展、向后兼容的功能迭代
+- `1.7.0 -> 2.0.0`：不兼容变更、核心架构升级
 
 ## 日常升版步骤
 
@@ -29,7 +29,7 @@ python scripts/bump_version.py patch
 ```bash
 python scripts/bump_version.py minor
 python scripts/bump_version.py major
-python scripts/bump_version.py 1.5.0
+python scripts/bump_version.py 1.8.0
 ```
 
 ### 2. 检查同步结果
@@ -68,15 +68,15 @@ python -m pytest
 
 ```bash
 git add .
-git commit -m "release: v1.4.1"
-git tag v1.4.1
+git commit -m "release: v1.7.1"
+git tag v1.7.1
 ```
 
 ### 6. 推送
 
 ```bash
 git push
-git push origin v1.4.1
+git push origin v1.7.1
 ```
 
 ## 当前约束

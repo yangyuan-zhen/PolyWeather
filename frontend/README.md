@@ -40,8 +40,8 @@ PolyWeather Pro 的生产前端工程。
 - 城市决策卡的 AI 机场报文解读包括最终判断、METAR 解读、推理说明、模型集群备注、风险提示和原始 METAR
 - AI 机场报文解读按 `city + local_date + locale + METAR signature` 做页面内存缓存和 `localStorage` 最终结果缓存；切换选项卡返回时会优先恢复已有内容
 - 市场价格层使用完整 `all_buckets` 匹配温度桶，并把 `模型-市场差` 解释为 `模型概率 - 市场隐含概率`
-- 概率区展示当前生产概率引擎输出；EMOS / LGBM 只在评估通过或 shadow 对照时进入解释层，模型共识和市场价格只作为辅助说明
-- `/ops` 现已展示 prewarm worker 运行态、缓存桶状态与 summary cache hit/miss
+- 概率区展示当前生产概率引擎输出（legacy 高斯或 EMOS），模型共识只作为辅助参考
+- 缓存桶状态与 summary cache hit/miss
 
 ## 本地开发
 
@@ -150,7 +150,6 @@ Ops：
 
 - 系统状态
 - SQLite / rollout / 支付运行态
-- prewarm worker 运行态
 - 缓存桶状态与 summary cache hit/miss
 - 用户查询
 - 当前会员
@@ -201,4 +200,4 @@ Ops：
 
 详见根目录策略文档：`docs/OPEN_CORE_POLICY.md`
 
-最后更新：`2026-04-19`
+最后更新：`2026-05-23`

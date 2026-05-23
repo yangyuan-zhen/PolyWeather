@@ -46,7 +46,6 @@ flowchart TD
 - 支付运行态 API 与 SQLite 审计事件已补齐。
 - 钱包绑定支持浏览器钱包 + WalletConnect。
 - 账户中心与 Pro 权限展示链路打通。
-- 钱包异动支持独立频道路由。
 - 运行态状态/缓存与核心离线训练、评估、回填链路已完成 SQLite 主路径收口。
 - 轻量可观测性已上线（`/healthz`、`/api/system/status`、`/metrics`）。
 

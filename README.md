@@ -21,7 +21,7 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 
 [![Star History Chart](https://api.star-history.com/svg?repos=yangyuan-zhen/PolyWeather&type=Date)](https://star-history.com/#yangyuan-zhen/PolyWeather&Date)
 
-## Product Status (2026-05-11)
+## Product Status (2026-05-23)
 
 - Subscription live: `Pro Monthly 10 USDC`.
 - Points system live: earn via group chat, welcome bonus (+20), first-message-of-day bonus (+2), weekly participation rewards.
@@ -35,22 +35,18 @@ Public docs center: `/docs/intro` on the main site (bilingual product documentat
 - EMOS/CRPS calibration is wired and trainable, but production should stay on `legacy` or `emos_shadow`; `emos_primary` is only for candidates that pass local offline evaluation and manual rollout.
 - Intraday analysis is now positioned as a professional meteorology read: headline, confidence, base/upside/downside paths, next observation point, evidence chain, failure modes, and confirmation rules.
 - Intraday modal now blocks stale cached detail during refresh, so users do not briefly trade off old city/date data before full detail arrives.
-- City decision cards now include the AI airport read: METAR, DEB, model cluster, and the AI expected-high center are resolved before mapping the result to Polymarket temperature buckets.
+- City decision cards now include the AI airport read: METAR, DEB, model cluster, and the AI expected-high center are resolved before mapping the result to temperature buckets.
 - AI airport reads now use in-page memory cache, browser `localStorage`, and backend short-TTL cache; returning from another dashboard tab restores existing stream text or final results before any new request is needed.
 - Market bucket matching now uses the full `all_buckets` surface and strict exact / range / or-higher / or-lower direction checks, reducing bad matches to unreasonable tail buckets.
 - The card label “model-market difference” means `model probability - market-implied probability`; positive values indicate weather probability above market pricing, while negative values indicate the YES is already priced more fully.
-- Calibrated model probability is now the primary probability panel. It shows the active production probability engine; EMOS/LGBM are surfaced only when evaluated or shadowed, while model consensus and market prices remain secondary references.
+- Calibrated model probability is now the primary probability panel. It shows the active production probability engine (legacy Gaussian or EMOS), while model consensus remains a secondary reference.
 - Non-Hong Kong airport cities now ingest `TAF` and parse `FM / TEMPO / BECMG / PROB30/40`.
 - Temperature chart now overlays `TAF Timing` markers near the expected peak window.
 - Trade cue now combines upper-air structure, `TAF`, market crowding, and `edge_percent`.
 - Browser extension now uses `DEB` for multi-day forecast and stays positioned as a lightweight lead-in to the main site.
 - Official nearby-network layer now covers `MGM` (Turkey), `CMA/NMC` (Mainland China), `JMA AMeDAS` (Japan), `AMOS` (Korea, runway-level, Seoul/Busan), `HKO` (Hong Kong), and `CWA` (Taiwan).
 - Tokyo now ingests Haneda `JMA AMeDAS` 10-minute temperature as the official enhancement layer.
-- Dashboard prewarm is now supported through a dedicated worker / cron path, with runtime status exposed in `/api/system/status` and `/ops`.
-- `/ops` now exposes cache bucket counts, summary cache hit / miss rate, and prewarm runtime heartbeat.
-- Intraday commentary can optionally use `Groq` as a bilingual rewrite layer, while rule-based commentary remains the fallback.
-- Vercel frontend guidance now includes cost controls for analytics, eager fetches, and edge-side scanner blocking.
-- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (68→6 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/frontend-ui-design-review.md` for the full audit trail.
+- Frontend design system overhauled: unified CSS token system, eliminated `!important` abuse (134→49 in light theme), consolidated breakpoints (18→10), migrated hardcoded colors to CSS variables, added ARIA attributes and focus-visible keyboard navigation. See `docs/frontend-ui-design-review.md` for the full audit trail.
 
 ## License & Commercial Boundary
 
@@ -66,15 +62,13 @@ See: [AGPL-3.0 & Commercial Boundary](docs/OPEN_CORE_POLICY.md)
 
 - Aggregates observations and forecasts for 51 monitored cities.
 - Uses DEB (Dynamic Error Balancing) to blend multi-model highs.
-- Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution), with `LGBM` metadata surfaced when the calibrated engine is active.
-- Maps weather view to Polymarket quotes for mispricing scan.
+- Generates settlement-oriented calibrated probability buckets (`mu` + bucket distribution) via legacy Gaussian or EMOS/CRPS calibration.
 - Adds city decision cards that combine AI airport reads, expected-high centers, full market-bucket mapping, and model-market difference in one view.
 - Reuses one analysis core across web dashboard and Telegram bot.
 - Adds payment audit trails, replay tooling, and incident visibility in ops.
 - Adds peak-window-oriented intraday analysis with meteorology headline, path buckets, evidence chain, invalidation rules, and confirmation rules.
 - Adds airport-side `TAF` timing overlays and airport suppression/disruption interpretation for non-Hong Kong airport cities.
 - Adds official nearby-network and runway-level enhancement layers for China, Japan, Korea (AMOS runway sensors for Seoul/Busan), Hong Kong, Taiwan, and Turkey without replacing airport settlement anchors.
-- Adds optional dashboard prewarm worker so hot cities can be refreshed before user clicks.
 
 ## Reference Architecture
 
@@ -96,9 +90,7 @@ flowchart LR
 
     API --> ANA["DEB + Trend + Probability + Market Scan"]
     ANA --> PAY["Payment State (Intent + Event + Confirm Loop)"]
-    ANA --> PM["Polymarket Read-only Layer"]
-    ANA --> LLM["Optional Groq Commentary Rewrite"]
-    API --> PREWARM["Dashboard Prewarm API / Worker"]
+    ANA --> STATE["SQLite runtime state"]
 ```
 
 ## Monitored Cities (51)
@@ -131,7 +123,7 @@ npm run dev
 - Hong Kong keeps `HKO` official readings in dashboard and history, without falling back to airport METAR lines.
 - Intraday analysis now separates meteorology conclusion, evidence chain, invalidation rules, confirmation rules, calibrated probability, and market reference.
 - `TAF` is used as an airport-side confirmation layer, not as the main temperature model.
-- `LGBM` can power the calibrated probability panel; model vote counts remain an explanatory consensus line, not the final probability.
+- Calibrated probability uses legacy Gaussian (default) or EMOS/CRPS when evaluated; model vote counts remain an explanatory consensus line, not the final probability.
 - Browser extension remains a lightweight monitoring + basic-bias product, while the site holds the full analysis experience.
 
 ## Runtime Data (Recommended on VPS)
@@ -167,20 +159,6 @@ curl http://127.0.0.1:8000/api/system/status
 curl http://127.0.0.1:8000/metrics
 ```
 
-### Dashboard prewarm worker
-
-```bash
-docker compose --profile workers up -d polyweather_prewarm
-curl http://127.0.0.1:8000/api/system/status
-```
-
-Check:
-
-- `prewarm.thread_alive`
-- `prewarm.runtime.cycle_count`
-- `cache.analysis.hit_rate`
-- `cache.open_meteo_forecast_entries`
-
 ### Frontend cache headers
 
 ```bash
@@ -197,12 +175,6 @@ docker compose logs -f polyweather | egrep "payment event loop started|payment c
 
 ```bash
 curl http://127.0.0.1:8000/api/payments/runtime
-```
-
-### Wallet activity logs
-
-```bash
-docker compose logs -f polyweather | egrep "polymarket wallet activity watcher started|wallet activity pushed"
 ```
 
 ## Telegram Commands
@@ -222,26 +194,25 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Chinese API guide: [docs/API_ZH.md](docs/API_ZH.md)
 - TAF signal guide (ZH): [docs/TAF_SIGNAL_ZH.md](docs/TAF_SIGNAL_ZH.md)
 - Model stack & DEB (ZH): [docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
-- EMOS + LGBM system (ZH): [docs/EMOS_LGBM_SYSTEM_ZH.md](docs/EMOS_LGBM_SYSTEM_ZH.md)
 - Commercialization: [docs/COMMERCIALIZATION.md](docs/COMMERCIALIZATION.md)
 - AGPL-3.0 policy: [docs/OPEN_CORE_POLICY.md](docs/OPEN_CORE_POLICY.md)
 - Supabase setup (ZH): [docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - Configuration & secrets (ZH): [docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
-- LightGBM daily-high model (ZH): [docs/LGBM_DAILY_HIGH_ZH.md](docs/LGBM_DAILY_HIGH_ZH.md)
 - Frontend deployment (ZH): [docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
-- Tech debt (EN): [docs/TECH_DEBT.md](docs/TECH_DEBT.md)
 - Tech debt (ZH): [docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
+- Airport realtime sources: [docs/AIRPORT_REALTIME_SOURCES.md](docs/AIRPORT_REALTIME_SOURCES.md)
+- Airport market monitor (ZH): [docs/AIRPORT_MARKET_MONITOR_ZH.md](docs/AIRPORT_MARKET_MONITOR_ZH.md)
+- Services overview (ZH): [docs/SERVICES_ZH.md](docs/SERVICES_ZH.md)
 - Payment verification: [docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - Payment audit: [docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - Payment V2 upgrade: [docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
 - Ops admin guide: [docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
 - Monitoring guide (ZH): [docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
 - Deep research report: [docs/deep-research-report.md](docs/deep-research-report.md)
-- Frontend report: [FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - Release process: [RELEASE.md](RELEASE.md)
 - Changelog: [CHANGELOG.md](CHANGELOG.md)
 
 ## Version
 
 - Version: `v1.7.0`
-- Last Updated: `2026-05-11`
+- Last Updated: `2026-05-23`

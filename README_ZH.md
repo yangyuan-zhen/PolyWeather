@@ -14,7 +14,7 @@
 
 ![PolyWeather Ankara 分析页](docs/images/demo_ankara.png)
 
-## 当前产品状态（2026-05-11）
+## 当前产品状态（2026-05-23）
 
 - 已上线订阅制：`Pro 月付 10 USDC`。
 - 已上线积分体系：群内发言赚分 + 首次发言欢迎奖励 (+20) + 每日首条消息奖励 (+2) + 每周全员参与奖。
@@ -40,13 +40,12 @@
 - `/ops` 现已展示缓存桶数量、summary cache hit/miss 与 prewarm heartbeat。
 - 今日日内分析已改为“专业气象判断台”：顶部先给气象主判断、置信度、基准/上修/下修路径、下一观测点，再展示证据链、失效条件、确认条件和模型层。
 - 日内分析弹窗在 full detail / market detail 同步完成前会锁住旧内容并显示刷新状态，避免用户短暂看到上一轮缓存数据后误判。
-- 城市决策卡已接入 AI 机场报文解读：先用 METAR、DEB、多模型集群和 AI 最高温中枢判断天气路径，再映射到 Polymarket 温度桶。
+- 城市决策卡已接入 AI 机场报文解读：先用 METAR、DEB、多模型集群和 AI 最高温中枢判断天气路径，再映射到温度桶。
 - AI 机场报文解读现在同时使用页面内存缓存、浏览器 `localStorage` 和后端短 TTL 缓存；从其他选项卡切回决策卡时会优先恢复已有流式内容或最终结果。
 - 市场温度桶匹配已改为完整 `all_buckets` 映射，按 exact / range / or higher / or lower 方向严格匹配，避免把天气中枢错配到不合理尾部桶。
 - 决策卡中的“模型-市场差”口径为 `模型概率 - 市场隐含概率`，正值表示天气概率高于市场报价，负值表示市场已经更充分计价。
-- 概率区已改为“校准模型概率”；默认展示生产概率引擎输出，EMOS/LGBM 只在通过评估或作为 shadow 时进入解释层。
-- 今日日内结构解读已支持可选 `Groq` 改写层，失败时自动回退规则文案。
-- 前端部署文档已补充 Vercel 节流建议，包括 analytics 关闭、eager fetch 开关与扫描流量防火墙规则。
+- 概率区已改为”校准模型概率”；默认展示生产概率引擎输出（legacy 高斯或 EMOS），模型共识作为辅助参考。
+- 今日日内结构解读已支持可选 Groq 改写层，失败时自动回退规则文案。
 - 前端设计系统全面重构：统一 CSS token 体系、消除 !important 滥用（134→49）、合并断点（18→10）、数百处硬编码颜色迁移至 CSS 变量、添加 ARIA 无障碍属性和键盘导航。完整审查记录见 `docs/frontend-ui-design-review.md`。
 
 ## 许可证与商用边界（重要）
@@ -63,13 +62,11 @@
 
 - 聚合 51 个监控城市的实测与预报数据。
 - DEB（Dynamic Error Balancing）融合多模型最高温。
-- 输出结算导向校准概率分布（`mu` + 温度桶），并在 LGBM 生效时展示校准引擎元数据。
-- 将模型观点映射到 Polymarket 行情，做错价扫描。
+- 输出结算导向校准概率分布（`mu` + 温度桶），通过 legacy 高斯或 EMOS/CRPS 校准引擎。
 - 地图城市决策卡把 AI 机场报文解读、最高温中枢、完整市场温度桶和模型-市场差放在同一张卡中展示。
 - Web 仪表盘与 Telegram Bot 复用同一分析内核。
 - 支付链路具备事件重放、SQLite 审计事件与 RPC 容灾能力。
 - 官方增强层与跑道级传感器支持按国家 provider 统一接入（含韩国 AMOS 首尔/釜山跑道实测），不替代机场主站、METAR 或明确官方结算站。
-- 支持后台预热热点城市，降低用户点击城市后的冷启动成本。
 
 ## 参考架构
 
@@ -90,10 +87,6 @@ flowchart LR
 
     API --> ANA["DEB + 趋势 + 概率 + 市场扫描"]
     ANA --> PAY["支付状态（Intent + Event + Confirm Loop）"]
-    ANA --> PM["Polymarket 只读层"]
-    API --> OBS["healthz / system status / metrics"]
-    API --> PREWARM["Dashboard 预热接口 / Worker"]
-    ANA --> LLM["可选 Groq 文案改写层"]
     ANA --> STATE["SQLite runtime state<br/>legacy files only for migration/export fallback"]
 ```
 
@@ -158,21 +151,7 @@ curl http://127.0.0.1:8000/api/system/status
 curl http://127.0.0.1:8000/metrics
 ```
 
-### Dashboard 预热 Worker
-
-```bash
-docker compose --profile workers up -d polyweather_prewarm
-curl http://127.0.0.1:8000/api/system/status
-```
-
-重点关注：
-
-- `prewarm.thread_alive`
-- `prewarm.runtime.cycle_count`
-- `prewarm.runtime.last_summary_ok`
-- `cache.analysis.hit_rate`
-
-### 前端缓存头
+### 外部监控栈
 
 ```bash
 ./scripts/validate_frontend_cache.sh "https://polyweather-pro.vercel.app"
@@ -215,12 +194,6 @@ curl http://127.0.0.1:8000/api/payments/runtime
 POLYWEATHER_OPS_ADMIN_EMAILS=yhrsc30@gmail.com
 ```
 
-### 钱包异动监听日志
-
-```bash
-docker compose logs -f polyweather | egrep "polymarket wallet activity watcher started|wallet activity pushed"
-```
-
 ## Telegram 指令
 
 | 指令 | 用途 |
@@ -241,24 +214,21 @@ docker compose logs -f polyweather | egrep "polymarket wallet activity watcher s
 - Supabase 接入：[docs/SUPABASE_SETUP_ZH.md](docs/SUPABASE_SETUP_ZH.md)
 - 配置与密钥管理：[docs/CONFIGURATION_ZH.md](docs/CONFIGURATION_ZH.md)
 - 前端部署（Vercel）：[docs/FRONTEND_DEPLOYMENT_ZH.md](docs/FRONTEND_DEPLOYMENT_ZH.md)
-- EMOS 训练报告：[docs/EMOS_TRAINING_REPORT_ZH.md](docs/EMOS_TRAINING_REPORT_ZH.md)
-- 概率快照归档：[docs/PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md](docs/PROBABILITY_SNAPSHOT_ARCHIVE_ZH.md)
-- 技术债（中文镜像）：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
-- 技术债（主文档）：[docs/TECH_DEBT.md](docs/TECH_DEBT.md)
+- 技术债：[docs/TECH_DEBT_ZH.md](docs/TECH_DEBT_ZH.md)
+- 机场实时数据源：[docs/AIRPORT_REALTIME_SOURCES.md](docs/AIRPORT_REALTIME_SOURCES.md)
+- 机场市场监控（中文）：[docs/AIRPORT_MARKET_MONITOR_ZH.md](docs/AIRPORT_MARKET_MONITOR_ZH.md)
+- 外部服务总览：[docs/SERVICES_ZH.md](docs/SERVICES_ZH.md)
 - 支付合约验证：[docs/payments/POLYGONSCAN_VERIFY.md](docs/payments/POLYGONSCAN_VERIFY.md)
 - 支付审计说明：[docs/payments/PAYMENT_AUDIT_ZH.md](docs/payments/PAYMENT_AUDIT_ZH.md)
 - 支付 V2 升级方案：[docs/payments/PAYMENT_UPGRADE_V2_ZH.md](docs/payments/PAYMENT_UPGRADE_V2_ZH.md)
 - 运营后台说明：[docs/OPS_ADMIN_ZH.md](docs/OPS_ADMIN_ZH.md)
 - 外部监控说明：[docs/MONITORING_ZH.md](docs/MONITORING_ZH.md)
 - 模型栈与 DEB：[docs/MODEL_STACK_AND_DEB_ZH.md](docs/MODEL_STACK_AND_DEB_ZH.md)
-- LightGBM 日最高温模型：[docs/LGBM_DAILY_HIGH_ZH.md](docs/LGBM_DAILY_HIGH_ZH.md)
-- EMOS + LGBM 系统：[docs/EMOS_LGBM_SYSTEM_ZH.md](docs/EMOS_LGBM_SYSTEM_ZH.md)
 - 深度评估报告：[docs/deep-research-report.md](docs/deep-research-report.md)
-- 前端报告：[FRONTEND_REDESIGN_REPORT.md](FRONTEND_REDESIGN_REPORT.md)
 - 发布流程：[RELEASE.md](RELEASE.md)
 - 变更记录：[CHANGELOG.md](CHANGELOG.md)
 
 ## 当前版本
 
 - 版本：`v1.7.0`
-- 文档最后更新：`2026-05-11`
+- 文档最后更新：`2026-05-23`
