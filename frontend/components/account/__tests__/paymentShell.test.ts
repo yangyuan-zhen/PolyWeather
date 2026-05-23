@@ -16,6 +16,47 @@ export function runTests() {
   const serviceWorkerPath = path.join(projectRoot, "public", "sw.js");
 
   const accountCenterSource = fs.readFileSync(accountCenterPath, "utf8");
+  const accountDir = path.dirname(accountCenterPath);
+  const accountSplitFiles = [
+    "types.ts",
+    "constants.ts",
+    "formatters.ts",
+    "wallet.ts",
+    "payment-utils.ts",
+    "AccountInfoRow.tsx",
+    "account-copy.ts",
+    "usePaymentState.ts",
+  ];
+  for (const file of accountSplitFiles) {
+    assert(
+      fs.existsSync(path.join(accountDir, file)),
+      `AccountCenter split file must exist: components/account/${file}`,
+    );
+  }
+  const accountFeatureSource = [
+    "AccountCenter.tsx",
+    "account-copy.ts",
+    "wallet.ts",
+    "payment-utils.ts",
+    "usePaymentState.ts",
+  ]
+    .map((file) => fs.readFileSync(path.join(accountDir, file), "utf8"))
+    .join("\n");
+  assert(
+    accountCenterSource.split(/\r?\n/).length < 3200,
+    "AccountCenter.tsx must stay below 3200 lines after extracting account helpers",
+  );
+  assert(
+    accountCenterSource.includes('import { createAccountCopy } from "./account-copy";') &&
+      accountCenterSource.includes('const copy = useMemo(() => createAccountCopy(isEn), [isEn]);'),
+    "AccountCenter copy text must be centralized in account-copy.ts instead of an inline 170+ line object",
+  );
+  assert(
+    accountCenterSource.includes('import { usePaymentState } from "./usePaymentState";') &&
+      accountCenterSource.includes("clearPaymentState") &&
+      accountCenterSource.includes("clearPaymentMessages"),
+    "payment UI state reset/message helpers must be centralized in usePaymentState.ts",
+  );
   const serviceWorkerSource = fs.readFileSync(serviceWorkerPath, "utf8");
   const appAnalyticsSource = fs.readFileSync(
     path.join(projectRoot, "lib", "app-analytics.ts"),
@@ -64,18 +105,18 @@ export function runTests() {
   );
   assert(
     !/label\.toLowerCase\(\)\.includes\(["']binance["']\)\)\s*return/.test(
-      accountCenterSource,
+      accountFeatureSource,
     ),
     "Binance Web3 Wallet injected provider must remain available for browser-extension binding",
   );
   assert(
-    accountCenterSource.includes("Binance 扩展已绑定") &&
-      accountCenterSource.includes("如支付卡住，请优先使用 WalletConnect 扫码支付"),
+    accountFeatureSource.includes("Binance 扩展已绑定") &&
+      accountFeatureSource.includes("如支付卡住，请优先使用 WalletConnect 扫码支付"),
     "Binance extension binding must show a WalletConnect fallback hint for payment stability",
   );
   assert(
-    accountCenterSource.includes("钱包里需要少量 POL 作为 gas 手续费") &&
-      accountCenterSource.includes("只有 USDC 可能无法完成授权或支付"),
+    accountFeatureSource.includes("钱包里需要少量 POL 作为 gas 手续费") &&
+      accountFeatureSource.includes("只有 USDC 可能无法完成授权或支付"),
     "payment wallet tab must warn users that Polygon POL gas is required in addition to USDC",
   );
   assert(

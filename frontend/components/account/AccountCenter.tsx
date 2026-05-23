@@ -34,7 +34,6 @@ import {
   ChevronRight,
   Loader2,
   CreditCard,
-  type LucideIcon,
 } from "lucide-react";
 import {
   getSupabaseBrowserClient,
@@ -49,679 +48,60 @@ import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
-// --- Types ---
-
-type AuthMeResponse = {
-  authenticated?: boolean;
-  user_id?: string | null;
-  email?: string | null;
-  points?: number;
-  weekly_points?: number;
-  weekly_rank?: number | string | null;
-  entitlement_mode?: string | null;
-  auth_required?: boolean;
-  subscription_required?: boolean;
-  subscription_active?: boolean | null;
-  subscription_plan_code?: string | null;
-  subscription_starts_at?: string | null;
-  subscription_expires_at?: string | null;
-  subscription_total_expires_at?: string | null;
-  subscription_queued_days?: number | null;
-  subscription_queued_count?: number | null;
-  telegram_pricing?: TelegramPricing | null;
-};
-
-type TelegramPricing = {
-  configured?: boolean;
-  telegram_id?: number | null;
-  telegram_status?: string | null;
-  is_group_member?: boolean;
-  amount_usdc?: string;
-  pricing_source?: string;
-};
-
-type PaymentPlan = {
-  plan_code: string;
-  plan_id: number;
-  amount_usdc: string;
-  duration_days: number;
-};
-
-type PaymentTokenOption = {
-  code: string;
-  symbol: string;
-  name: string;
-  address: string;
-  decimals: number;
-  receiver_contract?: string;
-  is_default?: boolean;
-};
-
-type PointsRedemptionConfig = {
-  enabled?: boolean;
-  points_per_usdc?: number;
-  max_discount_usdc?: number;
-};
-
-type PaymentConfig = {
-  enabled?: boolean;
-  configured?: boolean;
-  chain_id?: number;
-  token_address?: string;
-  token_decimals?: number;
-  default_token_address?: string;
-  tokens?: PaymentTokenOption[];
-  receiver_contract?: string;
-  confirmations?: number;
-  points_redemption?: PointsRedemptionConfig;
-  plans?: PaymentPlan[];
-};
-
-type BoundWallet = {
-  chain_id: number;
-  address: string;
-  status: string;
-  is_primary: boolean;
-  verified_at?: string | null;
-};
-
-type CreatedIntent = {
-  intent?: {
-    intent_id: string;
-    order_id_hex: string;
-    plan_code: string;
-    amount_usdc: string;
-    allowed_wallet?: string | null;
-  };
-  tx_payload?: {
-    chain_id: number;
-    to: string;
-    data: string;
-    value: string;
-    amount_units: string;
-    token_address: string;
-    token_symbol?: string;
-    token_decimals?: number;
-  };
-  direct_payment?: {
-    chain_id: number;
-    chain?: string;
-    token_symbol?: string;
-    token_address: string;
-    token_decimals?: number;
-    receiver_address: string;
-    amount_units: string;
-    amount_usdc: string;
-    intent_id: string;
-    expires_at: string;
-  };
-};
-
-type IntentStatusResponse = {
-  intent?: {
-    intent_id?: string;
-    status?: string;
-    tx_hash?: string | null;
-  };
-};
-
-declare global {
-  interface Window {
-    ethereum?: EvmProvider;
-    okxwallet?: {
-      ethereum?: EvmProvider;
-    };
-    okexchain?: EvmProvider;
-    rabby?: EvmProvider;
-    bitkeep?: {
-      ethereum?: EvmProvider;
-    };
-  }
-}
-
-type EvmProvider = {
-  request: (args: { method: string; params?: any[] | object }) => Promise<any>;
-  providers?: EvmProvider[];
-  connect?: (args?: any) => Promise<void>;
-  disconnect?: () => Promise<void>;
-  session?: unknown;
-  isMetaMask?: boolean;
-  isRabby?: boolean;
-  isOkxWallet?: boolean;
-  isBitKeep?: boolean;
-};
-
-type ProviderMode = "auto" | "walletconnect";
-
-type ProviderSelection = {
-  provider: EvmProvider;
-  label: string;
-  mode: ProviderMode;
-};
-
-type InjectedProviderOption = ProviderSelection & {
-  key: string;
-};
-
-type Eip6963ProviderInfo = {
-  uuid: string;
-  name: string;
-  icon: string;
-  rdns: string;
-};
-
-type Eip6963ProviderDetail = {
-  info: Eip6963ProviderInfo;
-  provider: EvmProvider;
-};
-
-type ConnectBindOptions = {
-  openOverlayAfterBind?: boolean;
-};
-
-type PaymentRecoveryState = {
-  intentId: string;
-  txHash: string;
-  userId: string;
-  createdAt: number;
-};
-
-const WALLETCONNECT_PROJECT_ID = String(
-  process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || "",
-).trim();
-const WALLETCONNECT_POLYGON_RPC_URL = String(
-  process.env.NEXT_PUBLIC_WALLETCONNECT_POLYGON_RPC_URL ||
-    "https://polygon-bor-rpc.publicnode.com",
-).trim();
-const TELEGRAM_GROUP_URL = "https://t.me/+Se93RpNQ58FhYmZh";
-const TELEGRAM_BOT_URL = String(
-  process.env.NEXT_PUBLIC_TELEGRAM_BOT_URL || "https://t.me/WeatherQuant_bot",
-).trim();
-const TELEGRAM_TOPICS_GROUP_URL = TELEGRAM_GROUP_URL;
-const SUBSCRIPTION_HELP_HREF = "/subscription-help";
-const PAYMENT_RECOVERY_STORAGE_KEY = "polyweather:lastPaymentRecovery";
-const PAYMENT_RECOVERY_TTL_MS = 6 * 60 * 60 * 1000;
-const WALLET_REQUEST_TIMEOUT_MS = 60_000;
-const WALLET_TRANSACTION_REQUEST_TIMEOUT_MS = 120_000;
-
-function chainIdToDisplayName(chainId: number | undefined | null): string {
-  if (chainId === 137) return "Polygon";
-  if (chainId === 1) return "Ethereum Mainnet";
-  if (chainId) return `Chain ID ${chainId}`;
-  return "Polygon";
-}
-
-let walletConnectProviderCache: EvmProvider | null = null;
-let walletConnectProviderChainId: number | null = null;
-const eip6963Providers = new Map<string, Eip6963ProviderDetail>();
-
-function isWalletConnectResetError(error: unknown): boolean {
-  const source = error as any;
-  const message = String(
-    source?.shortMessage ||
-      source?.message ||
-      source?.reason ||
-      source?.data?.message ||
-      source?.cause?.message ||
-      source?.error?.message ||
-      (error instanceof Error ? error.message : "") ||
-      (typeof error === "string" ? error : ""),
-  ).toLowerCase();
-  return (
-    message.includes("connection request reset") ||
-    message.includes("pairing aborted") ||
-    message.includes("pairing attempt") ||
-    message.includes("unable to connect")
-  );
-}
-
-async function resetWalletConnectProvider(): Promise<void> {
-  if (walletConnectProviderCache?.disconnect) {
-    try {
-      await walletConnectProviderCache.disconnect();
-    } catch {
-      // ignore
-    }
-  }
-  walletConnectProviderCache = null;
-  walletConnectProviderChainId = null;
-}
-
-// --- Helpers ---
-
-type InfoRowProps = {
-  icon?: LucideIcon;
-  label: string;
-  value: string;
-  isPrimary?: boolean;
-};
-
-const InfoRow = ({
-  icon: Icon,
-  label,
-  value,
-  isPrimary = false,
-}: InfoRowProps) => (
-  <div className="flex min-w-0 flex-col gap-3 p-4 bg-white/5 rounded-2xl border border-white/5 hover:bg-white/10 transition-all group sm:flex-row sm:items-center sm:justify-between">
-    <div className="flex min-w-0 items-center gap-3">
-      <div className="shrink-0 p-2 bg-slate-800 rounded-lg text-slate-400 group-hover:text-blue-400 transition-colors">
-        {Icon && <Icon size={18} />}
-      </div>
-      <span className="min-w-0 text-slate-400 text-sm font-medium leading-5">
-        {label}
-      </span>
-    </div>
-    <span
-      className={`min-w-0 break-all text-left text-sm font-semibold font-mono sm:text-right ${isPrimary ? "text-blue-400" : "text-slate-200"}`}
-    >
-      {value}
-    </span>
-  </div>
-);
-
-function formatTime(value: string | undefined | null, locale: string) {
-  if (!value) return "--";
-  try {
-    const dt = new Date(value);
-    if (Number.isNaN(dt.getTime())) return "--";
-    return new Intl.DateTimeFormat(locale, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(dt);
-  } catch {
-    return "--";
-  }
-}
-
-function parseSubscriptionExpiry(value: string | undefined | null) {
-  const raw = String(value || "").trim();
-  if (!raw) return null;
-  const dt = new Date(raw);
-  if (Number.isNaN(dt.getTime())) return null;
-  const diffMs = dt.getTime() - Date.now();
-  return {
-    raw,
-    date: dt,
-    expired: diffMs <= 0,
-    daysLeft: Math.ceil(diffMs / 86_400_000),
-  };
-}
-
-function shortAddress(address: string) {
-  const text = String(address || "");
-  if (!text.startsWith("0x") || text.length < 12) return text || "--";
-  return `${text.slice(0, 8)}...${text.slice(-6)}`;
-}
-
-function clearStoredPaymentRecovery() {
-  if (typeof window === "undefined") return;
-  window.sessionStorage.removeItem(PAYMENT_RECOVERY_STORAGE_KEY);
-}
-
-function getEvmProvider(): EvmProvider | null {
-  return listInjectedProviders()[0]?.provider || null;
-}
-
-function getEip6963Providers(): Eip6963ProviderDetail[] {
-  return Array.from(eip6963Providers.values());
-}
-
-function detectWalletLabel(
-  provider: EvmProvider | null,
-  detail?: Eip6963ProviderDetail,
-): string {
-  if (!provider && !detail) return "EVM 钱包";
-  const announcedName = String(detail?.info?.name || "").trim();
-  const announcedRdns = String(detail?.info?.rdns || "").toLowerCase();
-  
-  if (
-    provider?.isOkxWallet ||
-    announcedName.toLowerCase().includes("okx") ||
-    announcedRdns.includes("okx")
-  ) {
-    return "OKX Wallet";
-  }
-  if (
-    provider?.isRabby ||
-    announcedName.toLowerCase().includes("rabby") ||
-    announcedRdns.includes("rabby")
-  ) {
-    return "Rabby";
-  }
-  if (
-    provider?.isBitKeep ||
-    announcedName.toLowerCase().includes("bitget") ||
-    announcedRdns.includes("bitkeep") ||
-    announcedRdns.includes("bitget")
-  ) {
-    return "Bitget Wallet";
-  }
-  if (
-    (provider as any)?.isBinance ||
-    (provider as any)?.bnbSign ||
-    announcedName.toLowerCase().includes("binance") ||
-    announcedRdns.includes("binance")
-  ) {
-    return "Binance Web3 Wallet";
-  }
-  if (
-    provider?.isMetaMask ||
-    announcedName.toLowerCase().includes("metamask") ||
-    announcedRdns.includes("metamask")
-  ) {
-    return "MetaMask";
-  }
-  if (announcedName) return announcedName;
-  return "EVM 钱包";
-}
-
-function collectInjectedProviders(): EvmProvider[] {
-  if (typeof window === "undefined") return [];
-  const out: EvmProvider[] = [];
-  const seen = new Set<EvmProvider>();
-
-  const push = (provider: unknown) => {
-    if (!provider || typeof provider !== "object") return;
-    const candidate = provider as EvmProvider;
-    if (typeof candidate.request !== "function") return;
-    if (seen.has(candidate)) return;
-    seen.add(candidate);
-    out.push(candidate);
-  };
-
-  const root = window.ethereum;
-  if (Array.isArray(root?.providers)) {
-    root.providers.forEach(push);
-  }
-  push(root);
-  push(window.okxwallet?.ethereum);
-  push(window.okexchain);
-  push(window.rabby);
-  push(window.bitkeep?.ethereum);
-
-  return out;
-}
-
-function getInjectedProviderStableId(
-  provider: EvmProvider,
-  index: number,
-  detail?: Eip6963ProviderDetail,
-): string {
-  const rdns = String(detail?.info?.rdns || "").toLowerCase();
-  const announcedName = String(detail?.info?.name || "")
-    .toLowerCase()
-    .trim();
-  if (rdns) return `rdns:${rdns}`;
-  if (announcedName) return `name:${announcedName}`;
-  if (provider.isOkxWallet || rdns.includes("okx")) return `okx:${index}`;
-  if (provider.isMetaMask || rdns.includes("metamask"))
-    return `metamask:${index}`;
-  if (provider.isRabby || rdns.includes("rabby")) return `rabby:${index}`;
-  if (
-    provider.isBitKeep ||
-    rdns.includes("bitkeep") ||
-    rdns.includes("bitget")
-  ) {
-    return `bitget:${index}`;
-  }
-  return `evm:${index}`;
-}
-
-function listInjectedProviders(): InjectedProviderOption[] {
-  const detailByProvider = new Map<EvmProvider, Eip6963ProviderDetail>();
-  getEip6963Providers().forEach((detail) => {
-    if (detail?.provider && typeof detail.provider.request === "function") {
-      detailByProvider.set(detail.provider, detail);
-    }
-  });
-  const candidates = collectInjectedProviders();
-  detailByProvider.forEach((_detail, provider) => {
-    if (!candidates.includes(provider)) {
-      candidates.push(provider);
-    }
-  });
-  const seen = new Set<string>();
-  const seenLabels = new Set<string>();
-  const out: InjectedProviderOption[] = [];
-  candidates.forEach((provider, index) => {
-    const detail = detailByProvider.get(provider);
-    const label = detectWalletLabel(provider, detail);
-    const key = getInjectedProviderStableId(provider, index, detail);
-    if (seen.has(key)) return;
-    const normalizedLabel = label.trim().toLowerCase();
-    if (normalizedLabel && seenLabels.has(normalizedLabel)) return;
-    seen.add(key);
-    if (normalizedLabel) seenLabels.add(normalizedLabel);
-    out.push({
-      key,
-      provider,
-      label,
-      mode: "auto",
-    });
-  });
-  return out;
-}
-
-function getEvmWalletLabel(provider: EvmProvider | null): string {
-  return detectWalletLabel(provider);
-}
-
-async function getWalletConnectProvider(
-  chainId: number,
-  rpcUrl: string,
-): Promise<EvmProvider> {
-  if (!WALLETCONNECT_PROJECT_ID) {
-    throw new Error(
-      "WalletConnect 未配置：缺少 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID。",
-    );
-  }
-  if (walletConnectProviderCache && walletConnectProviderChainId === chainId) {
-    return walletConnectProviderCache;
-  }
-  const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
-  const rpcMap: Record<number, string> = {
-    [chainId]: rpcUrl || WALLETCONNECT_POLYGON_RPC_URL,
-  };
-  const origin =
-    typeof window !== "undefined"
-      ? window.location.origin
-      : "https://polyweather-pro.vercel.app";
-  const provider = (await EthereumProvider.init({
-    projectId: WALLETCONNECT_PROJECT_ID,
-    chains: [chainId],
-    optionalChains: [chainId],
-    showQrModal: true,
-    methods: [
-      "eth_sendTransaction",
-      "personal_sign",
-      "eth_signTypedData",
-      "eth_signTypedData_v4",
-      "eth_sign",
-      "eth_call",
-      "eth_chainId",
-      "eth_accounts",
-      "eth_requestAccounts",
-    ],
-    events: ["accountsChanged", "chainChanged", "disconnect"],
-    rpcMap,
-    metadata: {
-      name: "PolyWeather",
-      description: "PolyWeather Pro checkout",
-      url: origin,
-      icons: [`${origin}/favicon.ico`],
-    },
-  })) as unknown as EvmProvider;
-  walletConnectProviderCache = provider;
-  walletConnectProviderChainId = chainId;
-  return provider;
-}
-
-function toPaddedHex(value: bigint) {
-  return value.toString(16).padStart(64, "0");
-}
-
-function toPaddedAddress(address: string) {
-  return String(address || "")
-    .toLowerCase()
-    .replace(/^0x/, "")
-    .padStart(64, "0");
-}
-
-function buildAllowanceCalldata(owner: string, spender: string) {
-  return `0xdd62ed3e${toPaddedAddress(owner)}${toPaddedAddress(spender)}`;
-}
-
-function buildApproveCalldata(spender: string, amount: bigint) {
-  return `0x095ea7b3${toPaddedAddress(spender)}${toPaddedHex(amount)}`;
-}
-
-function buildBalanceOfCalldata(owner: string) {
-  return `0x70a08231${toPaddedAddress(owner)}`;
-}
-
-async function requestWalletWithTimeout<T>(
-  provider: EvmProvider,
-  args: { method: string; params?: unknown[] },
-  actionLabel = "钱包操作",
-  timeoutMs = WALLET_REQUEST_TIMEOUT_MS,
-): Promise<T> {
-  let timeoutId: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return (await Promise.race([
-      provider.request(args),
-      new Promise<never>((_, reject) => {
-        timeoutId = setTimeout(() => {
-          reject(
-            new Error(
-              `${actionLabel}长时间无响应，请确认钱包弹窗是否被拦截；如使用 Binance Web3 Wallet，请回到钱包确认或重新连接后再试。`,
-            ),
-          );
-        }, timeoutMs);
-      }),
-    ])) as T;
-  } finally {
-    if (timeoutId) clearTimeout(timeoutId);
-  }
-}
-
-function formatTokenUnits(amount: bigint, decimals: number) {
-  const safeDecimals =
-    Number.isFinite(decimals) && decimals >= 0 ? Math.floor(decimals) : 6;
-  const base = 10n ** BigInt(safeDecimals);
-  const whole = amount / base;
-  const fraction = amount % base;
-  if (fraction === 0n) return whole.toString();
-  const rawFraction = fraction.toString().padStart(safeDecimals, "0");
-  const trimmed = rawFraction.replace(/0+$/, "");
-  return `${whole.toString()}.${trimmed}`;
-}
-
-type NormalizedPaymentError = {
-  message: string;
-  pending: boolean;
-  userRejected: boolean;
-};
-
-function normalizePaymentError(error: unknown): NormalizedPaymentError {
-  const source = error as any;
-  const code = Number(
-    source?.code ??
-      source?.error?.code ??
-      source?.data?.code ??
-      source?.cause?.code ??
-      NaN,
-  );
-  const messageCandidates = [
-    source?.shortMessage,
-    source?.message,
-    source?.reason,
-    source?.data?.message,
-    source?.cause?.message,
-    source?.error?.message,
-    error instanceof Error ? error.message : "",
-    typeof error === "string" ? error : "",
-  ];
-  const rawMessage = messageCandidates
-    .find(
-      (item) =>
-        typeof item === "string" &&
-        item.trim() &&
-        item.trim().toLowerCase() !== "[object object]",
-    )
-    ?.trim();
-  const lower = String(rawMessage || "").toLowerCase();
-
-  if (
-    lower.includes("confirm pending") ||
-    lower.includes("payment pending timeout")
-  ) {
-    return {
-      message: "链上交易已提交，正在确认中，请稍后刷新查看状态。",
-      pending: true,
-      userRejected: false,
-    };
-  }
-
-  if (isWalletConnectResetError(error)) {
-    return {
-      message:
-        "WalletConnect 连接已重置，请重新扫码连接；若仍失败，请先在钱包里断开旧连接后再试。",
-      pending: false,
-      userRejected: false,
-    };
-  }
-
-  const userRejected =
-    code === 4001 ||
-    /user rejected|user denied|rejected request|cancelled|canceled|拒绝|取消|签名请求已拒绝/.test(
-      lower,
-    );
-  if (userRejected) {
-    return {
-      message: "你已取消钱包操作。",
-      pending: false,
-      userRejected: true,
-    };
-  }
-
-  const insufficientGas =
-    (code === -32000 &&
-      /insufficient funds/.test(lower) &&
-      /(gas|fee|native|pol|matic)/.test(lower)) ||
-    /not enough pol|insufficient (pol|matic)|insufficient funds for gas|network fee|网络费|手续费/.test(
-      lower,
-    );
-  if (insufficientGas) {
-    return {
-      message: "钱包 POL 不足，无法支付链上手续费，请先充值少量 POL 后重试。",
-      pending: false,
-      userRejected: false,
-    };
-  }
-
-  if (rawMessage) {
-    return {
-      message: rawMessage,
-      pending: false,
-      userRejected: false,
-    };
-  }
-
-  try {
-    return {
-      message: JSON.stringify(error),
-      pending: false,
-      userRejected: false,
-    };
-  } catch {
-    return {
-      message: "发生未知错误，请稍后重试。",
-      pending: false,
-      userRejected: false,
-    };
-  }
-}
+import type {
+  AuthMeResponse,
+  BoundWallet,
+  ConnectBindOptions,
+  CreatedIntent,
+  Eip6963ProviderDetail,
+  EvmProvider,
+  InjectedProviderOption,
+  IntentStatusResponse,
+  PaymentConfig,
+  PaymentTokenOption,
+  PaymentRecoveryState,
+  ProviderMode,
+  ProviderSelection,
+  TelegramPricing,
+} from "./types";
+import {
+  PAYMENT_RECOVERY_STORAGE_KEY,
+  PAYMENT_RECOVERY_TTL_MS,
+  SUBSCRIPTION_HELP_HREF,
+  TELEGRAM_BOT_URL,
+  TELEGRAM_GROUP_URL,
+  TELEGRAM_TOPICS_GROUP_URL,
+  WALLETCONNECT_PROJECT_ID,
+  WALLETCONNECT_POLYGON_RPC_URL,
+  WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
+} from "./constants";
+import { InfoRow, PlusIcon } from "./AccountInfoRow";
+import {
+  chainIdToDisplayName,
+  clearStoredPaymentRecovery,
+  formatTime,
+  parseSubscriptionExpiry,
+  shortAddress,
+} from "./formatters";
+import {
+  buildAllowanceCalldata,
+  buildApproveCalldata,
+  buildBalanceOfCalldata,
+  formatTokenUnits,
+  normalizePaymentError,
+  requestWalletWithTimeout,
+} from "./payment-utils";
+import { createAccountCopy } from "./account-copy";
+import { usePaymentState } from "./usePaymentState";
+import {
+  eip6963Providers,
+  getEvmProvider,
+  getEvmWalletLabel,
+  getWalletConnectProvider,
+  isWalletConnectResetError,
+  listInjectedProviders,
+  resetWalletConnectProvider,
+} from "./wallet";
 
 // --- Main Component ---
 
@@ -729,188 +109,7 @@ export function AccountCenter() {
   const router = useRouter();
   const { locale } = useI18n();
   const isEn = locale === "en-US";
-  const copy: Record<string, string> = useMemo(
-    (): Record<string, string> => ({
-      backHome: isEn ? "Back to Home" : "返回首页",
-      accountCenter: isEn ? "Account Center" : "账户中心",
-      loadingAccount: isEn ? "Loading account info..." : "加载账户信息中...",
-      refresh: isEn ? "Refresh" : "刷新",
-      signOut: isEn ? "Sign Out" : "退出",
-      signIn: isEn ? "Sign In" : "登录",
-      upgradePro: isEn ? "Upgrade Pro" : "升级 Pro",
-      guestUser: isEn ? "Guest User" : "游客用户",
-      joinedAt: isEn ? "Joined" : "加入时间",
-      totalPoints: isEn ? "Total Points" : "总积分 (荣誉)",
-      weeklyPoints: isEn ? "Weekly Points" : "本周积分 (竞技)",
-      weeklyRank: isEn ? "Weekly Rank" : "周排行 (竞技)",
-      weeklyRewards: isEn ? "Weekly Rewards" : "周榜奖励",
-      membershipDetails: isEn ? "Membership Details" : "会员权限详情",
-      identityStatus: isEn ? "Identity Status" : "身份状态",
-      authMode: isEn ? "Auth Mode" : "鉴权模式",
-      weatherEngine: isEn ? "Weather Engine" : "气象引擎",
-      intradayAnalysis: isEn ? "Intraday Analysis" : "今日内分析",
-      historyFuture: isEn
-        ? "Future-date + Decision Card Analysis"
-        : "未来日期分析 + 城市决策卡",
-      smartPush: isEn
-        ? "Cross-platform Smart Weather Push"
-        : "全平台智能气象查询",
-      deepMode: isEn
-        ? "Deep mode (incl. high-temp window)"
-        : "深度版（含高温时段）",
-      compactVisible: isEn ? "Compact visible" : "简版可见",
-      enabled: isEn ? "Enabled" : "已开启",
-      locked: isEn ? "Locked" : "锁定",
-      boundEmail: isEn ? "Bound Email" : "绑定邮箱",
-      loginMethod: isEn ? "Sign-in Method" : "登录方式",
-      renewalDate: isEn ? "Renewal Date" : "续费日期",
-      accessUntil: isEn ? "Access Until" : "可用至",
-      authResult: isEn ? "Auth Result" : "鉴权结果",
-      passed: isEn ? "Passed" : "通过",
-      restricted: isEn ? "Restricted" : "受限",
-      telegramBind: isEn ? "Telegram Bot Binding" : "Telegram Bot 绑定",
-      telegramHint: isEn
-        ? "Use one-click Telegram binding first to sync notifications and access. After binding, refresh this page and submit your Telegram group join request."
-        : "优先使用「一键绑定 Telegram Bot」同步通知与权限。绑定完成后刷新本页，再提交 Telegram 群组入群申请。",
-      telegramFallbackHint: isEn
-        ? "Fallback copy method: only use this if one-click binding does not open Telegram correctly. Copy the command below and send it to @WeatherQuant_bot. After binding, refresh this page to show the group entry."
-        : "兜底复制方式：仅在一键绑定无法正常打开 Telegram 时使用。请复制下方命令并发送给 @WeatherQuant_bot。绑定完成后刷新本页，即可显示入群入口。",
-      paymentManualSupport: isEn
-        ? "If payment succeeds but Pro is still not activated, email yhrsc30@gmail.com. This project is currently maintained by one developer, so manual recovery may be needed in edge cases."
-        : "如果付款成功后 Pro 仍未开通，请发邮件到 yhrsc30@gmail.com。当前项目由我一人维护，极少数边缘情况可能需要人工补开。给你带来的不便，敬请谅解！",
-      telegramBotLink: isEn
-        ? "Open Bot (@WeatherQuant_bot)"
-        : "打开机器人 (@WeatherQuant_bot)",
-      telegramBotBindLink: isEn ? "One-click Telegram Binding" : "一键绑定 Telegram Bot",
-      telegramGroupLink: isEn ? "Join Telegram Group" : "加入 Telegram 群组",
-      telegramTopicsGroupLink: isEn
-        ? "Real-time Weather Updates"
-        : "城市实测温度群",
-      copyCommand: isEn ? "Copy fallback command" : "复制兜底命令",
-      paymentMgmt: isEn ? "Payment Management" : "支付管理",
-      paymentToken: isEn ? "Payment Token" : "支付币种",
-      paymentAccount: isEn ? "Subscription Account" : "订阅归属账号",
-      paymentWallet: isEn ? "Paying Wallet" : "付款钱包",
-      paymentReceiver: isEn ? "Receiver Contract" : "当前收款合约",
-      paymentNetwork: isEn ? "Payment Network" : "支付网络",
-      paymentHost: isEn ? "Payment Host" : "支付域名",
-      primary: "Primary",
-      polygonChain: isEn ? "Polygon Network" : "Polygon 网络",
-      noWallet: isEn ? "No payment wallet bound yet." : "未绑定任何付款钱包",
-      bindExt: isEn
-        ? "Bind Browser Wallet (EVM Extension)"
-        : "绑定浏览器钱包（EVM扩展）",
-      bindQr: isEn
-        ? "Bind via QR (WalletConnect)"
-        : "扫码绑定（WalletConnect）",
-      walletConnectMissing: isEn
-        ? "WalletConnect disabled: please configure"
-        : "未启用 WalletConnect：请配置",
-      walletExtensionDetected: isEn
-        ? "Detected browser wallets"
-        : "检测到的浏览器钱包",
-      walletExtensionChoose: isEn
-        ? "Choose extension wallet"
-        : "选择浏览器钱包",
-      walletRecoveryBusy: isEn
-        ? "Recovering Pro entitlement after on-chain payment..."
-        : "正在根据链上支付恢复 Pro 权限...",
-      walletRecoveryDone: isEn
-        ? "Pro entitlement recovered."
-        : "Pro 权限已恢复。",
-      walletRecoveryFailed: isEn
-        ? "A recent on-chain payment is still syncing to your subscription. Please refresh in a minute or contact support."
-        : "检测到最近的链上支付流程，但订阅状态仍在同步中。请稍后刷新，或联系管理员处理。",
-      unbind: isEn ? "Unbind" : "解绑",
-      unbindConfirm: isEn
-        ? "Unbind wallet {address}? You can bind it again later."
-        : "确认解绑钱包 {address}？后续可重新绑定。",
-      unbindDone: isEn ? "Wallet unbound." : "钱包已解绑。",
-      unbindDonePrimary: isEn
-        ? "Wallet unbound. New primary: {address}"
-        : "钱包已解绑，新的主钱包：{address}",
-      unbindFailed: isEn ? "Failed to unbind wallet" : "解绑钱包失败",
-      authExpired: isEn
-        ? "Session expired. Please sign out and sign in again."
-        : "登录会话已失效，请退出后重新登录。",
-      payNow: isEn ? "Subscribe & Activate" : "立即订阅并激活服务",
-      connectAndPay: isEn ? "Connect Wallet & Pay" : "连接钱包并支付",
-      loginBeforeBind: isEn
-        ? "Please sign in before binding wallet."
-        : "请先登录后再绑定钱包。",
-      loginBeforePay: isEn
-        ? "Please sign in before payment."
-        : "请先登录后再支付。",
-      bindFirstBeforePay: isEn
-        ? "Please bind a wallet first."
-        : "请先绑定钱包。",
-      payNotReady: isEn
-        ? "Payment service is not fully configured."
-        : "支付服务未配置完成。",
-      paymentHostBlocked: isEn
-        ? "Payments are disabled on this host. Please return to the production site: {host}"
-        : "当前域名不允许发起支付，请回到主站后重试：{host}",
-      paymentGuardHint: isEn
-        ? "Payment will be credited to the current account and bound wallet shown below."
-        : "支付将记入下方显示的当前账号和绑定钱包，请先核对。",
-      openBindFlow: isEn
-        ? "Please bind a wallet first. Opening bind flow..."
-        : "请先完成钱包绑定，正在拉起绑定流程...",
-      walletBoundCreatingOrder: isEn
-        ? "Wallet bound. Creating order and sending payment..."
-        : "钱包已绑定，正在创建订单并发起支付...",
-      proMember: "PRO MEMBER",
-      freeTier: "FREE TIER",
-      proPendingSync: isEn ? "Activated (pending sync)" : "已开通（待同步）",
-      noProSubscription: isEn ? "No Pro subscription" : "暂无 Pro 订阅",
-      proEndsSoonTitle: isEn ? "Pro renewal due soon" : "Pro 即将到期",
-      proEndsSoonBody: isEn
-        ? "Your Pro membership will expire soon. Renew now to avoid interruption."
-        : "你的 Pro 会员即将到期。现在续费可避免权限中断。",
-      proExpiredTitle: isEn ? "Pro expired" : "Pro 已到期",
-      proExpiredBody: isEn
-        ? "Your Pro membership has expired. Renew now to restore premium access."
-        : "你的 Pro 会员已到期。立即续费可恢复高级权限。",
-      renewNow: isEn ? "Renew Now" : "立即续费",
-      daysLeft: isEn ? "{days} days left" : "剩余 {days} 天",
-      queuedExtensionSummary: isEn
-        ? "Current plan until {current}. Queued extension: +{days} days. Total access until {total}."
-        : "当前订阅至 {current}，已排队延长 +{days} 天，总可用至 {total}。",
-      paymentMethodLabel: isEn ? "Payment Method" : "请选择支付方式",
-      paymentMethodWallet: isEn ? "Wallet Quick Pay" : "钱包快捷支付",
-      paymentMethodManual: isEn ? "Manual On-chain Transfer" : "手动链上转账",
-      paymentWalletDesc: isEn
-        ? "Option 1: Bind your EVM wallet (e.g. MetaMask extension or WalletConnect QR scan) to sign and pay via smart contract. Credits are credited instantly."
-        : "方式一：绑定您的 EVM 钱包（如 MetaMask 扩展或 WalletConnect 扫码），通过智能合约自动签名付款，额度即时到账。",
-      paymentGasWarning: isEn
-        ? "Your wallet needs a small amount of POL for gas fees; USDC alone may not complete authorization or payment. Please confirm your wallet is on Polygon network and keep some POL before paying."
-        : "钱包里需要少量 POL 作为 gas 手续费；只有 USDC 可能无法完成授权或支付。请确认当前钱包在 Polygon 网络，并预留一点 POL 后再支付。",
-      paymentManualDesc: isEn
-        ? "Option 2: Transfer directly to the platform's receiver contract without binding a wallet. After the transfer, submit the transaction hash (Tx Hash) and the system will verify and activate Pro automatically."
-        : "方式二：无需将钱包绑定到账号，直接向平台收款合约转账。转账完成后提交交易哈希（Tx Hash）系统会自动验签并开通 Pro。",
-      paymentManualTitle: isEn
-        ? "Manual Transfer (No Wallet Binding)"
-        : "手动转账（无需绑定钱包）",
-      paymentManualHint: isEn
-        ? "Create an order first, transfer to the specified receiver address, then submit the tx hash here. Do not mix with the wallet payment channel."
-        : "先创建订单，向指定收款地址转账，完成后在此处提交 tx hash。请勿与钱包付款通道重复混用。",
-      paymentManualCreate: isEn ? "Create Transfer Order" : "创建转账订单",
-      paymentAmount: isEn ? "Amount" : "金额",
-      paymentReceiverLabel: isEn ? "Receiver" : "收款地址",
-      paymentTxHash: "Tx Hash",
-      paymentCopyAddress: isEn ? "Copy" : "复制",
-      paymentManualSubmit: isEn
-        ? "Submit Tx Hash & Confirm"
-        : "提交 tx hash 并自动确认",
-      chainReadError: isEn ? "Reading wallet network" : "读取钱包网络",
-      chainSwitchError: isEn ? "Switch wallet network" : "切换钱包网络",
-      chainAddPolygon: isEn ? "Add Polygon network" : "添加 Polygon 网络",
-      chainSwitchPrompt: isEn
-        ? "Please manually switch to Polygon network in your wallet and try again."
-        : "请在钱包中手动切换到 Polygon 网络后再试。",
-    }),
-    [isEn],
-  );
+  const copy = useMemo(() => createAccountCopy(isEn), [isEn]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -935,26 +134,32 @@ export function AccountCenter() {
   >([]);
   const [selectedInjectedProviderKey, setSelectedInjectedProviderKey] =
     useState("");
-  const [paymentBusy, setPaymentBusy] = useState(false);
-  const [paymentInfo, setPaymentInfo] = useState("");
-  const [paymentError, setPaymentError] = useState("");
-  const [lastIntentId, setLastIntentId] = useState("");
-  const [lastTxHash, setLastTxHash] = useState("");
-  const [telegramBindOpening, setTelegramBindOpening] = useState(false);
-  const [manualPayment, setManualPayment] = useState<
-    CreatedIntent["direct_payment"] | null
-  >(null);
-  const [manualTxHash, setManualTxHash] = useState("");
-  const [txValidation, setTxValidation] = useState<{
-    loading: boolean;
-    checked: boolean;
-    valid?: boolean;
-    reason?: string;
-    detail?: string;
-    checks?: Record<string, unknown>;
-  }>({ loading: false, checked: false });
-  const [paymentMethodTab, setPaymentMethodTab] = useState<"wallet" | "manual">("wallet");
-  const [lastPaymentStartedAt, setLastPaymentStartedAt] = useState(0);
+  const {
+    paymentBusy,
+    setPaymentBusy,
+    paymentInfo,
+    setPaymentInfo,
+    paymentError,
+    setPaymentError,
+    lastIntentId,
+    setLastIntentId,
+    lastTxHash,
+    setLastTxHash,
+    telegramBindOpening,
+    setTelegramBindOpening,
+    manualPayment,
+    setManualPayment,
+    manualTxHash,
+    setManualTxHash,
+    txValidation,
+    setTxValidation,
+    paymentMethodTab,
+    setPaymentMethodTab,
+    lastPaymentStartedAt,
+    setLastPaymentStartedAt,
+    clearPaymentMessages,
+    clearPaymentState,
+  } = usePaymentState();
   const [showSecondarySections, setShowSecondarySections] = useState(false);
   const [reconcileBusy, setReconcileBusy] = useState(false);
 
@@ -1474,11 +679,7 @@ export function AccountCenter() {
 
   useEffect(() => {
     if (!backend?.subscription_active) return;
-    setLastIntentId("");
-    setLastTxHash("");
-    setManualPayment(null);
-    setManualTxHash("");
-    setLastPaymentStartedAt(0);
+    clearPaymentState();
     clearStoredPaymentRecovery();
   }, [backend?.subscription_active]);
 
@@ -1619,19 +820,9 @@ export function AccountCenter() {
   ]);
 
   const onSignOut = async () => {
-    setLastIntentId("");
-    setLastTxHash("");
-    setLastPaymentStartedAt(0);
+    clearPaymentState();
     clearStoredPaymentRecovery();
-    if (walletConnectProviderCache?.disconnect) {
-      try {
-        await walletConnectProviderCache.disconnect();
-      } catch {
-        // ignore
-      }
-      walletConnectProviderCache = null;
-      walletConnectProviderChainId = null;
-    }
+    await resetWalletConnectProvider();
     if (supabaseReady) {
       try {
         await getSupabaseBrowserClient().auth.signOut();
@@ -2150,8 +1341,7 @@ export function AccountCenter() {
     mode: ProviderMode = "auto",
     options: ConnectBindOptions = {},
   ): Promise<boolean> => {
-    setPaymentError("");
-    setPaymentInfo("");
+    clearPaymentMessages();
     if (!isAuthenticated) {
       setPaymentError(copy.loginBeforeBind);
       return false;
@@ -2266,8 +1456,7 @@ export function AccountCenter() {
     if (!confirmed) return;
 
     setPaymentBusy(true);
-    setPaymentError("");
-    setPaymentInfo("");
+    clearPaymentMessages();
     try {
       // Do not hard-fail on client-side token refresh here.
       // The same-origin API route can still authenticate via server-side Supabase session cookies.
@@ -2344,11 +1533,8 @@ export function AccountCenter() {
   };
 
   const createIntentAndPay = async () => {
-    setPaymentError("");
-    setPaymentInfo("");
-    setLastIntentId("");
-    setLastTxHash("");
-    setLastPaymentStartedAt(0);
+    clearPaymentMessages();
+    clearPaymentState();
     clearStoredPaymentRecovery();
     if (!paymentHostAllowed) {
       setPaymentError(
@@ -2673,8 +1859,7 @@ export function AccountCenter() {
   };
 
   const createManualPaymentIntent = async () => {
-    setPaymentError("");
-    setPaymentInfo("");
+    clearPaymentMessages();
     setManualPayment(null);
     setManualTxHash("");
     setLastIntentId("");
@@ -3701,21 +2886,3 @@ export function AccountCenter() {
   );
 }
 
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      className={className}
-      width="24"
-      height="24"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="12" y1="5" x2="12" y2="19"></line>
-      <line x1="5" y1="12" x2="19" y2="12"></line>
-    </svg>
-  );
-}
