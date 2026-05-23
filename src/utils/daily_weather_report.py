@@ -46,6 +46,27 @@ CITY_NAME_ZH: Dict[str, str] = {
 }
 
 
+def _weather_desc(code: Any) -> str:
+    """Translate WMO weather code to Chinese."""
+    try:
+        c = int(code or 0)
+    except (TypeError, ValueError):
+        return "未知"
+    if c == 0:
+        return "晴"
+    if 1 <= c <= 3:
+        return "多云"
+    if c in (45, 48):
+        return "雾"
+    if 51 <= c <= 67:
+        return "雨"
+    if 71 <= c <= 86:
+        return "雪"
+    if 95 <= c <= 99:
+        return "雷暴"
+    return "阴"
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.getenv(name)
     if raw is None:
@@ -93,7 +114,7 @@ def _fetch_city_data(
     return {
         "city": city_key,
         "name": CITY_NAME_ZH.get(city_key, city_key),
-        "weather_code": current.get("weathercode"),
+        "weather": _weather_desc(current.get("weathercode")),
         "forecast_high": today_high,
     }
 
@@ -103,16 +124,14 @@ def _build_ai_prompt(cities_data: List[Dict[str, Any]], report_date: str) -> str
     return (
         f"今天是 {report_date}。以下是今天中国主要城市的天气预报数据（JSON格式）。\n\n"
         f"{data_json}\n\n"
-        "请用自然亲切的中文写一段天气日报。每个城市逐行播报，格式参考：\n\n"
-        "城市名 天气描述，最高N度。一句话体感或穿衣建议。\n\n"
+        "请用自然亲切的中文写一段天气日报。每个城市逐行播报，格式：\n\n"
+        "城市名 weather，最高 forecast_high 度。一句话体感或穿衣建议。\n\n"
         "要求：\n"
-        "1. 天气描述用 weather_code 对应的中文词（晴/多云/阴/雨/雾/雪/雷暴），不要跳过\n"
-        "2. 最高温来自 forecast_high，单位℃\n"
+        "1. weather 和 forecast_high 直接使用数据中的值，不要修改\n"
+        "2. 每个城市一行，城市名用 <b> 加粗\n"
         "3. 开头问候语「☀️ 早上好！今天是x月x日」\n"
         "4. 播报完直接结束，禁止写结尾祝福、总结、免责声明\n"
-        "5. 输出用 HTML：城市名加 <b> 标签，每城一行\n"
-        "6. 总字数不超过 250\n"
-        "weather_code 参考：0=晴, 1-3=多云, 45-48=雾, 51-67=雨, 71-86=雪, 95-99=雷暴"
+        "5. 总字数不超过 200\n"
     )
 
 
