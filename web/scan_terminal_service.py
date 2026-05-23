@@ -49,11 +49,8 @@ from web.scan_terminal_ai_compact import (
     _build_metar_decision_context,
     _city_observation_anchor,
     _compact_hourly_context,
-    _compact_intraday_context,
-    _compact_observation_points,
     _compact_probability_context,
     _compact_taf_context,
-    _compact_vertical_context,
     build_scan_ai_prompt,
 )
 from web.scan_terminal_ai_merge import _normalize_ai_items, merge_scan_ai_result
@@ -195,13 +192,13 @@ SCAN_AI_MAX_TOKENS = _env_int(
 )
 SCAN_CITY_AI_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_MAX_TOKENS",
-    1200,
+    800,
     min_value=400,
     max_value=64000,
 )
 SCAN_CITY_AI_STREAM_MAX_TOKENS = _env_int(
     "POLYWEATHER_SCAN_CITY_AI_STREAM_MAX_TOKENS",
-    min(SCAN_CITY_AI_MAX_TOKENS, 1200),
+    min(SCAN_CITY_AI_MAX_TOKENS, 800),
     min_value=400,
     max_value=64000,
 )
@@ -314,26 +311,48 @@ def _call_deepseek_scan_ai(ai_input: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(data, dict):
         parsed["_polyweather_meta"] = {
             "usage": data.get("usage"),
-            "finish_reason": ((data.get("choices") or [{}])[0] or {}).get("finish_reason"),
+            "finish_reason": ((data.get("choices") or [{}])[0] or {}).get(
+                "finish_reason"
+            ),
         }
     return parsed
 
 
 def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
     local_date = str(data.get("local_date") or "").strip()
-    multi_model_daily = data.get("multi_model_daily") if isinstance(data.get("multi_model_daily"), dict) else {}
-    daily_entry = multi_model_daily.get(local_date) if isinstance(multi_model_daily, dict) else {}
+    multi_model_daily = (
+        data.get("multi_model_daily")
+        if isinstance(data.get("multi_model_daily"), dict)
+        else {}
+    )
+    daily_entry = (
+        multi_model_daily.get(local_date) if isinstance(multi_model_daily, dict) else {}
+    )
     if not isinstance(daily_entry, dict):
         daily_entry = {}
-    daily_models = daily_entry.get("models") if isinstance(daily_entry.get("models"), dict) else None
-    models = daily_models or (data.get("multi_model") if isinstance(data.get("multi_model"), dict) else {})
+    daily_models = (
+        daily_entry.get("models")
+        if isinstance(daily_entry.get("models"), dict)
+        else None
+    )
+    models = daily_models or (
+        data.get("multi_model") if isinstance(data.get("multi_model"), dict) else {}
+    )
     model_values = [_safe_float(value) for value in (models or {}).values()]
     model_values = [value for value in model_values if value is not None]
     metar_context = _build_metar_decision_context(data)
     observation_anchor = _city_observation_anchor(data)
     current = data.get("current") if isinstance(data.get("current"), dict) else {}
-    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
-    airport_primary = data.get("airport_primary") if isinstance(data.get("airport_primary"), dict) else {}
+    airport_current = (
+        data.get("airport_current")
+        if isinstance(data.get("airport_current"), dict)
+        else {}
+    )
+    airport_primary = (
+        data.get("airport_primary")
+        if isinstance(data.get("airport_primary"), dict)
+        else {}
+    )
     risk = data.get("risk") if isinstance(data.get("risk"), dict) else {}
 
     return {
@@ -362,25 +381,76 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
             "observation_source": current.get("settlement_source"),
         },
         "airport": {
-            "name": risk.get("airport") or airport_current.get("station_label") or airport_primary.get("station_label"),
-            "icao": risk.get("icao") or airport_current.get("station_code") or airport_primary.get("station_code"),
+            "name": risk.get("airport")
+            or airport_current.get("station_label")
+            or airport_primary.get("station_label"),
+            "icao": risk.get("icao")
+            or airport_current.get("station_code")
+            or airport_primary.get("station_code"),
             "distance_km": risk.get("distance_km"),
         },
         "model_cluster": {
             "sources": [
-                *([
-                    {"model": "DEB (fusion)", "value": ((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)}
-                ] if (((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)) is not None else []),
+                *(
+                    [
+                        {
+                            "model": "DEB (fusion)",
+                            "value": (
+                                (daily_entry.get("deb") or {}).get("prediction")
+                                if isinstance(daily_entry.get("deb"), dict)
+                                else None
+                            )
+                            or (
+                                (data.get("deb") or {}).get("prediction")
+                                if isinstance(data.get("deb"), dict)
+                                else None
+                            ),
+                        }
+                    ]
+                    if (
+                        (
+                            (daily_entry.get("deb") or {}).get("prediction")
+                            if isinstance(daily_entry.get("deb"), dict)
+                            else None
+                        )
+                        or (
+                            (data.get("deb") or {}).get("prediction")
+                            if isinstance(data.get("deb"), dict)
+                            else None
+                        )
+                    )
+                    is not None
+                    else []
+                ),
                 *[
                     {"model": str(name), "value": value}
                     for name, value in (models or {}).items()
                     if _safe_float(value) is not None
                 ],
             ],
-            "model_count": len(model_values) + (1 if (((daily_entry.get("deb") or {}).get("prediction") if isinstance(daily_entry.get("deb"), dict) else None) or ((data.get("deb") or {}).get("prediction") if isinstance(data.get("deb"), dict) else None)) is not None else 0),
+            "model_count": len(model_values)
+            + (
+                1
+                if (
+                    (
+                        (daily_entry.get("deb") or {}).get("prediction")
+                        if isinstance(daily_entry.get("deb"), dict)
+                        else None
+                    )
+                    or (
+                        (data.get("deb") or {}).get("prediction")
+                        if isinstance(data.get("deb"), dict)
+                        else None
+                    )
+                )
+                is not None
+                else 0
+            ),
             "min": min(model_values) if model_values else None,
             "max": max(model_values) if model_values else None,
-            "spread": (max(model_values) - min(model_values)) if len(model_values) >= 2 else None,
+            "spread": (max(model_values) - min(model_values))
+            if len(model_values) >= 2
+            else None,
         },
         "peak": data.get("peak") or {},
         "metar_context": metar_context,
@@ -401,27 +471,19 @@ def _build_city_ai_prompt(data: Dict[str, Any]) -> Dict[str, Any]:
         },
         "taf": _compact_taf_context(data.get("taf")),
         "probability": _compact_probability_context(
-            data.get("probabilities") if isinstance(data.get("probabilities"), dict) else None,
+            data.get("probabilities")
+            if isinstance(data.get("probabilities"), dict)
+            else None,
             data.get("deb") if isinstance(data.get("deb"), dict) else None,
             data.get("temp_symbol"),
         ),
-        "vertical_profile_signal": _compact_vertical_context(
-            data.get("vertical_profile_signal")
-        ),
-        "intraday_meteorology": _compact_intraday_context(
-            data.get("intraday_meteorology")
-        ),
         "hourly": _compact_hourly_context(data.get("hourly")),
-        "metar_today_obs": _compact_observation_points(data.get("metar_today_obs"), 18),
-        "metar_recent_obs": _compact_observation_points(data.get("metar_recent_obs"), 8),
-        "settlement_today_obs": _compact_observation_points(
-            data.get("settlement_today_obs"),
-            18,
-        ),
     }
 
 
-def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -> Dict[str, Any]:
+def _call_deepseek_city_ai(
+    ai_input: Dict[str, Any], *, locale: str = "zh-CN"
+) -> Dict[str, Any]:
     return _call_deepseek_city_ai_provider(
         ai_input,
         locale=locale,
@@ -434,17 +496,30 @@ def _call_deepseek_city_ai(ai_input: Dict[str, Any], *, locale: str = "zh-CN") -
 
 
 def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
-    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    observation_anchor = (
+        ai_input.get("observation_anchor")
+        if isinstance(ai_input.get("observation_anchor"), dict)
+        else {}
+    )
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
-    airport_current = ai_input.get("airport_current") if isinstance(ai_input.get("airport_current"), dict) else {}
-    metar_context = ai_input.get("metar_context") if isinstance(ai_input.get("metar_context"), dict) else {}
+    airport_current = (
+        ai_input.get("airport_current")
+        if isinstance(ai_input.get("airport_current"), dict)
+        else {}
+    )
+    metar_context = (
+        ai_input.get("metar_context")
+        if isinstance(ai_input.get("metar_context"), dict)
+        else {}
+    )
     key_payload = {
         "prompt_version": SCAN_CITY_AI_PROMPT_VERSION,
         "city": ai_input.get("city"),
         "local_date": ai_input.get("local_date"),
         "station": observation_anchor.get("station_code"),
         "raw_metar": airport_current.get("raw_metar") if is_airport_metar else None,
-        "obs_time": airport_current.get("obs_time") or metar_context.get("last_observation_time"),
+        "obs_time": airport_current.get("obs_time")
+        or metar_context.get("last_observation_time"),
         "stale_for_today": metar_context.get("stale_for_today"),
     }
     raw = json.dumps(key_payload, sort_keys=True, ensure_ascii=False, default=str)
@@ -452,9 +527,17 @@ def _scan_city_ai_cache_key(ai_input: Dict[str, Any]) -> str:
 
 
 def _quick_metar_cache_key(data: Dict[str, Any]) -> str:
-    airport_current = data.get("airport_current") if isinstance(data.get("airport_current"), dict) else {}
+    airport_current = (
+        data.get("airport_current")
+        if isinstance(data.get("airport_current"), dict)
+        else {}
+    )
     current = data.get("current") if isinstance(data.get("current"), dict) else {}
-    observation_anchor = data.get("observation_anchor") if isinstance(data.get("observation_anchor"), dict) else {}
+    observation_anchor = (
+        data.get("observation_anchor")
+        if isinstance(data.get("observation_anchor"), dict)
+        else {}
+    )
     raw_metar = airport_current.get("raw_metar") or current.get("raw_metar")
     obs_time = airport_current.get("obs_time") or current.get("obs_time")
     if raw_metar and obs_time:
@@ -613,7 +696,8 @@ def stream_scan_city_ai_forecast_payload(
                         "model": SCAN_CITY_AI_MODEL,
                         "provider": SCAN_AI_PROVIDER,
                         "city": cached.get("city") or city_name,
-                        "city_display_name": cached.get("city_display_name") or city_name,
+                        "city_display_name": cached.get("city_display_name")
+                        or city_name,
                         "generated_at": cached.get("generated_at"),
                         "duration_ms": 0,
                         "city_forecast": cached.get("payload"),
@@ -625,7 +709,11 @@ def stream_scan_city_ai_forecast_payload(
         locale=normalized_locale,
         reason="stream preview",
     )
-    observation_anchor = ai_input.get("observation_anchor") if isinstance(ai_input.get("observation_anchor"), dict) else {}
+    observation_anchor = (
+        ai_input.get("observation_anchor")
+        if isinstance(ai_input.get("observation_anchor"), dict)
+        else {}
+    )
     is_airport_metar = observation_anchor.get("is_airport_metar") is not False
     calling_message_zh = (
         f"{SCAN_AI_PROVIDER_LABEL} 正在快速增强机场报文解读…"
@@ -712,7 +800,11 @@ def stream_scan_city_ai_forecast_payload(
             "scan city AI stream request city={} locale={} input_bytes={} max_tokens={} timeout_sec={}",
             ai_input.get("city"),
             normalized_locale,
-            len(json.dumps(request_json, ensure_ascii=False, default=str).encode("utf-8")),
+            len(
+                json.dumps(request_json, ensure_ascii=False, default=str).encode(
+                    "utf-8"
+                )
+            ),
             request_json.get("max_tokens"),
             SCAN_CITY_AI_TIMEOUT_SEC,
         )
@@ -832,7 +924,9 @@ def stream_scan_city_ai_forecast_payload(
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
         reason_en = f"{SCAN_AI_PROVIDER_LABEL} city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_zh = (
+            f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        )
         logger.warning(
             "scan city AI stream timeout fallback city={} duration_ms={} model={} error={}",
             data.get("name") or city_name,
@@ -983,7 +1077,11 @@ def build_scan_city_ai_forecast_payload(
         logger.info(
             "scan city AI forecast calling provider city={} station={} model={} raw_metar_present={}",
             data.get("name") or city_name,
-            ((ai_input.get("airport") or {}).get("icao") if isinstance(ai_input.get("airport"), dict) else None),
+            (
+                (ai_input.get("airport") or {}).get("icao")
+                if isinstance(ai_input.get("airport"), dict)
+                else None
+            ),
             SCAN_CITY_AI_MODEL,
             bool(
                 (ai_input.get("airport_current") or {}).get("raw_metar")
@@ -995,7 +1093,9 @@ def build_scan_city_ai_forecast_payload(
     except httpx.TimeoutException as exc:
         duration_ms = int((time.time() - started_at) * 1000)
         reason_en = f"{SCAN_AI_PROVIDER_LABEL} city AI timed out after {SCAN_CITY_AI_TIMEOUT_SEC}s"
-        reason_zh = f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        reason_zh = (
+            f"{SCAN_AI_PROVIDER_LABEL} 城市 AI 在 {SCAN_CITY_AI_TIMEOUT_SEC} 秒内未返回"
+        )
         ai_raw = _build_city_ai_fallback(
             ai_input,
             locale=normalized_locale,
@@ -1162,7 +1262,9 @@ def _build_scan_terminal_payload_uncached(
                     except Exception as exc:
                         failed_cities.append(city_name)
                         failed_reasons.append(str(exc))
-                        logger.warning("scan terminal city failed city={}: {}", city_name, exc)
+                        logger.warning(
+                            "scan terminal city failed city={}: {}", city_name, exc
+                        )
             except FutureTimeoutError:
                 timed_out = True
                 timeout_message = (
@@ -1184,7 +1286,9 @@ def _build_scan_terminal_payload_uncached(
             executor.shutdown(wait=False)
 
         if city_names and len(failed_cities) >= len(city_names):
-            error_message = failed_reasons[0] if failed_reasons else "all city market scans failed"
+            error_message = (
+                failed_reasons[0] if failed_reasons else "all city market scans failed"
+            )
             set_scan_terminal_failure_state(filters, error_message=error_message)
             failed_entry = get_scan_terminal_cache_entry(filters) or {}
             success_payload = failed_entry.get("success_payload")
@@ -1271,7 +1375,9 @@ def build_scan_terminal_payload(
 ) -> Dict[str, Any]:
     filters = _normalize_scan_terminal_filters(raw_filters)
     if not force_refresh:
-        cached = get_cached_scan_terminal_payload(filters, ttl_sec=SCAN_TERMINAL_PAYLOAD_TTL_SEC)
+        cached = get_cached_scan_terminal_payload(
+            filters, ttl_sec=SCAN_TERMINAL_PAYLOAD_TTL_SEC
+        )
         if cached is not None:
             return cached
 
@@ -1283,9 +1389,7 @@ def build_scan_terminal_payload(
                 filters=filters,
                 success_payload=success_payload,
                 error_message=(
-                    "正在后台刷新市场扫描快照"
-                    if started
-                    else "市场扫描快照正在刷新中"
+                    "正在后台刷新市场扫描快照" if started else "市场扫描快照正在刷新中"
                 ),
                 failed_at=cached_entry.get("last_failed_at"),
             )
@@ -1303,7 +1407,11 @@ def build_scan_terminal_ai_payload(
     payload = build_scan_terminal_payload(filters, force_refresh=False)
     current_snapshot_id = str(payload.get("snapshot_id") or "").strip()
     requested_snapshot_id = str(snapshot_id or "").strip()
-    if requested_snapshot_id and current_snapshot_id and requested_snapshot_id != current_snapshot_id:
+    if (
+        requested_snapshot_id
+        and current_snapshot_id
+        and requested_snapshot_id != current_snapshot_id
+    ):
         return _build_scan_ai_unavailable_payload(
             payload,
             status="snapshot_mismatch",
@@ -1363,7 +1471,11 @@ def build_scan_terminal_ai_payload(
 
     try:
         ai_input = build_scan_ai_prompt(payload, max_rows=SCAN_AI_MAX_ROWS)
-        input_meta = ai_input.get("_polyweather_input_meta") if isinstance(ai_input, dict) else {}
+        input_meta = (
+            ai_input.get("_polyweather_input_meta")
+            if isinstance(ai_input, dict)
+            else {}
+        )
         sent_rows = int((input_meta or {}).get("sent_contracts") or 0)
         sent_cities = int((input_meta or {}).get("sent_cities") or 0)
         logger.info(
