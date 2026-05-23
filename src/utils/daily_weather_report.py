@@ -115,14 +115,13 @@ def _fetch_cma_forecast(city_key: str) -> Optional[Dict[str, Any]]:
     low_str: Optional[str] = None
 
     if tem_text:
-        # Patterns: <span>25℃</span> or <span>25°C</span>
-        high_match = re.search(r"<span[^>]*>(-?\d+)\s*(?:℃|°C|°c)?</span>", tem_text)
-        if high_match:
-            high_str = high_match.group(1)
-        # Night temp in <i>: <i>19℃</i>
-        low_match = re.search(r"<i[^>]*>(-?\d+)\s*(?:℃|°C|°c)?</i>", tem_text)
-        if low_match:
-            low_str = low_match.group(1)
+        # Strip all HTML tags, then find numbers followed by degree
+        clean = re.sub(r"<[^>]+>", " ", tem_text)
+        nums = re.findall(r"(-?\d+)\s*(?:℃|°C|°c|°)?", clean)
+        if len(nums) >= 1:
+            high_str = nums[0]
+        if len(nums) >= 2:
+            low_str = nums[1]
 
     if not weather and not high_str:
         return None
@@ -161,64 +160,57 @@ def _fetch_city_data(
 ) -> Optional[Dict[str, Any]]:
     name = CITY_NAME_ZH.get(city_key, city_key)
 
-    # 1. Try CMA first for weather description + official forecast high
+    # 1. Try CMA first for weather description
     cma = _fetch_cma_forecast(city_key)
-    if cma and cma.get("weather") and cma.get("forecast_high") is not None:
-        logger.info(
-            "daily_weather_report: {} using CMA weather={} high={}",
-            city_key,
-            cma["weather"],
-            cma["forecast_high"],
-        )
-        return {
-            "city": city_key,
-            "name": name,
-            "weather": cma["weather"],
-            "forecast_high": cma["forecast_high"],
-        }
 
-    # 2. Fall back to Open-Meteo
+    # 2. Get Open-Meteo data for temperature fallback
+    om_high = None
     info = CITY_REGISTRY.get(city_key)
-    if not info:
-        return None
+    if info:
+        try:
+            results = collector.fetch_all_sources(
+                city_key,
+                lat=info["lat"],
+                lon=info["lon"],
+                include_taf=False,
+                include_ensemble=False,
+                include_multi_model=False,
+            )
+            if isinstance(results, dict):
+                om = results.get("open-meteo", {})
+                daily = om.get("daily", {}) if isinstance(om, dict) else {}
+                daily_highs = daily.get("temperature_2m_max", []) or []
+                om_high = daily_highs[0] if daily_highs else None
+        except Exception as exc:
+            logger.warning(
+                "daily_weather_report: OM fetch failed for {}: {}", city_key, exc
+            )
 
-    try:
-        results = collector.fetch_all_sources(
-            city_key,
-            lat=info["lat"],
-            lon=info["lon"],
-            include_taf=False,
-            include_ensemble=False,
-            include_multi_model=False,
-        )
-    except Exception as exc:
-        logger.warning(f"daily_weather_report: OM fetch failed for {city_key}: {exc}")
-        return None
+    # Use CMA weather + CMA high, fall back to OM high
+    weather: Optional[str] = None
+    forecast_high: Optional[float] = None
 
-    if not isinstance(results, dict):
-        return None
-
-    om = results.get("open-meteo", {}) if isinstance(results, dict) else {}
-    current = om.get("current_weather", {}) if isinstance(om, dict) else {}
-    daily = om.get("daily", {}) if isinstance(om, dict) else {}
-
-    daily_highs = daily.get("temperature_2m_max", []) or []
-    today_high = daily_highs[0] if daily_highs else None
-
-    # Use CMA weather if available, fall back to WMO code translation
-    weather = (
-        cma.get("weather")
-        if (cma and cma.get("weather"))
-        else _wmo_to_weather(current.get("weathercode"))
-    )
-    forecast_high = cma.get("forecast_high") if cma else None
+    if cma:
+        weather = cma.get("weather")
+        forecast_high = cma.get("forecast_high")
     if forecast_high is None:
-        forecast_high = today_high
+        forecast_high = om_high
+
+    if not weather and not forecast_high:
+        return None
+
+    logger.info(
+        "daily_weather_report: {} weather={} high={} (cma_ok={})",
+        city_key,
+        weather or "?",
+        forecast_high,
+        bool(cma and cma.get("weather")),
+    )
 
     return {
         "city": city_key,
         "name": name,
-        "weather": weather,
+        "weather": weather or "?",
         "forecast_high": forecast_high,
     }
 
