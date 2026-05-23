@@ -363,6 +363,7 @@ def _runner(bot: Any, config: Dict[str, Any]) -> None:
                     continue
 
                 try:
+                    report_text += "\n\n⚠️ 以上为粗略预测，仅供参考。"
                     bot.send_message(
                         FORUM_CHAT_ID,
                         report_text,
