@@ -953,7 +953,10 @@ def _build_airport_status_message(
                 station_temp = row.get("temp")
                 break
         if station_temp is None and mgm_nearby:
-            station_temp = mgm_nearby[0].get("temp")
+            logger.warning(
+                "airport message fallback city={}: station {} not found in mgm_nearby, falling back to current.temp",
+                city, airport_icao,
+            )
         if station_temp is None:
             station_temp = (city_weather.get("current") or {}).get("temp")
         display_temp = station_temp
@@ -1210,7 +1213,11 @@ def _process_airport_city(
             airport_row = row
             break
     if not airport_row:
-        airport_row = mgm_nearby[0] if mgm_nearby else {}
+        logger.warning(
+            "airport push skipped city={}: station {} not found in mgm_nearby ({} rows)",
+            city, airport_icao, len(mgm_nearby),
+        )
+        return None
     station_temp = airport_row.get("temp") if airport_row else None
     current_obs_time = str(airport_row.get("obs_time") or "")
 
