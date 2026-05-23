@@ -1,6 +1,41 @@
 # Changelog
 
-## 1.6.0 - 2026-05-10
+## 1.7.0 - 2026-05-23
+
+### 新增能力
+- 市场监控面板（MonitorPanel）：22 城实时温度监控，温度分辨率链（AMOS 跑道 → airport_primary → airport_current → current），按数据源新鲜度驱动刷新
+- 中国城市天气日报：AI 生成每日天气摘要，接入 CMA weather.com.cn 预报数据，推送至 Telegram 论坛群
+- 后台管理系统重写：从 1694 行单页拆分为 9 个模块（总览、会员、订阅、支付、训练、Telegram 审计、健康检查、配置、日志），含漏斗图、KPI 卡片、缓存饼图、增长趋势图
+- 跑道观测系统重构：全跑道展示、结算跑道标注、热力模型、风场分析，推送增加市场状态标签（超预期/升温中/冲顶观察/降温中）
+- 新增 6 个高频数据源：AEROWEB (Météo-France)、NCM (沙特)、IMS Lod (以色列)、AMSC AWOS (中国跑道)、MSS 1 分钟 (新加坡)、AROME HD 15 分钟 (巴黎)
+- 接入 HKO 1 分钟、流浮山 LFS 1 分钟、CWA 10 分钟 (台北松山) 实时温度
+- NOAA MADIS HFMETAR 适配新格式（netCDF stationId 替代 icaoId）+ 目录迁移适配
+- KNMI 适配新数据布局 (station,time) + 5 位 WMO 码 + S3 下载认证修复
+- 新增 GET /api/cities/model-range 端点
+- 积分转账功能：管理员手动扣除/划转用户积分
+- 支付提交前 Tx 预校验：链上验签收款地址与金额
+- CI 全流程自动化：测试通过后自动 SSH 部署到 VPS
+- 一键部署脚本：deploy.sh + deploy.ps1
+
+### 移除
+- 删除 LGBM 全部代码和模型文件，EMOS 简化为纯 legacy 高斯分桶
+- 删除 Polymarket 价格拉取与 UI 层（MarketDecisionLine）
+- 删除 Groq、Meteoblue、NMC、俄罗斯 pogodaiklimat 数据源
+- 删除预热（prewarm）系统
+- 删除市场提醒引擎（market_alert_engine）
+- 删除 Lagos、Masroor Air Base 城市
+- 移除季付/年付计划，统一月付 10 USDC
+
+### 修复与优化
+- 修复移动端城市列表搜索无数据、Leaflet flyTo NaN 崩溃
+- 修复 MacBook Safari 布局崩溃（100vw/dvh、-webkit-backdrop-filter、grid minmax 溢出）
+- 修复温度曲线图三个渲染问题：数据点过少、张力过高、canvas CSS 拉伸
+- 修复 Open-Meteo 冷却期无限循环导致多模型数据缺失
+- 修复转化漏斗数据显示 3750%（前端重复乘以 100）
+- 多模型缓存优化 + ETag 缓存 + stale-while-revalidate
+- 性能优化：Context 重渲染、LGBM 循环移除、TTL 对齐
+- 账户页 Pro 状态偶发性丢失修复
+- 机场推送重构：观测缓存分离 + 全城市覆盖 + 四路并发
 
 - 全面修复前端 UI 设计审查 15 项问题：消除工程债务、统一 token 体系、提升可维护性
 - CSS 架构：消除 !important 滥用（134→49，仅保留 Leaflet/图表所必需项）、浅色主题重构为 `html.light` 选择器体系

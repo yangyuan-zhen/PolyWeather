@@ -9,10 +9,11 @@ PolyWeather Pro — a production weather-intelligence stack for temperature sett
 ## Environment & Preferences (ALWAYS follow)
 
 ### Working Directory
-- All commands run from the repo root: `E:/web/PolyWeather`
+- All commands run from the repo root
+- Python virtual env: `venv\Scripts\activate` (Windows) / `source venv/bin/activate` (Linux/macOS)
 - Frontend dev server: `cd frontend && npm run dev` → http://localhost:3000
 - Backend API server: `uvicorn web.app:app --reload --host 0.0.0.0 --port 8000` → http://localhost:8000
-- When I say "start the server", assume the correct working directory is `E:/web/PolyWeather`
+- When I say "start the server", assume the working directory is the repo root
 
 ### Git Conventions
 - **Commit language: Chinese (简体中文) ONLY**
@@ -38,7 +39,7 @@ Users (Web / Telegram) → Next.js Frontend (Vercel) → FastAPI /web/app.py
                                             Payment Layer (Intent + Event + Confirm Loop)
 ```
 
-- **Backend**: FastAPI on port 8000 (`web/app.py` → `web/app_factory.py` → `web/routers/` (8 route modules) + `web/services/` (14 service modules) + `web/core.py`)
+- **Backend**: FastAPI on port 8000 (`web/app.py` → `web/app_factory.py` → `web/routers/` (8 route modules: `system`, `city`, `auth`, `analytics`, `scan`, `payments`, `ops`, `routes` (legacy)) + `web/services/` (14 service modules) + `web/core.py`)
 - **Frontend**: Next.js 15 + React 19 + TypeScript + Tailwind CSS 3 + shadcn/ui (new-york style) on port 3000 (dev)
 - **Bot**: Telegram bot via `bot_listener.py` → `src/bot/`
 - **Shared analysis core** in `src/` is used by both web API and bot
@@ -59,7 +60,7 @@ npm run build       # Production build (runs sync-next-server-chunks.mjs after)
 npm run start       # Production server
 npm run lint        # ESLint via next lint
 npm run typecheck   # tsc --noEmit
-npm run test:business  # Business state tests (also runs in CI)
+npm run test:business  # Business state tests via scripts/run-business-state-tests.mjs (also runs in CI)
 ```
 
 ### Backend (dev on port 8000)
@@ -82,9 +83,16 @@ The compose file defines two services: `polyweather` (bot) and `polyweather_web`
 
 ### Python tests
 ```bash
-pytest tests/                           # all tests
-pytest tests/test_web_observability.py  # single test file
+python -m pytest tests/                           # all tests
+python -m pytest tests/test_web_observability.py  # single test file
 ```
+
+### Version bump (see RELEASE.md)
+```bash
+python scripts/bump_version.py patch   # or minor / major / 1.5.0
+python scripts/sync_version.py         # verify sync across files
+```
+`VERSION` file is the single source of truth; frontend `package.json` and docs sync from it.
 
 ### Lint & Format
 ```bash
@@ -131,7 +139,7 @@ curl http://127.0.0.1:8000/metrics
 - **State storage**: SQLite primary path (set via `POLYWEATHER_STATE_STORAGE_MODE=sqlite` + `POLYWEATHER_DB_PATH`). Legacy JSON/JSONL files are migration/fallback only.
 - **Runtime data**: External dir recommended (`POLYWEATHER_RUNTIME_DATA_DIR=/var/lib/polyweather`) to avoid git conflicts
 - **Configuration**: `.env.example` is the comprehensive reference (8 config sections: runtime, Telegram, weather cache, auth, ops, frontend, optional modules, Polygon monitor). Copy to `.env` and fill in secrets.
-- **Auth gating** (frontend middleware): Token-based (`POLYWEATHER_DASHBOARD_ACCESS_TOKEN`) or Supabase session-based (`POLYWEATHER_AUTH_ENABLED`). Local dev hosts bypass auth.
+- **Auth gating** (frontend middleware): Three-tier priority in `middleware.ts` — (1) local dev hosts (localhost / 127.0.0.1 / ::1) bypass auth entirely, (2) Supabase session-based when `POLYWEATHER_AUTH_ENABLED=true` via `handleSupabaseAuthGate` or `handleSupabaseOptionalSession`, (3) legacy token fallback via `POLYWEATHER_DASHBOARD_ACCESS_TOKEN` cookie/query-param. Public pages (`/`, `/docs`, `/auth/*`, `/entitlement-required`) and public API routes are always accessible.
 - **CORS**: Allowed origins from `WEB_CORS_ORIGINS` env var (defaults: localhost:3000, polyweather-pro.vercel.app)
 - **API proxy**: Frontend uses Next.js rewrites to proxy `/api/*` to the FastAPI backend; see `frontend/lib/api-proxy.ts` and `frontend/lib/backend-api.ts`
 

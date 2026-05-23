@@ -18,17 +18,11 @@ TEXT_REPLACEMENTS = {
     ROOT / "README_ZH.md": [
         (r"- 版本：`v[\d.]+`", f"- 版本：`{DISPLAY_VERSION}`"),
     ],
-    ROOT / "FRONTEND_REDESIGN_REPORT.md": [
-        (r"前端交付与重构报告（v[\d.]+）", f"前端交付与重构报告（{DISPLAY_VERSION}）"),
-    ],
     ROOT / "docs" / "API_ZH.md": [
         (r"PolyWeather API 文档（v[\d.]+）", f"PolyWeather API 文档（{DISPLAY_VERSION}）"),
     ],
     ROOT / "docs" / "SUPABASE_SETUP_ZH.md": [
         (r"Supabase \+ 登录 \+ 支付接入说明（v[\d.]+）", f"Supabase + 登录 + 支付接入说明（{DISPLAY_VERSION}）"),
-    ],
-    ROOT / "docs" / "TECH_DEBT.md": [
-        (r"技术债与工程待办（v[\d.]+）", f"技术债与工程待办（{DISPLAY_VERSION}）"),
     ],
     ROOT / "docs" / "TECH_DEBT_ZH.md": [
         (r"技术债与工程待办（v[\d.]+）", f"技术债与工程待办（{DISPLAY_VERSION}）"),
