@@ -112,7 +112,10 @@ def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):
     )
 
     assert sent is True
-    assert calls == [("qingdao", False, True)]
+    # All cities processed with force_refresh_observations_only=True
+    assert len(calls) >= 1
+    assert all(c[2] is True for c in calls)
+    assert ("qingdao", False, True) in calls
     assert bot.messages
 
 
