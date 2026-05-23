@@ -103,14 +103,15 @@ def _build_ai_prompt(cities_data: List[Dict[str, Any]], report_date: str) -> str
     return (
         f"今天是 {report_date}。以下是今天中国主要城市的天气预报数据（JSON格式）。\n\n"
         f"{data_json}\n\n"
-        "请用自然亲切的中文写一段天气日报。每个城市必须用以下格式逐城播报：\n\n"
-        "<b>城市名</b> 天气，最高温。一句话体感/建议。\n\n"
+        "请用自然亲切的中文写一段天气日报。每个城市逐行播报，格式参考：\n\n"
+        "城市名 天气描述，最高N度。一句话体感或穿衣建议。\n\n"
         "要求：\n"
-        "1. 「天气」必须是 weather_code 对应的中文（晴/多云/阴/雨/雾/雪/雷暴），不得省略\n"
-        "2. forecast_high 是预报最高温（℃）\n"
-        "3. 开头加问候语「☀️ 早上好！今天是x月x日」\n"
-        "4. 逐城播报完毕后直接结束，不写结尾祝福语、不写总结、不写免责声明\n"
-        "5. 总体控制在 250 字以内\n"
+        "1. 天气描述用 weather_code 对应的中文词（晴/多云/阴/雨/雾/雪/雷暴），不要跳过\n"
+        "2. 最高温来自 forecast_high，单位℃\n"
+        "3. 开头问候语「☀️ 早上好！今天是x月x日」\n"
+        "4. 播报完直接结束，禁止写结尾祝福、总结、免责声明\n"
+        "5. 输出用 HTML：城市名加 <b> 标签，每城一行\n"
+        "6. 总字数不超过 250\n"
         "weather_code 参考：0=晴, 1-3=多云, 45-48=雾, 51-67=雨, 71-86=雪, 95-99=雷暴"
     )
 
@@ -151,8 +152,17 @@ def _call_ai(prompt: str) -> Optional[str]:
             )
             resp.raise_for_status()
             data = resp.json()
-            content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
-            return str(content).strip() if content else None
+            choice = (data.get("choices") or [{}])[0]
+            content = choice.get("message", {}).get("content", "")
+            finish = choice.get("finish_reason", "")
+            if not str(content or "").strip():
+                logger.warning(
+                    "daily_weather_report: AI empty content finish_reason={} model={}",
+                    finish,
+                    model,
+                )
+                return None
+            return str(content).strip()
     except Exception as exc:
         logger.warning(f"daily_weather_report: AI call failed: {exc}")
         return None
