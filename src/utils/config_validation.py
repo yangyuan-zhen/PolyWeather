@@ -71,7 +71,6 @@ def validate_runtime_env(
     entitlement_guard = _env_bool("POLYWEATHER_REQUIRE_ENTITLEMENT", False)
     payment_enabled = _env_bool("POLYWEATHER_PAYMENT_ENABLED", False)
     weekly_reward_enabled = _env_bool("POLYWEATHER_WEEKLY_REWARD_ENABLED", False)
-    wallet_activity_enabled = _env_bool("POLYMARKET_WALLET_ACTIVITY_ENABLED", False)
     polygon_watch_enabled = _env_bool("POLYGON_WALLET_WATCH_ENABLED", False)
 
     if component_key == "bot":
@@ -79,7 +78,9 @@ def validate_runtime_env(
         if missing:
             report.errors.append(f"Bot 启动缺少必填变量: {', '.join(missing)}")
         if not (_has("TELEGRAM_CHAT_ID") or _has("TELEGRAM_CHAT_IDS")):
-            report.warnings.append("未配置 TELEGRAM_CHAT_ID / TELEGRAM_CHAT_IDS，机器人推送目标为空")
+            report.warnings.append(
+                "未配置 TELEGRAM_CHAT_ID / TELEGRAM_CHAT_IDS，机器人推送目标为空"
+            )
 
     if auth_enabled:
         missing = _missing(["SUPABASE_URL", "SUPABASE_ANON_KEY"])
@@ -93,12 +94,16 @@ def validate_runtime_env(
     if entitlement_guard:
         missing = _missing(["POLYWEATHER_BACKEND_ENTITLEMENT_TOKEN"])
         if missing:
-            report.errors.append(f"已启用 backend entitlement guard，但缺少变量: {', '.join(missing)}")
+            report.errors.append(
+                f"已启用 backend entitlement guard，但缺少变量: {', '.join(missing)}"
+            )
 
     if payment_enabled:
         payment_missing = _missing(["POLYWEATHER_PAYMENT_RPC_URL"])
         if payment_missing:
-            report.errors.append(f"已启用支付，但缺少变量: {', '.join(payment_missing)}")
+            report.errors.append(
+                f"已启用支付，但缺少变量: {', '.join(payment_missing)}"
+            )
         has_receiver = _has("POLYWEATHER_PAYMENT_RECEIVER_CONTRACT")
         has_tokens_json = _has("POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON")
         if not (has_receiver or has_tokens_json):
@@ -106,13 +111,11 @@ def validate_runtime_env(
                 "已启用支付，但未配置 POLYWEATHER_PAYMENT_RECEIVER_CONTRACT 或 POLYWEATHER_PAYMENT_ACCEPTED_TOKENS_JSON"
             )
 
-    if wallet_activity_enabled:
-        if not _has("POLYMARKET_WALLET_ACTIVITY_USERS"):
-            report.warnings.append("已启用 wallet activity watcher，但未配置 POLYMARKET_WALLET_ACTIVITY_USERS")
-
     if polygon_watch_enabled:
         if not _has("POLYGON_WALLET_WATCH_ADDRESSES"):
-            report.warnings.append("已启用 polygon watcher，但未配置 POLYGON_WALLET_WATCH_ADDRESSES")
+            report.warnings.append(
+                "已启用 polygon watcher，但未配置 POLYGON_WALLET_WATCH_ADDRESSES"
+            )
 
     if component_key == "web":
         if auth_enabled and not auth_required:

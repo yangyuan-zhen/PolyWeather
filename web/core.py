@@ -19,7 +19,6 @@ from src.utils.config_validation import validate_runtime_env
 from src.data_collection.weather_sources import WeatherDataCollector
 from src.data_collection.country_networks import provider_coverage_summary
 from src.data_collection.city_risk_profiles import CITY_RISK_PROFILES  # noqa: F401
-from src.data_collection.polymarket_readonly import PolymarketReadOnlyLayer
 from src.auth.supabase_entitlement import SUPABASE_ENTITLEMENT, extract_bearer_token
 from src.utils.metrics import (
     build_metrics_summary,
@@ -53,7 +52,6 @@ for _warning in _config_validation.warnings:
 if _config_validation.errors:
     raise RuntimeError(" | ".join(_config_validation.errors))
 _weather = WeatherDataCollector(_config)
-_market_layer = PolymarketReadOnlyLayer()
 _account_db = DBManager()
 
 CITIES: Dict[str, Dict[str, Any]] = {
@@ -62,7 +60,10 @@ CITIES: Dict[str, Dict[str, Any]] = {
         "lon": info["lon"],
         "f": info["use_fahrenheit"],
         "tz": info["tz_offset"],
-        "settlement_source": str(info.get("settlement_source") or "metar").strip().lower() or "metar",
+        "settlement_source": str(info.get("settlement_source") or "metar")
+        .strip()
+        .lower()
+        or "metar",
     }
     for cid, info in CITY_REGISTRY.items()
 }
@@ -141,6 +142,7 @@ async def _etag_middleware(request: Request, call_next):
 
     try:
         import hashlib
+
         etag = hashlib.md5(body).hexdigest()
     except Exception:
         return response
@@ -149,11 +151,13 @@ async def _etag_middleware(request: Request, call_next):
     if_none_match = request.headers.get("If-None-Match", "")
     if if_none_match == etag_value:
         from fastapi.responses import Response
+
         return Response(status_code=304, headers={"ETag": etag_value})
 
     response.headers["ETag"] = etag_value
     response.headers["Cache-Control"] = "private, max-age=30"
     return response
+
 
 def _env_bool(name: str, default: bool = False) -> bool:
     raw = os.getenv(name)
@@ -227,7 +231,9 @@ def _resolve_auth_points(request: Request) -> int:
                     request.state.auth_points = email_points
                     points = email_points
             except Exception as exc:
-                logger.warning(f"auth points email fallback failed email={email}: {exc}")
+                logger.warning(
+                    f"auth points email fallback failed email={email}: {exc}"
+                )
 
     return points
 
@@ -289,9 +295,14 @@ def _assert_entitlement(request: Request) -> None:
 
 def _require_supabase_identity(request: Request) -> Dict[str, str]:
     if not SUPABASE_ENTITLEMENT.enabled:
-        raise HTTPException(status_code=503, detail="payment requires POLYWEATHER_AUTH_ENABLED=true")
+        raise HTTPException(
+            status_code=503, detail="payment requires POLYWEATHER_AUTH_ENABLED=true"
+        )
     if not SUPABASE_ENTITLEMENT.configured:
-        raise HTTPException(status_code=503, detail="payment requires SUPABASE_URL and SUPABASE_ANON_KEY")
+        raise HTTPException(
+            status_code=503,
+            detail="payment requires SUPABASE_URL and SUPABASE_ANON_KEY",
+        )
 
     state_user_id = str(getattr(request.state, "auth_user_id", "") or "").strip()
     if state_user_id:
@@ -306,9 +317,13 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
 
     legacy_ok = _legacy_service_token_valid(request)
     if legacy_ok:
-        forwarded_user_id = str(request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or "").strip()
+        forwarded_user_id = str(
+            request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or ""
+        ).strip()
         if forwarded_user_id:
-            forwarded_email = str(request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or "").strip()
+            forwarded_email = str(
+                request.headers.get(_FORWARDED_SUPABASE_EMAIL_HEADER) or ""
+            ).strip()
             return {"user_id": forwarded_user_id, "email": forwarded_email}
         # Entitlement token is valid but forwarded headers are missing.
         # Return a placeholder identity — callers (e.g. _require_ops_admin)
@@ -316,12 +331,15 @@ def _require_supabase_identity(request: Request) -> Dict[str, str]:
         return {"user_id": "entitlement", "email": ""}
 
     logger.warning(
-        "payment auth identity missing state_user={} auth_bearer={} legacy_ok={} forwarded_user={}"
-        .format(
+        "payment auth identity missing state_user={} auth_bearer={} legacy_ok={} forwarded_user={}".format(
             bool(state_user_id),
             bool(token),
             bool(legacy_ok),
-            bool(str(request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or "").strip()),
+            bool(
+                str(
+                    request.headers.get(_FORWARDED_SUPABASE_USER_ID_HEADER) or ""
+                ).strip()
+            ),
         )
     )
     raise HTTPException(status_code=401, detail="Unauthorized")
@@ -342,7 +360,10 @@ def _require_ops_admin(request: Request) -> Dict[str, str]:
     # missing forwarded headers), loosen the requirement: entitlement token
     # alone is sufficient admin proof when admin list is configured.
     if is_entitlement:
-        granted = {"user_id": "admin:entitlement", "email": next(iter(_OPS_ADMIN_EMAILS))}
+        granted = {
+            "user_id": "admin:entitlement",
+            "email": next(iter(_OPS_ADMIN_EMAILS)),
+        }
         return granted
     raise HTTPException(status_code=403, detail="ops admin required")
 
@@ -437,15 +458,24 @@ def _cache_summary() -> Dict[str, Any]:
 
     open_meteo_forecast_entries = len(getattr(_weather, "_open_meteo_cache", {}) or {})
     open_meteo_ensemble_entries = len(getattr(_weather, "_ensemble_cache", {}) or {})
-    open_meteo_multi_model_entries = len(getattr(_weather, "_multi_model_cache", {}) or {})
+    open_meteo_multi_model_entries = len(
+        getattr(_weather, "_multi_model_cache", {}) or {}
+    )
     metar_entries = len(getattr(_weather, "_metar_cache", {}) or {})
     taf_entries = len(getattr(_weather, "_taf_cache", {}) or {})
     settlement_entries = len(getattr(_weather, "_settlement_cache", {}) or {})
 
     gauge_set("polyweather_api_cache_entries", len(_cache))
-    gauge_set("polyweather_open_meteo_forecast_cache_entries", open_meteo_forecast_entries)
-    gauge_set("polyweather_open_meteo_ensemble_cache_entries", open_meteo_ensemble_entries)
-    gauge_set("polyweather_open_meteo_multi_model_cache_entries", open_meteo_multi_model_entries)
+    gauge_set(
+        "polyweather_open_meteo_forecast_cache_entries", open_meteo_forecast_entries
+    )
+    gauge_set(
+        "polyweather_open_meteo_ensemble_cache_entries", open_meteo_ensemble_entries
+    )
+    gauge_set(
+        "polyweather_open_meteo_multi_model_cache_entries",
+        open_meteo_multi_model_entries,
+    )
     gauge_set("polyweather_metar_cache_entries", metar_entries)
     gauge_set("polyweather_taf_cache_entries", taf_entries)
     gauge_set("polyweather_settlement_cache_entries", settlement_entries)
@@ -475,8 +505,12 @@ def _integration_summary() -> Dict[str, Any]:
     weather_cfg = _config.get("weather", {}) if isinstance(_config, dict) else {}
     return {
         "supabase_configured": bool(SUPABASE_ENTITLEMENT.configured),
-        "telegram_bot_configured": bool((_config.get("telegram", {}) or {}).get("bot_token")),
-        "walletconnect_configured": bool(os.getenv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID")),
+        "telegram_bot_configured": bool(
+            (_config.get("telegram", {}) or {}).get("bot_token")
+        ),
+        "walletconnect_configured": bool(
+            os.getenv("NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID")
+        ),
         "weather_sources": {
             "openweather": bool(weather_cfg.get("openweather_api_key")),
             "wunderground": bool(weather_cfg.get("wunderground_api_key")),
@@ -603,7 +637,9 @@ def _city_coverage_summary(conn: sqlite3.Connection) -> Dict[str, Any]:
                 "city": city,
                 "name": str(meta.get("name") or city),
                 "settlement_source": str(meta.get("settlement_source") or "metar"),
-                "settlement_station_code": str(meta.get("settlement_station_code") or meta.get("icao") or ""),
+                "settlement_station_code": str(
+                    meta.get("settlement_station_code") or meta.get("icao") or ""
+                ),
                 "truth_rows": int(truth_payload.get("truth_rows") or 0),
                 "feature_rows": int(feature_payload.get("feature_rows") or 0),
                 "truth_min_date": truth_payload.get("truth_min_date"),
@@ -614,9 +650,7 @@ def _city_coverage_summary(conn: sqlite3.Connection) -> Dict[str, Any]:
         )
 
     highlighted = [
-        entry
-        for entry in entries
-        if entry["city"] in {"taipei", "shenzhen"}
+        entry for entry in entries if entry["city"] in {"taipei", "shenzhen"}
     ]
     gaps = sorted(
         entries,
@@ -687,7 +721,9 @@ def _training_data_summary() -> Dict[str, Any]:
             if truth_records.get("ok"):
                 truth_records["source_counts"] = _truth_source_counts(conn)
             truth_revisions = _truth_revisions_summary(conn)
-            training_features = _table_date_summary(conn, "training_feature_records_store")
+            training_features = _table_date_summary(
+                conn, "training_feature_records_store"
+            )
             city_coverage = _city_coverage_summary(conn)
     except Exception as exc:
         return {

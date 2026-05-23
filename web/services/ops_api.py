@@ -39,7 +39,9 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
             )
         except Exception:
             pass
-    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=limit)
+    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+        limit=limit
+    )
     subscription_user_ids = [str(item.get("user_id") or "") for item in subscriptions]
     user_map = db.get_users_by_supabase_user_ids(subscription_user_ids)
     unresolved_user_ids = [
@@ -47,19 +49,24 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
         for user_id in subscription_user_ids
         if str(user_id or "").strip().lower()
         and not str(
-            (user_map.get(str(user_id).strip().lower(), {}) or {}).get("supabase_email") or ""
+            (user_map.get(str(user_id).strip().lower(), {}) or {}).get("supabase_email")
+            or ""
         ).strip()
     ]
-    auth_user_map = legacy_routes.SUPABASE_ENTITLEMENT.get_auth_users(unresolved_user_ids)
+    auth_user_map = legacy_routes.SUPABASE_ENTITLEMENT.get_auth_users(
+        unresolved_user_ids
+    )
     deduped: dict[str, dict] = {}
     for item in subscriptions:
         user_id = str(item.get("user_id") or "").strip().lower()
         local_user = user_map.get(user_id, {})
         auth_user = auth_user_map.get(user_id, {})
-        subscription_window = legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
-            user_id,
-            respect_requirement=False,
-            bypass_cache=True,
+        subscription_window = (
+            legacy_routes.SUPABASE_ENTITLEMENT.get_subscription_window(
+                user_id,
+                respect_requirement=False,
+                bypass_cache=True,
+            )
         )
         current_expires_at = item.get("expires_at")
         total_expires_at = (
@@ -78,13 +85,18 @@ def list_ops_memberships(request: Request, limit: int = 200) -> Dict[str, Any]:
             else 0
         )
         source = str(item.get("source") or "")
-        is_trial = source == "signup_trial" or str(item.get("plan_code") or "").startswith("signup_trial")
+        is_trial = source == "signup_trial" or str(
+            item.get("plan_code") or ""
+        ).startswith("signup_trial")
         row = {
             "user_id": user_id,
-            "email": str(auth_user.get("email") or local_user.get("supabase_email") or ""),
+            "email": str(
+                auth_user.get("email") or local_user.get("supabase_email") or ""
+            ),
             "telegram_id": local_user.get("telegram_id"),
             "username": local_user.get("username"),
-            "registered_at": local_user.get("created_at") or auth_user.get("created_at"),
+            "registered_at": local_user.get("created_at")
+            or auth_user.get("created_at"),
             "plan_code": item.get("plan_code"),
             "source": source,
             "is_trial": is_trial,
@@ -113,7 +125,9 @@ def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, An
     from datetime import datetime, timedelta
 
     safe_days = max(7, min(365, int(days or 90)))
-    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=5000)
+    subscriptions = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+        limit=5000
+    )
     now = datetime.utcnow()
     cutoff = now - timedelta(days=safe_days)
 
@@ -150,7 +164,15 @@ def get_ops_memberships_growth(request: Request, days: int = 90) -> dict[str, An
         pc = paid_by_day.get(key, 0)
         total = tc + pc
         running += total
-        daily.append({"date": key, "trial": tc, "paid": pc, "total": total, "cumulative": running})
+        daily.append(
+            {
+                "date": key,
+                "trial": tc,
+                "paid": pc,
+                "total": total,
+                "cumulative": running,
+            }
+        )
         cursor += timedelta(days=1)
 
     return {"days": safe_days, "daily": daily}
@@ -186,7 +208,9 @@ def list_ops_payment_incidents(
 def resolve_ops_payment_incident(request: Request, event_id: int) -> Dict[str, Any]:
     admin = _require_ops(request) or {}
     db = DBManager()
-    resolved = db.mark_payment_audit_event_resolved(event_id, str(admin.get("email") or ""))
+    resolved = db.mark_payment_audit_event_resolved(
+        event_id, str(admin.get("email") or "")
+    )
     if not resolved:
         raise HTTPException(status_code=404, detail="payment_incident_not_found")
     return {"ok": True, "incident": resolved}
@@ -251,7 +275,9 @@ def transfer_ops_points(
     to_email = str(to_email or "").strip()
     amount = int(amount or 0)
     if not from_email or not to_email:
-        raise HTTPException(status_code=400, detail="from_email and to_email are required")
+        raise HTTPException(
+            status_code=400, detail="from_email and to_email are required"
+        )
     if amount <= 0:
         raise HTTPException(status_code=400, detail="amount must be positive")
     db = DBManager()
@@ -300,7 +326,8 @@ def get_ops_truth_history(
                 {
                     "city": row_city,
                     "display_name": str(
-                        (legacy_routes.CITY_REGISTRY.get(row_city) or {}).get("name") or row_city
+                        (legacy_routes.CITY_REGISTRY.get(row_city) or {}).get("name")
+                        or row_city
                     ),
                     "target_date": str(target_date),
                     "actual_high": payload.get("actual_high"),
@@ -314,7 +341,9 @@ def get_ops_truth_history(
                 }
             )
 
-    rows.sort(key=lambda item: (str(item["target_date"]), str(item["city"])), reverse=True)
+    rows.sort(
+        key=lambda item: (str(item["target_date"]), str(item["city"])), reverse=True
+    )
     filtered_count = len(rows)
     rows = rows[:max_limit]
     available_cities = [
@@ -358,26 +387,33 @@ _EDITABLE_CONFIG_KEYS: dict[str, str] = {
 def get_ops_config(request: Request) -> dict[str, Any]:
     _require_ops(request)
     import os
+
     configs: list[dict[str, str]] = []
     for key, desc in _EDITABLE_CONFIG_KEYS.items():
-        configs.append({
-            "key": key,
-            "value": os.getenv(key) or "",
-            "description": desc,
-        })
+        configs.append(
+            {
+                "key": key,
+                "value": os.getenv(key) or "",
+                "description": desc,
+            }
+        )
     return {"configs": configs}
 
 
 def update_ops_config(request: Request, key: str, value: str) -> dict[str, Any]:
     _require_ops(request)
     import os
+
     if key not in _EDITABLE_CONFIG_KEYS:
-        raise HTTPException(status_code=400, detail=f"config key '{key}' is not editable")
+        raise HTTPException(
+            status_code=400, detail=f"config key '{key}' is not editable"
+        )
     os.environ[key] = str(value)
     return {"key": key, "value": value, "ok": True}
 
 
 # ── Subscriptions ───────────────────────────────────────────────────
+
 
 def grant_ops_subscription(
     request: Request,
@@ -398,7 +434,9 @@ def grant_ops_subscription(
 
     allowed_plans = {"pro_monthly"}
     if plan_code not in allowed_plans:
-        raise HTTPException(status_code=400, detail=f"invalid plan_code, allowed: {allowed_plans}")
+        raise HTTPException(
+            status_code=400, detail=f"invalid plan_code, allowed: {allowed_plans}"
+        )
 
     safe_days = max(1, min(365, int(days or 30)))
     safe_deduct = max(0, int(deduct_points or 0))
@@ -423,7 +461,9 @@ def grant_ops_subscription(
     users = user_resp.json().get("users", []) if user_resp.ok else []
     user_id = users[0].get("id") if users else None
     if not user_id:
-        raise HTTPException(status_code=404, detail=f"user not found: {normalized_email}")
+        raise HTTPException(
+            status_code=404, detail=f"user not found: {normalized_email}"
+        )
 
     now = datetime.utcnow()
     starts_at = now.isoformat() + "Z"
@@ -446,17 +486,24 @@ def grant_ops_subscription(
         timeout=10,
     )
     if not resp.ok:
-        raise HTTPException(status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}")
+        raise HTTPException(
+            status_code=500, detail=f"Supabase insert failed: {resp.text[:200]}"
+        )
 
     result: dict[str, Any] = {
-        "ok": True, "user_id": user_id, "plan_code": plan_code,
-        "days": safe_days, "expires_at": expires_at,
+        "ok": True,
+        "user_id": user_id,
+        "plan_code": plan_code,
+        "days": safe_days,
+        "expires_at": expires_at,
     }
 
     # Optionally deduct points from the user (manual Pro grant with points payment)
     if safe_deduct > 0:
         db = DBManager()
-        deduct_result = db.deduct_points_by_supabase_email(normalized_email, safe_deduct)
+        deduct_result = db.deduct_points_by_supabase_email(
+            normalized_email, safe_deduct
+        )
         result["points_deducted"] = safe_deduct
         result["points_result"] = deduct_result
 
@@ -504,7 +551,9 @@ def extend_ops_subscription(
     )
     subs = subs_resp.json() if subs_resp.ok else []
     if not subs:
-        raise HTTPException(status_code=404, detail=f"no subscription found for {normalized_email}")
+        raise HTTPException(
+            status_code=404, detail=f"no subscription found for {normalized_email}"
+        )
 
     sub = subs[0]
     current_expiry = sub.get("expires_at", "")
@@ -521,8 +570,15 @@ def extend_ops_subscription(
         timeout=10,
     )
     if patch_resp.ok:
-        return {"ok": True, "email": normalized_email, "additional_days": safe_days, "new_expires_at": new_expiry}
-    raise HTTPException(status_code=500, detail=f"Supabase update failed: {patch_resp.text[:200]}")
+        return {
+            "ok": True,
+            "email": normalized_email,
+            "additional_days": safe_days,
+            "new_expires_at": new_expiry,
+        }
+    raise HTTPException(
+        status_code=500, detail=f"Supabase update failed: {patch_resp.text[:200]}"
+    )
 
 
 def get_ops_user_subscriptions(
@@ -559,7 +615,9 @@ def get_ops_user_subscriptions(
     users = user_resp.json().get("users", []) if user_resp.ok else []
     user_id = users[0].get("id") if users else None
     if not user_id:
-        raise HTTPException(status_code=404, detail=f"user not found: {normalized_email}")
+        raise HTTPException(
+            status_code=404, detail=f"user not found: {normalized_email}"
+        )
 
     # Fetch all subscription rows for this user (no status filter)
     subs_resp = _requests.get(
@@ -587,6 +645,7 @@ def get_ops_user_subscriptions(
 
 # ── Logs ────────────────────────────────────────────────────────────
 
+
 def get_ops_logs(
     request: Request,
     level: str = "",
@@ -595,6 +654,7 @@ def get_ops_logs(
     _require_ops(request)
     import os
     import subprocess
+
     safe_lines = max(10, min(1000, int(lines or 100)))
     log_text = ""
     try:
@@ -649,8 +709,19 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     supabase_key = str(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
     if supabase_url and supabase_key:
         try:
-            r = _r.get(f"{supabase_url}/rest/v1/", headers={"apikey": supabase_key, "Authorization": f"Bearer {supabase_key}"}, timeout=timeout)
-            results["supabase"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round(r.elapsed.total_seconds() * 1000)}
+            r = _r.get(
+                f"{supabase_url}/rest/v1/",
+                headers={
+                    "apikey": supabase_key,
+                    "Authorization": f"Bearer {supabase_key}",
+                },
+                timeout=timeout,
+            )
+            results["supabase"] = {
+                "ok": r.ok,
+                "status": r.status_code,
+                "latency_ms": round(r.elapsed.total_seconds() * 1000),
+            }
         except Exception as e:
             results["supabase"] = {"ok": False, "error": str(e)[:100]}
     else:
@@ -659,16 +730,30 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     # Open-Meteo
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&daily=temperature_2m_max&timezone=auto&forecast_days=1", timeout=timeout)
-        results["open_meteo"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://api.open-meteo.com/v1/forecast?latitude=52.52&longitude=13.41&daily=temperature_2m_max&timezone=auto&forecast_days=1",
+            timeout=timeout,
+        )
+        results["open_meteo"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["open_meteo"] = {"ok": False, "error": str(e)[:100]}
 
     # METAR (aviationweather)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://aviationweather.gov/api/data/metar?ids=KJFK&format=json", timeout=timeout)
-        results["metar"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://aviationweather.gov/api/data/metar?ids=KJFK&format=json",
+            timeout=timeout,
+        )
+        results["metar"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["metar"] = {"ok": False, "error": str(e)[:100]}
 
@@ -677,8 +762,16 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     if knmi_key:
         try:
             t0 = _time.perf_counter()
-            r = _r.get("https://api.dataplatform.knmi.nl/open-data/v1/datasets/10-minute-in-situ-meteorological-observations/versions/1.0/files?maxKeys=1", headers={"Authorization": knmi_key}, timeout=timeout)
-            results["knmi"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+            r = _r.get(
+                "https://api.dataplatform.knmi.nl/open-data/v1/datasets/10-minute-in-situ-meteorological-observations/versions/1.0/files?maxKeys=1",
+                headers={"Authorization": knmi_key},
+                timeout=timeout,
+            )
+            results["knmi"] = {
+                "ok": r.ok,
+                "status": r.status_code,
+                "latency_ms": round((_time.perf_counter() - t0) * 1000),
+            }
         except Exception as e:
             results["knmi"] = {"ok": False, "error": str(e)[:100]}
     else:
@@ -687,8 +780,15 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     # MADIS (NOAA)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/", timeout=timeout)
-        results["madis"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://madis-data.ncep.noaa.gov/madisPublic1/data/LDAD/hfmetar/netCDF/",
+            timeout=timeout,
+        )
+        results["madis"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["madis"] = {"ok": False, "error": str(e)[:100]}
 
@@ -697,8 +797,14 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     if bot_token:
         try:
             t0 = _time.perf_counter()
-            r = _r.get(f"https://api.telegram.org/bot{bot_token}/getMe", timeout=timeout)
-            results["telegram"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+            r = _r.get(
+                f"https://api.telegram.org/bot{bot_token}/getMe", timeout=timeout
+            )
+            results["telegram"] = {
+                "ok": r.ok,
+                "status": r.status_code,
+                "latency_ms": round((_time.perf_counter() - t0) * 1000),
+            }
         except Exception as e:
             results["telegram"] = {"ok": False, "error": str(e)[:100]}
     else:
@@ -708,86 +814,125 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     try:
         t0 = _time.perf_counter()
         r = _r.get("https://www.jma.go.jp/bosai/forecast/", timeout=timeout)
-        results["jma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        results["jma"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["jma"] = {"ok": False, "error": str(e)[:100]}
 
     # MGM (Turkish State Meteorological Service)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://servis.mgm.gov.tr/web/sondurumlar?istno=17130&_=1", timeout=timeout, headers={"Origin": "https://www.mgm.gov.tr"})
-        results["mgm"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://servis.mgm.gov.tr/web/sondurumlar?istno=17130&_=1",
+            timeout=timeout,
+            headers={"Origin": "https://www.mgm.gov.tr"},
+        )
+        results["mgm"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["mgm"] = {"ok": False, "error": str(e)[:100]}
 
     # FMI (Finnish Meteorological Institute)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetCapabilities", timeout=timeout)
-        results["fmi"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://opendata.fmi.fi/wfs?service=WFS&version=2.0.0&request=GetCapabilities",
+            timeout=timeout,
+        )
+        results["fmi"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["fmi"] = {"ok": False, "error": str(e)[:100]}
 
     # KMA (Korea Meteorological Administration)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://www.weather.go.kr/wgis-nuri/js/info/sfc.geojson", timeout=timeout)
-        results["kma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://www.weather.go.kr/wgis-nuri/js/info/sfc.geojson", timeout=timeout
+        )
+        results["kma"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["kma"] = {"ok": False, "error": str(e)[:100]}
 
     # HKO (Hong Kong Observatory)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv", timeout=timeout)
-        results["hko"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://data.weather.gov.hk/weatherAPI/hko_data/regional-weather/latest_1min_temperature.csv",
+            timeout=timeout,
+        )
+        results["hko"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["hko"] = {"ok": False, "error": str(e)[:100]}
 
     # Singapore MSS (data.gov.sg)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://api.data.gov.sg/v1/environment/air-temperature", timeout=timeout)
-        results["singapore_mss"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://api.data.gov.sg/v1/environment/air-temperature", timeout=timeout
+        )
+        results["singapore_mss"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["singapore_mss"] = {"ok": False, "error": str(e)[:100]}
 
     # CWA (Taiwan Central Weather Administration)
-    cwa_key = str(os.getenv("CWA_API_KEY") or os.getenv("CWA_OPEN_DATA_AUTH") or os.getenv("CWA_OPEN_DATA_API_KEY") or "").strip()
+    cwa_key = str(
+        os.getenv("CWA_API_KEY")
+        or os.getenv("CWA_OPEN_DATA_AUTH")
+        or os.getenv("CWA_OPEN_DATA_API_KEY")
+        or ""
+    ).strip()
     if cwa_key:
         try:
             t0 = _time.perf_counter()
-            r = _r.get(f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization={cwa_key}&limit=1", timeout=timeout)
-            results["cwa"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+            r = _r.get(
+                f"https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0003-001?Authorization={cwa_key}&limit=1",
+                timeout=timeout,
+            )
+            results["cwa"] = {
+                "ok": r.ok,
+                "status": r.status_code,
+                "latency_ms": round((_time.perf_counter() - t0) * 1000),
+            }
         except Exception as e:
             results["cwa"] = {"ok": False, "error": str(e)[:100]}
     else:
         results["cwa"] = {"ok": False, "error": "not configured"}
 
-    # Polymarket Gamma API
-    try:
-        t0 = _time.perf_counter()
-        r = _r.get("https://gamma-api.polymarket.com/events?limit=1", timeout=timeout)
-        results["polymarket_gamma"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-    except Exception as e:
-        results["polymarket_gamma"] = {"ok": False, "error": str(e)[:100]}
-
-    # Polymarket CLOB API — GET / returns 200 on healthy CLOB
-    try:
-        t0 = _time.perf_counter()
-        r = _r.get("https://clob.polymarket.com/", timeout=timeout)
-        results["polymarket_clob"] = {"ok": r.status_code < 500, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
-    except Exception as e:
-        results["polymarket_clob"] = {"ok": False, "error": str(e)[:100]}
-
-
-
+    # Polymarket health checks have been removed from the project
 
     # AMOS (Korea runway sensors)
     try:
         t0 = _time.perf_counter()
-        r = _r.get("https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do", timeout=timeout)
-        results["amos"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        r = _r.get(
+            "https://global.amo.go.kr/amosobsnew/AmosRealTimeImage.do", timeout=timeout
+        )
+        results["amos"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["amos"] = {"ok": False, "error": str(e)[:100]}
 
@@ -802,11 +947,17 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
                 verify=False,
                 headers={
                     "Accept": "application/json, text/plain, */*",
-                    "Referer": os.getenv("AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"),
+                    "Referer": os.getenv(
+                        "AMSC_AWOS_REFERER", "https://www.amsc.net.cn/"
+                    ),
                     "User-Agent": "PolyWeather/1.0",
                 },
             )
-            results["amsc_awos"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+            results["amsc_awos"] = {
+                "ok": r.ok,
+                "status": r.status_code,
+                "latency_ms": round((_time.perf_counter() - t0) * 1000),
+            }
         except Exception as e:
             results["amsc_awos"] = {"ok": False, "error": str(e)[:100]}
     else:
@@ -816,12 +967,20 @@ def get_ops_health_check(request: Request) -> dict[str, Any]:
     try:
         t0 = _time.perf_counter()
         r = _r.get("https://www.weather.gov/wrh/timeseries?site=KJFK", timeout=timeout)
-        results["noaa_wrh"] = {"ok": r.ok, "status": r.status_code, "latency_ms": round((_time.perf_counter() - t0) * 1000)}
+        results["noaa_wrh"] = {
+            "ok": r.ok,
+            "status": r.status_code,
+            "latency_ms": round((_time.perf_counter() - t0) * 1000),
+        }
     except Exception as e:
         results["noaa_wrh"] = {"ok": False, "error": str(e)[:100]}
 
     all_ok = all(v.get("ok") for v in results.values())
-    return {"ok": all_ok, "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z", "services": results}
+    return {
+        "ok": all_ok,
+        "checked_at": __import__("datetime").datetime.utcnow().isoformat() + "Z",
+        "services": results,
+    }
 
 
 def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
@@ -841,7 +1000,7 @@ def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
                 "hit_rate": deb_acc[0],
                 "mae": deb_acc[1],
                 "total_days": deb_acc[2],
-                "details_str": deb_acc[3]
+                "details_str": deb_acc[3],
             }
 
         # Calculate Mu accuracy
@@ -853,24 +1012,21 @@ def get_ops_training_accuracy(request: Request) -> Dict[str, Any]:
                 "hit_rate": mu_acc[1],
                 "brier_score": mu_acc[2],
                 "total_days": mu_acc[3],
-                "details_str": mu_acc[4]
+                "details_str": mu_acc[4],
             }
 
         if deb_payload or mu_payload:
-            accuracy_data.append({
-                "city_id": city_id,
-                "name": name,
-                "deb": deb_payload,
-                "mu": mu_payload
-            })
+            accuracy_data.append(
+                {"city_id": city_id, "name": name, "deb": deb_payload, "mu": mu_payload}
+            )
 
     # Sort by total days of DEB or Mu
     accuracy_data.sort(
         key=lambda x: max(
             x["deb"]["total_days"] if x["deb"] else 0,
-            x["mu"]["total_days"] if x["mu"] else 0
+            x["mu"]["total_days"] if x["mu"] else 0,
         ),
-        reverse=True
+        reverse=True,
     )
 
     return {"accuracy": accuracy_data}
@@ -891,7 +1047,9 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
     with db._get_connection() as conn:
         conn.row_factory = sqlite3.Row
         users_rows = conn.execute("SELECT telegram_id, username FROM users").fetchall()
-        bindings_rows = conn.execute("SELECT telegram_id, supabase_user_id, supabase_email FROM supabase_bindings").fetchall()
+        bindings_rows = conn.execute(
+            "SELECT telegram_id, supabase_user_id, supabase_email FROM supabase_bindings"
+        ).fetchall()
 
     user_info = {}
     for r in users_rows:
@@ -901,7 +1059,7 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
             "username": r["username"] or f"ID: {tid}",
             "supabase_user_id": None,
             "supabase_email": None,
-            "is_bound": False
+            "is_bound": False,
         }
 
     for r in bindings_rows:
@@ -912,7 +1070,7 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
                 "username": f"ID: {tid}",
                 "supabase_user_id": r["supabase_user_id"],
                 "supabase_email": r["supabase_email"],
-                "is_bound": True
+                "is_bound": True,
             }
         else:
             user_info[tid]["supabase_user_id"] = r["supabase_user_id"]
@@ -924,13 +1082,19 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
     chat_ids = get_telegram_chat_ids_from_env()
 
     # Add other group IDs if configured
-    for env_name in ["POLYWEATHER_TELEGRAM_GROUP_ID", "POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID"]:
+    for env_name in [
+        "POLYWEATHER_TELEGRAM_GROUP_ID",
+        "POLYWEATHER_TELEGRAM_TOPICS_GROUP_ID",
+    ]:
         val = str(os.getenv(env_name) or "").strip()
         if val and val not in chat_ids:
             chat_ids.append(val)
 
     if not bot_token or not chat_ids:
-        return {"error": "Telegram Bot Token or Chat IDs not configured", "anomalies": []}
+        return {
+            "error": "Telegram Bot Token or Chat IDs not configured",
+            "anomalies": [],
+        }
 
     # 3. Check membership status for all users in parallel
     results = []
@@ -940,7 +1104,7 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
             resp = requests.get(
                 f"https://api.telegram.org/bot{bot_token}/getChatMember",
                 params={"chat_id": chat_id, "user_id": tg_id},
-                timeout=5
+                timeout=5,
             )
             if resp.status_code == 200:
                 data = resp.json()
@@ -972,7 +1136,10 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
     valid_members = []
 
     from web.services.ops_api import legacy_routes
-    active_subs = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(limit=5000)
+
+    active_subs = legacy_routes.SUPABASE_ENTITLEMENT.list_active_subscriptions(
+        limit=5000
+    )
     active_subs_map = {}
     for sub in active_subs:
         uid = str(sub.get("user_id") or "").strip().lower()
@@ -983,16 +1150,18 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
         info = user_info[tg_id]
 
         if not info["is_bound"]:
-            anomalies.append({
-                "telegram_id": tg_id,
-                "username": info["username"],
-                "chat_id": chat_id,
-                "status": status,
-                "anomaly_type": "unbound",
-                "reason": "未绑定网页账号",
-                "email": None,
-                "expires_at": None,
-            })
+            anomalies.append(
+                {
+                    "telegram_id": tg_id,
+                    "username": info["username"],
+                    "chat_id": chat_id,
+                    "status": status,
+                    "anomaly_type": "unbound",
+                    "reason": "未绑定网页账号",
+                    "email": None,
+                    "expires_at": None,
+                }
+            )
         else:
             uid = str(info["supabase_user_id"]).strip().lower()
             sub = active_subs_map.get(uid)
@@ -1007,42 +1176,46 @@ def get_ops_telegram_audit(request: Request) -> Dict[str, Any]:
                 expires_at = sub.get("expires_at")
 
             if not sub:
-                anomalies.append({
-                    "telegram_id": tg_id,
-                    "username": info["username"],
-                    "chat_id": chat_id,
-                    "status": status,
-                    "anomaly_type": "expired",
-                    "reason": "没有有效的会员订阅",
-                    "email": info["supabase_email"],
-                    "expires_at": None,
-                })
+                anomalies.append(
+                    {
+                        "telegram_id": tg_id,
+                        "username": info["username"],
+                        "chat_id": chat_id,
+                        "status": status,
+                        "anomaly_type": "expired",
+                        "reason": "没有有效的会员订阅",
+                        "email": info["supabase_email"],
+                        "expires_at": None,
+                    }
+                )
             elif not is_paid:
-                anomalies.append({
-                    "telegram_id": tg_id,
-                    "username": info["username"],
-                    "chat_id": chat_id,
-                    "status": status,
-                    "anomaly_type": "trial_only",
-                    "reason": f"仅拥有试用会员 ({plan_code})",
-                    "email": info["supabase_email"],
-                    "expires_at": expires_at,
-                })
+                anomalies.append(
+                    {
+                        "telegram_id": tg_id,
+                        "username": info["username"],
+                        "chat_id": chat_id,
+                        "status": status,
+                        "anomaly_type": "trial_only",
+                        "reason": f"仅拥有试用会员 ({plan_code})",
+                        "email": info["supabase_email"],
+                        "expires_at": expires_at,
+                    }
+                )
             else:
-                valid_members.append({
-                    "telegram_id": tg_id,
-                    "username": info["username"],
-                    "chat_id": chat_id,
-                    "status": status,
-                    "email": info["supabase_email"],
-                    "plan_code": plan_code,
-                    "expires_at": expires_at,
-                })
+                valid_members.append(
+                    {
+                        "telegram_id": tg_id,
+                        "username": info["username"],
+                        "chat_id": chat_id,
+                        "status": status,
+                        "email": info["supabase_email"],
+                        "plan_code": plan_code,
+                        "expires_at": expires_at,
+                    }
+                )
 
     return {
         "anomalies": anomalies,
         "valid_count": len(valid_members),
         "anomaly_count": len(anomalies),
     }
-
-
