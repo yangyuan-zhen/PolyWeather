@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import threading
@@ -237,21 +236,12 @@ def _wmo_to_weather(code: Any) -> str:
 
 
 def _build_ai_prompt(cities_data: List[Dict[str, Any]], report_date: str) -> str:
-    data_json = json.dumps(cities_data, ensure_ascii=False, indent=2, default=str)
-    return (
-        f"今天是 {report_date}。以下是今天中国主要城市的天气预报数据（JSON格式），"
-        "数据来自中国气象局（weather.com.cn）。\n\n"
-        f"{data_json}\n\n"
-        "请用自然亲切的中文写一段天气日报。每个城市逐行播报，格式：\n\n"
-        "城市名 weather，最高 forecast_high 度。一句话体感或穿衣建议。\n\n"
-        "要求：\n"
-        "1. weather 和 forecast_high 直接使用数据中的值，不要修改\n"
-        "2. 每城一行，城市名 <b>加粗</b>，换行用纯换行符，禁止用 <br> 标签\n"
-        "3. 只允许 <b> </b> 两种 HTML 标签，其他标签一律禁止\n"
-        "4. 开头问候语「☀️ 早上好！今天是x月x日」\n"
-        "5. 播报完直接结束，禁止结尾祝福、总结、免责\n"
-        "6. 总字数不超过 200\n"
-    )
+    lines = [f"今天是 {report_date}。请用自然亲切的中文写一段天气日报。\n"]
+    lines.append("城市天气数据：")
+    for c in cities_data:
+        lines.append(f"{c['name']}：{c['weather']}，最高{c['forecast_high']}度")
+    lines.append("\n要求：每城一行播报，城市名<b>加粗</b>，开头问候，禁止结尾废话。")
+    return "\n".join(lines)
 
 
 def _call_ai(prompt: str) -> Optional[str]:
@@ -273,8 +263,8 @@ def _call_ai(prompt: str) -> Optional[str]:
         "messages": [
             {"role": "user", "content": prompt},
         ],
-        "max_tokens": 1200,
-        "temperature": 0.7,
+        "max_tokens": 800,
+        "temperature": 0.5,
     }
 
     timeout = httpx.Timeout(timeout=30.0, connect=8.0, read=30.0)
