@@ -22,6 +22,8 @@ _MODEL_RANGE_CITIES: List[str] = [
     "chongqing",
     "qingdao",
     "wuhan",
+    "seoul",
+    "busan",
 ]
 
 _MODEL_RANGE_NAMES: Dict[str, str] = {
@@ -32,6 +34,8 @@ _MODEL_RANGE_NAMES: Dict[str, str] = {
     "chongqing": "重庆 (ZUCK)",
     "qingdao": "青岛 (ZSQD)",
     "wuhan": "武汉 (ZHHH)",
+    "seoul": "首尔 (RKSI)",
+    "busan": "釜山 (RKPK)",
 }
 
 
@@ -45,7 +49,7 @@ async def cities_model_range(
     request: Request,
     force_refresh: bool = Query(False),
 ):
-    """Return DEB prediction and model range for monitored Chinese cities."""
+    """Return DEB prediction and model range for monitored cities (CN + KR)."""
     from web.app import _analyze
 
     rows: List[Dict[str, Any]] = []

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { MembershipEntry } from "@/types/ops";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, Area, AreaChart,
@@ -170,7 +171,7 @@ export function MembershipsPageClient() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                   <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={45} />
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                   <Area type="monotone" dataKey="cumulative" stroke="#06b6d4" fill="#06b6d420" name="累计" />
                 </AreaChart>
               </ResponsiveContainer>
@@ -184,7 +185,7 @@ export function MembershipsPageClient() {
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                   <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
                   <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={30} />
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                  <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                   <Legend wrapperStyle={{ fontSize: 12 }} />
                   <Area type="monotone" dataKey="paid" stackId="1" stroke="#22c55e" fill="#22c55e60" name="付费" />
                   <Area type="monotone" dataKey="trial" stackId="1" stroke="#f59e0b" fill="#f59e0b60" name="体验" />

@@ -664,3 +664,11 @@ export function getTemperatureChartData(
     yTickStep,
   };
 }
+
+export const CHART_TOOLTIP_STYLE: React.CSSProperties = {
+  background: "#1e293b",
+  border: "1px solid rgba(255,255,255,0.1)",
+  borderRadius: 8,
+  color: "#e2e8f0",
+  fontSize: 12,
+};

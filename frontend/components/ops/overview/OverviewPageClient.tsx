@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { opsApi } from "@/lib/ops-api";
 import Link from "next/link";
 import type { SystemStatusPayload, MembershipsPayload, MembershipEntry } from "@/types/ops";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -164,7 +165,7 @@ export function OverviewPageClient() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={35} />
-                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                     <Area type="monotone" dataKey="cumulative" stroke="#06b6d4" fillOpacity={1} fill="url(#colorCumulative)" name="累计" />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -178,7 +179,7 @@ export function OverviewPageClient() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 10 }} interval="preserveStartEnd" />
                     <YAxis tick={{ fill: "#64748b", fontSize: 10 }} width={25} />
-                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Area type="monotone" dataKey="paid" stackId="1" stroke="#22c55e" fill="#22c55e40" name="付费" />
                     <Area type="monotone" dataKey="trial" stackId="1" stroke="#f59e0b" fill="#f59e0b40" name="体验" />
@@ -208,7 +209,7 @@ export function OverviewPageClient() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
                     <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={75} />
-                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                     <Bar dataKey="count" radius={[0, 4, 4, 0]} fill="#06b6d4" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -228,7 +229,7 @@ export function OverviewPageClient() {
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
                     <XAxis type="number" tick={{ fill: "#64748b", fontSize: 11 }} />
                     <YAxis type="category" dataKey="name" tick={{ fill: "#94a3b8", fontSize: 11 }} width={45} />
-                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                    <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]} fill="#6366f1" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -271,7 +272,7 @@ export function OverviewPageClient() {
                       <Pie data={memberPie} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={2} dataKey="value">
                         {memberPie.map((d, i) => (<Cell key={i} fill={d.color} />))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                      <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>
@@ -317,7 +318,7 @@ export function OverviewPageClient() {
                         <Pie data={cachePie} cx="50%" cy="50%" innerRadius={36} outerRadius={58} paddingAngle={2} dataKey="value">
                           {cachePie.map((d, i) => (<Cell key={i} fill={d.color} />))}
                         </Pie>
-                        <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }} />
+                        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                       </PieChart>
                     </ResponsiveContainer>
                   </div>

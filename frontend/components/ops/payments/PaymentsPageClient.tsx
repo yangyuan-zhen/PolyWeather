@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { PaymentRuntimePayload, PaymentIncident, PaymentRecord } from "@/types/ops";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import {
   PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
 } from "recharts";
@@ -119,7 +120,7 @@ export function PaymentsPageClient() {
                           <Cell key={i} fill={COLORS[i % COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 11 }} />
+                      <Tooltip contentStyle={{ ...CHART_TOOLTIP_STYLE, fontSize: 11 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 </div>

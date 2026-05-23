@@ -5,6 +5,7 @@ import { RefreshCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import {
   BarChart,
   Bar,
@@ -117,7 +118,7 @@ export function AnalyticsPageClient() {
                 <XAxis type="number" stroke="rgba(255,255,255,0.3)" tick={{ fill: "#94a3b8", fontSize: 12 }} />
                 <YAxis type="category" dataKey="name" stroke="rgba(255,255,255,0.3)" tick={{ fill: "#e2e8f0", fontSize: 13 }} width={130} />
                 <Tooltip
-                  contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0" }}
+                  contentStyle={CHART_TOOLTIP_STYLE}
                   formatter={(value) => [`${value} 人`, "数量"]}
                 />
                 <Bar dataKey="count" radius={[0, 6, 6, 0]}>

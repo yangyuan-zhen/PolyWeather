@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { opsApi } from "@/lib/ops-api";
 import type { SystemStatusPayload } from "@/types/ops";
+import { CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import Link from "next/link";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -233,7 +234,7 @@ export function TrainingPageClient() {
                     <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
                     <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
                     <Tooltip
-                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
                     />
                     <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
@@ -258,7 +259,7 @@ export function TrainingPageClient() {
                     <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
                     <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} unit="°" />
                     <Tooltip
-                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: unknown) => [`${Number(value).toFixed(1)}°`, "MAE"]}
                     />
                     <Bar dataKey="mae" radius={[4, 4, 0, 0]} maxBarSize={36}>
@@ -288,7 +289,7 @@ export function TrainingPageClient() {
                     <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
                     <YAxis domain={[0, 0.5]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
                     <Tooltip
-                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: unknown) => [Number(value).toFixed(4), "Brier Score"]}
                     />
                     <Bar dataKey="brierScore" radius={[4, 4, 0, 0]} maxBarSize={36}>
@@ -313,7 +314,7 @@ export function TrainingPageClient() {
                     <XAxis dataKey="name" angle={-45} textAnchor="end" tick={{ fill: "#94a3b8", fontSize: 11 }} interval={0} />
                     <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} unit="%" />
                     <Tooltip
-                      contentStyle={{ background: "#1e293b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, color: "#e2e8f0", fontSize: 12 }}
+                      contentStyle={CHART_TOOLTIP_STYLE}
                       formatter={(value: unknown) => [`${Number(value).toFixed(1)}%`, "命中率"]}
                     />
                     <Bar dataKey="hitRate" radius={[4, 4, 0, 0]} maxBarSize={36}>
