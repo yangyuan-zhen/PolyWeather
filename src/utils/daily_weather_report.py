@@ -86,42 +86,31 @@ def _fetch_city_data(
     om = results.get("open-meteo", {}) if isinstance(results, dict) else {}
     current = om.get("current_weather", {}) if isinstance(om, dict) else {}
     daily = om.get("daily", {}) if isinstance(om, dict) else {}
-    metar = results.get("metar", {}) if isinstance(results, dict) else {}
 
     daily_highs = daily.get("temperature_2m_max", []) or []
     today_high = daily_highs[0] if daily_highs else None
-    daily_times = daily.get("time", []) or []
-    today_date = daily_times[0] if daily_times else None
 
     return {
         "city": city_key,
         "name": CITY_NAME_ZH.get(city_key, city_key),
-        "temp": current.get("temperature"),
-        "wind_speed": current.get("windspeed"),
-        "wind_dir": current.get("winddirection"),
         "weather_code": current.get("weathercode"),
         "forecast_high": today_high,
-        "forecast_date": today_date,
-        "metar_raw": (metar.get("raw_metar") or metar.get("raw") or "")
-        if isinstance(metar, dict)
-        else "",
     }
 
 
-def _build_ai_prompt(cities_data: List[Dict[str, Any]]) -> str:
+def _build_ai_prompt(cities_data: List[Dict[str, Any]], report_date: str) -> str:
     data_json = json.dumps(cities_data, ensure_ascii=False, indent=2, default=str)
     return (
-        "你是天气预报播报员。以下是今天中国主要城市的实时天气数据（JSON格式）。\n\n"
+        f"今天是 {report_date}。以下是今天中国主要城市的天气预报数据（JSON格式）。\n\n"
         f"{data_json}\n\n"
         "请用自然、亲切的中文写一段天气日报，要求：\n"
-        "1. 每个城市1-2句，描述今天天气状况（晴/多云/雨等）和温度体感\n"
-        "2. 温度用摄氏度（℃），风速用 km/h\n"
-        "3. 语气轻松自然，像朋友聊天，不要机械罗列数据\n"
-        "4. 可以提一句户外活动建议或穿衣提示\n"
-        "5. 格式：<b>城市名</b> 加粗，用 HTML 标签\n"
-        "6. 开头加一句日期和问候，例如「☀️ 早上好！今天是 5 月 23 日」\n"
-        "7. 总体控制在 500 字以内\n"
-        "8. metar_raw 是机场观测报文，可辅助判断天气现象\n"
+        "1. forecast_high 是今日预报最高温（℃），weather_code 是天气现象代码\n"
+        "2. 根据 weather_code 描述天气（晴/多云/雨/雾等），根据 forecast_high 描述冷热\n"
+        "3. 每个城市1-2句，语气轻松自然，像朋友聊天\n"
+        "4. 不要编造数据缺失声明，所有数据都已提供，直接基于数据播报\n"
+        "5. <b>城市名</b> 用 HTML 加粗\n"
+        "6. 开头加问候语，例如「☀️ 早上好！」\n"
+        "7. 总体控制在 400 字以内\n"
         "weather_code 参考：0=晴, 1-3=多云, 45-48=雾, 51-67=雨, 71-86=雪, 95-99=雷暴"
     )
 
@@ -225,7 +214,8 @@ def _runner(bot: Any, config: Dict[str, Any]) -> None:
                     time.sleep(60)
                     continue
 
-                prompt = _build_ai_prompt(cities_data)
+                report_date = now.strftime("%m月%d日")
+                prompt = _build_ai_prompt(cities_data, report_date)
                 report_text = _call_ai(prompt)
 
                 if not report_text:
