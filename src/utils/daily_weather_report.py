@@ -141,6 +141,13 @@ def _fetch_cma_forecast(city_key: str) -> Optional[Dict[str, Any]]:
         except (TypeError, ValueError):
             result["forecast_low"] = None
 
+    logger.info(
+        "daily_weather_report: CMA parsed {} weather={} high={} low={}",
+        city_key,
+        result.get("weather"),
+        result.get("forecast_high"),
+        result.get("forecast_low"),
+    )
     return result
 
 
@@ -157,8 +164,8 @@ def _fetch_city_data(
     # 1. Try CMA first for weather description + official forecast high
     cma = _fetch_cma_forecast(city_key)
     if cma and cma.get("weather") and cma.get("forecast_high") is not None:
-        logger.debug(
-            "daily_weather_report: {} using CMA data weather={} high={}",
+        logger.info(
+            "daily_weather_report: {} using CMA weather={} high={}",
             city_key,
             cma["weather"],
             cma["forecast_high"],
@@ -247,10 +254,11 @@ def _build_ai_prompt(cities_data: List[Dict[str, Any]], report_date: str) -> str
         "城市名 weather，最高 forecast_high 度。一句话体感或穿衣建议。\n\n"
         "要求：\n"
         "1. weather 和 forecast_high 直接使用数据中的值，不要修改\n"
-        "2. 每个城市一行，城市名用 <b> 加粗\n"
-        "3. 开头问候语「☀️ 早上好！今天是x月x日」\n"
-        "4. 播报完直接结束，禁止写结尾祝福、总结、免责声明\n"
-        "5. 总字数不超过 200\n"
+        "2. 每城一行，城市名 <b>加粗</b>，换行用纯换行符，禁止用 <br> 标签\n"
+        "3. 只允许 <b> </b> 两种 HTML 标签，其他标签一律禁止\n"
+        "4. 开头问候语「☀️ 早上好！今天是x月x日」\n"
+        "5. 播报完直接结束，禁止结尾祝福、总结、免责\n"
+        "6. 总字数不超过 200\n"
     )
 
 
