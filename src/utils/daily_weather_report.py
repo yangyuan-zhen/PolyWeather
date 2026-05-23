@@ -151,7 +151,7 @@ def _fetch_cma_forecast(city_key: str) -> Optional[Dict[str, Any]]:
 
 
 def _extract_first(html: str, pattern: str) -> Optional[str]:
-    m = re.search(pattern, html, re.IGNORECASE)
+    m = re.search(pattern, html, re.IGNORECASE | re.DOTALL)
     return m.group(1) if m else None
 
 
