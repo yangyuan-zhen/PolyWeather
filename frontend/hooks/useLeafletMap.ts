@@ -39,6 +39,8 @@ const MAP_TILE_URLS = {
   dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
   light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
 } as const;
+const TILE_RETRY_LIMIT = 2;
+const TILE_RETRY_DELAY_BASE_MS = 500;
 const CITY_MARKER_DISPLAY_OFFSETS: Record<
   string,
   { x: number; y: number; zIndexOffset?: number }
@@ -528,6 +530,21 @@ export function useLeafletMap({
       subdomains: "abcd",
     }).addTo(map);
 
+    // Retry failed tiles (CartoCDN may throttle long-running sessions)
+    const tileRetries = new Map<string, number>();
+    tileLayer.on("tileerror", (ev: { tile: HTMLElement; coords: L.Coords }) => {
+      const { tile, coords } = ev;
+      const key = `${coords.z}/${coords.x}/${coords.y}`;
+      const attempts = tileRetries.get(key) ?? 0;
+      if (attempts >= TILE_RETRY_LIMIT) return;
+      tileRetries.set(key, attempts + 1);
+      const delay = TILE_RETRY_DELAY_BASE_MS * 2 ** attempts;
+      setTimeout(() => {
+        (tile as HTMLImageElement).src = tileLayer.getTileUrl(coords);
+      }, delay);
+    });
+    map.on("moveend zoomend", () => tileRetries.clear());
+
     const nearbyLayer = L.layerGroup().addTo(map);
     mapRef.current = map;
     tileLayerRef.current = tileLayer;
@@ -601,8 +618,13 @@ export function useLeafletMap({
     const tileLayer = tileLayerRef.current;
     if (!tileLayer || typeof MutationObserver === "undefined") return;
 
+    let lastTileUrl = "";
+
     const syncMapTheme = () => {
-      tileLayer.setUrl(getMapTileUrl(containerRef.current));
+      const nextUrl = getMapTileUrl(containerRef.current);
+      if (nextUrl === lastTileUrl) return;
+      lastTileUrl = nextUrl;
+      tileLayer.setUrl(nextUrl);
     };
     syncMapTheme();
 
@@ -611,11 +633,12 @@ export function useLeafletMap({
       attributeFilter: ["class"],
       attributes: true,
     });
-    if (document.body) {
-      observer.observe(document.body, {
+
+    const scanTerminal = document.querySelector(".scan-terminal");
+    if (scanTerminal) {
+      observer.observe(scanTerminal, {
         attributeFilter: ["class"],
         attributes: true,
-        subtree: true,
       });
     }
 
