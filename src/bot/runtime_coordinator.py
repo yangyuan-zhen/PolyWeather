@@ -89,6 +89,7 @@ class StartupCoordinator:
             self._start_weekly_reward_loop(),
             self._start_payment_event_loop(),
             self._start_payment_confirm_loop(),
+            self._start_daily_weather_report_loop(),
         ]
         self._runtime_status = RuntimeStatus(
             started_at=datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -157,7 +158,19 @@ class StartupCoordinator:
         details = {
             "mode": "airport-periodic",
             "interval_sec": interval,
-            "cities": ["seoul", "busan", "tokyo", "ankara", "helsinki", "amsterdam", "istanbul", "paris", "hong kong", "lau fau shan", "taipei"],
+            "cities": [
+                "seoul",
+                "busan",
+                "tokyo",
+                "ankara",
+                "helsinki",
+                "amsterdam",
+                "istanbul",
+                "paris",
+                "hong kong",
+                "lau fau shan",
+                "taipei",
+            ],
             "chat_targets": len(chat_ids),
             "window": "DEB proximity ≤3°C",
         }
@@ -168,7 +181,9 @@ class StartupCoordinator:
             configured_enabled=enabled,
             details=details,
             validation_error=validation_error,
-            starter=lambda: import_module("src.utils.telegram_push").start_high_freq_airport_push_loop(
+            starter=lambda: import_module(
+                "src.utils.telegram_push"
+            ).start_high_freq_airport_push_loop(
                 self.bot,
                 self.config,
             ),
@@ -222,7 +237,9 @@ class StartupCoordinator:
         settle_weekday = min(
             7, max(1, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_WEEKDAY", 1))
         )
-        settle_hour = min(23, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_HOUR", 0)))
+        settle_hour = min(
+            23, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_HOUR", 0))
+        )
         settle_minute = min(
             59, max(0, _env_int("POLYWEATHER_WEEKLY_REWARD_SETTLE_MINUTE", 5))
         )
@@ -249,9 +266,9 @@ class StartupCoordinator:
             configured_enabled=enabled,
             details=details,
             validation_error=validation_error,
-            starter=lambda: import_module("src.bot.weekly_reward_loop").start_weekly_reward_loop(
-                self.bot
-            ),
+            starter=lambda: import_module(
+                "src.bot.weekly_reward_loop"
+            ).start_weekly_reward_loop(self.bot),
         )
 
     def _start_payment_confirm_loop(self) -> LoopStatus:
@@ -316,6 +333,41 @@ class StartupCoordinator:
             starter=lambda: import_module(
                 "src.payments.event_loop"
             ).start_payment_event_loop(),
+        )
+
+    def _start_daily_weather_report_loop(self) -> LoopStatus:
+        enabled = _env_bool("DAILY_WEATHER_REPORT_ENABLED", True)
+        chat_ids = get_telegram_chat_ids_from_env()
+        report_hour = _env_int("DAILY_WEATHER_REPORT_HOUR", 8)
+        report_minute = _env_int("DAILY_WEATHER_REPORT_MINUTE", 0)
+        tz_name = str(
+            os.getenv("DAILY_WEATHER_REPORT_TIMEZONE") or "Asia/Shanghai"
+        ).strip()
+        details = {
+            "schedule": f"{report_hour:02d}:{report_minute:02d}",
+            "timezone": tz_name,
+            "cities": [
+                "beijing",
+                "shanghai",
+                "guangzhou",
+                "chengdu",
+                "chongqing",
+                "wuhan",
+                "qingdao",
+            ],
+            "target": "forum_general_topic",
+            "chat_targets": len(chat_ids),
+        }
+        validation_error = None
+        return self._start_with_validation(
+            key="daily_weather_report",
+            label="中国城市天气日报",
+            configured_enabled=enabled,
+            details=details,
+            validation_error=validation_error,
+            starter=lambda: import_module(
+                "src.utils.daily_weather_report"
+            ).start_daily_weather_report_loop(self.bot, self.config),
         )
 
 
