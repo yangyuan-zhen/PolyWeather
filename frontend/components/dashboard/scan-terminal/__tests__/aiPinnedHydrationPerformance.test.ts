@@ -42,9 +42,8 @@ export function runTests() {
   );
   assert(
     cardSource.includes("getRowModelEntries") &&
-      cardSource.includes("row?.ai_predicted_max") &&
-      cardSource.includes("row?.cluster_median") &&
-      cardSource.includes("detailModelEntries.length ? detailModelEntries : getRowModelEntries(row)"),
-    "decision card should render model support and AI predicted max from the row before full detail/AI stream arrives",
+      cardSource.includes("detailModelEntries.length ? detailModelEntries : getRowModelEntries(row)") &&
+      cardSource.includes('aiForecast.status === "ready"'),
+    "decision card should render model support from the row; AI predicted max must wait for AI ready status",
   );
 }
