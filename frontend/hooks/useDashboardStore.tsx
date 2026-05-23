@@ -659,6 +659,42 @@ export function DashboardStoreProvider({
   const [cityDetailMetaByName, setCityDetailMetaByName] = useState<
     Record<string, { cachedAt: number; revision: string }>
   >({});
+  const MAX_CACHED_CITIES = 20;
+  const cityLruRef = useRef<string[]>([]);
+
+  const touchCityLru = (cityName: string) => {
+    cityLruRef.current = [
+      ...cityLruRef.current.filter((c) => c !== cityName),
+      cityName,
+    ];
+  };
+
+  // Evict LRU cities when cache exceeds limit
+  useEffect(() => {
+    const detailsCount = Object.keys(cityDetailsByName).length;
+    if (detailsCount <= MAX_CACHED_CITIES) return;
+    const lru = cityLruRef.current;
+    const excess = detailsCount - MAX_CACHED_CITIES;
+    const toEvict = lru.slice(0, excess);
+    if (!toEvict.length) return;
+    cityLruRef.current = lru.slice(excess);
+    setCityDetailsByName((current) => {
+      const next = { ...current };
+      toEvict.forEach((c) => delete next[c]);
+      return next;
+    });
+    setCitySummariesByName((current) => {
+      const next = { ...current };
+      toEvict.forEach((c) => delete next[c]);
+      return next;
+    });
+    setCityDetailMetaByName((current) => {
+      const next = { ...current };
+      toEvict.forEach((c) => delete next[c]);
+      return next;
+    });
+  }, [cityDetailsByName]);
+
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [isPanelOpen, setIsPanelOpen] = useState(false);
   const [selectedForecastDate, setSelectedForecastDate] = useState<
@@ -766,6 +802,7 @@ export function DashboardStoreProvider({
   const preloadCityFromRow = (row: { city?: string | null; city_display_name?: string | null; display_name?: string | null; [key: string]: unknown }) => {
     const cityName = (row.city || row.city_display_name || row.display_name || "").trim();
     if (!cityName || findCachedCityDetail(cityDetailsByName, cityName)) return;
+    touchCityLru(cityName);
     // Pre-populate cache from scan terminal row so detail panel shows data immediately
     const now = Date.now();
     const currentTemp = Number(row.current_temp ?? row.current_max_so_far);
@@ -837,6 +874,7 @@ export function DashboardStoreProvider({
     force = false,
     depth: CityDetailDepth = "panel",
   ) => {
+    touchCityLru(cityName);
     const cached = findCachedCityDetail(cityDetailsByName, cityName);
     const cachedMeta = cityDetailMetaByName[cityName];
     const marketTargetDate =
@@ -1146,6 +1184,7 @@ export function DashboardStoreProvider({
   }, []);
 
   const ensureCitySummary = async (cityName: string, force = false) => {
+    touchCityLru(cityName);
     const existing = citySummariesRef.current[cityName];
     if (!force && existing) {
       return existing;
@@ -1346,7 +1385,9 @@ export function DashboardStoreProvider({
   const refreshAll = async () => {
     dashboardClient.clearCityDetailCache();
     setCityDetailsByName({});
+    setCitySummariesByName({});
     setCityDetailMetaByName({});
+    cityLruRef.current = [];
     if (!citiesRef.current.length) {
       await loadCities();
     }

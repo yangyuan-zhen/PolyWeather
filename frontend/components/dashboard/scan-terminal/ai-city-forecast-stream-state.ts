@@ -20,6 +20,16 @@ const aiCityForecastStateCache = new Map<
   string,
   { state: AiCityForecastState; updatedAt: number }
 >();
+const MAX_AI_FORECAST_CACHE_SIZE = 40;
+
+function trimAiForecastCache() {
+  if (aiCityForecastStateCache.size <= MAX_AI_FORECAST_CACHE_SIZE) return;
+  const excess = aiCityForecastStateCache.size - MAX_AI_FORECAST_CACHE_SIZE;
+  const keys = Array.from(aiCityForecastStateCache.keys());
+  for (let i = 0; i < excess && i < keys.length; i++) {
+    aiCityForecastStateCache.delete(keys[i]);
+  }
+}
 
 function isHkoObservationCity(detail?: CityDetail | null) {
   const source = String(
@@ -100,6 +110,7 @@ export function writeCachedAiForecastState(
     state,
     updatedAt: Date.now(),
   });
+  trimAiForecastCache();
 }
 
 export function readReadyCachedAiForecastState(cacheKey: string, refreshToken: number) {
