@@ -25,6 +25,7 @@ type EvidenceSeries = {
   color: string;
   dashed?: boolean;
   featured?: boolean;
+  smooth?: boolean;
   values: Array<number | null>;
 };
 
@@ -103,6 +104,7 @@ function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly
         source: "DEB Hourly",
         color: "#f97316",
         featured: true,
+        smooth: true,
         values,
       });
     }
@@ -322,7 +324,7 @@ export function LiveTemperatureThresholdChart({
           <ResponsiveContainer width="100%" height="100%">
             <ReLineChart data={data} margin={{ top: 16, right: 28, left: 8, bottom: 8 }}>
               <CartesianGrid stroke="#dbe6ef" strokeDasharray="2 2" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} />
+              <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={{ stroke: "#cbd5e1" }} interval={2} />
               <YAxis tick={{ fontSize: 10, fill: "#64748b" }} tickFormatter={(v) => `${Number(v).toFixed(1)}°`} orientation="right" axisLine={{ stroke: "#cbd5e1" }} tickLine={false} />
               {threshold !== null && (
                 <ReferenceLine
@@ -351,7 +353,7 @@ export function LiveTemperatureThresholdChart({
                   dot={false}
                   isAnimationActive={false}
                   name={item.label}
-                  type="stepAfter"
+                  type={item.smooth ? "monotone" : "stepAfter"}
                 />
               ))}
             </ReLineChart>
