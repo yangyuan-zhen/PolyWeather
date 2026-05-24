@@ -434,7 +434,7 @@ class PolymarketReadOnlyLayer:
             200,
         )
         self.min_liquidity_for_signal = (
-            _safe_float(os.getenv("POLYMARKET_SIGNAL_MIN_LIQUIDITY")) or 500.0
+            _safe_float(os.getenv("POLYMARKET_SIGNAL_MIN_LIQUIDITY")) or 50.0
         )
         self.edge_threshold = _safe_float(os.getenv("POLYMARKET_SIGNAL_EDGE_PCT")) or 2.0
         fast_price_only = _safe_bool(os.getenv("POLYMARKET_FAST_PRICE_ONLY", "false"))
@@ -2804,9 +2804,9 @@ class PolymarketReadOnlyLayer:
         min_price = _clamp_float(_safe_float(raw.get("min_price")), 0.0, 1.0)
         max_price = _clamp_float(_safe_float(raw.get("max_price")), 0.0, 1.0)
         if min_price is None:
-            min_price = 0.05
+            min_price = 0.001
         if max_price is None:
-            max_price = 0.95
+            max_price = 0.999
         if min_price > max_price:
             min_price, max_price = max_price, min_price
 
@@ -2827,7 +2827,7 @@ class PolymarketReadOnlyLayer:
             "market_type": str(raw.get("market_type") or "maxtemp").strip().lower() or "maxtemp",
             "time_range": str(raw.get("time_range") or "today").strip().lower() or "today",
             "limit": max(1, _safe_int(raw.get("limit"), 60)),
-            "max_spread": max(0.0, _safe_float(raw.get("max_spread")) or 0.03),
+            "max_spread": max(0.0, _safe_float(raw.get("max_spread")) or 0.2),
         }
 
     def _build_window_meta(
@@ -3691,7 +3691,7 @@ class PolymarketReadOnlyLayer:
                 _reason = "order_book_disabled"
             elif ask < filters["min_price"] or ask > filters["max_price"]:
                 _reason = f"price_range ask={ask} min={filters['min_price']} max={filters['max_price']}"
-            elif edge_percent < filters["min_edge_pct"]:
+            elif abs(edge_percent) < filters["min_edge_pct"]:
                 _reason = f"edge_too_low edge={edge_percent} min={filters['min_edge_pct']}"
             elif spread is not None and spread > filters["max_spread"]:
                 _reason = f"spread_too_wide spread={spread} max={filters['max_spread']}"

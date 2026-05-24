@@ -732,7 +732,7 @@ def test_distribution_scan_hard_filters_block_unusable_extreme_quotes():
                 "buy": 0.99 if token_id.startswith("yes") else 0.01,
                 "sell": 0.95 if token_id.startswith("yes") else 0.0,
                 "midpoint": 0.97 if token_id.startswith("yes") else 0.03,
-                "spread": 0.04,
+                "spread": 0.3,
                 "book_liquidity": 100,
             }
             for token_id in token_ids
