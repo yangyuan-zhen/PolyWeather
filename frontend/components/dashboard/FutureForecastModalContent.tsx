@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
+import Link from "next/link";
+import { LockKeyhole } from "lucide-react";
 import { CSSProperties, useEffect, useMemo, useState } from "react";
 import type { Locale } from "@/lib/i18n";
-import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { getFutureModalView } from "@/lib/dashboard-utils";
 import { getModelView, getProbabilityView } from "@/lib/model-utils";
 import { getTodayPaceView } from "@/lib/pace-utils";
@@ -898,10 +899,25 @@ export function FutureForecastModalContent({
           </div>
         </div>
       ) : !isPro ? (
-        <ProFeaturePaywall
-          feature={isToday ? "today" : "future"}
-          onClose={modal.closeFutureModal}
-        />
+        <div className="flex h-full items-center justify-center p-8">
+          <div className="text-center">
+            <LockKeyhole size={32} className="mx-auto mb-3 text-slate-400" />
+            <p className="text-sm font-bold text-slate-700">
+              {locale === "en-US" ? "Pro subscription required" : "需要 Pro 订阅"}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">
+              {locale === "en-US"
+                ? "Subscribe in Account Center to unlock full analysis."
+                : "请在账户中心订阅以解锁完整分析功能。"}
+            </p>
+            <Link
+              href="/account"
+              className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800"
+            >
+              {locale === "en-US" ? "Subscribe" : "去订阅"}
+            </Link>
+          </div>
+        </div>
       ) : (
         <div className="modal-content large future-modal">
           <FutureForecastModalHeader
