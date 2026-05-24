@@ -44,7 +44,6 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
-import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -182,7 +181,7 @@ function KoyfinRowsTable({
   return (
     <table className="w-full border-collapse text-[11px]">
       <thead>
-        <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase tracking-wide text-slate-500">
+        <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[11px] uppercase tracking-wide text-slate-500">
           <th className="w-5 px-2 py-1 text-left font-black">
             <span className="block h-3 w-3 rounded-[2px] border border-slate-300 bg-white" />
           </th>
@@ -218,7 +217,7 @@ function KoyfinRowsTable({
                 <div className="truncate font-bold text-slate-800">
                   {rowName(row)}
                 </div>
-                <div className="truncate text-[9px] font-medium text-slate-400">
+                <div className="truncate text-[10px] font-medium text-slate-400">
                   {row.target_label || row.market_question || row.airport || "--"}
                 </div>
               </td>
@@ -512,7 +511,7 @@ function PolyWeatherTerminal({
                   ✕
                 </button>
               )}
-              <kbd className="ml-auto rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[9px] font-mono text-slate-400">
+              <kbd className="ml-auto rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-mono text-slate-400">
                 /
               </kbd>
             </div>
@@ -544,17 +543,6 @@ function PolyWeatherTerminal({
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {activeNavKey === "training" ? (
             <TrainingDashboard isEn={isEn} />
-          ) : activeNavKey === "markets" ? (
-            <MarketOverviewView
-              isEn={isEn}
-              rows={rows}
-              onSelectRow={(row) => {
-                const regionKey = String(row.trading_region || "").toLowerCase();
-                if (regionKey) setSelectedRegionKey(regionKey);
-                setSelectedRow(row);
-                setActiveNavKey("contracts");
-              }}
-            />
           ) : (
             <>
               {/* Region tabs */}
