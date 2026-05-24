@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from web.core import CITIES
 from web.analysis_service import _analyze, _build_city_market_scan_payload
@@ -138,6 +139,10 @@ def _scan_city_terminal_rows(
     *,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
+    # Quick mode: skip Polymarket matching, return cached analysis rows only
+    if filters.get("skip_polymarket"):
+        return _scan_city_terminal_rows_quick(city, filters, force_refresh=force_refresh)
+
     # Try cached analysis first; force-refresh if probability distribution is missing
     data = _analyze(
         city,
@@ -193,3 +198,82 @@ def _scan_city_terminal_rows(
         "candidate_total": candidate_total,
         "primary_scores": primary_scores,
     }
+
+
+def _scan_city_terminal_rows_quick(
+    city: str,
+    filters: Dict[str, Any],
+    *,
+    force_refresh: bool = False,
+) -> Dict[str, Any]:
+    """Fast path that skips Polymarket matching — returns a single row per city
+    with cached analysis data (Obs, DEB, probabilities) but no market prices."""
+    data = _analyze(
+        city,
+        force_refresh=force_refresh,
+        include_llm_commentary=False,
+        detail_mode="panel",
+    )
+    row = _build_quick_row(city=city, data=data)
+    return {
+        "city": city,
+        "rows": [row] if row else [],
+        "candidate_total": 1,
+        "primary_scores": [float(row.get("final_score") or 0)] if row else [],
+    }
+
+
+def _build_quick_row(
+    *,
+    city: str,
+    data: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    curr = data.get("current") or {}
+    risk = data.get("risk") or {}
+    deb = data.get("deb") or {}
+    probs = data.get("probabilities") or {}
+    multi = data.get("multi_model") or {}
+    distribution = probs.get("distribution") or []
+    local_date = str(data.get("local_date") or "")
+    local_time = str(data.get("local_time") or "")
+
+    id_parts = [city, local_date or "today"]
+    if data.get("temp_symbol") == "°F":
+        id_parts.append("F")
+    row_id = hashlib.sha256("|".join(id_parts).encode()).hexdigest()[:16]
+
+    row: Dict[str, Any] = {
+        "id": f"{city}:{local_date or 'today'}",
+        "city": city,
+        "city_display_name": str(data.get("display_name") or city),
+        "airport": str(risk.get("airport") or ""),
+        "local_date": local_date,
+        "local_time": local_time,
+        "tz_offset_seconds": data.get("utc_offset_seconds"),
+        "temp_symbol": data.get("temp_symbol"),
+        "risk_level": risk.get("level"),
+        "current_temp": curr.get("temp"),
+        "current_max_so_far": curr.get("max_so_far"),
+        "deb_prediction": deb.get("prediction"),
+        "model_cluster_sources": {
+            str(k): v for k, v in multi.get("forecasts", {}).items()
+            if v is not None
+        },
+        "distribution_preview": distribution[:6] if distribution else [],
+        "trading_region": data.get("trading_region"),
+        "trading_region_sort": data.get("trading_region_sort"),
+        "active": True,
+        "closed": False,
+        "tradable": False,
+        "is_primary_signal": True,
+        "accepting_orders": False,
+        "row_id": row_id,
+    }
+    # Compute a simple edge: model top probability vs neutral
+    best_model_prob = max(
+        (float(b.get("probability") or 0) for b in distribution[:6]),
+        default=None,
+    )
+    row["model_probability"] = best_model_prob
+    row["final_score"] = float(deb.get("prediction") or 0)
+    return row
