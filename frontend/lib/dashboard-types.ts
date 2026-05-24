@@ -844,6 +844,10 @@ export interface CityDetail {
     times?: string[];
     temps?: Array<number | null>;
   };
+  models_hourly?: {
+    times?: string[];
+    curves?: Record<string, Array<number | null>>;
+  };
   hourly_next_48h?: HourlySeries;
   metar_recent_obs?: Array<{
     time?: string;

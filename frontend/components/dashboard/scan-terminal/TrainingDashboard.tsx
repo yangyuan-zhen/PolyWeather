@@ -45,8 +45,29 @@ function barColor(hr: number) {
   return "#dc2626";
 }
 
+const TRAINING_CACHE_KEY = "polyweather_training_accuracy_v1";
+const TRAINING_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+function readTrainingCache(): TrainingCity[] | null {
+  try {
+    const raw = localStorage.getItem(TRAINING_CACHE_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw);
+    if (cached.ts && Date.now() - cached.ts < TRAINING_CACHE_TTL_MS && Array.isArray(cached.data)) {
+      return cached.data;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
+function writeTrainingCache(data: TrainingCity[]) {
+  try {
+    localStorage.setItem(TRAINING_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch { /* ignore */ }
+}
+
 export function TrainingDashboard({ isEn }: { isEn: boolean }) {
-  const [data, setData] = useState<TrainingCity[] | null>(null);
+  const [data, setData] = useState<TrainingCity[] | null>(() => readTrainingCache());
 
   useEffect(() => {
     let cancelled = false;
@@ -57,7 +78,9 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
       })
       .then((payload) => {
         if (cancelled || !payload?.accuracy) return;
-        setData(payload.accuracy.filter((c) => (c.deb || c.mu) && ((c.deb?.total_days ?? 0) + (c.mu?.total_days ?? 0)) >= 5));
+        const filtered = payload.accuracy.filter((c) => (c.deb || c.mu) && ((c.deb?.total_days ?? 0) + (c.mu?.total_days ?? 0)) >= 5);
+        setData(filtered);
+        writeTrainingCache(filtered);
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -70,8 +93,8 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
     if (!debSorted.length) return null;
     const avgHit = debSorted.reduce((s, c) => s + (c.deb?.hit_rate ?? 0), 0) / debSorted.length;
     const avgMae = debSorted.reduce((s, c) => s + (c.deb?.mae ?? 0), 0) / debSorted.length;
-    const totalDays = debSorted.reduce((s, c) => s + (c.deb?.total_days ?? 0), 0);
-    return { avgHit, avgMae, totalDays, cities: debSorted.length };
+    const avgDays = Math.round(debSorted.reduce((s, c) => s + (c.deb?.total_days ?? 0), 0) / Math.max(debSorted.length, 1));
+    return { avgHit, avgMae, avgDays, cities: debSorted.length };
   }, [debSorted]);
 
   const muStats = useMemo(() => {
@@ -79,8 +102,8 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
     const avgHit = muSorted.reduce((s, c) => s + (c.mu?.hit_rate ?? 0), 0) / muSorted.length;
     const avgMae = muSorted.reduce((s, c) => s + (c.mu?.mae ?? 0), 0) / muSorted.length;
     const avgBrier = muSorted.reduce((s, c) => s + (c.mu?.brier_score ?? 0), 0) / muSorted.length;
-    const totalDays = muSorted.reduce((s, c) => s + (c.mu?.total_days ?? 0), 0);
-    return { avgHit, avgMae, avgBrier, totalDays, cities: muSorted.length };
+    const avgDays = Math.round(muSorted.reduce((s, c) => s + (c.mu?.total_days ?? 0), 0) / Math.max(muSorted.length, 1));
+    return { avgHit, avgMae, avgBrier, avgDays, cities: muSorted.length };
   }, [muSorted]);
 
   const debHitChart = useMemo(
@@ -125,7 +148,7 @@ export function TrainingDashboard({ isEn }: { isEn: boolean }) {
                 { icon: Hash, label: isEn ? "Cities" : "城市数", value: debStats.cities, tone: "blue" },
                 { icon: Target, label: isEn ? "Avg Hit" : "平均命中", value: `${debStats.avgHit.toFixed(1)}%`, tone: "emerald" },
                 { icon: Thermometer, label: isEn ? "Avg Error" : "平均误差", value: `${debStats.avgMae.toFixed(1)}°`, tone: "amber" },
-                { icon: TrendingUp, label: isEn ? "Total Days" : "训练天数", value: debStats.totalDays.toLocaleString(), tone: "purple" },
+                { icon: TrendingUp, label: isEn ? "Avg Days/City" : "每城平均天数", value: debStats.avgDays.toLocaleString(), tone: "purple" },
               ].map(({ icon: Icon, label, value, tone }) => (
                 <div key={label} className={`flex items-center gap-3 rounded-lg border ${STAT_CARD_CLASSES[tone]} p-3`}>
                   <Icon size={20} className={STAT_ICON_CLASSES[tone]} />

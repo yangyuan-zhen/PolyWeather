@@ -181,6 +181,16 @@ def build_city_detail_payload(
             for k, v in (data.get("multi_model") or {}).items()
             if not _is_excluded_model_name(k)
         },
+        "models_hourly": {
+            "times": (data.get("multi_model") or {}).get("hourly_times", []),
+            "curves": {
+                model: values
+                for model, values in (
+                    (data.get("multi_model") or {}).get("hourly_forecasts", {})
+                ).items()
+                if not _is_excluded_model_name(model)
+            },
+        },
         "deb": data.get("deb") or {},
         "multi_model_daily": data.get("multi_model_daily") or {},
         "probabilities": data.get("probabilities") or {"mu": None, "distribution": []},

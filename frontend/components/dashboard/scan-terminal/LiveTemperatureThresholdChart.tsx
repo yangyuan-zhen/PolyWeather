@@ -101,6 +101,7 @@ type HourlyForecast = {
   localTime?: string | null;
   times: string[];
   temps: Array<number | null>;
+  modelCurves?: Record<string, Array<number | null>>;
 } | null;
 
 function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly: HourlyForecast) {
@@ -131,6 +132,33 @@ function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly
         featured: true,
         smooth: true,
         values,
+      });
+    }
+
+    // Per-model hourly curves from Open-Meteo multi-model API
+    if (hourly.modelCurves) {
+      const modelColors = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
+      Object.keys(hourly.modelCurves).forEach((model, idx) => {
+        const modelTemps = hourly.modelCurves![model];
+        if (!modelTemps?.length) return;
+        const values = Array.from({ length }, (): number | null => null);
+        hourly.times.forEach((t, i) => {
+          const slot = parseTimeSlot(t);
+          if (slot !== null && slot >= 0 && slot < length && i < modelTemps.length) {
+            values[slot] = validNumber(modelTemps[i]);
+          }
+        });
+        if (values.some((v) => v !== null)) {
+          result.push({
+            key: `model_curve_${model}`,
+            label: model,
+            source: "Multi-model hourly",
+            color: modelColors[idx % modelColors.length],
+            dashed: true,
+            smooth: true,
+            values,
+          });
+        }
       });
     }
   }
@@ -365,6 +393,7 @@ export function LiveTemperatureThresholdChart({
           localTime: json.local_time || null,
           times: json.hourly.times || [],
           temps: json.hourly.temps || [],
+          modelCurves: json.models_hourly?.curves || undefined,
         });
       })
       .catch(() => {});
@@ -374,7 +403,13 @@ export function LiveTemperatureThresholdChart({
   const { data, series } = useMemo(() => buildEvidenceChart(row, hourly), [row, hourly]);
   const visibleData = useMemo(() => buildMovingWindowData(data, row, hourly), [data, row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-  const modelSummaryCards = useMemo(() => buildModelSummaryCards(row), [row]);
+  const modelSummaryCards = useMemo(() => {
+    const cards = buildModelSummaryCards(row);
+    // Exclude models that already show as hourly curves (from buildModelCurves)
+    if (!hourly?.modelCurves) return cards;
+    const curveKeys = new Set(Object.keys(hourly.modelCurves));
+    return cards.filter((card) => !curveKeys.has(card.label));
+  }, [row, hourly]);
   const tableRows = [...series, ...modelSummaryCards]
     .slice(0, 5)
     .map((item) => ({ ...item, ...seriesStats(item.values) }));
