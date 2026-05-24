@@ -11,6 +11,7 @@ from web.services.city_api import (
     get_city_summary_payload,
     list_cities_payload,
 )
+from web.services.city_realtime_stream import get_realtime_stream_payload
 
 router = APIRouter(tags=["city"])
 
@@ -208,3 +209,10 @@ async def city_holders(
         "available": True,
         "condition_id": condition_id,
     }
+
+
+@router.get("/api/city/{name}/realtime-stream")
+async def city_realtime_stream(name: str):
+    """Return a rolling window of recent temperature readings + market
+    threshold lines for the scrolling realtime chart."""
+    return get_realtime_stream_payload(name)

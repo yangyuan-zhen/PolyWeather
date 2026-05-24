@@ -341,12 +341,20 @@ export function LiveTemperatureThresholdChart({
   isEn: boolean;
   row: ScanOpportunityRow | null;
 }) {
+const hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
+const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
 
   useEffect(() => {
-    setHourly(null);
     if (!city) return;
+    const cached = hourlyCache.get(city);
+    if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
+      setHourly(cached.data);
+      return;
+    }
+    setHourly(null);
     let cancelled = false;
     fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=panel&force_refresh=false`, {
       cache: "no-store",
@@ -358,13 +366,15 @@ export function LiveTemperatureThresholdChart({
       })
       .then((json) => {
         if (cancelled || !json?.hourly) return;
-        setHourly({
+        const data: HourlyForecast = {
           forecastTodayHigh: json.forecast?.today_high ?? null,
           localTime: json.local_time || null,
           times: json.hourly.times || [],
           temps: json.hourly.temps || [],
           modelCurves: json.models_hourly?.curves || undefined,
-        });
+        };
+        hourlyCache.set(city, { ts: Date.now(), data });
+        setHourly(data);
       })
       .catch(() => {});
     return () => { cancelled = true; };
