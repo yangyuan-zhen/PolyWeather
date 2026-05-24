@@ -4,6 +4,7 @@ Polymarket read-only market layer.
 P0 scope:
 - Market discovery from Gamma REST
 - Price / midpoint / spread / orderbook read from CLOB REST
+- Optional WebSocket quote acceleration via PolymarketWsQuoteCache
 - No signing, no order placement
 """
 
@@ -23,6 +24,7 @@ import httpx
 from loguru import logger
 
 from src.data_collection.city_registry import ALIASES, CITY_REGISTRY
+from src.data_collection.polymarket_ws_cache import PolymarketWsQuoteCache
 
 
 def _safe_float(value: Any) -> Optional[float]:
@@ -447,6 +449,9 @@ class PolymarketReadOnlyLayer:
         self._broad_markets_cache: Dict[str, Any] = {"data": [], "t": 0.0}
         self._price_cache: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
+
+        self._ws_cache = PolymarketWsQuoteCache.from_env()
+        self._ws_cache.start()
 
     def _market_scan_debug_enabled(self) -> bool:
         return (
@@ -1768,6 +1773,14 @@ class PolymarketReadOnlyLayer:
             cached = self._price_cache.get(token_id)
             if cached and now - cached.get("t", 0) < self.price_cache_ttl:
                 return cached.get("data", {})
+
+        ws_data = self._ws_cache.get_market_data(token_id)
+        if ws_data:
+            with self._lock:
+                self._price_cache[token_id] = {"data": ws_data, "t": now}
+            return ws_data
+
+        self._ws_cache.subscribe([token_id])
 
         data = self._fetch_token_market_data(token_id)
 
