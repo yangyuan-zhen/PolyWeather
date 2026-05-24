@@ -6,6 +6,8 @@ import {
   Activity,
   BarChart3,
   Bell,
+  ChevronDown,
+  ChevronRight,
   CloudSun,
   CreditCard,
   Gauge,
@@ -18,7 +20,7 @@ import {
   Table2,
   UserRound,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -34,6 +36,19 @@ import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
 import { sortRowsByUserTime } from "@/components/dashboard/scan-terminal/decision-utils";
+import {
+  type ContinentGroup,
+  buildContinentGroups,
+  formatPrice,
+  formatSpreadLiquidity,
+  GAP_COLOR_MAP,
+  getDefaultExpanded,
+  getGapColor,
+  getSignalLabel,
+  getSignalState,
+} from "@/components/dashboard/scan-terminal/continent-grouping";
+import { MobileCityCard } from "@/components/dashboard/scan-terminal/MobileCityCard";
+import { MobileRegionTabs } from "@/components/dashboard/scan-terminal/MobileRegionTabs";
 import { useScanTerminalQuery } from "@/components/dashboard/scan-terminal/use-scan-terminal-query";
 import {
   useScanTerminalTheme,
@@ -306,80 +321,134 @@ function Panel({
   );
 }
 
-function MarketTable({
+function GroupedMarketTable({
+  groups,
+  isEn,
   onSelect,
-  rows,
   selectedId,
-  isEn = true,
 }: {
+  groups: ContinentGroup[];
+  isEn: boolean;
   onSelect: (row: ScanOpportunityRow) => void;
-  rows: ScanOpportunityRow[];
   selectedId?: string | null;
-  isEn?: boolean;
 }) {
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
+    const c = new Set<string>();
+    const defaultExpanded = getDefaultExpanded(groups);
+    for (const g of groups) {
+      if (!defaultExpanded.has(g.key)) c.add(g.key);
+    }
+    return c;
+  });
+
+  const toggleGroup = (key: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
   return (
     <div className="overflow-auto">
-      <table className="w-full min-w-[720px] border-collapse text-[13px]">
+      <table className="w-full min-w-[800px] border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-slate-200 bg-[#f5f7fa] text-left text-[11px] uppercase text-slate-500">
-            <th className="px-3 py-2 font-black">{t("cityContract", isEn)}</th>
-            <th className="px-2 py-2 text-right font-black">{t("live", isEn)}</th>
-            <th className="px-2 py-2 text-right font-black">{t("deb", isEn)}</th>
-            <th className="px-2 py-2 text-right font-black">{t("mkt", isEn)}</th>
-            <th className="px-2 py-2 text-right font-black">{t("edge", isEn)}</th>
-            <th className="px-2 py-2 text-right font-black">{t("liq", isEn)}</th>
-            <th className="px-3 py-2 font-black">{t("signal", isEn)}</th>
+            <th className="px-3 py-2 font-black">City</th>
+            <th className="px-2 py-2 text-right font-black">Obs</th>
+            <th className="px-2 py-2 text-right font-black">High</th>
+            <th className="px-2 py-2 text-right font-black">DEB</th>
+            <th className="px-2 py-2 text-right font-black">Gap</th>
+            <th className="px-2 py-2 text-right font-black">Market</th>
+            <th className="px-2 py-2 text-right font-black">Edge</th>
+            <th className="px-2 py-2 text-right font-black">Spr/Liq</th>
+            <th className="px-3 py-2 font-black">Signal</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const label = decisionLabel(row);
+          {groups.map((group) => {
+            const isExpanded = !collapsed.has(group.key);
+            const label = isEn ? group.labelEn : group.labelZh;
             return (
-              <tr
-                key={row.id}
-                className={clsx(
-                  "cursor-pointer border-b border-slate-100 hover:bg-blue-50/70",
-                  selectedId === row.id && "bg-blue-50",
-                )}
-                onClick={() => onSelect(row)}
-              >
-                <td className="px-3 py-2">
-                  <div className="font-bold text-slate-900">{rowName(row)}</div>
-                  <div className="truncate text-[11px] text-slate-500">
-                    {row.target_label || row.market_question || row.airport || "--"}
-                  </div>
-                </td>
-                <td className="px-2 py-2 text-right font-mono font-bold">
-                  {temp(row.current_max_so_far ?? row.current_temp, row.temp_symbol)}
-                </td>
-                <td className="px-2 py-2 text-right font-mono">
-                  {temp(row.deb_prediction, row.temp_symbol)}
-                </td>
-                <td className="px-2 py-2 text-right font-mono">
-                  {pct(row.market_probability ?? row.market_event_probability)}
-                </td>
-                <td
-                  className={clsx(
-                    "px-2 py-2 text-right font-mono font-black",
-                    edgeClass(row.edge_percent ?? row.signed_gap ?? row.gap),
-                  )}
-                >
-                  {pct(row.edge_percent ?? row.signed_gap ?? row.gap)}
-                </td>
-                <td className="px-2 py-2 text-right font-mono">
-                  {money(row.book_liquidity ?? row.market_liquidity ?? row.volume)}
-                </td>
-                <td className="px-3 py-2">
-                  <span
-                    className={clsx(
-                      "inline-flex rounded border px-2 py-1 text-[11px] font-black",
-                      decisionClass(label),
-                    )}
-                  >
-                    {label}
-                  </span>
-                </td>
-              </tr>
+              <Fragment key={group.key}>
+                {/* Group header row */}
+                <tr className="border-b border-slate-200 bg-[#eef2f6]">
+                  <td colSpan={9} className="p-0">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(group.key)}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#e2e8f0] transition-colors"
+                    >
+                      <span className="grid h-4 w-4 place-items-center text-slate-400">
+                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                      </span>
+                      <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
+                        {label}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        {group.rows.length} · {isEn ? "Active" : "活跃"} {group.activeCount} · {isEn ? "Watch" : "观察"} {group.watchCount}
+                        {group.localTimeRange ? ` · LT ${group.localTimeRange}` : ""}
+                        {group.hotCity ? ` · Hot: ${group.hotCity}` : ""}
+                      </span>
+                    </button>
+                  </td>
+                </tr>
+                {/* Data rows */}
+                {isExpanded &&
+                  group.rows.map((row) => {
+                    const signal = getSignalState(row);
+                    const gapColor = GAP_COLOR_MAP[getGapColor(row)];
+                    return (
+                      <tr
+                        key={row.id}
+                        className={clsx(
+                          "cursor-pointer border-b border-slate-100 hover:bg-blue-50/70",
+                          selectedId === row.id && "bg-blue-50"
+                        )}
+                        onClick={() => onSelect(row)}
+                      >
+                        <td className="px-3 py-2">
+                          <div className="font-bold text-slate-900">{rowName(row)}</div>
+                          <div className="truncate text-[11px] text-slate-500">
+                            {row.airport || ""}{row.local_time ? ` · ${row.local_time}` : ""}
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono font-bold">
+                          {temp(row.current_temp, row.temp_symbol)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          {temp(row.current_max_so_far, row.temp_symbol)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          {temp(row.deb_prediction, row.temp_symbol)}
+                        </td>
+                        <td className={clsx("px-2 py-2 text-right font-mono font-bold", gapColor)}>
+                          {temp(row.signed_gap ?? row.gap_to_target, row.temp_symbol)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono">
+                          {formatPrice(row.midpoint, row.ask, row.bid)}
+                        </td>
+                        <td className={clsx("px-2 py-2 text-right font-mono font-bold", edgeClass(row.edge_percent))}>
+                          {pct(row.edge_percent)}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-[11px]">
+                          {formatSpreadLiquidity(row.spread, row.book_liquidity ?? row.market_liquidity)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={clsx(
+                            "text-[11px] font-black",
+                            signal === "active" ? "text-emerald-600" :
+                            signal === "watch" ? "text-amber-600" :
+                            signal === "closed" ? "text-slate-400" : "text-red-500"
+                          )}>
+                            {getSignalLabel(signal, isEn)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </Fragment>
             );
           })}
         </tbody>
@@ -411,14 +480,27 @@ function KoyfinWeatherTerminal({
   toggleLocale: () => void;
   userLocalTime: string;
 }) {
-  const topRows = rows.slice(0, 18);
   const approveRows = rows
     .filter((row) => ["Approve", "Tradable"].includes(decisionLabel(row)))
     .slice(0, 8);
   const watchRows = rows
     .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
     .slice(0, 8);
-  const selectedLabel = decisionLabel(selectedRow);
+  const selectedLabel = selectedRow ? getSignalLabel(getSignalState(selectedRow), isEn) : "";
+  const continentGroups = useMemo(
+    () => buildContinentGroups(rows, isEn),
+    [rows, isEn]
+  );
+  const [mobileTab, setMobileTab] = useState<string>("active_signals");
+  const mobileActiveGroup = useMemo(
+    () => continentGroups.find((g) => g.key === mobileTab) || continentGroups[0],
+    [continentGroups, mobileTab]
+  );
+  useEffect(() => {
+    if (continentGroups.length > 0 && !continentGroups.find((g) => g.key === mobileTab)) {
+      setMobileTab(continentGroups[0].key);
+    }
+  }, [continentGroups, mobileTab]);
   const avgEdge =
     rows.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) /
     Math.max(rows.length, 1);
@@ -522,7 +604,49 @@ function KoyfinWeatherTerminal({
         </header>
 
         <main className="min-h-0 flex-1 overflow-auto p-2">
-          <div className="grid min-h-full grid-cols-1 gap-2 xl:grid-cols-[1.12fr_1.6fr_1.1fr]">
+          {/* Mobile layout */}
+          <div className="flex flex-col gap-2 lg:hidden">
+            <MobileRegionTabs
+              activeTab={mobileTab}
+              groups={continentGroups}
+              isEn={isEn}
+              onSelectTab={setMobileTab}
+            />
+            <div className="space-y-2 px-1">
+              {mobileActiveGroup?.rows.map((row) => (
+                <MobileCityCard
+                  key={row.id}
+                  row={row}
+                  isEn={isEn}
+                  onClick={setSelectedRow}
+                />
+              ))}
+            </div>
+            {/* Mobile Selected Row Detail */}
+            {selectedRow && (
+              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-black text-slate-900 mb-2">{rowName(selectedRow)}</h3>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  {[
+                    ["Obs", temp(selectedRow.current_temp, selectedRow.temp_symbol)],
+                    ["High", temp(selectedRow.current_max_so_far, selectedRow.temp_symbol)],
+                    ["DEB", temp(selectedRow.deb_prediction, selectedRow.temp_symbol)],
+                    ["Gap", temp(selectedRow.signed_gap ?? selectedRow.gap_to_target, selectedRow.temp_symbol)],
+                    ["Edge", pct(selectedRow.edge_percent)],
+                    ["Market", formatPrice(selectedRow.midpoint, selectedRow.ask, selectedRow.bid)],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded border border-slate-200 bg-slate-50 p-2">
+                      <div className="text-[10px] font-black uppercase text-slate-500">{label}</div>
+                      <div className="font-mono font-bold text-slate-900">{value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop layout */}
+          <div className="hidden min-h-full grid-cols-1 gap-2 lg:grid xl:grid-cols-[1.12fr_1.6fr_1.1fr]">
             <div className="grid min-h-0 gap-2">
               <Panel title={t("weatherContracts", isEn)}>
                 <div className="grid grid-cols-3 border-b border-slate-200 text-center">
@@ -549,17 +673,17 @@ function KoyfinWeatherTerminal({
                     </div>
                   </div>
                 </div>
-                <MarketTable
-                  rows={topRows}
+                <GroupedMarketTable
+                  groups={continentGroups}
+                  isEn={isEn}
                   selectedId={selectedRow?.id}
                   onSelect={setSelectedRow}
-                  isEn={isEn}
                 />
               </Panel>
 
               <Panel title={t("approvedSignals", isEn)}>
                 <div className="divide-y divide-slate-100">
-                  {(approveRows.length ? approveRows : topRows.slice(0, 5)).map((row) => (
+                  {(approveRows.length ? approveRows : rows.slice(0, 5)).map((row) => (
                     <button
                       key={row.id}
                       type="button"
@@ -667,11 +791,11 @@ function KoyfinWeatherTerminal({
               </Panel>
 
               <Panel title={t("marketList", isEn)}>
-                <MarketTable
-                  rows={rows.slice(0, 24)}
+                <GroupedMarketTable
+                  groups={continentGroups}
+                  isEn={isEn}
                   selectedId={selectedRow?.id}
                   onSelect={setSelectedRow}
-                  isEn={isEn}
                 />
               </Panel>
             </div>
@@ -679,7 +803,7 @@ function KoyfinWeatherTerminal({
             <div className="grid min-h-0 gap-2">
               <Panel title={t("watchlist", isEn)}>
                 <div className="divide-y divide-slate-100">
-                  {(watchRows.length ? watchRows : topRows.slice(0, 8)).map((row) => (
+                  {(watchRows.length ? watchRows : rows.slice(0, 8)).map((row) => (
                     <button
                       key={row.id}
                       type="button"
