@@ -472,6 +472,26 @@ function formatChartLabel(value: string) {
   return value.length > 8 ? value.slice(-8) : value;
 }
 
+const DAILY_CHART_HOURS = Array.from(
+  { length: 24 },
+  (_, index) => `${String(index).padStart(2, "0")}:00`,
+);
+
+function parseHourOfDay(value?: string | null) {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.getHours();
+  }
+  const match = raw.match(/(?:^|\D)([01]?\d|2[0-3])[:：][0-5]\d/);
+  if (match?.[1] !== undefined) {
+    const hour = Number(match[1]);
+    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : null;
+  }
+  return null;
+}
+
 function seriesStats(values: Array<number | null>) {
   const nums = values.filter((value): value is number => validNumber(value) !== null);
   const latest = nums.length ? nums[nums.length - 1] : null;
@@ -552,16 +572,18 @@ function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number
 function buildEvidenceChart(row: ScanOpportunityRow | null) {
   const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
   const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
-  const baseLabels = settlement.length >= metar.length ? settlement.map((point) => point.label) : metar.map((point) => point.label);
-  const length = Math.max(baseLabels.length, settlement.length, metar.length, 24);
-  const labels = length === baseLabels.length
-    ? baseLabels
-    : Array.from({ length }, (_, index) => baseLabels[index] || `${String(index).padStart(2, "0")}:00`);
+  const labels = DAILY_CHART_HOURS;
+  const length = labels.length;
 
   const align = (points: Array<{ label: string; value: number }>) => {
-    if (!points.length) return Array.from({ length }, () => null);
-    const offset = Math.max(0, length - points.length);
-    return Array.from({ length }, (_, index) => (index < offset ? null : points[index - offset]?.value ?? null));
+    if (!points.length) return Array.from({ length }, (): number | null => null);
+    const values = Array.from({ length }, (): number | null => null);
+    points.forEach((point, index) => {
+      const hour = parseHourOfDay(point.label);
+      const bucket = hour ?? Math.min(index, length - 1);
+      values[bucket] = point.value;
+    });
+    return values;
   };
 
   const series: EvidenceSeries[] = [];
@@ -606,7 +628,7 @@ function buildEvidenceChart(row: ScanOpportunityRow | null) {
   }
 
   const data = labels.map((label, index) => {
-    const point: Record<string, string | number | null> = { label: formatChartLabel(label) };
+    const point: Record<string, string | number | null> = { label };
     series.forEach((item) => {
       point[item.key] = item.values[index] ?? null;
     });
@@ -634,21 +656,6 @@ function NormalizedPerformancePanel({
       title={isEn ? "Live Temperature Trend & Option Threshold Lines" : "实时气温走势与期权阈值线"}
     >
       <div className="flex h-full min-h-[420px] flex-col">
-        <div className="flex shrink-0 overflow-x-auto border-b border-slate-200 bg-[#f5f7f9] text-[10px] font-black text-slate-600 scrollbar-none">
-          {rows.slice(0, 18).map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => onSelect?.(item)}
-              className={clsx(
-                "min-w-[76px] border-r border-slate-200 px-3 py-2 text-center hover:bg-white",
-                item.id === row?.id ? "bg-white text-blue-600 shadow-[inset_0_2px_0_#2563eb]" : "text-slate-600",
-              )}
-            >
-              <span className="block truncate">{rowName(item)}</span>
-            </button>
-          ))}
-        </div>
         <div className="shrink-0 border-b border-slate-200 bg-white px-3 py-2">
           <div className="mb-2 flex items-end justify-between gap-3 text-[10px]">
             <div className="space-y-0.5">
@@ -889,14 +896,8 @@ function PolyWeatherTerminal({
     const byRegion = selectedRegionKey === "all"
       ? rows
       : rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
-    // Deduplicate: one row per city, keep the first (highest score from sorting)
-    const seen = new Set<string>();
-    return byRegion.filter((row) => {
-      const key = (row.city || "").toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    // Only show the primary signal per city (backend marks is_primary_signal)
+    return byRegion.filter((row) => row.is_primary_signal !== false);
   }, [rows, selectedRegionKey]);
 
   const watchRows = useMemo(() => {
