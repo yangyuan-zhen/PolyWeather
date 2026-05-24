@@ -27,9 +27,6 @@ export function Panel({
         </h2>
         <div className="flex items-center gap-1.5">
           {actions}
-          <span className="grid h-5 w-5 cursor-pointer place-items-center rounded border border-slate-300 bg-white text-[9px] text-slate-500 hover:bg-slate-50">
-            ↗
-          </span>
         </div>
       </div>
       <div className="flex-1 min-h-0 overflow-auto">

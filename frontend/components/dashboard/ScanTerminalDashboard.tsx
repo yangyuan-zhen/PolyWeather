@@ -886,8 +886,17 @@ function PolyWeatherTerminal({
   }, [isEn]);
 
   const filteredRegionRows = useMemo(() => {
-    if (selectedRegionKey === "all") return rows;
-    return rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
+    const byRegion = selectedRegionKey === "all"
+      ? rows
+      : rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
+    // Deduplicate: one row per city, keep the first (highest score from sorting)
+    const seen = new Set<string>();
+    return byRegion.filter((row) => {
+      const key = (row.city || "").toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   }, [rows, selectedRegionKey]);
 
   const watchRows = useMemo(() => {

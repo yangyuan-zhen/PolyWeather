@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import clsx from "clsx";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import type { ScanOpportunityRow } from "@/lib/dashboard-types";
 import {
   type ContinentGroup,
@@ -125,7 +125,21 @@ export function GroupedMarketTable({
                           {temp(row.signed_gap ?? row.gap_to_target, row.temp_symbol)}
                         </td>
                         <td className="px-2 py-1.5 text-right font-mono">
-                          {formatPrice(row.midpoint, row.ask, row.bid)}
+                          {row.market_url ? (
+                            <a
+                              href={row.market_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                              className="inline-flex items-center gap-0.5 text-blue-600 hover:text-blue-800 hover:underline"
+                              title={row.market_question || "Polymarket"}
+                            >
+                              {formatPrice(row.midpoint, row.ask, row.bid)}
+                              <ExternalLink size={10} />
+                            </a>
+                          ) : (
+                            formatPrice(row.midpoint, row.ask, row.bid)
+                          )}
                         </td>
                         <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", edgeClass(row.edge_percent))}>
                           {pct(row.edge_percent)}
