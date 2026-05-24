@@ -499,6 +499,8 @@ function PolyWeatherTerminal({
   searchQuery,
   setSearchQuery,
   searchInputRef,
+  selectedCity,
+  setSelectedCity,
 }: {
   generatedText: string;
   isEn: boolean;
