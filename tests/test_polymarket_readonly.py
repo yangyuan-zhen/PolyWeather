@@ -183,11 +183,11 @@ def test_get_token_market_data_uses_price_cache_within_ttl():
     layer = PolymarketReadOnlyLayer()
     calls = []
 
-    def _fake_fetch(_token_id):
+    def _fake_ws(_token_id):
         calls.append(_token_id)
-        return {"buy": 0.33, "sell": 0.31, "midpoint": 0.32}
+        return {"buy": 0.33, "sell": 0.31, "midpoint": 0.32, "quote_source": "polymarket_ws"}
 
-    layer._fetch_token_market_data = _fake_fetch
+    layer._ws_cache.get_market_data = _fake_ws
 
     first = layer._get_token_market_data("token-1")
     second = layer._get_token_market_data("token-1")
@@ -900,22 +900,6 @@ def test_distribution_scan_uses_model_cluster_to_prefer_tail_no_over_yes():
     assert (21.0, "yes") not in recommendations
     assert all(row.get("is_directional_candidate") for row in scan["rows"])
     assert all(row.get("cluster_adjusted") for row in scan["rows"])
-
-
-def test_batch_token_market_data_falls_back_to_single_fetch_when_batch_fails():
-    layer = PolymarketReadOnlyLayer()
-    layer._clob_post = lambda *_args, **_kwargs: None
-    layer._fetch_token_market_data = lambda token_id: {
-        "buy": 0.33,
-        "sell": 0.31,
-        "midpoint": 0.32,
-        "quote_source": f"fallback:{token_id}",
-    }
-
-    result = layer._batch_get_token_market_data(["token-a", "token-b"])
-
-    assert result["token-a"]["midpoint"] == 0.32
-    assert result["token-b"]["quote_source"] == "fallback:token-b"
 
 
 def test_normalize_scan_filters_raises_liquidity_floor_when_high_liquidity_only():

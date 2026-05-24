@@ -41,80 +41,39 @@ function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function getCityLocalUtcTimestamp(
-  value: string | number | null | undefined,
-  tzOffsetSeconds: number,
-  referenceLocalDate?: string | null
-): number | null {
-  if (value == null) return null;
-  
-  if (typeof value === "number") {
-    const d = new Date(value + tzOffsetSeconds * 1000);
-    return Date.UTC(
-      d.getUTCFullYear(),
-      d.getUTCMonth(),
-      d.getUTCDate(),
-      d.getUTCHours(),
-      d.getUTCMinutes()
-    );
-  }
-
-  const raw = String(value).trim();
+function toTimestamp(value?: string | null): number | null {
+  const raw = String(value || "").trim();
   if (!raw) return null;
-
-  if (raw.includes("T") || raw.includes("Z") || raw.includes("-")) {
-    const d = new Date(raw);
-    if (!Number.isNaN(d.getTime())) {
-      const localMs = d.getTime() + tzOffsetSeconds * 1000;
-      const localDate = new Date(localMs);
-      return Date.UTC(
-        localDate.getUTCFullYear(),
-        localDate.getUTCMonth(),
-        localDate.getUTCDate(),
-        localDate.getUTCHours(),
-        localDate.getUTCMinutes()
-      );
-    }
-  }
-
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d.getTime();
+  // HH:MM or HH:MM:SS — treat as today, but handle cross-midnight:
+  // if parsed time is >2h ahead of now, assume yesterday
   const m = raw.match(/(\d{1,2}):(\d{2})/);
   if (m) {
-    const h = +m[1];
-    const min = +m[2];
-    
-    let year = new Date().getUTCFullYear();
-    let month = new Date().getUTCMonth();
-    let date = new Date().getUTCDate();
-    
-    if (referenceLocalDate) {
-      const dateParts = referenceLocalDate.split("-");
-      if (dateParts.length === 3) {
-        year = parseInt(dateParts[0]);
-        month = parseInt(dateParts[1]) - 1;
-        date = parseInt(dateParts[2]);
-      }
+    const now = new Date();
+    const h = +m[1], min = +m[2];
+    const candidate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), h, min);
+    if (candidate.getTime() - now.getTime() > 2 * 60 * 60 * 1000) {
+      candidate.setDate(candidate.getDate() - 1);
     }
-    
-    return Date.UTC(year, month, date, h, min);
+    return candidate.getTime();
   }
-
   return null;
 }
 
 function formatTimestamp(ts: number): string {
   const d = new Date(ts);
-  return `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
-function normObs(points: ObsPoint[] | null | undefined, tzOffsetSeconds: number, limit = MAX_OBS_POINTS) {
+function normObs(points?: ObsPoint[] | null, limit = MAX_OBS_POINTS) {
   return (points || [])
-    .filter((p) => validNumber(p.temp) !== null && p.time)
+    .filter((p) => validNumber(p.temp) !== null && toTimestamp(p.time) !== null)
+    .slice(-limit)
     .map((p) => ({
-      ts: getCityLocalUtcTimestamp(p.time, tzOffsetSeconds)!,
+      ts: toTimestamp(p.time)!,
       value: Number(p.temp),
-    }))
-    .filter((p) => p.ts !== null)
-    .slice(-limit);
+    }));
 }
 
 function seriesStats(values: Array<number | null>) {
@@ -140,8 +99,8 @@ function buildSlidingChartData(
   row: ScanOpportunityRow | null,
   hourly: HourlyForecast,
 ) {
-  const settlementObs = normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs, 0);
-  const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs, 0);
+  const settlementObs = normObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
+  const metarObs = normObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
 
   // Collect all timestamps from observations + forecasts
   const allTimes = new Set<number>();
@@ -361,11 +320,9 @@ function buildChartDomain(
 export function LiveTemperatureThresholdChart({
   isEn,
   row,
-  allRows = [],
 }: {
   isEn: boolean;
   row: ScanOpportunityRow | null;
-  allRows?: ScanOpportunityRow[];
 }) {
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
@@ -405,36 +362,6 @@ export function LiveTemperatureThresholdChart({
 
   const { data, series } = useMemo(() => buildSlidingChartData(row, hourly), [row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
-
-  const cityThresholds = useMemo(() => {
-    if (!row || !allRows || !allRows.length) return [];
-    const cityKey = String(row.city || "").toLowerCase().trim();
-    const sameCityRows = allRows.filter(
-      (r) => String(r.city || "").toLowerCase().trim() === cityKey
-    );
-
-    const seen = new Set<number>();
-    const list: { threshold: number; label: string; isBreached: boolean; kind: "gte" | "lte" }[] = [];
-    sameCityRows.forEach((r) => {
-      const t = Number(r.target_threshold ?? r.target_value ?? r.target_lower ?? r.target_upper);
-      if (!Number.isFinite(t) || seen.has(t)) return;
-      seen.add(t);
-
-      const maxTemp = Number(r.current_max_so_far ?? r.current_temp ?? 0);
-      const q = String(r.market_question || r.target_label || "").toLowerCase();
-      const kind: "gte" | "lte" = q.includes("below") || q.includes("under") || q.includes("lte") ? "lte" : "gte";
-      const isBreached = kind === "lte" ? maxTemp > t : maxTemp >= t;
-
-      list.push({
-        threshold: t,
-        label: r.target_label || `${t}°C`,
-        isBreached,
-        kind,
-      });
-    });
-
-    return list.sort((a, b) => a.threshold - b.threshold);
-  }, [row, allRows]);
   const modelSummaryCards = useMemo(() => {
     const cards = buildModelSummaryCards(row);
     if (!hourly?.modelCurves) return cards;
@@ -522,28 +449,15 @@ export function LiveTemperatureThresholdChart({
                 domain={chartDomain}
                 ticks={marketTicks ?? undefined}
               />
-              {cityThresholds.map((t, idx) => {
-                const isSelected = row && (Number(row.target_threshold ?? row.target_value) === t.threshold);
-                const labelText = isEn
-                  ? `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}° [${t.isBreached ? "Excluded" : "Active"}]`
-                  : `${t.kind === "gte" ? "≥" : "≤"} ${t.threshold.toFixed(1)}° [${t.isBreached ? "已排除" : "活跃"}]`;
-
-                return (
-                  <ReferenceLine
-                    key={idx}
-                    y={t.threshold}
-                    stroke={isSelected ? "#3b82f6" : t.isBreached ? "#ef4444" : "#f97316"}
-                    strokeDasharray={isSelected ? undefined : "4 4"}
-                    strokeWidth={isSelected ? 2 : 1}
-                    label={{
-                      value: labelText,
-                      fill: isSelected ? "#3b82f6" : t.isBreached ? "#ef4444" : "#f97316",
-                      fontSize: 9,
-                      position: isSelected ? "left" : "insideBottomRight",
-                    }}
-                  />
-                );
-              })}
+              {threshold !== null && (
+                <ReferenceLine
+                  y={threshold}
+                  stroke="#f97316"
+                  strokeDasharray="4 3"
+                  strokeWidth={2}
+                  label={{ value: `${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
+                />
+              )}
               <Tooltip
                 contentStyle={{
                   border: "1px solid #cbd5e1",
