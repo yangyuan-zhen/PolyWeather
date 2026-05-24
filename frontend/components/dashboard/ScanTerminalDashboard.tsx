@@ -184,7 +184,7 @@ const TERM = {
   tsData: { en: "Data", zh: "数据" },
   tsAccess: { en: "Access", zh: "访问权限" },
   tsLayout: { en: "Layout", zh: "布局" },
-  tsLayoutValue: { en: "Koyfin-style grid", zh: "Koyfin 风格网格" },
+  tsLayoutValue: { en: "Multi-panel grid", zh: "多面板网格" },
   tsDataLive: { en: "live", zh: "实时" },
   tsAccessPaid: { en: "paid", zh: "付费" },
 } as const;
@@ -207,16 +207,6 @@ function decisionLabel(row?: ScanOpportunityRow | null) {
   if (value.includes("downgrade")) return "Downgrade";
   if (row?.tradable) return "Tradable";
   return "Monitor";
-}
-
-function decisionClass(label: string) {
-  if (label === "Approve" || label === "Tradable") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-  if (label === "Veto" || label === "Downgrade") {
-    return "border-red-200 bg-red-50 text-red-700";
-  }
-  return "border-amber-200 bg-amber-50 text-amber-700";
 }
 
 function SparkArea({
@@ -476,7 +466,7 @@ function GroupedMarketTable({
   );
 }
 
-function KoyfinWeatherTerminal({
+function PolyWeatherTerminal({
   generatedText,
   isEn,
   locale,
@@ -1318,7 +1308,7 @@ function ScanTerminalScreen() {
   }
 
   return (
-    <KoyfinWeatherTerminal
+    <PolyWeatherTerminal
       generatedText={generatedText || ""}
       isEn={isEn}
       locale={locale}
