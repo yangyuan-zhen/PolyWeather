@@ -280,7 +280,7 @@ export function MarketOverviewView({
         </div>
       </Panel>
 
-      <Panel title={isEn ? "Top Opportunities" : "Top Opportunities"}>
+      <Panel title={isEn ? "Top Opportunities" : "最佳机会"}>
         <CompactRowsTable
           empty={isEn ? "No opportunities" : "暂无机会"}
           isEn={isEn}
@@ -289,7 +289,7 @@ export function MarketOverviewView({
         />
       </Panel>
 
-      <Panel title={isEn ? "Risk / Watchlist" : "Risk / Watchlist"}>
+      <Panel title={isEn ? "Risk / Watchlist" : "风险 / 观察列表"}>
         <CompactRowsTable
           empty={isEn ? "No risk rows" : "暂无风险项"}
           isEn={isEn}

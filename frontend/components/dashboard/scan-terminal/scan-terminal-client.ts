@@ -53,6 +53,7 @@ type AiCityStreamEvent = {
 type TerminalQueryOptions = {
   forceRefresh?: boolean;
   signal?: AbortSignal;
+  tradingRegion?: string;
 };
 
 type CityDetailQueryOptions = {
@@ -253,6 +254,7 @@ async function readAiCityForecastStream(
 async function getTerminal({
   forceRefresh = false,
   signal,
+  tradingRegion,
 }: TerminalQueryOptions = {}) {
   const params = new URLSearchParams({
     scan_mode: "tradable",
@@ -266,6 +268,9 @@ async function getTerminal({
     force_refresh: String(forceRefresh),
     skip_polymarket: "true",
   });
+  if (tradingRegion && tradingRegion !== "all") {
+    params.set("trading_region", tradingRegion);
+  }
   if (forceRefresh) {
     params.set("_ts", String(Date.now()));
   }

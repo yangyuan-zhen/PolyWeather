@@ -13,9 +13,11 @@ import type { ScanTerminalResponse } from "@/lib/dashboard-types";
 export function useScanTerminalQuery({
   isPro,
   proAccessLoading,
+  tradingRegion,
 }: {
   isPro: boolean;
   proAccessLoading: boolean;
+  tradingRegion?: string;
 }) {
   const {
     data: terminalData,
@@ -48,11 +50,12 @@ export function useScanTerminalQuery({
           scanTerminalClient.getTerminal({
             forceRefresh,
             signal,
+            tradingRegion,
           }),
         showLoading,
       });
     },
-    [isPro, proAccessLoading, run],
+    [isPro, proAccessLoading, run, tradingRegion],
   );
 
   useEffect(() => {
@@ -62,7 +65,7 @@ export function useScanTerminalQuery({
       return;
     }
     void fetchScanTerminal({ forceRefresh: false, showLoading: true });
-  }, [fetchScanTerminal, isPro, proAccessLoading, reset]);
+  }, [fetchScanTerminal, isPro, proAccessLoading, reset, tradingRegion]);
 
   const refreshScanTerminalManually = useCallback(() => {
     if (

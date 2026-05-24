@@ -1230,6 +1230,16 @@ def _build_scan_terminal_payload_uncached(
 
     try:
         city_names = list(CITIES.keys())
+        region_filter = str(filters.get("trading_region") or "").strip().lower()
+        if region_filter and region_filter not in ("all", ""):
+            from web.scan_terminal_filters import market_region_from_tz_offset as _tz_region
+
+            def _city_in_region(city_name: str) -> bool:
+                city_meta = CITIES.get(city_name) or {}
+                tz = city_meta.get("tz", 0)
+                return _tz_region(tz)["key"] == region_filter
+
+            city_names = [c for c in city_names if _city_in_region(c)]
         max_workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
         city_results: List[Dict[str, Any]] = []
         failed_cities: List[str] = []
