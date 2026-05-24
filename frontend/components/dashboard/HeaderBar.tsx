@@ -96,8 +96,8 @@ export function HeaderBar({
   return (
     <header className="header">
       <div className="brand">
-        <span className="brand-mark bg-blue-600 !border-transparent flex items-center justify-center text-white" aria-hidden="true">
-          <CloudSun size={18} />
+        <span className="brand-mark" aria-hidden="true">
+          <img src="/apple-touch-icon.png" alt="PolyWeather" />
         </span>
         <h1>PolyWeather</h1>
         <span className="subtitle">{t("header.subtitle")}</span>
