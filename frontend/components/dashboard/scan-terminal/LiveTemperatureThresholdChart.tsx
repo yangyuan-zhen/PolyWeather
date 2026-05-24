@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
   Line,
@@ -82,31 +82,50 @@ function seriesStats(values: Array<number | null>) {
   return { latest, high, delta15 };
 }
 
-function buildModelPoints(row: ScanOpportunityRow | null, length: number) {
+type HourlyForecast = { times: string[]; temps: Array<number | null> } | null;
+
+function buildModelCurves(row: ScanOpportunityRow | null, length: number, hourly: HourlyForecast) {
+  const result: EvidenceSeries[] = [];
+  // Use hourly forecast data if available (DEB-blended ensemble curve)
+  if (hourly?.times?.length && hourly?.temps?.length) {
+    const values = Array.from({ length }, (): number | null => null);
+    hourly.times.forEach((t, i) => {
+      const hour = /(\d{1,2}):/.exec(String(t || ""))?.[1];
+      const h = hour ? parseInt(hour, 10) : null;
+      if (h !== null && h >= 0 && h < length && i < hourly.temps.length) {
+        values[h] = validNumber(hourly.temps[i]);
+      }
+    });
+    if (values.some((v) => v !== null)) {
+      result.push({
+        key: "hourly_forecast",
+        label: "DEB Forecast",
+        source: "DEB Hourly",
+        color: "#f97316",
+        featured: true,
+        values,
+      });
+    }
+  }
+  // Fallback: show model daily-high points as anchors
   const modelEntries = Object.entries(row?.model_cluster_sources || {})
     .map(([label, value]) => [label, validNumber(value)] as const)
     .filter((entry): entry is readonly [string, number] => entry[1] !== null)
-    .slice(0, 4);
-  const constants: EvidenceSeries[] = modelEntries.map(([label, value], index) => ({
-    key: `model_${index}`,
-    label,
-    source: "Multi-model",
-    color: ["#2563eb", "#14b8a6", "#7c3aed", "#64748b"][index] || "#64748b",
-    dashed: true,
-    values: Array.from({ length }, () => value),
-  }));
-  const deb = validNumber(row?.deb_prediction);
-  if (deb !== null) {
-    constants.unshift({
-      key: "deb",
-      label: "DEB",
-      source: "DEB",
-      color: "#f97316",
+    .slice(0, 3);
+  modelEntries.forEach(([label, value], index) => {
+    // Place anchor points at peak hours (14-17 local)
+    const values = Array.from({ length }, (): number | null => null);
+    for (let h = 14; h <= 17; h++) values[h] = value;
+    result.push({
+      key: `model_${index}`,
+      label,
+      source: "Multi-model",
+      color: ["#2563eb", "#14b8a6", "#7c3aed"][index] || "#64748b",
       dashed: true,
-      values: Array.from({ length }, () => deb),
+      values,
     });
-  }
-  return constants;
+  });
+  return result;
 }
 
 function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number): EvidenceSeries[] {
@@ -152,7 +171,7 @@ function extractRunwayPointSeries(row: ScanOpportunityRow | null, length: number
   return series.slice(0, 4);
 }
 
-function buildEvidenceChart(row: ScanOpportunityRow | null) {
+function buildEvidenceChart(row: ScanOpportunityRow | null, hourly: HourlyForecast) {
   const settlement = normalizeObs(row?.settlement_today_obs || row?.metar_context?.settlement_today_obs);
   const metar = normalizeObs(row?.metar_today_obs || row?.metar_context?.today_obs || row?.metar_recent_obs || row?.metar_context?.recent_obs);
   const labels = DAILY_CHART_HOURS;
@@ -191,7 +210,7 @@ function buildEvidenceChart(row: ScanOpportunityRow | null) {
       values: align(metar),
     });
   }
-  series.push(...buildModelPoints(row, length));
+  series.push(...buildModelCurves(row, length, hourly));
 
   const fallbackValue =
     validNumber(row?.current_temp) ??
@@ -227,7 +246,33 @@ export function LiveTemperatureThresholdChart({
   isEn: boolean;
   row: ScanOpportunityRow | null;
 }) {
-  const { data, series } = useMemo(() => buildEvidenceChart(row), [row]);
+  const [hourly, setHourly] = useState<HourlyForecast>(null);
+  const city = String(row?.city || "").toLowerCase().trim();
+
+  useEffect(() => {
+    setHourly(null);
+    if (!city) return;
+    let cancelled = false;
+    fetch(`/api/city/${encodeURIComponent(city)}/summary`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        return res.json() as Promise<{ timeseries?: { hourly?: { times?: string[]; temps?: Array<number | null> } } }>;
+      })
+      .then((json) => {
+        if (cancelled || !json?.timeseries?.hourly) return;
+        setHourly({
+          times: json.timeseries.hourly.times || [],
+          temps: json.timeseries.hourly.temps || [],
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [city]);
+
+  const { data, series } = useMemo(() => buildEvidenceChart(row, hourly), [row, hourly]);
   const threshold = validNumber(row?.target_threshold) ?? validNumber(row?.target_value);
   const tableRows = series.slice(0, 5).map((item) => ({ ...item, ...seriesStats(item.values) }));
 
