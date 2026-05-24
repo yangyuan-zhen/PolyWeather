@@ -110,7 +110,6 @@ const TERM = {
   signal: { en: "Signal", zh: "信号" },
   searchPlaceholder: { en: "Search city, contract, station, or signal", zh: "搜索城市、合约、站点或信号" },
   weatherContracts: { en: "Weather Contracts", zh: "天气合约" },
-  approvedSignals: { en: "Approved Signals", zh: "已确认信号" },
   selectedContractMonitor: { en: "Selected Contract Monitor", zh: "选中合约监控" },
   probabilityDistribution: { en: "Probability Distribution", zh: "概率分布" },
   marketList: { en: "Market List", zh: "市场列表" },
@@ -377,12 +376,6 @@ function PolyWeatherTerminal({
     return rows.filter((row) => String(row.trading_region).toLowerCase() === selectedRegionKey);
   }, [rows, selectedRegionKey]);
 
-  const approveRows = useMemo(() => {
-    return filteredRegionRows
-      .filter((row) => ["Approve", "Tradable"].includes(decisionLabel(row)))
-      .slice(0, 8);
-  }, [filteredRegionRows]);
-
   const watchRows = useMemo(() => {
     return filteredRegionRows
       .filter((row) => decisionLabel(row) === "Watch" || !row.tradable)
@@ -618,109 +611,40 @@ function PolyWeatherTerminal({
                 })}
               </div>
 
-              {activeNavKey === "signals" ? (
-                <>
-                  <Panel title={t("approvedSignals", isEn)} className="flex-1 min-h-0">
-                    <div className="divide-y divide-slate-100">
-                      {approveRows.map((row) => (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => setSelectedRow(row)}
-                          className={clsx(
-                            "grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 transition-colors",
-                            selectedRow?.id === row.id && "bg-blue-50/70"
-                          )}
-                        >
-                          <span>
-                            <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
-                            <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
-                              {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
-                            </small>
-                          </span>
-                          <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
-                            {pct(row.edge_percent)}
-                          </span>
-                        </button>
-                      ))}
-                      {approveRows.length === 0 && (
-                        <div className="p-4 text-center text-xs text-slate-400">
-                          {isEn ? "No approved signals in this timezone" : "该时区暂无已确认信号"}
-                        </div>
-                      )}
+              <Panel title={isEn ? "Weather Contracts" : "天气合约"} className="flex-1 min-h-0">
+                <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
+                  <div className="py-2 border-r border-slate-200">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
+                      {t("rows", isEn)}
                     </div>
-                  </Panel>
-
-                  <Panel title={t("probabilityDistribution", isEn)} className="h-[250px] shrink-0">
-                    <div className="p-3 h-full">
-                      <ProbabilityDistributionChart points={selectedRow?.distribution_preview} isEn={isEn} />
+                    <div className="font-mono text-base font-black text-slate-800">{filteredRegionRows.length}</div>
+                  </div>
+                  <div className="py-2 border-r border-slate-200">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
+                      {t("avgEdge", isEn)}
                     </div>
-                  </Panel>
-                </>
-              ) : (
-                <>
-                  <Panel title={isEn ? "Weather Contracts" : "天气合约"}>
-                    <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
-                      <div className="py-2 border-r border-slate-200">
-                        <div className="text-[10px] font-bold uppercase text-slate-400">
-                          {t("rows", isEn)}
-                        </div>
-                        <div className="font-mono text-base font-black text-slate-800">{filteredRegionRows.length}</div>
-                      </div>
-                      <div className="py-2 border-r border-slate-200">
-                        <div className="text-[10px] font-bold uppercase text-slate-400">
-                          {t("avgEdge", isEn)}
-                        </div>
-                        <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
-                          {pct(avgEdge)}
-                        </div>
-                      </div>
-                      <div className="py-2">
-                        <div className="text-[10px] font-bold uppercase text-slate-400">
-                          {t("liquidity", isEn)}
-                        </div>
-                        <div className="font-mono text-base font-black text-slate-800">
-                          {money(totalLiquidity)}
-                        </div>
-                      </div>
+                    <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
+                      {pct(avgEdge)}
                     </div>
-                    <div className="flex-1 min-h-0 overflow-auto">
-                      <GroupedMarketTable
-                        groups={continentGroups}
-                        isEn={isEn}
-                        selectedId={selectedRow?.id}
-                        onSelect={setSelectedRow}
-                      />
+                  </div>
+                  <div className="py-2">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
+                      {t("liquidity", isEn)}
                     </div>
-                  </Panel>
-
-                  <Panel title={t("approvedSignals", isEn)} className="h-[210px] shrink-0">
-                    <div className="divide-y divide-slate-100">
-                      {(approveRows.length ? approveRows : rows.slice(0, 5)).map((row) => (
-                        <button
-                          key={row.id}
-                          type="button"
-                          onClick={() => setSelectedRow(row)}
-                          className={clsx(
-                            "grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors",
-                            selectedRow?.id === row.id && "bg-blue-50/70"
-                          )}
-                        >
-                          <span>
-                            <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
-                            <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
-                              {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
-                            </small>
-                          </span>
-                          <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
-                            {pct(row.edge_percent)}
-                          </span>
-                        </button>
-                      ))}
+                    <div className="font-mono text-base font-black text-slate-800">
+                      {money(totalLiquidity)}
                     </div>
-                  </Panel>
-                </>
-              )}
+                  </div>
+                </div>
+                <div className="flex-1 min-h-0 overflow-auto">
+                  <GroupedMarketTable
+                    groups={continentGroups}
+                    isEn={isEn}
+                    selectedId={selectedRow?.id}
+                    onSelect={setSelectedRow}
+                  />
+                </div>
+              </Panel>
             </div>
 
             {/* Column 2 */}
