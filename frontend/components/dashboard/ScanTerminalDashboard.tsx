@@ -4,10 +4,7 @@ import clsx from "clsx";
 import Link from "next/link";
 import {
   Activity,
-  BarChart3,
-  Bell,
   ChevronLeft,
-  Gauge,
   GraduationCap,
   LineChart,
   Menu,
@@ -47,6 +44,7 @@ import { Panel } from "@/components/dashboard/scan-terminal/Panel";
 import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
+import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
 import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
@@ -168,13 +166,6 @@ function tablePrice(row: ScanOpportunityRow) {
   return formatPrice(row.midpoint, row.ask, row.bid);
 }
 
-function ticker(row: ScanOpportunityRow) {
-  return String(row.airport || row.market_key || row.city || "--")
-    .replace(/[^A-Za-z0-9]/g, "")
-    .slice(0, 6)
-    .toUpperCase();
-}
-
 function KoyfinRowsTable({
   compact = false,
   isEn,
@@ -198,11 +189,6 @@ function KoyfinRowsTable({
           <th className="px-1.5 py-1 text-left font-black">
             {isEn ? "Weather Contract" : "天气合约"}
           </th>
-          {!compact && (
-            <th className="px-1.5 py-1 text-left font-black">
-              {isEn ? "Ticker" : "代码"}
-            </th>
-          )}
           <th className="px-1.5 py-1 text-right font-black">
             {isEn ? "Price" : "价格"}
           </th>
@@ -236,11 +222,6 @@ function KoyfinRowsTable({
                   {row.target_label || row.market_question || row.airport || "--"}
                 </div>
               </td>
-              {!compact && (
-                <td className="px-1.5 py-1 font-mono font-bold text-slate-600">
-                  {ticker(row)}
-                </td>
-              )}
               <td className="px-1.5 py-1 text-right font-mono font-bold text-slate-800">
                 {tablePrice(row)}
               </td>
@@ -353,9 +334,6 @@ function PolyWeatherTerminal({
   const NAV_ITEMS = [
     { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
     { key: "signals", Icon: LineChart, labelEn: "Signals", labelZh: "交易信号" },
-    { key: "analytics", Icon: BarChart3, labelEn: "Analytics", labelZh: "分析图表" },
-    { key: "watchlist", Icon: Gauge, labelEn: "Watchlist", labelZh: "自选监控" },
-    { key: "alerts", Icon: Bell, labelEn: "Alerts", labelZh: "实时预警" },
     { key: "markets", Icon: Activity, labelEn: "Markets", labelZh: "市场概览" },
     { key: "training", Icon: GraduationCap, labelEn: "Training", labelZh: "训练数据" },
   ];
@@ -564,211 +542,132 @@ function PolyWeatherTerminal({
         </header>
 
         <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
-          {/* Region tabs */}
-          <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 mb-2 scrollbar-none">
-            {TRADING_REGIONS.map((r) => ({
-                key: r.key,
-                labelEn: r.labelEn.toUpperCase(),
-                labelZh: r.labelZh,
-              })).map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setSelectedRegionKey(tab.key)}
-                className={clsx(
-                  "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-[3px] transition-all whitespace-nowrap",
-                  selectedRegionKey === tab.key
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                )}
-              >
-                {isEn ? tab.labelEn : tab.labelZh}
-              </button>
-            ))}
-          </div>
-          {/* Mobile layout */}
-          <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
-            <MobileRegionTabs
-              activeTab={mobileTab}
-              groups={continentGroups}
+          {activeNavKey === "training" ? (
+            <TrainingDashboard isEn={isEn} />
+          ) : activeNavKey === "markets" ? (
+            <MarketOverviewView
               isEn={isEn}
-              onSelectTab={setMobileTab}
+              rows={rows}
+              onSelectRow={(row) => {
+                const regionKey = String(row.trading_region || "").toLowerCase();
+                if (regionKey) setSelectedRegionKey(regionKey);
+                setSelectedRow(row);
+                setActiveNavKey("contracts");
+              }}
             />
-            <div className="space-y-2 px-1">
-              {mobileActiveGroup?.rows.map((row) => (
-                <MobileCityCard
-                  key={row.id}
-                  row={row}
+          ) : (
+            <>
+              {/* Region tabs */}
+              <div className="flex shrink-0 items-center gap-1 overflow-x-auto rounded-[4px] border border-[#cfd6df] bg-white p-1 mb-2 scrollbar-none">
+                {TRADING_REGIONS.map((r) => ({
+                    key: r.key,
+                    labelEn: r.labelEn.toUpperCase(),
+                    labelZh: r.labelZh,
+                  })).map((tab) => (
+                  <button
+                    key={tab.key}
+                    type="button"
+                    onClick={() => setSelectedRegionKey(tab.key)}
+                    className={clsx(
+                      "px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider rounded-[3px] transition-all whitespace-nowrap",
+                      selectedRegionKey === tab.key
+                        ? "bg-blue-600 text-white shadow-sm"
+                        : "text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                    )}
+                  >
+                    {isEn ? tab.labelEn : tab.labelZh}
+                  </button>
+                ))}
+              </div>
+              {/* Mobile layout */}
+              <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
+                <MobileRegionTabs
+                  activeTab={mobileTab}
+                  groups={continentGroups}
                   isEn={isEn}
-                  onClick={setSelectedRow}
+                  onSelectTab={setMobileTab}
                 />
-              ))}
-            </div>
-            {/* Mobile Selected Row Detail */}
-            {selectedRow && (
-              <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-black text-slate-900 mb-2">{rowName(selectedRow)}</h3>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  {[
-                    ["Obs", temp(selectedRow.current_temp, selectedRow.temp_symbol)],
-                    ["High", temp(selectedRow.current_max_so_far, selectedRow.temp_symbol)],
-                    ["DEB", temp(selectedRow.deb_prediction, selectedRow.temp_symbol)],
-                    ["Gap", temp(selectedRow.signed_gap ?? selectedRow.gap_to_target, selectedRow.temp_symbol)],
-                    ["Edge", pct(selectedRow.edge_percent)],
-                    ["Market", formatPrice(selectedRow.midpoint, selectedRow.ask, selectedRow.bid)],
-                  ].map(([label, value]) => (
-                    <div key={label} className="rounded border border-slate-200 bg-slate-50 p-2">
-                      <div className="text-[10px] font-black uppercase text-slate-500">{label}</div>
-                      <div className="font-mono font-bold text-slate-900">{value}</div>
-                    </div>
+                <div className="space-y-2 px-1">
+                  {mobileActiveGroup?.rows.map((row) => (
+                    <MobileCityCard
+                      key={row.id}
+                      row={row}
+                      isEn={isEn}
+                      onClick={setSelectedRow}
+                    />
                   ))}
                 </div>
+                {/* Mobile Selected Row Detail */}
+                {selectedRow && (
+                  <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+                    <h3 className="text-sm font-black text-slate-900 mb-2">{rowName(selectedRow)}</h3>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {[
+                        ["Obs", temp(selectedRow.current_temp, selectedRow.temp_symbol)],
+                        ["High", temp(selectedRow.current_max_so_far, selectedRow.temp_symbol)],
+                        ["DEB", temp(selectedRow.deb_prediction, selectedRow.temp_symbol)],
+                        ["Gap", temp(selectedRow.signed_gap ?? selectedRow.gap_to_target, selectedRow.temp_symbol)],
+                        ["Edge", pct(selectedRow.edge_percent)],
+                        ["Market", formatPrice(selectedRow.midpoint, selectedRow.ask, selectedRow.bid)],
+                      ].map(([label, value]) => (
+                        <div key={label} className="rounded border border-slate-200 bg-slate-50 p-2">
+                          <div className="text-[10px] font-black uppercase text-slate-500">{label}</div>
+                          <div className="font-mono font-bold text-slate-900">{value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Desktop layout */}
-          <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr_0.96fr] gap-2">
-            <div className="flex min-h-0 flex-col gap-2">
-              <KoyfinMarketPanel
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={filteredRegionRows}
-                selectedId={selectedRow?.id}
-                title={isEn ? "Weather Contract Markets" : "天气合约市场"}
-              />
-            </div>
+              {/* Desktop layout */}
+              <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr_0.96fr] gap-2">
+                <div className="flex min-h-0 flex-col gap-2">
+                  <KoyfinMarketPanel
+                    isEn={isEn}
+                    onSelect={setSelectedRow}
+                    rows={filteredRegionRows}
+                    selectedId={selectedRow?.id}
+                    title={isEn ? "Weather Contract Markets" : "天气合约市场"}
+                  />
+                </div>
 
-            <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
-              <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} />
-            </div>
+                <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
+                  <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} />
+                </div>
 
-            <div className="flex min-h-0 flex-col gap-2">
-              <KoyfinMarketPanel
-                compact
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={heatRows.length ? heatRows : topRows.slice(0, 8)}
-                selectedId={selectedRow?.id}
-                title={isEn ? "High Heat Markets" : "高温市场"}
-              />
-              <KoyfinMarketPanel
-                compact
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={liquidRows}
-                selectedId={selectedRow?.id}
-                title={isEn ? "Liquid Weather Markets" : "高流动性市场"}
-              />
-              <KoyfinMarketPanel
-                compact
-                isEn={isEn}
-                onSelect={setSelectedRow}
-                rows={watchRows.length ? watchRows : negativeRows.length ? negativeRows : topRows.slice(0, 8)}
-                selectedId={selectedRow?.id}
-                title={isEn ? "Watchlist & Risk" : "观察与风险"}
-              />
-              <RegionalWhaleWatch isEn={isEn} rows={filteredRegionRows} />
-            </div>
-          </div>
+                <div className="flex min-h-0 flex-col gap-2">
+                  <KoyfinMarketPanel
+                    compact
+                    isEn={isEn}
+                    onSelect={setSelectedRow}
+                    rows={heatRows.length ? heatRows : topRows.slice(0, 8)}
+                    selectedId={selectedRow?.id}
+                    title={isEn ? "High Heat Markets" : "高温市场"}
+                  />
+                  <KoyfinMarketPanel
+                    compact
+                    isEn={isEn}
+                    onSelect={setSelectedRow}
+                    rows={liquidRows}
+                    selectedId={selectedRow?.id}
+                    title={isEn ? "Liquid Weather Markets" : "高流动性市场"}
+                  />
+                  <KoyfinMarketPanel
+                    compact
+                    isEn={isEn}
+                    onSelect={setSelectedRow}
+                    rows={watchRows.length ? watchRows : negativeRows.length ? negativeRows : topRows.slice(0, 8)}
+                    selectedId={selectedRow?.id}
+                    title={isEn ? "Watchlist & Risk" : "观察与风险"}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>
-  );
-}
-
-function RegionalWhaleWatch({
-  isEn,
-  rows,
-}: {
-  isEn: boolean;
-  rows: ScanOpportunityRow[];
-}) {
-  type HolderInfo = { city: string; holders: Array<{ proxyWallet?: string; amount?: number; outcomeIndex?: number; pseudonym?: string; name?: string }> | null; loading: boolean };
-  const [holderMap, setHolderMap] = useState<Record<string, HolderInfo>>({});
-
-  const regions = ["americas", "europe", "asia_pacific", "middle_east_africa"];
-  const regionLabels: Record<string, string> = {
-    americas: isEn ? "Americas" : "美洲",
-    europe: isEn ? "Europe" : "欧洲",
-    asia_pacific: isEn ? "Asia-Pacific" : "亚太",
-    middle_east_africa: isEn ? "ME & Africa" : "中东非洲",
-  };
-  const topByRegion = useMemo(() => {
-    return regions.map((region) => {
-      const regionRows = rows
-        .filter((row) => row.trading_region === region)
-        .sort((a, b) => (Number(b.volume || b.book_liquidity || 0)) - (Number(a.volume || a.book_liquidity || 0)))
-        .slice(0, 2);
-      return { region, label: regionLabels[region] || region, rows: regionRows };
-    }).filter((r) => r.rows.length > 0);
-  }, [rows, isEn]);
-
-  useEffect(() => {
-    topByRegion.forEach(({ rows: regionRows }) => {
-      regionRows.forEach((row) => {
-        const city = String(row.city || "").toLowerCase();
-        if (!city || holderMap[city]?.loading || holderMap[city]?.holders) return;
-        setHolderMap((prev) => ({ ...prev, [city]: { city, holders: null, loading: true } }));
-        fetch(`/api/city/${encodeURIComponent(city)}/holders?limit=6`, { cache: "no-store", headers: { Accept: "application/json" } })
-          .then(async (res) => {
-            const json = await res.json() as { holders?: Array<{ proxyWallet?: string; amount?: number; outcomeIndex?: number; pseudonym?: string; name?: string }>; available?: boolean };
-            setHolderMap((prev) => ({ ...prev, [city]: { city, holders: json.holders || [], loading: false } }));
-          })
-          .catch(() => setHolderMap((prev) => ({ ...prev, [city]: { city, holders: null, loading: false } })));
-      });
-    });
-  }, [topByRegion]);
-
-  if (!topByRegion.length) return null;
-
-  return (
-    <Panel title={isEn ? "Whale Watch" : "巨鲸盯盘"}>
-      <div className="divide-y divide-slate-100 text-[11px]">
-        {topByRegion.map(({ region, label, rows: regionRows }) => (
-          <div key={region} className="py-1 px-2">
-            <div className="mb-1 text-[10px] font-black uppercase text-slate-400">{label}</div>
-            {regionRows.map((row) => {
-              const city = String(row.city || "").toLowerCase();
-              const info = holderMap[city];
-              const vol = Number(row.volume || row.book_liquidity || 0);
-              return (
-                <div key={row.id}>
-                  <div className="flex items-center justify-between py-0.5 border-b border-slate-50">
-                    <span className="font-semibold text-slate-800 truncate max-w-[100px]">
-                      {row.city_display_name || row.city}
-                    </span>
-                    <span className="text-[10px] text-slate-500 truncate max-w-[80px] text-right">
-                      {row.target_label || "--"}
-                    </span>
-                    <span className="ml-1 font-mono text-[10px] font-bold text-blue-700 shrink-0">
-                      {vol >= 1000 ? `$${(vol / 1000).toFixed(1)}K` : `$${Math.round(vol)}`}
-                    </span>
-                  </div>
-                  {info?.loading ? (
-                    <div className="text-[9px] text-slate-300 py-0.5 animate-pulse">{isEn ? "Loading holders..." : "加载持仓..."}</div>
-                  ) : info?.holders?.length ? (
-                    info.holders.slice(0, 3).map((h, i) => (
-                      <div key={i} className="flex items-center justify-between py-0.5 text-[10px] ml-2">
-                        <span className="text-slate-500 truncate max-w-[130px]">
-                          {h.name || h.pseudonym || (h.proxyWallet ? `${String(h.proxyWallet).slice(0, 6)}...${String(h.proxyWallet).slice(-4)}` : "--")}
-                        </span>
-                        <span className="font-mono text-slate-600 shrink-0">
-                          {h.outcomeIndex === 0 ? "YES" : h.outcomeIndex === 1 ? "NO" : ""}{" "}
-                          {h.amount != null ? `${Number(h.amount).toFixed(0)}` : ""}
-                        </span>
-                      </div>
-                    ))
-                  ) : info ? (
-                    <div className="text-[9px] text-slate-300 py-0.5">{isEn ? "No holder data" : "无持仓数据"}</div>
-                  ) : null}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </Panel>
   );
 }
 
