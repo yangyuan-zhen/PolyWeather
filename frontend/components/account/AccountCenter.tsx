@@ -39,45 +39,17 @@ import {
   getSupabaseBrowserClient,
   hasSupabasePublicEnv,
 } from "@/lib/supabase/client";
-import {
-  getAllowedPaymentHosts,
-  getCurrentPaymentHost,
-  isPaymentHostAllowed,
-} from "@/lib/payment-host";
-import {
-  assertExpectedPaymentReceiver,
-  EXPECTED_PAYMENT_RECEIVER_ADDRESS,
-} from "@/lib/payment-receiver";
 import { markAnalyticsOnce, trackAppEvent } from "@/lib/app-analytics";
 import { useI18n } from "@/hooks/useI18n";
 import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
 
-import type {
-  AuthMeResponse,
-  BoundWallet,
-  ConnectBindOptions,
-  CreatedIntent,
-  Eip6963ProviderDetail,
-  EvmProvider,
-  InjectedProviderOption,
-  IntentStatusResponse,
-  PaymentConfig,
-  PaymentTokenOption,
-  PaymentRecoveryState,
-  ProviderMode,
-  ProviderSelection,
-  TelegramPricing,
-} from "./types";
+import type { AuthMeResponse } from "./types";
 import {
-  PAYMENT_RECOVERY_STORAGE_KEY,
-  PAYMENT_RECOVERY_TTL_MS,
   SUBSCRIPTION_HELP_HREF,
   TELEGRAM_BOT_URL,
   TELEGRAM_GROUP_URL,
   TELEGRAM_TOPICS_GROUP_URL,
   WALLETCONNECT_PROJECT_ID,
-  WALLETCONNECT_POLYGON_RPC_URL,
-  WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
 } from "./constants";
 import { InfoRow, PlusIcon } from "./AccountInfoRow";
 import {
@@ -87,25 +59,9 @@ import {
   parseSubscriptionExpiry,
   shortAddress,
 } from "./formatters";
-import {
-  buildAllowanceCalldata,
-  buildApproveCalldata,
-  buildBalanceOfCalldata,
-  formatTokenUnits,
-  normalizePaymentError,
-  requestWalletWithTimeout,
-} from "./payment-utils";
 import { createAccountCopy } from "./account-copy";
-import { usePaymentState } from "./usePaymentState";
-import {
-  eip6963Providers,
-  getEvmProvider,
-  getEvmWalletLabel,
-  getWalletConnectProvider,
-  isWalletConnectResetError,
-  listInjectedProviders,
-  resetWalletConnectProvider,
-} from "./wallet";
+import { resetWalletConnectProvider } from "./wallet";
+import { useAccountPayment } from "./useAccountPayment";
 
 // --- Main Component ---
 
@@ -115,76 +71,121 @@ export function AccountCenter() {
   const isEn = locale === "en-US";
   const copy = useMemo(() => createAccountCopy(isEn), [isEn]);
 
+  // ── UI-only state ──────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [errorText, setErrorText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [showSecondarySections, setShowSecondarySections] = useState(false);
+
+  // ── Shared state (declared in component, written by hook via setters) ─
   const [showOverlay, setShowOverlay] = useState(false);
   const [usePoints, setUsePoints] = useState(true);
+  const [errorText, setErrorText] = useState("");
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [user, setUser] = useState<User | null>(null);
   const [backend, setBackend] = useState<AuthMeResponse | null>(null);
-  const [paymentConfig, setPaymentConfig] = useState<PaymentConfig | null>(
-    null,
-  );
-  const [boundWallets, setBoundWallets] = useState<BoundWallet[]>([]);
-  const [walletAddress, setWalletAddress] = useState("");
-  const [selectedPlanCode, setSelectedPlanCode] = useState("pro_monthly");
-  const [selectedTokenAddress, setSelectedTokenAddress] = useState("");
-  const [selectedWallet, setSelectedWallet] = useState("");
-  const [providerMode, setProviderMode] = useState<ProviderMode>("auto");
-  const [injectedProviderOptions, setInjectedProviderOptions] = useState<
-    InjectedProviderOption[]
-  >([]);
-  const [selectedInjectedProviderKey, setSelectedInjectedProviderKey] =
-    useState("");
-  const {
-    paymentBusy,
-    setPaymentBusy,
-    paymentInfo,
-    setPaymentInfo,
-    paymentError,
-    setPaymentError,
-    lastIntentId,
-    setLastIntentId,
-    lastTxHash,
-    setLastTxHash,
-    telegramBindOpening,
-    setTelegramBindOpening,
-    manualPayment,
-    setManualPayment,
-    manualTxHash,
-    setManualTxHash,
-    txValidation,
-    setTxValidation,
-    paymentMethodTab,
-    setPaymentMethodTab,
-    lastPaymentStartedAt,
-    setLastPaymentStartedAt,
-    clearPaymentMessages,
-    clearPaymentState,
-  } = usePaymentState();
-  const [showSecondarySections, setShowSecondarySections] = useState(false);
-  const [reconcileBusy, setReconcileBusy] = useState(false);
-  const [telegramBindUrl, setTelegramBindUrl] = useState("");
 
   const supabaseReady = hasSupabasePublicEnv();
   const walletConnectEnabled = Boolean(WALLETCONNECT_PROJECT_ID);
-  const authUserId = backend?.user_id || user?.id || "";
-  const authIsAuthenticated = Boolean(authUserId);
-  const paymentReadyForRecovery = Boolean(
-    paymentConfig?.enabled && paymentConfig?.configured,
-  );
-  const hasRecentPaymentRecovery =
-    Boolean(lastIntentId && lastTxHash && authUserId && lastPaymentStartedAt) &&
-    Date.now() - lastPaymentStartedAt <= PAYMENT_RECOVERY_TTL_MS;
-  const allowedPaymentHosts = useMemo(() => getAllowedPaymentHosts(), []);
-  const currentPaymentHost = useMemo(() => getCurrentPaymentHost(), []);
-  const paymentHostAllowed = useMemo(
-    () => isPaymentHostAllowed(currentPaymentHost),
-    [currentPaymentHost],
-  );
 
+  // ── Hook ────────────────────────────────────────────────
+  const {
+    // State from usePaymentState
+    paymentBusy,
+    paymentInfo,
+    paymentError,
+    lastIntentId,
+    lastTxHash,
+    lastPaymentStartedAt,
+    telegramBindOpening,
+    telegramBindUrl,
+    manualPayment,
+    manualTxHash,
+    txValidation,
+    paymentMethodTab,
+    clearPaymentMessages,
+    clearPaymentState,
+
+    // Setters
+    setPaymentBusy,
+    setPaymentInfo,
+    setPaymentError,
+    setLastIntentId,
+    setLastTxHash,
+    setLastPaymentStartedAt,
+    setTelegramBindOpening,
+    setPaymentMethodTab,
+    setManualPayment,
+    setManualTxHash,
+    setTxValidation,
+
+    // Additional state
+    paymentConfig,
+    boundWallets,
+    walletAddress,
+    selectedPlanCode,
+    selectedTokenAddress,
+    selectedWallet,
+    providerMode,
+    injectedProviderOptions,
+    selectedInjectedProviderKey,
+    reconcileBusy,
+
+    // Shared setters
+    setSelectedTokenAddress,
+    setSelectedWallet,
+    setSelectedInjectedProviderKey,
+    setProviderMode,
+
+    // Derived values
+    authUserId,
+    authIsAuthenticated,
+    paymentReadyForRecovery,
+    hasRecentPaymentRecovery,
+    allowedPaymentHosts,
+    currentPaymentHost,
+    paymentHostAllowed,
+    selectedPlan,
+    selectedPaymentToken,
+    selectedTokenLabel,
+    availableTokenList,
+    effectivePlanList,
+    resolvedSelectedTokenAddress,
+    paymentReceiverAddress,
+    paymentWalletLabel,
+    hasPayingWallet,
+    totalPoints,
+    billing,
+
+    // Callbacks
+    loadSnapshot,
+    loadPaymentSnapshot,
+    connectAndBindWallet,
+    handleUnbindWallet,
+    createIntentAndPay,
+    createManualPaymentIntent,
+    submitManualPaymentTx,
+    validateTxHash,
+    handleOverlayCheckout,
+    openTelegramBotBindLink,
+  } = useAccountPayment({
+    isEn,
+    supabaseReady,
+    walletConnectEnabled,
+    copy,
+    backend,
+    user,
+    setUser,
+    setBackend,
+    setErrorText,
+    setUpdatedAt,
+    showOverlay,
+    setShowOverlay,
+    usePoints,
+    setUsePoints,
+  });
+
+  // ── Auth analytics effect ──────────────────────────────
   useEffect(() => {
     if (!authIsAuthenticated || !authUserId) return;
     const actorKey = authUserId.toLowerCase();
@@ -202,6 +203,7 @@ export function AccountCenter() {
     }
   }, [authIsAuthenticated, authUserId]);
 
+  // ── Idle callback effect ──────────────────────────────
   useEffect(() => {
     let canceled = false;
     let timeoutId: number | null = null;
@@ -237,388 +239,7 @@ export function AccountCenter() {
     };
   }, []);
 
-  useEffect(() => {
-    const syncProviders = () => {
-      const nextOptions = listInjectedProviders();
-      setInjectedProviderOptions(nextOptions);
-      setSelectedInjectedProviderKey((current) => {
-        if (current && nextOptions.some((row) => row.key === current)) {
-          return current;
-        }
-        return nextOptions[0]?.key || "";
-      });
-    };
-
-    const handleAnnounce = (event: Event) => {
-      const customEvent = event as CustomEvent<Eip6963ProviderDetail>;
-      const detail = customEvent.detail;
-      if (!detail?.provider || typeof detail.provider.request !== "function") {
-        return;
-      }
-      const uuid = String(detail.info?.uuid || "").trim();
-      const fallbackKey = `${String(detail.info?.rdns || "wallet").toLowerCase()}:${String(
-        detail.info?.name || "wallet",
-      ).toLowerCase()}`;
-      eip6963Providers.set(uuid || fallbackKey, detail);
-      syncProviders();
-    };
-
-    syncProviders();
-    if (typeof window === "undefined") return;
-    window.addEventListener(
-      "eip6963:announceProvider",
-      handleAnnounce as EventListener,
-    );
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-    window.addEventListener(
-      "ethereum#initialized",
-      syncProviders as EventListener,
-      {
-        once: false,
-      },
-    );
-    return () => {
-      window.removeEventListener(
-        "eip6963:announceProvider",
-        handleAnnounce as EventListener,
-      );
-      window.removeEventListener(
-        "ethereum#initialized",
-        syncProviders as EventListener,
-      );
-    };
-  }, []);
-
-  /**
-   * Returns a valid access token, refreshing the session if the stored one
-   * is missing or close to expiry. Throws if the user is not authenticated.
-   */
-  const getValidAccessToken = useCallback(async (): Promise<string> => {
-    if (!supabaseReady)
-      throw new Error(
-        isEn
-          ? "Supabase is not configured. Unable to get auth token."
-          : "Supabase 未配置，无法获取登录凭证。",
-      );
-    const client = getSupabaseBrowserClient();
-    // First try the cached session.
-    const {
-      data: { session: cached },
-    } = await client.auth.getSession();
-    const cachedToken = String(cached?.access_token || "").trim();
-    const expiresAtSec = Number(cached?.expires_at || 0);
-    const nowSec = Math.floor(Date.now() / 1000);
-    const refreshLeadSec = 90;
-    if (
-      cachedToken &&
-      Number.isFinite(expiresAtSec) &&
-      expiresAtSec > nowSec + refreshLeadSec
-    ) {
-      return cachedToken;
-    }
-    if (cachedToken && (!Number.isFinite(expiresAtSec) || expiresAtSec <= 0)) {
-      return cachedToken;
-    }
-    // Session missing or expired — force a refresh.
-    const {
-      data: { session: refreshed },
-      error,
-    } = await client.auth.refreshSession();
-    const refreshedToken = String(refreshed?.access_token || "").trim();
-    if (refreshedToken) return refreshedToken;
-    if (cachedToken && Number.isFinite(expiresAtSec) && expiresAtSec > nowSec) {
-      return cachedToken;
-    }
-    throw new Error(
-      error?.message
-        ? isEn
-          ? `Session expired (${error.message}). Please sign out and sign in again.`
-          : `登录会话已失效 (${error.message})，请退出后重新登录。`
-        : isEn
-          ? "Session expired. Please sign out and sign in again."
-          : "登录会话已失效，请退出后重新登录。",
-    );
-  }, [isEn, supabaseReady]);
-
-  const buildAuthedHeaders = useCallback(
-    async (
-      withJson = false,
-      requireAuth = false,
-    ): Promise<Record<string, string>> => {
-      const headers: Record<string, string> = {};
-      if (withJson) headers["Content-Type"] = "application/json";
-      if (!supabaseReady) return headers;
-      try {
-        const token = await getValidAccessToken();
-        headers.Authorization = `Bearer ${token}`;
-      } catch (error) {
-        if (requireAuth) throw error;
-        // Best-effort fallback: use current cached session token (if any)
-        // even when refresh failed, so same-origin API routes can still auth.
-        try {
-          const {
-            data: { session },
-          } = await getSupabaseBrowserClient().auth.getSession();
-          const fallbackToken = String(session?.access_token || "").trim();
-          if (fallbackToken) {
-            headers.Authorization = `Bearer ${fallbackToken}`;
-          }
-        } catch {
-          // Non-authenticated page load — silently skip.
-        }
-      }
-      return headers;
-    },
-    [supabaseReady, getValidAccessToken],
-  );
-
-  const resolvePaymentProvider = useCallback(
-    async (
-      mode: ProviderMode = "auto",
-      preferredInjectedKey = "",
-    ): Promise<ProviderSelection> => {
-      const targetChainId = Number(paymentConfig?.chain_id || 137);
-      if (mode !== "walletconnect") {
-        const injectedOptions = listInjectedProviders();
-        const injected =
-          injectedOptions.find((row) => row.key === preferredInjectedKey)
-            ?.provider || getEvmProvider();
-        const label =
-          injectedOptions.find((row) => row.key === preferredInjectedKey)
-            ?.label || getEvmWalletLabel(injected);
-        if (injected) {
-          return {
-            provider: injected,
-            label,
-            mode: "auto",
-          };
-        }
-      }
-      if (!walletConnectEnabled) {
-        throw new Error(
-          "未检测到浏览器扩展钱包，且 WalletConnect 未启用。请配置 NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID 或安装 EVM 钱包扩展。",
-        );
-      }
-      const wcProvider = await getWalletConnectProvider(
-        targetChainId,
-        WALLETCONNECT_POLYGON_RPC_URL,
-      );
-      const existingAccounts = (await wcProvider
-        .request({ method: "eth_accounts" })
-        .catch(() => [])) as string[];
-      if (!Array.isArray(existingAccounts) || existingAccounts.length === 0) {
-        if (typeof wcProvider.connect === "function") {
-          try {
-            await wcProvider.connect({ chains: [targetChainId] });
-          } catch (err) {
-            if (!isWalletConnectResetError(err)) throw err;
-            await resetWalletConnectProvider();
-            const freshProvider = await getWalletConnectProvider(
-              targetChainId,
-              WALLETCONNECT_POLYGON_RPC_URL,
-            );
-            if (typeof freshProvider.connect === "function") {
-              await freshProvider.connect({ chains: [targetChainId] });
-            }
-            return {
-              provider: freshProvider,
-              label: "WalletConnect",
-              mode: "walletconnect",
-            };
-          }
-        }
-      }
-      return {
-        provider: wcProvider,
-        label: "WalletConnect",
-        mode: "walletconnect",
-      };
-    },
-    [paymentConfig?.chain_id, walletConnectEnabled],
-  );
-
-  const loadPaymentSnapshot = useCallback(async () => {
-    if (!backend?.authenticated) {
-      setPaymentConfig(null);
-      setBoundWallets([]);
-      return;
-    }
-    try {
-      const authHeadersPromise = buildAuthedHeaders(false);
-      const [configRes, walletsRes] = await Promise.all([
-        authHeadersPromise.then((headers) =>
-          fetch("/api/payments/config", {
-            cache: "no-store",
-            headers,
-          }),
-        ),
-        authHeadersPromise.then((headers) =>
-          fetch("/api/payments/wallets", {
-            cache: "no-store",
-            headers,
-          }),
-        ),
-      ]);
-      if (configRes.ok) {
-        const configJson = (await configRes.json()) as PaymentConfig;
-        setPaymentConfig(configJson);
-        if (!selectedPlanCode && configJson.plans?.length) {
-          setSelectedPlanCode(configJson.plans[0].plan_code);
-        }
-        const tokenOptions = Array.isArray(configJson.tokens)
-          ? configJson.tokens.filter(
-              (row) =>
-                typeof row?.address === "string" &&
-                String(row.address).startsWith("0x"),
-            )
-          : [];
-        const defaultTokenAddress = String(
-          configJson.default_token_address ||
-            tokenOptions.find((row) => row.is_default)?.address ||
-            tokenOptions[0]?.address ||
-            configJson.token_address ||
-            "",
-        ).toLowerCase();
-        if (defaultTokenAddress) {
-          setSelectedTokenAddress((prev) => prev || defaultTokenAddress);
-        }
-      }
-      if (walletsRes.ok) {
-        const walletsJson = (await walletsRes.json()) as {
-          wallets?: BoundWallet[];
-        };
-        const wallets = (
-          Array.isArray(walletsJson.wallets) ? walletsJson.wallets : []
-        )
-          .filter((row) => {
-            const status = String(row?.status || "active").toLowerCase();
-            const address = String(row?.address || "");
-            return status === "active" && address.startsWith("0x");
-          })
-          .map((row) => ({
-            ...row,
-            address: String(row.address || "").toLowerCase(),
-          }));
-        setBoundWallets(wallets);
-        if (wallets.length) {
-          const currentSelected = String(selectedWallet || "").toLowerCase();
-          const hasCurrent = wallets.some(
-            (row) =>
-              String(row.address || "").toLowerCase() === currentSelected,
-          );
-          const fallback =
-            wallets.find((row) => Boolean(row.is_primary))?.address ||
-            wallets[0].address;
-          if (!currentSelected || !hasCurrent) {
-            setSelectedWallet(fallback);
-          }
-          const currentWalletAddress = String(
-            walletAddress || "",
-          ).toLowerCase();
-          const hasWalletAddress = wallets.some(
-            (row) =>
-              String(row.address || "").toLowerCase() === currentWalletAddress,
-          );
-          if (!currentWalletAddress || !hasWalletAddress) {
-            setWalletAddress(fallback);
-          }
-        } else {
-          setSelectedWallet("");
-          setWalletAddress("");
-        }
-      }
-    } catch {
-      // ignore
-    }
-  }, [
-    backend?.authenticated,
-    buildAuthedHeaders,
-    selectedPlanCode,
-    selectedWallet,
-    walletAddress,
-  ]);
-
-  const fetchLatestPaymentConfig = useCallback(
-    async (
-      authHeaders?: Record<string, string>,
-      syncState = true,
-    ): Promise<PaymentConfig> => {
-      const headers = authHeaders || (await buildAuthedHeaders(false));
-      const configRes = await fetch("/api/payments/config", {
-        cache: "no-store",
-        headers,
-      });
-      if (!configRes.ok) {
-        const raw = (await configRes.text()).slice(0, 350);
-        throw new Error(copy.loadConfigFailed.replace("{raw}", raw));
-      }
-      const configJson = (await configRes.json()) as PaymentConfig;
-      if (syncState) {
-        setPaymentConfig(configJson);
-        if (!selectedPlanCode && configJson.plans?.length) {
-          setSelectedPlanCode(configJson.plans[0].plan_code);
-        }
-        const tokenOptions = Array.isArray(configJson.tokens)
-          ? configJson.tokens.filter(
-              (row) =>
-                typeof row?.address === "string" &&
-                String(row.address).startsWith("0x"),
-            )
-          : [];
-        const defaultTokenAddress = String(
-          configJson.default_token_address ||
-            tokenOptions.find((row) => row.is_default)?.address ||
-            tokenOptions[0]?.address ||
-            configJson.token_address ||
-            "",
-        ).toLowerCase();
-        if (defaultTokenAddress) {
-          setSelectedTokenAddress((prev) => prev || defaultTokenAddress);
-        }
-      }
-      return configJson;
-    },
-    [buildAuthedHeaders, selectedPlanCode],
-  );
-
-  const loadSnapshot = useCallback(async () => {
-    setErrorText("");
-    const attempt = async (retry: boolean): Promise<void> => {
-      const userPromise = supabaseReady
-        ? getSupabaseBrowserClient().auth.getUser()
-        : Promise.resolve({ data: { user: null as User | null } });
-      const authHeadersPromise = buildAuthedHeaders(false);
-      const backendPromise = authHeadersPromise.then((headers) =>
-        fetch("/api/auth/me", {
-          cache: "no-store",
-          headers,
-        }),
-      );
-      const [userResult, backendResult] = await Promise.all([
-        userPromise,
-        backendPromise,
-      ]);
-      setUser(userResult.data?.user ?? null);
-      if (!backendResult.ok) {
-        if (retry && backendResult.status === 401) {
-          // Supabase session may not be hydrated yet; wait and retry once.
-          await new Promise((r) => setTimeout(r, 1200));
-          return attempt(false);
-        }
-        const raw = (await backendResult.text()).slice(0, 260);
-        throw new Error(copy.httpError.replace("{status}", String(backendResult.status)).replace("{raw}", raw));
-      }
-      const backendJson = (await backendResult.json()) as AuthMeResponse;
-      setBackend(backendJson);
-      setUpdatedAt(new Date().toISOString());
-    };
-    try {
-      await attempt(true);
-    } catch (error) {
-      setErrorText(String(error));
-    }
-  }, [buildAuthedHeaders, supabaseReady]);
-
+  // ── Initial load effect ────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
@@ -632,62 +253,7 @@ export function AccountCenter() {
     };
   }, [loadSnapshot]);
 
-  useEffect(() => {
-    void loadPaymentSnapshot();
-  }, [loadPaymentSnapshot]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!(lastIntentId && lastTxHash && authUserId && lastPaymentStartedAt)) {
-      clearStoredPaymentRecovery();
-      return;
-    }
-    const payload: PaymentRecoveryState = {
-      intentId: lastIntentId,
-      txHash: lastTxHash,
-      userId: authUserId,
-      createdAt: lastPaymentStartedAt,
-    };
-    window.sessionStorage.setItem(
-      PAYMENT_RECOVERY_STORAGE_KEY,
-      JSON.stringify(payload),
-    );
-  }, [authUserId, lastIntentId, lastPaymentStartedAt, lastTxHash]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    if (!authUserId) return;
-    if (lastIntentId && lastTxHash && lastPaymentStartedAt) return;
-    const raw = window.sessionStorage.getItem(PAYMENT_RECOVERY_STORAGE_KEY);
-    if (!raw) return;
-    try {
-      const parsed = JSON.parse(raw) as PaymentRecoveryState;
-      const userId = String(parsed?.userId || "").trim();
-      const intentId = String(parsed?.intentId || "").trim();
-      const txHash = String(parsed?.txHash || "")
-        .trim()
-        .toLowerCase();
-      const createdAt = Number(parsed?.createdAt || 0);
-      const expired =
-        !createdAt || Date.now() - createdAt > PAYMENT_RECOVERY_TTL_MS;
-      if (expired || !intentId || !txHash || !userId || userId !== authUserId) {
-        clearStoredPaymentRecovery();
-        return;
-      }
-      setLastIntentId(intentId);
-      setLastTxHash(txHash);
-      setLastPaymentStartedAt(createdAt);
-    } catch {
-      clearStoredPaymentRecovery();
-    }
-  }, [authUserId, lastIntentId, lastPaymentStartedAt, lastTxHash]);
-
-  useEffect(() => {
-    if (!backend?.subscription_active) return;
-    clearPaymentState();
-    clearStoredPaymentRecovery();
-  }, [backend?.subscription_active]);
-
+  // ── Refresh ────────────────────────────────────────────
   const onRefresh = async () => {
     setRefreshing(true);
     await loadSnapshot();
@@ -695,135 +261,7 @@ export function AccountCenter() {
     setRefreshing(false);
   };
 
-  const reconcileLatestPayment = useCallback(async () => {
-    if (!authIsAuthenticated || reconcileBusy) return false;
-    setReconcileBusy(true);
-    try {
-      const headers = await buildAuthedHeaders(true, true);
-      const res = await fetch("/api/payments/reconcile-latest", {
-        method: "POST",
-        headers,
-      });
-      if (!res.ok) {
-        return false;
-      }
-      const json = (await res.json()) as {
-        ok?: boolean;
-        action?: string;
-        subscription?: { plan_code?: string | null } | null;
-      };
-      if (json.ok) {
-        setPaymentInfo(copy.walletRecoveryDone);
-        setPaymentError("");
-        await loadSnapshot();
-        await loadPaymentSnapshot();
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    } finally {
-      setReconcileBusy(false);
-    }
-  }, [
-    authIsAuthenticated,
-    buildAuthedHeaders,
-    copy.walletRecoveryDone,
-    loadPaymentSnapshot,
-    loadSnapshot,
-    reconcileBusy,
-  ]);
-
-  const handleSubmit409 = useCallback(
-    async (intentId: string, txHashNorm: string, raw: string) => {
-      const lowerRaw = raw.toLowerCase();
-      // If intent was already confirmed (maybe by confirm loop), reconcile
-      if (
-        lowerRaw.includes("已支付") ||
-        lowerRaw.includes("already confirmed") ||
-        lowerRaw.includes("already paid")
-      ) {
-        const ok = await reconcileLatestPayment();
-        if (ok) return;
-        setPaymentInfo(copy.orderAlreadyPaid);
-        await loadSnapshot();
-        await loadPaymentSnapshot();
-        return;
-      }
-      // If intent expired, tell user to create a new order
-      if (lowerRaw.includes("expired")) {
-        throw new Error(copy.orderExpired);
-      }
-      // Try fetching intent status as fallback
-      try {
-        const headers = await buildAuthedHeaders(true, false);
-        const intentRes = await fetch(`/api/payments/intents/${intentId}`, {
-          headers,
-          cache: "no-store",
-        });
-        if (intentRes.ok) {
-          const intentJson = (await intentRes.json()) as {
-            intent?: { status?: string; tx_hash?: string };
-          };
-          const status = intentJson.intent?.status;
-          if (status === "confirmed") {
-            await reconcileLatestPayment();
-            const txHash =
-              intentJson.intent?.tx_hash || txHashNorm;
-            setPaymentInfo(
-              `支付已确认，交易: ${shortAddress(txHash)}`,
-            );
-            setPaymentError("");
-            await loadSnapshot();
-            await loadPaymentSnapshot();
-            return;
-          }
-          if (status === "expired") {
-            throw new Error(copy.orderExpired);
-          }
-        }
-      } catch (e) {
-        if (e instanceof Error && e.message !== raw) throw e;
-      }
-      throw new Error(copy.submitTxFailed.replace("{raw}", raw));
-    },
-    [
-      buildAuthedHeaders,
-      loadPaymentSnapshot,
-      loadSnapshot,
-      reconcileLatestPayment,
-    ],
-  );
-
-  useEffect(() => {
-    if (!authIsAuthenticated) return;
-    if (backend?.subscription_active) return;
-    if (!paymentReadyForRecovery) return;
-    if (!hasRecentPaymentRecovery) return;
-    let cancelled = false;
-    const run = async () => {
-      setPaymentInfo(copy.walletRecoveryBusy);
-      const repaired = await reconcileLatestPayment();
-      if (cancelled) return;
-      if (!repaired && !backend?.subscription_active) {
-        setPaymentInfo("");
-        setPaymentError(copy.walletRecoveryFailed);
-      }
-    };
-    void run();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    backend?.subscription_active,
-    authIsAuthenticated,
-    copy.walletRecoveryBusy,
-    copy.walletRecoveryFailed,
-    hasRecentPaymentRecovery,
-    paymentReadyForRecovery,
-    reconcileLatestPayment,
-  ]);
-
+  // ── Sign out ────────────────────────────────────────────
   const onSignOut = async () => {
     clearPaymentState();
     clearStoredPaymentRecovery();
@@ -838,48 +276,10 @@ export function AccountCenter() {
     router.replace("/");
   };
 
-  // --- Derived State ---
+  // ── Derived display values ──────────────────────────────
   const userId = backend?.user_id || user?.id || "";
   const isAuthenticated = Boolean(userId);
   const email = backend?.email || user?.email || "";
-  // Handle ?bind_token=xxx from Telegram bot /bind deep link
-  useEffect(() => {
-    if (!isAuthenticated) return;
-    const params = new URLSearchParams(window.location.search);
-    const token = params.get("bind_token");
-    if (!token) return;
-    // Remove token from URL so refresh doesn't retry
-    const url = new URL(window.location.href);
-    url.searchParams.delete("bind_token");
-    window.history.replaceState(null, "", url.toString());
-    (async () => {
-      setPaymentError("");
-      setPaymentInfo("");
-      try {
-        const authHeaders = await buildAuthedHeaders(true, false);
-        const res = await fetch("/api/auth/telegram/bind-by-token", {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ token }),
-        });
-        if (!res.ok) {
-          const raw = (await res.text()).slice(0, 350);
-          throw new Error(copy.bindFailed.replace("{raw}", raw));
-        }
-        const data = (await res.json()) as {
-          telegram_pricing?: TelegramPricing | null;
-        };
-        if (data.telegram_pricing?.is_group_member) {
-          const amount = data.telegram_pricing.amount_usdc || "10";
-          setPaymentInfo(copy.telegramVerifySuccess.replace("{amount}", amount));
-        }
-        await loadSnapshot();
-        await loadPaymentSnapshot();
-      } catch (error) {
-        setPaymentError(normalizePaymentError(error).message);
-      }
-    })();
-  }, [isAuthenticated, buildAuthedHeaders, loadPaymentSnapshot, loadSnapshot]);
   const displayName =
     String(user?.user_metadata?.full_name || "").trim() ||
     (email ? String(email).split("@")[0] : "") ||
@@ -889,7 +289,9 @@ export function AccountCenter() {
   const isSubscribed = Boolean(backend?.subscription_active);
   const planCode = String(backend?.subscription_plan_code || "").trim();
   const currentExpiryRaw = String(
-    backend?.subscription_expires_at || user?.user_metadata?.pro_expiry || "",
+    backend?.subscription_expires_at ||
+      user?.user_metadata?.pro_expiry ||
+      "",
   ).trim();
   const totalExpiryRaw = String(
     backend?.subscription_total_expires_at ||
@@ -901,12 +303,15 @@ export function AccountCenter() {
     0,
     Number(backend?.subscription_queued_days || 0),
   );
-  const hasQueuedExtension = Boolean(isSubscribed && queuedExtensionDays > 0);
-  const canAccessPaidTelegramGroup = Boolean(
-    isSubscribed,
+  const hasQueuedExtension = Boolean(
+    isSubscribed && queuedExtensionDays > 0,
   );
-  const telegramBound = Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
-  const displayExpiryRaw = isSubscribed ? totalExpiryRaw : currentExpiryRaw;
+  const canAccessPaidTelegramGroup = Boolean(isSubscribed);
+  const telegramBound =
+    Number(backend?.telegram_pricing?.telegram_id || 0) > 0;
+  const displayExpiryRaw = isSubscribed
+    ? totalExpiryRaw
+    : currentExpiryRaw;
   const reminderExpiryRaw = isSubscribed
     ? totalExpiryRaw
     : currentExpiryRaw || totalExpiryRaw;
@@ -921,10 +326,10 @@ export function AccountCenter() {
     : copy.noProSubscription;
   const showExpiringSoon = Boolean(
     isSubscribed &&
-    !hasQueuedExtension &&
-    expiryInfo &&
-    !expiryInfo.expired &&
-    expiryInfo.daysLeft <= 3,
+      !hasQueuedExtension &&
+      expiryInfo &&
+      !expiryInfo.expired &&
+      expiryInfo.daysLeft <= 3,
   );
   const showExpiredReminder = Boolean(
     !isSubscribed && expiryInfo && expiryInfo.expired,
@@ -932,7 +337,7 @@ export function AccountCenter() {
   const paymentFeatureReady = paymentReadyForRecovery;
   const canOpenCheckoutOverlay = Boolean(
     paymentFeatureReady &&
-    (!isSubscribed || showExpiringSoon || showExpiredReminder),
+      (!isSubscribed || showExpiringSoon || showExpiredReminder),
   );
   const subscriptionStatusTitle = showExpiredReminder
     ? copy.proExpiredTitle
@@ -954,8 +359,11 @@ export function AccountCenter() {
         .replace("{days}", String(queuedExtensionDays))
         .replace("{total}", totalExpiryFormatted)
     : "";
-  const expiryLabel = hasQueuedExtension ? copy.accessUntil : copy.renewalDate;
+  const expiryLabel = hasQueuedExtension
+    ? copy.accessUntil
+    : copy.renewalDate;
 
+  // ── Payment overlay tracking effect ──────────────────────
   useEffect(() => {
     if (!showOverlay || !canOpenCheckoutOverlay) return;
     trackAppEvent("paywall_viewed", {
@@ -974,17 +382,7 @@ export function AccountCenter() {
     showOverlay,
   ]);
 
-  // Points Logic
-  const backendPointsRaw = Number(backend?.points);
-  const metadataPointsRaw = Number(
-    user?.user_metadata?.points ?? user?.user_metadata?.total_points ?? 0,
-  );
-  const metadataPointsSafe = Number.isFinite(metadataPointsRaw)
-    ? metadataPointsRaw
-    : 0;
-  const pointsRaw = Number.isFinite(backendPointsRaw)
-    ? Math.max(backendPointsRaw, metadataPointsSafe)
-    : metadataPointsSafe;
+  // ── Weekly points display (component-only derived) ──────
   const backendWeeklyPointsRaw = Number(backend?.weekly_points);
   const metadataWeeklyPointsRaw = Number(
     user?.user_metadata?.weekly_points ?? 0,
@@ -994,150 +392,17 @@ export function AccountCenter() {
     : metadataWeeklyPointsRaw;
   const weeklyRankRaw =
     backend?.weekly_rank ?? user?.user_metadata?.weekly_rank;
-  const totalPoints = Number.isFinite(pointsRaw) ? Math.max(0, pointsRaw) : 0;
   const weeklyPoints = Number.isFinite(weeklyPointsRaw)
     ? Math.max(0, weeklyPointsRaw)
     : 0;
   const weeklyRank = weeklyRankRaw == null ? "--" : String(weeklyRankRaw);
 
-  const planList = paymentConfig?.plans || [];
-  const monthlyPlanList = planList.filter(
-    (plan) =>
-      String(plan.plan_code || "")
-        .trim()
-        .toLowerCase() === "pro_monthly",
-  );
-  const effectivePlanList = monthlyPlanList.length ? monthlyPlanList : planList;
-  const selectedPlan =
-    effectivePlanList.find((plan) => plan.plan_code === selectedPlanCode) ||
-    effectivePlanList[0];
-  const availableTokenList: PaymentTokenOption[] = useMemo(() => {
-    const configured = Array.isArray(paymentConfig?.tokens)
-      ? paymentConfig?.tokens || []
-      : [];
-    const clean = configured
-      .filter(
-        (row) =>
-          row &&
-          typeof row.address === "string" &&
-          row.address.startsWith("0x"),
-      )
-      .map((row) => ({
-        ...row,
-        address: String(row.address).toLowerCase(),
-        symbol: String(row.symbol || "USDC"),
-        name: String(row.name || row.symbol || "USDC"),
-        code: String(row.code || "usdc"),
-        decimals: Number.isFinite(Number(row.decimals))
-          ? Number(row.decimals)
-          : Number(paymentConfig?.token_decimals ?? 6),
-      }));
-    if (clean.length) return clean;
-    const fallbackAddress = String(
-      paymentConfig?.token_address || "",
-    ).toLowerCase();
-    if (!fallbackAddress.startsWith("0x")) return [];
-    return [
-      {
-        code: "usdc",
-        symbol: "USDC",
-        name: "USDC",
-        address: fallbackAddress,
-        decimals: Number(paymentConfig?.token_decimals ?? 6),
-        receiver_contract: paymentConfig?.receiver_contract,
-        is_default: true,
-      },
-    ];
-  }, [paymentConfig]);
-  const resolvedSelectedTokenAddress = String(
-    selectedTokenAddress ||
-      paymentConfig?.default_token_address ||
-      availableTokenList.find((row) => row.is_default)?.address ||
-      availableTokenList[0]?.address ||
-      paymentConfig?.token_address ||
-      "",
-  ).toLowerCase();
-  const selectedPaymentToken =
-    availableTokenList.find(
-      (row) => row.address === resolvedSelectedTokenAddress,
-    ) || availableTokenList[0];
-  const selectedTokenLabel =
-    selectedPaymentToken?.symbol ||
-    (resolvedSelectedTokenAddress.startsWith("0x")
-      ? shortAddress(resolvedSelectedTokenAddress)
-      : "USDC");
-  const paymentReceiverAddress = EXPECTED_PAYMENT_RECEIVER_ADDRESS;
-  const paymentWalletLabel = String(
-    selectedWallet ||
-      walletAddress ||
-      boundWallets.find((row) => row.is_primary)?.address ||
-      boundWallets[0]?.address ||
-      "",
-  ).toLowerCase();
-  const hasPayingWallet = Boolean(
-    String(
-      selectedWallet || walletAddress || boundWallets[0]?.address || "",
-    ).trim(),
-  );
-
-  const billing = useMemo(() => {
-    const parsedPlanAmount = Number(
-      backend?.telegram_pricing?.amount_usdc ?? selectedPlan?.amount_usdc ?? 10,
-    );
-    const planAmount =
-      Number.isFinite(parsedPlanAmount) && parsedPlanAmount > 0
-        ? parsedPlanAmount
-        : 10;
-
-    const pointsCfg = paymentConfig?.points_redemption || {};
-    const pointsEnabled = pointsCfg.enabled !== false;
-    const pointsPerUsdcRaw = Number(pointsCfg.points_per_usdc ?? 500);
-    const pointsPerUsdc =
-      Number.isFinite(pointsPerUsdcRaw) && pointsPerUsdcRaw > 0
-        ? Math.floor(pointsPerUsdcRaw)
-        : 500;
-
-    const maxDiscountRaw = Number(pointsCfg.max_discount_usdc ?? 3);
-    const maxDiscountUsdc = Math.max(
-      0,
-      Math.min(
-        Math.floor(Number.isFinite(maxDiscountRaw) ? maxDiscountRaw : 3),
-        Math.floor(planAmount),
-      ),
-    );
-
-    const maxRedeemablePoints = pointsPerUsdc * maxDiscountUsdc;
-    const actualRedeem = pointsEnabled
-      ? Math.min(totalPoints, maxRedeemablePoints)
-      : 0;
-    const discountUnits = Math.floor(actualRedeem / pointsPerUsdc);
-    const pointsUsed = discountUnits * pointsPerUsdc;
-    const canRedeem =
-      pointsEnabled && maxDiscountUsdc > 0 && totalPoints >= pointsPerUsdc;
-    const applyDiscount = usePoints && canRedeem && pointsUsed > 0;
-
-    return {
-      planAmount,
-      pointsEnabled,
-      pointsPerUsdc,
-      maxDiscountUsdc,
-      pointsUsed,
-      discountAmount: discountUnits,
-      payAmount: planAmount - (applyDiscount ? discountUnits : 0),
-      canRedeem,
-    };
-  }, [
-    paymentConfig?.points_redemption,
-    backend?.telegram_pricing?.amount_usdc,
-    selectedPlan?.amount_usdc,
-    totalPoints,
-    usePoints,
-  ]);
-
+  // ── Telegram bind command ──────────────────────────────
   const bindCommand = userId
     ? `/bind ${userId}${email ? ` ${email}` : ""}`
     : "/bind <supabase_user_id> <email>";
 
+  // ── Copy handler ──────────────────────────────────────
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true);
@@ -1145,962 +410,7 @@ export function AccountCenter() {
     });
   };
 
-  const openTelegramBotBindLink = async () => {
-    setTelegramBindOpening(true);
-    setPaymentError("");
-    setTelegramBindUrl("");
-    const popup = window.open("about:blank", "_blank", "noopener,noreferrer");
-    try {
-      const authHeaders = await buildAuthedHeaders(true, false);
-      const res = await fetch("/api/auth/telegram/bot-bind-link", {
-        method: "POST",
-        headers: authHeaders,
-      });
-      if (!res.ok) {
-        const raw = (await res.text()).slice(0, 300);
-        throw new Error(raw || copy.telegramBindFailed);
-      }
-      const data = (await res.json()) as { bot_url?: string };
-      const botUrl = String(data.bot_url || "").trim();
-      if (!botUrl) throw new Error(copy.telegramBindLinkMissing);
-      if (popup && !popup.closed) {
-        popup.location.href = botUrl;
-        setPaymentInfo(
-          copy.telegramBindClickHint,
-        );
-      } else {
-        setPaymentInfo(
-          copy.telegramPopupBlocked,
-        );
-        setTelegramBindUrl(botUrl);
-      }
-    } catch (error) {
-      if (popup && !popup.closed) popup.close();
-      setPaymentError(normalizePaymentError(error).message);
-    } finally {
-      setTelegramBindOpening(false);
-    }
-  };
-
-  // --- Payment Logic (preserved) ---
-
-  const waitForReceipt = async (
-    txHash: string,
-    provider?: EvmProvider,
-    timeoutMs = 120000,
-    pollMs = 3000,
-  ) => {
-    const eth = provider || getEvmProvider();
-    if (!eth) throw new Error(copy.noWalletProvider);
-    const started = Date.now();
-    while (Date.now() - started < timeoutMs) {
-      const receipt = await requestWalletWithTimeout<{ status?: string } | null>(
-        eth,
-        {
-          method: "eth_getTransactionReceipt",
-          params: [txHash],
-        },
-        "查询授权交易确认",
-        15_000,
-      );
-      if (receipt && receipt.status) {
-        if (receipt.status === "0x1") return receipt;
-        throw new Error(copy.txReverted.replace("{txHash}", txHash));
-      }
-      await new Promise((resolve) => setTimeout(resolve, pollMs));
-    }
-    throw new Error(copy.txConfirmTimeout.replace("{txHash}", txHash));
-  };
-
-  const pollIntentUntilConfirmed = useCallback(
-    async (
-      intentId: string,
-      authHeaders: Record<string, string>,
-      txHashHint = "",
-      timeoutMs = 180000,
-      pollMs = 5000,
-    ) => {
-      const startedAt = Date.now();
-      const shortTx = shortAddress(txHashHint);
-      while (Date.now() - startedAt < timeoutMs) {
-        const statusRes = await fetch(`/api/payments/intents/${intentId}`, {
-          method: "GET",
-          headers: authHeaders,
-          cache: "no-store",
-        });
-        if (!statusRes.ok) {
-          if (statusRes.status >= 500 || statusRes.status === 429) {
-            await new Promise((resolve) => setTimeout(resolve, pollMs));
-            continue;
-          }
-          const raw = (await statusRes.text()).slice(0, 260);
-          throw new Error(copy.queryIntentFailed.replace("{raw}", raw));
-        }
-
-        const statusJson = (await statusRes.json()) as IntentStatusResponse;
-        const intent = statusJson.intent || {};
-        const status = String(intent.status || "").toLowerCase();
-        const txHash = String(intent.tx_hash || txHashHint || "").toLowerCase();
-        if (status === "confirmed") {
-          setPaymentError("");
-          setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHash)));
-          trackAppEvent("checkout_succeeded", {
-            entry: "account_center",
-            plan_code: selectedPlan?.plan_code || "pro_monthly",
-            intent_id: intentId,
-            tx_hash: txHash || null,
-          });
-          await loadSnapshot();
-          await loadPaymentSnapshot();
-          return;
-        }
-        if (
-          status === "failed" ||
-          status === "cancelled" ||
-          status === "expired"
-        ) {
-          throw new Error(copy.paymentStatus.replace("{status}", status));
-        }
-        setPaymentInfo(
-          copy.txSubmitted.replace("{txHash}", shortTx).replace("{status}", status || "submitted"),
-        );
-        await new Promise((resolve) => setTimeout(resolve, pollMs));
-      }
-      throw new Error(copy.paymentPendingTimeout);
-    },
-    [loadPaymentSnapshot, loadSnapshot, selectedPlan?.plan_code],
-  );
-
-  const signBindMessage = async (
-    eth: EvmProvider,
-    address: string,
-    message: string,
-  ): Promise<string> => {
-    try {
-      return (await eth.request({
-        method: "personal_sign",
-        params: [message, address],
-      })) as string;
-    } catch {
-      // Some injected wallets still use the reversed param order.
-      return (await eth.request({
-        method: "personal_sign",
-        params: [address, message],
-      })) as string;
-    }
-  };
-
-  const ensureTargetChain = async (
-    eth: EvmProvider,
-    targetChainId: number,
-  ): Promise<void> => {
-    const currentChainIdHex = String(
-      (await requestWalletWithTimeout<string>(
-        eth,
-        { method: "eth_chainId" },
-        copy.chainReadError,
-      )) || "",
-    );
-    const targetChainHex = `0x${targetChainId.toString(16)}`;
-    if (currentChainIdHex.toLowerCase() === targetChainHex.toLowerCase())
-      return;
-    try {
-      await requestWalletWithTimeout(
-        eth,
-        {
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: targetChainHex }],
-        },
-        copy.chainSwitchError,
-      );
-    } catch (err: any) {
-      const code = Number(err?.code);
-      const msg = String(err?.message || "").toLowerCase();
-      
-      // If the error code indicates the chain is not added (4902), or it's Polygon (137)
-      if (code === 4902 || targetChainId === 137) {
-        try {
-          await requestWalletWithTimeout(
-            eth,
-            {
-              method: "wallet_addEthereumChain",
-              params: [
-              {
-                chainId: "0x89",
-                chainName: "Polygon Mainnet",
-                nativeCurrency: { name: "POL", symbol: "POL", decimals: 18 },
-                rpcUrls: ["https://polygon-rpc.com"],
-                blockExplorerUrls: ["https://polygonscan.com"],
-              },
-              ],
-            },
-            copy.chainAddPolygon,
-          );
-          return;
-        } catch (addErr: any) {
-          err = addErr;
-        }
-      }
-      throw new Error(
-        `${copy.chainSwitchPrompt} (${err?.message || (isEn ? "Network switch failed" : "网络切换失败")})`,
-      );
-    }
-  };
-
-  const connectAndBindWallet = async (
-    mode: ProviderMode = "auto",
-    options: ConnectBindOptions = {},
-  ): Promise<boolean> => {
-    clearPaymentMessages();
-    if (!paymentHostAllowed) {
-      setPaymentError(
-        copy.paymentHostBlocked.replace(
-          "{host}",
-          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
-        ),
-      );
-      return false;
-    }
-    if (!isAuthenticated) {
-      setPaymentError(copy.loginBeforeBind);
-      return false;
-    }
-
-    setPaymentBusy(true);
-    try {
-      const providerSelection = await resolvePaymentProvider(
-        mode,
-        selectedInjectedProviderKey,
-      );
-      const eth = providerSelection.provider;
-      const walletLabel = providerSelection.label;
-      const binanceBindHint = walletLabel.toLowerCase().includes("binance")
-        ? copy.binanceBindHint
-        : "";
-
-      // Ensure we have a valid token BEFORE opening the wallet modal.
-      let accessToken: string;
-      try {
-        accessToken = await getValidAccessToken();
-      } catch (tokenErr) {
-        setPaymentError(normalizePaymentError(tokenErr).message);
-        setPaymentBusy(false);
-        return false;
-      }
-      const authHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      };
-
-      const accounts = await requestWalletWithTimeout<string[]>(
-        eth,
-        { method: "eth_requestAccounts" },
-        "连接绑定钱包",
-      );
-      const address = String(accounts?.[0] || "").toLowerCase();
-      if (!address)
-        throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
-
-      const existingWallet = boundWallets.find(
-        (w) => String(w.address || "").toLowerCase() === address,
-      );
-      if (existingWallet) {
-        setWalletAddress(address);
-        setSelectedWallet(address);
-        setPaymentInfo(
-          `${walletLabel} 已绑定: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`,
-        );
-        await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
-        if (options.openOverlayAfterBind) setShowOverlay(true);
-        setPaymentBusy(false);
-        return true;
-      }
-
-      setWalletAddress(address);
-      const challengeRes = await fetch("/api/payments/wallets/challenge", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ address }),
-      });
-      if (!challengeRes.ok) {
-        const raw = (await challengeRes.text()).slice(0, 300);
-        throw new Error(copy.challengeFailed.replace("{raw}", raw));
-      }
-
-      const challengeJson = (await challengeRes.json()) as {
-        nonce?: string;
-        message?: string;
-      };
-      const message = String(challengeJson.message || "");
-      const nonce = String(challengeJson.nonce || "");
-      if (!message || !nonce) throw new Error(copy.challengeInvalid);
-
-      const signature = await signBindMessage(eth, address, message);
-      const verifyRes = await fetch("/api/payments/wallets/verify", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({ address, nonce, signature }),
-      });
-      if (!verifyRes.ok) {
-        const raw = (await verifyRes.text()).slice(0, 300);
-        throw new Error(copy.verifyFailedRaw.replace("{raw}", raw));
-      }
-
-      setPaymentInfo(
-        `${walletLabel} 绑定成功: ${shortAddress(address)}。${binanceBindHint || "现在可点击“立即订阅并激活服务”。"}`,
-      );
-      setProviderMode(providerSelection.mode);
-      if (options.openOverlayAfterBind) setShowOverlay(true);
-      await Promise.all([loadSnapshot(), loadPaymentSnapshot()]);
-      return true;
-    } catch (error) {
-      setPaymentInfo("");
-      setPaymentError(normalizePaymentError(error).message);
-      return false;
-    } finally {
-      setPaymentBusy(false);
-    }
-  };
-
-  const handleUnbindWallet = async (address: string) => {
-    const target = String(address || "").toLowerCase();
-    if (!target) return;
-    if (!isAuthenticated) {
-      setPaymentError(copy.loginBeforeBind);
-      return;
-    }
-    const confirmed = window.confirm(
-      copy.unbindConfirm.replace("{address}", shortAddress(target)),
-    );
-    if (!confirmed) return;
-
-    setPaymentBusy(true);
-    clearPaymentMessages();
-    try {
-      // Do not hard-fail on client-side token refresh here.
-      // The same-origin API route can still authenticate via server-side Supabase session cookies.
-      const headers = await buildAuthedHeaders(true, false);
-      const res = await fetch("/api/payments/wallets", {
-        method: "DELETE",
-        headers,
-        body: JSON.stringify({ address: target }),
-      });
-      const raw = await res.text();
-      if (!res.ok) {
-        let detail = raw;
-        try {
-          const parsed = JSON.parse(raw);
-          detail = String(parsed?.detail || parsed?.error || raw);
-          if (detail.trim().startsWith("{")) {
-            try {
-              const nested = JSON.parse(detail);
-              detail = String(nested?.detail || nested?.error || detail);
-            } catch {
-              // ignore nested parse failure
-            }
-          }
-        } catch {
-          // ignore
-        }
-        throw new Error(detail || copy.httpError.replace("{status}", String(res.status)).replace("{raw}", ""));
-      }
-
-      let data: Record<string, unknown> = {};
-      try {
-        data = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
-      } catch {
-        data = {};
-      }
-      const newPrimary = String(data?.new_primary || "").toLowerCase();
-      const selectedWalletNorm = String(selectedWallet || "").toLowerCase();
-      const walletAddressNorm = String(walletAddress || "").toLowerCase();
-      if (selectedWalletNorm === target) {
-        setSelectedWallet(newPrimary || "");
-      }
-      if (walletAddressNorm === target) {
-        setWalletAddress(newPrimary || "");
-      }
-      setBoundWallets((prev) =>
-        prev.filter(
-          (row) => String(row.address || "").toLowerCase() !== String(target),
-        ),
-      );
-      await loadPaymentSnapshot();
-      setPaymentInfo(
-        newPrimary
-          ? copy.unbindDonePrimary.replace(
-              "{address}",
-              shortAddress(newPrimary),
-            )
-          : copy.unbindDone,
-      );
-    } catch (error) {
-      const message = normalizePaymentError(error).message;
-      const lower = String(message || "").toLowerCase();
-      if (
-        lower.includes("unauthorized") ||
-        lower.includes("session required") ||
-        lower.includes("401")
-      ) {
-        setPaymentError(`${copy.unbindFailed}: ${copy.authExpired}`);
-        return;
-      }
-      setPaymentError(`${copy.unbindFailed}: ${message}`);
-    } finally {
-      setPaymentBusy(false);
-    }
-  };
-
-  const createIntentAndPay = async () => {
-    clearPaymentMessages();
-    clearPaymentState();
-    clearStoredPaymentRecovery();
-    if (!paymentHostAllowed) {
-      setPaymentError(
-        copy.paymentHostBlocked.replace(
-          "{host}",
-          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
-        ),
-      );
-      return;
-    }
-    if (!isAuthenticated) {
-      setPaymentError(copy.loginBeforePay);
-      return;
-    }
-    if (!paymentConfig?.configured) {
-      setPaymentError(copy.payNotReady);
-      return;
-    }
-
-    const fallbackWallet = String(
-      selectedWallet || walletAddress || boundWallets[0]?.address || "",
-    ).toLowerCase();
-    if (!fallbackWallet) {
-      setPaymentError(copy.bindFirstBeforePay);
-      return;
-    }
-
-    setPaymentBusy(true);
-    let approvedInThisRun = false;
-    try {
-      const providerSelection = await resolvePaymentProvider(
-        providerMode,
-        selectedInjectedProviderKey,
-      );
-      const eth = providerSelection.provider;
-      const activeAccounts = await requestWalletWithTimeout<string[]>(
-        eth,
-        { method: "eth_requestAccounts" },
-        "连接付款钱包",
-      );
-      const activeAddress = String(activeAccounts?.[0] || "").toLowerCase();
-      if (!activeAddress)
-        throw new Error(isEn ? "Wallet account is empty." : "钱包账户为空");
-
-      const boundAddrSet = new Set(
-        boundWallets.map((row) => String(row.address || "").toLowerCase()),
-      );
-      if (boundAddrSet.size > 0 && !boundAddrSet.has(activeAddress)) {
-        throw new Error(
-          `当前连接钱包 ${shortAddress(activeAddress)} 未绑定，请先绑定该地址后支付。`,
-        );
-      }
-      const payingWallet = boundAddrSet.has(activeAddress)
-        ? activeAddress
-        : fallbackWallet;
-
-      setSelectedWallet(payingWallet);
-      setProviderMode(providerSelection.mode);
-
-      // Ensure we have a valid token BEFORE switching chain / sending tx.
-      let accessToken: string;
-      try {
-        accessToken = await getValidAccessToken();
-      } catch (tokenErr) {
-        setPaymentError(normalizePaymentError(tokenErr).message);
-        setPaymentBusy(false);
-        return;
-      }
-      const authHeaders: Record<string, string> = {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
-      };
-
-      const latestConfig = await fetchLatestPaymentConfig(authHeaders, true);
-      if (!latestConfig?.enabled || !latestConfig?.configured) {
-        throw new Error(copy.payNotReady);
-      }
-      const expectedReceiver = String(
-        latestConfig.receiver_contract || "",
-      ).toLowerCase();
-      assertExpectedPaymentReceiver(expectedReceiver, "payment receiver contract");
-      if (
-        paymentConfig?.receiver_contract &&
-        String(paymentConfig.receiver_contract).toLowerCase() !==
-          expectedReceiver
-      ) {
-        setPaymentInfo(
-          copy.paymentConfigUpdated.replace("{address}", shortAddress(expectedReceiver)),
-        );
-      } else {
-        setPaymentInfo(copy.currentReceiver.replace("{address}", shortAddress(expectedReceiver)));
-      }
-
-      const targetChainId = Number(latestConfig.chain_id || 137);
-      await ensureTargetChain(eth, targetChainId);
-
-      const createRes = await fetch("/api/payments/intents", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          plan_code: selectedPlan?.plan_code || "pro_monthly",
-          payment_mode: "strict",
-          allowed_wallet: payingWallet,
-          token_address: resolvedSelectedTokenAddress || undefined,
-          use_points: billing.canRedeem && usePoints,
-          points_to_consume:
-            billing.canRedeem && usePoints ? billing.pointsUsed : 0,
-          metadata: {
-            source: "account_center",
-            frontend_host: currentPaymentHost || null,
-            account_email: email || null,
-          },
-        }),
-      });
-      if (!createRes.ok) {
-        const raw = (await createRes.text()).slice(0, 350);
-        throw new Error(copy.createIntentFailed.replace("{raw}", raw));
-      }
-
-      const created = (await createRes.json()) as CreatedIntent;
-      const intentId = String(created.intent?.intent_id || "");
-      const txPayload = created.tx_payload;
-      if (!intentId || !txPayload?.to || !txPayload?.data)
-        throw new Error(copy.intentPayloadInvalid);
-      trackAppEvent("checkout_started", {
-        entry: "account_center",
-        plan_code: selectedPlan?.plan_code || "pro_monthly",
-        intent_id: intentId,
-        use_points: billing.canRedeem && usePoints,
-        pay_amount_usd: billing.payAmount,
-      });
-      const intentReceiver = String(txPayload.to || "").toLowerCase();
-      if (intentReceiver !== expectedReceiver) {
-        throw new Error(
-          `payment receiver changed: expected ${expectedReceiver}, got ${intentReceiver}. 请刷新页面后重试。`,
-        );
-      }
-      setLastIntentId(intentId);
-
-      const tokenAddress = String(txPayload.token_address || "").toLowerCase();
-      const amountUnits = BigInt(String(txPayload.amount_units || "0"));
-      if (!tokenAddress.startsWith("0x") || amountUnits <= 0n)
-        throw new Error(copy.intentTokenInvalid);
-      const tokenSymbol = String(
-        txPayload.token_symbol ||
-          selectedPaymentToken?.symbol ||
-          selectedTokenLabel ||
-          "USDC",
-      );
-      const tokenDecimals = Number(
-        txPayload.token_decimals ??
-          selectedPaymentToken?.decimals ??
-          latestConfig?.token_decimals ??
-          6,
-      );
-
-      const balanceHex = await requestWalletWithTimeout<string>(
-        eth,
-        {
-          method: "eth_call",
-          params: [
-          {
-            to: tokenAddress,
-            data: buildBalanceOfCalldata(payingWallet),
-          },
-          "latest",
-          ],
-        },
-        `读取 ${tokenSymbol} 余额`,
-      );
-      const tokenBalance = BigInt(String(balanceHex || "0x0"));
-      if (tokenBalance < amountUnits) {
-        const need = formatTokenUnits(amountUnits, tokenDecimals);
-        const have = formatTokenUnits(tokenBalance, tokenDecimals);
-        throw new Error(
-          `支付代币余额不足：需要 ${need} ${tokenSymbol}，当前 ${have} ${tokenSymbol}。请确认你钱包里持有该支付币种。`,
-        );
-      }
-
-      const allowanceHex = await requestWalletWithTimeout<string>(
-        eth,
-        {
-          method: "eth_call",
-          params: [
-          {
-            to: tokenAddress,
-            data: buildAllowanceCalldata(payingWallet, txPayload.to),
-          },
-          "latest",
-          ],
-        },
-        `读取 ${tokenSymbol} 授权额度`,
-      );
-      const allowance = BigInt(String(allowanceHex || "0x0"));
-
-      if (allowance < amountUnits) {
-        setPaymentInfo(copy.approvalDetected.replace("{symbol}", tokenSymbol));
-        const approveParams: Record<string, any> = {
-          from: payingWallet,
-          to: tokenAddress,
-          data: buildApproveCalldata(txPayload.to, amountUnits),
-        };
-        const approveHash = await requestWalletWithTimeout<string>(
-          eth,
-          {
-            method: "eth_sendTransaction",
-            params: [approveParams],
-          },
-          `发起 ${tokenSymbol} 授权`,
-          WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
-        );
-        await waitForReceipt(String(approveHash || ""), eth);
-        approvedInThisRun = true;
-        setPaymentInfo(copy.approvalDone.replace("{symbol}", tokenSymbol));
-      } else {
-        setPaymentInfo(copy.approvalSufficient);
-      }
-
-      const payParams: Record<string, any> = {
-        from: payingWallet,
-        to: txPayload.to,
-        data: txPayload.data,
-      };
-      if (txPayload.value && txPayload.value !== "0x0" && txPayload.value !== "0") {
-        payParams.value = txPayload.value;
-      }
-      
-      const txHash = await requestWalletWithTimeout<string>(
-        eth,
-        {
-          method: "eth_sendTransaction",
-          params: [payParams],
-        },
-        "发起支付交易",
-        WALLET_TRANSACTION_REQUEST_TIMEOUT_MS,
-      );
-      const txHashNorm = String(txHash || "").toLowerCase();
-      setLastTxHash(txHashNorm);
-      setLastPaymentStartedAt(Date.now());
-
-      const submitRes = await fetch(
-        `/api/payments/intents/${intentId}/submit`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({
-            tx_hash: txHashNorm,
-            from_address: payingWallet,
-          }),
-        },
-      );
-      if (!submitRes.ok) {
-        const raw = (await submitRes.text()).slice(0, 350);
-        if (submitRes.status === 409) {
-          await handleSubmit409(intentId, txHashNorm, raw);
-          return;
-        }
-        throw new Error(copy.submitTxFailed.replace("{raw}", raw));
-      }
-
-      const confirmRes = await fetch(
-        `/api/payments/intents/${intentId}/confirm`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ tx_hash: txHashNorm }),
-        },
-      );
-      if (!confirmRes.ok) {
-        const raw = (await confirmRes.text()).slice(0, 350);
-        const lowerRaw = raw.toLowerCase();
-        const maybePending =
-          (confirmRes.status === 404 &&
-            !lowerRaw.includes("payment intent not found")) ||
-          confirmRes.status === 408 ||
-          (confirmRes.status === 409 &&
-            (lowerRaw.includes("confirmations not enough") ||
-              lowerRaw.includes("tx indexed partially")));
-        if (maybePending) {
-          setPaymentInfo(
-            `交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`,
-          );
-          await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
-          return;
-        }
-        throw new Error(copy.confirmFailed.replace("{raw}", raw));
-      }
-
-      setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
-      trackAppEvent("checkout_succeeded", {
-        entry: "account_center",
-        plan_code: selectedPlan?.plan_code || "pro_monthly",
-        intent_id: intentId,
-        tx_hash: txHashNorm,
-      });
-      await loadSnapshot();
-      await loadPaymentSnapshot();
-    } catch (error) {
-      const normalized = normalizePaymentError(error);
-      if (normalized.pending) {
-        setPaymentError(normalized.message);
-      } else if (normalized.userRejected) {
-        setPaymentInfo(
-          approvedInThisRun
-            ? `${selectedTokenLabel} 授权已完成，本次支付已取消，可直接再次点击支付。`
-            : "",
-        );
-        setPaymentError(normalized.message);
-      } else {
-        setPaymentInfo(
-          approvedInThisRun
-            ? `${selectedTokenLabel} 授权已完成，但支付未完成，请重试。`
-            : "",
-        );
-        setPaymentError(normalized.message);
-      }
-    } finally {
-      setPaymentBusy(false);
-    }
-  };
-
-  const createManualPaymentIntent = async () => {
-    clearPaymentMessages();
-    setManualPayment(null);
-    setManualTxHash("");
-    setLastIntentId("");
-    setLastTxHash("");
-    if (!paymentHostAllowed) {
-      setPaymentError(
-        copy.paymentHostBlocked.replace(
-          "{host}",
-          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
-        ),
-      );
-      return;
-    }
-    if (!isAuthenticated) {
-      setPaymentError(copy.loginBeforePay);
-      return;
-    }
-    if (!paymentConfig?.configured) {
-      setPaymentError(copy.payNotReady);
-      return;
-    }
-
-    setPaymentBusy(true);
-    try {
-      const authHeaders = await buildAuthedHeaders(true, false);
-      const createRes = await fetch("/api/payments/intents", {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify({
-          plan_code: selectedPlan?.plan_code || "pro_monthly",
-          payment_mode: "direct",
-          token_address: resolvedSelectedTokenAddress || undefined,
-          use_points: billing.canRedeem && usePoints,
-          points_to_consume:
-            billing.canRedeem && usePoints ? billing.pointsUsed : 0,
-          metadata: {
-            source: "account_center_manual_transfer",
-            frontend_host: currentPaymentHost || null,
-            account_email: email || null,
-          },
-        }),
-      });
-      if (!createRes.ok) {
-        const raw = (await createRes.text()).slice(0, 350);
-        throw new Error(copy.createManualIntentFailed.replace("{raw}", raw));
-      }
-      const created = (await createRes.json()) as CreatedIntent;
-      const direct = created.direct_payment;
-      const intentId = String(
-        created.intent?.intent_id || direct?.intent_id || "",
-      );
-      if (!intentId || !direct?.receiver_address || !direct?.amount_usdc) {
-        throw new Error(copy.manualPaymentInvalid);
-      }
-      assertExpectedPaymentReceiver(
-        direct.receiver_address,
-        "manual payment receiver",
-      );
-      setLastIntentId(intentId);
-      setManualPayment(direct);
-      setPaymentMethodTab("manual");
-      setShowOverlay(false);
-      setPaymentInfo(
-        `手动转账订单已创建：请在 Polygon 网络转 ${direct.amount_usdc} ${direct.token_symbol || selectedTokenLabel} 到 ${direct.receiver_address}，请在下方【手动转账】面板中查看详情并复制地址，完成后提交 tx hash。`,
-      );
-      trackAppEvent("checkout_started", {
-        entry: "account_center_manual_transfer",
-        plan_code: selectedPlan?.plan_code || "pro_monthly",
-        intent_id: intentId,
-        payment_mode: "direct",
-        use_points: billing.canRedeem && usePoints,
-        pay_amount_usd: billing.payAmount,
-      });
-    } catch (error) {
-      setPaymentError(normalizePaymentError(error).message);
-    } finally {
-      setPaymentBusy(false);
-    }
-  };
-
-  const submitManualPaymentTx = async () => {
-    const txHashNorm = String(manualTxHash || "")
-      .trim()
-      .toLowerCase();
-    const intentId = String(
-      lastIntentId || manualPayment?.intent_id || "",
-    ).trim();
-    if (!intentId || !manualPayment) {
-      setPaymentError(copy.manualOrderRequired);
-      return;
-    }
-    if (!txHashNorm.startsWith("0x") || txHashNorm.length !== 66) {
-      setPaymentError(copy.txHashRequired);
-      return;
-    }
-    setPaymentBusy(true);
-    setPaymentError("");
-    try {
-      const authHeaders = await buildAuthedHeaders(true, false);
-      const submitRes = await fetch(
-        `/api/payments/intents/${intentId}/submit`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ tx_hash: txHashNorm }),
-        },
-      );
-      if (!submitRes.ok) {
-        const raw = (await submitRes.text()).slice(0, 350);
-        if (submitRes.status === 409) {
-          await handleSubmit409(intentId, txHashNorm, raw);
-          return;
-        }
-        throw new Error(copy.submitTxFailed.replace("{raw}", raw));
-      }
-      const confirmRes = await fetch(
-        `/api/payments/intents/${intentId}/confirm`,
-        {
-          method: "POST",
-          headers: authHeaders,
-          body: JSON.stringify({ tx_hash: txHashNorm }),
-        },
-      );
-      if (!confirmRes.ok) {
-        const raw = (await confirmRes.text()).slice(0, 350);
-        const lowerRaw = raw.toLowerCase();
-        const maybePending =
-          confirmRes.status === 408 ||
-          (confirmRes.status === 409 &&
-            (lowerRaw.includes("confirmations not enough") ||
-              lowerRaw.includes("tx indexed partially")));
-        if (maybePending) {
-          setPaymentInfo(
-            `交易已提交: ${shortAddress(txHashNorm)}，等待链上确认中...`,
-          );
-          await pollIntentUntilConfirmed(intentId, authHeaders, txHashNorm);
-          return;
-        }
-        throw new Error(copy.confirmFailed.replace("{raw}", raw));
-      }
-      setLastTxHash(txHashNorm);
-      setPaymentInfo(copy.paymentConfirmed.replace("{txHash}", shortAddress(txHashNorm)));
-      setManualPayment(null);
-      setManualTxHash("");
-      setTxValidation({ loading: false, checked: false });
-      trackAppEvent("checkout_succeeded", {
-        entry: "account_center_manual_transfer",
-        plan_code: selectedPlan?.plan_code || "pro_monthly",
-        intent_id: intentId,
-        tx_hash: txHashNorm,
-      });
-      await loadSnapshot();
-      await loadPaymentSnapshot();
-    } catch (error) {
-      setPaymentError(normalizePaymentError(error).message);
-    } finally {
-      setPaymentBusy(false);
-    }
-  };
-
-  const validateTxHash = useCallback(
-    async (intentId: string, hash: string) => {
-      const hashNorm = String(hash || "").trim().toLowerCase();
-      if (!hashNorm.startsWith("0x") || hashNorm.length !== 66) {
-        setTxValidation({ loading: false, checked: false });
-        return;
-      }
-      setTxValidation({ loading: true, checked: false });
-      try {
-        const headers = await buildAuthedHeaders(true, false);
-        const res = await fetch(`/api/payments/intents/${intentId}/validate`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ tx_hash: hashNorm }),
-        });
-        const json = (await res.json()) as {
-          valid?: boolean;
-          reason?: string;
-          detail?: string;
-          checks?: Record<string, unknown>;
-        };
-        setTxValidation({
-          loading: false,
-          checked: true,
-          valid: Boolean(json.valid),
-          reason: json.reason,
-          detail: json.detail,
-          checks: json.checks,
-        });
-      } catch {
-        setTxValidation({ loading: false, checked: false });
-      }
-    },
-    [buildAuthedHeaders],
-  );
-
-  const handleOverlayCheckout = async () => {
-    if (!paymentHostAllowed) {
-      setPaymentError(
-        copy.paymentHostBlocked.replace(
-          "{host}",
-          allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
-        ),
-      );
-      return;
-    }
-    if (!isAuthenticated) {
-      setPaymentError(copy.loginBeforePay);
-      return;
-    }
-    if (!hasPayingWallet) {
-      setPaymentInfo(copy.openBindFlow);
-      const bound = await connectAndBindWallet(providerMode, {
-        openOverlayAfterBind: true,
-      });
-      if (!bound) return;
-      setPaymentInfo(copy.walletBoundCreatingOrder);
-      await createIntentAndPay();
-      return;
-    }
-    await createIntentAndPay();
-  };
-
-  // --- Render ---
+  // ── Render ────────────────────────────────────────────
 
   if (loading && !refreshing) {
     return (
@@ -2198,7 +508,7 @@ export function AccountCenter() {
                   </p>
                 ) : null}
                 {billing.canRedeem ? (
-                    <p className="mt-2 text-xs text-emerald-700">
+                  <p className="mt-2 text-xs text-emerald-700">
                     当前可用 {billing.pointsUsed} 积分抵扣 $
                     {billing.discountAmount.toFixed(2)}， 续费时会自动生效。
                   </p>
@@ -2236,7 +546,9 @@ export function AccountCenter() {
               >
                 {isSubscribed
                   ? copy.proMember
-                  : isEn ? "UNSUBSCRIBED" : "未订阅"}
+                  : isEn
+                    ? "UNSUBSCRIBED"
+                    : "未订阅"}
               </span>
             </div>
             <p className="mb-4 font-mono text-sm text-slate-500">
@@ -2462,80 +774,88 @@ export function AccountCenter() {
           <div className="lg:col-span-12 grid grid-cols-1 md:flex gap-6">
             {canAccessPaidTelegramGroup && (
               <section className="group relative flex-1 overflow-hidden rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-              <Bot
-                size={140}
-                className="absolute -right-8 -bottom-8 -rotate-12 text-slate-100 transition-transform duration-1000 group-hover:rotate-0"
-              />
-              <div className="relative z-10">
-                <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-blue-700">
-                  <Bot size={22} /> {copy.telegramBind}
-                </h3>
-                <p className="mb-6 text-sm text-slate-500">
-                  {copy.telegramHint}
-                </p>
+                <Bot
+                  size={140}
+                  className="absolute -right-8 -bottom-8 -rotate-12 text-slate-100 transition-transform duration-1000 group-hover:rotate-0"
+                />
+                <div className="relative z-10">
+                  <h3 className="mb-2 flex items-center gap-2 text-lg font-bold text-blue-700">
+                    <Bot size={22} /> {copy.telegramBind}
+                  </h3>
+                  <p className="mb-6 text-sm text-slate-500">
+                    {copy.telegramHint}
+                  </p>
 
-                <div className="mb-4 flex flex-wrap gap-2">
-                  {TELEGRAM_TOPICS_GROUP_URL &&
-                  TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL &&
-                  telegramBound ? (
-                    <Link
-                      href={TELEGRAM_TOPICS_GROUP_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                  <div className="mb-4 flex flex-wrap gap-2">
+                    {TELEGRAM_TOPICS_GROUP_URL &&
+                      TELEGRAM_TOPICS_GROUP_URL !== TELEGRAM_GROUP_URL &&
+                      telegramBound ? (
+                      <Link
+                        href={TELEGRAM_TOPICS_GROUP_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-100"
+                      >
+                        {copy.telegramTopicsGroupLink}
+                        <ExternalLink size={12} />
+                      </Link>
+                    ) : null}
+                    {TELEGRAM_GROUP_URL && telegramBound ? (
+                      <Link
+                        href={TELEGRAM_GROUP_URL}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                      >
+                        {copy.telegramGroupLink}
+                        <ExternalLink size={12} />
+                      </Link>
+                    ) : null}
+                  </div>
+                  <div className="flex gap-2">
+                    <code className="flex-grow overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-blue-700">
+                      {bindCommand}
+                    </code>
+                    <button
+                      onClick={() => void openTelegramBotBindLink()}
+                      disabled={telegramBindOpening || !isAuthenticated}
+                      className="rounded-xl border border-cyan-700 bg-cyan-600 px-4 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      title={copy.telegramBotBindLink}
+                      aria-label={copy.telegramBotBindLink}
                     >
-                      {copy.telegramTopicsGroupLink}
-                      <ExternalLink size={12} />
-                    </Link>
-                  ) : null}
-                  {TELEGRAM_GROUP_URL && telegramBound ? (
-                    <Link
-                      href={TELEGRAM_GROUP_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
+                      {telegramBindOpening
+                        ? "..."
+                        : copy.telegramBotBindLink}
+                    </button>
+                    <button
+                      onClick={() => handleCopy(bindCommand)}
+                      className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700"
+                      title={copy.copyCommand}
+                      aria-label={copy.copyCommand}
                     >
-                      {copy.telegramGroupLink}
-                      <ExternalLink size={12} />
-                    </Link>
-                  ) : null}
+                      {copied ? (
+                        <CheckCircle2 size={20} />
+                      ) : (
+                        <Copy size={20} />
+                      )}
+                    </button>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                    {copy.telegramFallbackHint}
+                  </p>
+                  <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
+                    {copy.paymentManualSupport}
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <code className="flex-grow overflow-hidden text-ellipsis whitespace-nowrap rounded-xl border border-slate-200 bg-slate-50 p-4 font-mono text-xs text-blue-700">
-                    {bindCommand}
-                  </code>
-                  <button
-                    onClick={() => void openTelegramBotBindLink()}
-                    disabled={telegramBindOpening || !isAuthenticated}
-                    className="rounded-xl border border-cyan-700 bg-cyan-600 px-4 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    title={copy.telegramBotBindLink}
-                    aria-label={copy.telegramBotBindLink}
-                  >
-                    {telegramBindOpening ? "..." : copy.telegramBotBindLink}
-                  </button>
-                  <button
-                    onClick={() => handleCopy(bindCommand)}
-                    className="rounded-xl border border-blue-700 bg-blue-600 p-4 text-white shadow-sm transition-all hover:bg-blue-700"
-                    title={copy.copyCommand}
-                    aria-label={copy.copyCommand}
-                  >
-                    {copied ? <CheckCircle2 size={20} /> : <Copy size={20} />}
-                  </button>
-                </div>
-                <p className="mt-2 text-[11px] leading-5 text-slate-400">
-                  {copy.telegramFallbackHint}
-                </p>
-                <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-6 text-amber-800">
-                  {copy.paymentManualSupport}
-                </div>
-              </div>
-            </section>
+              </section>
             )}
 
             {/* Payment Details / Wallet Management */}
-            <section className={`flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-8 shadow-sm ${
-              canAccessPaidTelegramGroup ? "w-full md:w-96" : "w-full"
-            }`}>
+            <section
+              className={`flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-8 shadow-sm ${
+                canAccessPaidTelegramGroup ? "w-full md:w-96" : "w-full"
+              }`}
+            >
               <div>
                 <h3 className="mb-6 flex items-center gap-2 text-sm font-bold uppercase text-blue-700">
                   <Wallet size={18} /> {copy.paymentMgmt}
@@ -2564,7 +884,8 @@ export function AccountCenter() {
                   <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
                     {copy.paymentHostBlocked.replace(
                       "{host}",
-                      allowedPaymentHosts[0] || "polyweather-pro.vercel.app",
+                      allowedPaymentHosts[0] ||
+                        "polyweather-pro.vercel.app",
                     )}
                   </div>
                 ) : null}
@@ -2608,13 +929,16 @@ export function AccountCenter() {
                       {availableTokenList.map((token) => {
                         const active =
                           token.address ===
-                          (resolvedSelectedTokenAddress || token.address);
+                          (resolvedSelectedTokenAddress ||
+                            token.address);
                         return (
                           <button
                             type="button"
                             key={token.address}
                             onClick={() =>
-                              setSelectedTokenAddress(token.address)
+                              setSelectedTokenAddress(
+                                token.address,
+                              )
                             }
                             disabled={paymentBusy}
                             className={`rounded-xl border px-3 py-2 text-left transition-all ${
@@ -2636,7 +960,7 @@ export function AccountCenter() {
                   </div>
                 )}
 
-                {/* 支付方式选择 Tabs */}
+                {/* Payment Method Tabs */}
                 <div className="mt-6 border-t border-slate-200 pt-6">
                   <p className="mb-3 text-[10px] font-semibold uppercase text-slate-500">
                     {copy.paymentMethodLabel}
@@ -2676,7 +1000,7 @@ export function AccountCenter() {
                       <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-800">
                         {copy.paymentGasWarning}
                       </div>
-                      
+
                       {boundWallets.length ? (
                         <div className="space-y-3">
                           {boundWallets.map((w) => (
@@ -2698,11 +1022,17 @@ export function AccountCenter() {
                                   </span>
                                 )}
                               </div>
-                              <div className="text-[10px]">{copy.polygonChain}</div>
+                              <div className="text-[10px]">
+                                {copy.polygonChain}
+                              </div>
                               <div className="mt-2 flex justify-end">
                                 <button
                                   type="button"
-                                  onClick={() => void handleUnbindWallet(w.address)}
+                                  onClick={() =>
+                                    void handleUnbindWallet(
+                                      w.address,
+                                    )
+                                  }
                                   disabled={paymentBusy}
                                   className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700 transition-all hover:bg-red-100 disabled:opacity-50"
                                 >
@@ -2730,20 +1060,24 @@ export function AccountCenter() {
                             <select
                               value={selectedInjectedProviderKey}
                               onChange={(event) =>
-                                setSelectedInjectedProviderKey(event.target.value)
+                                setSelectedInjectedProviderKey(
+                                  event.target.value,
+                                )
                               }
                               disabled={paymentBusy}
                               className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 text-xs text-slate-900 outline-none transition-all hover:bg-slate-50 disabled:opacity-60"
                             >
-                              {injectedProviderOptions.map((option) => (
-                                <option
-                                  key={option.key}
-                                  value={option.key}
-                                  className="bg-white text-slate-900"
-                                >
-                                  {option.label}
-                                </option>
-                              ))}
+                              {injectedProviderOptions.map(
+                                (option) => (
+                                  <option
+                                    key={option.key}
+                                    value={option.key}
+                                    className="bg-white text-slate-900"
+                                  >
+                                    {option.label}
+                                  </option>
+                                ),
+                              )}
                             </select>
                           </label>
                         )}
@@ -2752,22 +1086,30 @@ export function AccountCenter() {
                             setProviderMode("auto");
                             void connectAndBindWallet("auto");
                           }}
-                          disabled={paymentBusy || !isAuthenticated}
+                          disabled={
+                            paymentBusy || !isAuthenticated
+                          }
                           className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white py-3 text-xs font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-60"
                         >
-                          <PlusIcon className="w-4 h-4" /> {copy.bindExt}
+                          <PlusIcon className="w-4 h-4" />{" "}
+                          {copy.bindExt}
                         </button>
                         <button
                           onClick={() => {
                             setProviderMode("walletconnect");
-                            void connectAndBindWallet("walletconnect");
+                            void connectAndBindWallet(
+                              "walletconnect",
+                            );
                           }}
                           disabled={
-                            paymentBusy || !isAuthenticated || !walletConnectEnabled
+                            paymentBusy ||
+                            !isAuthenticated ||
+                            !walletConnectEnabled
                           }
                           className="flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 py-3 text-xs font-bold text-cyan-700 transition-all hover:bg-cyan-100 disabled:opacity-60"
                         >
-                          <CreditCard className="w-4 h-4" /> {copy.bindQr}
+                          <CreditCard className="w-4 h-4" />{" "}
+                          {copy.bindQr}
                         </button>
                         {!walletConnectEnabled && (
                           <p className="text-[11px] text-slate-500 text-center mt-1">
@@ -2784,7 +1126,7 @@ export function AccountCenter() {
                       <p className="text-[11px] leading-relaxed text-slate-400">
                         {copy.paymentManualDesc}
                       </p>
-                      
+
                       <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
                         <div className="flex flex-col gap-3">
                           <div>
@@ -2797,8 +1139,12 @@ export function AccountCenter() {
                           </div>
                           <button
                             type="button"
-                            onClick={() => void createManualPaymentIntent()}
-                            disabled={paymentBusy || !isAuthenticated}
+                            onClick={() =>
+                              void createManualPaymentIntent()
+                            }
+                            disabled={
+                              paymentBusy || !isAuthenticated
+                            }
                             className="w-full rounded-xl border border-emerald-700 bg-emerald-600 py-2.5 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                           >
                             {copy.paymentManualCreate}
@@ -2812,7 +1158,8 @@ export function AccountCenter() {
                               </p>
                               <p className="font-mono text-sm font-bold text-slate-950">
                                 {manualPayment.amount_usdc}{" "}
-                                {manualPayment.token_symbol || selectedTokenLabel}
+                                {manualPayment.token_symbol ||
+                                  selectedTokenLabel}
                               </p>
                             </div>
                             <div>
@@ -2821,12 +1168,16 @@ export function AccountCenter() {
                               </p>
                               <div className="mt-1 flex gap-2">
                                 <code className="min-w-0 flex-1 break-all whitespace-normal rounded-lg border border-blue-200 bg-blue-50 px-2 py-2 font-mono text-[11px] text-blue-800">
-                                  {manualPayment.receiver_address}
+                                  {
+                                    manualPayment.receiver_address
+                                  }
                                 </code>
                                 <button
                                   type="button"
                                   onClick={() =>
-                                    handleCopy(manualPayment.receiver_address)
+                                    handleCopy(
+                                      manualPayment.receiver_address,
+                                    )
                                   }
                                   className="rounded-lg border border-blue-700 bg-blue-600 px-2 text-xs font-bold text-white transition-colors hover:bg-blue-700"
                                 >
@@ -2841,7 +1192,9 @@ export function AccountCenter() {
                               <input
                                 value={manualTxHash}
                                 onChange={(event) => {
-                                  setManualTxHash(event.target.value);
+                                  setManualTxHash(
+                                    event.target.value,
+                                  );
                                   void validateTxHash(
                                     manualPayment.intent_id ||
                                       lastIntentId ||
@@ -2854,38 +1207,49 @@ export function AccountCenter() {
                               />
                               {txValidation.loading ? (
                                 <p className="mt-1 text-[10px] text-slate-500">
-                                  验证中...
-                                </p>
-                              ) : txValidation.checked && txValidation.valid ? (
-                                <p className="mt-1 text-[10px] text-emerald-700">
-                                  收款地址和金额匹配
+                                  {copy.verifying}
                                 </p>
                               ) : txValidation.checked &&
-                                txValidation.valid === false ? (
+                                txValidation.valid ? (
+                                <p className="mt-1 text-[10px] text-emerald-700">
+                                  {copy.verifyAddressMatch}
+                                </p>
+                              ) : txValidation.checked &&
+                                txValidation.valid ===
+                                  false ? (
                                 <p className="mt-1 text-[10px] text-red-700">
                                   {txValidation.reason ===
                                   "tx_not_mined"
                                     ? copy.verifyTxNotMined
-                                    : txValidation.reason === "receiver_mismatch"
-                                      ? "收款地址不匹配！请检查是否转到了正确的地址"
+                                    : txValidation.reason ===
+                                        "receiver_mismatch"
+                                      ? copy
+                                          .verifyAddressMismatch
                                       : txValidation.reason ===
                                           "amount_insufficient"
-                                        ? copy.verifyAmountLow
-                                        : txValidation.reason === "tx_reverted"
-                                          ? copy.verifyTxReverted
+                                        ? copy
+                                            .verifyAmountLow
+                                        : txValidation.reason ===
+                                            "tx_reverted"
+                                          ? copy
+                                              .verifyTxReverted
                                           : txValidation.detail ||
                                             copy.verifyFailed +
                                               (txValidation.reason ||
-                                                copy.verifyUnknown)}
+                                                copy
+                                                  .verifyUnknown)}
                                 </p>
                               ) : null}
                             </div>
                             <button
                               type="button"
-                              onClick={() => void submitManualPaymentTx()}
+                              onClick={() =>
+                                void submitManualPaymentTx()
+                              }
                               disabled={
                                 paymentBusy ||
-                                (txValidation.checked && !txValidation.valid)
+                                (txValidation.checked &&
+                                  !txValidation.valid)
                               }
                               className="w-full rounded-xl border border-emerald-700 bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition-all hover:bg-emerald-700 disabled:opacity-50"
                             >
@@ -2914,4 +1278,3 @@ export function AccountCenter() {
     </div>
   );
 }
-
