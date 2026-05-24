@@ -26,12 +26,13 @@ type Mode = "login" | "signup";
 
 type LoginClientProps = {
   nextPath: string;
+  initialMode?: Mode;
 };
 
-export function LoginClient({ nextPath }: LoginClientProps) {
+export function LoginClient({ nextPath, initialMode }: LoginClientProps) {
   const router = useRouter();
   const { locale } = useI18n();
-  const [mode, setMode] = useState<Mode>("login");
+  const [mode, setMode] = useState<Mode>(initialMode ?? "login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,18 +40,6 @@ export function LoginClient({ nextPath }: LoginClientProps) {
   const [infoText, setInfoText] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      const params = new URLSearchParams(window.location.search);
-      const m = params.get("mode");
-      if (m === "signup") {
-        setMode("signup");
-      } else if (m === "login") {
-        setMode("login");
-      }
-    }
-  }, []);
 
   const supabaseReady = hasSupabasePublicEnv();
   const isLogin = mode === "login";
