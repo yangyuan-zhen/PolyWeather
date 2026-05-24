@@ -70,9 +70,11 @@ def test_singapore_is_in_telegram_push_city_lists():
     assert HIGH_FREQ_AIRPORT_ICAO["singapore"] == "WSSS"
 
 
-def test_shenzhen_is_removed_from_telegram_push_city_lists():
-    assert "shenzhen" not in HIGH_FREQ_AIRPORT_CITIES
-    assert "shenzhen" not in HIGH_FREQ_AIRPORT_ICAO
+def test_shenzhen_is_in_high_freq_push_as_hko_station():
+    # shenzhen uses LFS / HKO 1-min data (formerly lau fau shan)
+    assert "shenzhen" in HIGH_FREQ_AIRPORT_CITIES
+    assert "shenzhen" in HIGH_FREQ_AIRPORT_ICAO
+    assert HIGH_FREQ_AIRPORT_ICAO["shenzhen"] == "LFS"
 
 
 def test_high_freq_airport_push_forces_analysis_refresh(monkeypatch):

@@ -281,7 +281,7 @@ def test_lau_fau_shan_uses_shenzhen_market_city():
     layer._build_top_temperature_buckets = _fake_build_top_temperature_buckets
 
     scan = layer.build_market_scan(
-        city="Lau Fau Shan",
+        city="shenzhen",
         target_date="2026-04-23",
         temperature_bucket={"temp": 30, "probability": 0.58},
         model_probability=0.58,
@@ -289,7 +289,7 @@ def test_lau_fau_shan_uses_shenzhen_market_city():
 
     assert captured["primary_city_key"] == "shenzhen"
     assert captured["bucket_city_key"] == "shenzhen"
-    assert scan["city_key"] == "lau fau shan"
+    assert scan["city_key"] == "shenzhen"
     assert scan["market_city_key"] == "shenzhen"
     assert scan["selected_slug"] == "highest-temperature-in-shenzhen-on-april-23-2026-30c-or-higher"
 

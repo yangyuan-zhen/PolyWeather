@@ -292,13 +292,13 @@ def test_hko_provider_marks_explicit_official_station_as_anchor():
     raw = {
         "settlement_current": {
             "station_code": "LFS",
-            "station_name": "Lau Fau Shan",
+            "station_name": "shenzhen",
             "observation_time": "2026-04-06T10:00:00+08:00",
             "current": {"temp": 25.0},
         }
     }
 
-    snapshot = build_country_network_snapshot("lau fau shan", raw)
+    snapshot = build_country_network_snapshot("shenzhen", raw)
 
     assert snapshot["provider_code"] == "hongkong_hko"
     assert snapshot["settlement_station"]["is_official_station_anchor"] is True
