@@ -20,7 +20,7 @@ import {
   Table2,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -36,6 +36,8 @@ import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
 import { sortRowsByUserTime } from "@/components/dashboard/scan-terminal/decision-utils";
+import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
+import { useTerminalPay } from "@/components/subscription/useTerminalPay";
 import {
   type ContinentGroup,
   buildContinentGroups,
@@ -888,7 +890,42 @@ function KoyfinWeatherTerminal({
 // ─── Layer 2: Authenticated but no active subscription ───────────────────────
 // Shown inside the terminal shell after middleware has confirmed the user is
 // logged in (Layer 1). Presents a targeted upgrade prompt.
-function SubscriptionGate({ isEn }: { isEn: boolean }) {
+function SubscriptionGate({
+  isEn,
+  points,
+  onPaid,
+}: {
+  isEn: boolean;
+  points: number;
+  onPaid: () => void;
+}) {
+  const [showOverlay, setShowOverlay] = useState(false);
+  const {
+    billing,
+    usePoints,
+    setUsePoints,
+    payBusy,
+    errorText,
+    infoText,
+    txHash,
+    chainId,
+    tokenSymbol,
+    walletAddress,
+    handlePay,
+  } = useTerminalPay({
+    points,
+    planPriceUsd: 10,
+    onPaid: () => {
+      setShowOverlay(false);
+      onPaid();
+    },
+    isEn,
+  });
+
+  const handleSubscribeClick = () => {
+    setShowOverlay(true);
+  };
+
   const features = isEn
     ? [
         "Real-time METAR observations across 500+ stations",
@@ -954,13 +991,14 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
             </ul>
 
             {/* CTA */}
-            <Link
-              href="/account"
+            <button
+              type="button"
+              onClick={handleSubscribeClick}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
             >
               <CreditCard size={16} />
               {t("subscribeNow", isEn)}
-            </Link>
+            </button>
 
             <p className="mt-4 text-center text-[11px] text-slate-400">
               {isEn
@@ -980,6 +1018,38 @@ function SubscriptionGate({ isEn }: { isEn: boolean }) {
           </Link>
         </div>
       </div>
+
+      {/* Payment overlay */}
+      {showOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <UnlockProOverlay
+            points={points}
+            planPriceUsd={10}
+            usePoints={usePoints}
+            billing={billing}
+            onToggleUsePoints={() => setUsePoints((prev) => !prev)}
+            onPay={() => void handlePay()}
+            onClose={() => setShowOverlay(false)}
+            payBusy={payBusy}
+            payLabel={
+              walletAddress
+                ? isEn
+                  ? "Subscribe & Activate"
+                  : "立即订阅并激活服务"
+                : isEn
+                  ? "Connect Wallet & Subscribe"
+                  : "连接钱包并订阅"
+            }
+            errorText={errorText || undefined}
+            infoText={infoText || undefined}
+            txHash={txHash || undefined}
+            chainId={chainId}
+            paymentTokenLabel={tokenSymbol}
+            locale={isEn ? "en-US" : "zh-CN"}
+            faqHref="/subscription-help"
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -1047,17 +1117,21 @@ function UnauthenticatedGate({
 function ProductAccessRequired({
   isAuthenticated,
   isEn,
+  points,
+  onPaid,
   userLocalTime,
 }: {
   isAuthenticated: boolean;
   isEn: boolean;
+  points: number;
+  onPaid: () => void;
   userLocalTime: string;
 }) {
   // Layer 1 fallback (middleware should catch this first in production)
   if (!isAuthenticated) {
     return <UnauthenticatedGate isEn={isEn} userLocalTime={userLocalTime} />;
   }
-  // Layer 2: logged in, no subscription
+  // Layer 2: logged in, no subscription — inline pay overlay
   return (
     <div className="flex h-screen w-full bg-[#e9edf3] text-slate-950">
       <aside className="w-[52px] bg-[#171d24]" />
@@ -1069,7 +1143,7 @@ function ProductAccessRequired({
           </Link>
           <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
         </header>
-        <SubscriptionGate isEn={isEn} />
+        <SubscriptionGate isEn={isEn} points={points} onPaid={onPaid} />
       </main>
     </div>
   );
@@ -1187,11 +1261,54 @@ function ScanTerminalScreen() {
     );
   }
 
+  const refreshAuth = useCallback(() => {
+    fetch("/api/auth/me", {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json() as Promise<{
+          authenticated?: boolean;
+          user_id?: string | null;
+          subscription_active?: boolean | null;
+          subscription_plan_code?: string | null;
+          subscription_expires_at?: string | null;
+          subscription_total_expires_at?: string | null;
+          subscription_queued_days?: number | null;
+          points?: number | null;
+        }>;
+      })
+      .then((payload) => {
+        setProAccess({
+          loading: false,
+          authenticated: Boolean(payload.authenticated),
+          userId: payload.user_id ?? null,
+          subscriptionActive: payload.subscription_active === true,
+          subscriptionPlanCode: payload.subscription_plan_code ?? null,
+          subscriptionExpiresAt: payload.subscription_expires_at ?? null,
+          subscriptionTotalExpiresAt:
+            payload.subscription_total_expires_at ??
+            payload.subscription_expires_at ??
+            null,
+          subscriptionQueuedDays: Math.max(
+            0,
+            Number(payload.subscription_queued_days ?? 0),
+          ),
+          points: Number(payload.points ?? 0),
+          error: null,
+        });
+      })
+      .catch(() => {}); // keep current state on error
+  }, []);
+
   if (!isAuthenticated || !isPro) {
     return (
       <ProductAccessRequired
         isAuthenticated={isAuthenticated}
         isEn={isEn}
+        points={proAccess.points}
+        onPaid={refreshAuth}
         userLocalTime={userLocalTime}
       />
     );
