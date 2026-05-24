@@ -1544,3 +1544,58 @@ def build_scan_terminal_ai_payload(
             reason=str(exc),
             duration_ms=duration_ms,
         )
+
+
+_SCAN_PREWARM_STARTED = False
+_SCAN_PREWARM_LOCK = threading.Lock()
+
+
+def start_scan_terminal_prewarm() -> None:
+    """Warm analysis caches for all cities at startup so the first terminal
+    scan returns quickly instead of forcing every city through a cold
+    _analyze() path.
+
+    Runs once per process.  Safe to call from any thread and at any point
+    during the server lifecycle.
+    """
+    global _SCAN_PREWARM_STARTED
+    with _SCAN_PREWARM_LOCK:
+        if _SCAN_PREWARM_STARTED:
+            return
+        _SCAN_PREWARM_STARTED = True
+
+    city_names = list(CITIES.keys())
+    logger.info(
+        "scan terminal pre-warm starting cities={} workers={}",
+        len(city_names),
+        SCAN_TERMINAL_MAX_WORKERS,
+    )
+
+    def _warm_one(city: str) -> str:
+        try:
+            _analyze(city, force_refresh=False, detail_mode="panel")
+        except Exception:
+            pass
+        return city
+
+    def _run():
+        started = time.time()
+        ok = 0
+        workers = max(1, min(SCAN_TERMINAL_MAX_WORKERS, len(city_names)))
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(_warm_one, c): c for c in city_names}
+            for f in as_completed(futures):
+                try:
+                    f.result()
+                    ok += 1
+                except Exception:
+                    pass
+        elapsed = int(time.time() - started)
+        logger.info(
+            "scan terminal pre-warm finished ok={}/{} elapsed={}s",
+            ok,
+            len(city_names),
+            elapsed,
+        )
+
+    threading.Thread(target=_run, name="scan-prewarm", daemon=True).start()

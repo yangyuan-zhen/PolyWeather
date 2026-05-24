@@ -16,6 +16,7 @@ from web.routers.payments import router as payments_router
 from web.routers.scan import router as scan_router
 from web.routers.system import router as system_router
 from web.routes import router as legacy_router
+from web.scan_terminal_service import start_scan_terminal_prewarm
 
 _ROUTES_REGISTERED_FLAG = "_polyweather_routes_registered"
 
@@ -32,4 +33,5 @@ def create_app() -> FastAPI:
         core_app.include_router(ops_router)
         core_app.include_router(legacy_router)
         setattr(core_app.state, _ROUTES_REGISTERED_FLAG, True)
+        start_scan_terminal_prewarm()
     return core_app
