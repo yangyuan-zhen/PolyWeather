@@ -143,6 +143,19 @@ def _is_plausible_city_temp(city: str, value: Any, unit: str = "°C") -> bool:
     return temp >= min_value
 
 
+def _parse_local_hour(local_time_str: Optional[str]) -> Optional[int]:
+    if not local_time_str:
+        return None
+    try:
+        parts = str(local_time_str).strip().split(":")
+        hour = int(parts[0])
+        if 0 <= hour <= 23:
+            return hour
+    except Exception:
+        pass
+    return None
+
+
 def _parse_utc_datetime(value: Any) -> Optional[datetime]:
     raw = str(value or "").strip()
     if not raw or "T" not in raw:
@@ -1478,6 +1491,66 @@ def _analyze(
             today_hourly["times"].append(ts.split("T")[1][:5])
             today_hourly["temps"].append(h_temps[i] if i < len(h_temps) else None)
             today_hourly["radiation"].append(h_rad[i] if i < len(h_rad) else None)
+
+    # ── 12a-b. Intraday bias correction ──────────────────────────────────
+    # Nudge the DEB high-temp forecast and probability mu using the gap
+    # between the current observed temperature and the model's hourly path.
+    # Weight grows as the day progresses toward the peak window.
+    _live_mc = raw.get("live_mc") or {}
+    _settle_cur = raw.get("settlement_current") or {}
+    _sc_cur = _settle_cur.get("current", {}) if _settle_cur else {}
+    _use_settle = str(raw.get("settlement_source") or "").lower() in {
+        "hko", "cwa", "noaa", "wunderground",
+    } and bool(_sc_cur)
+    _pri_cur = _sc_cur if _use_settle else _live_mc
+    _current_temp = _sf(_pri_cur.get("temp"))
+    _max_so_far = _sf(_pri_cur.get("max_temp_so_far"))
+    if _max_so_far is None:
+        _max_so_far = _sf(_live_mc.get("max_temp_so_far"))
+    _local_hour = _parse_local_hour(local_time_str)
+    peak_first = int(first_peak_h or 14)
+    peak_last_h = int(last_peak_h or 17)
+
+    if (
+        deb_val is not None
+        and _current_temp is not None
+        and _local_hour is not None
+        and 6 <= _local_hour <= 22
+    ):
+        hourly_times_list = today_hourly.get("times") or []
+        hourly_temps_list = today_hourly.get("temps") or []
+        model_hourly_temp = None
+        current_hour_str = f"{_local_hour:02d}:00"
+        for idx, t_str in enumerate(hourly_times_list):
+            if str(t_str or "").startswith(current_hour_str) and idx < len(hourly_temps_list):
+                candidate = _sf(hourly_temps_list[idx])
+                if candidate is not None:
+                    model_hourly_temp = candidate
+                    break
+        reference_temp = model_hourly_temp if model_hourly_temp is not None else _current_temp
+        if reference_temp is not None:
+            hourly_bias = _current_temp - reference_temp
+
+            if _local_hour < peak_first:
+                progress = max(0.0, (_local_hour - 6) / max(1, peak_first - 6))
+                weight = 0.15 + 0.20 * progress
+            elif peak_first <= _local_hour <= peak_last_h:
+                progress = (_local_hour - peak_first) / max(1, peak_last_h - peak_first)
+                weight = 0.40 + 0.35 * progress
+            else:
+                weight = 0.80
+
+            max_correction = 5.0 if str(sym or "").upper() == "F" else 3.0
+            hourly_correction = max(-max_correction, min(max_correction, hourly_bias * weight))
+
+            max_so_far_excess = (_max_so_far or _current_temp) - deb_val
+            max_correction_clamped = max(-max_correction, min(max_correction, max_so_far_excess * max(0.3, weight)))
+
+            blended_correction = hourly_correction * 0.6 + max_correction_clamped * 0.4
+            deb_val = round(deb_val + blended_correction, 1)
+            if mu is not None:
+                mu = round(mu + blended_correction, 1)
+            deb_weights = f"{deb_weights or 'DEB'} + intraday_bias({blended_correction:+.1f})"
 
     # ── 12b. Next 48h hourly block for future-date analysis modal ──
     next_48h_hourly = {
