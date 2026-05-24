@@ -20,13 +20,16 @@ import {
   Table2,
   UserRound,
 } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
   Bar,
   BarChart as ReBarChart,
   CartesianGrid,
+  Line,
+  LineChart as ReLineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,8 +39,7 @@ import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
 import { sortRowsByUserTime } from "@/components/dashboard/scan-terminal/decision-utils";
-import { UnlockProOverlay } from "@/components/subscription/UnlockProOverlay";
-import { useTerminalPay } from "@/components/subscription/useTerminalPay";
+import { ProductAccessRequired } from "@/components/dashboard/scan-terminal/ProductAccessRequired";
 import {
   type ContinentGroup,
   buildContinentGroups,
@@ -59,6 +61,10 @@ import {
 import { ScanTerminalLoadingScreen } from "@/components/dashboard/scan-terminal/ScanTerminalShellParts";
 import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
+import { Panel } from "@/components/dashboard/scan-terminal/Panel";
+import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
+import { RunwayMeteorologyPanel } from "@/components/dashboard/scan-terminal/RunwayMeteorologyPanel";
+import { rowName, pct, money, temp, edgeClass } from "@/components/dashboard/scan-terminal/utils";
 
 function createEmptyAccess(loading = true): ProAccessState {
   return {
@@ -90,33 +96,7 @@ function createLocalAccess(): ProAccessState {
   };
 }
 
-function rowName(row?: ScanOpportunityRow | null) {
-  return row?.city_display_name || row?.display_name || row?.city || "--";
-}
 
-function pct(value: unknown, digits = 1) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "--";
-  return `${(Math.abs(n) <= 1 ? n * 100 : n).toFixed(digits)}%`;
-}
-
-function money(value: unknown) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "--";
-  return `$${Math.round(n).toLocaleString()}`;
-}
-
-function temp(value: unknown, unit?: string | null) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "--";
-  return `${n.toFixed(1)}${unit || "°"}`;
-}
-
-function edgeClass(value: unknown) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n === 0) return "text-slate-500";
-  return n > 0 ? "text-emerald-700" : "text-red-600";
-}
 
 const TERM = {
   cityContract: { en: "City / Contract", zh: "城市 / 合约" },
@@ -208,6 +188,21 @@ function decisionLabel(row?: ScanOpportunityRow | null) {
   if (row?.tradable) return "Tradable";
   return "Monitor";
 }
+
+function decisionClass(label: string) {
+  const l = label.toLowerCase();
+  if (l.includes("approve") || l.includes("active") || l.includes("活跃")) {
+    return "bg-emerald-50 border-emerald-200 text-emerald-700";
+  }
+  if (l.includes("watch") || l.includes("观察") || l.includes("monitor")) {
+    return "bg-amber-50 border-amber-200 text-amber-700";
+  }
+  if (l.includes("veto") || l.includes("downgrade") || l.includes("closed") || l.includes("关闭")) {
+    return "bg-slate-50 border-slate-200 text-slate-500";
+  }
+  return "bg-blue-50 border-blue-200 text-blue-700";
+}
+
 
 function SparkArea({
   color = "#2563eb",
@@ -301,171 +296,6 @@ function ProbabilityDistributionChart({
   );
 }
 
-function Panel({
-  children,
-  className,
-  title,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  title: string;
-}) {
-  return (
-    <section
-      className={clsx(
-        "overflow-hidden rounded-[4px] border border-[#cfd6df] bg-white shadow-sm",
-        className,
-      )}
-    >
-      <div className="flex h-9 items-center justify-between border-b border-[#dce2e9] bg-[#eef2f6] px-3">
-        <h2 className="text-[15px] font-black leading-none text-[#202833]">
-          {title}
-        </h2>
-        <span className="grid h-5 w-5 place-items-center rounded border border-slate-300 bg-white text-slate-500">
-          ↗
-        </span>
-      </div>
-      {children}
-    </section>
-  );
-}
-
-function GroupedMarketTable({
-  groups,
-  isEn,
-  onSelect,
-  selectedId,
-}: {
-  groups: ContinentGroup[];
-  isEn: boolean;
-  onSelect: (row: ScanOpportunityRow) => void;
-  selectedId?: string | null;
-}) {
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    const c = new Set<string>();
-    const defaultExpanded = getDefaultExpanded(groups);
-    for (const g of groups) {
-      if (!defaultExpanded.has(g.key)) c.add(g.key);
-    }
-    return c;
-  });
-
-  const toggleGroup = (key: string) => {
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  };
-
-  return (
-    <div className="overflow-auto">
-      <table className="w-full min-w-[800px] border-collapse text-[13px]">
-        <thead>
-          <tr className="border-b border-slate-200 bg-[#f5f7fa] text-left text-[11px] uppercase text-slate-500">
-            <th className="px-3 py-2 font-black">City</th>
-            <th className="px-2 py-2 text-right font-black">Obs</th>
-            <th className="px-2 py-2 text-right font-black">High</th>
-            <th className="px-2 py-2 text-right font-black">DEB</th>
-            <th className="px-2 py-2 text-right font-black">Gap</th>
-            <th className="px-2 py-2 text-right font-black">Market</th>
-            <th className="px-2 py-2 text-right font-black">Edge</th>
-            <th className="px-2 py-2 text-right font-black">Spr/Liq</th>
-            <th className="px-3 py-2 font-black">Signal</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((group) => {
-            const isExpanded = !collapsed.has(group.key);
-            const label = isEn ? group.labelEn : group.labelZh;
-            return (
-              <Fragment key={group.key}>
-                {/* Group header row */}
-                <tr className="border-b border-slate-200 bg-[#eef2f6]">
-                  <td colSpan={9} className="p-0">
-                    <button
-                      type="button"
-                      onClick={() => toggleGroup(group.key)}
-                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-[#e2e8f0] transition-colors"
-                    >
-                      <span className="grid h-4 w-4 place-items-center text-slate-400">
-                        {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                      </span>
-                      <span className="text-[11px] font-black uppercase tracking-wide text-slate-600">
-                        {label}
-                      </span>
-                      <span className="text-[10px] text-slate-400">
-                        {group.rows.length} · {t("active", isEn)} {group.activeCount} · {t("watch", isEn)} {group.watchCount}
-                        {group.localTimeRange ? ` · LT ${group.localTimeRange}` : ""}
-                        {group.hotCity ? ` · Hot: ${group.hotCity}` : ""}
-                      </span>
-                    </button>
-                  </td>
-                </tr>
-                {/* Data rows */}
-                {isExpanded &&
-                  group.rows.map((row) => {
-                    const signal = getSignalState(row);
-                    const gapColor = GAP_COLOR_MAP[getGapColor(row)];
-                    return (
-                      <tr
-                        key={row.id}
-                        className={clsx(
-                          "cursor-pointer border-b border-slate-100 hover:bg-blue-50/70",
-                          selectedId === row.id && "bg-blue-50"
-                        )}
-                        onClick={() => onSelect(row)}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="font-bold text-slate-900">{rowName(row)}</div>
-                          <div className="truncate text-[11px] text-slate-500">
-                            {row.airport || ""}{row.local_time ? ` · ${row.local_time}` : ""}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono font-bold">
-                          {temp(row.current_temp, row.temp_symbol)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono">
-                          {temp(row.current_max_so_far, row.temp_symbol)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono">
-                          {temp(row.deb_prediction, row.temp_symbol)}
-                        </td>
-                        <td className={clsx("px-2 py-2 text-right font-mono font-bold", gapColor)}>
-                          {temp(row.signed_gap ?? row.gap_to_target, row.temp_symbol)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono">
-                          {formatPrice(row.midpoint, row.ask, row.bid)}
-                        </td>
-                        <td className={clsx("px-2 py-2 text-right font-mono font-bold", edgeClass(row.edge_percent))}>
-                          {pct(row.edge_percent)}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono text-[11px]">
-                          {formatSpreadLiquidity(row.spread, row.book_liquidity ?? row.market_liquidity)}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={clsx(
-                            "text-[11px] font-black",
-                            signal === "active" ? "text-emerald-600" :
-                            signal === "watch" ? "text-amber-600" :
-                            signal === "closed" ? "text-slate-400" : "text-red-500"
-                          )}>
-                            {getSignalLabel(signal, isEn)}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function PolyWeatherTerminal({
   generatedText,
   isEn,
@@ -477,6 +307,9 @@ function PolyWeatherTerminal({
   setSelectedRow,
   toggleLocale,
   userLocalTime,
+  searchQuery,
+  setSearchQuery,
+  searchInputRef,
 }: {
   generatedText: string;
   isEn: boolean;
@@ -488,7 +321,31 @@ function PolyWeatherTerminal({
   setSelectedRow: (row: ScanOpportunityRow) => void;
   toggleLocale: () => void;
   userLocalTime: string;
+  searchQuery: string;
+  setSearchQuery: (val: string) => void;
+  searchInputRef: React.RefObject<HTMLInputElement | null>;
 }) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInputFocused =
+        activeEl &&
+        (activeEl.tagName === "INPUT" ||
+          activeEl.tagName === "TEXTAREA" ||
+          (activeEl instanceof HTMLElement && activeEl.isContentEditable));
+      if (e.key === "/" && !isInputFocused) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }
+      if (e.key === "Escape" && activeEl === searchInputRef.current) {
+        setSearchQuery("");
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [searchInputRef, setSearchQuery]);
   const approveRows = rows
     .filter((row) => ["Approve", "Tradable"].includes(decisionLabel(row)))
     .slice(0, 8);
@@ -522,61 +379,78 @@ function PolyWeatherTerminal({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
-      <aside className="flex w-[52px] shrink-0 flex-col items-center gap-2 bg-[#171d24] py-4 text-slate-300">
+      <aside className="flex w-[52px] shrink-0 flex-col items-center gap-2 bg-[#11161d] py-3 text-slate-400">
         <Link
           href="/"
-          className="mb-2 block h-8 w-8 overflow-hidden rounded transition hover:opacity-90"
+          className="mb-2 block h-7 w-7 overflow-hidden rounded transition hover:opacity-90"
           title="PolyWeather"
         >
           <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
         </Link>
-        <Menu size={23} className="mb-3" />
+        <Menu size={20} className="mb-2 hover:text-white cursor-pointer" />
         {[CloudSun, Table2, BarChart3, LineChart, Gauge, Bell].map((Icon, i) => (
           <button
             key={i}
             className={clsx(
-              "grid h-10 w-full place-items-center border-l-4",
+              "grid h-9 w-full place-items-center border-l-4 transition-colors",
               i === 0
                 ? "border-blue-500 bg-white/5 text-white"
-                : "border-transparent hover:bg-white/5",
+                : "border-transparent hover:bg-white/5 hover:text-white",
             )}
             type="button"
           >
-            <Icon size={19} />
+            <Icon size={16} />
           </button>
         ))}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[64px] shrink-0 items-center justify-between bg-[#171d24] px-4 text-white">
+        <header className="flex h-12 shrink-0 items-center justify-between bg-[#11161d] border-b border-[#242f3d] px-4 text-white">
           <div className="flex min-w-0 items-center gap-4">
-            <div className="flex h-10 min-w-[320px] items-center gap-3 rounded border border-slate-600 bg-[#29323d] px-3 text-slate-300">
-              <Search size={19} />
-              <span className="truncate text-sm font-semibold">
-                {t("searchPlaceholder", isEn)}
-              </span>
-              <kbd className="ml-auto rounded border border-slate-500 px-2 py-0.5 text-xs">
+            <div className="flex h-8 min-w-[320px] items-center gap-2 rounded border border-[#2d3846] bg-[#1e2630] px-2.5 text-slate-300">
+              <Search size={14} className="text-slate-400" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t("searchPlaceholder", isEn)}
+                className="w-full bg-transparent text-xs font-semibold text-white placeholder-slate-500 outline-none"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchQuery("");
+                    searchInputRef.current?.focus();
+                  }}
+                  className="text-slate-400 hover:text-white text-xs"
+                >
+                  ✕
+                </button>
+              )}
+              <kbd className="ml-auto rounded border border-slate-600 bg-[#2a3543] px-1.5 py-0.5 text-[9px] font-mono text-slate-400">
                 /
               </kbd>
             </div>
-            <div className="hidden items-center gap-2 text-xs font-bold uppercase text-slate-400 lg:flex">
-              <Activity size={15} />
+            <div className="hidden items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 lg:flex tracking-wider">
+              <Activity size={13} />
               {t("dashboard", isEn)}
             </div>
           </div>
-          <div className="flex items-center gap-3 text-sm text-slate-300">
-            <span className="hidden font-mono md:inline">{userLocalTime}</span>
+          <div className="flex items-center gap-3 text-xs text-slate-400">
+            <span className="hidden font-mono md:inline text-slate-500">{userLocalTime}</span>
             {/* Language toggle — matches landing page style */}
             <button
               type="button"
               aria-label={t("switchLang", isEn)}
               title={t("switchLang", isEn)}
               onClick={toggleLocale}
-              className="inline-flex h-9 items-center gap-0.5 rounded border border-slate-600 bg-[#29323d] p-1 text-xs font-bold text-slate-400 hover:border-slate-400"
+              className="inline-flex h-7 items-center gap-0.5 rounded border border-slate-700 bg-[#1e2630] p-0.5 text-[10px] font-bold text-slate-400 hover:border-slate-400"
             >
               <span
                 className={clsx(
-                  "rounded px-2 py-1 transition-colors",
+                  "rounded px-1.5 py-0.5 transition-colors",
                   locale === "zh-CN"
                     ? "bg-blue-600 text-white"
                     : "hover:text-slate-200",
@@ -586,7 +460,7 @@ function PolyWeatherTerminal({
               </span>
               <span
                 className={clsx(
-                  "rounded px-2 py-1 transition-colors",
+                  "rounded px-1.5 py-0.5 transition-colors",
                   locale === "en-US"
                     ? "bg-blue-600 text-white"
                     : "hover:text-slate-200",
@@ -599,23 +473,24 @@ function PolyWeatherTerminal({
               type="button"
               onClick={onRefresh}
               disabled={refreshing}
-              className="inline-flex h-9 items-center gap-2 rounded border border-slate-600 bg-[#29323d] px-3 font-bold hover:bg-[#323c49] disabled:opacity-60"
+              className="inline-flex h-7 items-center gap-1.5 rounded border border-slate-700 bg-[#1e2630] px-2.5 font-bold hover:bg-[#29323d] text-slate-300 disabled:opacity-60 transition-colors"
             >
-              <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
+              <RefreshCw size={12} className={refreshing ? "animate-spin" : ""} />
               {t("refresh", isEn)}
             </button>
             <Link
               href="/account"
-              className="grid h-9 w-9 place-items-center rounded-full bg-slate-200 text-slate-900"
+              className="grid h-7 w-7 place-items-center rounded-full bg-slate-700 border border-slate-600 text-slate-200 hover:bg-slate-600 hover:text-white transition-colors"
+              title="User Account"
             >
-              <UserRound size={18} />
+              <UserRound size={13} />
             </Link>
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-auto p-2">
+        <main className="min-h-0 flex-1 overflow-hidden flex flex-col p-2 bg-[#eef2f6]">
           {/* Mobile layout */}
-          <div className="flex flex-col gap-2 lg:hidden">
+          <div className="flex flex-col gap-2 lg:hidden overflow-auto flex-1 pb-6">
             <MobileRegionTabs
               activeTab={mobileTab}
               groups={continentGroups}
@@ -656,57 +531,60 @@ function PolyWeatherTerminal({
           </div>
 
           {/* Desktop layout */}
-          <div className="hidden min-h-full grid-cols-1 gap-2 lg:grid xl:grid-cols-[1.12fr_1.6fr_1.1fr]">
-            <div className="grid min-h-0 gap-2">
-              <Panel title={t("weatherContracts", isEn)}>
-                <div className="grid grid-cols-3 border-b border-slate-200 text-center">
-                  <div className="p-3">
-                    <div className="text-[11px] font-black uppercase text-slate-500">
+          <div className="hidden lg:grid lg:grid-cols-[1.1fr_1.65fr_0.95fr] h-full gap-2 min-h-0">
+            {/* Column 1 */}
+            <div className="flex flex-col gap-2 min-h-0 h-full">
+              <Panel title={isEn ? "Weather Contracts" : "天气合约"}>
+                <div className="grid grid-cols-3 border-b border-slate-200 text-center bg-[#f8f9fa] shrink-0">
+                  <div className="py-2 border-r border-slate-200">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
                       {t("rows", isEn)}
                     </div>
-                    <div className="font-mono text-xl font-black">{rows.length}</div>
+                    <div className="font-mono text-base font-black text-slate-800">{rows.length}</div>
                   </div>
-                  <div className="border-x border-slate-200 p-3">
-                    <div className="text-[11px] font-black uppercase text-slate-500">
+                  <div className="py-2 border-r border-slate-200">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
                       {t("avgEdge", isEn)}
                     </div>
-                    <div className={clsx("font-mono text-xl font-black", edgeClass(avgEdge))}>
+                    <div className={clsx("font-mono text-base font-black", edgeClass(avgEdge))}>
                       {pct(avgEdge)}
                     </div>
                   </div>
-                  <div className="p-3">
-                    <div className="text-[11px] font-black uppercase text-slate-500">
+                  <div className="py-2">
+                    <div className="text-[10px] font-bold uppercase text-slate-400">
                       {t("liquidity", isEn)}
                     </div>
-                    <div className="font-mono text-xl font-black">
+                    <div className="font-mono text-base font-black text-slate-800">
                       {money(totalLiquidity)}
                     </div>
                   </div>
                 </div>
-                <GroupedMarketTable
-                  groups={continentGroups}
-                  isEn={isEn}
-                  selectedId={selectedRow?.id}
-                  onSelect={setSelectedRow}
-                />
+                <div className="flex-1 min-h-0 overflow-auto">
+                  <GroupedMarketTable
+                    groups={continentGroups}
+                    isEn={isEn}
+                    selectedId={selectedRow?.id}
+                    onSelect={setSelectedRow}
+                  />
+                </div>
               </Panel>
 
-              <Panel title={t("approvedSignals", isEn)}>
+              <Panel title={t("approvedSignals", isEn)} className="h-[210px] shrink-0">
                 <div className="divide-y divide-slate-100">
                   {(approveRows.length ? approveRows : rows.slice(0, 5)).map((row) => (
                     <button
                       key={row.id}
                       type="button"
                       onClick={() => setSelectedRow(row)}
-                      className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-blue-50"
+                      className="grid w-full grid-cols-[1fr_auto] items-center gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors"
                     >
                       <span>
-                        <b className="block text-sm">{rowName(row)}</b>
-                        <small className="text-slate-500">
-                          {row.ai_reason_en || row.ai_city_thesis_en || row.target_label || "--"}
+                        <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
+                        <small className="text-[10px] text-slate-400 block truncate max-w-[200px]">
+                          {row.ai_reason_zh || row.ai_city_thesis_zh || row.target_label || "--"}
                         </small>
                       </span>
-                      <span className={clsx("font-mono text-sm font-black", edgeClass(row.edge_percent))}>
+                      <span className={clsx("font-mono text-xs font-bold", edgeClass(row.edge_percent))}>
                         {pct(row.edge_percent)}
                       </span>
                     </button>
@@ -715,17 +593,18 @@ function PolyWeatherTerminal({
               </Panel>
             </div>
 
-            <div className="grid min-h-0 grid-rows-[auto_auto_1fr] gap-2">
-              <Panel title={t("selectedContractMonitor", isEn)}>
-                <div className="grid gap-4 p-4 lg:grid-cols-[1fr_220px]">
+            {/* Column 2 */}
+            <div className="flex flex-col gap-2 min-h-0 h-full">
+              <Panel title={t("selectedContractMonitor", isEn)} className="shrink-0">
+                <div className="grid gap-4 p-3 lg:grid-cols-[1fr_200px]">
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <h1 className="text-2xl font-black leading-tight">
+                      <h1 className="text-lg font-black leading-tight text-slate-800">
                         {rowName(selectedRow)}
                       </h1>
                       <span
                         className={clsx(
-                          "rounded border px-2 py-1 text-xs font-black",
+                          "rounded border px-1.5 py-0.5 text-[10px] font-bold",
                           selectedSignal === "active" ? "border-emerald-200 bg-emerald-50 text-emerald-700" :
                           selectedSignal === "watch" ? "border-amber-200 bg-amber-50 text-amber-700" :
                           selectedSignal === "closed" ? "border-slate-200 bg-slate-50 text-slate-500" :
@@ -735,101 +614,86 @@ function PolyWeatherTerminal({
                         {selectedLabel}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm leading-6 text-slate-600">
-                      {selectedRow?.ai_city_thesis_en ||
-                        selectedRow?.ai_reason_en ||
-                        selectedRow?.market_question ||
-                        t("selectContract", isEn)}
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-slate-500">
+                      {isEn
+                        ? selectedRow?.ai_city_thesis_en || selectedRow?.ai_reason_en || selectedRow?.market_question || t("selectContract", isEn)
+                        : selectedRow?.ai_city_thesis_zh || selectedRow?.ai_reason_zh || selectedRow?.market_question || t("selectContract", isEn)}
                     </p>
-                    <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <div className="mt-3 grid grid-cols-2 gap-1.5 md:grid-cols-4">
                       {[
                         [t("live", isEn), temp(selectedRow?.current_max_so_far ?? selectedRow?.current_temp, selectedRow?.temp_symbol)],
                         [t("deb", isEn), temp(selectedRow?.deb_prediction, selectedRow?.temp_symbol)],
                         [t("model", isEn), pct(selectedRow?.model_probability ?? selectedRow?.model_event_probability)],
                         [t("mkt", isEn), pct(selectedRow?.market_probability ?? selectedRow?.market_event_probability)],
                       ].map(([label, value]) => (
-                        <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-3">
-                          <div className="text-[11px] font-black uppercase text-slate-500">
+                        <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 px-2 py-1">
+                          <div className="text-[9px] font-bold uppercase text-slate-400">
                             {label}
                           </div>
-                          <div className="font-mono text-lg font-black">{value}</div>
+                          <div className="font-mono text-[13px] font-bold text-slate-800">{value}</div>
                         </div>
                       ))}
                     </div>
                   </div>
-                  <div className="rounded border border-slate-200 bg-[#f7f9fb] p-3">
-                    <div className="mb-2 text-xs font-black uppercase text-slate-500">
-                      {t("intradayPerformance", isEn)}
+                  <div className="rounded border border-slate-200 bg-[#f8f9fa] p-2.5 flex flex-col justify-between">
+                    <div>
+                      <div className="mb-1 text-[9px] font-bold uppercase text-slate-400">
+                        {t("intradayPerformance", isEn)}
+                      </div>
+                      <div className="h-12">
+                        <SparkArea
+                          isEn={isEn}
+                          color={
+                            Number(selectedRow?.edge_percent || 0) >= 0
+                              ? "#059669"
+                              : "#dc2626"
+                          }
+                          data={
+                            selectedRow?.distribution_preview?.map((p) => ({
+                              v:
+                                typeof p === "number"
+                                  ? p
+                                  : p.model_probability ?? 0,
+                            })) || []
+                          }
+                        />
+                      </div>
                     </div>
-                    <div className="h-20">
-                      <SparkArea
-                        isEn={isEn}
-                        color={
-                          Number(selectedRow?.edge_percent || 0) >= 0
-                            ? "#059669"
-                            : "#dc2626"
-                        }
-                        data={
-                          selectedRow?.distribution_preview?.map((p) => ({
-                            v:
-                              typeof p === "number"
-                                ? p
-                                : p.model_probability ?? 0,
-                          })) || []
-                        }
-                      />
-                    </div>
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-                      <span className="rounded bg-white p-2">
-                        {t("edge", isEn)} <b className={edgeClass(selectedRow?.edge_percent)}>{pct(selectedRow?.edge_percent)}</b>
+                    <div className="mt-1.5 grid grid-cols-2 gap-1 text-[10px] font-bold">
+                      <span className="rounded border border-slate-200 bg-white p-1 text-center">
+                        {t("edge", isEn)} <b className={clsx("block font-mono", edgeClass(selectedRow?.edge_percent))}>{pct(selectedRow?.edge_percent)}</b>
                       </span>
-                      <span className="rounded bg-white p-2">
-                        {t("spread", isEn)} <b>{pct(selectedRow?.spread)}</b>
+                      <span className="rounded border border-slate-200 bg-white p-1 text-center text-slate-700">
+                        {t("spread", isEn)} <b className="block font-mono">{pct(selectedRow?.spread)}</b>
                       </span>
                     </div>
                   </div>
                 </div>
               </Panel>
 
-              <Panel title={t("probabilityDistribution", isEn)}>
-                <div className="h-48 p-2">
-                  <ProbabilityDistributionChart
-                    isEn={isEn}
-                    points={
-                      selectedRow?.distribution_preview ??
-                      selectedRow?.distribution_full
-                    }
-                  />
-                </div>
-              </Panel>
-
-              <Panel title={t("marketList", isEn)}>
-                <GroupedMarketTable
-                  groups={continentGroups}
-                  isEn={isEn}
-                  selectedId={selectedRow?.id}
-                  onSelect={setSelectedRow}
-                />
+              <Panel title={isEn ? "Runway Temperature Trend & Option Threshold Lines" : "实时气象走势与期权阈值线"} className="flex-1 min-h-0">
+                <RunwayMeteorologyPanel row={selectedRow} isEn={isEn} />
               </Panel>
             </div>
 
-            <div className="grid min-h-0 gap-2">
-              <Panel title={t("watchlist", isEn)}>
+            {/* Column 3 */}
+            <div className="flex flex-col gap-2 min-h-0 h-full">
+              <Panel title={t("watchlist", isEn)} className="flex-1 min-h-0">
                 <div className="divide-y divide-slate-100">
                   {(watchRows.length ? watchRows : rows.slice(0, 8)).map((row) => (
                     <button
                       key={row.id}
                       type="button"
                       onClick={() => setSelectedRow(row)}
-                      className="grid w-full grid-cols-[1fr_auto] gap-3 px-3 py-2 text-left hover:bg-blue-50"
+                      className="grid w-full grid-cols-[1fr_auto] gap-3 px-3 py-1.5 text-left hover:bg-slate-50 transition-colors"
                     >
                       <span>
-                        <b className="block text-sm">{rowName(row)}</b>
-                        <small className="text-slate-500">
+                        <b className="block text-xs font-bold text-slate-800">{rowName(row)}</b>
+                        <small className="text-[10px] text-slate-400 block truncate max-w-[150px]">
                           {row.airport || row.trading_region_label || row.local_time || "--"}
                         </small>
                       </span>
-                      <span className={clsx("font-mono text-sm font-black", edgeClass(row.signed_gap ?? row.gap))}>
+                      <span className={clsx("font-mono text-xs font-bold", edgeClass(row.signed_gap ?? row.gap))}>
                         {pct(row.signed_gap ?? row.gap)}
                       </span>
                     </button>
@@ -837,8 +701,8 @@ function PolyWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title={t("globalWeatherFactors", isEn)}>
-                <div className="grid grid-cols-3 gap-2 p-3 text-center">
+              <Panel title={t("globalWeatherFactors", isEn)} className="shrink-0">
+                <div className="grid grid-cols-3 gap-1.5 p-2 text-center">
                   {[
                     [t("heat", isEn), rows.filter((r) => r.risk_level === "high").length],
                     [t("active", isEn), rows.filter((r) => r.active).length],
@@ -847,9 +711,9 @@ function PolyWeatherTerminal({
                     [t("ai", isEn), rows.filter((r) => r.ai_decision).length],
                     [t("closed", isEn), rows.filter((r) => r.closed).length],
                   ].map(([label, value]) => (
-                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-3">
-                      <div className="font-mono text-lg font-black">{value}</div>
-                      <div className="text-[11px] font-black uppercase text-slate-500">
+                    <div key={String(label)} className="rounded border border-slate-200 bg-slate-50 p-1.5">
+                      <div className="font-mono text-sm font-bold text-slate-800">{value}</div>
+                      <div className="text-[9px] font-bold uppercase text-slate-400 truncate">
                         {label}
                       </div>
                     </div>
@@ -857,21 +721,21 @@ function PolyWeatherTerminal({
                 </div>
               </Panel>
 
-              <Panel title={t("terminalStatus", isEn)}>
-                <div className="space-y-3 p-3 text-sm">
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">{t("tsData", isEn)}</span>
-                    <span className="font-mono text-emerald-700">
+              <Panel title={t("terminalStatus", isEn)} className="shrink-0">
+                <div className="space-y-1.5 p-2 text-[11px]">
+                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                    <span className="font-bold text-slate-500">{t("tsData", isEn)}</span>
+                    <span className="font-mono text-emerald-700 font-bold">
                       {generatedText || t("tsDataLive", isEn)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">{t("tsAccess", isEn)}</span>
-                    <span className="font-mono text-blue-700">{t("tsAccessPaid", isEn)}</span>
+                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                    <span className="font-bold text-slate-500">{t("tsAccess", isEn)}</span>
+                    <span className="font-mono text-blue-700 font-bold">{t("tsAccessPaid", isEn)}</span>
                   </div>
-                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 p-3">
-                    <span className="font-semibold">{t("tsLayout", isEn)}</span>
-                    <span className="font-mono">{t("tsLayoutValue", isEn)}</span>
+                  <div className="flex items-center justify-between rounded border border-slate-200 bg-slate-50 px-2.5 py-1.5">
+                    <span className="font-bold text-slate-500">{t("tsLayout", isEn)}</span>
+                    <span className="font-mono text-slate-700 font-medium">{t("tsLayoutValue", isEn)}</span>
                   </div>
                 </div>
               </Panel>
@@ -883,267 +747,7 @@ function PolyWeatherTerminal({
   );
 }
 
-// ─── Layer 2: Authenticated but no active subscription ───────────────────────
-// Shown inside the terminal shell after middleware has confirmed the user is
-// logged in (Layer 1). Presents a targeted upgrade prompt.
-function SubscriptionGate({
-  isEn,
-  points,
-  onPaid,
-}: {
-  isEn: boolean;
-  points: number;
-  onPaid: () => void;
-}) {
-  const [showOverlay, setShowOverlay] = useState(false);
-  const {
-    billing,
-    usePoints,
-    setUsePoints,
-    payBusy,
-    errorText,
-    infoText,
-    txHash,
-    chainId,
-    tokenSymbol,
-    walletAddress,
-    handlePay,
-  } = useTerminalPay({
-    points,
-    planPriceUsd: 10,
-    onPaid: () => {
-      setShowOverlay(false);
-      onPaid();
-    },
-    isEn,
-  });
 
-  const handleSubscribeClick = () => {
-    setShowOverlay(true);
-  };
-
-  const features = isEn
-    ? [
-        "Real-time METAR observations across 500+ stations",
-        "DEB forecast blends with 0–240h horizon",
-        "AI decision cards with Poly-score ranking",
-        "Historical backtesting & weather market signals",
-      ]
-    : [
-        "500+ 气象站实时 METAR 实况",
-        "DEB 智能融合预测（0–240 小时）",
-        "AI 决策卡片 + Poly-score 排名",
-        "历史回测与天气市场交易信号",
-      ];
-
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center bg-[#e9edf3] p-6">
-      <div className="w-full max-w-lg">
-        {/* Header badge */}
-        <div className="mb-6 flex items-center justify-center">
-          <span className="inline-flex items-center gap-2 rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold uppercase tracking-wider text-amber-700">
-            <LockKeyhole size={12} />
-            {t("proAccessRequired", isEn)}
-          </span>
-        </div>
-
-        {/* Main card */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
-          {/* Card top band */}
-          <div className="bg-gradient-to-r from-blue-600 to-blue-700 px-8 py-6 text-white">
-            <h1 className="text-xl font-black tracking-tight">
-              {isEn
-                ? "Unlock the Weather Terminal"
-                : "解锁天气交易决策台"}
-            </h1>
-            <p className="mt-1 text-sm text-blue-100">
-              {isEn
-                ? "Your account is verified. One step away from full access."
-                : "账号已验证，只差一步即可获得完整访问权限。"}
-            </p>
-          </div>
-
-          <div className="p-8">
-            {/* Price */}
-            <div className="mb-6 flex items-baseline gap-1">
-              <span className="text-4xl font-black text-slate-900">$10</span>
-              <span className="text-base text-slate-500">
-                {t("month", isEn)}
-              </span>
-            </div>
-
-            {/* Feature list */}
-            <ul className="mb-8 space-y-3">
-              {features.map((f) => (
-                <li key={f} className="flex items-start gap-3 text-sm text-slate-700">
-                  <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded-full bg-blue-600 text-white">
-                    <svg width="8" height="6" viewBox="0 0 8 6" fill="none">
-                      <path d="M1 3L3 5L7 1" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-
-            {/* CTA */}
-            <button
-              type="button"
-              onClick={handleSubscribeClick}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 py-3.5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <CreditCard size={16} />
-              {t("subscribeNow", isEn)}
-            </button>
-
-            <p className="mt-4 text-center text-[11px] text-slate-400">
-              {isEn
-                ? "Cancel anytime · No hidden fees · Instant access after payment"
-                : "随时取消 · 无隐藏费用 · 付款后立即解锁"}
-            </p>
-          </div>
-        </div>
-
-        {/* Back link */}
-        <div className="mt-5 text-center">
-          <Link
-            href="/"
-            className="text-xs text-slate-500 hover:text-slate-800 transition-colors"
-          >
-            ← {t("backToProduct", isEn)}
-          </Link>
-        </div>
-      </div>
-
-      {/* Payment overlay */}
-      {showOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <UnlockProOverlay
-            points={points}
-            planPriceUsd={10}
-            usePoints={usePoints}
-            billing={billing}
-            onToggleUsePoints={() => setUsePoints((prev) => !prev)}
-            onPay={() => void handlePay()}
-            onClose={() => setShowOverlay(false)}
-            payBusy={payBusy}
-            payLabel={
-              walletAddress
-                ? isEn
-                  ? "Subscribe & Activate"
-                  : "立即订阅并激活服务"
-                : isEn
-                  ? "Connect Wallet & Subscribe"
-                  : "连接钱包并订阅"
-            }
-            errorText={errorText || undefined}
-            infoText={infoText || undefined}
-            txHash={txHash || undefined}
-            chainId={chainId}
-            paymentTokenLabel={tokenSymbol}
-            locale={isEn ? "en-US" : "zh-CN"}
-            faqHref="/subscription-help"
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Layer 1 fallback: Should not normally appear (middleware handles it) ─────
-// Shown only when middleware is not configured (no Supabase env).
-function UnauthenticatedGate({
-  isEn,
-  userLocalTime,
-}: {
-  isEn: boolean;
-  userLocalTime: string;
-}) {
-  return (
-    <div className="flex h-screen w-full bg-[#e9edf3] text-slate-950">
-      <aside className="w-[52px] bg-[#171d24]" />
-      <main className="flex flex-1 flex-col">
-        <header className="flex h-[64px] items-center justify-between bg-[#171d24] px-4 text-white">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-90">
-            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
-            <span className="text-sm font-semibold tracking-tight text-white/90">Terminal</span>
-          </Link>
-          <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
-        </header>
-        <section className="grid flex-1 place-items-center p-6">
-          <div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-lg">
-            <div className="mx-auto mb-4 grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-600">
-              <LogIn size={24} />
-            </div>
-            <h1 className="text-xl font-black text-slate-900">
-              {t("signInToContinue", isEn)}
-            </h1>
-            <p className="mt-2 text-sm text-slate-500">
-              {isEn
-                ? "The weather terminal is for verified subscribers only."
-                : "天气决策台仅对已验证的付费用户开放。"}
-            </p>
-            <Link
-              href="/auth/login?next=%2Fterminal"
-              className="mt-6 flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-3 text-sm font-black text-white transition hover:bg-slate-700"
-            >
-              <LogIn size={15} />
-              {isEn ? "Log in" : "登录"}
-            </Link>
-            <Link
-              href="/auth/login?next=%2Fterminal&mode=signup"
-              className="mt-3 flex items-center justify-center gap-2 rounded-xl border border-slate-300 py-3 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-            >
-              {isEn ? "Create an account" : "注册账号"}
-            </Link>
-            <Link
-              href="/"
-              className="mt-4 block text-xs text-slate-400 hover:text-slate-700 transition-colors"
-            >
-              {isEn ? "← Learn about PolyWeather" : "← 了解 PolyWeather"}
-            </Link>
-          </div>
-        </section>
-      </main>
-    </div>
-  );
-}
-
-/** Unified access gate — routes to the correct layer based on auth state */
-function ProductAccessRequired({
-  isAuthenticated,
-  isEn,
-  points,
-  onPaid,
-  userLocalTime,
-}: {
-  isAuthenticated: boolean;
-  isEn: boolean;
-  points: number;
-  onPaid: () => void;
-  userLocalTime: string;
-}) {
-  // Layer 1 fallback (middleware should catch this first in production)
-  if (!isAuthenticated) {
-    return <UnauthenticatedGate isEn={isEn} userLocalTime={userLocalTime} />;
-  }
-  // Layer 2: logged in, no subscription — inline pay overlay
-  return (
-    <div className="flex h-screen w-full bg-[#e9edf3] text-slate-950">
-      <aside className="w-[52px] bg-[#171d24]" />
-      <main className="flex flex-1 flex-col">
-        <header className="flex h-[64px] items-center justify-between bg-[#171d24] px-4 text-white">
-          <Link href="/" className="flex items-center gap-2 hover:opacity-90">
-            <img src="/logo.png" alt="PolyWeather" className="h-7 w-auto object-contain" />
-            <span className="text-sm font-semibold tracking-tight text-white/90">Terminal</span>
-          </Link>
-          <div className="font-mono text-sm text-slate-300">{userLocalTime}</div>
-        </header>
-        <SubscriptionGate isEn={isEn} points={points} onPaid={onPaid} />
-      </main>
-    </div>
-  );
-}
 
 function ScanTerminalScreen() {
   const [proAccess, setProAccess] = useState<ProAccessState>(() =>
@@ -1240,10 +844,25 @@ function ScanTerminalScreen() {
     () => sortRowsByUserTime(terminalData?.rows || []),
     [terminalData?.rows],
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const filteredRows = useMemo(() => {
+    if (!searchQuery.trim()) return rows;
+    const q = searchQuery.toLowerCase().trim();
+    return rows.filter((row) => {
+      const city = (rowName(row) || "").toLowerCase();
+      const airport = (row.airport || "").toLowerCase();
+      const region = ((isEn ? row.trading_region_label : row.trading_region_label_zh) || row.trading_region_label || "").toLowerCase();
+      const signal = (row.ai_decision || row.v4_metar_decision || row.signal_status || "").toLowerCase();
+      return city.includes(q) || airport.includes(q) || region.includes(q) || signal.includes(q);
+    });
+  }, [rows, searchQuery, isEn]);
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedRow = useMemo(
-    () => rows.find((row) => row.id === selectedId) || rows[0] || null,
-    [rows, selectedId],
+    () => filteredRows.find((row) => row.id === selectedId) || filteredRows[0] || null,
+    [filteredRows, selectedId],
   );
   const generatedText = useRelativeTime(terminalData?.generated_at ?? null);
 
@@ -1318,11 +937,14 @@ function ScanTerminalScreen() {
       locale={locale}
       onRefresh={refreshScanTerminalManually}
       refreshing={scanLoading}
-      rows={rows}
+      rows={filteredRows}
       selectedRow={selectedRow}
       setSelectedRow={(row) => setSelectedId(row.id)}
       toggleLocale={toggleLocale}
       userLocalTime={userLocalTime}
+      searchQuery={searchQuery}
+      setSearchQuery={setSearchQuery}
+      searchInputRef={searchInputRef}
     />
   );
 }
