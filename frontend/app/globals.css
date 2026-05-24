@@ -9,28 +9,28 @@
 @layer base {
   :root {
     /* ── Background Scale ── */
-    --color-bg-base: #0B1220;
-    --color-bg-raised: #111A2E;
-    --color-bg-overlay: #16213A;
-    --color-bg-card: rgba(17, 26, 46, 0.88);
-    --color-bg-input: rgba(22, 33, 58, 0.72);
+    --color-bg-base: #f4f7fb;
+    --color-bg-raised: #ffffff;
+    --color-bg-overlay: #ffffff;
+    --color-bg-card: rgba(255, 255, 255, 0.95);
+    --color-bg-input: rgba(241, 245, 249, 0.88);
 
     /* ── Text Scale ── */
-    --color-text-primary: #E6EDF3;
-    --color-text-secondary: #9FB2C7;
-    --color-text-muted: #7D8FA3;
-    --color-text-disabled: #7D8FA3;
+    --color-text-primary: #0F172A;
+    --color-text-secondary: #334155;
+    --color-text-muted: #475569;
+    --color-text-disabled: #94A3B8;
 
     /* ── Accent Colors ── */
-    --color-accent-primary: #4DA3FF;
-    --color-accent-secondary: #6FB7FF;
-    --color-accent-tertiary: #93C5FD;
+    --color-accent-primary: #2563EB;
+    --color-accent-secondary: #3B82F6;
+    --color-accent-tertiary: #60A5FA;
 
     /* ── Signal / Semantic Colors ── */
-    --color-signal-success: #22C55E;
-    --color-signal-warning: #F59E0B;
-    --color-signal-danger: #EF4444;
-    --color-signal-info: #4DA3FF;
+    --color-signal-success: #00897b;
+    --color-signal-warning: #d97706;
+    --color-signal-danger: #dc2626;
+    --color-signal-info: #2563eb;
 
     /* ── Risk Colors (aliased from signal) ── */
     --color-risk-high: var(--color-signal-danger);
@@ -38,16 +38,16 @@
     --color-risk-low: var(--color-signal-success);
 
     /* ── Border ── */
-    --color-border-default: rgba(159, 178, 199, 0.16);
-    --color-border-hover: rgba(77, 163, 255, 0.38);
-    --color-border-subtle: rgba(159, 178, 199, 0.08);
+    --color-border-default: #d8e0ec;
+    --color-border-hover: #b8c4d6;
+    --color-border-subtle: #e8edf5;
 
     /* ── Shadow / Elevation ── */
-    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.3);
-    --shadow-elevation-2: 0 8px 24px rgba(0, 0, 0, 0.45);
-    --shadow-elevation-3: 0 20px 60px rgba(0, 0, 0, 0.6);
-    --shadow-glow-accent: 0 0 20px rgba(77, 163, 255, 0.24);
-    --shadow-glow-secondary: 0 0 20px rgba(111, 183, 255, 0.22);
+    --shadow-elevation-1: 0 1px 3px rgba(15, 23, 42, 0.05);
+    --shadow-elevation-2: 0 8px 24px rgba(15, 23, 42, 0.06);
+    --shadow-elevation-3: 0 20px 60px rgba(15, 23, 42, 0.08);
+    --shadow-glow-accent: 0 0 20px rgba(37, 99, 235, 0.08);
+    --shadow-glow-secondary: 0 0 20px rgba(96, 165, 250, 0.08);
 
     /* ── Typography ── */
     --font-data: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -66,19 +66,19 @@
     --space-12: 48px;
 
     /* ── Border Radius ── */
-    --radius-sm: 6px;
-    --radius-md: 10px;
-    --radius-lg: 14px;
-    --radius-xl: 20px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
+    --radius-xl: 14px;
     --radius-full: 9999px;
 
     /* ── Glass / Blur ── */
     --glass-blur-1: blur(10px);
     --glass-blur-2: blur(16px);
     --glass-blur-3: blur(24px);
-    --glass-opacity-1: 0.72;
-    --glass-opacity-2: 0.85;
-    --glass-opacity-3: 0.92;
+    --glass-opacity-1: 0.86;
+    --glass-opacity-2: 0.92;
+    --glass-opacity-3: 0.96;
 
     /* ── Layout ── */
     --header-height: 52px;
@@ -91,8 +91,7 @@
     --transition-slow: 400ms cubic-bezier(0.16, 1, 0.3, 1);
     --transition: var(--transition-base);
 
-    /* ── Legacy Variable Aliases (bridge for older CSS modules) ── */
-    /* These map old shorthand names → current design token names.  */
+    /* ── Legacy Variable Aliases ── */
     --accent-cyan:    var(--color-accent-primary);
     --accent-blue:    var(--color-accent-secondary);
     --accent-green:   var(--color-signal-success);
@@ -111,68 +110,36 @@
     --shadow-lg:      var(--shadow-elevation-2);
     --glass-blur:     10px;
 
-    /* ── shadcn/ui Tokens (used by Tailwind @apply border-border) ── */
-    --background: 223 53% 4%;
-    --foreground: 210 40% 98%;
-    --card: 223 46% 8%;
-    --card-foreground: 210 40% 98%;
-    --primary: 159 100% 44%;
-    --primary-foreground: 222 47% 8%;
-    --secondary: 224 30% 14%;
-    --secondary-foreground: 210 40% 98%;
-    --accent: 217 30% 18%;
-    --accent-foreground: 210 40% 98%;
-    --border: 221 38% 22%;
+    /* ── shadcn/ui Tokens ── */
+    --background: 210 40% 98%;
+    --foreground: 222 47% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 12%;
+    --primary: 221 83% 53%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 12%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 222 47% 12%;
+    --border: 214 32% 91%;
   }
 
-  /* ── Light Theme Token Overrides ── */
-  html.light,
-  html[data-theme="light"] {
-    --color-bg-base: #F7F9FC;
-    --color-bg-raised: #EEF2F7;
-    --color-bg-overlay: #FFFFFF;
-    --color-bg-card: rgba(255, 255, 255, 0.92);
-    --color-bg-input: rgba(238, 242, 247, 0.88);
-
-    --color-text-primary: #0F172A;
-    --color-text-secondary: #334155;
-    --color-text-muted: #475569;
-    --color-text-disabled: #94A3B8;
-
-    --color-accent-primary: #2563EB;
-    --color-accent-secondary: #3B82F6;
-    --color-accent-tertiary: #60A5FA;
-
-    --color-border-default: rgba(148, 163, 184, 0.24);
-    --color-border-hover: rgba(37, 99, 235, 0.38);
-    --color-border-subtle: rgba(148, 163, 184, 0.12);
-
-    --shadow-elevation-1: 0 1px 3px rgba(0, 0, 0, 0.1);
-    --shadow-elevation-2: 0 8px 24px rgba(40, 70, 110, 0.12);
-    --shadow-elevation-3: 0 20px 60px rgba(40, 70, 110, 0.15);
-    --shadow-glow-accent: 0 0 20px rgba(37, 99, 235, 0.14);
-    --shadow-glow-secondary: 0 0 20px rgba(96, 165, 250, 0.12);
-
-    --glass-blur-1: blur(10px);
-    --glass-blur-2: blur(16px);
-    --glass-blur-3: blur(24px);
-    --glass-opacity-1: 0.86;
-    --glass-opacity-2: 0.92;
-    --glass-opacity-3: 0.96;
-
-    /* ── Legacy alias overrides for light theme ── */
-    --accent-cyan:    var(--color-accent-primary);
-    --accent-blue:    var(--color-accent-secondary);
-    --bg-primary:     var(--color-bg-base);
-    --bg-secondary:   var(--color-bg-raised);
-    --bg-card:        var(--color-bg-card);
-    --bg-glass:       var(--color-bg-card);
-    --border-glass:   var(--color-border-default);
-    --border-subtle:  var(--color-border-subtle);
-    --text-primary:   var(--color-text-primary);
-    --text-secondary: var(--color-text-secondary);
-    --text-muted:     var(--color-text-muted);
-    --shadow-lg:      var(--shadow-elevation-2);
+  /* ── Monospaced numbers & data globally for professional feel ── */
+  .font-mono,
+  .nearby-temp,
+  .nearby-wind,
+  .nearby-time,
+  .nearby-marker,
+  .marker-bubble,
+  .map-pill,
+  [class*="temp"],
+  [class*="value"],
+  [class*="price"],
+  [class*="number"],
+  [class*="stat"],
+  [class*="score"],
+  [class*="time-"] {
+    font-family: var(--font-mono) !important;
   }
 
   * {
@@ -207,23 +174,7 @@
 
   body {
     font-family: var(--font-data);
-    background:
-      radial-gradient(
-        circle at 10% -10%,
-        rgba(0, 224, 164, 0.1),
-        transparent 40%
-      ),
-      radial-gradient(
-        circle at 90% 0%,
-        rgba(123, 97, 255, 0.08),
-        transparent 36%
-      ),
-      radial-gradient(
-        circle at 80% 100%,
-        rgba(0, 224, 164, 0.06),
-        transparent 48%
-      ),
-      var(--color-bg-base);
+    background: var(--color-bg-base);
     color: var(--color-text-primary);
   }
 }

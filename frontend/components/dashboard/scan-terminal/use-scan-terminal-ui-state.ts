@@ -20,30 +20,13 @@ export function useUserLocalClock() {
 }
 
 export function useScanTerminalTheme() {
-  const [themeMode, setThemeMode] = useState<ThemeMode>("dark");
+  const [themeMode] = useState<ThemeMode>("light");
 
   useEffect(() => {
     const root = document.documentElement;
-    const hadLight = root.classList.contains("light");
-    const hadDark = root.classList.contains("dark");
-    root.classList.toggle("light", themeMode === "light");
-    root.classList.toggle("dark", themeMode === "dark");
-    return () => {
-      root.classList.toggle("light", hadLight);
-      root.classList.toggle("dark", hadDark);
-    };
-  }, [themeMode]);
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem("polyweather_scan_theme");
-    if (stored === "light") {
-      setThemeMode("light");
-    }
+    root.classList.add("light");
+    root.classList.remove("dark");
   }, []);
 
-  useEffect(() => {
-    window.localStorage.setItem("polyweather_scan_theme", themeMode);
-  }, [themeMode]);
-
-  return { setThemeMode, themeMode };
+  return { setThemeMode: () => {}, themeMode };
 }

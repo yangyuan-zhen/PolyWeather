@@ -41,7 +41,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${inter.variable} ${jetbrainsMono.variable} dark`}
+      className={`${inter.variable} ${jetbrainsMono.variable} light`}
     >
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

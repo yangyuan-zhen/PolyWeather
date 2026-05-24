@@ -122,19 +122,7 @@ export function ScanTerminalTopBar({
             {isEn ? "Sign in" : "登录"}
           </Link>
         )}
-        <button
-          type="button"
-          className="scan-theme-button"
-          aria-label={
-            themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"
-          }
-          title={themeMode === "light" ? "切换到暗色模式" : "切换到明亮模式"}
-          onClick={() =>
-            setThemeMode((current) => (current === "light" ? "dark" : "light"))
-          }
-        >
-          {themeMode === "light" ? <Moon size={15} /> : <Sun size={15} />}
-        </button>
+
         {isAuthenticated ? (
           <Link
             href={accountHref}
