@@ -15,7 +15,6 @@ CHINA_CMA_CITIES = {
     "guangzhou",
     "qingdao",
     "shanghai",
-    "shenzhen",
     "wuhan",
 }
 

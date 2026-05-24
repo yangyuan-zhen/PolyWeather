@@ -20,7 +20,7 @@ export function getObservationSourceCode(detail: CityDetail): string {
   if (
     city === "hong kong" ||
     city === "shek kong" ||
-    city === "lau fau shan"
+    city === "shenzhen"
   ) {
     return "hko";
   }

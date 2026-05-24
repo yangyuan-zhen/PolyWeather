@@ -76,19 +76,19 @@ const CITY_SPECIFIC_SOURCES: Record<string, OfficialSourceLink[]> = {
       kind: "metar",
     },
     {
-      label: "流浮山站（HKO）",
+      label: "深圳流浮山站（HKO）",
       href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
       kind: "agency",
     },
   ],
-  "lau fau shan": [
+  "shenzhen": [
     {
       label: "香港天文台",
       href: "https://www.hko.gov.hk/en/index.html",
       kind: "agency",
     },
     {
-      label: "流浮山站（HKO）",
+      label: "深圳流浮山站（HKO）",
       href: "https://www.hko.gov.hk/sc/wxinfo/ts/index.htm",
       kind: "airport",
     },

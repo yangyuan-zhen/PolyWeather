@@ -21,7 +21,6 @@ const CITY_REGION_FALLBACK: Record<string, TradingRegionKey> = {
   chongqing: "east_asia",
   guangzhou: "east_asia",
   "hong kong": "east_asia",
-  "lau fau shan": "east_asia",
   qingdao: "east_asia",
   seoul: "east_asia",
   shanghai: "east_asia",

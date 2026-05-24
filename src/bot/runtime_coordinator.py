@@ -167,7 +167,7 @@ class StartupCoordinator:
                 "istanbul",
                 "paris",
                 "hong kong",
-                "lau fau shan",
+                "shenzhen",
                 "taipei",
             ],
             "chat_targets": len(chat_ids),

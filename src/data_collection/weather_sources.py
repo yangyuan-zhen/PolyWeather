@@ -67,7 +67,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
         "chongqing": ["ZUCK", "ZUPS"],
         "guangzhou": ["ZGGG", "ZGSZ"],
         "qingdao": ["ZSQD"],
-        "shenzhen": ["ZGSZ", "ZGGG"],
         "beijing": ["ZBAA", "ZBAD"],
         "wuhan": ["ZHHH", "ZHES"],
         "shanghai": ["ZSPD", "ZSSS", "ZSNB", "ZSHC"],
@@ -657,9 +656,9 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "vhsk": "Shek Kong",
             "石岗": "Shek Kong",
             "石崗": "Shek Kong",
-            "lau fau shan": "Lau Fau Shan",
-            "lfs": "Lau Fau Shan",
-            "流浮山": "Lau Fau Shan",
+            "shenzhen": "shenzhen",
+            "lfs": "shenzhen",
+            "深圳流浮山": "shenzhen",
             "taipei": "Taipei",
             "台北": "Taipei",
             "臺北": "Taipei",
@@ -667,8 +666,6 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
             "成都": "Chengdu",
             "chongqing": "Chongqing",
             "重庆": "Chongqing",
-            "shenzhen": "Shenzhen",
-            "深圳": "Shenzhen",
             "qingdao": "Qingdao",
             "青岛": "Qingdao",
             "青島": "Qingdao",
@@ -846,7 +843,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def _supports_aviationweather(self, city_lower: str) -> bool:
         city_meta = self.CITY_REGISTRY.get(str(city_lower or "").strip().lower(), {}) or {}
         settlement_source = str(city_meta.get("settlement_source") or "").strip().lower()
-        # HKO-settled Hong Kong cities (Hong Kong, Lau Fau Shan, future HKO stations)
+        # HKO-settled Hong Kong cities (Hong Kong, shenzhen, future HKO stations)
         # are official observatory stations, not airport/METAR contracts. Do not fetch
         # AviationWeather for their city cards; Shenzhen remains ZGSZ/Bao'an METAR-backed.
         if settlement_source == "hko":
@@ -1085,7 +1082,7 @@ class WeatherDataCollector(OpenMeteoCacheMixin, SettlementSourceMixin, MetarSour
     def _attach_hko_obs_official_nearby(
         self, results: Dict, city_lower: str, use_fahrenheit: bool
     ) -> None:
-        if city_lower not in ("hong kong", "lau fau shan"):
+        if city_lower not in ("hong kong", "shenzhen"):
             return
         rows = self.fetch_hko_obs_official_nearby(
             city_lower, use_fahrenheit=use_fahrenheit

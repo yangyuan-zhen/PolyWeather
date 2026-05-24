@@ -26,7 +26,7 @@ const CITY_NAME_ZH: Record<string, string> = {
   Jakarta: "雅加达",
   Jeddah: "吉达",
   Karachi: "卡拉奇",
-  "Lau Fau Shan": "流浮山",
+  "shenzhen": "深圳流浮山",
   London: "伦敦",
   Lucknow: "勒克瑙",
   Madrid: "马德里",
@@ -77,7 +77,7 @@ const AIRPORT_NAME_ZH: Record<string, string> = {
   Jakarta: "苏加诺-哈达国际机场",
   Jeddah: "阿卜杜勒-阿齐兹国王国际机场",
   Karachi: "真纳国际机场",
-  "Lau Fau Shan": "流浮山监测站",
+  "shenzhen": "深圳流浮山监测站",
   London: "希思罗机场",
   Lucknow: "乔杜里·查兰·辛格国际机场",
   Madrid: "马德里-巴拉哈斯机场",
@@ -107,7 +107,7 @@ const AIRPORT_NAME_ZH: Record<string, string> = {
 
 const AIRPORT_NAME_EN: Record<string, string> = {
   "Hong Kong": "Hong Kong Observatory HQ",
-  "Lau Fau Shan": "Lau Fau Shan Monitoring Station",
+  "shenzhen": "shenzhen Monitoring Station",
 };
 
 function normalizeCityKey(value: string | null | undefined) {

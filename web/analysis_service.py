@@ -55,7 +55,7 @@ HIGH_FREQ_AIRPORT_ANALYSIS_CITIES = {
     "istanbul",
     "paris",
     "hong kong",
-    "lau fau shan",
+    "shenzhen",
     "taipei",
     "beijing",
     "shanghai",

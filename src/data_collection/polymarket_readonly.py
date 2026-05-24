@@ -84,9 +84,6 @@ def _normalize_city_key(city: Any) -> str:
 
 
 MARKET_CITY_ALIASES: Dict[str, str] = {
-    # Lau Fau Shan has its own HKO observation / settlement layer, but
-    # Polymarket lists this temperature market under nearby Shenzhen.
-    "lau fau shan": "shenzhen",
 }
 
 MARKET_CITY_SLUG_ALIASES: Dict[str, str] = {
