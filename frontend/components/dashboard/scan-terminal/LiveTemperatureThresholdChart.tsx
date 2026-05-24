@@ -365,7 +365,7 @@ export function LiveTemperatureThresholdChart({
         {row?.market_slug ? (
           <div className="shrink-0 border-t border-slate-200 px-3 py-2">
             <Link
-              href={`https://polymarket.com/event/${row.market_slug}`}
+              href={`https://polymarket.com/event/${row.market_slug.replace(/-?\d+(?:-?\d+)*[cf](?:or\w+)?(?:for\w+)?$/i, "")}`}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
