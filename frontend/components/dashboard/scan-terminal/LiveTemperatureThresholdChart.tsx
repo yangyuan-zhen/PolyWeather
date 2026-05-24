@@ -508,7 +508,7 @@ export function LiveTemperatureThresholdChart({
                   stroke="#f97316"
                   strokeDasharray="4 3"
                   strokeWidth={2}
-                  label={{ value: `UMA ${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
+                  label={{ value: `${threshold.toFixed(1)}°`, fill: "#f97316", fontSize: 10, position: "left" }}
                 />
               )}
               {probRefLines.map((item, i) => (
