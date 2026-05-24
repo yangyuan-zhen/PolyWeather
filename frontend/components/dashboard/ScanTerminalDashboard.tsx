@@ -325,20 +325,24 @@ function MarketTable({
 function KoyfinWeatherTerminal({
   generatedText,
   isEn,
+  locale,
   onRefresh,
   refreshing,
   rows,
   selectedRow,
   setSelectedRow,
+  toggleLocale,
   userLocalTime,
 }: {
   generatedText: string;
   isEn: boolean;
+  locale: "zh-CN" | "en-US";
   onRefresh: () => void;
   refreshing: boolean;
   rows: ScanOpportunityRow[];
   selectedRow: ScanOpportunityRow | null;
   setSelectedRow: (row: ScanOpportunityRow) => void;
+  toggleLocale: () => void;
   userLocalTime: string;
 }) {
   const topRows = rows.slice(0, 18);
@@ -404,6 +408,35 @@ function KoyfinWeatherTerminal({
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-300">
             <span className="hidden font-mono md:inline">{userLocalTime}</span>
+            {/* Language toggle — matches landing page style */}
+            <button
+              type="button"
+              aria-label={isEn ? "Switch to Chinese" : "切换到英文"}
+              title={isEn ? "Switch to Chinese" : "切换到英文"}
+              onClick={toggleLocale}
+              className="inline-flex h-9 items-center gap-0.5 rounded border border-slate-600 bg-[#29323d] p-1 text-xs font-bold text-slate-400 hover:border-slate-400"
+            >
+              <span
+                className={clsx(
+                  "rounded px-2 py-1 transition-colors",
+                  locale === "zh-CN"
+                    ? "bg-blue-600 text-white"
+                    : "hover:text-slate-200",
+                )}
+              >
+                中文
+              </span>
+              <span
+                className={clsx(
+                  "rounded px-2 py-1 transition-colors",
+                  locale === "en-US"
+                    ? "bg-blue-600 text-white"
+                    : "hover:text-slate-200",
+                )}
+              >
+                EN
+              </span>
+            </button>
             <button
               type="button"
               onClick={onRefresh}
@@ -411,7 +444,7 @@ function KoyfinWeatherTerminal({
               className="inline-flex h-9 items-center gap-2 rounded border border-slate-600 bg-[#29323d] px-3 font-bold hover:bg-[#323c49] disabled:opacity-60"
             >
               <RefreshCw size={15} className={refreshing ? "animate-spin" : ""} />
-              Refresh
+              {isEn ? "Refresh" : "刷新"}
             </button>
             <Link
               href="/account"
@@ -839,6 +872,8 @@ function ScanTerminalScreen() {
   );
   const [locale, setLocale] = useState<"zh-CN" | "en-US">("zh-CN");
   const isEn = locale === "en-US";
+  const toggleLocale = () =>
+    setLocale((prev) => (prev === "zh-CN" ? "en-US" : "zh-CN"));
   const [hydrated, setHydrated] = useState(false);
   const [localFullAccess, setLocalFullAccess] = useState(false);
   const canUseLocalFullAccess = hydrated && localFullAccess;
@@ -957,11 +992,13 @@ function ScanTerminalScreen() {
     <KoyfinWeatherTerminal
       generatedText={generatedText || ""}
       isEn={isEn}
+      locale={locale}
       onRefresh={refreshScanTerminalManually}
       refreshing={scanLoading}
       rows={rows}
       selectedRow={selectedRow}
       setSelectedRow={(row) => setSelectedId(row.id)}
+      toggleLocale={toggleLocale}
       userLocalTime={userLocalTime}
     />
   );
