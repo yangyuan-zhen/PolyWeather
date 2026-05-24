@@ -2,6 +2,8 @@
 
 import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ExternalLink } from "lucide-react";
 import {
   CartesianGrid,
   Line,
@@ -359,6 +361,19 @@ export function LiveTemperatureThresholdChart({
             </ReLineChart>
           </ResponsiveContainer>
         </div>
+        {row?.market_slug ? (
+          <div className="shrink-0 border-t border-slate-200 px-3 py-2">
+            <Link
+              href={`https://polymarket.com/event/${row.market_slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              <ExternalLink size={12} />
+              {isEn ? "View on Polymarket" : "在 Polymarket 查看"}
+            </Link>
+          </div>
+        ) : null}
       </div>
     </Panel>
   );
