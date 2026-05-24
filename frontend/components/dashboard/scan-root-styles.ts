@@ -4,8 +4,6 @@
 
 import clsx from "clsx";
 
-import dashboardHomeStyles from "./DashboardHomeIntelligence.module.css";
-import dashboardMapStyles from "./DashboardMap.module.css";
 import dashboardModalGuideStyles from "./DashboardModalGuide.module.css";
 import dashboardShellStyles from "./DashboardShell.module.css";
 import detailChromeStyles from "./DetailPanelChrome.module.css";
@@ -26,8 +24,6 @@ import scanTerminalContinentStyles from "./ScanTerminalContinent.module.css";
 import scanTerminalStateStyles from "./ScanTerminalState.module.css";
 
 export const scanRootClass = clsx(
-  dashboardHomeStyles.root,
-  dashboardMapStyles.root,
   dashboardShellStyles.root,
   dashboardModalGuideStyles.root,
   scanTerminalStyles.root,
