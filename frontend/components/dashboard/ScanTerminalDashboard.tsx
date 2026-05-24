@@ -733,90 +733,6 @@ function NormalizedPerformancePanel({
   );
 }
 
-function FactorMatrix({
-  isEn,
-  rows,
-}: {
-  isEn: boolean;
-  rows: ScanOpportunityRow[];
-}) {
-  const buckets = [
-    [isEn ? "Heat" : "高温", rows.filter((r) => r.risk_level === "high")],
-    [isEn ? "Live Edge" : "实况优势", rows.filter((r) => Number(r.edge_percent || 0) > 0)],
-    [isEn ? "Tradable" : "可交易", rows.filter((r) => r.tradable)],
-    [isEn ? "AI Approved" : "AI 通过", rows.filter((r) => String(r.ai_decision || "").includes("approve"))],
-    [isEn ? "Watch" : "观察", rows.filter((r) => getSignalState(r) === "watch")],
-    [isEn ? "Closed" : "关闭", rows.filter((r) => r.closed)],
-  ];
-  return (
-    <Panel title={isEn ? "Weather Equity Factors" : "天气交易因子"}>
-      <div className="grid h-full grid-cols-3 gap-2 p-3">
-        {buckets.map(([label, list]) => {
-          const count = Array.isArray(list) ? list.length : 0;
-          const ratio = rows.length ? count / rows.length : 0;
-          const tone =
-            ratio >= 0.5 ? "bg-emerald-100 text-emerald-800 border-emerald-200" :
-            ratio >= 0.2 ? "bg-amber-100 text-amber-800 border-amber-200" :
-            "bg-slate-100 text-slate-600 border-slate-200";
-          return (
-            <div key={String(label)} className={clsx("grid place-items-center rounded border p-2 text-center", tone)}>
-              <div className="font-mono text-sm font-black">{(ratio * 100).toFixed(1)}%</div>
-              <div className="mt-1 text-[10px] font-black uppercase">{String(label)}</div>
-            </div>
-          );
-        })}
-      </div>
-    </Panel>
-  );
-}
-
-function YieldLikeTable({
-  isEn,
-  rows,
-}: {
-  isEn: boolean;
-  rows: ScanOpportunityRow[];
-}) {
-  const regionStats = TRADING_REGIONS.map((region) => {
-    const regionRows = rows.filter((row) => String(row.trading_region).toLowerCase() === region.key);
-    const avgEdge = regionRows.reduce((sum, row) => sum + Number(row.edge_percent || 0), 0) / Math.max(regionRows.length, 1);
-    const avgProb = regionRows.reduce((sum, row) => sum + Number(row.model_probability ?? row.model_event_probability ?? 0), 0) / Math.max(regionRows.length, 1);
-    return {
-      label: isEn ? region.labelEn : region.labelZh,
-      edge: avgEdge,
-      prob: avgProb,
-      liq: regionRows.reduce((sum, row) => sum + Number(row.book_liquidity || row.market_liquidity || 0), 0),
-      count: regionRows.length,
-    };
-  }).filter((row) => row.count > 0).slice(0, 7);
-  return (
-    <Panel title={isEn ? "Regional Weather Yields" : "区域天气收益率"}>
-      <table className="w-full border-collapse text-[11px]">
-        <thead>
-          <tr className="border-b border-slate-200 bg-[#f3f5f7] text-[9px] uppercase text-slate-500">
-            <th className="px-3 py-1 text-left font-black">{isEn ? "Region" : "区域"}</th>
-            <th className="px-2 py-1 text-right font-black">1D</th>
-            <th className="px-2 py-1 text-right font-black">5D</th>
-            <th className="px-2 py-1 text-right font-black">10D</th>
-            <th className="px-3 py-1 text-right font-black">{isEn ? "Liq" : "流动性"}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {regionStats.map((row) => (
-            <tr key={row.label} className="border-b border-slate-100">
-              <td className="px-3 py-1.5 font-bold text-slate-800">{row.label}</td>
-              <td className={clsx("px-2 py-1.5 text-right font-mono font-bold", edgeClass(row.edge))}>{pct(row.edge)}</td>
-              <td className="px-2 py-1.5 text-right font-mono">{pct(row.prob)}</td>
-              <td className="px-2 py-1.5 text-right font-mono">{pct(row.edge + row.prob * 0.2)}</td>
-              <td className="px-3 py-1.5 text-right font-mono">{money(row.liq)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
-  );
-}
-
 function PolyWeatherTerminal({
   generatedText,
   isEn,
@@ -1177,10 +1093,6 @@ function PolyWeatherTerminal({
                 row={selectedRow}
                 rows={topRows}
               />
-              <div className="grid min-h-0 grid-cols-[0.48fr_0.52fr] gap-2">
-                <FactorMatrix isEn={isEn} rows={filteredRegionRows} />
-                <YieldLikeTable isEn={isEn} rows={filteredRegionRows} />
-              </div>
             </div>
 
             <div className="flex min-h-0 flex-col gap-2">
