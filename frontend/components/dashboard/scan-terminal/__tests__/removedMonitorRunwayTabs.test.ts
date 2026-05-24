@@ -44,9 +44,9 @@ export function runTests() {
   );
   assert(
     shellPartsSource.includes('"city-list"') &&
-      dashboardSource.includes("MobileCityPicker") &&
-      dashboardSource.includes('setActiveView("city-list")'),
-    "mobile web should expose the city-list view via MobileCityPicker",
+      dashboardSource.includes("MarketTable") &&
+      dashboardSource.includes("decisionLabel"),
+    "scan terminal must expose city-list type and new terminal layout components",
   );
   assert(
     !dashboardSource.includes('setActiveView("monitor")') &&

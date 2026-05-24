@@ -16,8 +16,9 @@ export function runTests() {
   const source = fs.readFileSync(dashboardPath, "utf8");
 
   assert(
-    source.includes("isMobileViewport") &&
+    source.includes("MarketTable") &&
+      source.includes("decisionLabel") &&
       !source.includes("showAnnouncement"),
-    "v1.5.6 scan upgrade announcement must be removed",
+    "v1.5.6 scan upgrade announcement must be removed; new terminal layout must be present",
   );
 }

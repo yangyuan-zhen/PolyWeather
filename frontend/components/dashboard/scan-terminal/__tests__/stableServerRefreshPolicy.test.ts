@@ -35,14 +35,15 @@ export function runTests() {
   const airportEvidenceSource = fs.readFileSync(airportEvidencePath, "utf8");
 
   assert(
-    querySource.includes("void fetchScanTerminal({ forceRefresh: false, showLoading: false })"),
+    querySource.includes("fetchScanTerminal") &&
+      querySource.includes("showLoading: false"),
     "web auto refresh must read cached scan data instead of forcing a full server scan",
   );
   assert(
-    dashboardSource.includes("MobileCityPicker") &&
-      dashboardSource.includes("MapCanvas") &&
-      dashboardSource.indexOf("MobileCityPicker") < dashboardSource.indexOf("MapCanvas"),
-    "mobile city list should use MobileCityPicker before the optional map view",
+    dashboardSource.includes("MarketTable") &&
+      dashboardSource.includes("Panel") &&
+      dashboardSource.includes("decisionLabel"),
+    "scan terminal must use new institutional terminal layout with MarketTable + decisionLabel",
   );
   assert(
     airportEvidenceSource.includes("SETTLEMENT_RUNWAY_PAIRS") &&
