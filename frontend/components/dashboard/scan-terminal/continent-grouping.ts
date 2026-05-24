@@ -13,7 +13,7 @@ export const TRADING_REGIONS = [
 export type TradingRegionKey = (typeof TRADING_REGIONS)[number]["key"];
 
 export interface ContinentGroup {
-  key: string;
+  key: TradingRegionKey | "active_signals";
   labelEn: string;
   labelZh: string;
   sort: number;
@@ -154,7 +154,10 @@ export function buildContinentGroups(rows: ScanOpportunityRow[], isEn: boolean):
     );
     const hotCity = sorted[0]?.city_display_name || sorted[0]?.city || null;
 
-    const times = regionRows.map((r) => String(r.local_time || "").trim()).filter(Boolean);
+    const times = regionRows
+      .map((r) => String(r.local_time || "").trim())
+      .filter(Boolean)
+      .sort();
     const ltRange = times.length >= 2
       ? `${times[0]}-${times[times.length - 1]}`
       : times[0] || null;
