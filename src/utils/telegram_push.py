@@ -577,7 +577,7 @@ def _alert_signature(alert_payload: Dict[str, Any]) -> str:
 
 HIGH_FREQ_AIRPORT_CITIES = {
     "seoul", "singapore", "busan", "tokyo", "ankara", "helsinki", "amsterdam",
-    "istanbul", "paris", "hong kong", "lau fau shan", "taipei",
+    "istanbul", "paris", "hong kong", "shenzhen", "taipei",
     "beijing", "shanghai", "guangzhou", "qingdao", "chengdu", "chongqing", "wuhan",
     "new york", "los angeles", "chicago", "denver", "atlanta",
     "miami", "san francisco", "houston", "dallas", "austin", "seattle",
@@ -586,7 +586,7 @@ HIGH_FREQ_AIRPORT_CITIES = {
 HIGH_FREQ_AIRPORT_ICAO = {
     "seoul": "RKSI", "singapore": "WSSS", "busan": "RKPK", "tokyo": "44166",
     "ankara": "17128", "helsinki": "EFHK", "amsterdam": "EHAM", "istanbul": "17058",
-    "paris": "LFPB", "hong kong": "HKO", "lau fau shan": "LFS", "taipei": "466920",
+    "paris": "LFPB", "hong kong": "HKO", "shenzhen": "LFS", "taipei": "466920",
     "beijing": "ZBAA", "shanghai": "ZSPD", "guangzhou": "ZGGG", "qingdao": "ZSQD",
     "chengdu": "ZUUU", "chongqing": "ZUCK", "wuhan": "ZHHH",
     "new york": "KLGA", "los angeles": "KLAX", "chicago": "KORD",
@@ -951,9 +951,9 @@ def _build_airport_status_message(
     _AIRPORT_EN = {"seoul": "Incheon", "singapore": "Changi", "busan": "Gimhae", "tokyo": "Haneda",
                    "ankara": "Esenboğa", "helsinki": "Vantaa", "amsterdam": "Schiphol",
                    "istanbul": "Airport", "paris": "Le Bourget",
-                   "hong kong": "Observatory", "lau fau shan": "Lau Fau Shan",
+                   "hong kong": "Observatory", "shenzhen": "LFS Observatory",
                    "taipei": "Songshan", "beijing": "Capital", "shanghai": "Pudong",
-                   "guangzhou": "Baiyun", "shenzhen": "Bao'an", "qingdao": "Jiaodong",
+                   "guangzhou": "Baiyun", "qingdao": "Jiaodong",
                    "chengdu": "Shuangliu", "chongqing": "Jiangbei", "wuhan": "Tianhe",
                    "new york": "LaGuardia", "los angeles": "LAX", "chicago": "O'Hare",
                    "denver": "Buckley", "atlanta": "Hartsfield", "miami": "Intl",
@@ -1148,7 +1148,7 @@ def _get_airport_daily_high(city_weather: Dict[str, Any]):
 _AIRPORT_PUSH_INTERVAL = {
     "seoul": 60, "busan": 60, "tokyo": 60, "ankara": 60,
     "helsinki": 60, "amsterdam": 60, "istanbul": 60, "paris": 60,
-    "hong kong": 60, "lau fau shan": 60, "singapore": 60, "taipei": 60,
+    "hong kong": 60, "shenzhen": 60, "singapore": 60, "taipei": 60,
     "beijing": 60, "shanghai": 60, "guangzhou": 60, "qingdao": 60,
     "chengdu": 60, "chongqing": 60, "wuhan": 60,
     "new york": 60, "los angeles": 60, "chicago": 60, "denver": 60,
@@ -1163,7 +1163,7 @@ _AIRPORT_PUSH_INTERVAL = {
 _AIRPORT_HEAT_THRESHOLD = {
     "seoul": 3.0, "ankara": 3.0, "istanbul": 3.0, "paris": 3.0,
     "busan": 2.0, "tokyo": 2.0, "amsterdam": 2.0, "helsinki": 2.0,
-    "hong kong": 1.5, "lau fau shan": 1.5, "taipei": 1.5,
+    "hong kong": 1.5, "shenzhen": 1.5, "taipei": 1.5,
 }
 
 
@@ -1313,7 +1313,7 @@ def _process_airport_city(
         return None
 
     # Dedup: same observation → skip (with delayed retry for HK / LFS)
-    _CITIES_WITH_DELAYED_API = {"hong kong", "lau fau shan"}
+    _CITIES_WITH_DELAYED_API = {"hong kong", "shenzhen"}
     if (current_obs_time and last_obs_time and current_obs_time == last_obs_time
             and city in _CITIES_WITH_DELAYED_API
             and now_ts - last_city_ts > 540):
