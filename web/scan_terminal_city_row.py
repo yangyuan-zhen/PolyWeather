@@ -138,12 +138,21 @@ def _scan_city_terminal_rows(
     *,
     force_refresh: bool = False,
 ) -> Dict[str, Any]:
+    # Try cached analysis first; force-refresh if probability distribution is missing
     data = _analyze(
         city,
         force_refresh=force_refresh,
         include_llm_commentary=False,
         detail_mode="market",
     )
+    probs = data.get("probabilities") or {}
+    if not probs.get("distribution") and not force_refresh:
+        data = _analyze(
+            city,
+            force_refresh=True,
+            include_llm_commentary=False,
+            detail_mode="market",
+        )
     target_dates = _resolve_time_range_dates(data, filters["time_range"])
     rows: List[Dict[str, Any]] = []
     primary_scores: List[float] = []
