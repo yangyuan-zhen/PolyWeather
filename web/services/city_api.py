@@ -145,7 +145,18 @@ async def get_city_detail_aggregate_payload(
 ) -> Dict[str, Any]:
     legacy_routes._assert_entitlement(request)
     city = legacy_routes._normalize_city_or_404(name)
-    data = await run_in_threadpool(legacy_routes._analyze, city, force_refresh, True)
+    if force_refresh:
+        data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, True)
+    else:
+        cached_entry = await run_in_threadpool(legacy_routes._CACHE_DB.get_city_cache, "full", city)
+        if cached_entry:
+            if not legacy_routes._city_cache_is_fresh(cached_entry, legacy_routes.CITY_FULL_CACHE_TTL_SEC):
+                data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
+            else:
+                data = cached_entry.get("payload") or {}
+        else:
+            data = await run_in_threadpool(legacy_routes._refresh_city_full_cache, city, False)
+
     return await run_in_threadpool(
         legacy_routes._build_city_detail_payload,
         data,

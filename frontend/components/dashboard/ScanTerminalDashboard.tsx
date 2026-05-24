@@ -13,7 +13,7 @@ import {
   Table2,
   UserRound,
 } from "lucide-react";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ProAccessState, ScanOpportunityRow } from "@/lib/dashboard-types";
 import { getInitialLocaleFromNavigator } from "@/lib/i18n";
 import { isBrowserLocalFullAccess } from "@/lib/local-dev-access";
@@ -44,7 +44,6 @@ import { ScanTerminalLoadingScreen } from "@/components/dashboard/scan-terminal/
 import { scanRootClass } from "@/components/dashboard/scan-root-styles";
 import { useRelativeTime } from "@/hooks/useRelativeTime";
 import { Panel } from "@/components/dashboard/scan-terminal/Panel";
-import { GroupedMarketTable } from "@/components/dashboard/scan-terminal/GroupedMarketTable";
 import { TrainingDashboard } from "@/components/dashboard/scan-terminal/TrainingDashboard";
 import { LiveTemperatureThresholdChart } from "@/components/dashboard/scan-terminal/LiveTemperatureThresholdChart";
 import { MarketOverviewView } from "@/components/dashboard/scan-terminal/MarketOverviewView";
@@ -862,7 +861,7 @@ function PolyWeatherTerminal({
                 </div>
 
                 <div className="min-h-0">
-                  <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} />
+                  <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} allRows={filteredRegionRows} />
                 </div>
               </div>
             </>
@@ -1000,6 +999,9 @@ function ScanTerminalScreen() {
     () => filteredRows.find((row) => row.id === selectedId) || filteredRows[0] || null,
     [filteredRows, selectedId],
   );
+  const handleSelectRow = useCallback((row: ScanOpportunityRow) => {
+    setSelectedId(row.id);
+  }, []);
   const generatedText = useRelativeTime(terminalData?.generated_at ?? null);
 
   if (!hydrated || (proAccess.loading && !canUseLocalFullAccess)) {
@@ -1032,7 +1034,7 @@ function ScanTerminalScreen() {
       refreshing={scanLoading}
       rows={filteredRows}
       selectedRow={selectedRow}
-      setSelectedRow={(row) => setSelectedId(row.id)}
+      setSelectedRow={handleSelectRow}
       toggleLocale={toggleLocale}
       userLocalTime={userLocalTime}
       searchQuery={searchQuery}
