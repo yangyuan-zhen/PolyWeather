@@ -621,7 +621,7 @@ function PolyWeatherTerminal({
               </div>
 
               {/* Desktop layout */}
-              <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr_0.96fr] gap-2">
+              <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[0.96fr_1.72fr] gap-2">
                 <div className="flex min-h-0 flex-col gap-2">
                   <KoyfinMarketPanel
                     isEn={isEn}
@@ -632,35 +632,8 @@ function PolyWeatherTerminal({
                   />
                 </div>
 
-                <div className="grid min-h-0 grid-rows-[auto_1fr_0.38fr] gap-2">
+                <div className="min-h-0">
                   <LiveTemperatureThresholdChart isEn={isEn} row={selectedRow} />
-                </div>
-
-                <div className="flex min-h-0 flex-col gap-2">
-                  <KoyfinMarketPanel
-                    compact
-                    isEn={isEn}
-                    onSelect={setSelectedRow}
-                    rows={heatRows.length ? heatRows : topRows.slice(0, 8)}
-                    selectedId={selectedRow?.id}
-                    title={isEn ? "High Heat Markets" : "高温市场"}
-                  />
-                  <KoyfinMarketPanel
-                    compact
-                    isEn={isEn}
-                    onSelect={setSelectedRow}
-                    rows={liquidRows}
-                    selectedId={selectedRow?.id}
-                    title={isEn ? "Liquid Weather Markets" : "高流动性市场"}
-                  />
-                  <KoyfinMarketPanel
-                    compact
-                    isEn={isEn}
-                    onSelect={setSelectedRow}
-                    rows={watchRows.length ? watchRows : negativeRows.length ? negativeRows : topRows.slice(0, 8)}
-                    selectedId={selectedRow?.id}
-                    title={isEn ? "Watchlist & Risk" : "观察与风险"}
-                  />
                 </div>
               </div>
             </>
