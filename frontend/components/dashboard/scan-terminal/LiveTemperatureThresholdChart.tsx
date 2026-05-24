@@ -34,6 +34,8 @@ type EvidenceSeries = {
 
 // Sliding window: keep at most this many observation points (24h at 1-min ≈ 1440)
 const MAX_OBS_POINTS = 1440;
+const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000;
+const _hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
 
 function validNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -66,10 +68,10 @@ function formatTimestamp(ts: number): string {
 
 function normObs(points?: ObsPoint[] | null, limit = MAX_OBS_POINTS) {
   return (points || [])
-    .filter((p) => validNumber(p.temp) !== null)
+    .filter((p) => validNumber(p.temp) !== null && toTimestamp(p.time) !== null)
     .slice(-limit)
-    .map((p, i) => ({
-      ts: toTimestamp(p.time) ?? (Date.now() - (limit - i) * 60_000),
+    .map((p) => ({
+      ts: toTimestamp(p.time)!,
       value: Number(p.temp),
     }));
 }
@@ -291,7 +293,6 @@ function buildMarketTemperatureOptions(row: ScanOpportunityRow | null) {
   [row?.target_lower, row?.target_upper, row?.target_value, row?.target_threshold]
     .forEach((v) => { if (validNumber(v) !== null) values.add(validNumber(v)!); });
   parseTemperatureOptionsFromText(row?.target_label).forEach((x) => values.add(x));
-  parseTemperatureOptionsFromText(row?.market_question).forEach((x) => values.add(x));
 
   const sorted = [...values].sort((a, b) => a - b);
   if (sorted.length) return sorted;
@@ -323,20 +324,16 @@ export function LiveTemperatureThresholdChart({
   isEn: boolean;
   row: ScanOpportunityRow | null;
 }) {
-const hourlyCache = new Map<string, { ts: number; data: HourlyForecast }>();
-const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
-
   const [hourly, setHourly] = useState<HourlyForecast>(null);
   const city = String(row?.city || "").toLowerCase().trim();
 
   useEffect(() => {
     if (!city) return;
-    const cached = hourlyCache.get(city);
+    const cached = _hourlyCache.get(city);
     if (cached && Date.now() - cached.ts < HOURLY_CACHE_TTL_MS) {
       setHourly(cached.data);
       return;
     }
-    setHourly(null);
     let cancelled = false;
     fetch(`/api/city/${encodeURIComponent(city)}/detail?depth=panel&force_refresh=false`, {
       cache: "no-store",
@@ -355,7 +352,7 @@ const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
           temps: json.hourly.temps || [],
           modelCurves: json.models_hourly?.curves || undefined,
         };
-        hourlyCache.set(city, { ts: Date.now(), data });
+        _hourlyCache.set(city, { ts: Date.now(), data });
         setHourly(data);
       })
       .catch(() => {});
@@ -414,7 +411,7 @@ const HOURLY_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
                     <div className="grid grid-cols-3 gap-1">
                       <span>now: {temp(item.latest)}</span>
                       <span>max: {temp(item.high)}</span>
-                      <span>15m: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
+                      <span>Δ15: {item.delta15 === null ? "--" : `${item.delta15 >= 0 ? "+" : ""}${item.delta15.toFixed(1)}°`}</span>
                     </div>
                   )}
                 </div>
