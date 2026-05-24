@@ -4,7 +4,6 @@ import clsx from "clsx";
 import Link from "next/link";
 import type { Dispatch, SetStateAction } from "react";
 import { LogIn, UserRound } from "lucide-react";
-import { ProFeaturePaywall } from "@/components/dashboard/ProFeaturePaywall";
 import { LoadingSignal } from "@/components/dashboard/scan-terminal/LoadingSignal";
 import type { Locale } from "@/lib/i18n";
 
@@ -134,30 +133,6 @@ export function ScanTerminalTopBar({
           </Link>
         ) : null}
       </div>
-    </div>
-  );
-}
-
-export function ScanPaywallModal({
-  isEn,
-  onClose,
-}: {
-  isEn: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="modal-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={isEn ? "Unlock market scan" : "解锁市场扫描"}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          onClose();
-        }
-      }}
-    >
-      <ProFeaturePaywall feature="scan" onClose={onClose} />
     </div>
   );
 }
