@@ -7,6 +7,7 @@ import {
   BarChart3,
   Bell,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CloudSun,
   CreditCard,
@@ -354,6 +355,18 @@ function PolyWeatherTerminal({
     .slice(0, 8);
   const selectedSignal = selectedRow ? getSignalState(selectedRow) : "data" as const;
   const selectedLabel = selectedRow ? getSignalLabel(selectedSignal, isEn) : "";
+  const [navExpanded, setNavExpanded] = useState(false);
+  const [activeNavKey, setActiveNavKey] = useState<string>("contracts");
+
+  const NAV_ITEMS = [
+    { key: "contracts", Icon: Table2, labelEn: "Contracts", labelZh: "天气合约" },
+    { key: "signals", Icon: LineChart, labelEn: "Signals", labelZh: "交易信号" },
+    { key: "analytics", Icon: BarChart3, labelEn: "Analytics", labelZh: "分析图表" },
+    { key: "watchlist", Icon: Gauge, labelEn: "Watchlist", labelZh: "自选监控" },
+    { key: "alerts", Icon: Bell, labelEn: "Alerts", labelZh: "实时预警" },
+    { key: "markets", Icon: Activity, labelEn: "Markets", labelZh: "市场概览" },
+  ];
+
   const continentGroups = useMemo(
     () => buildContinentGroups(rows, isEn),
     [rows, isEn]
@@ -379,29 +392,86 @@ function PolyWeatherTerminal({
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-[#e9edf3] text-[#202833]">
-      <aside className="flex w-[52px] shrink-0 flex-col items-center gap-2 bg-[#11161d] py-3 text-slate-400">
-        <Link
-          href="/"
-          className="mb-2 block h-7 w-7 overflow-hidden rounded transition hover:opacity-90"
-          title="PolyWeather"
-        >
-          <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
-        </Link>
-        <Menu size={20} className="mb-2 hover:text-white cursor-pointer" />
-        {[CloudSun, Table2, BarChart3, LineChart, Gauge, Bell].map((Icon, i) => (
-          <button
-            key={i}
-            className={clsx(
-              "grid h-9 w-full place-items-center border-l-4 transition-colors",
-              i === 0
-                ? "border-blue-500 bg-white/5 text-white"
-                : "border-transparent hover:bg-white/5 hover:text-white",
-            )}
-            type="button"
+      <aside
+        className={clsx(
+          "flex shrink-0 flex-col bg-[#11161d] py-3 text-slate-400 transition-all duration-200",
+          navExpanded ? "w-[172px] items-start px-3" : "w-[52px] items-center gap-2",
+        )}
+      >
+        {/* Logo row */}
+        <div className={clsx(
+          "flex items-center w-full",
+          navExpanded ? "gap-3 mb-3 px-1" : "justify-center mb-2",
+        )}>
+          <Link
+            href="/"
+            className="block h-7 w-7 shrink-0 overflow-hidden rounded transition hover:opacity-90"
+            title="PolyWeather"
           >
-            <Icon size={16} />
-          </button>
-        ))}
+            <img src="/apple-touch-icon.png" alt="PolyWeather" className="h-full w-full object-cover" />
+          </Link>
+          {navExpanded && (
+            <span className="text-sm font-black text-white tracking-tight truncate">
+              PolyWeather
+            </span>
+          )}
+        </div>
+
+        {/* Toggle button */}
+        <button
+          type="button"
+          onClick={() => setNavExpanded((prev) => !prev)}
+          className={clsx(
+            "flex items-center gap-3 transition-colors hover:text-white",
+            navExpanded
+              ? "w-full h-8 px-1 mb-2"
+              : "grid h-9 w-full place-items-center mb-2",
+          )}
+        >
+          {navExpanded ? (
+            <>
+              <ChevronLeft size={14} />
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">
+                {isEn ? "Collapse" : "收起"}
+              </span>
+            </>
+          ) : (
+            <Menu size={18} />
+          )}
+        </button>
+
+        {/* Nav items */}
+        {NAV_ITEMS.map(({ key, Icon, labelEn, labelZh }) => {
+          const isActive = activeNavKey === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => { setActiveNavKey(key); }}
+              className={clsx(
+                "flex items-center gap-3 transition-colors rounded",
+                navExpanded
+                  ? "w-full h-9 px-2 text-left"
+                  : "grid h-9 w-full place-items-center border-l-4",
+                isActive
+                  ? navExpanded
+                    ? "bg-white/8 text-white"
+                    : "border-blue-500 bg-white/5 text-white"
+                  : navExpanded
+                    ? "hover:bg-white/5 hover:text-white"
+                    : "border-transparent hover:bg-white/5 hover:text-white",
+              )}
+              title={isEn ? labelEn : labelZh}
+            >
+              <Icon size={16} className="shrink-0" />
+              {navExpanded && (
+                <span className="text-xs font-semibold whitespace-nowrap">
+                  {isEn ? labelEn : labelZh}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
